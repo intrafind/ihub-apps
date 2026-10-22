@@ -301,7 +301,7 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
           <div className="text-center py-4">
             <Icon
               name="chart-bar"
-              className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-2"
+              className="w-12 h-12 text-gray-500 dark:text-gray-400 mx-auto mb-2"
             />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('admin.models.details.noUsageData', 'No usage data available')}
@@ -314,7 +314,7 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
           <div className="text-center py-4">
             <Icon
               name="document-text"
-              className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-2"
+              className="w-12 h-12 text-gray-500 dark:text-gray-400 mx-auto mb-2"
             />
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t(

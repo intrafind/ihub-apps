@@ -124,7 +124,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors"
+              className="text-gray-500 hover:text-gray-500 dark:hover:text-gray-300 transition-colors"
             >
               <Icon name="x" className="w-6 h-6" />
             </button>
@@ -135,11 +135,11 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
             <div className="px-4 pt-3">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Icon name="search" className="h-4 w-4 text-gray-400" />
+                  <Icon name="search" className="h-4 w-4 text-gray-500" />
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder={t('workflows.chatWithResults.searchApps', 'Search apps...')}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -215,7 +215,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
                           </div>
                         )}
                       </div>
-                      <Icon name="chevron-right" className="w-4 h-4 text-gray-400 shrink-0" />
+                      <Icon name="chevron-right" className="w-4 h-4 text-gray-500 shrink-0" />
                     </button>
                   );
                 })}

@@ -79,7 +79,9 @@ function StateBadge({ state }) {
       ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'
       : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
   return (
-    <span className={`inline-block text-[11px] font-semibold rounded-full px-2 py-0.5 ${tone}`}>
+    <span
+      className={`inline-block text-[0.6875rem] font-semibold rounded-full px-2 py-0.5 ${tone}`}
+    >
       {labels[state] || state}
     </span>
   );
@@ -692,7 +694,7 @@ export default function ChatSharePanel({ chatId }) {
       <section aria-labelledby="share-existing-heading">
         <h3
           id="share-existing-heading"
-          className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2"
+          className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2"
         >
           {t('chatSharing.existingTitle', 'Links for this chat')}
         </h3>

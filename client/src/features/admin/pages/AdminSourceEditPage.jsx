@@ -226,7 +226,7 @@ function AdminSourceEditPage() {
         <div className="max-w-7xl mx-auto py-6 px-4">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <Icon name="arrow-path" className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4" />
+              <Icon name="arrow-path" className="animate-spin h-8 w-8 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-500 dark:text-gray-400">
                 {t('common.loading', 'Loading...')}
               </p>
@@ -375,7 +375,7 @@ function AdminSourceEditPage() {
                   <Icon
                     name={testResult.success ? 'check-circle' : 'x-circle'}
                     className={`h-5 w-5 mr-2 ${
-                      testResult.success ? 'text-green-600' : 'text-red-600'
+                      testResult.success ? 'text-green-700' : 'text-red-600'
                     }`}
                   />
                   <span

@@ -36,7 +36,7 @@ export function DetailsPopupHeader({
       </div>
       <button
         onClick={onClose}
-        className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="p-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         <Icon name="x" className="w-5 h-5" />
       </button>

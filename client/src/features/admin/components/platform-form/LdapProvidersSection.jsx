@@ -140,7 +140,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
 
       {config.ldapAuth?.providers?.length === 0 && (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <Icon name="server" className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+          <Icon name="server" className="h-12 w-12 mx-auto mb-2 text-gray-500" />
           <p>{t('admin.auth.ldap.empty', 'No LDAP providers configured')}</p>
           <p className="text-sm mt-1">
             {t('admin.auth.ldap.emptyHint', 'Click "Add LDAP Provider" to get started')}

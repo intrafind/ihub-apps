@@ -165,7 +165,7 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
         <div className="flex items-start space-x-2">
           <Icon
             name="exclamation-circle"
-            className="text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5"
+            className="text-yellow-700 dark:text-yellow-500 shrink-0 mt-0.5"
           />
           <div className="text-sm text-yellow-800 dark:text-yellow-200">
             <p className="font-medium">

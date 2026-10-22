@@ -9,6 +9,7 @@ import VariablesPanel from './VariablesPanel';
 import LocalizedField from './forms/LocalizedField';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
+import { NodeConnections } from './NodeConnections';
 
 /**
  * Editor for a node's progress note — the one-line message the step announces
@@ -29,7 +30,7 @@ function ProgressNoteField({ config, onChange, t }) {
 
   if (typeof progress === 'string') {
     return (
-      <p className="text-xs text-amber-600 dark:text-amber-400">
+      <p className="text-xs text-amber-700 dark:text-amber-400">
         {t(
           'workflows.editor.progressNoteLegacy',
           'This step has a plain-text progress value. Edit it via the JSON tab.'
@@ -99,8 +100,17 @@ function ProgressNoteField({ config, onChange, t }) {
  * @param {function} props.onUpdateNode - Callback to update node data: (nodeId, { nodeName, nodeConfig }) => void
  * @param {function} props.onClose - Callback to close the panel
  * @param {function} props.onDeleteNode - Callback to delete a node: (nodeId) => void
+ * @param {{nodes: object[], edges: object[], onConnect: function, onDeleteEdge: function, onEditEdge: function}} [props.connections]
+ *   Workflow graph and edge callbacks for the keyboard-operable connections section
  */
-export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose, onDeleteNode }) {
+export function NodeConfigPanel({
+  selectedNode,
+  variables,
+  onUpdateNode,
+  onClose,
+  onDeleteNode,
+  connections
+}) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [config, setConfig] = useState({});
@@ -221,7 +231,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
           )}
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1"
             aria-label={t('common.close', 'Close')}
           >
             &#x2715;
@@ -302,6 +312,16 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
                   'No form available for this node type. Use the JSON tab.'
                 )}
               </div>
+            )}
+            {connections && (
+              <NodeConnections
+                node={selectedNode}
+                nodes={connections.nodes}
+                edges={connections.edges}
+                onConnect={connections.onConnect}
+                onDeleteEdge={connections.onDeleteEdge}
+                onEditEdge={connections.onEditEdge}
+              />
             )}
             {nodeType !== 'start' && nodeType !== 'end' && nodeType !== 'progress' && (
               <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">

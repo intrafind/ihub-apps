@@ -59,7 +59,7 @@ function AppCard({
             <Icon
               name="star"
               size="sm"
-              className={isFavorite ? 'text-yellow-500' : 'text-gray-400'}
+              className={isFavorite ? 'text-yellow-500' : 'text-gray-500'}
               solid={isFavorite}
             />
           </button>
@@ -157,7 +157,7 @@ function AppCard({
         >
           <Icon
             name="star"
-            className={isFavorite ? 'text-yellow-500' : 'text-gray-400'}
+            className={isFavorite ? 'text-yellow-500' : 'text-gray-500'}
             solid={isFavorite}
           />
         </button>

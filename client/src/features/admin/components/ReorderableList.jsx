@@ -86,7 +86,7 @@ function ReorderableList({
           >
             {!disabled && (
               <span
-                className="shrink-0 cursor-grab text-gray-400 dark:text-gray-500"
+                className="shrink-0 cursor-grab text-gray-500 dark:text-gray-400"
                 title={t('admin.reorder.dragHandle', 'Drag to reorder')}
                 aria-hidden="true"
               >

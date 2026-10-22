@@ -393,7 +393,7 @@ function FileUploader({ source, onChange, isEditing }) {
               <div className="flex items-start">
                 <Icon
                   name="document-text"
-                  className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-3 mt-0.5"
+                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3 mt-0.5"
                 />
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -425,7 +425,7 @@ function FileUploader({ source, onChange, isEditing }) {
                       type="button"
                       onClick={saveFileContent}
                       disabled={loading || !hasUnsavedChanges}
-                      className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium disabled:opacity-50"
+                      className="text-sm text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium disabled:opacity-50"
                     >
                       {t('common.save', 'Save')}
                     </button>
@@ -456,7 +456,7 @@ function FileUploader({ source, onChange, isEditing }) {
                 {t('admin.sources.editingFile', 'Editing: {{file}}', { file: currentFile.name })}
               </p>
               {hasUnsavedChanges && (
-                <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                <span className="text-xs text-orange-700 dark:text-orange-400 font-medium">
                   {t('admin.sources.unsavedChanges', 'Unsaved changes')}
                 </span>
               )}
@@ -466,7 +466,7 @@ function FileUploader({ source, onChange, isEditing }) {
                 <div className="flex items-center justify-center h-96 bg-gray-50 dark:bg-gray-800">
                   <Icon
                     name="arrow-path"
-                    className="animate-spin h-6 w-6 text-gray-400 dark:text-gray-500"
+                    className="animate-spin h-6 w-6 text-gray-500 dark:text-gray-400"
                   />
                 </div>
               }
@@ -529,10 +529,10 @@ function FileUploader({ source, onChange, isEditing }) {
                     }
                     className={`mx-auto h-8 w-8 ${
                       loading
-                        ? 'animate-spin text-gray-400 dark:text-gray-500'
+                        ? 'animate-spin text-gray-500 dark:text-gray-400'
                         : isDragging
                           ? 'text-blue-500 dark:text-blue-400'
-                          : 'text-gray-400 dark:text-gray-500'
+                          : 'text-gray-500 dark:text-gray-400'
                     }`}
                   />
                   <div className="flex text-sm text-gray-600 dark:text-gray-400">

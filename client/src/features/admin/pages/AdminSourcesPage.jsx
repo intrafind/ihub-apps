@@ -23,7 +23,7 @@ function NameCell({ source }) {
       </div>
       <div className="text-sm text-gray-500 dark:text-gray-400 font-mono truncate">{source.id}</div>
       {source.description && Object.values(source.description)[0] && (
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
           {Object.values(source.description)[0]}
         </div>
       )}
@@ -423,7 +423,7 @@ function AdminSourcesPage() {
                 <button
                   onClick={() => handleBulkToggle(true)}
                   disabled={bulkOperating}
-                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                  className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
                 >
                   {bulkOperating
                     ? t('common.processing', 'Processing...')

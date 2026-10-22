@@ -116,7 +116,7 @@ function JsonDiff({ before, after }) {
             </span>
             <div className="mt-1 grid grid-cols-2 gap-2">
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-red-500 dark:text-red-400 font-semibold">
+                <span className="text-[0.625rem] uppercase tracking-wider text-red-500 dark:text-red-400 font-semibold">
                   {t('admin.changeHistory.before', 'Before')}
                 </span>
                 <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap mt-0.5 bg-red-50 dark:bg-red-900/20 rounded-sm p-1">
@@ -124,7 +124,7 @@ function JsonDiff({ before, after }) {
                 </pre>
               </div>
               <div>
-                <span className="text-[10px] uppercase tracking-wider text-green-500 dark:text-green-400 font-semibold">
+                <span className="text-[0.625rem] uppercase tracking-wider text-green-500 dark:text-green-400 font-semibold">
                   {t('admin.changeHistory.after', 'After')}
                 </span>
                 <pre className="text-xs font-mono text-green-700 dark:text-green-300 whitespace-pre-wrap mt-0.5 bg-green-50 dark:bg-green-900/20 rounded-sm p-1">
@@ -173,7 +173,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
             {t('admin.changeHistory.changedBy', 'Changed by')}: {snapshot.admin}
           </p>
         )}
-        <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+        <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
           {t(
             'admin.changeHistory.rollbackWarning',
             'This action will create a new change entry and cannot be undone except by another rollback.'
@@ -421,7 +421,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+            className="p-1.5 rounded-md text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             aria-label={t('admin.changeHistory.close', 'Close')}
           >
             <XMarkIcon className="h-5 w-5" />
@@ -465,7 +465,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('admin.changeHistory.noChanges', 'No changes recorded yet.')}
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(
                   'admin.changeHistory.noChangesHint',
                   'Changes will appear here when this resource is modified.'
@@ -496,7 +496,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
                         )}
                       </div>
                       <svg
-                        className="h-4 w-4 text-gray-400 shrink-0"
+                        className="h-4 w-4 text-gray-500 shrink-0"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"

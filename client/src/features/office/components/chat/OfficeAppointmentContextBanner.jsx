@@ -146,7 +146,7 @@ function OfficeAppointmentContextBanner({
           </div>
 
           {timeLine && (
-            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1 dark:text-slate-400">
+            <div className="mt-0.5 text-[0.6875rem] text-slate-500 flex items-center gap-1 dark:text-slate-400">
               <Icon
                 name="clock"
                 size="xs"
@@ -158,7 +158,7 @@ function OfficeAppointmentContextBanner({
             </div>
           )}
           {ctx?.location && (
-            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1 dark:text-slate-400">
+            <div className="mt-0.5 text-[0.6875rem] text-slate-500 flex items-center gap-1 dark:text-slate-400">
               <Icon
                 name="globe"
                 size="xs"
@@ -170,11 +170,11 @@ function OfficeAppointmentContextBanner({
             </div>
           )}
           {ctx?.organizer && (
-            <div className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400">
+            <div className="mt-0.5 text-[0.6875rem] text-slate-500 truncate dark:text-slate-400">
               <span className="font-medium text-slate-600 dark:text-slate-300">Organizer:</span>{' '}
               {ctx.organizer.name || ctx.organizer.email}
               {ctx?.isOrganizer && (
-                <span className="ml-1.5 inline-flex items-center rounded-sm bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                <span className="ml-1.5 inline-flex items-center rounded-sm bg-indigo-50 px-1.5 py-0.5 text-[0.625rem] font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                   You
                 </span>
               )}
@@ -182,7 +182,7 @@ function OfficeAppointmentContextBanner({
           )}
           {requiredNames && (
             <div
-              className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400"
+              className="mt-0.5 text-[0.6875rem] text-slate-500 truncate dark:text-slate-400"
               title={requiredNames}
             >
               <span className="font-medium text-slate-600 dark:text-slate-300">Required:</span>{' '}
@@ -191,7 +191,7 @@ function OfficeAppointmentContextBanner({
           )}
           {optionalNames && (
             <div
-              className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400"
+              className="mt-0.5 text-[0.6875rem] text-slate-500 truncate dark:text-slate-400"
               title={optionalNames}
             >
               <span className="font-medium text-slate-600 dark:text-slate-300">Optional:</span>{' '}
@@ -212,7 +212,7 @@ function OfficeAppointmentContextBanner({
             </div>
           )}
           {hasBody && !bodySent && (
-            <div className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+            <div className="mt-0.5 text-[0.6875rem] text-amber-700 dark:text-amber-400">
               Meeting description will not be sent.
             </div>
           )}

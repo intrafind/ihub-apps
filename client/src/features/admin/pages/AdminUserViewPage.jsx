@@ -286,7 +286,7 @@ function AdminUserViewPage() {
                   </span>
                 ))
               ) : (
-                <span className="text-sm text-gray-400 dark:text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.users.view.noGroups', 'No groups assigned')}
                 </span>
               )}
@@ -316,7 +316,7 @@ function AdminUserViewPage() {
                 {user.lastActiveDate ? (
                   <div className="flex flex-col">
                     <span>{new Date(user.lastActiveDate).toLocaleString()}</span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       {Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24))}{' '}
                       {t('admin.users.view.daysAgo', 'days ago')}
                     </span>

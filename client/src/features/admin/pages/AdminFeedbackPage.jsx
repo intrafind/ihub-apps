@@ -340,7 +340,7 @@ function AdminFeedbackPage() {
               className={`text-sm ${
                 message.type === 'error'
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-green-600 dark:text-green-400'
+                  : 'text-green-700 dark:text-green-400'
               }`}
             >
               {message.text}

@@ -22,7 +22,7 @@ export default function NotFound() {
       <p className="text-xl mb-6">
         {getLocalizedContent(cfg?.title, lang) || t('errors.notFound.title', 'Page Not Found')}
       </p>
-      <p className="text-gray-600 mb-8 text-center max-w-md">
+      <p className="text-gray-600 dark:text-gray-400 mb-8 text-center max-w-md">
         {getLocalizedContent(cfg?.message, lang) ||
           t('errors.notFound.message', "We couldn't find the page you're looking for.")}
       </p>

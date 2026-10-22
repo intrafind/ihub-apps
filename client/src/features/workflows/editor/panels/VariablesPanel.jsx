@@ -69,7 +69,7 @@ function VariablesPanel({ variables }) {
       <div className="max-h-64 overflow-y-auto space-y-2">
         {groups.map(([heading, items]) => (
           <div key={heading}>
-            <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5">
+            <p className="text-[0.625rem] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-0.5">
               {heading}
             </p>
             <ul className="space-y-0.5">
@@ -82,7 +82,7 @@ function VariablesPanel({ variables }) {
                   >
                     <span className="truncate">{`{{${v.value}}}`}</span>
                     {copied === v.value && (
-                      <span className="shrink-0 text-[10px] text-green-600 dark:text-green-400">
+                      <span className="shrink-0 text-[0.625rem] text-green-700 dark:text-green-400">
                         {t('workflows.editor.copied', 'copied')}
                       </span>
                     )}

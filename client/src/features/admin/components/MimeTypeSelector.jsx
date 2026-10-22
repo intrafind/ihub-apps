@@ -109,7 +109,7 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
                 />
                 <label className="ml-2 block text-xs text-gray-700">
                   {displayName}
-                  {extensions && <span className="text-gray-400 ml-1">({extensions})</span>}
+                  {extensions && <span className="text-gray-500 ml-1">({extensions})</span>}
                 </label>
               </div>
             );

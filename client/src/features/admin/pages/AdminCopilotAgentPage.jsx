@@ -59,7 +59,7 @@ function Prerequisite({ ok, children }) {
     <li className="flex items-start gap-2 text-sm">
       <span
         aria-hidden
-        className={ok ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}
+        className={ok ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}
       >
         {ok ? '✓' : '!'}
       </span>

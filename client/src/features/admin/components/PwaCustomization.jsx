@@ -92,7 +92,7 @@ function PwaCustomization({ config, onUpdate, t }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.name', 'App Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">
+              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
                 (max 60 chars)
               </span>
             </label>
@@ -104,7 +104,7 @@ function PwaCustomization({ config, onUpdate, t }) {
               placeholder="iHub Apps"
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t('admin.ui.pwa.nameHint', 'Shown on install prompt and app list')}
             </p>
           </div>
@@ -112,7 +112,7 @@ function PwaCustomization({ config, onUpdate, t }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.shortName', 'Short Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">
+              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
                 (max 15 chars)
               </span>
             </label>
@@ -124,7 +124,7 @@ function PwaCustomization({ config, onUpdate, t }) {
               placeholder="iHub"
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t('admin.ui.pwa.shortNameHint', 'Shown under the home screen icon')}
             </p>
           </div>
@@ -172,7 +172,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t('admin.ui.pwa.themeColorHint', 'Browser chrome / status bar color on Android')}
             </p>
           </div>
@@ -197,7 +197,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t(
                 'admin.ui.pwa.backgroundColorHint',
                 'Splash screen background before the app paints'
@@ -228,7 +228,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             </button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {t(
             'admin.ui.pwa.displayHint',
             '"standalone" recommended — hides browser chrome for an app-like experience'
@@ -277,7 +277,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 />
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
           </div>
         ))}
       </fieldset>

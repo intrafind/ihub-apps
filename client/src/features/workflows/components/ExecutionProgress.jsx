@@ -43,7 +43,7 @@ function ParameterRow({ name, value }) {
   const collapsible = isObject || isLongString;
 
   const inlineDisplay = (() => {
-    if (value === null || value === undefined) return <em className="text-gray-400">empty</em>;
+    if (value === null || value === undefined) return <em className="text-gray-500">empty</em>;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number') return String(value);
     if (typeof value === 'string') {
@@ -51,7 +51,7 @@ function ParameterRow({ name, value }) {
       return value;
     }
     if (Array.isArray(value)) {
-      if (value.length === 0) return <em className="text-gray-400">[]</em>;
+      if (value.length === 0) return <em className="text-gray-500">[]</em>;
       const allPrimitive = value.every(
         v => v === null || ['string', 'number', 'boolean'].includes(typeof v)
       );
@@ -79,7 +79,7 @@ function ParameterRow({ name, value }) {
     }
     if (typeof value === 'object') {
       const keys = Object.keys(value);
-      if (keys.length === 0) return <em className="text-gray-400">{'{}'}</em>;
+      if (keys.length === 0) return <em className="text-gray-500">{'{}'}</em>;
       return `{${keys.slice(0, 4).join(', ')}${keys.length > 4 ? ', …' : ''}}`;
     }
     return String(value);
@@ -112,14 +112,14 @@ function ParameterRow({ name, value }) {
  */
 function NodeStatus({ status }) {
   const config = {
-    pending: { icon: 'circle', color: 'text-gray-400', bg: 'bg-gray-100' },
+    pending: { icon: 'circle', color: 'text-gray-600', bg: 'bg-gray-100' },
     running: { icon: 'arrow-path', color: 'text-blue-600', bg: 'bg-blue-100', animate: true },
-    completed: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' },
-    failed: { icon: 'x-circle', color: 'text-red-600', bg: 'bg-red-100' },
-    paused: { icon: 'pause-circle', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+    completed: { icon: 'check-circle', color: 'text-green-700', bg: 'bg-green-100' },
+    failed: { icon: 'x-circle', color: 'text-red-700', bg: 'bg-red-100' },
+    paused: { icon: 'pause-circle', color: 'text-yellow-700', bg: 'bg-yellow-100' },
     cancelled: { icon: 'stop-circle', color: 'text-gray-600', bg: 'bg-gray-200' },
-    rejected: { icon: 'stop-circle', color: 'text-orange-600', bg: 'bg-orange-100' },
-    approved: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' }
+    rejected: { icon: 'stop-circle', color: 'text-orange-700', bg: 'bg-orange-100' },
+    approved: { icon: 'check-circle', color: 'text-green-700', bg: 'bg-green-100' }
   };
 
   const c = config[status] || config.pending;
@@ -581,7 +581,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                   <NodeStatus status={lastItem.status} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Icon name={getTypeIcon(firstItem.type)} className="w-4 h-4 text-gray-400" />
+                      <Icon name={getTypeIcon(firstItem.type)} className="w-4 h-4 text-gray-500" />
                       <span className="font-medium text-gray-900 dark:text-white">
                         {firstItem.name}
                       </span>
@@ -597,7 +597,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                   </div>
                   <Icon
                     name={isGroupExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 shrink-0"
+                    className="w-5 h-5 text-gray-500 shrink-0"
                   />
                 </button>
 
@@ -626,7 +626,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                             <NodeStatus status={item.status} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm">
+                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-sm">
                                   #{item.iteration}
                                 </span>
                                 {showTechnical && item.type === 'prompt' && item.model && (
@@ -638,7 +638,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                   item.tokens &&
                                   (item.tokens.input > 0 || item.tokens.output > 0) && (
                                     <span
-                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
+                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-sm"
                                       title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
                                     >
                                       {(item.tokens.input + item.tokens.output).toLocaleString()}{' '}
@@ -646,7 +646,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                     </span>
                                   )}
                                 {item.duration !== undefined && item.duration !== null && (
-                                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
                                     {item.duration >= 1000
                                       ? `${(item.duration / 1000).toFixed(1)}s`
                                       : item.duration > 0
@@ -655,7 +655,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                   </span>
                                 )}
                                 {item.timestamp && (
-                                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
                                     {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
                                   </span>
                                 )}
@@ -666,7 +666,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                 </p>
                               )}
                               {item.outputValue && !isItemExpanded && (
-                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
                                   {showTechnical && item.outputVariable && (
                                     <span className="font-mono">{item.outputVariable} = </span>
                                   )}
@@ -677,7 +677,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                             {hasDetails && (
                               <Icon
                                 name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
-                                className="w-5 h-5 text-gray-400 shrink-0"
+                                className="w-5 h-5 text-gray-500 shrink-0"
                                 aria-hidden="true"
                               />
                             )}
@@ -715,7 +715,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                 <NodeStatus status={item.status} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
+                    <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-500" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
                     {showTechnical && item.type === 'prompt' && item.model && (
                       <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded-sm">
@@ -726,14 +726,14 @@ function ExecutionProgress({ state, nodes = [] }) {
                       item.tokens &&
                       (item.tokens.input > 0 || item.tokens.output > 0) && (
                         <span
-                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
+                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-sm"
                           title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
                         >
                           {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
                         </span>
                       )}
                     {item.duration !== undefined && item.duration !== null && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         {item.duration >= 1000
                           ? `${(item.duration / 1000).toFixed(1)}s`
                           : item.duration > 0
@@ -742,7 +742,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                       </span>
                     )}
                     {item.timestamp && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
                       </span>
                     )}
@@ -751,7 +751,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
                   )}
                   {item.outputValue && !isExpanded && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
                       {showTechnical && item.outputVariable && (
                         <span className="font-mono">{item.outputVariable} = </span>
                       )}
@@ -762,7 +762,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                 {hasDetails && (
                   <Icon
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 shrink-0"
+                    className="w-5 h-5 text-gray-500 shrink-0"
                     aria-hidden="true"
                   />
                 )}

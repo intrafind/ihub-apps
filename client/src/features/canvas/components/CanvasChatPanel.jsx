@@ -63,7 +63,7 @@ const CanvasChatPanel = ({
           <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200 relative">
             <button
               type="button"
-              className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-2 text-gray-500 hover:text-gray-600"
               onClick={onClearSelection}
               title={t('common.clear', 'Clear')}
             >

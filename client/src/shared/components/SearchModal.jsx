@@ -114,7 +114,7 @@ const SearchModal = ({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-xl mt-20">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Icon name="search" className="text-gray-400 dark:text-gray-500" />
+            <Icon name="search" className="text-gray-500 dark:text-gray-400" />
           </div>
           <input
             ref={inputRef}
@@ -123,7 +123,7 @@ const SearchModal = ({
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyNav}
             placeholder={placeholder}
-            className="w-full pl-12 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
+            className="w-full pl-12 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-500 dark:placeholder-gray-300"
             autoComplete="off"
             data-lpignore="true"
             data-1p-ignore="true"
@@ -132,7 +132,7 @@ const SearchModal = ({
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
               aria-label={t('common.clear', 'Clear')}
             >
               <Icon name="x" className="w-5 h-5" />
@@ -157,7 +157,7 @@ const SearchModal = ({
                 onMouseDown={() => onSelect(item)}
               >
                 {showHeader && (
-                  <div className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <div className="px-3 pt-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {group}
                   </div>
                 )}

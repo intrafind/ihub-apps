@@ -146,7 +146,7 @@ function MicrophoneCheck({ t }) {
             t('admin.voiceInput.test.mic.device', 'Device: {{device}}', { device: deviceLabel }) +
               ' · '}
           {soundDetected ? (
-            <span className="text-green-600 dark:text-green-400">
+            <span className="text-green-700 dark:text-green-400">
               {t(
                 'admin.voiceInput.test.mic.soundDetected',
                 'Sound detected: the microphone works.'

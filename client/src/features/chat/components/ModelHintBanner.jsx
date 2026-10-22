@@ -37,14 +37,14 @@ function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
       bgColor: 'bg-cyan-50 dark:bg-cyan-900/20',
       borderColor: 'border-cyan-200 dark:border-cyan-800',
       textColor: 'text-cyan-800 dark:text-cyan-300',
-      iconColor: 'text-cyan-600 dark:text-cyan-400',
+      iconColor: 'text-cyan-700 dark:text-cyan-400',
       iconName: 'informationCircle'
     },
     warning: {
       bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
       borderColor: 'border-yellow-200 dark:border-yellow-800',
       textColor: 'text-yellow-800 dark:text-yellow-300',
-      iconColor: 'text-yellow-600 dark:text-yellow-400',
+      iconColor: 'text-yellow-700 dark:text-yellow-400',
       iconName: 'exclamationTriangle'
     },
     alert: {

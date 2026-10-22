@@ -148,7 +148,7 @@ function JobCard({ job, onCancel }) {
         {status === 'completed' && (
           <button
             onClick={handleDownload}
-            className="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-green-700 text-white rounded-sm hover:bg-green-800 transition-colors font-medium"
           >
             Download
           </button>
@@ -399,7 +399,7 @@ export default function OcrPage() {
                   className={`text-xs mt-1 text-right ${
                     promptTooLong
                       ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      : 'text-gray-500 dark:text-gray-400'
                   }`}
                 >
                   {promptTokens} / {MAX_PROMPT_TOKENS} tokens
@@ -475,7 +475,7 @@ export default function OcrPage() {
         ) : (
           <div>
             <svg
-              className="mx-auto h-10 w-10 text-gray-400 mb-2"
+              className="mx-auto h-10 w-10 text-gray-500 mb-2"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={1.5}
@@ -490,7 +490,7 @@ export default function OcrPage() {
             <p className="text-gray-600 dark:text-gray-400">
               Drop files here or <span className="text-blue-600 dark:text-blue-400">browse</span>
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               PDF, JPEG, PNG, TIFF, or WebP — multiple files supported
             </p>
           </div>
@@ -521,7 +521,7 @@ export default function OcrPage() {
 
       {/* Error */}
       {status === 'error' && errorMessage && (
-        <div className="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+        <div className="mt-4 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
           {errorMessage}
         </div>
       )}

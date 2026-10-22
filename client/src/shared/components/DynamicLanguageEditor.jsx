@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { translateText } from '../../api/adminApi';
@@ -16,7 +16,8 @@ function LanguageInput({
   placeholder,
   required,
   onChange,
-  hasError
+  hasError,
+  ariaLabel
 }) {
   const inputClass = `block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
     hasError ? 'border-red-300 focus:border-red-500' : 'border-gray-300 dark:border-gray-600'
@@ -24,6 +25,7 @@ function LanguageInput({
   const commonProps = {
     id: name ? `${name}.${lang}` : undefined,
     'data-field': name ? `${name}.${lang}` : undefined,
+    'aria-label': ariaLabel,
     value,
     onChange: e => onChange(e.target.value),
     placeholder,
@@ -55,6 +57,7 @@ const DynamicLanguageEditor = ({
   validationErrors = null // Optional full validation-errors map; picks `${name}.${lang}` keys
 }) => {
   const { t } = useTranslation();
+  const labelId = useId();
   const contextErrors = useFormValidationErrors();
   const effectiveValidationErrors = validationErrors ?? contextErrors;
   const [showAddLanguage, setShowAddLanguage] = useState(false);
@@ -302,12 +305,17 @@ const DynamicLanguageEditor = ({
   const availableLanguages = commonLanguages.filter(lang => !languages.includes(lang));
 
   return (
-    <div className={`space-y-4 ${className}`} data-field={name || undefined}>
+    <div
+      className={`space-y-4 ${className}`}
+      data-field={name || undefined}
+      role="group"
+      aria-labelledby={labelId}
+    >
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <span id={labelId} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
+        </span>
         <button
           type="button"
           onClick={() => setShowAddLanguage(!showAddLanguage)}
@@ -322,6 +330,7 @@ const DynamicLanguageEditor = ({
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center space-x-2">
             <select
+              aria-label={t('admin.apps.edit.selectLanguage', 'Select...')}
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value)}
               className="block w-32 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
@@ -335,6 +344,7 @@ const DynamicLanguageEditor = ({
             </select>
             <input
               type="text"
+              aria-label={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value.toLowerCase())}
               placeholder={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
@@ -363,6 +373,11 @@ const DynamicLanguageEditor = ({
             <div className="flex-1">
               <LanguageInput
                 lang={lang}
+                ariaLabel={
+                  typeof label === 'string'
+                    ? `${label} (${lang.toUpperCase()})`
+                    : lang.toUpperCase()
+                }
                 name={name}
                 type={type}
                 rows={rows}
@@ -394,6 +409,9 @@ const DynamicLanguageEditor = ({
                 type="button"
                 onClick={() => handleRemoveLanguage(lang)}
                 className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                aria-label={t('admin.apps.edit.removeLanguage', 'Remove language {{lang}}', {
+                  lang: lang.toUpperCase()
+                })}
                 disabled={lang === 'en'}
               >
                 <Icon name="x" className="w-4 h-4" />

@@ -151,7 +151,7 @@ export default function ConnectedAppsCard({ connections = [], busy = false, onDi
                 <div className="mt-4 relative">
                   <Icon
                     name="search"
-                    className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                   />
                   <input
                     type="search"
@@ -208,7 +208,7 @@ export default function ConnectedAppsCard({ connections = [], busy = false, onDi
                           >
                             <Icon
                               name="chevron-right"
-                              className={`w-4 h-4 mt-0.5 shrink-0 text-gray-400 transition-transform ${
+                              className={`w-4 h-4 mt-0.5 shrink-0 text-gray-500 transition-transform ${
                                 isOpen ? 'rotate-90' : ''
                               }`}
                             />

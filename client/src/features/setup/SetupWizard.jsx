@@ -239,7 +239,7 @@ export default function SetupWizard() {
   const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg">
         {/* Progress bar */}
         <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-t-2xl overflow-hidden">
@@ -356,7 +356,7 @@ export default function SetupWizard() {
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('setup.step2.apiKeyLabel', { provider: selectedProvider.name })}
                     {isLocal && (
-                      <span className="ml-1.5 text-xs font-normal text-gray-400">
+                      <span className="ml-1.5 text-xs font-normal text-gray-500">
                         {t('setup.step2.apiKeyOptional')}
                       </span>
                     )}
@@ -381,7 +381,7 @@ export default function SetupWizard() {
                     setTestResult(null);
                   }}
                   placeholder={selectedProvider.placeholder}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoComplete="off"
                 />
                 {isLocal ? (
@@ -397,7 +397,7 @@ export default function SetupWizard() {
                 {/* Test result feedback */}
                 {testResult && (
                   <p
-                    className={`mt-1.5 text-xs ${testResult.valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                    className={`mt-1.5 text-xs ${testResult.valid ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
                   >
                     {testResult.valid
                       ? `✓ ${t('setup.step2.testSuccess')}`
@@ -616,6 +616,6 @@ export default function SetupWizard() {
           ))}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

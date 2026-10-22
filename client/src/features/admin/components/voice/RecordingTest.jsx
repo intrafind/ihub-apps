@@ -78,7 +78,7 @@ function RecordingControls({ status, elapsed, t, ...buttonProps }) {
 function RecordingVerdict({ transcript, durationSeconds, processingMs, t }) {
   if (!transcript.trim()) {
     return (
-      <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1">
+      <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-1">
         <Icon name="exclamation-triangle" className="w-4 h-4 shrink-0" />
         {t(
           'admin.voiceInput.test.recording.noText',
@@ -88,7 +88,7 @@ function RecordingVerdict({ transcript, durationSeconds, processingMs, t }) {
     );
   }
   return (
-    <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+    <p className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
       <Icon name="check-circle" className="w-4 h-4 shrink-0" />
       {t(
         'admin.voiceInput.test.recording.success',
@@ -166,7 +166,7 @@ function ModelPicker({ models, modelId, disabled, onChange, language, t }) {
         ))}
       </select>
       {models?.length === 0 && (
-        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
           {t(
             'admin.apps.edit.noTranscriptionModels',
             'No transcription models configured. Add one under Admin → Models (model type "transcription").'

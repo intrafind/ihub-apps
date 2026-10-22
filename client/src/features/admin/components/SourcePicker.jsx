@@ -229,7 +229,7 @@ function SourcePicker({
         {/* Search input */}
         <div className="relative mb-3">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
           </div>
           <input
             type="text"
@@ -237,7 +237,7 @@ function SourcePicker({
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search sources by name, description, or ID..."
             disabled={disabled || loading}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:outline-hidden focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
           />
         </div>
 
@@ -296,7 +296,7 @@ function SourcePicker({
               <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
               <button
                 onClick={loadAdminSources}
-                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 underline"
+                className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline"
               >
                 Try again
               </button>
@@ -375,7 +375,7 @@ function SourcePicker({
                         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {sourceName}
                         </h4>
-                        <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-sm">
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm">
                           {source.id}
                         </span>
                       </div>
@@ -384,7 +384,7 @@ function SourcePicker({
                           {sourceDescription}
                         </p>
                       )}
-                      <div className="mt-1 flex items-center space-x-2 text-xs text-gray-400 dark:text-gray-500">
+                      <div className="mt-1 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                         <span>Type: {source.type}</span>
                         {source.config?.path && <span>• Path: {source.config.path}</span>}
                         {source.config?.url && (

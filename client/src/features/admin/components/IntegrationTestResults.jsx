@@ -19,13 +19,13 @@ const STATUS_STYLES = {
     icon: 'check-circle',
     badge:
       'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-800',
-    iconColor: 'text-green-600 dark:text-green-400'
+    iconColor: 'text-green-700 dark:text-green-400'
   },
   warn: {
     icon: 'exclamation-triangle',
     badge:
       'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-    iconColor: 'text-amber-600 dark:text-amber-400'
+    iconColor: 'text-amber-700 dark:text-amber-400'
   },
   fail: {
     icon: 'close',
@@ -37,7 +37,7 @@ const STATUS_STYLES = {
     icon: 'minus-circle',
     badge:
       'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-    iconColor: 'text-gray-400 dark:text-gray-500'
+    iconColor: 'text-gray-500 dark:text-gray-400'
   }
 };
 
@@ -93,7 +93,7 @@ function StepRow({ step }) {
               {step.label}
             </span>
             {typeof step.durationMs === 'number' && (
-              <span className="text-xs text-gray-400 dark:text-gray-500">{step.durationMs}ms</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{step.durationMs}ms</span>
             )}
           </div>
           {step.message && (
@@ -106,7 +106,7 @@ function StepRow({ step }) {
           <Icon
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size="sm"
-            className="mt-1 shrink-0 text-gray-400"
+            className="mt-1 shrink-0 text-gray-500"
           />
         )}
       </button>

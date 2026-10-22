@@ -19,6 +19,7 @@ import { fetchUIConfig } from '../../../api';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import UploadConfigButton from '../components/UploadConfigButton';
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -252,7 +253,7 @@ function AdminPromptsPage() {
             {label}
           </span>
         ) : (
-          <span className="text-gray-400 text-sm">{t('common.notAvailable', 'N/A')}</span>
+          <span className="text-gray-500 text-sm">{t('common.notAvailable', 'N/A')}</span>
         );
       }
     },
@@ -279,9 +280,9 @@ function AdminPromptsPage() {
       align: 'center',
       render: prompt =>
         prompt.appId ? (
-          <Icon name="check" className="h-5 w-5 text-green-600" />
+          <Icon name="check" className="h-5 w-5 text-green-700" />
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-gray-500">-</span>
         )
     },
     {
@@ -354,7 +355,7 @@ function AdminPromptsPage() {
               <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+                className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
               >
                 {t('common.retry', 'Retry')}
               </button>
@@ -404,29 +405,13 @@ function AdminPromptsPage() {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.prompts.createNew', 'Create New Prompt')}
                 </button>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleUploadConfig}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={uploading}
-                    title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
-                  >
-                    <Icon
-                      name={uploading ? 'refresh' : 'upload'}
-                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                    />
-                    {uploading
-                      ? t('admin.prompts.uploading', 'Uploading...')
-                      : t('admin.prompts.uploadConfig', 'Upload Config')}
-                  </button>
-                </div>
+                <UploadConfigButton
+                  onChange={handleUploadConfig}
+                  uploading={uploading}
+                  title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
+                  uploadingLabel={t('admin.prompts.uploading', 'Uploading...')}
+                  label={t('admin.prompts.uploadConfig', 'Upload Config')}
+                />
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
@@ -672,7 +657,7 @@ function VariablesTabContent() {
             <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
             <button
               onClick={loadPlatformConfig}
-              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+              className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
             >
               {t('common.retry', 'Retry')}
             </button>

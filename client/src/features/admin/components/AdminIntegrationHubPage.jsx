@@ -155,14 +155,14 @@ function AdminIntegrationHubPage({
       <div className="mb-6 relative">
         <Icon
           name="search"
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none"
         />
         <input
           type="search"
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={searchPlaceholder}
-          className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+          className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 text-sm"
           aria-label="Search integrations"
         />
       </div>
@@ -179,7 +179,7 @@ function AdminIntegrationHubPage({
             <section key={category}>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
                 {category}
-                <span className="ml-2 text-gray-400 dark:text-gray-500 font-normal">
+                <span className="ml-2 text-gray-500 dark:text-gray-400 font-normal">
                   ({items.length})
                 </span>
               </h2>

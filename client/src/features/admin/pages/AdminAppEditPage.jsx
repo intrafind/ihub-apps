@@ -450,7 +450,7 @@ function AdminAppEditPage() {
               <button
                 type="button"
                 onClick={() => setError(null)}
-                className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
+                className="mt-2 text-sm text-red-700 hover:text-red-800 underline"
               >
                 {t('common.dismiss', 'Dismiss')}
               </button>
@@ -701,7 +701,7 @@ function AdminAppEditPage() {
       {toast && (
         <div
           role="status"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm text-white shadow-lg"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm text-white shadow-lg"
         >
           <Icon name="check-circle" className="h-4 w-4" />
           {toast}

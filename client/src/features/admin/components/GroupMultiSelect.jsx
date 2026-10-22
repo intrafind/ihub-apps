@@ -291,12 +291,12 @@ function GroupMultiSelect({
             onBlur={() => setShowDropdown(false)}
             onKeyDown={handleKeyDown}
             placeholder={resolvedPlaceholder}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500 disabled:bg-gray-100 dark:disabled:bg-gray-700"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-500 dark:placeholder-gray-300 disabled:bg-gray-100 dark:disabled:bg-gray-700"
           />
           <Icon
             name="search"
             size="sm"
-            className="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 pointer-events-none"
+            className="absolute right-3 top-2.5 text-gray-500 dark:text-gray-400 pointer-events-none"
           />
         </div>
 
@@ -330,11 +330,11 @@ function GroupMultiSelect({
                         <Icon
                           name="plus"
                           size="sm"
-                          className="mr-2 text-green-600 dark:text-green-400 shrink-0"
+                          className="mr-2 text-green-700 dark:text-green-400 shrink-0"
                         />
                         <span className="text-gray-900 dark:text-gray-100">{option.name}</span>
                         {option.name.toLowerCase() !== option.id.toLowerCase() && (
-                          <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                             {option.id}
                           </span>
                         )}
@@ -365,7 +365,7 @@ function GroupMultiSelect({
                       <Icon
                         name="plus"
                         size="sm"
-                        className="mr-2 text-amber-600 dark:text-amber-400 shrink-0"
+                        className="mr-2 text-amber-700 dark:text-amber-400 shrink-0"
                       />
                       <span className="text-gray-900 dark:text-gray-100">
                         {t('admin.groupSelect.addCustom', 'Add "{{name}}"', {

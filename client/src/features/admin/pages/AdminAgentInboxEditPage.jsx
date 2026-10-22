@@ -338,7 +338,7 @@ export default function AdminAgentInboxEditPage() {
                         value={item.text}
                         onChange={e => updateItem(idx, { text: e.target.value })}
                         className={`flex-1 rounded border-gray-300 shadow-xs text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
-                          item.status === 'done' ? 'line-through text-gray-400' : ''
+                          item.status === 'done' ? 'line-through text-gray-500' : ''
                         }`}
                       />
                       <div className="flex flex-col gap-1">

@@ -351,12 +351,12 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
                 'admin.contentAccess.searchPlaceholder',
                 'Search groups to grant access…'
               )}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-500 dark:placeholder-gray-300"
             />
             <Icon
               name="search"
               size="sm"
-              className="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 pointer-events-none"
+              className="absolute right-3 top-2.5 text-gray-500 dark:text-gray-400 pointer-events-none"
             />
           </div>
 
@@ -394,13 +394,13 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
                           size="sm"
                           className={`mr-2 shrink-0 ${
                             isPending
-                              ? 'animate-spin text-gray-400 dark:text-gray-500'
-                              : 'text-green-600 dark:text-green-400'
+                              ? 'animate-spin text-gray-500 dark:text-gray-400'
+                              : 'text-green-700 dark:text-green-400'
                           }`}
                         />
                         <span className="text-gray-900 dark:text-gray-100">{group.name}</span>
                         {group.name !== group.id && (
-                          <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                             {group.id}
                           </span>
                         )}
@@ -411,7 +411,7 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
                         </p>
                       )}
                       {inheritedFrom.length > 0 && (
-                        <p className="mt-0.5 ml-6 text-xs text-gray-400 dark:text-gray-500">
+                        <p className="mt-0.5 ml-6 text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.contentAccess.inheritedHint',
                             'Also inherited from: {{groups}}',

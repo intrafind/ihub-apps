@@ -93,7 +93,7 @@ function NodePalette({ onAddNode }) {
       />
       {groups.map(group => (
         <div key={group.group} className="mb-3">
-          <div className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t(`workflows.editor.groups.${group.group}`, group.label)}
           </div>
           <div className="space-y-1">
@@ -528,7 +528,7 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
             {onPublish && (
               <button
                 onClick={() => onPublish(nodes, edges)}
-                className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-green-700 transition-colors"
+                className="bg-green-700 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-green-800 transition-colors"
               >
                 {t('workflows.editor.publish', 'Publish')}
               </button>
@@ -556,6 +556,13 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
           variables={selectedNodeVariables}
           onUpdateNode={handleUpdateNode}
           onDeleteNode={handleDeleteNode}
+          connections={{
+            nodes,
+            edges,
+            onConnect,
+            onDeleteEdge: handleDeleteEdge,
+            onEditEdge: edge => onEdgeClick(null, edge)
+          }}
           onClose={() => setSelectedNode(null)}
         />
       )}

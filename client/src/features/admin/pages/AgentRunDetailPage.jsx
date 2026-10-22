@@ -326,7 +326,7 @@ export default function AgentRunDetailPage() {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600 dark:text-gray-400">
                 <span className="font-mono">{profileId}</span>
                 <span className="text-gray-300 dark:text-gray-600">·</span>
-                <span className="font-mono text-gray-400 dark:text-gray-500" title={runId}>
+                <span className="font-mono text-gray-500 dark:text-gray-400" title={runId}>
                   {runId.length > 18 ? `${runId.slice(0, 18)}…` : runId}
                 </span>
                 {triggeredBy?.userId && (
@@ -511,7 +511,7 @@ export default function AgentRunDetailPage() {
                     onClick={() => handleApprove(opt.value)}
                     className={`px-3 py-2 text-sm rounded transition-colors ${
                       opt.value === 'approve' || opt.style === 'primary'
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        ? 'bg-green-700 hover:bg-green-800 text-white'
                         : opt.style === 'danger' || opt.value === 'reject'
                           ? 'bg-red-600 hover:bg-red-700 text-white'
                           : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
@@ -595,7 +595,7 @@ export default function AgentRunDetailPage() {
                       ))}
                     </div>
                   )}
-                  <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 italic">
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
                     Input is summed across each step&apos;s agent iterations, not a single prompt.
                   </p>
                 </div>
@@ -692,7 +692,7 @@ export default function AgentRunDetailPage() {
                               }`}
                               onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
                             >
-                              <td className="py-2 pr-1 text-xs text-gray-400 dark:text-gray-500 select-none">
+                              <td className="py-2 pr-1 text-xs text-gray-500 dark:text-gray-400 select-none">
                                 {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
                               </td>
                               <td
@@ -770,7 +770,7 @@ export default function AgentRunDetailPage() {
                                             <>
                                               {' · '}
                                               <span
-                                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                                className={`px-1.5 py-0.5 rounded text-[0.625rem] font-semibold ${
                                                   entry.verdict === 'PASS'
                                                     ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                                                     : entry.verdict === 'PARTIAL'
@@ -885,7 +885,7 @@ export default function AgentRunDetailPage() {
                           </span>
                         )}
                         {a.writtenAt && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
                             {new Date(a.writtenAt).toLocaleTimeString()}
                           </span>
                         )}
@@ -921,7 +921,7 @@ export default function AgentRunDetailPage() {
                           {c.title || c.url}
                         </a>
                         {c.title && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 break-all">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 break-all">
                             {c.url}
                           </span>
                         )}
@@ -987,7 +987,7 @@ export default function AgentRunDetailPage() {
                               {skill.activatedBy || 'unknown'}
                             </span>
                             {skill.activatedAt && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {new Date(skill.activatedAt).toLocaleTimeString()}
                               </span>
                             )}

@@ -154,7 +154,7 @@ function SpeechServiceHint({ speechService, selectedModelMissing, t }) {
   if (speechService !== 'model') return null;
   if (selectedModelMissing) {
     return (
-      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
         {t(
           'admin.apps.edit.dictationModelUnavailable',
           'This model is disabled, no longer exists or does not stream, so voice input fails in this app.'

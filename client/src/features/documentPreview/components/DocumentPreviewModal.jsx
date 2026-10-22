@@ -175,7 +175,7 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
                 className={`text-xs px-2 py-1 rounded ${
                   totalMatches > 0
                     ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                 }`}
               >
                 {totalMatches > 0

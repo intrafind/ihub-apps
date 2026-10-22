@@ -137,7 +137,7 @@ export default function JobListPage() {
                           variant="inline"
                         />
                       ) : isActive ? (
-                        <span className="text-xs text-gray-400">Pending...</span>
+                        <span className="text-xs text-gray-500">Pending...</span>
                       ) : (
                         '-'
                       )}
@@ -153,7 +153,7 @@ export default function JobListPage() {
                         {job.status === 'completed' && (
                           <button
                             onClick={() => handleDownload(job.id)}
-                            className="px-2 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors"
+                            className="px-2 py-1 text-xs bg-green-700 text-white rounded-sm hover:bg-green-800 transition-colors"
                           >
                             Download
                           </button>
@@ -175,7 +175,7 @@ export default function JobListPage() {
           </table>
 
           {hasActiveJobs && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
               Auto-refreshing every 5 seconds...
             </p>
           )}

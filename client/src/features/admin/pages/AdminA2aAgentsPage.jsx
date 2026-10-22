@@ -324,7 +324,7 @@ function TestResult({ result, allowedSkills, onToggleSkill, t }) {
                   >
                     {skill.name}
                   </label>
-                  <div className="font-mono text-[11px] text-gray-400 dark:text-gray-500">
+                  <div className="font-mono text-[0.6875rem] text-gray-500 dark:text-gray-400">
                     {skill.toolId}
                   </div>
                   {skill.description && (
@@ -547,7 +547,7 @@ function AdminA2aAgentsPage() {
 
       {agents.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-          <Icon name="globe" className="mx-auto h-12 w-12 text-gray-400" />
+          <Icon name="globe" className="mx-auto h-12 w-12 text-gray-500" />
           <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('admin.a2a.agents.empty', 'No A2A agents configured')}
           </h3>

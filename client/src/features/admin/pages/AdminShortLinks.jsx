@@ -187,7 +187,7 @@ function AdminShortLinks() {
               <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+                className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
               >
                 {t('common.retry', 'Retry')}
               </button>

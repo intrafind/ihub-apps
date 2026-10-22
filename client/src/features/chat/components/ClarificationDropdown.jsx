@@ -272,18 +272,18 @@ function ClarificationDropdown({
           focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
           ${
             disabled
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600'
+              ? 'bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
               : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:border-gray-500'
           }
         `}
       >
-        <span className={`truncate ${selectedValues.length === 0 ? 'text-gray-400' : ''}`}>
+        <span className={`truncate ${selectedValues.length === 0 ? 'text-gray-500' : ''}`}>
           {getDisplayText()}
         </span>
         <Icon
           name={isOpen ? 'chevron-up' : 'chevron-down'}
           size="sm"
-          className="shrink-0 text-gray-400"
+          className="shrink-0 text-gray-500"
         />
       </button>
 
@@ -300,7 +300,7 @@ function ClarificationDropdown({
               <Icon
                 name="search"
                 size="sm"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
               <input
                 ref={inputRef}
@@ -436,7 +436,7 @@ function ClarificationDropdown({
               p-2 rounded-lg transition-colors
               ${
                 disabled || !otherValue.trim()
-                  ? 'text-gray-400 cursor-not-allowed'
+                  ? 'text-gray-500 cursor-not-allowed'
                   : 'text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20'
               }
             `}
@@ -451,7 +451,7 @@ function ClarificationDropdown({
               setOtherValue('');
             }}
             disabled={disabled}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             aria-label={t('common.cancel', 'Cancel')}
           >
             <Icon name="x" size="sm" />

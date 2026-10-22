@@ -212,7 +212,7 @@ function SkillDetailsModal({ skill, onClose, onEdit, onShare, onDuplicate, onHis
             title={t('skills.actions.copyLink', 'Copy link')}
           >
             {linkStatus === 'success' ? (
-              <Icon name="check-circle" className="text-green-600" solid />
+              <Icon name="check-circle" className="text-green-700" solid />
             ) : linkStatus === 'error' ? (
               <Icon name="exclamation-circle" className="text-red-600" solid />
             ) : (

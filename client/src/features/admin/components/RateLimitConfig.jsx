@@ -172,7 +172,7 @@ function RateLimitConfig() {
             >
               <Icon
                 name="ExclamationTriangleIcon"
-                className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 shrink-0"
+                className="w-5 h-5 text-yellow-700 dark:text-yellow-400 mt-0.5 mr-3 shrink-0"
               />
               <p className="text-sm text-yellow-800 dark:text-yellow-300">
                 {t('admin.security.rateLimits.restartRequired')}

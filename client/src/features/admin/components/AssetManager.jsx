@@ -239,7 +239,7 @@ function AssetManager({ t }) {
           <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 bg-white dark:bg-gray-800">
             <div className="text-center">
               <svg
-                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                 stroke="currentColor"
                 fill="none"
                 viewBox="0 0 48 48"
@@ -387,7 +387,7 @@ function AssetManager({ t }) {
         {assets.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+              className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

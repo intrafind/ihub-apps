@@ -164,7 +164,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
           </h2>
           <button
             onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
             aria-label={t('common.close', 'Close')}
           >
             &#x2715;

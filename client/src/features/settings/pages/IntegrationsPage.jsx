@@ -575,7 +575,7 @@ export default function IntegrationsPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <Icon name="lock" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <Icon name="lock" className="w-12 h-12 text-gray-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
             {t('integrations.page.authRequiredTitle')}
           </h2>
@@ -620,7 +620,7 @@ export default function IntegrationsPage() {
                   <Icon
                     name={message.type === 'success' ? 'check-circle' : 'warning'}
                     className={`w-5 h-5 mr-2 ${
-                      message.type === 'success' ? 'text-green-600' : 'text-red-600'
+                      message.type === 'success' ? 'text-green-700' : 'text-red-600'
                     }`}
                   />
                   <span className={message.type === 'success' ? 'text-green-800' : 'text-red-800'}>
@@ -631,7 +631,7 @@ export default function IntegrationsPage() {
                   onClick={dismissMessage}
                   className={`p-1 rounded-full ${
                     message.type === 'success'
-                      ? 'hover:bg-green-600/20 text-green-600'
+                      ? 'hover:bg-green-600/20 text-green-700'
                       : 'hover:bg-red-600/20 text-red-600'
                   }`}
                 >
@@ -909,11 +909,11 @@ export default function IntegrationsPage() {
                 {/* Empty state when no integrations are configured */}
                 {!hasAccounts && !hasAccess && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                    <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <Icon name="link" className="w-8 h-8 text-gray-500 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
                       {t('integrations.page.empty.title')}
                     </h3>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
                       {t('integrations.page.empty.body')}
                     </p>
                   </div>

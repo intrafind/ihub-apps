@@ -711,7 +711,7 @@ function AdminOAuthClientsPage() {
 
         {visibleClients.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-            <Icon name="key" className="mx-auto h-12 w-12 text-gray-400" />
+            <Icon name="key" className="mx-auto h-12 w-12 text-gray-500" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {clients.length === 0
                 ? t('admin.auth.oauth.noClients', 'No OAuth clients configured')
@@ -956,7 +956,7 @@ function AdminOAuthClientsPage() {
                 /* Token display */
                 <div>
                   <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/50">
-                    <Icon name="check" className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    <Icon name="check" className="h-6 w-6 text-green-700 dark:text-green-400" />
                   </div>
                   <div className="mt-3 text-center sm:mt-5">
                     <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">

@@ -101,7 +101,7 @@ function AdminIntegrationsPage() {
         'Side-panel extension for Chrome / Edge / Firefox. Run any iHub app against the page the user is reading.'
       ),
       icon: 'wrench',
-      color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400',
+      color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400',
       href: '/admin/browser-extension',
       status: statusFor('browserExtension'),
       category: productivity
@@ -127,7 +127,7 @@ function AdminIntegrationsPage() {
         'Let users browse and attach files from OneDrive / SharePoint via Microsoft Graph during a chat.'
       ),
       icon: 'cloud',
-      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400',
+      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
       href: '/admin/integrations/office365',
       status: statusFor('cloud', 'office365'),
       category: storage
@@ -140,7 +140,7 @@ function AdminIntegrationsPage() {
         'Let users browse and attach files from Google Drive during a chat.'
       ),
       icon: 'cloud',
-      color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400',
+      color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400',
       href: '/admin/integrations/google-drive',
       status: statusFor('cloud', 'google-drive'),
       category: storage
@@ -166,7 +166,7 @@ function AdminIntegrationsPage() {
         'Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached.'
       ),
       icon: 'cloud',
-      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400',
+      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
       href: '/admin/nextcloud-embed',
       status: statusFor('nextcloudEmbed'),
       category: storage

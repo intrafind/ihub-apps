@@ -23,25 +23,25 @@ const STATUS_STYLES = {
   ok: {
     container: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
     icon: 'CheckCircleIcon',
-    iconColor: 'text-green-600 dark:text-green-400',
+    iconColor: 'text-green-700 dark:text-green-400',
     title: 'text-green-900 dark:text-green-100'
   },
   empty: {
     container: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
     icon: 'ExclamationTriangleIcon',
-    iconColor: 'text-yellow-600 dark:text-yellow-400',
+    iconColor: 'text-yellow-700 dark:text-yellow-400',
     title: 'text-yellow-900 dark:text-yellow-100'
   },
   blocked: {
     container: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
     icon: 'shield-exclamation',
-    iconColor: 'text-orange-600 dark:text-orange-400',
+    iconColor: 'text-orange-700 dark:text-orange-400',
     title: 'text-orange-900 dark:text-orange-100'
   },
   rate_limited: {
     container: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
     icon: 'clock',
-    iconColor: 'text-yellow-600 dark:text-yellow-400',
+    iconColor: 'text-yellow-700 dark:text-yellow-400',
     title: 'text-yellow-900 dark:text-yellow-100'
   },
   unconfigured: {

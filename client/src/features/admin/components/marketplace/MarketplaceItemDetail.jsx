@@ -158,7 +158,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 {t(`admin.marketplace.types.${item?.type}`, item?.type)}
               </span>
               {item?.version && (
-                <span className="text-xs text-gray-400 dark:text-gray-500">v{item.version}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
               )}
               {isInstalled && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
@@ -178,7 +178,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold"
+            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold"
             aria-label={t('common.close', 'Close')}
           >
             &#x2715;
@@ -222,7 +222,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
             <button
               onClick={() => handleAction('update')}
               disabled={!!actionLoading}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 disabled:opacity-50 text-sm font-medium"
             >
               {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
             </button>
@@ -356,7 +356,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                     {item.tags.map(tag => (
                       <span
                         key={tag}
-                        className="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-sm"
+                        className="px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm"
                       >
                         {tag}
                       </span>

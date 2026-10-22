@@ -109,7 +109,7 @@ export default function AdminAgentApprovalsPage() {
               }`}
             >
               {t(tab.label[0], tab.label[1])}
-              <span className="ml-1 opacity-75">({counts[tab.id] || 0})</span>
+              <span className="ml-1 opacity-90">({counts[tab.id] || 0})</span>
             </button>
           ))}
         </div>

@@ -219,7 +219,7 @@ function AdminSkillsPage() {
             <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+              className="mt-2 text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
             >
               {t('common.retry', 'Retry')}
             </button>
@@ -344,7 +344,7 @@ function AdminSkillsPage() {
               <div className="flex-1">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Icon name="search" className="h-5 w-5 text-gray-400" />
+                    <Icon name="search" className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     type="text"
@@ -453,7 +453,7 @@ function AdminSkillsPage() {
                                   {skill.metadata.version}
                                 </code>
                               ) : (
-                                <span className="text-gray-400">-</span>
+                                <span className="text-gray-500">-</span>
                               )}
                             </td>
 
@@ -485,7 +485,7 @@ function AdminSkillsPage() {
                                     className={`p-2 rounded-full ${
                                       skill.enabled !== false
                                         ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
-                                        : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30'
+                                        : 'text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
                                     }`}
                                     title={
                                       skill.enabled !== false
@@ -506,7 +506,7 @@ function AdminSkillsPage() {
                                     e.stopPropagation();
                                     void handleExportSkill(skill.name);
                                   }}
-                                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
+                                  className="p-2 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
                                   title={t('admin.skills.export', 'Export Skill')}
                                 >
                                   <Icon name="download" className="h-4 w-4" />
@@ -556,7 +556,7 @@ function AdminSkillsPage() {
                       <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
                         <Icon
                           name="sparkles"
-                          className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                          className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                         />
                         <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                           {t('admin.skills.noSkills', 'No skills found')}

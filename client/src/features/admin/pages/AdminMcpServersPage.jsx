@@ -882,7 +882,7 @@ function AdminMcpServersPage() {
 
         {servers.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-            <Icon name="globe" className="mx-auto h-12 w-12 text-gray-400" />
+            <Icon name="globe" className="mx-auto h-12 w-12 text-gray-500" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.mcp.servers.empty', 'No MCP servers configured')}
             </h3>
@@ -1289,7 +1289,7 @@ function AdminMcpServersPage() {
                                     <span>{tool.originalName}</span>
                                     {tool.uiResourceUri && (
                                       <span
-                                        className="inline-flex items-center gap-1 rounded-sm bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 font-sans text-[11px] text-blue-700 dark:text-blue-300"
+                                        className="inline-flex items-center gap-1 rounded-sm bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 font-sans text-[0.6875rem] text-blue-700 dark:text-blue-300"
                                         title={tool.uiResourceUri}
                                       >
                                         <Icon name="cube" size="xs" />

@@ -286,8 +286,8 @@ function ChatInput({
     : contextUsage.remaining <= 0
       ? 'text-red-600 dark:text-red-400'
       : contextUsage.usedRatio >= 0.85
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-gray-400 dark:text-gray-500';
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-gray-500 dark:text-gray-400';
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -780,7 +780,7 @@ function ChatInput({
             {value && (
               <button
                 type="button"
-                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                className="absolute right-3 top-2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 onClick={handleClearInput}
                 aria-label={t('chat.clearInput', 'Clear input')}
                 title={t('common.clear', 'Clear')}
@@ -914,7 +914,7 @@ function ChatInput({
                 }
                 className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
                   isRecordingTranscription
-                    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
                     : 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
@@ -955,7 +955,7 @@ function ChatInput({
 
             {/* Warning when no models are available */}
             {showModelSelector && (!models || models.length === 0) && (
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                 <Icon name="exclamationTriangle" size="sm" />
                 <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
               </div>
@@ -1001,7 +1001,7 @@ function ChatInput({
                 disabled ||
                 sendBlockedByAttachment ||
                 (!allowEmptySubmit && !value.trim() && !isProcessing)
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                  ? 'bg-gray-200 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
                   : isProcessing
                     ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
                     : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
@@ -1046,7 +1046,7 @@ function ChatInput({
                   className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
                     ephemeral
                       ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:hover:bg-violet-900/70'
-                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700'
+                      : 'text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700'
                   }`}
                 >
                   <Icon name="ghost" size="sm" solid={ephemeral} />

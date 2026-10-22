@@ -64,7 +64,7 @@ export default function IntegrationCard({
                 )}
               </div>
               {tokenExpiring && (
-                <div className="mt-2 flex items-center text-sm text-amber-600 dark:text-amber-400">
+                <div className="mt-2 flex items-center text-sm text-amber-700 dark:text-amber-400">
                   <Icon name="exclamationTriangle" className="w-4 h-4 mr-2" />
                   <span>{t('integrations.page.card.tokenExpiring')}</span>
                 </div>

@@ -467,7 +467,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
                     className="text-xs text-gray-600 dark:text-gray-400 font-mono"
                   >
                     {param.name}
-                    <span className="text-gray-400 dark:text-gray-500">
+                    <span className="text-gray-500 dark:text-gray-400">
                       {' '}
                       ({param.in}
                       {param.required ? ', required' : ''})

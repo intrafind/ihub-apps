@@ -25,7 +25,7 @@ export default function ServerError() {
         {getLocalizedContent(cfg?.message, lang) ||
           t('errors.serverError.message', 'Something went wrong on our end.')}
       </p>
-      <p className="text-gray-600 mb-8 text-center">
+      <p className="text-gray-600 dark:text-gray-400 mb-8 text-center">
         {getLocalizedContent(cfg?.subtitle, lang) ||
           t('errors.serverError.subtitle', 'Please try again later.')}
       </p>

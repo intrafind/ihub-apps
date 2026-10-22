@@ -241,7 +241,7 @@ const CloudFileBrowserShell = ({
               <Icon
                 name="chevron-right"
                 size="md"
-                className="text-gray-400 dark:text-gray-500 ml-2"
+                className="text-gray-500 dark:text-gray-400 ml-2"
               />
             </button>
           ))}
@@ -355,7 +355,7 @@ const CloudFileBrowserShell = ({
             <Icon
               name="search"
               size="sm"
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"
             />
             <input
               type="text"
@@ -367,7 +367,7 @@ const CloudFileBrowserShell = ({
             {searchInput && (
               <button
                 onClick={() => setSearchInput('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-600"
               >
                 <Icon name="x" size="sm" />
               </button>
@@ -491,7 +491,7 @@ const CloudFileBrowserShell = ({
                         <Icon
                           name={getFileIcon(item)}
                           size="md"
-                          className="text-gray-400 dark:text-gray-500"
+                          className="text-gray-500 dark:text-gray-400"
                         />
                       </div>
 
@@ -509,7 +509,7 @@ const CloudFileBrowserShell = ({
                         <div className="w-32 text-right text-xs text-gray-500 dark:text-gray-400">
                           {!isFolder && item.size > 0 && <span>{formatFileSize(item.size)}</span>}
                           {!isFolder && virtual && item.size === 0 && (
-                            <span className="text-gray-400 italic">
+                            <span className="text-gray-500 italic">
                               {t('cloudStorage.virtualFile', 'Cloud document')}
                             </span>
                           )}

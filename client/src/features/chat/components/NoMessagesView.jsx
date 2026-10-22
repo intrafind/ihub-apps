@@ -10,7 +10,7 @@ function NoMessagesView() {
   return (
     <div className="text-center text-gray-500 space-y-6 w-full">
       <div className="px-4">
-        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
+        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-500" />
         <h3 className="text-lg font-semibold mb-2">
           {t('pages.appChat.noMessagesTitle', 'No Messages Yet')}
         </h3>

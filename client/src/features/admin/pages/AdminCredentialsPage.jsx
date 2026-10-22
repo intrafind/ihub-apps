@@ -493,7 +493,7 @@ function AdminCredentialsPage() {
 
       {credentials.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-          <Icon name="key" className="mx-auto h-12 w-12 text-gray-400" />
+          <Icon name="key" className="mx-auto h-12 w-12 text-gray-500" />
           <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('admin.credentials.empty', 'No credentials configured')}
           </h3>

@@ -98,7 +98,7 @@ function DataTablePagination({
           {pages.map((p, i) =>
             p === '…' ? (
               // eslint-disable-next-line @eslint-react/no-array-index-key
-              <span key={`gap-${i}`} className="px-1 text-gray-400">
+              <span key={`gap-${i}`} className="px-1 text-gray-500">
                 …
               </span>
             ) : (

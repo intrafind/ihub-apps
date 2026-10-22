@@ -58,7 +58,7 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
             {latestStep?.nodeName || t('workflow.running', 'Running workflow...')}
           </span>
           {visibleSteps.length > 0 && (
-            <span className="text-gray-400 dark:text-gray-500 shrink-0">
+            <span className="text-gray-500 dark:text-gray-400 shrink-0">
               {visibleSteps.length} {visibleSteps.length === 1 ? 'step' : 'steps'}
             </span>
           )}

@@ -136,7 +136,7 @@ function ExecutionCard({ execution, onJoin, onDelete, onArchive, onDownload }) {
 
             {/* Pending checkpoint indicator */}
             {hasPendingCheckpoint && (
-              <div className="mt-2 flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+              <div className="mt-2 flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
                 <Icon name="hand-raised" className="w-4 h-4" />
                 <span className="text-sm font-medium">
                   {t('workflows.checkpointAwaiting', 'Awaiting your input')}

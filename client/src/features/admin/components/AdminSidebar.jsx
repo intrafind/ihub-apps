@@ -303,7 +303,7 @@ export default function AdminSidebar({ onMobileToggle }) {
               <div className="text-base text-gray-900 dark:text-gray-100 truncate">
                 {brandTitle}
               </div>
-              <div className="text-[10px] text-gray-500 dark:text-gray-400 tracking-wide uppercase">
+              <div className="text-[0.625rem] text-gray-500 dark:text-gray-400 tracking-wide uppercase">
                 {t('admin.sidebar.adminPanel', 'Admin Panel')}
               </div>
             </div>
@@ -312,7 +312,7 @@ export default function AdminSidebar({ onMobileToggle }) {
             type="button"
             onClick={toggle}
             aria-label={t('admin.sidebar.collapse', 'Collapse sidebar')}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
           >
             <ChevronDoubleLeftIcon className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -354,7 +354,7 @@ export default function AdminSidebar({ onMobileToggle }) {
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event('admin:open-palette'))}
-            className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             aria-label={t('admin.sidebar.search', 'Search admin...')}
           >
             <MagnifyingGlassIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -432,7 +432,7 @@ export default function AdminSidebar({ onMobileToggle }) {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('admin:open-palette'))}
-              className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md"
+              className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md"
               aria-label={t('admin.sidebar.search', 'Search admin...')}
             >
               <MagnifyingGlassIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />

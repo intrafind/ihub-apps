@@ -399,7 +399,7 @@ function UserPromptSettingsPanel() {
         )}
         <div className="flex items-center justify-end gap-3">
           {saved && !dirty && (
-            <span className="text-sm text-green-600 dark:text-green-400">
+            <span className="text-sm text-green-700 dark:text-green-400">
               {t('admin.prompts.userPrompts.saved', 'Saved')}
             </span>
           )}

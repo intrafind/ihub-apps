@@ -130,7 +130,7 @@ function McpServerCatalogDialog({ onClose, onSelect }) {
               <Icon
                 name="search"
                 size="sm"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
               <input
                 type="search"

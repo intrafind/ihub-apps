@@ -308,7 +308,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
         <div className="flex">
           <Icon
             name="lightbulb"
-            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 shrink-0 mt-0.5"
+            className="w-5 h-5 text-yellow-700 dark:text-yellow-400 mr-2 shrink-0 mt-0.5"
           />
           <div>
             <h4 className="font-medium text-gray-900 dark:text-white mb-1">

@@ -60,7 +60,7 @@ function getStatusBadgeClasses(status) {
         text: 'text-purple-800 dark:text-purple-300'
       };
     default:
-      return { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-400' };
+      return { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300' };
   }
 }
 
@@ -385,7 +385,7 @@ function AdminWorkflowExecutionsPage() {
                     setError(null);
                     loadExecutions(true);
                   }}
-                  className="mt-1 text-sm text-red-600 dark:text-red-400 hover:text-red-500 underline"
+                  className="mt-1 text-sm text-red-700 dark:text-red-400 hover:text-red-800 underline"
                 >
                   {t('common.retry', 'Retry')}
                 </button>
@@ -423,7 +423,7 @@ function AdminWorkflowExecutionsPage() {
           <div className="flex-1">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Icon name="search" className="h-5 w-5 text-gray-400" />
+                <Icon name="search" className="h-5 w-5 text-gray-500" />
               </div>
               <input
                 type="text"
@@ -570,7 +570,7 @@ function AdminWorkflowExecutionsPage() {
                                 {execution.currentNode}
                               </code>
                             ) : (
-                              <span className="text-sm text-gray-400">-</span>
+                              <span className="text-sm text-gray-500">-</span>
                             )}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
@@ -608,7 +608,7 @@ function AdminWorkflowExecutionsPage() {
                 </table>
                 {executions.length === 0 && !loading && (
                   <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
-                    <Icon name="play" className="mx-auto h-12 w-12 text-gray-400" />
+                    <Icon name="play" className="mx-auto h-12 w-12 text-gray-500" />
                     <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
                       {t('admin.workflowExecutions.noExecutions', 'No executions found')}
                     </h3>

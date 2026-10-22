@@ -84,7 +84,7 @@ function TeamsAuthEnd() {
           </>
         ) : (
           <>
-            <div className="text-green-600 mb-4">
+            <div className="text-green-700 mb-4">
               <svg
                 className="w-16 h-16 mx-auto"
                 fill="none"

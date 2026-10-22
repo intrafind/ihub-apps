@@ -138,7 +138,7 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
       <div className="relative" ref={dropdownRef}>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon name="search" className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            <Icon name="search" className="h-5 w-5 text-gray-500 dark:text-gray-400" />
           </div>
           <input
             ref={searchInputRef}
@@ -148,7 +148,7 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             onFocus={() => setIsDropdownOpen(true)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             autoComplete="off"
           />
         </div>

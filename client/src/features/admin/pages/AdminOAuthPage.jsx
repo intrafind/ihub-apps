@@ -36,12 +36,12 @@ function StatusRow({ icon, iconColor, title, description, enabled, count, onClic
             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               enabled
                 ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
             }`}
           >
             {enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
           </span>
-          <Icon name="chevron-right" size="md" className="text-gray-400 dark:text-gray-500" />
+          <Icon name="chevron-right" size="md" className="text-gray-500 dark:text-gray-400" />
         </div>
       </div>
     </button>
@@ -138,7 +138,7 @@ function AdminOAuthPage() {
         />
         <StatusRow
           icon="link"
-          iconColor="bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
+          iconColor="bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400"
           title={t('admin.auth.oauth.tabs.connections', 'Connections')}
           description={t(
             'admin.auth.oauth.overview.connectionsDesc',

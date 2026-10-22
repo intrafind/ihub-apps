@@ -922,7 +922,7 @@ function ModelFormEditor({
                       <Icon
                         name="information-circle"
                         size="sm"
-                        className="text-gray-400 dark:text-gray-500 cursor-help"
+                        className="text-gray-500 dark:text-gray-400 cursor-help"
                         title={apiKeyTooltip}
                       />
                     )}
@@ -1340,7 +1340,7 @@ function ModelFormEditor({
                             className={`font-medium ${
                               data.provider === 'openai' || data.provider === 'local'
                                 ? 'text-gray-700 dark:text-gray-300'
-                                : 'text-gray-400 dark:text-gray-600'
+                                : 'text-gray-500 dark:text-gray-600'
                             }`}
                           >
                             {t('admin.models.fields.autoDiscovery', 'Auto Discovery')}

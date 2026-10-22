@@ -95,7 +95,7 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
         <Icon
           name={sources.queries?.length ? 'search' : 'book-open'}
           size="sm"
-          className="shrink-0 text-gray-400 dark:text-gray-500"
+          className="shrink-0 text-gray-500 dark:text-gray-400"
         />
         <span className="truncate">{sourcesLabel(t, sources)}</span>
         {stack.length > 0 && (
@@ -110,12 +110,12 @@ function AnswerSources({ messageKey, sources, citations, onOpenInApp = null }) {
           </span>
         )}
         {more > 0 && (
-          <span className="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
+          <span className="shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true">
             +{more}
           </span>
         )}
         <span className="sr-only">{t('sources.sourcesCount', { count: total })}</span>
-        <Icon name="chevron-right" size="sm" className="shrink-0 text-gray-400" />
+        <Icon name="chevron-right" size="sm" className="shrink-0 text-gray-500" />
       </button>
       {isOpen && (
         <SourcesPanel
@@ -220,7 +220,7 @@ function CitedSourceRow({ source, messageKey, active }) {
       <button
         type="button"
         onClick={showInPanel}
-        className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white dark:bg-indigo-900/60 dark:text-indigo-200 dark:hover:bg-indigo-500"
+        className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[0.625rem] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white dark:bg-indigo-900/60 dark:text-indigo-200 dark:hover:bg-indigo-500"
         aria-label={t('sources.showInPanel', 'Show source {{n}} in the sources panel', {
           n: source.n
         })}
@@ -615,7 +615,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             {source.n && (
-              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-200">
+              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[0.625rem] font-semibold text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-200">
                 {source.n}
               </span>
             )}
@@ -647,7 +647,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
               className="mt-1 flex items-start gap-1 text-sm font-medium text-gray-900 hover:text-indigo-600 hover:underline dark:text-gray-100 dark:hover:text-indigo-300"
             >
               <span className="line-clamp-2 break-words">{title}</span>
-              <Icon name="external-link" size="xs" className="mt-0.5 shrink-0 text-gray-400" />
+              <Icon name="external-link" size="xs" className="mt-0.5 shrink-0 text-gray-500" />
               <span className="sr-only">{t('sources.opensInNewTab', '(opens in a new tab)')}</span>
             </a>
           ) : (
@@ -741,7 +741,7 @@ function PassageItem({ passage, onShow }) {
         <button
           type="button"
           onClick={onShow}
-          className="shrink-0 self-start rounded-sm p-1 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700 dark:hover:text-indigo-400"
+          className="shrink-0 self-start rounded-sm p-1 text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700 dark:hover:text-indigo-400"
           title={t('sources.showInDocument', 'Show this passage in the document')}
           aria-label={t('sources.showInDocument', 'Show this passage in the document')}
         >
@@ -858,7 +858,7 @@ function ReadStatus({ source }) {
     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       {read.ok ? (
         <span
-          className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
+          className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400"
           title={
             isDocument
               ? t('toolActivity.readDocumentTitle', 'The document was read')
@@ -870,7 +870,7 @@ function ReadStatus({ source }) {
         </span>
       ) : (
         <span
-          className="text-amber-600 dark:text-amber-400"
+          className="text-amber-700 dark:text-amber-400"
           title={t('toolActivity.readFailedTitle', 'The page could not be fetched')}
         >
           {t('toolActivity.readFailed', 'Not readable')}
@@ -916,9 +916,9 @@ function avatarColor(key) {
 function documentColor(type) {
   if (type === 'pdf') return 'text-red-500';
   if (['word', 'doc', 'docx'].includes(type)) return 'text-blue-500';
-  if (['excel', 'xls', 'xlsx', 'csv'].includes(type)) return 'text-emerald-600';
+  if (['excel', 'xls', 'xlsx', 'csv'].includes(type)) return 'text-emerald-700';
   if (['powerpoint', 'ppt', 'pptx'].includes(type)) return 'text-orange-500';
-  return 'text-gray-400 dark:text-gray-500';
+  return 'text-gray-500 dark:text-gray-400';
 }
 
 /**
@@ -951,7 +951,7 @@ function SourceIcon({ source, className = '' }) {
     return (
       <span
         aria-hidden="true"
-        className={`inline-flex shrink-0 items-center justify-center rounded-full bg-white text-gray-400 dark:bg-gray-800 ${className}`}
+        className={`inline-flex shrink-0 items-center justify-center rounded-full bg-white text-gray-500 dark:bg-gray-800 ${className}`}
       >
         <Icon name="cube" size="xs" />
       </span>
@@ -972,7 +972,7 @@ function SourceIcon({ source, className = '' }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white ${avatarColor(
+      className={`inline-flex shrink-0 items-center justify-center rounded-full text-[0.5625rem] font-semibold text-white ${avatarColor(
         site
       )} ${className}`}
     >

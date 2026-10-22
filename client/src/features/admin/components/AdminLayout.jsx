@@ -10,6 +10,7 @@ import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
+import SkipLink from '../../../shared/components/SkipLink';
 import AdminSidebar from './AdminSidebar';
 import AdminCommandPalette from './AdminCommandPalette';
 import AdminShortcutsModal from './AdminShortcutsModal';
@@ -74,12 +75,12 @@ function AdminLayoutInner() {
   return (
     <SidebarProvider sectionIds={sectionIds}>
       {/* Skip to admin content */}
-      <a
-        href="#admin-main-content"
+      <SkipLink
+        targetId="admin-main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:bg-white dark:focus:bg-gray-800 focus:text-indigo-600 focus:rounded-sm focus:shadow-lg focus:text-sm focus:font-medium"
       >
         {t('admin.skipToContent', 'Skip to content')}
-      </a>
+      </SkipLink>
 
       <MobileTopbar />
 

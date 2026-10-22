@@ -350,7 +350,7 @@ export default function AdminCommandPalette() {
       >
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 dark:text-gray-500 shrink-0" />
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -360,9 +360,9 @@ export default function AdminCommandPalette() {
               'admin.commandPalette.placeholder',
               'Search pages, actions, entities...'
             )}
-            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-hidden"
+            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 outline-hidden"
           />
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
+          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[0.625rem] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
             ESC
           </kbd>
         </div>
@@ -395,13 +395,13 @@ export default function AdminCommandPalette() {
                   <span className="flex-1 min-w-0">
                     <span className="truncate block">{item.label}</span>
                     {item.subtitle && (
-                      <span className="block text-xs text-gray-400 dark:text-gray-500 truncate capitalize">
+                      <span className="block text-xs text-gray-500 dark:text-gray-400 truncate capitalize">
                         {item.subtitle}
                       </span>
                     )}
                   </span>
                   {item.type && (
-                    <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 capitalize shrink-0">
+                    <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 capitalize shrink-0">
                       {item.type}
                     </span>
                   )}
@@ -411,7 +411,7 @@ export default function AdminCommandPalette() {
 
             return (
               <div key={section.title}>
-                <div className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                <div className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   {section.title}
                 </div>
                 {sectionItems}
@@ -420,14 +420,14 @@ export default function AdminCommandPalette() {
           })}
 
           {entityLoading && (
-            <div className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500 text-center">
+            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
               {t('admin.commandPalette.searching', 'Searching...')}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-[0.6875rem] text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
               &uarr;

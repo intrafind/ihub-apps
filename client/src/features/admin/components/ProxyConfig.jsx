@@ -185,7 +185,7 @@ function ProxyConfig() {
     <>
       {sourceLabel(field)}
       {dirtyFields[field] && (
-        <span className="text-amber-600 dark:text-amber-400">
+        <span className="text-amber-700 dark:text-amber-400">
           {' · '}
           {t('admin.system.proxy.unsavedField', 'unsaved change')}
         </span>
@@ -470,7 +470,7 @@ function ProxyConfig() {
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fieldNote(field)}</p>
             {unresolvedPlaceholders[field] && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                 {t(
                   'admin.system.proxy.unresolvedPlaceholder',
                   '{{placeholder}} is not set in the environment, so no proxy is used for this scheme.',
@@ -664,7 +664,7 @@ function ProxyConfig() {
                     {row.value || t('admin.system.proxy.notSet', 'not set')}
                   </span>
                   {dirtyFields[row.key] && (
-                    <span className="block break-words text-amber-600 dark:text-amber-400">
+                    <span className="block break-words text-amber-700 dark:text-amber-400">
                       {t('admin.system.proxy.effectivePending', 'after saving: {{value}}', {
                         value: row.pending || t('admin.system.proxy.notSet', 'not set')
                       })}

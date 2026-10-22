@@ -77,7 +77,7 @@ export default function FloatingToolbox({ onAction, isProcessing, hasSelection }
       id: 'tone-style',
       icon: 'color-swatch',
       label: t('canvas.toolbox.toneStyle', 'Tone & Style'),
-      color: 'text-green-600',
+      color: 'text-green-700',
       bgColor: 'bg-green-50 hover:bg-green-100',
       tools: [
         {

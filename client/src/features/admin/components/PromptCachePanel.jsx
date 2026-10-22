@@ -14,7 +14,7 @@ const DIMENSIONS = [
 
 function Tile({ title, value, hint, tone = 'default', icon }) {
   const toneClass =
-    tone === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100';
+    tone === 'warning' ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100';
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-5">
       <div className="flex items-start justify-between gap-3">
@@ -185,7 +185,7 @@ export default function PromptCachePanel({ tokens }) {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 dark:text-gray-500">
+                        <span className="text-gray-500 dark:text-gray-400">
                           {t('admin.usage.promptCache.notReportedShort', 'not reported')}
                         </span>
                       )}

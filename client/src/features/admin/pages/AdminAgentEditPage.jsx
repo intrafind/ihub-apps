@@ -961,7 +961,7 @@ export default function AdminAgentEditPage() {
                       )}
                     </p>
                     {!profile.planner?.enabled && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                         {t(
                           'admin.agents.edit.reviewRequiresPlanner',
                           'Enable the Planner section above to use the review loop.'

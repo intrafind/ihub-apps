@@ -14,6 +14,7 @@ import { translateModelTestMessage } from '../utils/modelTestMessages';
 import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
+import UploadConfigButton from '../components/UploadConfigButton';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -363,7 +364,7 @@ function AdminModelsPage() {
                 return next;
               })
             }
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-500 hover:text-gray-600"
             title={t('common.close', 'Close')}
           >
             <Icon name="x" className="h-5 w-5" />
@@ -386,7 +387,7 @@ function AdminModelsPage() {
               <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 dark:text-red-300 hover:text-red-500"
+                className="mt-2 text-sm text-red-700 dark:text-red-300 hover:text-red-800"
               >
                 {t('common.retry', 'Retry')}
               </button>
@@ -426,29 +427,13 @@ function AdminModelsPage() {
                 <Icon name="link" className="h-4 w-4 mr-2" />
                 {t('admin.models.import.button', 'Import from URL')}
               </button>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleUploadConfig}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  disabled={uploading}
-                />
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={uploading}
-                  title={t('admin.models.uploadConfig', 'Upload Model Config')}
-                >
-                  <Icon
-                    name={uploading ? 'refresh' : 'upload'}
-                    className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                  />
-                  {uploading
-                    ? t('admin.models.uploading', 'Uploading...')
-                    : t('admin.models.uploadConfig', 'Upload Config')}
-                </button>
-              </div>
+              <UploadConfigButton
+                onChange={handleUploadConfig}
+                uploading={uploading}
+                title={t('admin.models.uploadConfig', 'Upload Model Config')}
+                uploadingLabel={t('admin.models.uploading', 'Uploading...')}
+                label={t('admin.models.uploadConfig', 'Upload Config')}
+              />
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"

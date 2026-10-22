@@ -145,7 +145,7 @@ const DualModeEditor = ({
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'form'
                       ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Icon name="document-text" className="h-4 w-4 mr-2" />
@@ -157,7 +157,7 @@ const DualModeEditor = ({
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'json'
                       ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Icon name="code-bracket" className="h-4 w-4 mr-2" />
@@ -169,7 +169,7 @@ const DualModeEditor = ({
             {/* Status indicators */}
             <div className="flex items-center space-x-3">
               {hasUnsavedChanges && (
-                <div className="flex items-center text-amber-600 dark:text-amber-400">
+                <div className="flex items-center text-amber-700 dark:text-amber-400">
                   <Icon name="exclamation-triangle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">
                     {t('admin.editor.unsavedChanges', 'Unsaved changes')}
@@ -187,7 +187,7 @@ const DualModeEditor = ({
               )}
 
               {validationState.isValid && !hasUnsavedChanges && (
-                <div className="flex items-center text-green-600 dark:text-green-400">
+                <div className="flex items-center text-green-700 dark:text-green-400">
                   <Icon name="check-circle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">{t('admin.editor.allValid', 'All valid')}</span>
                 </div>
@@ -224,7 +224,7 @@ const DualModeEditor = ({
               />
             ) : (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700">
-                <Icon name="document-text" className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <Icon name="document-text" className="h-12 w-12 mx-auto mb-4 text-gray-500" />
                 <p className="text-lg font-medium mb-2">
                   {t('admin.editor.noFormComponent', 'No Form Component')}
                 </p>

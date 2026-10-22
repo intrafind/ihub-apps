@@ -25,7 +25,7 @@ export const LARGE_PROMPT_SOURCE_TOKENS = 50000;
  */
 function SourceTokenCount({ estimate, exposeAs, budgetTokens, inline = false }) {
   const { t } = useTranslation();
-  const muted = 'text-gray-400 dark:text-gray-500';
+  const muted = 'text-gray-500 dark:text-gray-400';
   // Inline, the count takes the size and colour of the row it sits in.
   const size = inline ? '' : 'text-sm';
   const plain = inline ? '' : 'text-gray-700 dark:text-gray-300';
@@ -69,7 +69,7 @@ function SourceTokenCount({ estimate, exposeAs, budgetTokens, inline = false }) 
     );
   } else if (large) {
     note = (
-      <span className="text-xs text-amber-600 dark:text-amber-400">
+      <span className="text-xs text-amber-700 dark:text-amber-400">
         {t('admin.sources.tokensEveryRequest', 'sent with every request')}
       </span>
     );

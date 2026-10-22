@@ -210,7 +210,7 @@ function ClarificationChips({
                 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
                 ${
                   disabled
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                    ? 'bg-gray-100 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
                     : selected
                       ? 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -264,7 +264,7 @@ function ClarificationChips({
               setOtherValue('');
             }}
             disabled={disabled}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             aria-label={t('common.cancel', 'Cancel')}
           >
             <Icon name="x" size="sm" />
