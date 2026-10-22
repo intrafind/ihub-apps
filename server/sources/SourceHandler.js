@@ -5,7 +5,7 @@
  * Base Source Handler Interface
  *
  * This abstract class defines the interface that all source handlers must implement.
- * Source handlers are responsible for loading content from various sources (filesystem,
+ * Source handlers are responsible for loading content from various sources (URLs,
  * APIs, databases, etc.) and providing caching capabilities.
  */
 

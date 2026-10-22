@@ -137,6 +137,20 @@ export const updateProjectItem = (projectId, itemId, changes) =>
   call(() => apiClient.patch(itemPath(projectId, itemId), changes));
 
 /**
+ * Replace the text of a written, uploaded or imported document. The text is
+ * stored like written text; the item comes back `ready` and `written`.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @param {string} text
+ * @returns {Promise<Object>} The updated item.
+ */
+export const updateProjectItemText = async (projectId, itemId, text) => {
+  const data = await call(() => apiClient.put(`${itemPath(projectId, itemId)}/text`, { text }));
+  return data?.item;
+};
+
+/**
  * Remove an item and its text.
  *
  * @param {string} projectId

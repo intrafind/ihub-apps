@@ -37,7 +37,11 @@ import { ProjectError, getProjectService } from '../services/projects/ProjectSer
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
 import { ACCEPTED_TYPES, acceptedTypeOf, sniffBytes } from '../services/projects/extractText.js';
 import { projectName, serializeItem } from '../services/projects/projectView.js';
-import { ifinderPickerSchema, urlCheckSchema } from '../validators/projectSchema.js';
+import {
+  ifinderPickerSchema,
+  itemTextUpdateSchema,
+  urlCheckSchema
+} from '../validators/projectSchema.js';
 
 /** Field name of the uploaded file. */
 export const UPLOAD_FIELD = 'file';
@@ -303,6 +307,42 @@ export async function refreshItem(req, res, { project, authorize }) {
     });
   } catch (error) {
     sendProjectError(res, error, 'refresh project item');
+  }
+}
+
+/**
+ * Replace the text of a written, uploaded or imported item (`PUT …/text`,
+ * user and admin routes): the text is stored like written text and the item
+ * becomes `written` by the caller.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {{project: Object, authorize?: Function}} options
+ */
+export async function replaceItemText(req, res, { project, authorize }) {
+  const { itemId } = req.params;
+  if (!validateIdForPath(itemId, 'item', res)) return;
+  const parsed = itemTextUpdateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return sendBadRequest(res, parsed.error.issues[0]?.message || 'Invalid text');
+  }
+  try {
+    const { item } = await getProjectService().replaceItemText(
+      project.id,
+      itemId,
+      parsed.data.text,
+      { user: req.user, authorize }
+    );
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'projectItem',
+      resourceId: project.id,
+      summary: `Edited the text of ${item.kind} item "${item.name}" in project "${projectName(project)}"`
+    });
+    res.json({ item: serializeItem(item) });
+  } catch (error) {
+    sendProjectError(res, error, 'edit project item text');
   }
 }
 

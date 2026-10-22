@@ -122,6 +122,30 @@ export function isItemReadable(item) {
   return READABLE_ITEM_STATUSES.includes(item?.status);
 }
 
+/** The longest text the edit dialog loads and sends (the server's own cap). */
+export const ITEM_TEXT_EDIT_CHARS = 2_000_000;
+
+/** The origins whose stored text an editor may replace (mirrors the server). */
+export const EDITABLE_TEXT_ORIGINS = Object.freeze(['written', 'uploaded', 'imported']);
+
+/**
+ * Whether the text of an item can be edited in place: a readable stored
+ * text that came from the user (written, uploaded) or from the sources
+ * migration. A link reads live, and a document picked from a cloud drive or
+ * iFinder carries the source's text, so neither is editable.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isItemTextEditable(item) {
+  return (
+    item?.storage === 'text' &&
+    Boolean(item.text) &&
+    isItemReadable(item) &&
+    EDITABLE_TEXT_ORIGINS.includes(item.provenance?.origin)
+  );
+}
+
 /**
  * How many items of each kind a project holds, most frequent first.
  *

@@ -556,6 +556,22 @@ export const updateAdminProjectItem = async (projectId, itemId, changes) => {
 };
 
 /**
+ * Replace the text of a written, uploaded or imported document of an admin project.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @param {string} text
+ * @returns {Promise<Object>} The updated item.
+ */
+export const updateAdminProjectItemText = async (projectId, itemId, text) => {
+  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/text`, {
+    method: 'PUT',
+    body: { text }
+  });
+  return response.data?.item;
+};
+
+/**
  * Remove an item from a project.
  *
  * @param {string} projectId
@@ -1314,6 +1330,7 @@ export const adminApi = {
   addAdminProjectItem,
   uploadAdminProjectItem,
   updateAdminProjectItem,
+  updateAdminProjectItemText,
   deleteAdminProjectItem,
   refreshAdminProjectItem,
   fetchAdminProjectItemText,
