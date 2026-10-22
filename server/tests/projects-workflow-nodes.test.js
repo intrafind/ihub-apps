@@ -779,6 +779,73 @@ describe('project-write and project-read', () => {
     assert.match(back.output.text, /Memo: Hello \{\{customer\.name\}\}!/);
   });
 
+  it('binds {{item}} to the current loop item before a variable named item', async () => {
+    // An outer loop published its item as `item`; the inner document loop's
+    // current item is `_loopItem`.
+    const data = { item: { name: 'Outer folder' }, _loopItem: { name: 'Lease.md' } };
+    assert.equal(write.render('Memo {{item.name}}', stateOf(data)), 'Memo Lease.md');
+    // Outside a loop (no `_loopItem`) a variable named item still serves.
+    assert.equal(
+      write.render('Memo {{item.name}}', stateOf({ item: { name: 'Input' } })),
+      'Memo Input'
+    );
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: 'Memo {{item.name}}', text: 'x' }
+      },
+      stateOf(data),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    assert.equal(result.output.name, 'Memo Lease.md');
+
+    // The same through real nested loops: the outer one names its folder
+    // `item`, the inner one writes a memo per document of that folder.
+    const loop = getExecutor('loop');
+    const nested = await loop.execute(
+      {
+        id: 'folders',
+        type: 'loop',
+        config: {
+          mode: 'forEach',
+          array: '$.data.folders',
+          itemVariable: 'item',
+          body: [
+            {
+              id: 'docs',
+              type: 'loop',
+              config: {
+                mode: 'forEach',
+                array: '$.data.item.docs',
+                body: [
+                  {
+                    id: 'store',
+                    type: 'project-write',
+                    config: {
+                      project: caseProject.id,
+                      name: 'Nested {{item.name}}',
+                      text: '$.data._loopItem.text'
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      stateOf({
+        folders: [{ name: 'Folder A', docs: [{ name: 'Deed.md', text: 'The deed.' }] }]
+      }),
+      contextOf()
+    );
+    assert.equal(nested.status, 'completed', nested.error);
+    const names = (await repo.get(caseProject.id)).items.map(entry => entry.name);
+    assert.ok(names.includes('Nested Deed.md'), names.join(', '));
+    assert.ok(!names.includes('Nested Folder A'));
+  });
+
   it('returns the pending document at once when told not to wait', async () => {
     const result = await write.execute(
       {

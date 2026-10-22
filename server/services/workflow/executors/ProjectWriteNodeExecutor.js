@@ -64,7 +64,10 @@ export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
     // scanned again, so a run text holding `{{…}}` cannot reach other state.
     return renderTemplate(
       value,
-      { ...data, item: data.item ?? data._loopItem ?? null },
+      // `item` is the innermost loop's current item: `_loopItem` is set each
+      // round (and restored when the loop ends), while a variable named
+      // `item` may be an input, an earlier output or an outer loop's item.
+      { ...data, item: data._loopItem ?? data.item ?? null },
       { opaqueValues: true }
     );
   }
