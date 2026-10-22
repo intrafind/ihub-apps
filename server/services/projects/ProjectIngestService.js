@@ -204,7 +204,8 @@ export class ProjectIngestService {
    * @param {Object} item
    * @param {Object} input - One of `{path}`, `{bytes}`, `{text}` or `{fetch}`,
    *   with `contentType`, `name` and `bytes` (a size) as known; `previousBlobKey`
-   *   on a refresh; `purpose` (`upload`, `pick`, `refresh`, `write`, `import`).
+   *   on a refresh; `provenance` to merge into the item's once installed (an
+   *   edit); `purpose` (`upload`, `pick`, `refresh`, `write`, `import`).
    * @param {{user?: Object, authorize?: Function, wait?: boolean}} [options]
    * @returns {Promise<{item: Object}|null>} The finished item when the job ran
    *   inline, otherwise null (the caller polls).
@@ -419,6 +420,10 @@ export class ProjectIngestService {
               ...(item.provenance || {}),
               source: { ...(item.provenance?.source || {}), ...job.source }
             };
+          }
+          if (input.provenance) {
+            // An edit: the text is the caller's now, whatever it was before.
+            item.provenance = { ...(item.provenance || {}), ...input.provenance };
           }
           if (
             extracted.contentType &&

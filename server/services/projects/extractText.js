@@ -47,6 +47,8 @@ export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsh
 export const PDF_MIME = 'application/pdf';
 export const HTML_MIME = 'text/html';
 export const EML_MIME = 'message/rfc822';
+/** An Outlook message (`.msg`): an OLE2 compound file read with msgreader. */
+export const MSG_MIME = 'application/vnd.ms-outlook';
 
 /** An extraction failure the pipeline records on the item. */
 export class ExtractionError extends Error {
@@ -193,7 +195,6 @@ const REFUSED_TYPES = new Set([
   'application/x-sharedlib',
   'application/x-mach-binary',
   'application/java-archive',
-  'application/vnd.ms-outlook',
   'application/msword',
   'application/vnd.ms-excel',
   'application/vnd.ms-powerpoint'
@@ -204,14 +205,15 @@ const REFUSED_TYPES = new Set([
  * picker (`accept`).
  */
 export const ACCEPTED_TYPES = Object.freeze({
-  mimeTypes: Object.freeze([PDF_MIME, ...PACKAGES.keys(), 'text/*', ...TEXT_MIME_TYPES]),
+  mimeTypes: Object.freeze([PDF_MIME, ...PACKAGES.keys(), MSG_MIME, 'text/*', ...TEXT_MIME_TYPES]),
   extensions: Object.freeze([
     '.pdf',
     ...PACKAGE_MIME_BY_EXTENSION.keys(),
+    '.msg',
     ...TEXT_EXTENSIONS.keys()
   ]),
   summary:
-    'PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), OpenDocument (.odt, .ods, .odp), HTML, e-mail (.eml), Markdown, CSV, JSON, XML and other text files'
+    'PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), OpenDocument (.odt, .ods, .odp), HTML, e-mail (.eml, .msg), Markdown, CSV, JSON, XML and other text files'
 });
 
 function normalizeMime(value) {
@@ -252,6 +254,9 @@ export function acceptedTypeOf({ contentType, name } = {}) {
   // store's wording for the package, not an archive: the bytes decide below.
   const zipForPackage = ZIP_MIMES.has(declared) && PACKAGE_MIME_BY_EXTENSION.has(extension);
   if (declared && isRefusedMime(declared) && !zipForPackage) return null;
+  // Browsers send `.msg` as the Outlook type, as a generic binary or as
+  // nothing at all; the name is the witness, the OLE2 signature decides.
+  if (declared === MSG_MIME || extension === '.msg') return MSG_MIME;
   if (declared === PDF_MIME || (!declared && extension === '.pdf')) return PDF_MIME;
   if (PACKAGES.has(declared)) return declared;
   if (PACKAGE_MIME_BY_EXTENSION.has(extension)) {
@@ -271,11 +276,15 @@ export function acceptedTypeOf({ contentType, name } = {}) {
  * What the first bytes say the file is.
  *
  * @param {Buffer} bytes
- * @returns {'pdf'|'zip'|'refused'|'unknown'}
+ * @returns {'pdf'|'zip'|'ole2'|'refused'|'unknown'} `ole2` is a compound
+ *   file: an Outlook message, or a legacy Office document (`.doc`, `.xls`,
+ *   `.ppt`) that `resolveContentType` refuses.
  */
 export function sniffBytes(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 4) return 'unknown';
   if (bytes.subarray(0, 5).toString('latin1') === '%PDF-') return 'pdf';
+  if (bytes.length >= 8 && bytes.subarray(0, 8).toString('hex') === 'd0cf11e0a1b11ae1')
+    return 'ole2';
   if (
     bytes[0] === 0x50 &&
     bytes[1] === 0x4b &&
@@ -298,7 +307,6 @@ export function sniffBytes(bytes) {
     hex.startsWith('425a68') || // bzip2
     hex.startsWith('377abcaf271c') || // 7z
     hex.startsWith('526172211a07') || // RAR
-    hex.startsWith('d0cf11e0a1b11ae1') || // OLE2 (.doc, .xls, .msg)
     hex.startsWith('cafebabe') || // Java class / Mach-O fat
     hex.startsWith('fffb') ||
     hex.startsWith('494433') || // MP3
@@ -356,6 +364,13 @@ export async function resolveContentType(bytes, { contentType, name } = {}) {
     );
   }
   if (sniffed === 'pdf') return PDF_MIME;
+  if (sniffed === 'ole2') {
+    if (accepted === MSG_MIME) return MSG_MIME;
+    throw new ExtractionError(
+      'UNSUPPORTED_TYPE',
+      `${name || 'The file'} is a legacy Office file (.doc, .xls, .ppt). Save it as .docx, .xlsx, .pptx or PDF and upload it again. Supported: ${ACCEPTED_TYPES.summary}.`
+    );
+  }
   if (sniffed === 'zip') {
     const inside = await packageTypeOf(bytes);
     if (inside) return inside;
@@ -375,6 +390,12 @@ export async function resolveContentType(bytes, { contentType, name } = {}) {
     throw new ExtractionError(
       'UNSUPPORTED_TYPE',
       `${name || 'The file'} has an unsupported type ${normalizeMime(contentType) || '(unknown)'}. Supported: ${ACCEPTED_TYPES.summary}.`
+    );
+  }
+  if (accepted === MSG_MIME) {
+    throw new ExtractionError(
+      'UNSUPPORTED_TYPE',
+      `${name || 'The file'} is not a readable Outlook message (.msg).`
     );
   }
   if (PACKAGES.has(accepted) || accepted === PDF_MIME) {
@@ -599,6 +620,213 @@ function emailParts(body, contentType, encoding, depth = 0) {
   return [];
 }
 
+// --- Outlook messages (.msg) -------------------------------------------------
+
+/** Windows code pages Outlook records for a body, as TextDecoder labels. */
+const CODEPAGE_TO_LABEL = Object.freeze({
+  20127: 'us-ascii',
+  28591: 'iso-8859-1',
+  28592: 'iso-8859-2',
+  28595: 'iso-8859-5',
+  65001: 'utf-8',
+  1200: 'utf-16le',
+  1250: 'windows-1250',
+  1251: 'windows-1251',
+  1252: 'windows-1252',
+  1253: 'windows-1253',
+  1254: 'windows-1254',
+  1255: 'windows-1255',
+  1256: 'windows-1256',
+  1257: 'windows-1257',
+  1258: 'windows-1258',
+  932: 'shift_jis',
+  936: 'gbk',
+  949: 'euc-kr',
+  950: 'big5'
+});
+
+/** Bytes as text in the first known of the code pages given, else UTF-8. */
+function decodeCodepage(bytes, ...codepages) {
+  const label = codepages.map(cp => CODEPAGE_TO_LABEL[cp]).find(Boolean) || 'utf-8';
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return decodeCharset(Buffer.from(bytes));
+  }
+}
+
+/**
+ * RTF as plain text, best effort: Outlook wraps HTML in RTF (MS-OXRTFEX),
+ * whose markup is flattened like any HTML body; plain RTF keeps its
+ * paragraphs. Never throws.
+ */
+/** Groups of an RTF header that hold no text: fonts, colours, styles, metadata. */
+const RTF_SILENT_GROUP =
+  /^\{\\(fonttbl|colortbl|stylesheet|info|listtable|listoverridetable|rsidtbl|generator|themedata|datastore|xmlnstbl|latentstyles|pntext)\b/;
+
+/**
+ * RTF without its silent groups and without the `{\*…}` destinations an
+ * old reader may skip, keeping the `\*\htmltag` groups Outlook puts the
+ * HTML markup of an encapsulated body in.
+ */
+function stripRtfGroups(rtf) {
+  let out = '';
+  let i = 0;
+  while (i < rtf.length) {
+    const head = rtf.slice(i, i + 24);
+    if (rtf[i] === '{' && (RTF_SILENT_GROUP.test(head) || /^\{\\\*(?!\\htmltag)/.test(head))) {
+      let depth = 0;
+      for (; i < rtf.length; i += 1) {
+        const ch = rtf[i];
+        if (ch === '\\') {
+          i += 1;
+        } else if (ch === '{') {
+          depth += 1;
+        } else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            i += 1;
+            break;
+          }
+        }
+      }
+      continue;
+    }
+    out += rtf[i];
+    i += 1;
+  }
+  return out;
+}
+
+function rtfToText(rtf) {
+  if (!rtf) return '';
+  const text = stripRtfGroups(String(rtf))
+    .replace(/\\htmlrtf\b[\s\S]*?\\htmlrtf0 ?/g, ' ')
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replace(/\\u(-?\d+)\??/g, (_m, n) => {
+      let code = Number.parseInt(n, 10);
+      if (code < 0) code += 65536;
+      return String.fromCharCode(code);
+    })
+    .replace(/\\pard?\b ?/g, '\n')
+    .replace(/\\line\b ?/g, '\n')
+    .replace(/\\tab\b ?/g, '\t')
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, '')
+    .replace(/[{}]/g, '')
+    .replace(/\\\r?\n/g, '\n');
+  const flat = /<\/?[a-z][\s\S]*>/i.test(text) ? htmlText(text) : text;
+  return flat
+    .replace(/[ \t ]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim();
+}
+
+/** Outlook keeps internal addresses as X.500 names (`/O=…`): prefer SMTP. */
+function pickEmail(...candidates) {
+  return (
+    candidates.find(value => typeof value === 'string' && value && !/^\/[oO]=/.test(value)) || ''
+  );
+}
+
+function participant(name, email) {
+  if (name && email && name !== email) return `${name} <${email}>`;
+  return name || email || '';
+}
+
+async function loadMsgReader() {
+  // A CommonJS module whose default export is the class; the interop may
+  // surface it at `default` or `default.default`.
+  const mod = await import('@kenjiuno/msgreader');
+  const MsgReader = [mod?.default?.default, mod?.default, mod].find(
+    candidate => typeof candidate === 'function'
+  );
+  if (!MsgReader) throw new Error('msgreader is not available');
+  return MsgReader;
+}
+
+async function loadDecompressRtf() {
+  const mod = await import('@kenjiuno/decompressrtf');
+  const fn = mod?.decompressRTF || mod?.default?.decompressRTF || mod?.default;
+  if (typeof fn !== 'function') throw new Error('decompressrtf is not available');
+  return fn;
+}
+
+/**
+ * The text of a parsed Outlook message: the headers that matter, the
+ * attachment names (their content is not followed, as with `.eml`), then the
+ * body in the first form Outlook stored it in: plain text, HTML, or the
+ * compressed RTF of an older client.
+ *
+ * @param {Object} data - What `MsgReader.getFileData()` returns.
+ * @returns {Promise<string>}
+ */
+export async function msgContentOf(data) {
+  if (!data || typeof data !== 'object') return '';
+  const lines = [];
+  const subject = typeof data.subject === 'string' ? data.subject.trim() : '';
+  if (subject) lines.push(`Subject: ${subject}`);
+  const from = participant(
+    data.senderName,
+    pickEmail(data.senderSmtpAddress, data.sentRepresentingSmtpAddress, data.senderEmail)
+  );
+  if (from) lines.push(`From: ${from}`);
+  const recipients = Array.isArray(data.recipients) ? data.recipients : [];
+  const group = type =>
+    recipients
+      .filter(entry => String(entry?.recipType || 'to').toLowerCase() === type)
+      .map(entry => participant(entry.name, pickEmail(entry.smtpAddress, entry.email)))
+      .filter(Boolean)
+      .join(', ');
+  const to = group('to');
+  const cc = group('cc');
+  if (to) lines.push(`To: ${to}`);
+  if (cc) lines.push(`Cc: ${cc}`);
+  const date = data.messageDeliveryTime || data.clientSubmitTime || data.creationTime;
+  if (date) lines.push(`Date: ${date}`);
+  const attachments = (Array.isArray(data.attachments) ? data.attachments : [])
+    .map(entry => entry?.fileName || entry?.name)
+    .filter(Boolean);
+  if (attachments.length > 0) lines.push(`Attachments: ${attachments.join(', ')}`);
+
+  let body = '';
+  if (typeof data.body === 'string' && data.body.trim()) {
+    body = data.body;
+  } else if (typeof data.bodyHtml === 'string' && data.bodyHtml.trim()) {
+    body = htmlText(data.bodyHtml);
+  } else if (data.html) {
+    const html =
+      typeof data.html === 'string'
+        ? data.html
+        : decodeCodepage(data.html, data.internetCodepage, data.messageCodepage);
+    body = htmlText(html);
+  } else if (data.compressedRtf) {
+    try {
+      const decompressRTF = await loadDecompressRtf();
+      const rtfBytes = Uint8Array.from(decompressRTF(Array.from(data.compressedRtf)));
+      body = rtfToText(decodeCodepage(rtfBytes, data.messageCodepage));
+    } catch {
+      body = '';
+    }
+  }
+  return [lines.join('\n'), body.trim()].filter(Boolean).join('\n\n').trim();
+}
+
+/** An Outlook message file as text. */
+async function msgText(bytes) {
+  const MsgReader = await loadMsgReader();
+  const reader = new MsgReader(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  );
+  const data = reader.getFileData();
+  if (!data || data.error) {
+    throw new ExtractionError(
+      'EXTRACTION_FAILED',
+      `The file is not a readable Outlook message (${data?.error || 'no message data'})`
+    );
+  }
+  return msgContentOf(data);
+}
+
 async function extractXlsx(bytes, { report, sheetRows } = {}) {
   await assertSafePackage(bytes);
   const XLSX = await import('xlsx');
@@ -683,6 +911,8 @@ export async function extractText(
       raw = htmlText(decodeText(bytes, name));
     } else if (type === EML_MIME) {
       raw = emailText(bytes);
+    } else if (type === MSG_MIME) {
+      raw = await msgText(bytes);
     } else {
       raw = decodeText(bytes, name);
     }

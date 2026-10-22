@@ -310,6 +310,16 @@ export const itemUpdateSchema = z
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
 
+/** What `PUT /api/projects/:id/items/:itemId/text` accepts. */
+export const itemTextUpdateSchema = z
+  .object({
+    text: z
+      .string()
+      .max(2_000_000)
+      .refine(value => value.trim().length > 0, 'The text is empty')
+  })
+  .strict();
+
 /** What `PUT /api/projects/:id/members` accepts. */
 export const membersUpdateSchema = z
   .object({ members: z.array(projectMemberSchema).max(MAX_MEMBERS) })
