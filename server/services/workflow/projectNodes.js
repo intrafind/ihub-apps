@@ -243,7 +243,9 @@ export async function resolveNodeProject({ executor, node, state, context }) {
 
 /**
  * The error result of a step for a failure, with its code beside the
- * message so the execution view and the audit can tell them apart.
+ * message so the execution view and the audit can tell them apart. The code
+ * sits at the top of the result (where `WorkflowEngine.executeNode` reads
+ * it for the node error) and in `details`.
  *
  * @param {Object} executor
  * @param {Object} node
@@ -252,10 +254,11 @@ export async function resolveNodeProject({ executor, node, state, context }) {
  */
 export function projectNodeFailure(executor, node, error, resolvedInputs) {
   const code = error?.code || 'PROJECT_STEP_FAILED';
-  return executor.createErrorResult(`${node.type}: ${error?.message || String(error)}`, {
+  const result = executor.createErrorResult(`${node.type}: ${error?.message || String(error)}`, {
     nodeId: node.id,
     code,
     ...(error?.details || {}),
     ...(resolvedInputs ? { resolvedInputs } : {})
   });
+  return { ...result, code };
 }

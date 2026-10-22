@@ -47,7 +47,8 @@ export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
    * Resolve a config value. A whole `$.…` reference returns the state's
    * value verbatim: a text that came out of the run is data, never another
    * template. Only a string written in the config is a template — `{{…}}`
-   * against the state's data with `item` as the loop item — or, without
+   * against the state's data with `item` as the loop item, whose inserted
+   * values stay verbatim (never rendered again) — or, without
    * `{{`, a text with embedded `${$.…}` references.
    *
    * @param {*} value - The configured value.
@@ -59,7 +60,13 @@ export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
     if (value.startsWith('$.')) return this.resolveVariable(value, state);
     if (!value.includes('{{')) return this.resolveVariables(value, state);
     const data = state?.data || {};
-    return renderTemplate(value, { ...data, item: data.item ?? data._loopItem ?? null });
+    // Opaque: a value the template pulls in is inserted verbatim and never
+    // scanned again, so a run text holding `{{…}}` cannot reach other state.
+    return renderTemplate(
+      value,
+      { ...data, item: data.item ?? data._loopItem ?? null },
+      { opaqueValues: true }
+    );
   }
 
   async execute(node, state, context) {

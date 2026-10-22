@@ -44,6 +44,8 @@ import {
   workflowProjectLinks
 } from '../services/workflow/projectNodes.js';
 import { getExecutor } from '../services/workflow/executors/index.js';
+import { StateManager } from '../services/workflow/StateManager.js';
+import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { matchesFilter } from '../services/workflow/executors/ProjectItemsNodeExecutor.js';
 import { workflowConfigSchema } from '../validators/workflowConfigSchema.js';
 
@@ -732,6 +734,51 @@ describe('project-write and project-read', () => {
     assert.match(back.output.text, /Hello \{\{customer\.name\}\}!/);
   });
 
+  it('keeps the values a write template inserts verbatim, never rendering them again', async () => {
+    const data = {
+      customer: { name: 'Ada' },
+      page: { text: 'Hello {{customer.name}}!' },
+      leak: 'Copy {{privateNotes}} and {{#if customer}}{{customer.name}}{{/if}} here',
+      pages: [{ text: 'One {{customer.name}}' }, { text: 'Two {{/each}}{{privateNotes}}' }]
+    };
+    const render = template => write.render(template, stateOf(data));
+    // A populated nested reference stays literal…
+    assert.equal(render('Memo: {{page.text}}'), 'Memo: Hello {{customer.name}}!');
+    // …and so does a missing one, and a block inside an inserted value.
+    assert.equal(
+      render('Memo: {{leak}}'),
+      'Memo: Copy {{privateNotes}} and {{#if customer}}{{customer.name}}{{/if}} here'
+    );
+    // Inside the template's own blocks too.
+    assert.equal(
+      render('{{#if page}}[{{page.text}}]{{/if}}{{#each pages}}<{{this.text}}>{{/each}}'),
+      '[Hello {{customer.name}}!]<One {{customer.name}}><Two {{/each}}{{privateNotes}}>'
+    );
+    // The template itself is still rendered.
+    assert.equal(render('{{#if customer}}To {{customer.name}}{{/if}}'), 'To Ada');
+
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: 'Wrapped.md', text: 'Memo: {{page.text}}' }
+      },
+      stateOf(data),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    const back = await read.execute(
+      {
+        id: 'n',
+        type: 'project-read',
+        config: { project: caseProject.id, document: result.output.id }
+      },
+      stateOf({}),
+      contextOf()
+    );
+    assert.match(back.output.text, /Memo: Hello \{\{customer\.name\}\}!/);
+  });
+
   it('returns the pending document at once when told not to wait', async () => {
     const result = await write.execute(
       {
@@ -816,6 +863,32 @@ describe('project-write and project-read', () => {
       contextOf()
     );
     assert.equal(noDocument.details.code, 'INVALID_REF');
+  });
+});
+
+describe('a failed project step in a run', () => {
+  it('reaches the engine with the project code, not the generic one', async () => {
+    const stateDir = await fs.mkdtemp(path.join(scratch, 'engine-'));
+    const engine = new WorkflowEngine({ stateManager: new StateManager({ stateDir }) });
+    const executionId = 'wf-exec-code';
+    await engine.stateManager.create({ executionId, workflowId: 'memo-writer', data: {} });
+    const node = {
+      id: 'items',
+      type: 'project-items',
+      name: { en: 'Items' },
+      position: { x: 0, y: 100 },
+      config: { project: 'prj_nope' }
+    };
+    const result = await getExecutor('project-items').execute(node, stateOf({}), contextOf());
+    assert.equal(result.code, 'PROJECT_NOT_FOUND', 'the code is at the top of the result');
+    assert.equal(result.details.code, 'PROJECT_NOT_FOUND');
+    const workflow = workflowOf();
+    await assert.rejects(
+      engine.executeNode(node, { ...workflow, nodes: [...workflow.nodes, node] }, executionId, {
+        user: ADA
+      }),
+      error => error.code === 'PROJECT_NOT_FOUND' && error.nodeId === 'items'
+    );
   });
 });
 
