@@ -9,6 +9,7 @@
  * and the multipart route.
  */
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -65,7 +66,7 @@ import {
 } from '../services/projects/bootstrap.js';
 import { evictItemText, getItemText } from '../services/knowledge/ItemTextService.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
-import { countBodyBytes } from '../sources/SourceManager.js';
+import { countBodyBytes, probeUrl } from '../sources/SourceManager.js';
 import { z } from 'zod';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -926,6 +927,57 @@ describe('ingest pipeline', () => {
     );
   });
 
+  it('reserves a refresh before queueing it, so a second one is refused', async () => {
+    const project = await newProject();
+    const { item } = await service.addItem(
+      project.id,
+      { kind: 'fake-cloud', ref: { fileId: 'busy' } },
+      { user: ADA }
+    );
+    const picked = await settled(project.id, item.id);
+    assert.equal(picked.status, 'ready', JSON.stringify(picked.error));
+    const ingest = service.ingest;
+    // Every slot taken: the refresh waits in the queue, not yet in `_run`.
+    const occupied = ingest.settings().ingest.concurrency;
+    ingest.running += occupied;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      ingest.running -= occupied;
+      ingest._pump();
+    };
+    try {
+      const queued = await service.refreshItem(project.id, item.id, { user: ADA });
+      assert.equal(typeof queued.item.refreshingAt, 'string');
+      assert.equal(queued.item.status, 'ready');
+      assert.equal(queued.item.text.blobKey, picked.text.blobKey);
+      assert.equal(ingest.queue.filter(entry => entry.job.itemId === item.id).length, 1);
+      await assert.rejects(
+        service.refreshItem(project.id, item.id, { user: ADA }),
+        error => error.code === 'PROJECT_MISMATCH'
+      );
+      assert.equal(ingest.queue.filter(entry => entry.job.itemId === item.id).length, 1);
+      // The old snapshot stays readable while the refresh waits.
+      const waiting = await itemOf(project.id, item.id);
+      assert.match(
+        (await getItemText({ id: project.id }, waiting, { user: ADA })).text,
+        /Picked from the cloud/
+      );
+      release();
+      const done = await waitFor(async () => {
+        const current = await itemOf(project.id, item.id);
+        return current.refreshingAt === undefined && !ingest.isActive(item.id) && current;
+      });
+      assert.equal(done.status, 'ready');
+      // Once it is done, the item can be refreshed again.
+      const again = await service.refreshItem(project.id, item.id, { user: ADA, wait: true });
+      assert.equal(again.item.refreshingAt, undefined);
+    } finally {
+      release();
+    }
+  });
+
   it('rejects what the scanner flags and honours onError', async () => {
     const ingest = service.ingest;
     const exec = code => (_binary, _args, _options, cb) => {
@@ -1117,6 +1169,47 @@ describe('ingest pipeline', () => {
     await assert.rejects(fs.stat(oldDir));
     await fs.stat(newDir);
   });
+
+  it('sweeps no orphan blob while a project document cannot be read', async () => {
+    const repository = getProjectRepository();
+    const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
+    const userBlob = `prj_torn__itm_kept__${oldVersion}`;
+    const adminBlob = `admin_torn__itm_kept__${oldVersion}`;
+    await repository.blobs.put(PROJECT_FILES_NAMESPACE, userBlob, Buffer.from('user text'));
+    await repository.blobs.put(PROJECT_FILES_NAMESPACE, adminBlob, Buffer.from('admin text'));
+    const ingest = new ProjectIngestService({
+      service,
+      repository,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-torn')
+    });
+    // The test's storage keeps runtime documents under `<scratch>/data` and
+    // configuration under `<scratch>` (its contents directory).
+    const tornUser = path.join(scratch, 'data', 'user-projects', 'prj_torn.json');
+    const tornAdmin = path.join(scratch, 'projects', 'admin_torn.json');
+    await fs.mkdir(path.dirname(tornAdmin), { recursive: true });
+    try {
+      // A torn user project: the lenient listing skips it, but counts it.
+      await fs.writeFile(tornUser, '{"v":1,"data":{"id":"prj_to', 'utf8');
+      const scan = await repository.scanUser();
+      assert.equal(scan.skipped, 1);
+      assert.equal((await ingest.reconcile()).orphans, 0);
+      assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, userBlob));
+      await fs.rm(tornUser);
+
+      // A malformed admin project file: the strict admin listing refuses.
+      await fs.writeFile(tornAdmin, '{"id": "admin_torn", ', 'utf8');
+      await assert.rejects(repository.listAdmin({ strict: true }));
+      assert.deepEqual(await repository.listAdmin(), []);
+      assert.equal((await ingest.reconcile()).orphans, 0);
+      assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, adminBlob));
+    } finally {
+      await fs.rm(tornUser, { force: true });
+      await fs.rm(tornAdmin, { force: true });
+    }
+    // Both inventories whole again: the blobs no project names are swept.
+    assert.equal((await ingest.reconcile()).orphans, 2);
+  });
 });
 
 describe('routes', () => {
@@ -1271,5 +1364,85 @@ describe('routes', () => {
       bytes: 3,
       truncated: false
     });
+  });
+
+  /**
+   * A loopback server for the URL probe, with the target check that admits it.
+   * `handle(req, res)` answers; every request is recorded with its headers.
+   */
+  async function probeServer(handle) {
+    const requests = [];
+    const server = http.createServer((req, res) => {
+      requests.push({ url: req.url, headers: req.headers });
+      handle(req, res);
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    return {
+      origin: `http://127.0.0.1:${server.address().port}`,
+      requests,
+      close: () =>
+        new Promise(resolve => {
+          server.closeAllConnections();
+          server.close(resolve);
+        })
+    };
+  }
+  const loopback = { checkTarget: async () => ({ ok: true, addresses: ['127.0.0.1'] }) };
+
+  it('sends the configured probe headers to the original origin only', async () => {
+    const other = await probeServer((req, res) => res.end('elsewhere'));
+    const home = await probeServer((req, res) => {
+      if (req.url === '/away') {
+        res.writeHead(302, { location: `${other.origin}/landing` }).end();
+      } else if (req.url === '/stay') {
+        res.writeHead(302, { location: '/final' }).end();
+      } else {
+        res.end('home');
+      }
+    });
+    try {
+      const headers = { Authorization: 'Bearer s3cret', 'X-Api-Key': 'k' };
+      const away = await probeUrl({ url: `${home.origin}/away`, headers }, loopback);
+      assert.equal(away.status, 200);
+      assert.equal(home.requests[0].headers.authorization, 'Bearer s3cret');
+      // Another port is another origin: neither credential follows the redirect.
+      assert.equal(other.requests.length, 1);
+      assert.equal(other.requests[0].headers.authorization, undefined);
+      assert.equal(other.requests[0].headers['x-api-key'], undefined);
+
+      await probeUrl({ url: `${home.origin}/stay`, headers }, loopback);
+      const final = home.requests.find(request => request.url === '/final');
+      assert.equal(final.headers.authorization, 'Bearer s3cret');
+    } finally {
+      await home.close();
+      await other.close();
+    }
+  });
+
+  it('closes the unread bodies of a redirect and a failed probe', async () => {
+    const closed = new Set();
+    const server = await probeServer((req, res) => {
+      res.on('close', () => closed.add(req.url));
+      if (req.url === '/hang-redirect') {
+        // A body that never ends: only the client dropping it closes it.
+        res.writeHead(302, { location: '/ok' });
+        res.write('moved');
+      } else if (req.url === '/hang-error') {
+        res.writeHead(500);
+        res.write('broken');
+      } else {
+        res.end('fine');
+      }
+    });
+    try {
+      const ok = await probeUrl({ url: `${server.origin}/hang-redirect` }, loopback);
+      assert.equal(ok.accessible, true);
+      assert.equal(ok.contentLength, 4);
+      await waitFor(() => closed.has('/hang-redirect'), { timeoutMs: 2000 });
+      await assert.rejects(probeUrl({ url: `${server.origin}/hang-error` }, loopback), /HTTP 500/);
+      await waitFor(() => closed.has('/hang-error'), { timeoutMs: 2000 });
+    } finally {
+      await server.close();
+    }
   });
 });

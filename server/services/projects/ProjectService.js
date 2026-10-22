@@ -414,7 +414,10 @@ export class ProjectService {
    * @param {string} projectId
    * @param {string} itemId
    * @param {{user: Object, authorize?: Function, wait?: boolean}} options
-   * @returns {Promise<{project: Object, item: Object}>}
+   * @returns {Promise<{project: Object, item: Object}>} Without `wait`, the
+   *   item as reserved — carrying `refreshingAt` — while the job runs
+   * @throws {ProjectError} `PROJECT_MISMATCH` while the item is being
+   *   processed, a refresh included
    */
   async refreshItem(projectId, itemId, { user, authorize, wait = false }) {
     if (!this.ingest) {
@@ -439,10 +442,16 @@ export class ProjectService {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
           }
           this._checkKindRef(item.kind, item.ref, { admin: true });
-          // The old snapshot stays readable until the new one is stored:
-          // the status is left alone, the pipeline marks `refreshingAt`.
+          // The old snapshot stays readable until the new one is stored, so
+          // the status is left alone. `refreshingAt` is reserved here, under
+          // the project's lock and before the job is queued: a second refresh
+          // is refused while it is set, so two queued downloads can never
+          // race to install an older snapshot over a newer one. The job
+          // clears it when it finishes, fails or finds nothing changed.
+          const now = nowIso();
           item.error = null;
-          item.updatedAt = nowIso();
+          item.refreshingAt = now;
+          item.updatedAt = now;
           target = { item, kind };
           return project;
         },
