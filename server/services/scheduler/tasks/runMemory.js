@@ -92,6 +92,12 @@ const REPORT_ONLY_NEW =
   'report only what is new or changed since then. If nothing changed, say so in one short ' +
   'sentence.';
 
+const COMPARE_STEPS =
+  'Compare before you answer: note the watermark in your notes (latest version or date, item ' +
+  'titles or ids, source) and what the last run reported, check the current state of the task ' +
+  'against it, and drop everything that is already covered. Never repeat an item you already ' +
+  'reported unless it changed since.';
+
 /**
  * The instruction to inform itself first.
  *
@@ -111,8 +117,8 @@ export function buildProtocolNote({ toolsOffered, continuation = false }) {
   if (!toolsOffered) {
     return (
       'This task runs repeatedly and keeps notes between runs. Your notes above are your only ' +
-      `record of earlier runs. Do the task and ${REPORT_ONLY_NEW} Your notes are updated ` +
-      'automatically after this run.'
+      `record of earlier runs. ${COMPARE_STEPS} Then do the task and ${REPORT_ONLY_NEW} Your ` +
+      'notes are updated automatically after this run.'
     );
   }
   return [
@@ -121,6 +127,7 @@ export function buildProtocolNote({ toolsOffered, continuation = false }) {
     '1. Read your notes above.',
     '2. Call list_task_runs, then read the most recent successful run with get_task_run to see ' +
       'what you reported and anything the owner replied in that chat.',
+    `3. ${COMPARE_STEPS}`,
     `Then do the task and ${REPORT_ONLY_NEW} Your notes are updated automatically after this ` +
       'run; call write_memory only for something that must be remembered even if this run fails.'
   ].join('\n');
