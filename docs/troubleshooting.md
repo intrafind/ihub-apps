@@ -732,8 +732,13 @@ export NODE_OPTIONS="--max-old-space-size=4096"
    project must be enabled. Admin projects are reachable only through such a link.
 3. **Check the flags:** user projects need the `userProjects` feature flag and the `projects`
    group permission; a project the running user may not use is skipped silently.
-4. **Look for interrupted extraction:** after a restart, documents that were being extracted are
-   marked interrupted and can be retried from the page.
+4. **Look for interrupted extraction:** a document still waiting or extracting after
+   `platform.projects.ingest.staleAfterMinutes` (30 by default), for example because the server
+   restarted, is marked interrupted. The check runs shortly after startup and every 15 minutes, so
+   a restart does not mark documents at once. An interrupted **upload** cannot be retried, since
+   its original file is not kept: remove it and upload or paste it again. **Retry** and
+   **Refresh** apply to documents picked from a cloud drive, which are read again from their
+   source.
 
 ```bash
 # Admin projects on disk

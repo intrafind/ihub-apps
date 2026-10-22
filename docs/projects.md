@@ -267,7 +267,7 @@ instructions). The button shows how many projects you have against `maxProjectsP
 A project page shows:
 
 - **Documents** with status, provenance and size, and the usage against the limits. Owners and
-  editors pin, rename, refresh, preview and remove documents and retry failed ones.
+  editors pin, rename, refresh, preview and remove documents and retry failed cloud documents.
 - **Settings**: name (up to 200 characters), description and instructions (up to 20,000
   characters). The instructions apply to every chat in the project.
 - **Chats** in the project, all or only your own, and **New chat**, which asks for an app.
@@ -327,8 +327,9 @@ Every member may open the chats in a project; chats of other members are read-on
 
 With `platform.projects.retentionDays` above 0, a daily sweep deletes user projects without
 activity (documents added, refreshed or removed; chats started in or moved into the project) for
-that many days, with everything in them. The deletion is audited. The default, 0, keeps projects
-until someone deletes them. Admin projects have no retention.
+that many days, with all their documents. As with **Delete project**, the project's chats are
+kept: they leave the project and stay in their owners' chat history. The deletion is audited. The
+default, 0, keeps projects until someone deletes them. Admin projects have no retention.
 
 ### Not available yet
 
@@ -455,10 +456,25 @@ note "Sources are now Projects" in the release notes.
 
 ## API
 
-All paths are relative to the server's base path. Errors are `{ error, code }`; the codes are the
-ones named on this page plus `PROJECT_NOT_FOUND` (also "no access"), `PERMISSION_DENIED`,
-`USER_PROJECTS_DISABLED`, `QUOTA_*`, `KIND_DISABLED`, `INVALID_REF`, `SHARE_TARGET_INVALID`,
-`PROJECT_MISMATCH` and `STORAGE_UNAVAILABLE`.
+All paths are relative to the server's base path. Project errors carry their code in
+`details.code`, next to any further details (for `PROJECT_IN_USE`, the dependencies):
+
+```json
+{ "error": "Project not found", "details": { "code": "PROJECT_NOT_FOUND" } }
+```
+
+The codes are the ones named on this page plus `PROJECT_NOT_FOUND` (also "no access"),
+`PERMISSION_DENIED`, `USER_PROJECTS_DISABLED`, `QUOTA_*`, `KIND_DISABLED`, `INVALID_REF`,
+`SHARE_TARGET_INVALID`, `PROJECT_MISMATCH` and `STORAGE_UNAVAILABLE`. Generic errors (a plain
+"not found", a validation failure, an unexpected server error) may come without `details` or
+without a code.
+
+The chat request is different: a project it names but may not use is answered with the code at the
+top level:
+
+```json
+{ "error": "Project not found", "code": "PROJECT_NOT_FOUND" }
+```
 
 ### User API
 

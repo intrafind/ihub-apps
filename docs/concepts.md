@@ -112,6 +112,37 @@ leaves the project to the knowledge tools, so the model searches and reads what 
 loads the project in full while it fits the budget and searches it otherwise. Pinned documents are
 always in the prompt.
 
+---
+
+## Tools: letting the model act
+
+[Tools](tool-calling.md) extend iHub beyond text generation: [web search and content extraction](web-tools.md), API calls, screenshots, people search, [Jira](JIRA_INTEGRATION.md), iFinder, and further systems connected via [MCP](mcp-integration.md). Tools are enabled per app, and the model calls them when the task requires it.
+
+Note that tool calling requires a model that supports it — check the model's `supportsTools` setting (anything but `none`).
+
+---
+
+## Integrations and data flow
+
+- **Authentication**: [LDAP](ldap-ntlm-authentication.md), [OIDC/SSO](oidc-authentication.md), local accounts, proxy headers, or anonymous access — combinable. External groups are mapped onto iHub groups, which is what makes group-based app rollout work. See [Authentication Architecture](authentication-architecture.md).
+- **Outlook add-in**: can be distributed centrally by IT and made available group-based. See [Outlook Add-in Rollout](outlook-add-in.md).
+- **Speech-to-text**: which service transcribes matters. Browser-based speech recognition can send audio to the browser vendor's cloud. For sensitive environments, use the [self-hosted realtime transcription stack](voice-transcription.md), where audio is relayed by the iHub server to your own GPU host and nothing is persisted.
+- **MCP servers and cloud models**: as with any external endpoint, check whether data leaves your own infrastructure before enabling them.
+
+---
+
+## Further capabilities
+
+| Capability                                   | Notes                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Vision / image understanding**             | Depends on the model. It must support images (`supportsImages`) and be configured accordingly. See [Image Upload](image-upload-feature.md). |
+| **[Magic Prompt](magic-prompt-feature.md)**  | Rewrites a short or incomplete user input into a better prompt, with an undo option.                               |
+| **[Compare Mode](compare-mode.md)**          | Sends one input to two models and shows the answers side by side — useful for evaluating models against each other. |
+| **Chat history**                             | Users can keep a conversation across reloads. There is no persistent memory spanning different conversations in chat apps — keeping chat history and long-term memory are separate things. Long-term memory exists only for agents in the [Agent Factory](agents.md). |
+| **[Structured output](structured-output.md)**| JSON-schema-validated responses for apps whose output feeds another system.                                        |
+
+---
+
 ## Related documentation
 
 - [App Configuration](apps.md)
