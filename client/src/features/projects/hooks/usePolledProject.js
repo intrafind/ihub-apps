@@ -88,20 +88,27 @@ export function usePolledProject(projectId, { load, errorMessage }) {
   const items = project?.items;
   useEffect(() => {
     if (!projectId || !hasActiveItems(items)) return undefined;
+    // A poll already in flight when the items change (a delete, a pin, a
+    // reload) is stale by the time it answers: its result must not put the
+    // older snapshot back over the newer state.
+    let live = true;
     const timer = setTimeout(async () => {
       try {
         const loaded = await loadRef.current(projectId);
-        if (currentIdRef.current === projectId) setProject(loaded);
+        if (live && currentIdRef.current === projectId) setProject(loaded);
       } catch (err) {
         // A failed poll keeps the items, but as a new array so this effect
         // re-arms and tries again after the interval.
         console.error('Failed to refresh project items:', err);
-        if (currentIdRef.current === projectId) {
+        if (live && currentIdRef.current === projectId) {
           setProject(prev => (prev ? { ...prev, items: [...(prev.items || [])] } : prev));
         }
       }
     }, ITEM_POLL_INTERVAL_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   }, [projectId, items]);
 
   return {

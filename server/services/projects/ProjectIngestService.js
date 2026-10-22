@@ -236,7 +236,10 @@ export class ProjectIngestService {
       const extracting = await this.service.patchItem(projectId, itemId, item => {
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
-        if (refresh) item.refreshingAt = new Date().toISOString();
+        // `refreshItem` reserved it before queueing; that reservation is kept,
+        // not restamped, so the reconciler counts from the request (as it
+        // counts a queued upload from its `updatedAt`).
+        if (refresh) item.refreshingAt = item.refreshingAt || new Date().toISOString();
         else item.status = 'extracting';
         item.error = null;
       });
@@ -463,12 +466,25 @@ export class ProjectIngestService {
       });
     }
     if (this.repository.isAvailable()) {
-      const { projects: users, truncated } = await this.repository.scanUser({
+      const {
+        projects: users,
+        truncated,
+        skipped
+      } = await this.repository.scanUser({
         max: 10000,
         maxScanned: 10000
       });
       projects.push(...users);
-      if (truncated) complete = false;
+      // A project document that could not be read still names blobs.
+      if (truncated || skipped > 0) {
+        complete = false;
+        if (skipped > 0) {
+          logger.warn('Some user projects could not be read; orphan blobs are kept this time', {
+            component: COMPONENT,
+            skipped
+          });
+        }
+      }
     }
     let interrupted = 0;
     let orphans = 0;

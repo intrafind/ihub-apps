@@ -155,11 +155,19 @@ export class SubWorkflowMaterializer {
         : Array.isArray(templateApps)
           ? dedupeStrings(templateApps)
           : [];
+      // The planner names projects by id (its schema lists the template's
+      // ids); each name is resolved back to the template's link so the
+      // configured mode and write permission survive the selection.
+      const templateLinks = dedupeLinks(templateProjects);
+      const templateLinkById = new Map(
+        templateLinks.map(link => [typeof link === 'string' ? link : link.id, link])
+      );
       const effectiveProjects = taskProjectsExplicit
-        ? dedupeLinks(task.projects)
-        : Array.isArray(templateProjects)
-          ? dedupeLinks(templateProjects)
-          : [];
+        ? dedupeLinks(task.projects).map(link => {
+            const id = typeof link === 'string' ? link : link?.id;
+            return templateLinkById.get(id) ?? link;
+          })
+        : templateLinks;
 
       const hasSearchLikeTool = effectiveTools.some(t => {
         if (typeof t !== 'string') return false;
@@ -309,6 +317,9 @@ export class SubWorkflowMaterializer {
             en: 'Process the current task in `_currentTask`.'
           },
           tools: templateTools || [],
+          // The profile's linked knowledge, like its tools: `projects` was
+          // taken out of restTemplate above and has to be put back here.
+          projects: dedupeLinks(templateProjects),
           // Same as the planner-generated tasks above: drain workers should
           // not own inbox lifecycle. The orchestrator reads/marks the inbox.
           _isPlannerTask: true,

@@ -93,10 +93,10 @@ async function content({ ref, user, format = 'original' }) {
 
 /**
  * The original of a link item, by its kind: an iFinder document through the
- * iFinder provider (the reader's credentials, the same formats), a web page
- * or an iHub page by redirect to where it lives. Only a link whose source is
- * not reachable this way (an iFinder query, an item without a URL) keeps the
- * extracted text alone.
+ * iFinder provider (the reader's credentials, the same formats). A web page
+ * or an iHub page has no file to hand over: the preview and the download
+ * fall back to the extracted text (410, like a discarded upload), and the
+ * card's URL opens the page where it lives.
  */
 async function linkContent(project, item, { user, format }) {
   if (item.kind === 'ifinder-document' && item.ref?.documentId && hasSourceProvider('ifinder')) {
@@ -109,13 +109,6 @@ async function linkContent(project, item, { user, format }) {
       user,
       format
     });
-  }
-  // The web page's URL, or an iHub page's root-relative path.
-  const url = docOf(project, item).url;
-  if (url && (/^https?:\/\//i.test(url) || url.startsWith('/'))) {
-    const error = sourceProviderError(409, 'This document lives at its source');
-    error.redirect = url;
-    throw error;
   }
   const error = sourceProviderError(410, 'Only the extracted text of this document is kept');
   error.code = 'ORIGINAL_DISCARDED';

@@ -35,7 +35,7 @@ export async function cleanUpProjectsOfUser(userId) {
         // the listing leaves the new owner's project alone.
         authorize: ownedBy,
         detachChat: chatId =>
-          chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
+          chats.isAvailable() ? chats.moveProjectIf(chatId, project.id, null) : null
       });
       if (deleted) removed += 1;
     } catch (error) {
