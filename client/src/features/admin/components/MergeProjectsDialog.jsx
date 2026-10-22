@@ -61,7 +61,7 @@ function MergeProjectsDialog({ projects, onClose, onDone }) {
   // Those links are re-pointed to the kept project.
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled(sources.map(entry => fetchAdminProjectDependencies(entry.id))).then(
+    void Promise.allSettled(sources.map(entry => fetchAdminProjectDependencies(entry.id))).then(
       settled => {
         if (cancelled) return;
         const unique = new Map();

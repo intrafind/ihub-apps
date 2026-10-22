@@ -59,7 +59,7 @@ export function relinkList(list, fromIds, toId) {
     return fromIds.has(id) || id === toId;
   };
   if (!list.some(link => fromIds.has(normalizeProjectLink(link).id))) return null;
-  const merging = list.filter(merges).map(normalizeProjectLink);
+  const merging = list.filter(merges).map(link => normalizeProjectLink(link));
   const mode = merging.every(link => link.mode === merging[0].mode) ? merging[0].mode : 'auto';
   const write = merging.some(link => link.write);
   const merged = mode === 'auto' && !write ? toId : { id: toId, mode, write };
