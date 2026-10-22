@@ -609,8 +609,14 @@ export class ProjectRepository {
       const { project, etag } = await this._loadUser(projectId);
       if (!project) return null;
       assertAuthorized(authorize, project);
-      const before = new Set((project.members || []).map(member => memberTargetKey(member)));
-      const after = new Set(members.map(member => memberTargetKey(member)));
+      const roleBefore = new Map(
+        (project.members || []).map(member => [memberTargetKey(member), member.role || 'user'])
+      );
+      const before = new Set(roleBefore.keys());
+      const roleAfter = new Map(
+        members.map(member => [memberTargetKey(member), member.role || 'user'])
+      );
+      const after = new Set(roleAfter.keys());
       const stamp = now || new Date().toISOString();
       const stored = await this._writeUser(
         {
@@ -631,7 +637,12 @@ export class ProjectRepository {
       return {
         project: stored,
         added: [...after].filter(key => !before.has(key)),
-        removed: [...before].filter(key => !after.has(key))
+        removed: [...before].filter(key => !after.has(key)),
+        // A member kept with another role: no key moved, but what they may
+        // do did, which the audit trail has to show as much as a new member.
+        changed: [...after].filter(
+          key => before.has(key) && roleBefore.get(key) !== roleAfter.get(key)
+        )
       };
     });
   }

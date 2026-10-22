@@ -21,6 +21,7 @@ import configCache from '../../configCache.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { effectiveGroups } from './projectAccess.js';
+import { filterByPermissions } from '../workflow/workflowAccess.js';
 
 /** Node types whose `config.projects` is honoured. */
 export const PROJECT_NODE_TYPES = Object.freeze(['prompt', 'planner', 'verifier']);
@@ -57,12 +58,15 @@ function workflowLinks(workflow) {
   return result;
 }
 
+/**
+ * The policy the workflow routes apply (`workflowAccess.filterByPermissions`):
+ * a signed-in user runs a workflow their `permissions.workflows` grant. The
+ * link follows the same rule so a workflow a user may execute never answers
+ * 404 for the project it links.
+ */
 function workflowUsableBy(workflow, user) {
   if (workflow?.enabled === false) return false;
-  const allowed = Array.isArray(workflow?.allowedGroups) ? workflow.allowedGroups : [];
-  if (allowed.length === 0 || allowed.includes('*')) return true;
-  const groups = effectiveGroups(user);
-  return allowed.some(group => groups.includes(group));
+  return filterByPermissions([workflow], user).length > 0;
 }
 
 function agentUsableBy(profile, user) {
@@ -87,9 +91,7 @@ export function linkedProjectIds(user) {
   const usableApps = filterResourcesByPermissions(apps, user.permissions?.apps || new Set());
   for (const app of usableApps) for (const id of linkedIdsOf(app?.projects)) ids.add(id);
 
-  const workflowsAllowed = user.permissions?.workflows || new Set();
   for (const workflow of configCache.getWorkflows?.()?.data || []) {
-    if (!workflowsAllowed.has('*') && !workflowsAllowed.has(workflow?.id)) continue;
     if (!workflowUsableBy(workflow, user)) continue;
     for (const link of workflowLinks(workflow)) for (const id of link.ids) ids.add(id);
   }

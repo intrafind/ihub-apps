@@ -395,8 +395,7 @@ export default function registerAdminProjectsRoutes(app) {
       // A linked admin project answers PROJECT_IN_USE from the service.
       const chats = getChatRepository();
       const deleted = await getProjectService().deleteProject(id, {
-        detachChat: chatId =>
-          chats.isAvailable() ? chats.updateChat(chatId, { projectId: null }) : null
+        detachChat: chatId => (chats.isAvailable() ? chats.moveProjectIf(chatId, id, null) : null)
       });
       if (!deleted) return sendNotFound(res, 'Project');
       logAudit({

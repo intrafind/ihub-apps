@@ -20,6 +20,7 @@
  * @module services/knowledge/ItemTextService
  */
 import logger from '../../utils/logger.js';
+import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
 
@@ -129,6 +130,35 @@ function handlerCallOf(item, ctx) {
 }
 
 /**
+ * The page routes' policy (`authRequired`, `allowedGroups` on the page in
+ * `ui.pages`), applied to the reader of a page item: a project is not a way
+ * round a page's own access control, whoever added the item.
+ *
+ * @param {string} pageId
+ * @param {Object|null|undefined} user
+ * @param {Object} where
+ */
+function assertPageReadable(pageId, user, where) {
+  const page = configCache.getUI?.()?.data?.pages?.[pageId];
+  if (!page) throw new KnowledgeError('SOURCE_GONE', `Page ${pageId} does not exist`, where);
+  const anonymous = !user || user.id === 'anonymous' || user.anonymous === true;
+  if (page.authRequired && anonymous) {
+    throw new KnowledgeError('SOURCE_FORBIDDEN', `Page ${pageId} needs a signed-in reader`, where);
+  }
+  const allowed = Array.isArray(page.allowedGroups) ? page.allowedGroups : [];
+  if (allowed.length > 0 && !allowed.includes('*')) {
+    const groups = Array.isArray(user?.groups) ? user.groups : [];
+    if (!groups.some(group => allowed.includes(group))) {
+      throw new KnowledgeError(
+        'SOURCE_FORBIDDEN',
+        `Page ${pageId} is not open to this reader`,
+        where
+      );
+    }
+  }
+}
+
+/**
  * The text of one item.
  *
  * @param {Object} project
@@ -161,6 +191,7 @@ export async function getItemText(project, item, ctx = {}) {
   }
   const call = handlerCallOf(item, ctx);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
+  if (call.type === 'page') assertPageReadable(call.config.pageId, ctx.user, where);
   if (call.type === 'ifinder' && !ctx.user) {
     throw new KnowledgeError('SOURCE_FORBIDDEN', 'iFinder items need a signed-in reader', where);
   }
