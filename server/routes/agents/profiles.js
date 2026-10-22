@@ -13,7 +13,15 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 
-function visibleToUser(profile, user) {
+/**
+ * Whether a user may see (and so run) an agent profile. The one policy for
+ * the profile routes and for the admin projects a profile links.
+ *
+ * @param {Object} profile
+ * @param {Object|undefined} user
+ * @returns {boolean}
+ */
+export function visibleToUser(profile, user) {
   // Admins see all.
   if (user?.isAdmin) return true;
   // Operators see profiles where they are in profile.groups.

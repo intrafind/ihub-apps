@@ -43,6 +43,16 @@ export const UPLOAD_TEMP_DIR = ['data', 'tmp', 'project-uploads'];
 /** Temp directories and orphan blobs older than this are swept. */
 const ORPHAN_AGE_MS = 60 * 60 * 1000;
 
+/**
+ * How long a fetched document (a pick or a refresh) may take, metadata and
+ * body together. Well below `staleAfterMinutes`, so a stalled source fails
+ * its own job and frees its queue slot before any reconciler steps in.
+ */
+const FETCH_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** User projects read per page of the reconciler's inventory. */
+const INVENTORY_PAGE_SIZE = 10000;
+
 /** The error code of an item whose job never finished. */
 export const INTERRUPTED = 'INTERRUPTED';
 
@@ -70,7 +80,7 @@ function errorOf(error) {
   if (/\b(404|410)\b|not found|gone|no longer/i.test(message)) {
     return { code: 'SOURCE_GONE', message };
   }
-  if (/\b(401|403)\b|forbidden|denied|reconnect|unauthori[sz]ed/i.test(message)) {
+  if (/\b(401|403)\b|forbidden|denied|reconnect|unauthori[sz]ed|not authenticated/i.test(message)) {
     return { code: 'SOURCE_FORBIDDEN', message };
   }
   return { code: 'EXTRACTION_FAILED', message };
@@ -142,8 +152,9 @@ export class ProjectIngestService {
    * @param {Object} [options.scanner] - A `MalwareScanner`; built from the settings when absent.
    * @param {string} [options.tempDir]
    * @param {(projectId: string, item: Object) => void} [options.onReady] - Cache eviction hook.
+   * @param {number} [options.fetchTimeoutMs] - Deadline of a fetch (tests).
    */
-  constructor({ service, repository, platform, scanner, tempDir, onReady } = {}) {
+  constructor({ service, repository, platform, scanner, tempDir, onReady, fetchTimeoutMs } = {}) {
     // Both may be functions: the process-wide service and repository are
     // rebuilt when the storage provider changes (tests), so a long-lived
     // pipeline resolves them per job.
@@ -153,6 +164,7 @@ export class ProjectIngestService {
     this._scanner = scanner || null;
     this.tempDir = tempDir || uploadTempDir();
     this.onReady = onReady || (() => {});
+    this.fetchTimeoutMs = fetchTimeoutMs || FETCH_TIMEOUT_MS;
     this.queue = [];
     /** The jobs running on this worker; two may share an item (a released refresh and its successor). */
     this.active = new Set();
@@ -255,15 +267,16 @@ export class ProjectIngestService {
     let contentType = input.contentType;
     let storedBlobKey = null;
     const refresh = input.purpose === 'refresh' && Boolean(input.previousBlobKey);
-    // A refresh owns its item only while the item still carries the attempt
-    // `refreshItem` reserved: the reconciler of any worker may release a
-    // refresh that ran too long, and a new refresh mints a new attempt. A
-    // job that lost its attempt writes nothing, so an older snapshot can
-    // never overwrite a newer one, nor a late failure a newer state.
+    // A job owns its item only while the item still carries the attempt the
+    // service reserved with the item (`addItem`) or the refresh
+    // (`refreshItem`): the reconciler of any worker may release a job that
+    // ran too long, and a new refresh mints a new attempt. A job that lost
+    // its attempt writes nothing, so an older snapshot can never overwrite a
+    // newer one, nor a late failure a newer state.
     const fenced = typeof input.attempt === 'string';
     let lost = false;
     const owns = item => {
-      if (!fenced || item.refreshAttempt === input.attempt) return true;
+      if (!fenced || item.ingestAttempt === input.attempt) return true;
       lost = true;
       return false;
     };
@@ -271,7 +284,7 @@ export class ProjectIngestService {
       if (lost) {
         throw new ProjectError(
           'PROJECT_MISMATCH',
-          'The refresh was taken over by a newer one; its result is discarded'
+          'The job was released or taken over by a newer one; its result is discarded'
         );
       }
     };
@@ -296,7 +309,7 @@ export class ProjectIngestService {
         text = input.text;
         contentType = contentType || 'text/markdown';
       } else if (typeof input.fetch === 'function') {
-        const fetched = await input.fetch();
+        const fetched = await this._fetchWithDeadline(input.fetch);
         bytes = Buffer.isBuffer(fetched.bytes) ? fetched.bytes : Buffer.from(fetched.bytes || '');
         name = fetched.name || name;
         contentType = fetched.contentType || contentType;
@@ -314,7 +327,7 @@ export class ProjectIngestService {
             item.status = item.text ? 'ready' : 'failed';
             item.error = null;
             delete item.refreshingAt;
-            delete item.refreshAttempt;
+            delete item.ingestAttempt;
           });
           assertOwned();
           return unchanged ? { item: unchanged, unchanged: true } : null;
@@ -396,7 +409,7 @@ export class ProjectIngestService {
           item.status = 'ready';
           item.error = null;
           delete item.refreshingAt;
-          delete item.refreshAttempt;
+          delete item.ingestAttempt;
           item.text = block;
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
@@ -452,7 +465,7 @@ export class ProjectIngestService {
           item.status = input.previousBlobKey && item.text ? 'stale' : 'failed';
           item.error = { code: failure.code, message: failure.message.slice(0, 2000) };
           delete item.refreshingAt;
-          delete item.refreshAttempt;
+          delete item.ingestAttempt;
         })
         .catch(patchError =>
           logger.error('Could not record an ingest failure', {
@@ -465,6 +478,39 @@ export class ProjectIngestService {
       this.active.delete(job);
       // An upload's private directory goes; an import under `contents/` stays.
       if (input.cleanupDir) await removeQuietly(input.cleanupDir);
+    }
+  }
+
+  /**
+   * Run a kind's fetch with a deadline: its `signal` aborts the requests
+   * (headers and body), and the job fails at the deadline even when a fetch
+   * ignores the signal, so a stalled source never holds a queue slot.
+   *
+   * @param {(options: {signal: AbortSignal}) => Promise<Object>} fetch
+   * @returns {Promise<Object>}
+   * @throws {ProjectError} `SOURCE_TIMEOUT`
+   */
+  async _fetchWithDeadline(fetch) {
+    const controller = new AbortController();
+    let timer = null;
+    const deadline = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => {
+        const error = new ProjectError(
+          'SOURCE_TIMEOUT',
+          `The source did not deliver the document within ${Math.round(this.fetchTimeoutMs / 1000)} seconds`
+        );
+        controller.abort(error);
+        reject(error);
+      }, this.fetchTimeoutMs);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => fetch({ signal: controller.signal })),
+        deadline
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -501,10 +547,11 @@ export class ProjectIngestService {
    * longer than `projects.ingest.staleAfterMinutes` become `failed` with
    * `INTERRUPTED`; blobs no item names and older than an hour are deleted.
    *
-   * @param {{now?: number}} [options]
+   * @param {{now?: number, pageSize?: number}} [options] - `pageSize`: user
+   *   projects read per inventory page (tests).
    * @returns {Promise<{scanned: number, interrupted: number, orphans: number}>}
    */
-  async reconcile({ now = Date.now() } = {}) {
+  async reconcile({ now = Date.now(), pageSize = INVENTORY_PAGE_SIZE } = {}) {
     const staleMs = this.settings().ingest.staleAfterMinutes * 60 * 1000;
     const projects = [];
     let complete = true;
@@ -520,24 +567,33 @@ export class ProjectIngestService {
       });
     }
     if (this.repository.isAvailable()) {
-      const {
-        projects: users,
-        truncated,
-        skipped
-      } = await this.repository.scanUser({
-        max: 10000,
-        maxScanned: 10000
-      });
-      projects.push(...users);
-      // A project document that could not be read still names blobs.
-      if (truncated || skipped > 0) {
-        complete = false;
-        if (skipped > 0) {
-          logger.warn('Some user projects could not be read; orphan blobs are kept this time', {
-            component: COMPONENT,
-            skipped
-          });
+      // Page by page to the end, so every project is settled and the
+      // inventory can be complete however many there are.
+      let cursor = null;
+      let skipped = 0;
+      do {
+        const page = await this.repository.scanUser({
+          max: pageSize,
+          maxScanned: pageSize,
+          cursor
+        });
+        projects.push(...page.projects);
+        skipped += page.skipped || 0;
+        const next = page.truncated ? page.nextCursor : null;
+        if (page.truncated && (!next || next === cursor)) {
+          // A page that ends without a way on: the rest is unknown.
+          complete = false;
+          break;
         }
+        cursor = next;
+      } while (cursor);
+      // A project document that could not be read still names blobs.
+      if (skipped > 0) {
+        complete = false;
+        logger.warn('Some user projects could not be read; orphan blobs are kept this time', {
+          component: COMPONENT,
+          skipped
+        });
       }
     }
     let interrupted = 0;
@@ -569,7 +625,7 @@ export class ProjectIngestService {
               // attempt goes with it, so a job still running somewhere can
               // no longer install or fail it.
               delete entry.refreshingAt;
-              delete entry.refreshAttempt;
+              delete entry.ingestAttempt;
               entry.status = entry.text ? 'stale' : 'failed';
               entry.error = {
                 code: INTERRUPTED,
@@ -579,6 +635,8 @@ export class ProjectIngestService {
             }
             if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
             settled = true;
+            // Its attempt goes too: a job still running elsewhere is fenced out.
+            delete entry.ingestAttempt;
             entry.status = 'failed';
             entry.error = {
               code: INTERRUPTED,

@@ -41,6 +41,8 @@ const EXPAND_BELOW_CHARS = 1500;
 const MIN_RELATIVE_SCORE = 0.2;
 /** Headings deeper than this stay inside their parent section. */
 const MAX_SECTION_LEVEL = 4;
+/** Most further section ids a section read names when it continues. */
+const MAX_CONTINUATIONS = 20;
 
 // BM25 parameters, and the extra weight a term carries in a section's own
 // heading and in its parents' headings.
@@ -591,23 +593,30 @@ function renderPart(index, partIndex) {
   return `<section ${attributes.join(' ')}>\n${text}\n</section>`;
 }
 
+/** The default measure of a result: its length in characters. */
+const lengthOf = text => text.length;
+
 /**
  * Indented list of section ids and titles, as deep as fits `budgetChars`.
+ * @param {Object} index
+ * @param {number} budgetChars - The budget, in the units `measure` counts
+ * @param {(text: string) => number} [measure] - Size of a text (default: characters)
  * @returns {string}
  */
-export function renderOutline(index, budgetChars) {
+export function renderOutline(index, budgetChars, measure = lengthOf) {
   const line = s => `${'  '.repeat(Math.max(0, s.level - 1))}- ${s.id}: ${s.title}`;
   for (const maxLevel of [2, 1]) {
     const lines = index.sections.filter(s => s.level <= maxLevel).map(line);
     const text = lines.join('\n');
-    if (text.length <= budgetChars) return text;
+    if (measure(text) <= budgetChars) return text;
     if (maxLevel === 1) {
       let used = 0;
       const kept = [];
       for (const entry of lines) {
-        if (used + entry.length + 1 > budgetChars - 40) break;
+        const size = measure(entry) + 1;
+        if (used + size > budgetChars - 40) break;
         kept.push(entry);
-        used += entry.length + 1;
+        used += size;
       }
       return `${kept.join('\n')}\n… ${lines.length - kept.length} more sections`;
     }
@@ -658,12 +667,12 @@ const USAGE_NOTE =
   'or with `section` set to a section id to read that section and its subsections ' +
   '(an id ending in "#2", "#3", … continues a long section).';
 
-function outlineResult(index, lead, budgetChars) {
+function outlineResult(index, lead, budgetChars, measure = lengthOf) {
   const header =
     `${lead}\n\nPass \`query\` with keywords from the question to get the sections that ` +
     'match it, or `section` with an id from this outline to read that section.\n\nOutline:\n';
   return {
-    text: header + renderOutline(index, budgetChars - header.length),
+    text: header + renderOutline(index, budgetChars - measure(header), measure),
     sections: []
   };
 }
@@ -693,14 +702,15 @@ function subtreeEnd(index, start) {
   return end;
 }
 
-function searchResult(index, name, query, budgetChars) {
+function searchResult(index, name, query, budgetChars, measure = lengthOf) {
   const ranked = searchDocument(index, query);
   if (!ranked.length) {
     return outlineResult(
       index,
       `${tooLargeNote(name, index)} No section matches "${query}". Try other keywords ` +
         '(synonyms, English terms, configuration keys) or pick a section from the outline.',
-      budgetChars
+      budgetChars,
+      measure
     );
   }
 
@@ -734,10 +744,11 @@ function searchResult(index, name, query, budgetChars) {
     }
 
     const rendered = members.map(i => renderPart(index, i)).join('\n\n') + note;
-    if (used + rendered.length + 2 > budgetChars) continue;
+    const size = measure(rendered) + 2;
+    if (used + size > budgetChars) continue;
     members.forEach(i => included.add(i));
     groups.push({ members, rendered });
-    used += rendered.length + 2;
+    used += size;
   }
 
   const header =
@@ -749,13 +760,14 @@ function searchResult(index, name, query, budgetChars) {
   };
 }
 
-function sectionResult(index, name, ref, budgetChars) {
+function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
   const start = findPart(index, ref);
   if (start === -1) {
     return outlineResult(
       index,
       `${tooLargeNote(name, index)} There is no section "${ref}".`,
-      budgetChars
+      budgetChars,
+      measure
     );
   }
 
@@ -766,10 +778,11 @@ function sectionResult(index, name, ref, budgetChars) {
   let next = start;
   while (next < end) {
     const text = renderPart(index, next);
-    if (rendered.length && used + text.length + 2 > budgetChars) break;
+    const size = measure(text) + 2;
+    if (rendered.length && used + size > budgetChars) break;
     rendered.push(text);
     ids.push(idOfPart(index, next));
-    used += text.length + 2;
+    used += size;
     next++;
   }
 
@@ -777,6 +790,19 @@ function sectionResult(index, name, ref, budgetChars) {
   if (next < end) {
     const id = idOfPart(index, next);
     footer = `\n\nThe section continues: call this tool again with \`section\` set to "${id}".`;
+    // Reading that id returns its own section and subsections only, so the
+    // sections after it that the requested one still spans are named too:
+    // every omitted part stays one call away.
+    const after = [];
+    let at = subtreeEnd(index, next);
+    while (at < end && after.length < MAX_CONTINUATIONS) {
+      after.push(idOfPart(index, at));
+      at = subtreeEnd(index, at);
+    }
+    if (after.length) {
+      const more = at < end ? ', and the sections after them in the outline' : '';
+      footer += ` After it, read ${after.map(entry => `"${entry}"`).join(', ')}${more}.`;
+    }
   }
   return {
     text: `${tooLargeNote(name, index)} ${USAGE_NOTE}\n\n${rendered.join('\n\n')}${footer}`,
@@ -792,17 +818,23 @@ function sectionResult(index, name, ref, budgetChars) {
  * @param {string} [options.query] - Keywords to search for
  * @param {string} [options.section] - Section id (or title) to read
  * @param {string} [options.name] - Source name, used in the result's notes
- * @param {number} [options.budgetChars] - Most characters to return
+ * @param {number} [options.budgetChars] - Most characters to return, or most of
+ *   whatever `measure` counts
+ * @param {(text: string) => number} [options.measure] - Size of a text against the
+ *   budget (default: its length in characters); a caller bounded in serialized
+ *   bytes passes a byte count, so a text that is short in characters but long in
+ *   bytes is outlined and read in sections instead of returned whole
  * @returns {{content: string, retrieval: Object}} The text to return and a
  *   description of how it was chosen (`mode`: full, search, section, outline)
  */
 export function selectContent(content, options = {}) {
   const text = typeof content === 'string' ? content : '';
   const { name = 'This source', budgetChars = RESULT_BUDGET_CHARS } = options;
+  const measure = typeof options.measure === 'function' ? options.measure : lengthOf;
   const query = typeof options.query === 'string' ? options.query.trim() : '';
   const section = typeof options.section === 'string' ? options.section.trim() : '';
 
-  if (text.length <= budgetChars) {
+  if (measure(text) <= budgetChars) {
     return { content: text, retrieval: { mode: 'full' } };
   }
 
@@ -811,13 +843,18 @@ export function selectContent(content, options = {}) {
   let result;
   if (section) {
     mode = 'section';
-    result = sectionResult(index, name, section, budgetChars);
+    result = sectionResult(index, name, section, budgetChars, measure);
   } else if (query) {
     mode = 'search';
-    result = searchResult(index, name, query, budgetChars);
+    result = searchResult(index, name, query, budgetChars, measure);
   } else {
     mode = 'outline';
-    result = outlineResult(index, `${tooLargeNote(name, index)} This is its outline.`, budgetChars);
+    result = outlineResult(
+      index,
+      `${tooLargeNote(name, index)} This is its outline.`,
+      budgetChars,
+      measure
+    );
   }
 
   return {

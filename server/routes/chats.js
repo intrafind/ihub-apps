@@ -504,6 +504,16 @@ export default function registerChatRoutes(app) {
         removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
         component: COMPONENT
       });
+      // The chat is gone, so its project's marker has nothing to list; the
+      // listing would prune it on its next read, the cascade does it now.
+      if (access.chat?.projectId) {
+        const { getProjectService } = await import('../services/projects/ProjectService.js');
+        await getProjectService()
+          .detachChat(access.chat.projectId, chatId)
+          .catch(() => {
+            /* the project may already be gone */
+          });
+      }
       // True even when a concurrent delete won the race: the postcondition the
       // caller asked for — this chat no longer exists — holds either way.
       res.json({ deleted: true });

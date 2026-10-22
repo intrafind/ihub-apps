@@ -38,6 +38,20 @@ const MAX_LIMIT = 20;
  */
 const PAYLOAD_BUDGET_BYTES = RESULT_BUDGET_CHARS;
 
+/**
+ * What a read reserves beside its text for the retrieval details (the
+ * section ids it returned), and how often it narrows the text when the
+ * result still came out over the budget.
+ */
+const READ_ROOM_BYTES = 1024;
+const READ_ATTEMPTS = 3;
+
+/** What a read of a document its source cut short tells the model. */
+const SOURCE_TRUNCATED_NOTE =
+  'The source of this document handed over only its beginning (its length limit), so this ' +
+  'is not the whole document and no section or search reaches the rest. Say so when the ' +
+  'answer may depend on the missing part.';
+
 /** What the note and a passage number may take, reserved before they are known. */
 const NOTE_ROOM = 'x'.repeat(200);
 const MARKER_ROOM = 999999;
@@ -109,19 +123,18 @@ export async function search(params) {
     if (!query) return { error: 'query is required', code: 'INVALID_REF' };
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number(params.limit) || 8));
     const ctx = ctxOf(params);
-    const perProject = Math.max(1, Math.ceil(limit / targets.length));
     const gathered = [];
     const unavailable = [];
     const retrieval = [];
     for (const entry of targets) {
       const provider = providerFor(entry.project);
-      // Each project may fill the whole budget: the shared cap is applied
-      // once the hits of every project are ranked together, so a long
-      // matching section in one project is not dropped for the room others
-      // leave unused.
+      // Each project may fill the whole limit and budget: the shared cap is
+      // applied once the hits of every project are ranked together, so the
+      // passages of a project that matches are not dropped for the room an
+      // unrelated attached project leaves unused.
       const found = await provider.search(entry.project, ctx, {
         query,
-        limit: Math.min(limit, perProject + 2),
+        limit,
         budgetChars: RESULT_BUDGET_CHARS
       });
       for (const hit of found.hits) gathered.push({ hit, project: entry.project });
@@ -197,27 +210,54 @@ export async function read(params) {
         code: 'ITEM_NOT_FOUND'
       };
     const provider = providerFor(entry.project);
-    const result = await provider.read(
-      entry.project,
-      ctxOf(params),
-      { itemId: documentId },
-      {
-        section: typeof params.section === 'string' ? params.section : undefined
-      }
-    );
     const item = (entry.project.items || []).find(candidate => candidate.id === documentId);
-    return {
+    const respond = result => ({
       document: documentId,
       project: entry.project.id,
       name: result.doc.name,
       content: result.text,
       retrieval: result.retrieval,
+      ...(result.retrieval?.sourceTruncated ? { note: SOURCE_TRUNCATED_NOTE } : {}),
       sources: [
         projectSource(entry.project, item, {
-          read: { ok: true, truncated: result.retrieval?.mode !== 'full' }
+          read: {
+            ok: true,
+            truncated:
+              result.retrieval?.mode !== 'full' || result.retrieval?.sourceTruncated === true
+          }
         })
       ].filter(Boolean)
-    };
+    });
+    // The whole serialized result stays within the budget, in bytes, like a
+    // search: the loop replaces a larger tool result with a short preview,
+    // and a document that is short in characters can be long in bytes. The
+    // text gets what the envelope leaves; a document over it is outlined and
+    // read in sections, each naming the id it continues at.
+    const envelope = jsonBytes(
+      respond({
+        doc: { name: item?.name || '' },
+        text: '',
+        retrieval: { mode: 'full', sourceTruncated: true }
+      })
+    );
+    let budgetBytes = PAYLOAD_BUDGET_BYTES - envelope - READ_ROOM_BYTES;
+    let response;
+    for (let attempt = 0; attempt < READ_ATTEMPTS; attempt++) {
+      const result = await provider.read(
+        entry.project,
+        ctxOf(params),
+        { itemId: documentId },
+        {
+          section: typeof params.section === 'string' ? params.section : undefined,
+          budgetBytes
+        }
+      );
+      response = respond(result);
+      const over = jsonBytes(response) - PAYLOAD_BUDGET_BYTES;
+      if (over <= 0) break;
+      budgetBytes -= over + READ_ROOM_BYTES;
+    }
+    return response;
   } catch (error) {
     return errorResult(error);
   }

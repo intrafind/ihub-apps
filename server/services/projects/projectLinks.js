@@ -20,7 +20,7 @@
 import configCache from '../../configCache.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
-import { effectiveGroups } from './projectAccess.js';
+import { visibleToUser as profileVisibleToUser } from '../../routes/agents/profiles.js';
 import { filterByPermissions } from '../workflow/workflowAccess.js';
 
 /** Node types whose `config.projects` is honoured. */
@@ -73,12 +73,13 @@ function workflowUsableBy(workflow, user) {
   return filterByPermissions([workflow], user).length > 0;
 }
 
+/**
+ * The policy the profile routes apply (`visibleToUser`): a profile a user
+ * cannot open cannot grant them its linked projects either.
+ */
 function agentUsableBy(profile, user) {
   if (profile?.enabled === false) return false;
-  const allowed = Array.isArray(profile?.groups) ? profile.groups : [];
-  if (allowed.length === 0 || allowed.includes('*')) return true;
-  const groups = effectiveGroups(user);
-  return allowed.some(group => groups.includes(group));
+  return profileVisibleToUser(profile, user);
 }
 
 /**

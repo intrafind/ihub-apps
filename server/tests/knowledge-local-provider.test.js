@@ -19,7 +19,13 @@ import { resolveGroupInheritance } from '../utils/authorization.js';
 import { locateConfigFile } from '../utils/configFileLocation.js';
 import { buildCorpusIndex, collectHits, searchCorpus } from '../sources/documentRetrieval.js';
 import { ProjectRepository } from '../services/projects/ProjectRepository.js';
-import { setTextReader, evictItemText } from '../services/knowledge/ItemTextService.js';
+import {
+  getItemText,
+  setTextReader,
+  evictItemText
+} from '../services/knowledge/ItemTextService.js';
+import { createSourceManager } from '../sources/index.js';
+import URLHandler from '../sources/URLHandler.js';
 import {
   LocalKnowledgeProvider,
   evictProjectIndex
@@ -45,9 +51,13 @@ import {
   metadata as providerMetadata
 } from '../services/sources/providers/project.js';
 import PromptService from '../services/PromptService.js';
+import { processMessageTemplates } from '../serverHelpers.js';
 import { chatPostSchema } from '../validators/index.js';
 import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
-import { materializeUserTurn } from '../services/chat/chatMaterializer.js';
+import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMaterializer.js';
+import { getChatRepository } from '../services/chat/ChatRepository.js';
+import ChatService from '../services/chat/ChatService.js';
+import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { tryHandleMentionWorkflow } from '../services/workflow/mentionWorkflow.js';
 import { runToolCallScope } from '../services/sources/toolCallScope.js';
@@ -487,6 +497,80 @@ describe('scope and planner: incomplete loads', () => {
   });
 });
 
+describe('link items their source cut short', () => {
+  it('are carried as truncated through the text service, the planner and knowledge_read', async () => {
+    const handler = createSourceManager().getHandler('ifinder');
+    const original = handler.getCachedContent;
+    // The iFinder handler cuts a document at `maxLength` (10 000 characters
+    // by default) and says so in its metadata.
+    handler.getCachedContent = async () => ({
+      content: '# Manual\n\nThe first part of a long manual about deposits.',
+      metadata: { type: 'ifinder', documentId: 'doc-1', truncated: true }
+    });
+    const linked = await repo.createUser({ owner: ADA, content: { name: 'Linked' } });
+    const item = {
+      id: 'itm_manual',
+      kind: 'ifinder-document',
+      name: 'Manual',
+      ref: { documentId: 'doc-1', searchProfile: 'default' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: { id: ADA.id, name: ADA.name }, at: '2026-10-20' }
+    };
+    await repo.mutate(linked.id, p => ({ ...p, items: [item] }));
+    const ctx = { user: ADA, chatId: 'c-linked', language: 'en' };
+    try {
+      const fetched = await getItemText(linked, item, ctx);
+      assert.equal(fetched.truncated, true);
+
+      const scope = await resolveProjectScope({
+        appConfig: { id: 'chat', _projectId: linked.id },
+        user: ADA
+      });
+      const plan = await planKnowledgeScope(scope, {
+        model: { contextWindow: 100000 },
+        settings: { loadAllMaxTokens: 50000 },
+        ctx
+      });
+      assert.equal(plan.projects[0].mode, 'searched', 'a partial load is not loaded in full');
+      assert.ok(renderProjectsBlock(plan).includes('truncated="true"'));
+
+      const params = {
+        user: ADA,
+        chatId: 'c-linked',
+        language: 'en',
+        appConfig: { id: 'chat', _projectId: linked.id }
+      };
+      const doc = await read({ ...params, document: 'itm_manual' });
+      assert.equal(doc.retrieval.mode, 'full');
+      assert.equal(doc.retrieval.sourceTruncated, true);
+      assert.match(doc.note, /only its beginning/);
+      assert.equal(
+        doc.sources[0].read.truncated,
+        true,
+        'the source card does not claim a full read'
+      );
+
+      const found = await runToolCallScope([], () => search({ ...params, query: 'deposits' }));
+      assert.deepEqual(found.retrieval.projects[0].truncatedDocuments, ['itm_manual']);
+    } finally {
+      handler.getCachedContent = original;
+      evictProjectIndex(linked.id);
+    }
+  });
+
+  it('a URL fetch cut at its length limit says so in its metadata', async () => {
+    const handler = new URLHandler();
+    handler.getWebContentExtractor = async () => ({
+      extract: async () => ({ content: 'start of a page', truncated: true, metadata: {} })
+    });
+    const loaded = await handler.loadContent({ url: 'https://example.com/long' });
+    assert.equal(loaded.metadata.truncated, true);
+  });
+});
+
 describe('tools', () => {
   const params = (extra = {}) => ({
     user: ADA,
@@ -635,6 +719,75 @@ describe('tools', () => {
     evictProjectIndex(big.id);
   });
 
+  it('search lets a matching project fill the limit when an unrelated one is attached', async () => {
+    const section = n => `## Deposit rule ${n}\nThe deposit rule ${n} covers the deposit return.`;
+    const rules = await repo.createUser({ owner: ADA, content: { name: 'Rules' } });
+    await repo.mutate(rules.id, p => ({
+      ...p,
+      items: [
+        textItem(
+          'itm_rules',
+          'Rules.md',
+          `# Rules\n\n${Array.from({ length: 12 }, (_, i) => section(i + 1)).join('\n\n')}`
+        )
+      ]
+    }));
+    const unrelated = await repo.createUser({ owner: ADA, content: { name: 'Unrelated' } });
+    await repo.mutate(unrelated.id, p => ({
+      ...p,
+      items: [textItem('itm_weather', 'Weather.md', '# Weather\n\nSunny with light wind.')]
+    }));
+    const result = await runToolCallScope([], () =>
+      search({
+        ...params({ query: 'deposit rule' }),
+        appConfig: { id: 'chat', _projectId: rules.id, _attachedProjectIds: [unrelated.id] }
+      })
+    );
+    assert.equal(result.hits.length, 8, 'the default limit, all from the matching project');
+    assert.ok(result.hits.every(hit => hit.project === rules.id));
+    evictProjectIndex(rules.id);
+    evictProjectIndex(unrelated.id);
+  });
+
+  it('read bounds its serialized bytes and reaches every part of a long multi-byte document', async () => {
+    // 30 000 characters of Japanese: within a 40 000-character budget, but
+    // some 90 KB as UTF-8 JSON.
+    const body = n => `第${n}章の本文です。契約の条件について説明します。`.repeat(200);
+    const chapters = Array.from({ length: 6 }, (_, i) => `## Chapter ${i + 1}\n${body(i + 1)}`);
+    const text = `# Handbook\n\n${chapters.join('\n\n')}`;
+    const jp = await repo.createUser({ owner: ADA, content: { name: 'Japanese' } });
+    await repo.mutate(jp.id, p => ({ ...p, items: [textItem('itm_jp', 'Handbook.md', text)] }));
+    const readJp = section =>
+      read({
+        ...params({ document: 'itm_jp', ...(section ? { section } : {}) }),
+        appConfig: { id: 'chat', _projectId: jp.id }
+      });
+    const bytesOf = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+    const whole = await readJp();
+    assert.notEqual(whole.retrieval.mode, 'full', 'too long in bytes to return whole');
+    assert.ok(bytesOf(whole) <= 40000, `the outline serializes to ${bytesOf(whole)} bytes`);
+    assert.equal(whole.sources[0].read.truncated, true);
+
+    // A section read of the whole tree names where it continues, and the
+    // sections after that it still spans, until every chapter was read.
+    const seen = new Set();
+    const queue = ['handbook'];
+    const asked = new Set();
+    while (queue.length && asked.size < 12) {
+      const section = queue.shift();
+      if (asked.has(section)) continue;
+      asked.add(section);
+      const part = await readJp(section);
+      assert.ok(bytesOf(part) <= 40000, `a section read serializes to ${bytesOf(part)} bytes`);
+      for (let n = 1; n <= 6; n++) if (part.content.includes(`第${n}章`)) seen.add(n);
+      const footer = part.content.split('The section continues:')[1] || '';
+      queue.push(...[...footer.matchAll(/"([^"]+)"/g)].map(match => match[1]));
+    }
+    assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5, 6]);
+    evictProjectIndex(jp.id);
+  });
+
   it('read and list work by document id', async () => {
     const doc = await read(params({ document: 'itm_policy' }));
     assert.equal(doc.name, 'Policy.md');
@@ -663,7 +816,8 @@ describe('sources', () => {
     const item = textProject.items[0];
     const input = projectSource(textProject, item, { snippet: 'x' });
     const source = normalizeSource(input);
-    assert.equal(source.id, 'project:itm_contract');
+    assert.equal(source.id, `project:${textProject.id}:itm_contract`);
+    assert.deepEqual(normalizeSource(source), source, 'normalizing again keeps the identity');
     assert.equal(source.kind, 'document');
     assert.equal(source.private, true);
     assert.equal(source.site, 'Case 2026-114');
@@ -682,6 +836,31 @@ describe('sources', () => {
       normalizeSource({ ...input, provenance: { origin: 'stolen' } }).provenance,
       undefined
     );
+  });
+
+  it('keeps items of two projects with the same item id apart', () => {
+    const item = { ...textProject.items[1] };
+    const policyA = projectSource({ id: 'prj_admin_a', name: 'Handbook A' }, item);
+    const policyB = projectSource({ id: 'prj_admin_b', name: 'Handbook B' }, item);
+    const merged = mergeSources(emptySourceSet(), { items: [policyA, policyB] });
+    assert.equal(merged.items.length, 2, 'two documents, two sources');
+    assert.deepEqual(
+      merged.items.map(entry => entry.ref),
+      [
+        { id: item.id, scope: 'prj_admin_a' },
+        { id: item.id, scope: 'prj_admin_b' }
+      ],
+      'each keeps the handle its preview and download open'
+    );
+    // A provider whose scope only says how the document was reached still
+    // merges two sightings of it.
+    const viaProfiles = mergeSources(emptySourceSet(), {
+      items: [
+        { provider: 'ifinder', ref: { id: 'doc-1', scope: 'default' }, title: 'Doc' },
+        { provider: 'ifinder', ref: { id: 'doc-1', scope: 'legal' }, title: 'Doc' }
+      ]
+    });
+    assert.equal(viaProfiles.items.length, 1);
   });
 
   it('is extracted from a tool result through the producer', () => {
@@ -851,7 +1030,7 @@ describe('chat container', () => {
     });
     assert.equal(first.ok, true);
     assert.equal(first.newContainer, true);
-    assert.deepEqual(first.chatPatch.projectId, textProject.id);
+    assert.equal(first.projectPatch.claimContainer, textProject.id);
 
     // A standalone chat with a transcript cannot join a project by a turn.
     const standalone = { id: 'c-alone', projectId: null, messageCount: 2 };
@@ -869,12 +1048,16 @@ describe('chat container', () => {
     const inside = { id: 'c-in', projectId: textProject.id, messageCount: 2 };
     const leave = await resolveChatProjects({ req: req(), chat: inside, app, projectId: null });
     assert.equal(leave.code, 'PROJECT_MISMATCH');
-    // Omitting the field, or repeating the same container, changes nothing.
+    // Omitting the field changes nothing; repeating the same container only
+    // asserts it, checked again when the turn is stored.
     for (const projectId of [undefined, textProject.id]) {
       const same = await resolveChatProjects({ req: req(), chat: inside, app, projectId });
       assert.equal(same.ok, true);
       assert.equal(same.containerId, textProject.id);
-      assert.equal(same.chatPatch, null);
+      assert.deepEqual(
+        same.projectPatch,
+        projectId ? { expectedContainer: textProject.id, attach: [], maxAttached: 10 } : null
+      );
     }
     // An explicit null on a standalone chat is no change.
     const none = await resolveChatProjects({ req: req(), chat: standalone, app, projectId: null });
@@ -891,7 +1074,7 @@ describe('chat container', () => {
         projectId: null
       });
       assert.equal(ignored.ok, true);
-      assert.equal(ignored.chatPatch, null);
+      assert.equal(ignored.projectPatch, null);
       assert.equal(ignored.containerId, textProject.id);
     } finally {
       configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
@@ -913,6 +1096,18 @@ function recordingChats(projectId) {
       writes.push({ chatId, patch, markersBefore: markers.map(marker => marker.chatId) });
       return { id: chatId, ...patch };
     },
+    // The chat as the fake stores it never has a container or messages, so
+    // a claim always holds.
+    updateChatProjects: async (chatId, projects, patch) => {
+      const merged = {
+        ...patch,
+        ...(projects.claimContainer ? { projectId: projects.claimContainer } : {}),
+        attachedProjectIds: projects.attach
+      };
+      const markers = await repo.listChatMarkers(projectId);
+      writes.push({ chatId, patch: merged, markersBefore: markers.map(marker => marker.chatId) });
+      return { chat: { id: chatId, ...merged }, conflict: false };
+    },
     appendMessage: async (chatId, message) => ({ message: { id: `m-${chatId}`, ...message } })
   };
   const repository = new Proxy(known, {
@@ -933,7 +1128,7 @@ describe('chat container persistence', () => {
       appId: 'chat',
       runId: 'run-1',
       content: 'hello',
-      chat: { projectId: textProject.id, attachedProjectIds: [] }
+      projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
     });
     assert.equal(writes[0].patch.projectId, textProject.id);
     assert.equal(writes[0].markersBefore.includes(chatId), false, 'no marker before the patch');
@@ -974,7 +1169,7 @@ describe('chat container persistence', () => {
           ownerId: ADA.id,
           identityMode: 'default',
           content: message.content,
-          chat: { projectId: textProject.id, attachedProjectIds: [] }
+          projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
         }
       });
       assert.equal(outcome.handled, true);
@@ -1121,5 +1316,301 @@ describe('prompt injection', () => {
     );
     PromptService.takeKnowledgeScope('chat-k3');
     PromptService.resetPromptSources('chat-k3');
+  });
+});
+
+describe('chat projects under concurrency and caps', () => {
+  const req = () => ({ user: { ...ADA } });
+  const app = { id: 'chat' };
+
+  it('caps the attached projects against the stored ones, not only the request', async () => {
+    const extra = [];
+    for (const name of ['Extra A', 'Extra B', 'Extra C']) {
+      extra.push(await repo.createUser({ owner: ADA, content: { name } }));
+    }
+    const stored = Array.from({ length: 9 }, (_, index) => `prj_stored${index}`);
+    const resolved = await resolveChatProjects({
+      req: req(),
+      chat: { id: 'c-many', projectId: null, attachedProjectIds: stored, messageCount: 4 },
+      app,
+      projects: extra.map(entry => entry.id)
+    });
+    assert.equal(resolved.ok, true);
+    assert.equal(resolved.attachedIds.length, 10, 'the union stays within the cap');
+    assert.deepEqual(resolved.projectPatch.attach, [extra[0].id]);
+    assert.equal(resolved.projectPatch.maxAttached, 10);
+  });
+
+  it('refuses the slower of two first turns that open one chat in different projects', async () => {
+    const other = await repo.createUser({ owner: ADA, content: { name: 'Other case' } });
+    const chatId = 'chat-first-turn-race';
+    const repository = getChatRepository();
+    // Both turns are resolved against the chat as it was before either was
+    // stored: there is none yet, so each may open it in its project.
+    const [a, b] = await Promise.all(
+      [textProject.id, other.id].map(projectId =>
+        resolveChatProjects({ req: req(), chat: null, app, projectId })
+      )
+    );
+    assert.equal(a.newContainer && b.newContainer, true);
+    const turn = (resolved, runId) =>
+      settleUserTurn({
+        repository,
+        chatId,
+        ownerId: ADA.id,
+        identityMode: 'default',
+        appId: 'chat',
+        runId,
+        content: runId,
+        projects: resolved.projectPatch
+      });
+    try {
+      const results = await Promise.all([turn(a, 'chat-run-a'), turn(b, 'chat-run-b')]);
+      assert.equal(results.filter(result => result.message).length, 1);
+      const refused = results.find(result => result.refusal);
+      assert.equal(refused?.refusal.code, 'PROJECT_MISMATCH');
+      const chat = await repository.getChat(chatId);
+      const winner = results[0].message ? textProject.id : other.id;
+      assert.equal(chat.projectId, winner, 'the first claim stands');
+      const { messages } = await repository.getMessages(chatId);
+      assert.equal(messages.length, 1);
+    } finally {
+      await repository.deleteChat(chatId);
+      await repo.removeChatMarker(textProject.id, chatId);
+      await repo.removeChatMarker(other.id, chatId);
+    }
+  });
+});
+
+describe('chat route and projects', () => {
+  const routes = [];
+  const record =
+    method =>
+    (routePath, ...handlers) =>
+      routes.push({ method, routePath, handlers });
+  registerSessionRoutes(
+    { get: record('get'), post: record('post'), put: () => {}, delete: () => {}, use: () => {} },
+    { getLocalizedError: async code => `localized:${code}`, DEFAULT_TIMEOUT: 5000 }
+  );
+  const chatPost = routes.find(
+    entry => entry.method === 'post' && entry.routePath.endsWith('/api/apps/:appId/chat/:chatId')
+  ).handlers;
+
+  /** Drive the POST chain from `validate()` on; `req.user` stands in for the auth middleware. */
+  async function post({ appId, chatId, body }) {
+    const req = { params: { appId, chatId }, body, headers: {}, query: {}, user: { ...ADA } };
+    const res = { statusCode: 200, body: null };
+    res.status = code => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = value => {
+      res.body = value;
+      return res;
+    };
+    for (let index = 1; index < chatPost.length; index += 1) {
+      let advanced = false;
+      await chatPost[index](req, res, () => {
+        advanced = true;
+      });
+      if (index < chatPost.length - 1 && !advanced) break;
+    }
+    return res;
+  }
+
+  async function withStubs({ prepare, runTurn }, fn) {
+    const original = {
+      prepare: ChatService.prototype.prepareChatRequest,
+      run: ChatService.prototype.runTurn
+    };
+    ChatService.prototype.prepareChatRequest = prepare;
+    if (runTurn) ChatService.prototype.runTurn = runTurn;
+    try {
+      await fn();
+    } finally {
+      ChatService.prototype.prepareChatRequest = original.prepare;
+      ChatService.prototype.runTurn = original.run;
+    }
+  }
+
+  it("applies the app's userProjects gate to an app id typed in another case", async () => {
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, features: { userProjects: false } }
+    ]);
+    const calls = [];
+    try {
+      await withStubs(
+        {
+          prepare: async params => {
+            calls.push(params);
+            return { success: false, error: { code: 'APP_NOT_FOUND' } };
+          }
+        },
+        async () => {
+          await post({
+            appId: 'CHAT',
+            chatId: 'chat-case-gate',
+            body: { messages: [{ role: 'user', content: 'hi' }], projectId: textProject.id }
+          });
+        }
+      );
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].projectId, null, 'the app turned user projects off');
+    } finally {
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+    }
+  });
+
+  it('answers a turn refused at persistence with 409 PROJECT_MISMATCH', async () => {
+    const refusal = {
+      code: 'PROJECT_MISMATCH',
+      message: 'This chat already runs inside a project'
+    };
+    await withStubs(
+      {
+        prepare: async () => ({
+          success: true,
+          data: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] }
+        }),
+        runTurn: async () => ({ status: 'error', errorInfo: refusal, refusal })
+      },
+      async () => {
+        const res = await post({
+          appId: 'chat',
+          chatId: 'chat-refused-turn',
+          body: { messages: [{ role: 'user', content: 'hi' }], projectId: textProject.id }
+        });
+        assert.equal(res.statusCode, 409);
+        assert.deepEqual(res.body, { error: refusal.message, code: 'PROJECT_MISMATCH' });
+      }
+    );
+  });
+
+  it('ends a refused turn before the model is called', async () => {
+    const ended = [];
+    const service = new ChatService({
+      runLog: {
+        startRun: async () => {},
+        append: () => {},
+        endRun: (runId, summary) => ended.push({ runId, summary })
+      },
+      agentLoop: {
+        run: async () => {
+          throw new Error('the model must not be called');
+        }
+      }
+    });
+    const repository = {
+      isAvailable: () => true,
+      ensureChat: async ({ chatId }) => ({ id: chatId, title: 'x' }),
+      updateChatProjects: async chatId => ({
+        chat: { id: chatId, projectId: 'prj_someone_else' },
+        conflict: true
+      }),
+      appendMessage: async () => {
+        throw new Error('nothing may be stored');
+      }
+    };
+    const outcome = await service.runTurn({
+      prep: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] },
+      chatId: 'chat-refused-in-service',
+      streaming: false,
+      user: { ...ADA },
+      persistence: {
+        repository,
+        ownerId: ADA.id,
+        identityMode: 'default',
+        content: 'hi',
+        projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 }
+      }
+    });
+    assert.equal(outcome.refusal?.code, 'PROJECT_MISMATCH');
+    assert.equal(outcome.status, 'error');
+    assert.equal(ended.length, 1, 'the ledger run is ended');
+    assert.equal(ended[0].summary.error.code, 'PROJECT_MISMATCH');
+  });
+});
+
+describe('prompt scope through the production path', () => {
+  const ask = [{ role: 'user', content: 'What is the notice period?' }];
+
+  it("sizes the load-all budget by the model id the wrapper forwards, whatever the model's name", async () => {
+    const app = { id: 'chat', system: { en: 'You are helpful.' }, _projectId: textProject.id };
+    await processMessageTemplates(
+      ask,
+      app,
+      null,
+      null,
+      'en',
+      null,
+      ADA,
+      'chat-wrapper',
+      // The display name the request builder passes: localized, so only the
+      // id finds the model.
+      { en: 'Small', de: 'Klein' },
+      null,
+      null,
+      'small',
+      'prep-wrapper'
+    );
+    const scope = PromptService.takeKnowledgeScope('prep-wrapper');
+    assert.equal(scope?.budgetTokens, 3200, "the small model's 40 % share, not the default cap");
+    PromptService.resetPromptSources('chat-wrapper');
+  });
+
+  it('gives overlapping preparations of one chat each their own knowledge scope', async () => {
+    let releaseFirst;
+    const firstWaits = new Promise(resolve => {
+      releaseFirst = resolve;
+    });
+    let secondPrepared;
+    const secondDone = new Promise(resolve => {
+      secondPrepared = resolve;
+    });
+    // A request builder that builds the prompt, then (for the first turn)
+    // waits — the way the real one awaits API-key checks and tool loading —
+    // while the second turn of the same chat is prepared.
+    const requestBuilder = {
+      async prepareChatRequest(params) {
+        await params.processMessageTemplates(
+          ask,
+          params.app,
+          null,
+          null,
+          'en',
+          null,
+          ADA,
+          params.chatId,
+          null,
+          null,
+          null,
+          'small',
+          params.preparationId
+        );
+        if (params.turn === 'first') await firstWaits;
+        else secondPrepared();
+        return { success: true, data: { turn: params.turn } };
+      }
+    };
+    const service = new ChatService({ requestBuilder });
+    const chatId = 'chat-overlap';
+    const first = service.prepareChatRequest({
+      chatId,
+      turn: 'first',
+      app: { id: 'chat', system: { en: 'P' }, _projectId: textProject.id }
+    });
+    const second = service.prepareChatRequest({
+      chatId,
+      turn: 'second',
+      app: { id: 'chat', system: { en: 'P' }, _attachedProjectIds: [textProject.id] }
+    });
+    await secondDone;
+    releaseFirst();
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(a.data.knowledgeScope?.projects[0].origin, 'container');
+    assert.equal(b.data.knowledgeScope?.projects[0].origin, 'attached');
+    PromptService.resetPromptSources(chatId);
   });
 });
