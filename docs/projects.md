@@ -72,8 +72,8 @@ project, bytes per file and bytes per project.
 | **Waiting**      | `pending`    | The item exists, the content has not arrived yet.                                               |
 | **Extracting**   | `extracting` | The server is extracting and encrypting the text. The page refreshes until it is done.          |
 | **Ready**        | `ready`      | Usable. Text items show their size in tokens, picked items the date the text was taken.         |
-| **Failed**       | `failed`     | Permanent, with the reason. Remove the item and add it again.                                   |
-| **Outdated**     | `stale`      | A refresh found a newer version at the source, or could not read it. The old text stays usable. |
+| **Failed**       | `failed`     | Permanent, with the reason. An upload has to be removed and added again; a picked cloud document can be refreshed once its source is reachable again. |
+| **Outdated**     | `stale`      | A refresh could not read the source; the old text stays usable. A refresh that finds a newer version installs it and the item is **Ready** again. |
 
 Link items are **Ready** as soon as their reference checks out.
 
@@ -271,8 +271,8 @@ A project page shows:
 
 - **Documents** with status, provenance and size, and the usage against the limits. Owners and
   editors pin, rename, refresh, preview and remove documents and retry failed cloud documents.
-- **Settings**: name (up to 200 characters), description and instructions (up to 20,000
-  characters). The instructions apply to every chat in the project.
+- **Settings**: name (up to 200 characters), description (up to 2,000 characters) and
+  instructions (up to 20,000 characters). The instructions apply to every chat in the project.
 - **Chats** in the project, all or only your own, and **New chat**, which asks for an app.
 - **Members**: the owner, the members, **Share**, **Transfer ownership**, **Leave project** and
   **Delete project**.
@@ -288,7 +288,8 @@ picked cloud file is taken with your account; refresh the item later to take it 
 
 | Can                                                                  | Owner | Editor | User |
 | -------------------------------------------------------------------- | :---: | :----: | :--: |
-| See the project, its documents, instructions and members             |   ✓   |   ✓    |  ✓   |
+| See the project, its documents and instructions                      |   ✓   |   ✓    |  ✓   |
+| See the member list (users see only how many members there are)      |   ✓   |   ✓    |  —   |
 | Chat in it, read other members' chats in it (read-only)              |   ✓   |   ✓    |  ✓   |
 | Add, refresh, pin, rename and remove documents; edit settings        |   ✓   |   ✓    |  —   |
 | Let a workflow write into it                                         |   ✓   |   ✓    |  —   |
@@ -304,7 +305,9 @@ allows it.
 ### Transfer, delete and an owner who leaves
 
 - **Transfer ownership** hands the project to another active user, within that user's project
-  limit. The former owner loses access unless the new owner shares it back.
+  limit. Only the ownership moves: a share that reaches the former owner (their own entry, a group
+  they are in, everyone signed in) stays in force, so review the members afterwards when the
+  handover is meant to end their access.
 - **Delete project** removes the project and all its documents. Its chats are kept, outside the
   project. This cannot be undone.
 - When the owner's account is **deactivated**, the project stays readable for its members, but
