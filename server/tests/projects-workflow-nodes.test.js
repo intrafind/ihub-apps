@@ -463,6 +463,44 @@ describe('resolveNodeProject', () => {
     }
   });
 
+  it('reaches an admin project linked only by a step in a nested inline loop body', async () => {
+    const stepNode = {
+      id: 'read-orphan',
+      type: 'project-read',
+      config: { project: 'orphan', document: '$.data._loopItem.id', projects: ['orphan'] }
+    };
+    const loopNode = (id, body) => ({
+      id,
+      type: 'loop',
+      name: { en: id },
+      position: { x: 0, y: 100 },
+      config: { mode: 'forEach', array: '$.data.docs', body }
+    });
+    const loopWorkflow = workflowOf({
+      id: 'orphan-reader',
+      projects: [],
+      nodes: [...workflowOf().nodes, loopNode('outer', [loopNode('inner', [stepNode])])]
+    });
+    configCache.setCacheEntry('config/workflows.json', [workflowOf(), loopWorkflow]);
+    try {
+      const resolved = await resolveNodeProject({
+        executor,
+        node: stepNode,
+        state: stateOf({}),
+        context: contextOf({ user: GRACE, workflow: loopWorkflow })
+      });
+      assert.equal(resolved.project.id, 'orphan', 'the link inside the body reaches it');
+      assert.equal(resolved.canWrite, false, 'a bare id grants no writes');
+      assert.deepEqual(
+        findDependencies('orphan').filter(entry => entry.type === 'workflow'),
+        [{ type: 'workflow', id: 'orphan-reader', name: 'Memo writer', nodeId: 'read-orphan' }],
+        'the body step counts as a dependency'
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', [workflowOf()]);
+    }
+  });
+
   it('keeps user projects dark while the feature is off', async () => {
     configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
     try {
