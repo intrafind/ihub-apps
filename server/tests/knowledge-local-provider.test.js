@@ -400,13 +400,17 @@ describe('scope and planner', () => {
     assert.equal(shared.limitTokens, 150);
     const total = shared.projects.reduce((sum, project) => sum + project.tokens, 0);
     assert.ok(total <= 150, `injected ${total} tokens past the limit`);
-    assert.equal(shared.projects[0].cut.length, 0);
-    // What is left goes to the pinned policy first (truncated, so listed as
-    // cut as well); the contract, first in item order, is dropped whole.
-    assert.deepEqual(shared.projects[1].cut, ['itm_policy', 'itm_contract']);
+    // The pinned policy of both projects goes in first, whole; the room left
+    // goes to the contracts in scope order: the first is truncated (so listed
+    // as cut), the second dropped.
+    for (const planned of shared.projects) {
+      const policy = planned.injected.find(doc => doc.doc.id === 'itm_policy');
+      assert.ok(policy && !policy.truncated, `${planned.id}: its pinned document is whole`);
+      assert.deepEqual(planned.cut, ['itm_contract']);
+    }
+    assert.equal(shared.projects[0].injected.at(-1).doc.id, 'itm_contract');
+    assert.equal(shared.projects[0].injected.at(-1).truncated, true);
     assert.equal(shared.projects[1].injected.length, 1);
-    assert.equal(shared.projects[1].injected[0].doc.id, 'itm_policy');
-    assert.equal(shared.projects[1].injected[0].truncated, true);
     assert.equal(shared.tools, true);
     evictProjectIndex('prj_twin');
 
@@ -420,6 +424,57 @@ describe('scope and planner', () => {
       { model: { contextWindow: 200 }, settings: { loadAllMaxTokens: 10 }, ctx }
     );
     assert.equal(context.projects[0].mode, 'loaded');
+  });
+});
+
+describe('scope and planner: pinned documents across the scope', () => {
+  it("keeps a later project's pinned document before an earlier project's unpinned text", async () => {
+    const ctx = { user: ADA, chatId: 'c1', language: 'en' };
+    const bulky = await repo.createUser({ owner: ADA, content: { name: 'Bulky' } });
+    await repo.mutate(bulky.id, p => ({
+      ...p,
+      items: [1, 2, 3].map(n =>
+        textItem(`itm_bulk${n}`, `Bulk ${n}.md`, `# Bulk ${n}\n\n${'Filler text. '.repeat(700)}`)
+      )
+    }));
+    const small = await repo.createUser({ owner: ADA, content: { name: 'Small' } });
+    await repo.mutate(small.id, p => ({
+      ...p,
+      items: [
+        textItem('itm_rule', 'Rule.md', '# Rule\n\nAlways cite the clause.', { pinned: true })
+      ]
+    }));
+    const scope = [
+      ...(
+        await resolveProjectScope({ appConfig: { id: 'chat', _projectId: bulky.id }, user: ADA })
+      ).map(entry => ({ ...entry, mode: 'context' })),
+      ...(
+        await resolveProjectScope({
+          appConfig: { id: 'chat', _attachedProjectIds: [small.id] },
+          user: ADA
+        })
+      ).map(entry => ({ ...entry, mode: 'tools' }))
+    ];
+    // An 8 000-token model: a 6 000-token hard limit, which the earlier
+    // context project's unpinned documents alone exceed.
+    const plan = await planKnowledgeScope(scope, {
+      model: { contextWindow: 8000 },
+      settings: { loadAllMaxTokens: 50000 },
+      ctx
+    });
+    assert.equal(plan.limitTokens, 6000);
+    const [first, second] = plan.projects;
+    assert.deepEqual(
+      second.injected.map(doc => doc.doc.id),
+      ['itm_rule'],
+      'the pinned rule is kept'
+    );
+    assert.equal(second.cut.length, 0);
+    assert.ok(first.cut.length > 0, 'the unpinned text gives way');
+    const total = plan.projects.reduce((sum, planned) => sum + planned.tokens, 0);
+    assert.ok(total <= 6000, `injected ${total} tokens past the limit`);
+    evictProjectIndex(bulky.id);
+    evictProjectIndex(small.id);
   });
 });
 
