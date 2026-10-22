@@ -372,11 +372,16 @@ instructions). The button shows how many projects you have against `maxProjectsP
 
 A project page shows:
 
-- **Documents** with status, provenance and size, and the usage against the limits. Owners and
-  editors pin, rename, refresh, preview and remove documents and retry failed cloud documents.
+- **New chat** in the header, the main action: it asks for an app and starts a chat with the
+  project attached.
+- **Chats** in the project, all or only your own, above the documents so that a long document list
+  does not push them down.
+- **Documents** with status, provenance and size, and the usage against the limits; from six
+  documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
+  and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
+  document and the project weigh.
 - **Settings**: name (up to 200 characters), description (up to 2,000 characters) and
   instructions (up to 20,000 characters). The instructions apply to every chat in the project.
-- **Chats** in the project, all or only your own, and **New chat**, which asks for an app.
 - **Members**: the owner, the members, **Share**, **Transfer ownership**, **Leave project** and
   **Delete project**.
 

@@ -88,6 +88,10 @@ share projects.
 - **Add project** above the message box lets a chat use any of your own or shared projects, without
   starting the chat in it: tick a project and its documents and instructions are available to the
   answers; a chip takes it away again (up to 10 projects per chat). The chat stays where it is.
+- On a project's page **New chat** is the button in the header, the chats come before the
+  documents, and a long document list scrolls inside its card, so many files no longer push the
+  chats out of sight. File names with accents, dashes or umlauts keep their characters when a file
+  is uploaded.
 - The Projects page lists only your own and shared projects. Projects that administrators created
   are linked to apps and managed by administrators, so they are no longer listed there.
 - Answers name the project they drew on, and citations from a project show whether the document

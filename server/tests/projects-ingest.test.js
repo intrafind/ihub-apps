@@ -2454,6 +2454,21 @@ describe('routes', () => {
     assert.equal(refresh.body.details.code, 'INVALID_REF');
   });
 
+  it('keeps the characters of a UTF-8 file name', async () => {
+    const project = await create();
+    const name = 'Scope – Übersicht für Köln.md';
+    const req = multipartRequest({
+      name,
+      contentType: 'text/markdown',
+      bytes: Buffer.from('# Scope\n\nText.')
+    });
+    req.params = { projectId: project.id };
+    const res = await drive(route.addItem, { user: ADA, req });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    // multer reads part headers as latin1 unless told otherwise: "–" came out as "â€\"".
+    assert.equal(res.body.item.name, name);
+  });
+
   it('refuses an unsupported type before accepting bytes and a file over the limit', async () => {
     const project = await create();
     const png = multipartRequest({

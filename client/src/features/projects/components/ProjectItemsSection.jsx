@@ -45,6 +45,9 @@ function userItemApi(errorMessage) {
   };
 }
 
+/** From this many documents on, the table scrolls inside its card. */
+const ITEMS_SCROLL_FROM = 6;
+
 /** Text loader of the preview dialog. */
 const fetchItemText = (...args) => fetchProjectItemText(...args);
 
@@ -149,18 +152,28 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         </div>
       )}
 
-      <ProjectItemsTable
-        items={project.items || []}
-        kinds={config?.kinds || []}
-        busyItemId={actions.busyItemId}
-        readOnly={!editable}
-        estimates={estimate ? estimateByItem : undefined}
-        onPreview={setPreviewItem}
-        onTogglePinned={actions.togglePinned}
-        onRefresh={actions.refresh}
-        onRename={setRenaming}
-        onRemove={setRemoving}
-      />
+      {/* A long list scrolls inside its card instead of pushing the page down. */}
+      <div
+        className={
+          (project.items || []).length > ITEMS_SCROLL_FROM
+            ? 'max-h-[28rem] overflow-y-auto rounded-lg'
+            : undefined
+        }
+        data-testid="project-items-scroll"
+      >
+        <ProjectItemsTable
+          items={project.items || []}
+          kinds={config?.kinds || []}
+          busyItemId={actions.busyItemId}
+          readOnly={!editable}
+          estimates={estimate ? estimateByItem : undefined}
+          onPreview={setPreviewItem}
+          onTogglePinned={actions.togglePinned}
+          onRefresh={actions.refresh}
+          onRename={setRenaming}
+          onRemove={setRemoving}
+        />
+      </div>
 
       {adding && (
         <AddProjectItemDialog

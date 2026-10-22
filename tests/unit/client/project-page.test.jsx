@@ -239,6 +239,41 @@ describe('ProjectPage – owner', () => {
     expect(screen.queryByTestId('project-read-only')).not.toBeInTheDocument();
   });
 
+  test('starts a chat from the header and lists the chats above the documents', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+
+    const newChat = screen.getByRole('button', { name: 'New chat' });
+    // In the header, beside the title, not in the chats card.
+    expect(newChat.closest('section')).toBeNull();
+    // Chats come first, so many documents cannot push them down.
+    const chats = screen.getByRole('heading', { name: 'Chats' });
+    const documents = screen.getByRole('heading', { name: 'Documents' });
+    expect(
+      chats.compareDocumentPosition(documents) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    fireEvent.click(newChat);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('a long document list scrolls inside its card', async () => {
+    const many = Array.from({ length: 8 }, (_, index) => ({
+      id: `itm_${index}`,
+      kind: 'upload',
+      name: `file-${index}.md`,
+      status: 'ready',
+      pinned: false,
+      text: { tokens: 10 },
+      provenance: { origin: 'uploaded' }
+    }));
+    mockApi.fetchProject.mockResolvedValue({ ...makeProject(), items: many });
+    renderPage();
+    await screen.findByText('file-0.md');
+    expect(screen.getByTestId('project-items-scroll')).toHaveClass('overflow-y-auto');
+  });
+
   test('saves only the changed settings', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     mockApi.updateProject.mockResolvedValue(makeProject({ instructions: 'Answer in German.' }));

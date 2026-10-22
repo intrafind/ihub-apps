@@ -10,7 +10,6 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchProjectChats } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { PROJECT_CHAT_FILTERS, chatPath } from '../utils/projectView';
-import StartProjectChatDialog from './StartProjectChatDialog';
 
 /** A date and time in the user's language. */
 function formatWhen(value, language) {
@@ -25,21 +24,19 @@ function formatWhen(value, language) {
 /**
  * The chats inside a project (spec 1 §6.4): everyone's, or only the
  * caller's (`filter=mine`); each links into its app, read-only for the chats
- * of other members. A user project offers "New chat", which starts one in
- * an app with the project attached.
+ * of other members. "New chat" is in the project page's header, the main
+ * action of a project.
  *
  * @param {Object} props
  * @param {Object} props.project
- * @param {boolean} props.canStartChat - User projects only; admin projects are not containers.
  * @returns {JSX.Element}
  */
-function ProjectChatsSection({ project, canStartChat }) {
+function ProjectChatsSection({ project }) {
   const { t, i18n } = useTranslation();
   const language = i18n.language;
   const { apps } = useApps();
   const [filter, setFilter] = useState('all');
   const [state, setState] = useState({ loading: true, chats: [], error: null });
-  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -97,16 +94,6 @@ function ProjectChatsSection({ project, canStartChat }) {
             </button>
           ))}
         </div>
-        {canStartChat && (
-          <button
-            type="button"
-            onClick={() => setStarting(true)}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            <Icon name="chat" size="sm" />
-            {t('projects.chats.newChat', 'New chat')}
-          </button>
-        )}
       </div>
 
       {state.error && (
@@ -149,9 +136,6 @@ function ProjectChatsSection({ project, canStartChat }) {
             </li>
           ))}
         </ul>
-      )}
-      {starting && (
-        <StartProjectChatDialog projectId={project.id} onClose={() => setStarting(false)} />
       )}
     </section>
   );
