@@ -341,6 +341,7 @@ class RequestBuilder {
     processMessageTemplates,
     user,
     chatId,
+    preparationId = null,
     projectId = null,
     attachedProjectIds = []
   }) {
@@ -586,7 +587,8 @@ class RequestBuilder {
         modelName,
         requestedSkills,
         preparedSkills,
-        modelIdForPrompt
+        modelIdForPrompt,
+        preparationId
       );
       // The raw file/image data of the last user message, next to its rendered
       // content: workflow tools receive the structured file object for their

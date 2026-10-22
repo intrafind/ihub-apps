@@ -64,7 +64,13 @@ function translate(error, site) {
   if (/\b(404|410)\b|not found|gone/i.test(message)) {
     return new ProjectError('SOURCE_GONE', `The document is no longer at ${site}: ${message}`);
   }
-  if (/\b(401|403)\b|forbidden|denied|reconnect|unauthori[sz]ed|authentication/i.test(message)) {
+  // `not authenticated with <service>`: token storage holds no connection
+  // for this user (`TokenStorageService.getUserTokens`).
+  if (
+    /\b(401|403)\b|forbidden|denied|reconnect|unauthori[sz]ed|authentication|not authenticated/i.test(
+      message
+    )
+  ) {
     return new ProjectError(
       'SOURCE_FORBIDDEN',
       `You have no access to this ${site} document: ${message}`
@@ -124,7 +130,8 @@ export const office365Kind = registerItemKind({
         user.id,
         item.ref.fileId,
         item.ref.driveId || null,
-        item.ref.providerId
+        item.ref.providerId,
+        { signal: ctx?.signal }
       );
       return fetched(file, item.ref, site);
     } catch (error) {
@@ -155,7 +162,9 @@ export const googleDriveKind = registerItemKind({
     const user = requireUser(ctx, site);
     const { default: service } = await import('../../integrations/GoogleDriveService.js');
     try {
-      const file = await service.downloadFile(user.id, item.ref.fileId, item.ref.providerId);
+      const file = await service.downloadFile(user.id, item.ref.fileId, item.ref.providerId, {
+        signal: ctx?.signal
+      });
       return fetched(file, item.ref, site);
     } catch (error) {
       throw translate(error, site);
@@ -189,7 +198,9 @@ export const nextcloudKind = registerItemKind({
     const user = requireUser(ctx, site);
     const { default: service } = await import('../../integrations/NextcloudService.js');
     try {
-      const file = await service.downloadFile(user.id, item.ref.path, item.ref.providerId);
+      const file = await service.downloadFile(user.id, item.ref.path, item.ref.providerId, {
+        signal: ctx?.signal
+      });
       return fetched(file, item.ref, site);
     } catch (error) {
       throw translate(error, site);

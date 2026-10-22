@@ -146,7 +146,8 @@ const route = {
   adminToggle: handlersFor(adminRoutes, 'post', '/api/admin/projects/_toggle'),
   adminAddItem: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/items'),
   adminPut: handlersFor(adminRoutes, 'put', '/api/admin/projects/:id'),
-  chatPatch: handlersFor(chatRoutes, 'patch', '/api/chats/:chatId')
+  chatPatch: handlersFor(chatRoutes, 'patch', '/api/chats/:chatId'),
+  chatDelete: handlersFor(chatRoutes, 'delete', '/api/chats/:chatId')
 };
 
 async function create(user, body = {}) {
@@ -573,16 +574,17 @@ describe('admin projects', () => {
       provenance: { origin: 'uploaded' },
       ...extra
     });
-    for (const extra of [
-      { import: { file: 'config/platform.json' } },
-      { managedFile: 'config/platform.json' }
+    for (const [field, extra] of [
+      ['import', { import: { file: 'config/platform.json' } }],
+      ['managedFile', { managedFile: 'config/platform.json' }]
     ]) {
       const refused = await drive(route.adminCreate, {
         user: EDITOR,
         body: { id: 'smuggled', name: { en: 'Smuggled' }, items: [item(extra)] }
       });
       assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
-      assert.equal(refused.body.details.code, 'SERVER_ONLY_FIELDS');
+      // The strict creation schema names the field it refuses.
+      assert.match(JSON.stringify(refused.body), new RegExp(field));
     }
     assert.equal(await getProjectRepository().get('smuggled'), null);
   });
@@ -605,6 +607,69 @@ describe('admin projects', () => {
     } finally {
       configCache.setCacheEntry('config/workflows.json', []);
     }
+  });
+
+  it('builds the items of a new admin project itself and refuses server-owned fields', async () => {
+    const forged = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: {
+        id: 'forged',
+        name: { en: 'Forged' },
+        items: [
+          {
+            kind: 'url',
+            ref: { url: 'https://example.com/a' },
+            storage: 'text',
+            status: 'ready',
+            text: { blobKey: 'elsewhere__itm__v1', format: 'text/plain', extractedAt: 'now' }
+          }
+        ]
+      }
+    });
+    assert.equal(forged.statusCode, 400, JSON.stringify(forged.body));
+    assert.equal(
+      (await drive(route.adminGet, { user: EDITOR, params: { id: 'forged' } })).statusCode,
+      404
+    );
+    const badId = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: {
+        id: 'forged',
+        name: { en: 'Forged' },
+        items: [{ id: 'doc..v1', kind: 'url', ref: { url: 'https://example.com/a' } }]
+      }
+    });
+    assert.equal(badId.statusCode, 400, 'an item id the item routes would refuse');
+    const sepId = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'case__archive', name: { en: 'Archive' } }
+    });
+    assert.equal(sepId.statusCode, 400, 'a project id carrying the blob separator');
+
+    const built = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: {
+        id: 'built',
+        name: { en: 'Built' },
+        items: [
+          { id: 'policy', kind: 'url', ref: { url: 'https://example.com/policy' }, pinned: true }
+        ]
+      }
+    });
+    assert.equal(built.statusCode, 201, JSON.stringify(built.body));
+    const [item] = built.body.project.items;
+    assert.equal(item.id, 'policy');
+    assert.equal(item.storage, 'link');
+    assert.equal(item.status, 'ready');
+    assert.equal(item.pinned, true);
+    assert.equal(item.provenance.origin, 'linked');
+    assert.equal(item.provenance.by.id, EDITOR.id);
+    assert.deepEqual(item.cache, { ttlSeconds: 7200 });
+    assert.equal(item.text, null);
+    assert.equal(
+      (await drive(route.adminDelete, { user: EDITOR, params: { id: 'built' } })).statusCode,
+      204
+    );
   });
 
   it("is reached through a planner's task template and blocks its deletion", async () => {
@@ -977,5 +1042,133 @@ describe('chats in a project', () => {
       (await getProjectRepository().listChatMarkers(second.id)).map(m => m.chatId),
       [chat.id]
     );
+  });
+
+  it('prunes a stale marker only once the chat is judged under its own lock', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-prune-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Back and forth'
+    });
+    const project = await create(ADA, { name: 'Home' });
+    const into = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(into.statusCode, 200, JSON.stringify(into.body));
+    // A listing that read the chat elsewhere asks again under the lock: the
+    // chat is in the project now, so its marker stays.
+    let ran = false;
+    assert.equal(
+      await chats.unlessInProject(chat.id, project.id, () => {
+        ran = true;
+      }),
+      false
+    );
+    assert.equal(ran, false);
+    assert.equal(
+      await chats.unlessInProject(chat.id, 'prj_other', () => {
+        ran = true;
+      }),
+      true
+    );
+    assert.equal(ran, true);
+    const listed = await drive(route.chats, { user: ADA, params: { projectId: project.id } });
+    assert.deepEqual(
+      listed.body.items.map(entry => entry.id),
+      [chat.id]
+    );
+  });
+
+  it('removes the project marker of a deleted chat', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-erase-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Erased'
+    });
+    const project = await create(ADA, { name: 'Erasures' });
+    const into = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(into.statusCode, 200, JSON.stringify(into.body));
+    const erased = await drive(route.chatDelete, { user: ADA, params: { chatId: chat.id } });
+    assert.equal(erased.statusCode, 200, JSON.stringify(erased.body));
+    assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+
+  it('reports the chats a project delete could not detach, and keeps their markers', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-stuck-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Stuck'
+    });
+    const project = await create(ADA, { name: 'Half gone' });
+    const into = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(into.statusCode, 200, JSON.stringify(into.body));
+    await assert.rejects(
+      getProjectService().deleteProject(project.id, {
+        detachChat: () => {
+          throw new Error('chat storage is down');
+        }
+      }),
+      error =>
+        error.code === 'CASCADE_INCOMPLETE' &&
+        error.status === 500 &&
+        error.details.deleted === false &&
+        error.details.chats.length === 1 &&
+        // The chat id only: the storage error stays in the log.
+        Object.keys(error.details.chats[0]).join() === 'chatId' &&
+        error.details.chats[0].chatId === chat.id
+    );
+    // Nothing is gone: the project, the marker and the chat's association
+    // are the record of what is still to do.
+    assert.ok(await getProjectRepository().get(project.id));
+    assert.deepEqual(
+      (await getProjectRepository().listChatMarkers(project.id)).map(m => m.chatId),
+      [chat.id]
+    );
+    assert.equal((await chats.getChat(chat.id)).projectId, project.id);
+    // The retry with chat storage back finishes the job.
+    const retried = await drive(route.remove, {
+      user: ADA,
+      params: { projectId: project.id }
+    });
+    assert.equal(retried.statusCode, 204, JSON.stringify(retried.body));
+    assert.equal(await getProjectRepository().get(project.id), null);
+    assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+    assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
+  });
+});
+
+describe('listing without user projects', () => {
+  it('answers empty for the owned and shared scopes', async () => {
+    setFeatures({ userProjects: false });
+    try {
+      for (const scope of ['mine', 'shared']) {
+        const res = await drive(route.list, { user: NOBODY, query: { scope } });
+        assert.equal(res.statusCode, 200);
+        assert.deepEqual(res.body.items, [], scope);
+      }
+      const admin = await drive(route.list, { user: NOBODY, query: { scope: 'admin' } });
+      assert.ok(
+        admin.body.items.some(p => p.id === 'faq'),
+        'linked admin projects still list'
+      );
+    } finally {
+      setFeatures();
+    }
   });
 });

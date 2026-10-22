@@ -1221,6 +1221,69 @@ export class ChatRepository {
   }
 
   /**
+   * Patch a chat for a turn that names projects, under its lock: the
+   * project fields are checked against the chat as it stands now, not as
+   * the turn read it before its prompt was prepared.
+   *
+   * - `claimContainer` opens the chat in that project only while it has no
+   *   container and no messages (or already has this one): of two first
+   *   turns naming different projects, the later is refused, so a transcript
+   *   never moves to another project's members by a race.
+   * - `expectedContainer` (null for "in no project") refuses the patch when
+   *   the chat's container changed since the turn read it.
+   * - `attach` is added to the attached ids stored by now, never replacing
+   *   them, and the union is capped at `maxAttached`.
+   *
+   * Nothing is written when the patch is refused.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {import('../knowledge/chatProjects.js').ProjectPatch} projects
+   * @param {Object} [patch] - Further fields to apply with the projects.
+   * @returns {Promise<{chat: Object|null, conflict: boolean}>} The chat as it
+   *   stands (null when it does not exist or cannot be stored) and whether the
+   *   project fields were refused.
+   */
+  async updateChatProjects(chatId, projects, patch = {}) {
+    if (!this._usable(chatId, 'updateChatProjects')) return { chat: null, conflict: false };
+    const { claimContainer = null, expectedContainer, attach = [], maxAttached } = projects || {};
+    const limit = Number.isInteger(maxAttached) && maxAttached >= 0 ? maxAttached : Infinity;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, conflict: false };
+      const current = existing.projectId || null;
+      let projectId = current;
+      if (claimContainer) {
+        if (current !== claimContainer) {
+          if (current || Number(existing.messageCount) > 0) {
+            return { chat: existing, conflict: true };
+          }
+          projectId = claimContainer;
+        }
+      } else if (expectedContainer !== undefined && current !== (expectedContainer || null)) {
+        return { chat: existing, conflict: true };
+      }
+      const stored = Array.isArray(existing.attachedProjectIds) ? existing.attachedProjectIds : [];
+      const attached = [];
+      for (const id of [...stored, ...(Array.isArray(attach) ? attach : [])]) {
+        if (attached.length >= limit) break;
+        if (typeof id !== 'string' || !id || id === projectId || attached.includes(id)) continue;
+        attached.push(id);
+      }
+      const attachedChanged =
+        attached.length !== stored.length || attached.some((id, index) => id !== stored[index]);
+      const chat = await this._writeChat(
+        applyChatPatch(existing, {
+          ...patch,
+          ...(projectId !== current ? { projectId } : {}),
+          ...(attachedChanged ? { attachedProjectIds: attached } : {})
+        }),
+        etag
+      );
+      return { chat, conflict: false };
+    });
+  }
+
+  /**
    * Move a chat between projects only while it is still where the caller saw
    * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
    * (null for "in no project"). The compare runs inside the chat's lock, so a
@@ -1260,6 +1323,28 @@ export class ChatRepository {
         throw error;
       }
       return { chat, moved: true };
+    });
+  }
+
+  /**
+   * Run `fn` under the chat's lock unless the chat is in `projectId` right
+   * now. What a project listing prunes a stale chat marker with: a marker
+   * read beside a move is judged again once that move has settled, so the
+   * marker a later move back into the project wrote is never removed on the
+   * strength of an earlier snapshot.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} projectId - The project whose marker is in question.
+   * @param {(chat: Object|null) => Promise<unknown>} fn - Runs while locked.
+   * @returns {Promise<boolean>} Whether `fn` ran.
+   */
+  unlessInProject(chatId, projectId, fn) {
+    if (!this._usable(chatId, 'unlessInProject')) return Promise.resolve(false);
+    return this._withChatLock(chatId, async () => {
+      const chat = await this._readChat(chatId);
+      if (chat && (chat.projectId || null) === projectId) return false;
+      await fn(chat);
+      return true;
     });
   }
 
