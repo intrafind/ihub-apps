@@ -61,7 +61,7 @@ export function useAdminProjectOptions() {
   }, []);
 
   useEffect(() => {
-    void reload();
+    reload();
   }, [reload]);
 
   return { ...state, reload };

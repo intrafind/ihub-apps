@@ -47,8 +47,7 @@ export function matchesFilter(doc, filter = {}) {
   if (kinds && !kinds.includes(doc.kind)) return false;
   if (status.length && !status.includes(doc.status)) return false;
   if (typeof filter.pinned === 'boolean' && doc.pinned !== filter.pinned) return false;
-  if (origins && !origins.includes(doc.provenance?.origin || 'linked')) return false;
-  return true;
+  return !origins || origins.includes(doc.provenance?.origin || 'linked');
 }
 
 export class ProjectItemsNodeExecutor extends BaseNodeExecutor {

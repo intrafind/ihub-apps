@@ -890,9 +890,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         try {
           await assertProjectInputs(workflow, initialData, req.user);
         } catch (error) {
-          if (error?.code === 'PROJECT_NOT_FOUND') return sendNotFound(res, 'Project');
-          if (error?.code === 'INVALID_REF')
-            return sendBadRequest(res, error.message, error.details);
+          if (error?.code === 'PROJECT_NOT_FOUND') {
+            sendNotFound(res, 'Project');
+            return;
+          }
+          if (error?.code === 'INVALID_REF') {
+            sendBadRequest(res, error.message, error.details);
+            return;
+          }
           throw error;
         }
 
