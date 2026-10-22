@@ -270,8 +270,9 @@ way an app does. Three things bring a project into a run:
   person who starts the run pick a project they may use; the run dialog shows a picker. The id
   lands in state like every other input (`$.data.<name>` / `{{<name>}}`), the project joins the
   links of every step in mode `auto`, and the three project steps below accept the reference as
-  their `project`. The server refuses a run whose project input names a project the caller may
-  not use.
+  their `project` — including the tasks a planner step generates. The server refuses a run whose
+  project input names a project the caller may not use. A run started from a chat puts the
+  message into the first text input, never into a project input.
 - **The project steps.** They name a project directly or through a reference, and reach it with
   the running user's rights.
 
@@ -284,7 +285,9 @@ way an app does. Three things bring a project into a run:
 | `project-write`   | `project`, `name`, `text`, `contentType` (default `text/markdown`), `pinned`, `wait` (default true), `outputVariable` (default `_writtenDocument`)              | The stored document, with provenance `written` and the run (`executionId`, step id) that wrote it. |
 
 `name` and `text` of a write accept `$.data.<var>` references and `{{…}}` templates over the
-state; inside a loop `{{item.name}}` is the current item. A document that fits the read budget
+state; inside a loop `{{item.name}}` is the current item. Only the configured template is
+rendered: a value it inserts (such as a model's answer holding `{{…}}`) is stored as it is, never
+rendered again. A document that fits the read budget
 comes back whole whatever `section` says; a longer one is cut to the section, and the
 `retrieval` field says which happened.
 
