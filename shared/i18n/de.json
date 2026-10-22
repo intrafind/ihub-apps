@@ -3037,6 +3037,22 @@
       "users": "Benutzer",
       "dismiss": "Ausblenden"
     },
+    "onboarding": {
+      "title": "Onboarding beim ersten Start",
+      "description": "Der Einrichtungsassistent wird allen angezeigt, bis er abgeschlossen ist. Schalten Sie ihn aus, wenn Sie iHub über platform.json, Umgebungsvariablen oder Konfigurationsmanagement einrichten.",
+      "disable": "Onboarding (Einrichtungsassistent) nicht anzeigen",
+      "disableHint": "Niemand wird mehr auf /setup weitergeleitet. Ein Admin kann /setup weiterhin direkt aufrufen.",
+      "saved": "Onboarding-Einstellung gespeichert",
+      "saveError": "Die Onboarding-Einstellung konnte nicht gespeichert werden",
+      "demoOk": "Kein Demo-Konto meldet sich mit dem mitgelieferten Passwort an.",
+      "demoWarn": "{{accounts}} melden sich noch mit dem mitgelieferten Passwort an. Ändern Sie die Passwörter, bevor Sie das Onboarding ausblenden.",
+      "demoWarnHidden": "{{accounts}} melden sich noch mit dem mitgelieferten Passwort an, die Anmeldeseite listet sie aber nicht auf.",
+      "usersLink": "Benutzer",
+      "stateHidden": "Für alle ausgeblendet",
+      "stateCompleted": "Abgeschlossen",
+      "stateShown": "Wird angezeigt, bis er abgeschlossen ist",
+      "manage": "Onboarding-Einstellungen"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren",
@@ -5011,6 +5027,8 @@
       "getStarted": "Loslegen",
       "skipLater": "Überspringen, später konfigurieren"
     },
+    "skipConfirm": "Onboarding dauerhaft überspringen? Es wird dann niemandem mehr angezeigt. Sie können es unter Admin → Erweitert wieder einschalten.\n\nOK: nicht mehr anzeigen. Abbrechen: nur für diese Sitzung überspringen.",
+    "skipConfirmDemo": "Achtung: {{accounts}} melden sich noch mit dem mitgelieferten Passwort an.\n\n",
     "step2Login": {
       "title": "Anmelden, um fortzufahren",
       "description": "Zur Ersteinrichtung ist ein Admin-Konto erforderlich.",

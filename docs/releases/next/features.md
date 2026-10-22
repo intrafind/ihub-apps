@@ -81,6 +81,13 @@ dragging a line between two steps on the canvas and follows the same rules (no c
 loop boundary). The delete button on a step is also shown while it has keyboard focus, not only on
 mouse hover.
 
+## Turn off the first-run onboarding
+
+Clicking **Skip** in the setup wizard only skipped it for the current browser session, so it kept coming back for every new tab, browser or user.
+**Admin → Advanced → First-run onboarding** now has a switch (`setup.disabled` in `platform.json`) that stops the redirect to `/setup` for everyone.
+When a signed-in admin skips the wizard, they are asked whether to hide it for good; anyone else still skips for the current session only.
+The admin overview also has an Onboarding card that links there. Next to the switch, the page shows whether a demo account (`admin` / `user`) still signs in with the shipped password, and the skip prompt warns about it too.
+
 ## OpenRouter as a provider
 
 **Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key (change the prefilled URL for a regional endpoint if needed), load the model list and import the models you want; the key is stored encrypted on the provider. Models that generate images or audio instead of text are marked and not selected by **Select all**.

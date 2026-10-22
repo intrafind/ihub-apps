@@ -89,7 +89,26 @@ export default function registerSetupRoutes(app) {
     const platform = configCache.getPlatform() || {};
     // Default true so that existing installs without the flag are never blocked
     const configured = platform.setup?.configured ?? true;
-    res.json({ configured });
+    res.json({ configured, disabled: platform.setup?.disabled === true });
+  });
+
+  /**
+   * POST /api/setup/disable
+   * Persists "don't show the onboarding again" (setup.disabled = true) so the
+   * redirect to /setup stops for every user. Admin only.
+   */
+  app.post(buildServerPath('/api/setup/disable'), adminAuth, async (req, res) => {
+    try {
+      const platform = await configStore.readJson(PLATFORM_FILE);
+      if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
+      platform.setup = { ...platform.setup, disabled: true };
+      await configStore.writeJson(PLATFORM_FILE, platform);
+      await configCache.refreshCacheEntry(PLATFORM_FILE);
+      logger.info('Setup: onboarding disabled', { component: 'Setup' });
+      res.json({ success: true });
+    } catch (error) {
+      return sendInternalError(res, error, 'disable onboarding');
+    }
   });
 
   /**

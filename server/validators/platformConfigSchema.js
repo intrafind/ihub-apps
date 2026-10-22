@@ -268,6 +268,15 @@ export const platformConfigSchema = z
     // runs in when a request carries no language of its own (a workflow or
     // agent run). Edited in Admin → Customization → Localization.
     defaultLanguage: z.string().min(2).max(11).prefault('en'),
+    // First-run onboarding. `configured` is set when the wizard is completed;
+    // `disabled` hides the redirect to /setup for everyone (Admin → Advanced).
+    setup: z
+      .object({
+        configured: z.boolean().optional(),
+        disabled: z.boolean().prefault(false)
+      })
+      .passthrough()
+      .optional(),
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).prefault('local'),

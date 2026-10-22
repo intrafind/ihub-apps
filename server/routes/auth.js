@@ -790,7 +790,8 @@ export default function registerAuthRoutes(app) {
       })(),
       // Setup wizard state — default true so existing installs are never blocked
       setup: {
-        configured: platform.setup?.configured ?? true
+        configured: platform.setup?.configured ?? true,
+        disabled: platform.setup?.disabled === true
       }
     };
 
