@@ -136,6 +136,8 @@ export const projectItemSchema = z
     snapshotAt: z.string().nullable().optional(),
     /** Set while a refresh runs; the status keeps the readable snapshot. */
     refreshingAt: z.string().nullable().optional(),
+    /** The run that holds `refreshingAt`; only that run may install or fail it. */
+    refreshAttempt: z.string().max(64).optional(),
     import: z
       .object({ file: z.string().max(1024), encoding: z.string().max(32).optional() })
       .strict()

@@ -454,6 +454,10 @@ export class ProjectRepository {
    *
    * @param {Object} [options]
    * @param {boolean} [options.includeDisabled=true]
+   * @param {boolean} [options.strict=false] - Throw instead of skipping a
+   *   project file that cannot be read, or whose record has no valid id or an
+   *   id other than its file name: the caller needs the whole set (the
+   *   orphan-blob sweep), and a skipped project still names its blobs.
    * @returns {Promise<Object[]>}
    */
   async listAdmin({ includeDisabled = true, strict = false } = {}) {
@@ -461,8 +465,14 @@ export class ProjectRepository {
     const projects = [];
     for (const doc of docs) {
       const project = doc?.data;
-      if (!project || typeof project !== 'object' || !isAdminProjectId(project.id)) continue;
+      if (!project || typeof project !== 'object' || !isAdminProjectId(project.id)) {
+        if (strict) throw new Error(`Admin project file ${doc?.key} holds no valid project`);
+        continue;
+      }
       if (project.id !== doc.key) {
+        if (strict) {
+          throw new Error(`Admin project id ${project.id} differs from its file name ${doc.key}`);
+        }
         this.logger.warn('Admin project id differs from its file name; skipping', {
           component: COMPONENT,
           key: doc.key,

@@ -756,12 +756,19 @@ describe('ingest pipeline', () => {
       }),
       async fetch() {
         if (fakeFetch.fail) throw fakeFetch.fail;
+        // What the source holds now; a one-shot `gate` then holds the download.
+        const { bytes, lastModified, gate } = fakeFetch;
+        fakeFetch.gate = null;
+        if (gate) {
+          fakeFetch.entered = true;
+          await gate;
+        }
         return {
-          bytes: fakeFetch.bytes,
+          bytes,
           contentType: 'text/markdown',
           name: 'cloud.md',
-          lastModified: fakeFetch.lastModified,
-          source: { site: 'Fake cloud', lastModified: fakeFetch.lastModified }
+          lastModified,
+          source: { site: 'Fake cloud', lastModified }
         };
       }
     });
@@ -827,7 +834,13 @@ describe('ingest pipeline', () => {
     assert.equal(ready.text.original.pages, 2);
     assert.equal(ready.text.original.contentType, 'application/pdf');
     assert.equal(ready.ref.contentType, 'application/pdf');
-    await assert.rejects(fs.stat(dir), 'the upload directory is gone');
+    // The directory goes in the job's last step, after the item is ready.
+    await waitFor(() =>
+      fs.stat(dir).then(
+        () => null,
+        () => true
+      )
+    );
     const { text } = await getItemText({ id: project.id }, ready, { user: ADA });
     assert.match(text, /rent is due monthly/);
   });
@@ -1013,6 +1026,87 @@ describe('ingest pipeline', () => {
       service.refreshItem(project.id, 'itm_missing', { user: ADA }),
       error => error.code === 'ITEM_NOT_FOUND'
     );
+  });
+
+  it('discards a refresh another worker released, so it cannot overwrite a newer one', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const { item } = await service.addItem(
+      project.id,
+      { kind: 'fake-cloud', ref: { fileId: 'fenced' } },
+      { user: ADA }
+    );
+    const picked = await settled(project.id, item.id);
+    assert.equal(picked.status, 'ready', JSON.stringify(picked.error));
+    let open = null;
+    try {
+      // Refresh A downloads an older version and hangs in the download.
+      fakeFetch.bytes = Buffer.from('# Cloud doc A\n\nThe older version.');
+      fakeFetch.lastModified = '2026-10-05T00:00:00.000Z';
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const reserved = await service.refreshItem(project.id, item.id, { user: ADA });
+      assert.equal(typeof reserved.item.refreshAttempt, 'string');
+      await waitFor(() => fakeFetch.entered);
+
+      // Another worker's reconciler (its own job map, this project only)
+      // finds the refresh past `staleAfterMinutes` and releases it.
+      const scoped = Object.create(repository);
+      scoped.listAdmin = async () => [];
+      scoped.scanUser = async () => ({
+        projects: [await repository.get(project.id)],
+        truncated: false,
+        skipped: 0
+      });
+      scoped.hasBlobs = () => false;
+      const other = new ProjectIngestService({
+        service,
+        repository: scoped,
+        platform: () => platform,
+        tempDir: path.join(scratch, 'tmp-other-worker')
+      });
+      const released = await other.reconcile({ now: Date.now() + 3 * 60 * 60 * 1000 });
+      assert.equal(released.interrupted, 1);
+      const interrupted = await itemOf(project.id, item.id);
+      assert.equal(interrupted.status, 'stale');
+      assert.equal(interrupted.error.code, INTERRUPTED);
+      assert.equal(interrupted.refreshAttempt, undefined);
+
+      // Refresh B runs to the end with the newer version.
+      fakeFetch.bytes = Buffer.from('# Cloud doc B\n\nThe newer version.');
+      fakeFetch.lastModified = '2026-10-07T00:00:00.000Z';
+      const newer = await service.refreshItem(project.id, item.id, { user: ADA, wait: true });
+      assert.equal(newer.item.status, 'ready');
+
+      // A wakes up: its attempt is gone, it installs and records nothing.
+      open();
+      await waitFor(() => !service.ingest.isActive(item.id));
+      const final = await itemOf(project.id, item.id);
+      assert.equal(final.status, 'ready');
+      assert.equal(final.error, null);
+      assert.equal(final.refreshingAt, undefined);
+      assert.equal(final.text.blobKey, newer.item.text.blobKey);
+      assert.equal(final.provenance.source.lastModified, '2026-10-07T00:00:00.000Z');
+      assert.match(
+        (await getItemText({ id: project.id }, final, { user: ADA })).text,
+        /The newer version/
+      );
+      // A's blob went with it; only B's text is stored for the item.
+      const page = await repository.blobs.list(PROJECT_FILES_NAMESPACE, {
+        prefix: `${project.id}__${item.id}__`
+      });
+      assert.deepEqual(
+        page.items.map(blob => blob.key),
+        [final.text.blobKey]
+      );
+    } finally {
+      open?.();
+      fakeFetch.gate = null;
+      fakeFetch.lastModified = '2026-10-01T00:00:00.000Z';
+      fakeFetch.bytes = Buffer.from('# Cloud doc\n\nPicked from the cloud.');
+    }
   });
 
   it('reserves a refresh before queueing it, so a second one is refused', async () => {
@@ -1332,11 +1426,11 @@ describe('ingest pipeline', () => {
       await fs.writeFile(path.join(dirs[name], 'original'), 'plaintext');
       await fs.utimes(dirs[name], past, past);
     }
-    ingest.active.set('itm_running', {
+    ingest.active.add({
       itemId: 'itm_running',
       input: { path: path.join(dirs['u-running'], 'original'), cleanupDir: dirs['u-running'] }
     });
-    ingest.active.set('itm_picked', {
+    ingest.active.add({
       itemId: 'itm_picked',
       input: {},
       scratchDir: dirs['u-scratch']
@@ -1446,6 +1540,44 @@ describe('ingest pipeline', () => {
     }
   });
 
+  it('parses blob keys from the right and keeps the ones it cannot parse', async () => {
+    const repository = getProjectRepository();
+    const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
+    const newVersion = `${Date.now().toString(36).padStart(9, '0')}cafebabe`;
+    // An admin project id may hold `__`, and so may the base64url of an item id.
+    const keys = {
+      old: `policies__eu__itm_gone__${oldVersion}`,
+      young: `policies__eu__itm_young__${newVersion}`,
+      busy: `policies__eu__itm_b__sy__${oldVersion}`,
+      unparsable: `policies__eu__itm_odd__not-a-version`,
+      bare: `policies__${oldVersion}`
+    };
+    for (const key of Object.values(keys)) {
+      await repository.blobs.put(PROJECT_FILES_NAMESPACE, key, Buffer.from('text'));
+    }
+    const ingest = new ProjectIngestService({
+      service,
+      repository,
+      platform: () => platform,
+      tempDir: path.join(scratch, 'tmp-keys')
+    });
+    ingest.active.add({ itemId: 'itm_b__sy', input: {} });
+    try {
+      await ingest.reconcile();
+    } finally {
+      ingest.active.clear();
+    }
+    const left = async key => Boolean(await repository.blobs.get(PROJECT_FILES_NAMESPACE, key));
+    assert.equal(await left(keys.old), false, 'an old orphan is swept');
+    assert.equal(await left(keys.young), true, 'a young blob is kept');
+    assert.equal(await left(keys.busy), true, 'a blob of a running job is kept');
+    assert.equal(await left(keys.unparsable), true, 'a key without a version is kept');
+    assert.equal(await left(keys.bare), true, 'a key without an item is kept');
+    for (const key of Object.values(keys)) {
+      await repository.blobs.delete(PROJECT_FILES_NAMESPACE, key).catch(() => false);
+    }
+  });
+
   it('sweeps no orphan blob while a project document cannot be read', async () => {
     const repository = getProjectRepository();
     const oldVersion = `${(Date.now() - 3 * 60 * 60 * 1000).toString(36).padStart(9, '0')}deadbeef`;
@@ -1479,6 +1611,16 @@ describe('ingest pipeline', () => {
       assert.deepEqual(await repository.listAdmin(), []);
       assert.equal((await ingest.reconcile()).orphans, 0);
       assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, adminBlob));
+
+      // Readable, but its id was changed by hand, or is no valid id: the
+      // lenient listing skips it, the strict one refuses, the blobs stay.
+      for (const id of ['admin_renamed', 'not a valid id!']) {
+        await fs.writeFile(tornAdmin, JSON.stringify({ id, name: 'Torn', items: [] }), 'utf8');
+        await assert.rejects(repository.listAdmin({ strict: true }));
+        assert.deepEqual(await repository.listAdmin(), []);
+        assert.equal((await ingest.reconcile()).orphans, 0);
+        assert.ok(await repository.blobs.get(PROJECT_FILES_NAMESPACE, adminBlob));
+      }
     } finally {
       await fs.rm(tornUser, { force: true });
       await fs.rm(tornAdmin, { force: true });

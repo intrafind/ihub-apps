@@ -12,6 +12,7 @@
  *
  * @module services/projects/ProjectService
  */
+import { randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { StorageError } from '../../storage/errors.js';
@@ -457,9 +458,12 @@ export class ProjectService {
           // is refused while it is set, so two queued downloads can never
           // race to install an older snapshot over a newer one. The job
           // clears it when it finishes, fails or finds nothing changed.
+          // `refreshAttempt` names this run: the job must still find it on
+          // the item to install its text or record its failure.
           const now = nowIso();
           item.error = null;
           item.refreshingAt = now;
+          item.refreshAttempt = randomUUID();
           item.updatedAt = now;
           target = { item, kind };
           return project;
@@ -483,6 +487,7 @@ export class ProjectService {
         // The version the last fetch saw, so a change between that fetch
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
+        attempt: storedItem.refreshAttempt,
         purpose: 'refresh'
       },
       { user, wait }
