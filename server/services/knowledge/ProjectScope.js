@@ -21,7 +21,7 @@ import { callerContext, permissionsFor } from '../../middleware/projectAccess.js
 import { getProjectRepository } from '../projects/ProjectRepository.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
-import { projectName } from '../projects/projectView.js';
+import { projectDescription, projectName } from '../projects/projectView.js';
 
 /**
  * @typedef {Object} ScopeEntry
@@ -112,7 +112,8 @@ export function describeScope(scope, language = 'en') {
         item => item.status === 'ready' || item.status === 'stale'
       ).length;
       const how = entry.effective === 'loaded' ? 'loaded in full' : 'search it';
-      return `${entry.project.id} ("${projectName(entry.project, language)}", ${ready} documents, ${how})`;
+      const holds = projectDescription(entry.project, language, 200);
+      return `${entry.project.id} ("${projectName(entry.project, language)}", ${ready} documents, ${how}${holds ? `; ${holds}` : ''})`;
     })
     .join('; ');
 }

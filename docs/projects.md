@@ -62,7 +62,8 @@ upload in parallel and each gets its own status.
 
 The server extracts the text, encrypts it and stores it. **The original file is discarded.** A
 PDF of at most 500 pages is read; extracted text longer than 2,000,000 characters is cut at that
-length. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
+length (a file iHub imports from the server itself, such as the shipped documentation, is not cut
+below 20,000,000). There is no OCR: a scanned PDF without a text layer fails with a message that says so.
 Run it through OCR and upload the result.
 
 ### Writing and editing text
@@ -159,8 +160,8 @@ link the other projects.
    they differed, and it may write when any of them could.
 3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
 
-A project that ships with iHub (the `faq`, `meeting-knowledge-base` and `intrafind-website-*`
-projects, for example) is restored at the next server start once it is deleted, like any missing
+A project that ships with iHub (the `faq`, `meeting-knowledge-base` and `intrafind-website`
+project, for example) is restored at the next server start once it is deleted, like any missing
 default file. The merge result says so for such a project; disable it then, or leave **Delete the
 emptied projects** off and disable it yourself.
 
@@ -200,7 +201,14 @@ a project picker with the mode and the project's size against the budgets. `writ
 editable in the forms yet; set it in the JSON. A step's own `config.projects` replaces the
 workflow's list for that step.
 
-The linked project's **instructions** are added to the system prompt of the app, step or agent.
+The linked project's **instructions** are added to the system prompt of the app, step or agent:
+each project's instructions go in a `<project-instructions project="…">` block at the end of
+the system prompt, whatever the link mode. They apply for the projects an app, workflow
+or agent links and for the project a chat runs in; a project a user attaches to a single chat
+brings its documents but not its instructions. Use them for how the knowledge is to be used ("answer
+only from these contracts", "cite the clause number"), not for facts: facts belong in a document.
+The project's **description** is shown to the model next to its name, so it can tell what a project
+that is only searched can answer.
 
 ### The `{{projects}}` placeholder
 
@@ -234,6 +242,16 @@ projects for **New chat**.
 - **Test** (`POST /api/admin/projects/:id/test`) reads every item the way a chat would, with your
   own credentials for iFinder items, and reports per item whether it was readable, its size and
   how long it took.
+- **Estimate tokens** (`POST /api/admin/projects/:id/estimate`, on the project's view and edit
+  pages) loads every item, link items included, and counts its tokens. It recommends for each
+  document whether it is small enough to pin into the prompt (up to 20 % of the load-all budget)
+  or better searched, and for the project whether it belongs in the prompt (it fits the budget;
+  *tight* above half of it) or is searched (it exceeds the budget, or a source delivered only part
+  of its text). It also names the context window a model needs to load the project in full. The
+  numbers are an estimate; the real decision of a request is made against the model in use.
+  User projects have the same button on their page (`POST /api/projects/:projectId/estimate`).
+- The name of a project on **Admin → Projects** opens its read-only view; **Edit** leads to the
+  form (`/admin/projects/:id/edit`).
 - `GET /api/admin/projects/_tokens` reports each admin project's size in tokens, items and bytes,
   together with the load-all budget (`loadAllBudgetTokens`) and the tool result budget. The app
   editor uses it to explain whether a linked project will be loaded in full.
@@ -613,6 +631,7 @@ changing it takes a content admin.
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
 | `GET`    | `/api/projects/:projectId`                    | member    | The project with its items and your `permissions`.                                               |
 | `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`.                                                    |
+| `POST`   | `/api/projects/:projectId/estimate`           | member    | Tokens of every document and the recommendation (prompt or search).                              |
 | `DELETE` | `/api/projects/:projectId`                    | owner     | Delete the project and its documents.                                                            |
 | `GET`    | `/api/projects/:projectId/items`              | member    | The items.                                                                                       |
 | `POST`   | `/api/projects/:projectId/items`              | editor    | Add an item: multipart field `file` (plus `name`, `pinned`), or JSON `{ kind, ref, name?, pinned? }`, or `{ kind: "upload", text, name }`. Text kinds answer `202` while extracting, link kinds `201`. |
@@ -653,6 +672,7 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `GET`    | `/api/admin/projects/_config`               | Upload availability and accepted types, scan provider, limits, `loadAllMaxTokens`.          |
 | `GET`    | `/api/admin/projects/_tokens`               | Size of each admin project and the budgets, for the app editor.                             |
 | `GET`    | `/api/admin/projects/_dependencies/:id`     | Apps, workflows and agents that link the project.                                           |
+| `POST`   | `/api/admin/projects/:id/estimate`          | Tokens of every item and the recommendation (prompt or search) per item and for the project. |
 | `POST`   | `/api/admin/projects/_toggle`               | Enable or disable projects `{ ids, enabled }`.                                              |
 | `POST`   | `/api/admin/projects/_merge`                | Merge projects `{ sourceIds, targetId, deleteSources? }`: moves the items, re-points the links, optionally deletes the emptied projects. Answers `{ target, sources: [{ id, moved, failed, relinked, merged, deleted }] }`. |
 | `POST`   | `/api/admin/projects`                       | Create an admin project.                                                                    |

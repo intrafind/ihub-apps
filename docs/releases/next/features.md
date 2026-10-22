@@ -41,6 +41,20 @@ otherwise. The chat shows which happened.
   projects. This is how the one-item projects that the sources migration made of a website or a
   department become one project again. Instructions of merged projects are not carried over. See
   `docs/projects.md`, *Moving, copying and merging*.
+- A project's name on the list opens a read-only **view** (description, instructions, items with
+  their text preview, and the apps, workflows and agents that link it); **Edit** leads to the form.
+- **Estimate tokens** loads the documents of a project, web pages and iFinder documents included,
+  counts their tokens and recommends whether the project belongs in the prompt or is better
+  searched, for the project and for each document (`POST /api/admin/projects/:id/estimate`;
+  users get the same for their own projects). The items table shows the tokens of documents whose
+  size is otherwise only known while a chat reads them.
+- The IntraFind website ships as one project, `intrafind-website`, with the six pages the
+  sources migration had split into `intrafind-website-*` projects; an upgrade merges those and
+  re-points the IntraFind Website Bot and any other app, workflow or agent that linked them.
+- A project's description reaches the model next to its name, so it can tell that the iHub
+  Documentation also holds the release notes. Files that ship with iHub or sit in the sources
+  directory are imported in full; the 2,000,000-character cap applies to uploads only. Before,
+  the iHub Documentation was cut at that cap and lost its release notes, which come last.
 - Workflows iterate and write back: the steps `project-items` (the documents of a project as a
   list for a loop), `project-read` (one document's text without a tool call) and `project-write`
   (store a text the run produced, with the run as its provenance). A write into an admin project

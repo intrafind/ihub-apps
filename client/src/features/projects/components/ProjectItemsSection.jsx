@@ -8,16 +8,20 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   addProjectItem,
   checkPickerUrl,
+  estimateProjectTokens,
   fetchPickerCloudProviders,
   fetchPickerPages,
   fetchProjectItemText,
   searchPickerIFinder,
   uploadProjectItem
 } from '../../../api';
+import { useProjectEstimate } from '../hooks/useProjectEstimate';
 import { useProjectItemActions } from '../hooks/useProjectItemActions';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { canAddItem } from '../utils/projectView';
 import AddProjectItemDialog from './AddProjectItemDialog';
+import EstimateTokensButton from './EstimateTokensButton';
+import ProjectEstimatePanel from './ProjectEstimatePanel';
 import ProjectItemsTable from './ProjectItemsTable';
 import ProjectItemTextDialog from './ProjectItemTextDialog';
 import ProjectUsageBar from './ProjectUsageBar';
@@ -69,6 +73,16 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const messageOf = useCallback(err => projectErrorMessage(err, t), [t]);
   const itemApi = useMemo(() => userItemApi(messageOf), [messageOf]);
   const roomForMore = canAddItem(project, config);
+  const projectId = project.id;
+  const estimateCall = useCallback(() => estimateProjectTokens(projectId), [projectId]);
+  const {
+    estimate,
+    byItem: estimateByItem,
+    loading: estimating,
+    error: estimateError,
+    run: runEstimate,
+    clear: clearEstimate
+  } = useProjectEstimate(estimateCall, messageOf);
 
   return (
     <section
@@ -82,23 +96,39 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         >
           {t('projects.items.title', 'Documents')}
         </h2>
-        {editable && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            disabled={!roomForMore}
-            title={
-              roomForMore
-                ? undefined
-                : t('projects.items.full', 'This project holds as many items as it may.')
-            }
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
-          >
-            <Icon name="plus" size="sm" />
-            {t('projects.items.add', 'Add documents')}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {(project.items || []).length > 0 && (
+            <EstimateTokensButton loading={estimating} onClick={runEstimate} />
+          )}
+          {editable && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={!roomForMore}
+              title={
+                roomForMore
+                  ? undefined
+                  : t('projects.items.full', 'This project holds as many items as it may.')
+              }
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
+            >
+              <Icon name="plus" size="sm" />
+              {t('projects.items.add', 'Add documents')}
+            </button>
+          )}
+        </div>
       </div>
+
+      {estimateError && (
+        <div
+          role="alert"
+          className="mb-3 rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300"
+        >
+          {t('projects.estimate.failed', 'The estimate could not be made.')} {estimateError}
+        </div>
+      )}
+      {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
+      {estimate && <div className="mb-4" />}
 
       {config?.limits && <ProjectUsageBar project={project} config={config} className="mb-4" />}
 
@@ -124,6 +154,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         kinds={config?.kinds || []}
         busyItemId={actions.busyItemId}
         readOnly={!editable}
+        estimates={estimate ? estimateByItem : undefined}
         onPreview={setPreviewItem}
         onTogglePinned={actions.togglePinned}
         onRefresh={actions.refresh}

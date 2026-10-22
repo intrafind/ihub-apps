@@ -31,7 +31,13 @@ import { KnowledgeError } from '../knowledge/types.js';
 import { PROJECT_FILES_NAMESPACE, getProjectRepository, usageOf } from './ProjectRepository.js';
 import { ProjectError } from './projectErrors.js';
 import { projectSettings } from './projectSettings.js';
-import { ExtractionError, MAX_TEXT_CHARS, extractText, normalizeText } from './extractText.js';
+import {
+  ExtractionError,
+  MAX_IMPORT_TEXT_CHARS,
+  MAX_TEXT_CHARS,
+  extractText,
+  normalizeText
+} from './extractText.js';
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { scannerFor } from './scan/MalwareScanner.js';
 
@@ -372,14 +378,15 @@ export class ProjectIngestService {
       }
 
       // 4. Extract.
+      const maxChars = input.purpose === 'import' ? MAX_IMPORT_TEXT_CHARS : MAX_TEXT_CHARS;
       let extracted = null;
       if (text !== null) {
-        const normalized = normalizeText(text, { maxChars: MAX_TEXT_CHARS });
+        const normalized = normalizeText(text, { maxChars });
         extracted = { text: normalized.text, contentType, truncated: normalized.truncated };
         if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
       } else {
         const started = Date.now();
-        extracted = await extractText({ bytes, contentType, name });
+        extracted = await extractText({ bytes, contentType, name }, { maxChars });
         logger.debug('Extracted a project item', {
           ...where,
           contentType: extracted.contentType,

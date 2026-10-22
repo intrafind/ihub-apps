@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -12,6 +12,7 @@ import {
   checkProjectPickerUrl,
   createAdminProject,
   deleteAdminProjectItem,
+  estimateAdminProject,
   fetchAdminProjectConfig,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
@@ -31,6 +32,9 @@ import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import ProjectTestResults from '../components/ProjectTestResults';
+import EstimateTokensButton from '../../projects/components/EstimateTokensButton';
+import ProjectEstimatePanel from '../../projects/components/ProjectEstimatePanel';
+import { useProjectEstimate } from '../../projects/hooks/useProjectEstimate';
 import TransferItemsDialog from '../components/TransferItemsDialog';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useAdminProject } from '../hooks/useAdminProject';
@@ -79,7 +83,9 @@ const adminErrorMessage = err => getAdminApiErrorMessage(err);
 function AdminProjectEditPage() {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
-  const { id } = useParams();
+  // `/admin/projects/new` has no id in its path.
+  const { id: routeId } = useParams();
+  const id = routeId ?? 'new';
   const navigate = useNavigate();
   const isNew = id === 'new';
 
@@ -110,6 +116,16 @@ function AdminProjectEditPage() {
   const [transfer, setTransfer] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
+
+  const estimateCall = useCallback(() => estimateAdminProject(id), [id]);
+  const {
+    estimate,
+    byItem: estimateByItem,
+    loading: estimating,
+    error: estimateError,
+    run: runEstimate,
+    clear: clearEstimate
+  } = useProjectEstimate(estimateCall, adminErrorMessage);
 
   // The form is filled once per loaded project (state adjusted during render,
   // not in an effect); polling later only refreshes the items.
@@ -178,7 +194,7 @@ function AdminProjectEditPage() {
         const created = await createAdminProject(payload);
         markSaved();
         // Items can be added once the project exists.
-        navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}`, {
+        navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}/edit`, {
           replace: true
         });
         return;
@@ -338,6 +354,7 @@ function AdminProjectEditPage() {
               >
                 {t('admin.projects.history', 'History')}
               </button>
+              <EstimateTokensButton loading={estimating} onClick={runEstimate} />
               <button
                 type="button"
                 onClick={handleTest}
@@ -473,7 +490,7 @@ function AdminProjectEditPage() {
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t(
                   'admin.projects.fields.instructionsHint',
-                  'Instructions apply when the project is in context.'
+                  'Added to the system prompt of every app, workflow step or agent that links this project, in every link mode. Say how the knowledge is to be used; put facts into documents.'
                 )}
               </p>
             </div>
@@ -517,7 +534,9 @@ function AdminProjectEditPage() {
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
-                onClick={() => navigate('/admin/projects')}
+                onClick={() =>
+                  navigate(isNew ? '/admin/projects' : `/admin/projects/${encodeURIComponent(id)}`)
+                }
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
               >
                 {t('common.cancel', 'Cancel')}
@@ -537,6 +556,15 @@ function AdminProjectEditPage() {
             </div>
           </form>
 
+          {estimateError && (
+            <div
+              role="alert"
+              className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-800 dark:text-red-200"
+            >
+              {t('projects.estimate.failed', 'The estimate could not be made.')} {estimateError}
+            </div>
+          )}
+          {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
           {testResult && (
             <ProjectTestResults result={testResult} onDismiss={() => setTestResult(null)} />
           )}
@@ -608,6 +636,7 @@ function AdminProjectEditPage() {
                   items={project?.items || []}
                   kinds={kinds}
                   busyItemId={busyItemId}
+                  estimates={estimate ? estimateByItem : undefined}
                   selectedIds={new Set(selectedItems.map(item => item.id))}
                   onSelectionChange={setSelectedItemIds}
                   onTogglePinned={handleTogglePinned}

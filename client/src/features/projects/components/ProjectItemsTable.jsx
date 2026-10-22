@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { DataTable } from '../../admin/components/data-table';
 import { isItemReadable, kindIcon, localizedText } from '../utils/projectItems';
+import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
 import ProjectItemStatus from './ProjectItemStatus';
 
@@ -49,6 +50,8 @@ function isRetryable(item) {
  * @param {Set<string>} [props.selectedIds] - With `onSelectionChange`, a checkbox column
  *   selects items for a bulk action the page offers.
  * @param {(ids: Set<string>) => void} [props.onSelectionChange]
+ * @param {Object<string, Object>} [props.estimates] - The items of a token estimate by item
+ *   id; adds a column with each item's tokens and whether it belongs in the prompt.
  * @returns {JSX.Element}
  */
 function ProjectItemsTable({
@@ -63,7 +66,8 @@ function ProjectItemsTable({
   onRemove,
   onTransfer,
   selectedIds,
-  onSelectionChange
+  onSelectionChange,
+  estimates
 }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
@@ -151,6 +155,15 @@ function ProjectItemsTable({
       sortAccessor: item => item.status,
       render: item => <ProjectItemStatus item={item} />
     },
+    ...(estimates
+      ? [
+          {
+            key: 'estimate',
+            header: t('projects.items.columns.estimate', 'Estimate'),
+            render: item => <ItemEstimate estimate={estimates[item.id]} />
+          }
+        ]
+      : []),
     {
       key: 'pinned',
       header: t('projects.items.columns.pinned', 'Pinned'),

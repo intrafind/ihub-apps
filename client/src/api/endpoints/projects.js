@@ -175,6 +175,16 @@ export const refreshProjectItem = async (projectId, itemId) => {
 };
 
 /**
+ * Load every document of a project, count its tokens and get a
+ * recommendation (prompt or search) per document and for the project.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} See `services/projects/projectEstimate.js`.
+ */
+export const estimateProjectTokens = async projectId =>
+  call(() => apiClient.post(`${projectPath(projectId)}/estimate`));
+
+/**
  * The plain text of an item, cut at `maxChars`.
  *
  * @param {string} projectId

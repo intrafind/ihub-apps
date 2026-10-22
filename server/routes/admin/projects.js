@@ -65,6 +65,7 @@ import {
   sendProjectError
 } from '../projectItemRoutes.js';
 import { getItemText } from '../../services/knowledge/ItemTextService.js';
+import { estimateProject } from '../../services/projects/projectEstimate.js';
 import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
 import { RESULT_BUDGET_CHARS } from '../../sources/documentRetrieval.js';
 
@@ -745,6 +746,26 @@ export default function registerAdminProjectsRoutes(app) {
       });
     } catch (error) {
       sendFailedOperationError(res, 'test project', error);
+    }
+  });
+
+  // Load every item, count its tokens and say whether the text belongs in
+  // the prompt (link items are fetched, iFinder ones with the admin's rights).
+  app.post(route('/:id/estimate'), ...gate, contentAdminAuth, async (req, res) => {
+    try {
+      const project = await loadAdminProject(req, res);
+      if (!project) return;
+      const settings = projectSettings(configCache.getPlatform() || {});
+      res.json(
+        await estimateProject(project, {
+          user: req.user,
+          language: req.user?.language || 'en',
+          budgetTokens: settings.loadAllMaxTokens,
+          toolResultBudgetTokens: Math.floor(RESULT_BUDGET_CHARS / 4)
+        })
+      );
+    } catch (error) {
+      sendFailedOperationError(res, 'estimate project tokens', error);
     }
   });
 

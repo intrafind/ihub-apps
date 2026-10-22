@@ -86,27 +86,7 @@
   },
   "projects": [
     {
-      "id": "intrafind-website-home",
-      "mode": "context"
-    },
-    {
-      "id": "intrafind-website-ifinder",
-      "mode": "context"
-    },
-    {
-      "id": "intrafind-website-ifinder-features",
-      "mode": "context"
-    },
-    {
-      "id": "intrafind-website-ifinder-connectors",
-      "mode": "context"
-    },
-    {
-      "id": "intrafind-website-iassistant",
-      "mode": "context"
-    },
-    {
-      "id": "intrafind-website-ihub",
+      "id": "intrafind-website",
       "mode": "context"
     }
   ]

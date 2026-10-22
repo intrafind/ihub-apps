@@ -66,6 +66,8 @@ import {
 } from '../services/projects/projectSettings.js';
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
+import { estimateProject } from '../services/projects/projectEstimate.js';
+import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
 import {
   addItemSchema,
@@ -550,6 +552,31 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     (req, res) => sendItemText(req, res, { project: req.project })
+  );
+
+  // Load every document, count its tokens and say whether the text belongs
+  // in the prompt; the same estimate as the admin page, for a project the
+  // caller may use.
+  app.post(
+    route('/:projectId/estimate'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    async (req, res) => {
+      try {
+        const settings = projectSettings(configCache.getPlatform() || {});
+        res.json(
+          await estimateProject(req.project, {
+            user: req.user,
+            language: req.user?.language || 'en',
+            budgetTokens: settings.loadAllMaxTokens,
+            toolResultBudgetTokens: Math.floor(RESULT_BUDGET_CHARS / 4)
+          })
+        );
+      } catch (error) {
+        sendFailedOperationError(res, 'estimate project tokens', error);
+      }
+    }
   );
 
   app.put(
