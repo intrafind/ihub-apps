@@ -222,6 +222,31 @@ Each tool's description names the projects in scope and whether each one is load
 the model knows which ids it may pass. A tool call can never reach a project the request did not
 bring. Search is keyword search (BM25) over the stored text; there are no embeddings.
 
+#### How much of a linked document is searchable
+
+Link items are fetched when they are used, and the fetch is cut at a fixed length before anything
+searches, reads or loads the text: per document, and for an iFinder search per hit. This limit is
+separate from the tool result budget, which only shortens what one tool call returns from text
+iHub already has:
+
+| Kind                                | Default           | Option in `ref`    | Maximum   |
+| ----------------------------------- | ----------------- | ------------------ | --------- |
+| `ifinder-document`, `ifinder-query` | 10,000 characters | `maxLength`        | 1,000,000 |
+| `url`                               | 50,000 characters | `maxContentLength` | 5,000,000 |
+
+Only that first part of the document is searchable: neither `knowledge_search` nor another section
+read with `knowledge_read` reaches the rest. iHub pages and uploaded or picked documents are not
+cut this way. A cut document is marked as truncated in the tool result and in the prompt, and a
+project with such a document counts as _searched_, not _loaded in full_, in the tool descriptions
+and on the badge.
+
+Set a higher limit when you add the item through the API (`POST /api/projects/:projectId/items` or
+`POST /api/admin/projects/:id/items`), for example
+`{ "kind": "ifinder-document", "ref": { "documentId": "…", "maxLength": 100000 } }`. The project
+pages add items with the default, and an item's `ref` cannot be changed afterwards: remove the item
+and add it again. Sources migrated from `config/sources.json` keep their `maxLength` and
+`maxContentLength`.
+
 ### What users see
 
 - A badge on the answer says which projects it used and how: _3 projects · 2 loaded in full · 1
