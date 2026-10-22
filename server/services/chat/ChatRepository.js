@@ -398,6 +398,24 @@ export function normalizeChatVariables(variables) {
 }
 
 /**
+ * Whether a chat's container contradicts the project fields of a turn: a
+ * claim of a container (allowed while the chat has none and no messages, or
+ * already has this one), or the container the turn asserted (`null` for "in
+ * no project"; `undefined` asserts nothing).
+ *
+ * @param {Object|null} chat - The chat as it stands.
+ * @param {{claimContainer?: string|null, expectedContainer?: string|null}} projects
+ * @returns {boolean}
+ */
+export function chatProjectConflict(chat, { claimContainer = null, expectedContainer } = {}) {
+  const current = chat?.projectId || null;
+  if (claimContainer) {
+    return current !== claimContainer && (Boolean(current) || Number(chat?.messageCount) > 0);
+  }
+  return expectedContainer !== undefined && current !== (expectedContainer || null);
+}
+
+/**
  * Apply a patch to a chat, protecting the immutable fields and re-deriving
  * the values that are computed rather than set.
  *
@@ -1250,18 +1268,11 @@ export class ChatRepository {
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return { chat: null, conflict: false };
-      const current = existing.projectId || null;
-      let projectId = current;
-      if (claimContainer) {
-        if (current !== claimContainer) {
-          if (current || Number(existing.messageCount) > 0) {
-            return { chat: existing, conflict: true };
-          }
-          projectId = claimContainer;
-        }
-      } else if (expectedContainer !== undefined && current !== (expectedContainer || null)) {
+      if (chatProjectConflict(existing, { claimContainer, expectedContainer })) {
         return { chat: existing, conflict: true };
       }
+      const current = existing.projectId || null;
+      const projectId = claimContainer || current;
       const stored = Array.isArray(existing.attachedProjectIds) ? existing.attachedProjectIds : [];
       const attached = [];
       for (const id of [...stored, ...(Array.isArray(attach) ? attach : [])]) {
@@ -1504,10 +1515,17 @@ export class ChatRepository {
    *   place of this stored one, at its position, instead of appending it. Write
    *   nothing when that message is no longer stored — another writer replaced
    *   it first, under the same lock.
-   * @returns {Promise<{message: Object, messages: Object[], skipped?: true}|null>}
+   * @param {string|null} [options.expectedProjectId] - Write nothing unless the
+   *   chat is in this project (`null`: in none) when the message is written,
+   *   checked under the chat lock: a question is stored only in the container
+   *   its turn was prepared for, never in one a racing turn claimed since.
+   *   Omitted, the container is not checked.
+   * @returns {Promise<{message: Object|null, messages: Object[], skipped?: true,
+   *   conflict?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
    *   `unlessAnswered` found the run answered (`message` is that answer), or
-   *   `supersedeMessageId` is gone (`message` is the run's answer, if any).
+   *   `supersedeMessageId` is gone (`message` is the run's answer, if any);
+   *   `conflict` when the chat is not in `expectedProjectId` (nothing written).
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
@@ -1518,7 +1536,8 @@ export class ChatRepository {
       replaceFromMessageId = null,
       insertAfterRunId = null,
       unlessAnswered = false,
-      supersedeMessageId = null
+      supersedeMessageId = null,
+      expectedProjectId
     } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
@@ -1534,6 +1553,9 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      if (chatProjectConflict(chat, { expectedContainer: expectedProjectId })) {
+        return { message: null, messages, conflict: true };
+      }
       if (unlessAnswered && message?.runId) {
         const answer = messages.find(
           entry => entry.role === 'assistant' && entry.runId === message.runId

@@ -58,6 +58,7 @@ import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMateri
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import ChatService from '../services/chat/ChatService.js';
 import registerSessionRoutes from '../routes/chat/sessionRoutes.js';
+import { activeRequests } from '../sse.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { tryHandleMentionWorkflow } from '../services/workflow/mentionWorkflow.js';
 import { runToolCallScope } from '../services/sources/toolCallScope.js';
@@ -1540,6 +1541,8 @@ describe('chat route and projects', () => {
     });
     const repository = {
       isAvailable: () => true,
+      // The stored chat still looks free: the conflict shows only under the lock.
+      getChat: async () => null,
       ensureChat: async ({ chatId }) => ({ id: chatId, title: 'x' }),
       updateChatProjects: async chatId => ({
         chat: { id: chatId, projectId: 'prj_someone_else' },
@@ -1566,6 +1569,56 @@ describe('chat route and projects', () => {
     assert.equal(outcome.status, 'error');
     assert.equal(ended.length, 1, 'the ledger run is ended');
     assert.equal(ended[0].summary.error.code, 'PROJECT_MISMATCH');
+  });
+
+  it('refuses a turn the stored chat already contradicts without cancelling the running one', async () => {
+    const chatId = 'chat-refused-before-supersede';
+    const running = new AbortController();
+    activeRequests.set(chatId, running);
+    const started = [];
+    const service = new ChatService({
+      runLog: {
+        startRun: async params => started.push(params),
+        append: () => {},
+        endRun: () => {}
+      },
+      agentLoop: {
+        run: async () => {
+          throw new Error('the model must not be called');
+        }
+      }
+    });
+    // The accepted first turn opened the chat in another project and is
+    // generating; this one was prepared for a different container.
+    const repository = {
+      isAvailable: () => true,
+      getChat: async () => ({ id: chatId, projectId: 'prj_accepted', messageCount: 1 }),
+      ensureChat: async () => {
+        throw new Error('nothing may be written');
+      }
+    };
+    try {
+      const outcome = await service.runTurn({
+        prep: { app: { id: 'chat' }, model: { id: 'small' }, llmMessages: [], tools: [] },
+        chatId,
+        streaming: false,
+        user: { ...ADA },
+        persistence: {
+          repository,
+          ownerId: ADA.id,
+          identityMode: 'default',
+          content: 'hi',
+          projects: { claimContainer: textProject.id, attach: [], maxAttached: 10 },
+          projectId: textProject.id
+        }
+      });
+      assert.equal(outcome.refusal?.code, 'PROJECT_MISMATCH');
+      assert.equal(running.signal.aborted, false, 'the accepted turn keeps running');
+      assert.equal(activeRequests.get(chatId), running);
+      assert.equal(started.length, 0, 'no run was started for the refused turn');
+    } finally {
+      activeRequests.delete(chatId);
+    }
   });
 });
 
