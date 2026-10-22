@@ -202,6 +202,38 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
 }
 
 /**
+ * TLS options for a connection that does not go through `createAgent()` (a `ws`
+ * socket, an undici dispatcher, a pinned agent). Single sink for the whitelist
+ * bypass outside the agent factory: nothing is skipped unless
+ * ssl.ignoreInvalidCertificates is true and the host is on ssl.domainWhitelist.
+ *
+ * @param {string} url - The URL about to be dialed
+ * @param {Object} [sslConfig] - SSL configuration (defaults to the platform config)
+ * @returns {{ rejectUnauthorized?: false }} Options to merge into the socket/agent options
+ */
+export function getTlsBypassOptions(url, sslConfig = null) {
+  const options = {};
+  // Admin opt-in only, see shouldIgnoreSSLForURL.
+  if (shouldIgnoreSSLForURL(url, sslConfig)) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+  return options;
+}
+
+/**
+ * TLS options for an outbound WebSocket (`ws`) connection to `url`. `ws` takes no
+ * agent from us, so the whitelist `createAgent()` applies to HTTP(S) is applied to
+ * the socket options directly. Only `wss://` can be affected; plain `ws://` has no
+ * certificate to verify.
+ *
+ * @param {string} url - The `ws://` or `wss://` URL about to be dialed
+ * @param {Object} [sslConfig] - SSL configuration (defaults to the platform config)
+ * @returns {{ rejectUnauthorized?: false }} Options to merge into the `ws` constructor options
+ */
+export function getWebSocketTlsOptions(url, sslConfig = null) {
+  if (typeof url !== 'string' || !url.toLowerCase().startsWith('wss://')) return {};
+  return getTlsBypassOptions(url, sslConfig);
+}
+
+/**
  * Detect a `${VAR}` placeholder that was never substituted.
  *
  * `configCache` resolves `${VAR}` from the environment but deliberately leaves

@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import configCache from '../../configCache.js';
+import { getTlsBypassOptions } from '../../utils/httpConfig.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -127,16 +128,33 @@ function makePinnedLookup(pinnedAddress, family) {
   };
 }
 
+/** Whitelisted https hosts skip certificate verification (see getTlsBypassOptions). */
+function tlsBypassOptions(url) {
+  return url.protocol === 'https:' ? getTlsBypassOptions(url.toString()) : {};
+}
+
+/**
+ * With certificate verification off for the first host, never follow a redirect
+ * on our own: the next hop may be a host that is not on the whitelist but would
+ * share this connection's settings. A caller that handles redirects itself
+ * (`redirect: 'manual'`) is unaffected.
+ */
+export function withoutAutoRedirects(init, tlsOptions) {
+  if (tlsOptions.rejectUnauthorized !== false || init.redirect === 'manual') return init;
+  return { ...init, redirect: 'error' };
+}
+
 /**
  * Build an https/http Agent that pins the socket to the IP we already vetted,
  * so the actual TCP connection cannot land on a different host (DNS rebinding).
  */
-function makePinnedAgent(pinnedAddress, family, isHttps) {
+function makePinnedAgent(pinnedAddress, family, isHttps, tlsOptions = {}) {
   const AgentClass = isHttps ? https.Agent : http.Agent;
   return new AgentClass({
     keepAlive: true,
     maxSockets: 8,
-    lookup: makePinnedLookup(pinnedAddress, family)
+    lookup: makePinnedLookup(pinnedAddress, family),
+    ...(isHttps ? tlsOptions : {})
   });
 }
 
@@ -163,7 +181,8 @@ export async function safeFetch(input, init = {}, opts = {}) {
     opts.allowHosts,
     opts.blockPrivateIps !== false
   );
-  const agent = makePinnedAgent(address, family, url.protocol === 'https:');
+  const tlsOptions = tlsBypassOptions(url);
+  const agent = makePinnedAgent(address, family, url.protocol === 'https:', tlsOptions);
 
   // Pin the connection through an undici dispatcher. The fetch must come from
   // the same undici package as the Agent: Node's bundled `fetch` is a
@@ -183,9 +202,9 @@ export async function safeFetch(input, init = {}, opts = {}) {
   }
   if (typeof undici?.fetch === 'function' && typeof undici?.Agent === 'function') {
     const dispatcher = new undici.Agent({
-      connect: { lookup: makePinnedLookup(address, family) }
+      connect: { lookup: makePinnedLookup(address, family), ...tlsOptions }
     });
-    return await undici.fetch(url, { ...init, dispatcher });
+    return await undici.fetch(url, { ...withoutAutoRedirects(init, tlsOptions), dispatcher });
   }
 
   return await nodeHttpFetch(url, init, agent);

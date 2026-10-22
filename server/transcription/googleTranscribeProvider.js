@@ -36,6 +36,7 @@
  *       https://ai.google.dev/gemini-api/docs/files
  */
 import logger from '../utils/logger.js';
+import { httpFetch } from '../utils/httpConfig.js';
 import { expandEnvVars, resolveApiKey } from './credentials.js';
 import { annotationsOf, formatTranscript, parseOffset } from './transcriptFormat.js';
 import { pcm16ToWav, splitPcm } from './wav.js';
@@ -239,7 +240,7 @@ function delay(ms, signal) {
  * created file's `{ name, uri, mimeType }`.
  */
 async function uploadFile({ base, apiKey, bytes, mimeType, displayName, signal }) {
-  const startRes = await fetch(`${base}/upload/v1beta/files`, {
+  const startRes = await httpFetch(`${base}/upload/v1beta/files`, {
     method: 'POST',
     headers: {
       'x-goog-api-key': apiKey,
@@ -257,7 +258,7 @@ async function uploadFile({ base, apiKey, bytes, mimeType, displayName, signal }
   const uploadUrl = startRes.headers.get('x-goog-upload-url');
   if (!uploadUrl) throw new Error('Gemini transcription upload did not return an upload URL');
 
-  const uploadRes = await fetch(uploadUrl, {
+  const uploadRes = await httpFetch(uploadUrl, {
     method: 'POST',
     headers: {
       'Content-Length': String(bytes.length),
@@ -282,7 +283,7 @@ async function awaitFileActive({ base, apiKey, file, signal }) {
   let state = file.state;
   while (state === 'PROCESSING' && Date.now() < deadline) {
     await delay(POLL_INTERVAL_MS, signal);
-    const res = await fetch(`${base}/v1beta/${file.name}`, {
+    const res = await httpFetch(`${base}/v1beta/${file.name}`, {
       headers: { 'x-goog-api-key': apiKey },
       signal: signal || AbortSignal.timeout(POLL_TIMEOUT_MS)
     });
@@ -298,7 +299,7 @@ async function awaitFileActive({ base, apiKey, file, signal }) {
 async function deleteFile({ base, apiKey, name }) {
   if (!name) return;
   try {
-    await fetch(`${base}/v1beta/${name}`, {
+    await httpFetch(`${base}/v1beta/${name}`, {
       method: 'DELETE',
       headers: { 'x-goog-api-key': apiKey },
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS)
@@ -317,7 +318,7 @@ async function awaitInteraction({ base, apiKey, body, signal }) {
   const deadline = Date.now() + MAX_POLL_MS;
   while (isPendingStatus(current?.status) && Date.now() < deadline) {
     await delay(POLL_INTERVAL_MS, signal);
-    const res = await fetch(`${base}/v1beta/${current.id}`, {
+    const res = await httpFetch(`${base}/v1beta/${current.id}`, {
       headers: { 'x-goog-api-key': apiKey },
       signal: signal || AbortSignal.timeout(POLL_TIMEOUT_MS)
     });
@@ -374,7 +375,7 @@ async function transcribeWav({ cfg, base, wav, timed, signal }) {
     });
     await awaitFileActive({ base, apiKey, file, signal });
 
-    const res = await fetch(`${base}/v1beta/interactions`, {
+    const res = await httpFetch(`${base}/v1beta/interactions`, {
       method: 'POST',
       headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
