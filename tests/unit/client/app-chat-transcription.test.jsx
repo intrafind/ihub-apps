@@ -754,6 +754,11 @@ describe('a transcription turn in a project chat (#1036)', () => {
     await send();
     await waitFor(() => expect(shownTurns()).toHaveLength(2));
     const chatId = mockHeader.props.chatId;
+    // The recording's own turn names the project, so the server lists the
+    // chat in it before any chat model answers.
+    expect(transcribeAudioBuffer.mock.calls[0][1].chat).toEqual(
+      expect.objectContaining({ chatId, projectId: 'prj_case' })
+    );
     // Kept beside the transcript this tab holds for the chat.
     expect(sessionStorage.getItem(`ai_hub_chat_project_${chatId}`)).toBe('prj_case');
 

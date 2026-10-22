@@ -2015,7 +2015,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           appId,
           ephemeral: !serverBackedChat,
           clientMessageId: answerId,
-          attachment
+          attachment,
+          // The container, so a stored chat whose first turn is a recording
+          // is listed in its project at once (the server resolves it like
+          // the chat POST's `projectId`).
+          ...(containerProjectId ? { projectId: containerProjectId } : {})
         },
         open() {
           addUserMessage(label, { ...mark, clientMessageId: answerId });
@@ -2024,7 +2028,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           setSentInChatId(chatId);
           // The turn starts the chat, and a stored chat's URL is pinned to
           // `/c/:chatId` without `?project=`: keep the project, so the next
-          // chat-model turn carries it (the server takes the container then).
+          // chat-model turn carries it too.
           adoptContainerProject();
         },
         show(text) {
