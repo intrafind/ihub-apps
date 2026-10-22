@@ -39,7 +39,8 @@ const MAX_DEPTH = 8;
 // Placeholder for a withheld value in opaque mode: NUL-delimited, no braces,
 // so no later pass can read it as (part of) a `{{…}}` tag.
 const SLOT = '\u0000';
-const SLOT_RE = /\u0000(\d+)\u0000/g;
+// Built from the constant so the control character lives in one place.
+const SLOT_RE = new RegExp(`${SLOT}(\\d+)${SLOT}`, 'g');
 
 /**
  * @param {string} template
