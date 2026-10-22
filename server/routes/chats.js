@@ -43,7 +43,6 @@ import {
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
 import { logAudit } from '../services/AuditLogService.js';
-import logger from '../utils/logger.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -237,8 +236,35 @@ async function moveChatToProject(req, res, repository, chat) {
   const service = getProjectService();
   const from = chat.projectId || null;
   // Compared under the chat's lock: a move that raced this one wins, and the
-  // caller learns the chat is no longer where they saw it.
-  const { chat: updated, moved } = await repository.moveProjectIf(chat.id, from, targetId);
+  // caller learns the chat is no longer where they saw it. The markers change
+  // under the same lock, so two moves of one chat cannot interleave their
+  // bookkeeping, and the target is checked again under its own lock: a
+  // project deleted since the access check above refuses the marker and the
+  // chat goes back where it was.
+  let targetGone = false;
+  const { chat: updated, moved } = await repository
+    .moveProjectIf(chat.id, from, targetId, {
+      settle: async () => {
+        if (targetId) {
+          const attached = await service.attachChat(targetId, chat.id, {
+            ownerId: chat.ownerId || null
+          });
+          if (!attached) {
+            targetGone = true;
+            throw new Error('Project is gone');
+          }
+        }
+        if (from) await service.detachChat(from, chat.id).catch(() => {});
+      }
+    })
+    .catch(error => {
+      if (!targetGone) throw error;
+      return { chat: null, moved: false };
+    });
+  if (targetGone) {
+    sendNotFound(res, 'Project');
+    return null;
+  }
   if (!updated) {
     sendNotFound(res, 'Chat');
     return null;
@@ -248,25 +274,6 @@ async function moveChatToProject(req, res, repository, chat) {
       details: { code: 'CHAT_MOVED' }
     });
     return null;
-  }
-  if (from) await service.detachChat(from, chat.id).catch(() => {});
-  if (targetId) {
-    try {
-      await service.attachChat(targetId, chat.id, { ownerId: chat.ownerId || null });
-    } catch (error) {
-      // Without its marker the chat would be missing from the project's
-      // list: put the chat back where it was, marker included, and report
-      // the failure. The rollback is itself compared, so a newer move that
-      // landed in between is kept.
-      const rollback = await repository.moveProjectIf(chat.id, targetId, from).catch(failure => {
-        logger.warn('Chat move rollback failed', { chatId: chat.id, error: failure?.message });
-        return { moved: false };
-      });
-      if (rollback.moved && from) {
-        await service.attachChat(from, chat.id, { ownerId: chat.ownerId || null }).catch(() => {});
-      }
-      throw error;
-    }
   }
   logAudit({
     req,

@@ -28,6 +28,7 @@ export async function cleanUpProjectsOfUser(userId) {
   const chats = getChatRepository();
   let removed = 0;
   const ownedBy = project => String(project?.owner?.id) === String(userId);
+  const failures = [];
   for (const project of await repository.listOwned(String(userId))) {
     try {
       const deleted = await service.deleteProject(project.id, {
@@ -45,6 +46,7 @@ export async function cleanUpProjectsOfUser(userId) {
         projectId: project.id,
         error: error.message
       });
+      failures.push(error);
     }
   }
   const userKey = memberTargetKey({ type: 'user', id: String(userId) });
@@ -62,7 +64,16 @@ export async function cleanUpProjectsOfUser(userId) {
         projectId: project.id,
         error: error.message
       });
+      failures.push(error);
     }
+  }
+  // Everything that could be cleaned up was; what could not is reported, so
+  // the user deletion records this step as failed instead of as complete.
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `${failures.length} of the user's projects or memberships could not be cleaned up`
+    );
   }
   return { removed, membershipsDropped };
 }

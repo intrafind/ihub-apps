@@ -752,9 +752,13 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       // Nor create scheduled tasks: a leaked token must not be able to plant
       // work that keeps running as the user after the token is revoked.
       user.permissions.scheduledTasks = false;
-      // Nor create or share projects: a project outlives the token.
-      user.permissions.projects = false;
-      user.permissions.projectSharing = false;
+      // A third-party app acting for the user neither creates nor shares
+      // projects: a project outlives the token. A personal API key is the
+      // user's own hand (projectAccess.js) and keeps the owner's grants.
+      if (user.authMode === 'oauth_authorization_code') {
+        user.permissions.projects = false;
+        user.permissions.projectSharing = false;
+      }
     }
   }
 
