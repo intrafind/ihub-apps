@@ -1134,14 +1134,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // fetching separately) keeps the two in step.
         const streamOpen = hasChatClient(chatId);
 
-        // From here the turn owns the chat. A persisted turn has to survive the
-        // browser closing — its answer is written to the store either way — so
-        // the three paths that abort a run on disconnect must leave it alone
-        // until the finally below releases the mark.
-        // A temporary chat's turn is not: like the ephemeral turn it replaces,
-        // it stops when nobody is left to read it, so an anonymous or
-        // incognito visitor who closes the tab is not billed for the rest.
-        if (persistence && !persistence.temporary) {
+        // From here the turn owns the chat. A kept chat's turn has to survive
+        // the browser closing — its answer is written to the store either way —
+        // so the three paths that abort a run on disconnect must leave it alone
+        // until the finally below releases the mark. A temporary chat's turn is
+        // not: like the ephemeral turn it replaces, it stops when nobody is left
+        // to read it, so an anonymous or incognito visitor who closes the tab is
+        // not billed for the rest.
+        if (!persistence.temporary) {
           markChatDurable(chatId);
           durableTurn = true;
         }
