@@ -61,7 +61,11 @@ export class ExtractionError extends Error {
   }
 }
 
-/** Office packages: the declared type, the file extension and the extractor. */
+/**
+ * Office packages: the declared type, the file extension and the extractor.
+ * An extractor gets `(bytes, {report, sheetRows})` and sets `report.truncated`
+ * when it left content out on a limit of its own.
+ */
 const PACKAGES = new Map([
   [DOCX_MIME, { extension: '.docx', label: 'Word', extract: bytes => extractDocxDocument(bytes) }],
   [
@@ -72,9 +76,19 @@ const PACKAGES = new Map([
       extract: bytes => extractPptxDocument(bytes, { speakerNotes: 'include' })
     }
   ],
-  [XLSX_MIME, { extension: '.xlsx', label: 'Excel', extract: bytes => extractXlsx(bytes) }],
-  [ODT_MIME, { extension: '.odt', label: 'OpenDocument text', extract: extractOdfDocument }],
-  [ODS_MIME, { extension: '.ods', label: 'OpenDocument spreadsheet', extract: extractOdfDocument }],
+  [XLSX_MIME, { extension: '.xlsx', label: 'Excel', extract: extractXlsx }],
+  [
+    ODT_MIME,
+    { extension: '.odt', label: 'OpenDocument text', extract: bytes => extractOdfDocument(bytes) }
+  ],
+  [
+    ODS_MIME,
+    {
+      extension: '.ods',
+      label: 'OpenDocument spreadsheet',
+      extract: (bytes, { report }) => extractOdfDocument(bytes, { report })
+    }
+  ],
   [
     ODP_MIME,
     {
@@ -427,11 +441,53 @@ function htmlText(html) {
   });
 }
 
+const latin1 = new TextDecoder('latin1');
+
+/**
+ * Bytes as text in the charset a MIME part declares. An unknown label, or
+ * none, reads UTF-8 and falls back to Latin-1 for bytes that are not UTF-8.
+ *
+ * @param {Buffer} bytes
+ * @param {string} [charset]
+ * @returns {string}
+ */
+function decodeCharset(bytes, charset) {
+  const label = String(charset || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^utf8$/, 'utf-8');
+  if (label) {
+    try {
+      return new TextDecoder(label).decode(bytes);
+    } catch {
+      // A label TextDecoder does not know: guess below.
+    }
+  }
+  try {
+    return utf8.decode(bytes);
+  } catch {
+    return latin1.decode(bytes);
+  }
+}
+
+/** A string that holds one byte per character (`latin1`), as text in `charset`. */
+function decodeOctets(octets, charset) {
+  return decodeCharset(Buffer.from(octets, 'latin1'), charset);
+}
+
 /**
  * An e-mail file as text: the headers that matter, then the plain or HTML
  * body parts. Attachments are not followed (spec 3 §3.1).
+ *
+ * The message is parsed as one character per byte, so no byte is lost
+ * before a part's own `charset` decides how its body reads.
+ *
+ * @param {Buffer} bytes
+ * @returns {string}
  */
-function emailText(raw) {
+function emailText(bytes) {
+  const hasBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  const raw = (hasBom ? bytes.subarray(3) : bytes).toString('latin1');
   const normalized = raw.replace(/\r\n/g, '\n');
   const split = normalized.indexOf('\n\n');
   const headerBlock = split === -1 ? normalized : normalized.slice(0, split);
@@ -451,7 +507,9 @@ function emailText(raw) {
   const lines = [];
   for (const key of ['subject', 'from', 'to', 'cc', 'date']) {
     if (headers[key])
-      lines.push(`${key[0].toUpperCase()}${key.slice(1)}: ${decodeHeader(headers[key])}`);
+      lines.push(
+        `${key[0].toUpperCase()}${key.slice(1)}: ${decodeHeader(decodeOctets(headers[key]))}`
+      );
   }
   const parts = emailParts(
     body,
@@ -477,13 +535,14 @@ function decodeHeader(value) {
                 .replace(/=([0-9A-Fa-f]{2})/g, (_x, h) => String.fromCharCode(parseInt(h, 16))),
               'latin1'
             );
-      return new TextDecoder(charset.toLowerCase().replace(/^utf8$/, 'utf-8')).decode(bytes);
+      return decodeCharset(bytes, charset);
     } catch {
       return data;
     }
   });
 }
 
+/** A body part (one character per byte) as text: transfer encoding, then charset. */
 function decodeBody(body, encoding, charset) {
   const enc = encoding.trim().toLowerCase();
   let bytes;
@@ -495,14 +554,11 @@ function decodeBody(body, encoding, charset) {
         .replace(/=([0-9A-Fa-f]{2})/g, (_x, h) => String.fromCharCode(parseInt(h, 16))),
       'latin1'
     );
-  } else return body;
-  try {
-    return new TextDecoder((charset || 'utf-8').toLowerCase().replace(/^utf8$/, 'utf-8')).decode(
-      bytes
-    );
-  } catch {
-    return bytes.toString('utf8');
+  } else {
+    // 7bit, 8bit, binary or none: the bytes as they are.
+    bytes = Buffer.from(body, 'latin1');
   }
+  return decodeCharset(bytes, charset);
 }
 
 function emailParts(body, contentType, encoding, depth = 0) {
@@ -543,7 +599,7 @@ function emailParts(body, contentType, encoding, depth = 0) {
   return [];
 }
 
-async function extractXlsx(bytes) {
+async function extractXlsx(bytes, { report, sheetRows } = {}) {
   await assertSafePackage(bytes);
   const XLSX = await import('xlsx');
   const lib = XLSX.default || XLSX;
@@ -553,7 +609,12 @@ async function extractXlsx(bytes) {
   } catch (error) {
     throw new DocumentExtractionError(`not a readable Excel workbook (${error.message})`);
   }
-  return extractXlsxText({ XLSX: lib, workbook });
+  return extractXlsxText({
+    XLSX: lib,
+    workbook,
+    limits: sheetRows ? { sheetRows } : {},
+    report
+  });
 }
 
 function countPages(text) {
@@ -589,31 +650,39 @@ export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
 /**
  * Extract the text of a file.
  *
+ * `truncated` is true when anything of the file is missing from the text:
+ * cut at `maxChars` here, or left out by the extractor on a limit of its own
+ * (PDF pages past `maxPages`, spreadsheet rows past `sheetRows` or past the
+ * workbook's character budget).
+ *
  * @param {{bytes: Buffer, contentType?: string, name?: string}} file
- * @param {{maxChars?: number}} [options]
+ * @param {{maxChars?: number, maxPages?: number, sheetRows?: number}} [options]
+ *   The limits; `maxPages` and `sheetRows` default to the extractors' own.
  * @returns {Promise<{text: string, contentType: string, pages?: number, truncated: boolean}>}
  * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `NO_TEXT`
  */
 export async function extractText(
   { bytes, contentType, name },
-  { maxChars = MAX_TEXT_CHARS } = {}
+  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows } = {}
 ) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
     throw new ExtractionError('NO_TEXT', `${name || 'The file'} is empty`);
   }
   const type = await resolveContentType(bytes, { contentType, name });
+  const report = { truncated: false };
   let raw;
   let pages;
   try {
     if (type === PDF_MIME) {
-      raw = await extractPdfDocument(bytes, { maxPages: MAX_PDF_PAGES, maxChars: maxChars + 1 });
+      // A PDF that stops at `maxChars + 1` is cut below, by `normalizeText`.
+      raw = await extractPdfDocument(bytes, { maxPages, maxChars: maxChars + 1, report });
       pages = countPages(raw);
     } else if (PACKAGES.has(type)) {
-      raw = await PACKAGES.get(type).extract(bytes);
+      raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows });
     } else if (type === HTML_MIME) {
       raw = htmlText(decodeText(bytes, name));
     } else if (type === EML_MIME) {
-      raw = emailText(decodeText(bytes, name));
+      raw = emailText(bytes);
     } else {
       raw = decodeText(bytes, name);
     }
@@ -624,7 +693,9 @@ export async function extractText(
       `${name || 'The file'} could not be read: ${error?.message || 'extraction failed'}`
     );
   }
-  const { text, truncated } = normalizeText(raw, { maxChars });
+  const normalized = normalizeText(raw, { maxChars });
+  const { text } = normalized;
+  const truncated = normalized.truncated || report.truncated === true;
   if (type === PDF_MIME) {
     const real = realTextLength(text);
     if ((pages > 1 && real < MIN_REAL_TEXT_CHARS) || real === 0) {

@@ -384,14 +384,18 @@ export function projectChatStartPath(appId, projectId) {
 }
 
 /**
- * The apps a chat inside a project can start in: every app that does not
- * opt out with `features.userProjects: false` (spec 1 §6.1).
+ * The apps a chat inside a project can start in: chat apps (`type` omitted
+ * counts, the app router defaults it to chat) that do not opt out with
+ * `features.userProjects: false` (spec 1 §6.1). An iframe or redirect app
+ * would open an embedded page or an external site instead of a chat.
  *
- * @param {Array<{id: string, features?: Object}>} apps
+ * @param {Array<{id: string, type?: string, features?: Object}>} apps
  * @returns {Array<Object>}
  */
 export function appsForProjectChats(apps) {
-  return (apps || []).filter(app => app?.features?.userProjects !== false);
+  return (apps || []).filter(
+    app => (app?.type || 'chat') === 'chat' && app?.features?.userProjects !== false
+  );
 }
 
 /**

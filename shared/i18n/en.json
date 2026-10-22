@@ -3877,7 +3877,7 @@
       "tokens": {
         "count": "~{{tokens}} tokens",
         "unknown": "Size not known yet",
-        "autoPrompt": "loaded into the prompt",
+        "autoPrompt": "fits the prompt limit; loaded if the model and other linked projects leave room",
         "autoSearched": "too large to load; searched with tools",
         "everyRequest": "sent with every request",
         "searched": "searched, up to ~{{tokens}} per call",

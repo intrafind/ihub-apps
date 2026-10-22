@@ -23,19 +23,24 @@ const BROWSERS = {
 /**
  * Add each picked file as an item. A failure does not stop the others.
  *
- * @returns {Promise<{added: Array<Object>, failures: string[]}>}
+ * @param {Object} api
+ * @param {string} projectId
+ * @param {Array<{file: Object, body: Object}>} picks - Each file with its request.
+ * @returns {Promise<{added: Array<Object>, takenFiles: Array<Object>, failures: string[]}>}
  */
-async function addAll(api, projectId, requests) {
+async function addAll(api, projectId, picks) {
   const added = [];
+  const takenFiles = [];
   const failures = [];
-  for (const body of requests) {
+  for (const { file, body } of picks) {
     try {
       added.push(await api.addItem(projectId, body));
+      takenFiles.push(file);
     } catch (err) {
       failures.push(`${body.name || body.ref?.name || ''}: ${api.errorMessage(err)}`);
     }
   }
-  return { added, failures };
+  return { added, takenFiles, failures };
 }
 
 /**
@@ -86,17 +91,26 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
   const Browser = BROWSERS[kind];
   const uploadConfig = useMemo(() => cloudBrowserUploadConfig(config), [config]);
 
+  // Resolves to the files that were added: the browser drops them from its
+  // selection, so after a partial failure "Add to project" retries only the
+  // failed files instead of adding the others a second time.
   const handlePick = async (files, drive) => {
-    if (!provider) return;
-    const requests = buildCloudItemRequests(kind, provider.id, files, drive, { pinned });
-    if (requests.length === 0) return;
+    if (!provider || busy) return [];
+    const picks = (files || [])
+      .map(file => ({
+        file,
+        body: buildCloudItemRequests(kind, provider.id, [file], drive, { pinned })[0]
+      }))
+      .filter(pick => pick.body);
+    if (picks.length === 0) return [];
     setBusy(true);
     setError(null);
-    const { added, failures } = await addAll(api, projectId, requests);
+    const { added, takenFiles, failures } = await addAll(api, projectId, picks);
     added.forEach(item => onAdded(item));
     setBusy(false);
     if (failures.length > 0) setError(failures.join('\n'));
     else onClose();
+    return takenFiles;
   };
 
   if (providers === null) {
@@ -125,6 +139,7 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
                   id="project-item-cloud-provider"
                   value={provider?.id || ''}
                   onChange={e => setProviderId(e.target.value)}
+                  disabled={busy}
                   className={INPUT_CLASS}
                 >
                   {matching.map(entry => (
@@ -140,6 +155,7 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
                 type="checkbox"
                 checked={pinned}
                 onChange={e => setPinned(e.target.checked)}
+                disabled={busy}
                 className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
               />
               {t('projects.addItem.pinned', 'Pinned (always in the prompt)')}
@@ -152,7 +168,9 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
             )}
           </p>
           {provider && Browser && (
-            <div className={busy ? 'pointer-events-none opacity-60' : ''}>
+            // The browser disables its own selection and confirm button while
+            // the pick runs; the styling only greys out the rest.
+            <div className={busy ? 'pointer-events-none opacity-60' : ''} aria-busy={busy}>
               <Browser
                 key={provider.id}
                 provider={provider}

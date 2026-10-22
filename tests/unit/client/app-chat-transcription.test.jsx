@@ -381,10 +381,10 @@ const VIDEO_AUDIO = {
 };
 const DOC = { type: 'document', fileName: 'notes.txt', fileType: 'text/plain', content: 'agenda' };
 
-function renderApp(app = TRANSCRIPTION_APP) {
-  window.history.replaceState({}, '', '/apps/acme');
+function renderApp(app = TRANSCRIPTION_APP, path = '/apps/acme') {
+  window.history.replaceState({}, '', path);
   return render(
-    <MemoryRouter initialEntries={['/apps/acme']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/apps/:appId" element={<AppChat preloadedApp={app} />} />
       </Routes>
@@ -742,6 +742,83 @@ describe('a transcription model selected in the chat', () => {
       ['assistant', 'We ship on Friday.'],
       ['user', 'Summarize it']
     ]);
+  });
+});
+
+describe('a transcription turn in a project chat (#1036)', () => {
+  test('keeps the project, so the chat model selected next still gets it', async () => {
+    selectModel('gemini-live');
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    const view = renderApp(TRANSCRIPTION_APP, '/apps/acme?project=prj_case');
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    const chatId = mockHeader.props.chatId;
+    // The recording's own turn names the project, so the server lists the
+    // chat in it before any chat model answers.
+    expect(transcribeAudioBuffer.mock.calls[0][1].chat).toEqual(
+      expect.objectContaining({ chatId, projectId: 'prj_case' })
+    );
+    // Kept beside the transcript this tab holds for the chat.
+    expect(sessionStorage.getItem(`ai_hub_chat_project_${chatId}`)).toBe('prj_case');
+
+    // The app opened again without `?project=`: same chat, still in the project.
+    view.unmount();
+    selectModel('model-x');
+    renderApp();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    expect(mockHeader.props.chatId).toBe(chatId);
+    await type('Summarize it');
+    await send();
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
+    expect(sendAppChatMessage.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ projectId: 'prj_case' })
+    );
+  });
+
+  test('a new chat leaves the project behind', async () => {
+    selectModel('gemini-live');
+    transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+    renderApp(TRANSCRIPTION_APP, '/apps/acme?project=prj_case');
+    await attach(AUDIO);
+    await send();
+    await waitFor(() => expect(shownTurns()).toHaveLength(2));
+    const chatId = mockHeader.props.chatId;
+
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      act(() => mockHeader.props.onClearChat());
+    } finally {
+      confirm.mockRestore();
+    }
+    await waitFor(() => expect(mockHeader.props.chatId).not.toBe(chatId));
+    expect(sessionStorage.getItem(`ai_hub_chat_project_${chatId}`)).toBeNull();
+
+    // The next turn of the new chat goes out without the project.
+    selectModel('model-x');
+    await type('Hello');
+    await send();
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
+    expect(sendAppChatMessage.mock.calls[0][3]).not.toHaveProperty('projectId');
+  });
+
+  test('an incognito chat keeps nothing', async () => {
+    selectModel('gemini-live');
+    mockSettings.ephemeral = true;
+    try {
+      transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
+      renderApp(TRANSCRIPTION_APP, '/apps/acme?project=prj_case');
+      await attach(AUDIO);
+      await send();
+      await waitFor(() => expect(shownTurns()).toHaveLength(2));
+      expect(
+        Object.keys(sessionStorage).filter(key => key.startsWith('ai_hub_chat_project_'))
+      ).toEqual([]);
+    } finally {
+      mockSettings.ephemeral = false;
+    }
   });
 });
 

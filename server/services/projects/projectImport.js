@@ -14,8 +14,11 @@
  *    re-imported from `server/defaults/` whenever the shipped file's sha256
  *    differs from the one recorded on the item.
  *
- * The file is looked up under `contents/` first and `server/defaults/`
- * second; a path that leaves either directory is refused. The import runs
+ * The file is looked up under `contents/sources/` first and
+ * `server/defaults/sources/` second (the only places a filesystem source or
+ * a shipped import file could live); any other path, or a symlink whose
+ * target leaves that directory, is refused, so the importer never reads or
+ * deletes configuration or other installation files. The import runs
  * once per boot, under the `project-import` lock when the storage provider
  * has one, so several workers do not import the same file at once.
  *
@@ -27,6 +30,7 @@ import path from 'node:path';
 import logger from '../../utils/logger.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { getRootDir } from '../../pathUtils.js';
+import { resolveAndValidateRealPath } from '../../utils/pathSecurity.js';
 import { getStorage } from '../../storage/bootstrap.js';
 import { acceptedTypeOf } from './extractText.js';
 import { getProjectService } from './ProjectService.js';
@@ -56,13 +60,24 @@ export function safeRelativeFile(file) {
   return normalized;
 }
 
-async function exists(filePath) {
-  try {
-    await fs.stat(filePath);
-    return true;
-  } catch {
-    return false;
-  }
+/** The one directory, relative to `contents/` and `server/defaults/`, that import files come from. */
+export const IMPORT_DIR = 'sources';
+
+/**
+ * The real path of an import file inside `<baseDir>/sources/`, or null when
+ * the path names another directory, is missing, or (through a symlink)
+ * resolves outside it.
+ *
+ * @param {string} relative - Normalized relative path (from {@link safeRelativeFile}).
+ * @param {string} baseDir - `contents/` or `server/defaults/`.
+ * @returns {Promise<string|null>}
+ */
+async function resolveInImportDir(relative, baseDir) {
+  if (!relative?.startsWith(`${IMPORT_DIR}/`)) return null;
+  return resolveAndValidateRealPath(
+    relative.slice(IMPORT_DIR.length + 1),
+    path.join(baseDir, IMPORT_DIR)
+  );
 }
 
 /**
@@ -76,10 +91,10 @@ async function exists(filePath) {
 export async function resolveImportFile(file, dirs) {
   const relative = safeRelativeFile(file);
   if (!relative) return null;
-  const inContents = path.join(dirs.contentsDir, relative);
-  if (await exists(inContents)) return { path: inContents, where: 'contents' };
-  const inDefaults = path.join(dirs.defaultsDir, relative);
-  if (await exists(inDefaults)) return { path: inDefaults, where: 'defaults' };
+  const inContents = await resolveInImportDir(relative, dirs.contentsDir);
+  if (inContents) return { path: inContents, where: 'contents' };
+  const inDefaults = await resolveInImportDir(relative, dirs.defaultsDir);
+  if (inDefaults) return { path: inDefaults, where: 'defaults' };
   return null;
 }
 
@@ -195,7 +210,7 @@ async function importFromPointer(
       entry.status = 'failed';
       entry.error = {
         code: 'IMPORT_MISSING',
-        message: `The file to import was not found: ${String(item.import.file).slice(0, 300)}`
+        message: `The file to import was not found under ${IMPORT_DIR}/: ${String(item.import.file).slice(0, 300)}`
       };
     });
     logger.warn('Project item import file not found', { ...where, file: item.import.file });
@@ -242,8 +257,8 @@ async function importManaged(
 ) {
   const where = { component: COMPONENT, projectId: project.id, itemId: item.id };
   const relative = safeRelativeFile(item.managedFile);
-  const filePath = relative ? path.join(defaults, relative) : null;
-  if (!filePath || !(await exists(filePath))) {
+  const filePath = relative ? await resolveInImportDir(relative, defaults) : null;
+  if (!filePath) {
     if (item.status === 'ready') return 'skipped';
     await service.patchItem(project.id, item.id, entry => {
       entry.status = 'failed';
@@ -279,8 +294,8 @@ async function importManaged(
     delete entry.import;
   });
   // The copy an older release synced into contents/ is plaintext too.
-  const stale = contentsDir ? path.join(contentsDir, relative) : null;
-  if (deleteImported && stale && (await exists(stale))) {
+  const stale = contentsDir ? await resolveInImportDir(relative, contentsDir) : null;
+  if (deleteImported && stale) {
     await fs
       .unlink(stale)
       .catch(error =>

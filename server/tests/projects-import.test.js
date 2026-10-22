@@ -34,6 +34,7 @@ import {
   resolveImportFile,
   safeRelativeFile
 } from '../services/projects/projectImport.js';
+import { copyDefaultConfiguration } from '../utils/setupUtils.js';
 
 const MASTER = crypto.createHash('sha256').update('import-master').digest('hex');
 const SYSTEM = { id: 'system', name: 'Tests' };
@@ -118,6 +119,51 @@ describe('import pointers', () => {
       where: 'defaults'
     });
     assert.equal(await resolveImportFile('sources/nowhere.md', dirs), null);
+  });
+
+  it('reads only from the sources directory, symlinks included', async () => {
+    const base = path.join(scratch, 'confined');
+    const dirs = { contentsDir: base, defaultsDir: path.join(base, 'no-defaults') };
+    await write(path.join(base, 'config/platform.json'), '{"secret":true}');
+    await write(path.join(base, 'sources/ok.md'), 'fine');
+    await fs.symlink(path.join(base, 'config/platform.json'), path.join(base, 'sources/escape.md'));
+    assert.equal((await resolveImportFile('sources/ok.md', dirs))?.where, 'contents');
+    assert.equal(await resolveImportFile('config/platform.json', dirs), null);
+    assert.equal(await resolveImportFile('sources/escape.md', dirs), null);
+  });
+
+  it('neither reads nor deletes a pointer outside the sources directory', async () => {
+    const repository = getProjectRepository();
+    const base = path.join(scratch, 'guarded');
+    await write(path.join(base, 'config/platform.json'), '{"secret":true}');
+    await repository.createAdmin(
+      {
+        id: 'guarded',
+        name: { en: 'Guarded' },
+        items: [
+          item('itm_cfg', { import: { file: 'config/platform.json' } }),
+          item('itm_managed_cfg', { managedFile: 'config/platform.json' })
+        ]
+      },
+      { actor: SYSTEM }
+    );
+    try {
+      await importPendingProjects({ contentsDir: base, defaultsDir: base });
+      const project = await repository.get('guarded');
+      for (const entry of project.items) {
+        assert.equal(entry.status, 'failed', entry.id);
+        assert.equal(entry.error.code, 'IMPORT_MISSING', entry.id);
+        assert.equal(entry.text ?? null, null, entry.id);
+      }
+      assert.equal(
+        await fs.readFile(path.join(base, 'config/platform.json'), 'utf8'),
+        '{"secret":true}',
+        'the file is untouched'
+      );
+    } finally {
+      // The later tests count every project's outcomes.
+      await repository.delete('guarded');
+    }
   });
 });
 
@@ -232,5 +278,52 @@ describe('importPendingProjects', () => {
       fs.stat(path.join(scratch, 'sources/shared.md')),
       'gone after the last import'
     );
+  });
+
+  it('does not seed imported plaintext defaults back on the next start', async () => {
+    // Two boots of a fresh installation: default seeding, then the import.
+    // The shipped FAQ (an import pointer) and documentation (a managed
+    // file) are read from the defaults; neither may land in contents/ as
+    // plaintext, on the first start or any later one.
+    const repository = getProjectRepository();
+    const bootDefaults = path.join(scratch, 'boot-defaults');
+    const bootContents = path.join(scratch, 'boot-contents');
+    await write(path.join(bootDefaults, 'config/platform.json'), '{}');
+    await write(path.join(bootDefaults, 'sources/boot-faq.md'), '# FAQ\n\nShipped answers.');
+    await write(path.join(bootDefaults, 'sources/boot-docs.md'), '# Docs\n\nShipped manual.');
+    await repository.createAdmin(
+      {
+        id: 'shipped',
+        name: { en: 'Shipped' },
+        items: [
+          item('itm_boot_faq', { import: { file: 'sources/boot-faq.md' } }),
+          item('itm_boot_docs', { managedFile: 'sources/boot-docs.md' })
+        ]
+      },
+      { actor: SYSTEM }
+    );
+    const boot = async () => {
+      await copyDefaultConfiguration({ defaultsPath: bootDefaults, contentsPath: bootContents });
+      return importPendingProjects({ contentsDir: bootContents, defaultsDir: bootDefaults });
+    };
+
+    const first = await boot();
+    assert.equal(first.failed, 0);
+    await fs.stat(path.join(bootContents, 'config/platform.json'));
+    await assert.rejects(fs.stat(path.join(bootContents, 'sources')), 'nothing seeded');
+    let project = await repository.get('shipped');
+    for (const entry of project.items) {
+      assert.equal(entry.status, 'ready', entry.id);
+      assert.equal(entry.import, undefined, entry.id);
+    }
+    const faq = project.items.find(entry => entry.id === 'itm_boot_faq');
+    assert.match((await getItemText(project, faq, { user: SYSTEM })).text, /Shipped answers/);
+
+    const second = await boot();
+    assert.equal(second.imported, 0);
+    assert.equal(second.failed, 0);
+    await assert.rejects(fs.stat(path.join(bootContents, 'sources')), 'still nothing seeded');
+    project = await repository.get('shipped');
+    assert.ok(project.items.every(entry => entry.status === 'ready'));
   });
 });

@@ -164,17 +164,35 @@ export class SubWorkflowMaterializer {
           : [];
       // The planner names projects by id (its schema lists the template's
       // ids); each name is resolved back to the template's link so the
-      // configured mode and write permission survive the selection.
+      // configured mode and write permission survive the selection. The
+      // template is the only authority: a provider-side response schema is
+      // not a server-side check, and a planner answer (possibly steered by
+      // injected content) that names a project the template does not link
+      // would otherwise pull unrelated knowledge the caller can read into
+      // this workflow. Unknown ids are dropped, never taken as given.
       const templateLinks = dedupeLinks(templateProjects);
       const templateLinkById = new Map(
         templateLinks.map(link => [typeof link === 'string' ? link : link.id, link])
       );
-      const taskProjects = taskProjectsExplicit
-        ? dedupeLinks(task.projects).map(link => {
-            const id = typeof link === 'string' ? link : link?.id;
-            return templateLinkById.get(id) ?? link;
-          })
-        : templateLinks;
+      let taskProjects = templateLinks;
+      if (taskProjectsExplicit) {
+        taskProjects = [];
+        const dropped = [];
+        for (const link of dedupeLinks(task.projects)) {
+          const id = typeof link === 'string' ? link : link.id;
+          const templateLink = templateLinkById.get(id);
+          if (templateLink) taskProjects.push(templateLink);
+          else dropped.push(id);
+        }
+        if (dropped.length > 0) {
+          logger.warn({
+            component: 'SubWorkflowMaterializer',
+            message: 'Dropped planner-selected projects the task template does not link',
+            taskId: task.id,
+            droppedProjects: dropped
+          });
+        }
+      }
       const effectiveProjects = dedupeLinks([...taskProjects, ...inputLinks]);
 
       const hasSearchLikeTool = effectiveTools.some(t => {

@@ -10,15 +10,24 @@
  * the text is a snapshot taken at pick time (spec 3 §4). A later refresh
  * downloads again with the same user's token.
  *
- * Each kind is available when `platform.cloudStorage.providers` holds an
- * enabled provider of its type.
+ * Each kind is available when the `integrations` feature is on and
+ * `platform.cloudStorage.providers` holds an enabled provider of its type.
+ * The feature is checked again when a document is downloaded, for a pick and
+ * a refresh alike: a refresh skips the availability check (an item of a kind
+ * the admin switched off may still be saved), but it must not reach a cloud
+ * store the `requireFeature('integrations')` gate of the integration routes
+ * closed.
  *
  * @module services/projects/kinds/cloudKinds
  */
 import { z } from 'zod';
+import configCache from '../../../configCache.js';
+import { isFeatureEnabled } from '../../../featureRegistry.js';
 import { OAuthRefreshError } from '../../integrations/oauthRefreshError.js';
 import { ProjectError } from '../projectErrors.js';
 import { registerItemKind } from './registry.js';
+
+const INTEGRATIONS_FEATURE = 'integrations';
 
 const providerId = z.string().trim().min(1).max(100);
 const optionalMeta = {
@@ -30,10 +39,21 @@ const optionalMeta = {
 };
 
 function providerEnabled(type) {
-  return ({ platform }) =>
+  return ({ platform, features }) =>
+    isFeatureEnabled(INTEGRATIONS_FEATURE, features || {}) &&
     (platform?.cloudStorage?.providers || []).some(
       provider => provider?.type === type && provider.enabled !== false
     );
+}
+
+/** Refuse a download while the `integrations` feature is off. */
+function requireIntegrations(site) {
+  if (!isFeatureEnabled(INTEGRATIONS_FEATURE, configCache.getFeatures?.() || {})) {
+    throw new ProjectError(
+      'FEATURE_DISABLED',
+      `Integrations are switched off on this installation; ${site} documents cannot be read`
+    );
+  }
 }
 
 function translate(error, site) {
@@ -96,6 +116,7 @@ export const office365Kind = registerItemKind({
   describe: ref => ({ name: ref.name || ref.fileId, url: ref.url, site: 'OneDrive / SharePoint' }),
   async fetch(item, ctx) {
     const site = 'OneDrive / SharePoint';
+    requireIntegrations(site);
     const user = requireUser(ctx, site);
     const { default: service } = await import('../../integrations/Office365Service.js');
     try {
@@ -130,6 +151,7 @@ export const googleDriveKind = registerItemKind({
   describe: ref => ({ name: ref.name || ref.fileId, url: ref.url, site: 'Google Drive' }),
   async fetch(item, ctx) {
     const site = 'Google Drive';
+    requireIntegrations(site);
     const user = requireUser(ctx, site);
     const { default: service } = await import('../../integrations/GoogleDriveService.js');
     try {
@@ -163,6 +185,7 @@ export const nextcloudKind = registerItemKind({
   }),
   async fetch(item, ctx) {
     const site = 'Nextcloud';
+    requireIntegrations(site);
     const user = requireUser(ctx, site);
     const { default: service } = await import('../../integrations/NextcloudService.js');
     try {

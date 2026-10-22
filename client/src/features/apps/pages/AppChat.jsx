@@ -35,6 +35,7 @@ import VoiceModeDock from '../../voice/components/VoiceModeDock';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
+import { readChatProjectId, writeChatProjectId } from '../../chat/utils/chatMessagesStorage';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
@@ -685,6 +686,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * @returns {string} The new chat id.
    */
   const startNewChat = useCallback(() => {
+    // The chat being left takes its project along: the new one starts
+    // outside any project, as it does when chats are stored server-side.
+    if (!embedded) writeChatProjectId(chatId, null);
     const nextChatId = embedded ? mintChatId() : resetChatId(appId);
     // Minted here, so the store has never heard of it: skip the hydration
     // round trip that could only 404.
@@ -693,9 +697,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // has to land on.
     if (!embedded) freshChatRef.current = { appId, id: nextChatId };
     setChatId(nextChatId);
-    if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
+    // `?project=` started the chat being left; the new one is not in it.
+    if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
     return nextChatId;
-  }, [appId, navigate, routeChatId, embedded]);
+  }, [appId, navigate, routeChatId, embedded, chatId, projectParam]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -978,6 +983,29 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setChatOrigin(null);
     setChatProjectId(null);
   }, [chatId]);
+
+  // A chat that is not stored server-side keeps its container project in the
+  // browser, beside its transcript (`writeChatProjectId` below): reopening
+  // the app restores the transcript by the tab's chat id, and without the
+  // project its next turns would lose the project's instructions and
+  // documents. Never for an incognito chat, which keeps nothing.
+  const browserPersistedChat = !embedded && !ephemeral && !serverBackedChat;
+  useEffect(() => {
+    if (!browserPersistedChat) return;
+    const stored = readChatProjectId(chatId);
+    if (stored) setChatProjectId(prev => prev || stored);
+  }, [chatId, browserPersistedChat]);
+
+  /**
+   * The chat has started in its container project: keep the project once
+   * the URL drops `?project=` (a stored chat's URL is pinned to
+   * `/c/:chatId`), and, for a chat kept in the browser, beside its transcript.
+   */
+  const adoptContainerProject = useCallback(() => {
+    if (!containerProjectId) return;
+    setChatProjectId(prev => prev || containerProjectId);
+    if (browserPersistedChat) writeChatProjectId(chatId, containerProjectId);
+  }, [containerProjectId, browserPersistedChat, chatId]);
 
   // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
   // on the mode too, because leaving and re-entering server-backed mode (the
@@ -1453,14 +1481,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             outputFormat: selectedOutputFormat
           }
         });
-        // As for a typed first turn: keep the project once the URL drops
-        // `?project=` for `/c/:chatId` (this blank turn starts the chat too).
-        if (containerProjectId) setChatProjectId(prev => prev || containerProjectId);
+        // As for a typed first turn (this blank turn starts the chat too).
+        adoptContainerProject();
       }, 300); // Small delay to ensure everything is initialized
     }
   }, [
     app,
     containerProjectId,
+    adoptContainerProject,
     messages.length,
     hydrating,
     chatModeResolving,
@@ -1803,6 +1831,26 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   }, [pendingAutoSubmit]);
 
   /**
+   * The request parameters of an answer to a question the app asked. The
+   * container project rides along like on every turn: a chat that is not
+   * stored server-side has no stored chat to recover it from.
+   *
+   * @param {Object} [extra] - Further parameters (`voiceMode`).
+   * @returns {Object}
+   */
+  const clarificationParams = useCallback(
+    (extra = {}) => ({
+      modelId: selectedModel,
+      style: selectedStyle,
+      outputFormat: selectedOutputFormat,
+      language: currentLanguage,
+      ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      ...extra
+    }),
+    [selectedModel, selectedStyle, selectedOutputFormat, currentLanguage, containerProjectId]
+  );
+
+  /**
    * Handle clarification response submission.
    * Formats the response and continues the conversation.
    *
@@ -1810,21 +1858,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   const handleClarificationSubmit = useCallback(
     response => {
-      const params = {
-        modelId: selectedModel,
-        style: selectedStyle,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage
-      };
-      submitClarificationResponse(response, params);
+      submitClarificationResponse(response, clarificationParams());
     },
-    [
-      submitClarificationResponse,
-      selectedModel,
-      selectedStyle,
-      selectedOutputFormat,
-      currentLanguage
-    ]
+    [submitClarificationResponse, clarificationParams]
   );
 
   /**
@@ -1835,21 +1871,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    */
   const handleClarificationSkip = useCallback(
     response => {
-      const params = {
-        modelId: selectedModel,
-        style: selectedStyle,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage
-      };
-      submitClarificationResponse(response, params);
+      submitClarificationResponse(response, clarificationParams());
     },
-    [
-      submitClarificationResponse,
-      selectedModel,
-      selectedStyle,
-      selectedOutputFormat,
-      currentLanguage
-    ]
+    [submitClarificationResponse, clarificationParams]
   );
 
   // "Open in App" on a source: a new chat of the chosen app, with the source's
@@ -1991,13 +2015,21 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           appId,
           ephemeral: !serverBackedChat,
           clientMessageId: answerId,
-          attachment
+          attachment,
+          // The container, so a stored chat whose first turn is a recording
+          // is listed in its project at once (the server resolves it like
+          // the chat POST's `projectId`).
+          ...(containerProjectId ? { projectId: containerProjectId } : {})
         },
         open() {
           addUserMessage(label, { ...mark, clientMessageId: answerId });
           addAssistantMessage(answerId);
           updateAssistantMessage(answerId, '', true, mark);
           setSentInChatId(chatId);
+          // The turn starts the chat, and a stored chat's URL is pinned to
+          // `/c/:chatId` without `?project=`: keep the project, so the next
+          // chat-model turn carries it too.
+          adoptContainerProject();
         },
         show(text) {
           shown = text;
@@ -2019,6 +2051,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       addAssistantMessage,
       updateAssistantMessage,
       reportTranscriptionFailure,
+      adoptContainerProject,
       t
     ]
   );
@@ -2582,8 +2615,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     } else {
       sendChatMessage(messageStructure);
       setSentInChatId(chatId);
-      // Keep the project once the URL drops `?project=` for `/c/:chatId`.
-      if (containerProjectId && !chatProjectId) setChatProjectId(containerProjectId);
+      adoptContainerProject();
       voiceTurnSentRef.current = true;
     }
 
@@ -2633,13 +2665,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   };
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>
-    submitClarificationResponse(answer, {
-      modelId: selectedModel,
-      style: selectedStyle,
-      outputFormat: selectedOutputFormat,
-      language: currentLanguage,
-      voiceMode: true
-    });
+    submitClarificationResponse(answer, clarificationParams({ voiceMode: true }));
   const voiceMode = useVoiceMode({
     availability: voiceAvailability,
     language: currentLanguage,
