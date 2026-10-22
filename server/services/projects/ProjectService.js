@@ -155,11 +155,23 @@ export class ProjectService {
         limit: limits.maxFiles
       });
     }
-    // A new project is made of new items: a kind that is switched off is
-    // refused here exactly as the item endpoints refuse it.
-    for (const item of project.items || []) this._checkKindRef(item.kind, item.ref);
+    // A new project is made of new items, built here exactly as the item
+    // endpoints build them: the request names the kind, the reference, a
+    // name and whether it is pinned; storage, status and provenance are the
+    // kind's. Content that has to be fetched and extracted (uploads, picked
+    // documents) goes through the item endpoints, which run the ingestion.
+    const items = (project.items || []).map(input => {
+      const { kind, ref } = this._checkKindRef(input.kind, input.ref);
+      if (kind.storage.ihub !== 'link') {
+        throw new ProjectError(
+          'INVALID_REF',
+          `Items of kind "${kind.id}" are added through the item endpoints after the project exists`
+        );
+      }
+      return buildItem(kind, ref, input, { user: actor, origin: 'linked' });
+    });
     try {
-      return await this.repository.createAdmin(project, { actor: actorOf(actor) });
+      return await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
     } catch (error) {
       throw translateError(error);
     }
@@ -224,6 +236,20 @@ export class ProjectService {
         );
       }
     }
+    const where = { component: COMPONENT, projectId };
+    // Chats first, while the project still exists: a chat whose detach fails
+    // keeps its marker and the project, so the same delete can be retried.
+    // The lock order is chat, then project (`moveChatToProject`), which is
+    // why this runs outside the project's lock; a chat attached meanwhile is
+    // caught by the second pass once the document is gone.
+    const failed = await this._detachChats(projectId, detachChat, where);
+    if (failed.length > 0) {
+      throw new ProjectError(
+        'CASCADE_INCOMPLETE',
+        `The project is kept: ${failed.length} chat(s) could not be detached from it`,
+        { project: { id: projectId }, deleted: false, chats: failed }
+      );
+    }
     let project;
     try {
       project = await this.repository.delete(projectId, { authorize });
@@ -231,23 +257,60 @@ export class ProjectService {
       throw translateError(error);
     }
     if (!project) return null;
-    const where = { component: COMPONENT, projectId };
     await attempt(() => this.repository.deleteBlobs(projectId), 'text blobs', where);
-    await attempt(
-      async () => {
-        const chatIds = await this.repository.removeAllChatMarkers(projectId);
-        if (typeof detachChat === 'function') {
-          for (const chatId of chatIds)
-            await attempt(() => detachChat(chatId), `chat ${chatId}`, where);
-        }
-      },
-      'chat markers',
-      where
-    );
+    let late = [];
+    let unlisted = false;
+    try {
+      late = await this._detachChats(projectId, detachChat, where);
+    } catch (error) {
+      logger.error('Failed to list the chats of a deleted project', {
+        ...where,
+        error: error.message
+      });
+      unlisted = true;
+    }
     for (const hook of this.onDeleted) {
       await attempt(() => hook(project), 'a delete hook', where);
     }
+    if (late.length > 0 || unlisted) {
+      throw new ProjectError(
+        'CASCADE_INCOMPLETE',
+        `The project is deleted, but ${unlisted ? 'its' : late.length} chat(s) could not be detached from it`,
+        { project: { id: project.id, ownership: project.ownership }, deleted: true, chats: late }
+      );
+    }
     return project;
+  }
+
+  /**
+   * Detach every chat the project's markers name; a marker goes only once its
+   * chat is detached, so a failure leaves the record of what is still to do.
+   * Only the chat id is reported: the storage error is in the log.
+   *
+   * @returns {Promise<Array<{chatId: string}>>} The chats still attached.
+   */
+  async _detachChats(projectId, detachChat, where) {
+    let markers = [];
+    try {
+      markers = await this.repository.listChatMarkers(projectId, { all: true });
+    } catch (error) {
+      throw translateError(error);
+    }
+    const failed = [];
+    for (const marker of markers) {
+      try {
+        if (typeof detachChat === 'function') await detachChat(marker.chatId);
+        await this.repository.removeChatMarker(projectId, marker.chatId);
+      } catch (error) {
+        logger.error('Failed to detach a chat from a project being deleted', {
+          ...where,
+          chatId: marker.chatId,
+          error: error.message
+        });
+        failed.push({ chatId: marker.chatId });
+      }
+    }
+    return failed;
   }
 
   // --- items ----------------------------------------------------------------
@@ -750,6 +813,44 @@ export class ProjectService {
 /**
  * Run one cascade step without letting it strand the rest.
  */
+/**
+ * A new item of `kind`, as every creation path stores it.
+ *
+ * @param {Object} kind
+ * @param {Object} ref
+ * @param {{id?: string, name?: string, pinned?: boolean, cache?: Object}} input
+ * @param {{user: Object, origin?: string, run?: string|null}} context
+ * @returns {Object}
+ */
+function buildItem(kind, ref, input, { user, origin, run = null }) {
+  const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
+  const now = nowIso();
+  const link = kind.storage.ihub === 'link';
+  const source =
+    described.url || described.site ? { site: described.site, url: described.url } : null;
+  return {
+    id: input.id || mintItemId(),
+    kind: kind.id,
+    name: String(input.name || described.name || kind.id).slice(0, 300),
+    ref,
+    storage: kind.storage.ihub,
+    pinned: input.pinned === true,
+    status: link ? 'ready' : 'pending',
+    error: null,
+    provenance: {
+      origin: origin || (link ? 'linked' : 'picked'),
+      by: actorOf(user),
+      at: now,
+      run,
+      source
+    },
+    snapshotAt: null,
+    createdAt: now,
+    updatedAt: now,
+    ...(link ? { cache: input.cache || { ttlSeconds: 7200 } } : {})
+  };
+}
+
 async function attempt(step, what, where) {
   try {
     return await step();

@@ -42,8 +42,9 @@
  *   network; never included in a share
  *
  * @typedef {SourceInput & {id: string, provider: string, kind: SourceKind, private: boolean}} Source
- *   `id` identifies the source within an answer: `provider:ref.id`, else
- *   `provider:id`, else `url:<urlKey>`.
+ *   `id` identifies the source within an answer: `provider:ref.id` (for a
+ *   project item `project:<projectId>:<itemId>`), else `provider:id`, else
+ *   `url:<urlKey>`.
  *
  * Pure functions only, no DOM and no Node APIs, so both sides import it.
  *
@@ -180,13 +181,26 @@ function markersOf(value) {
 }
 
 /**
+ * Providers whose `ref.id` is unique only within its `ref.scope`: a project
+ * item id names an item of one project (`ref: { id: itemId, scope:
+ * projectId }`), so two projects' `itm_policy` are two sources. Elsewhere the
+ * scope is a way to reach the same document (an iFinder search profile) and
+ * two sightings of it are one source.
+ */
+const SCOPED_IDENTITY_PROVIDERS = new Set(['project']);
+
+/**
  * The identity of a source within an answer.
  *
- * @param {{provider: string, ref?: {id: string}, localId?: string|null, url?: string}} parts
+ * @param {{provider: string, ref?: {id: string, scope?: string}, localId?: string|null, url?: string}} parts
  * @returns {string|null}
  */
 function identity({ provider, ref, localId, url }) {
-  if (ref) return `${provider}:${ref.id}`;
+  if (ref) {
+    return ref.scope && SCOPED_IDENTITY_PROVIDERS.has(provider)
+      ? `${provider}:${ref.scope}:${ref.id}`
+      : `${provider}:${ref.id}`;
+  }
   if (localId) return `${provider}:${localId}`;
   const key = url ? urlKey(url) : null;
   return key ? `url:${key}` : null;

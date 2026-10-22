@@ -21,8 +21,12 @@ import {
   USER_PROJECTS_NAMESPACE,
   USER_PROJECT_SHARES_NAMESPACE,
   ProjectRepository,
+  chatMarkerKey,
+  isAdminProjectId,
   isUserProjectId,
-  memberMarkerKey
+  memberMarkerKey,
+  mintItemId,
+  mintProjectId
 } from '../services/projects/ProjectRepository.js';
 import { ProjectError, ProjectService } from '../services/projects/ProjectService.js';
 import { memberTargetKey } from '../services/projects/projectAccess.js';
@@ -217,12 +221,29 @@ describe('user projects', () => {
     await repo.addChatMarker(project.id, 'chat-2', { ownerId: GRACE.id });
     const markers = await repo.listChatMarkers(project.id);
     assert.deepEqual(markers.map(marker => marker.chatId).sort(), ['chat-1', 'chat-2']);
-    assert.deepEqual(await repo.removeAllChatMarkers(project.id), ['chat-1', 'chat-2']);
+    assert.deepEqual((await repo.removeAllChatMarkers(project.id)).sort(), ['chat-1', 'chat-2']);
     assert.deepEqual(await repo.listChatMarkers(project.id), []);
     assert.equal(
-      await getStorage().documents.get(PROJECT_CHATS_NAMESPACE, `${project.id}__chat-1`),
+      await getStorage().documents.get(
+        PROJECT_CHATS_NAMESPACE,
+        chatMarkerKey(project.id, 'chat-1')
+      ),
       null
     );
+  });
+
+  it('keeps a chat marker whose ids together outgrow a storage key', async () => {
+    const project = await repo.createUser({ owner: ADA, content: { name: 'Long chats' } });
+    const chatId = `chat-${'x'.repeat(75)}`;
+    assert.equal(chatId.length, 80);
+    assert.equal(await repo.addChatMarker(project.id, chatId, { ownerId: ADA.id }), true);
+    assert.ok(chatMarkerKey(project.id, chatId).length <= 100);
+    assert.deepEqual(
+      (await repo.listChatMarkers(project.id)).map(marker => marker.chatId),
+      [chatId]
+    );
+    assert.equal(await repo.removeChatMarker(project.id, chatId), true);
+    assert.deepEqual(await repo.listChatMarkers(project.id), []);
   });
 
   it('scans in pages without repeating a document when a budget stops it', async () => {
@@ -258,14 +279,31 @@ describe('user projects', () => {
     for (const id of made) assert.ok(ids.includes(id), `${id} is in the full scan`);
   });
 
-  it("removes a project's blobs by prefix", async () => {
+  it("removes a project's blobs by prefix, and only keys shaped like its own", async () => {
     const blobs = getStorage().blobs;
     await blobs.put(PROJECT_FILES_NAMESPACE, 'prj_a__itm_1__v1', 'one');
     await blobs.put(PROJECT_FILES_NAMESPACE, 'prj_a__itm_2__v1', 'two');
     await blobs.put(PROJECT_FILES_NAMESPACE, 'prj_b__itm_1__v1', 'other');
+    // A key that shares the prefix but has more parts is not this project's
+    // (`case` versus a hypothetical `case__archive`): a prefix match alone
+    // must not delete it.
+    await blobs.put(PROJECT_FILES_NAMESPACE, 'case__archive__itm_1__v1', 'archive');
+    await blobs.put(PROJECT_FILES_NAMESPACE, 'case__itm_9__v1', 'mine');
     assert.equal(await repo.deleteBlobs('prj_a', 'itm_1'), 1);
     assert.equal(await repo.deleteBlobs('prj_a'), 1);
     assert.ok(await blobs.get(PROJECT_FILES_NAMESPACE, 'prj_b__itm_1__v1'));
+    assert.equal(await repo.deleteBlobs('case'), 1);
+    assert.ok(await blobs.get(PROJECT_FILES_NAMESPACE, 'case__archive__itm_1__v1'));
+    assert.equal(await repo.deleteBlobs('case', 'itm__9'), 0, 'an item id with the separator');
+  });
+
+  it('never mints an id that carries the blob separator, and refuses one', () => {
+    for (let i = 0; i < 500; i++) {
+      assert.ok(!mintProjectId().includes('__'));
+      assert.ok(!mintItemId().includes('__'));
+    }
+    assert.equal(isAdminProjectId('case'), true);
+    assert.equal(isAdminProjectId('case__archive'), false);
   });
 });
 
@@ -298,7 +336,28 @@ describe('admin projects', () => {
   it('refuses ids shaped like user project ids and unsafe ids', async () => {
     await assert.rejects(repo.createAdmin({ id: 'prj_x', name: { en: 'x' } }));
     await assert.rejects(repo.createAdmin({ id: '../x', name: { en: 'x' } }));
+    await assert.rejects(repo.createAdmin({ id: 'case__archive', name: { en: 'x' } }));
     assert.equal(await repo.get('../x'), null);
+  });
+
+  it('deletes under the project lock, after the update that was in flight', async () => {
+    await repo.createAdmin({ id: 'racy', name: { en: 'Racy' }, items: [] });
+    let release;
+    const gate = new Promise(resolve => {
+      release = resolve;
+    });
+    const update = repo.mutate('racy', async project => {
+      await gate;
+      return { ...project, instructions: 'written late' };
+    });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const removal = repo.delete('racy');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    release();
+    const [updated, removed] = await Promise.all([update, removal]);
+    assert.equal(updated?.instructions, 'written late');
+    assert.equal(removed?.id, 'racy', 'the delete ran after the update and found the project');
+    assert.equal(await repo.get('racy'), null, 'the late write did not bring it back');
   });
 });
 

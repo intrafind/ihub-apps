@@ -120,6 +120,44 @@ for (const [label, relPath] of [
   });
 }
 
+describe('ConfigStore.remove on the filesystem path', () => {
+  const relPath = 'unserved/remove-target.json';
+
+  before(async () => {
+    await bootstrapStorage(PLATFORM_CONFIG);
+  });
+
+  after(async () => {
+    await shutdownStorageBootstrap();
+    await fs.rm(path.join(CONTENTS, 'unserved'), { recursive: true, force: true });
+  });
+
+  it('waits for the update of the same file that is in flight', async () => {
+    const store = new ConfigStore();
+    await store.updateJson(relPath, () => ({ items: ['first'] }));
+    let release;
+    const gate = new Promise(resolve => {
+      release = resolve;
+    });
+    const update = store.updateJson(relPath, async current => {
+      await gate;
+      return { items: [...current.items, 'late'] };
+    });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const removal = store.remove(relPath);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    release();
+    const [written, removed] = await Promise.all([update, removal]);
+    assert.equal(written.written, true);
+    assert.equal(removed, true, 'the removal ran after the update and found the file');
+    await assert.rejects(
+      fs.stat(path.join(CONTENTS, relPath)),
+      'the late write did not recreate it'
+    );
+    assert.equal(await store.remove(relPath), false);
+  });
+});
+
 describe('ConfigStore.updateJson: a write between the read and the write', () => {
   const relPath = 'config/interleaved.json';
 

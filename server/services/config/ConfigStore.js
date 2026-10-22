@@ -394,6 +394,35 @@ async function updateOnDisk(relPath, mutate) {
 }
 
 /**
+ * Delete one configuration file, wherever it lives (see {@link ConfigStore#remove}).
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ * @returns {Promise<boolean>}
+ */
+async function removeNow(relPath) {
+  const location = parseRawRelPath(relPath);
+  const documents = location ? documentsFor(location.ns) : null;
+  if (documents) return documents.delete(location.ns, location.key);
+  const filePath = await resolveConfigPath(relPath);
+  // No `invalidateText` here: the next read's `stat` fails and drops the
+  // entry on that path already. A line that cannot be made to matter is a
+  // line the next reader has to work out is dead.
+  return withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      try {
+        await fs.unlink(filePath);
+        return true;
+      } catch (error) {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+      }
+    },
+    { component: COMPONENT }
+  );
+}
+
+/**
  * List the JSON file names of a directory under `contents/`.
  *
  * Only names the raw store would accept are returned, so a directory lists the
@@ -714,21 +743,22 @@ export class ConfigStore {
    * @returns {Promise<boolean>} True when a file was removed, false when there
    *   was nothing to remove
    */
-  async remove(relPath) {
-    const location = parseRawRelPath(relPath);
-    const documents = location ? documentsFor(location.ns) : null;
-    if (documents) return documents.delete(location.ns, location.key);
-    const filePath = await resolveConfigPath(relPath);
-    // No `invalidateText` here: the next read's `stat` fails and drops the
-    // entry on that path already. A line that cannot be made to matter is a
-    // line the next reader has to work out is dead.
-    try {
-      await fs.unlink(filePath);
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') return false;
-      throw error;
-    }
+  remove(relPath) {
+    // Behind the updates of the same file from this process, and on disk
+    // under the same file lock `updateOnDisk` takes: a delete that slipped
+    // between an update's read and its atomic write was undone by that
+    // write, and reported success for a file that survived.
+    const queueKey = String(relPath);
+    const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
+    const run = previous.then(() => removeNow(relPath));
+    const settled = run.catch(() => {
+      /* a failed removal is reported to its caller, not to the next in line */
+    });
+    this.#updateQueues.set(queueKey, settled);
+    settled.then(() => {
+      if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
+    });
+    return run;
   }
 
   /**

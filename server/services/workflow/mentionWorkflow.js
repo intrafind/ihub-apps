@@ -18,8 +18,8 @@ import { RunStreamEmitter } from '../loop/RunStream.js';
 import { newRunId } from '../loop/RunLog.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { renderUserMessage } from '../../../shared/promptContext.js';
-import { materializeAssistantTurn, materializeUserTurn } from '../chat/chatMaterializer.js';
-import { recordRunActivity } from '../chat/runActivity.js';
+import { materializeAssistantTurn, settleUserTurn } from '../chat/chatMaterializer.js';
+import { discardRunActivity, recordRunActivity } from '../chat/runActivity.js';
 import { emitFailedRun } from '../chat/failedRun.js';
 import { mentionAccess } from './workflowAccess.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -66,7 +66,8 @@ export function workflowSummary(result) {
  * @param {string} params.runId - The workflow's run id.
  * @param {string} [params.titleText] - What a chat this turn opens is named
  *   after: the message without the mention.
- * @returns {Promise<void>}
+ * @returns {Promise<{code: string, message: string}|null>} Why the turn was
+ *   refused (the chat's container changed under it), else null.
  */
 async function materializeWorkflowUserTurn({
   persistence,
@@ -76,8 +77,8 @@ async function materializeWorkflowUserTurn({
   runId,
   titleText
 }) {
-  if (!persistence) return;
-  await materializeUserTurn({
+  if (!persistence) return null;
+  const { refusal } = await settleUserTurn({
     titleText,
     settings: persistence.settings,
     variables: persistence.variables,
@@ -94,8 +95,9 @@ async function materializeWorkflowUserTurn({
     replaceFromMessageId: persistence.replaceFromMessageId,
     // The container and attached projects this turn chose: a first turn
     // that is a workflow mention opens the chat inside its project too.
-    chat: persistence.chat
+    projects: persistence.projects
   });
+  return refusal;
 }
 
 /**
@@ -176,7 +178,7 @@ function refusalReason({ workflow, workflowId, access, clientLanguage }) {
  * @param {Object} params.user - Authenticated caller.
  * @param {string} params.clientLanguage - Language the caller works in.
  * @param {Object|null} [params.persistence] - Durable-chat context, or null.
- * @returns {Promise<{handled: true, response: Object}>}
+ * @returns {Promise<{handled: true, response: Object, statusCode?: number}>}
  */
 async function launchMentionWorkflow({
   workflow,
@@ -235,7 +237,7 @@ async function launchMentionWorkflow({
   // `ChatService`, which is what materializes an ordinary turn, so
   // both halves are written here or the exchange is missing from the
   // transcript — and from the history every later turn replays.
-  await materializeWorkflowUserTurn({
+  const refusal = await materializeWorkflowUserTurn({
     persistence,
     chatId,
     appId,
@@ -245,6 +247,17 @@ async function launchMentionWorkflow({
     // a bare `@workflow` is named after the workflow.
     titleText: withoutMention || getLocalizedString(workflow.name, clientLanguage)
   });
+  // A first turn that raced this one opened the chat in another project:
+  // nothing of this one was stored, and the workflow does not start.
+  if (refusal) {
+    discardRunActivity(workflowRunId);
+    failLaunch(refusal.message);
+    return {
+      handled: true,
+      statusCode: 409,
+      response: { error: refusal.message, code: refusal.code }
+    };
+  }
   // Announced once the question is stored, like an ordinary turn
   // (`ChatService`): a client reloading its chat list on the first
   // frame finds the chat there.

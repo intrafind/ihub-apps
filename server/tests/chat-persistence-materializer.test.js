@@ -24,7 +24,8 @@ import { FilesystemStorageProvider } from '../storage/providers/filesystem/index
 import { ChatRepository } from '../services/chat/ChatRepository.js';
 import {
   materializeAssistantTurn,
-  materializeUserTurn
+  materializeUserTurn,
+  settleUserTurn
 } from '../services/chat/chatMaterializer.js';
 
 const OWNER = 'user-1';
@@ -776,6 +777,83 @@ describe('chatMaterializer: sources behind the answer', () => {
       await assistantTurn(repository, { sources: { items: [], queries: [], supports: [] } });
       const { messages } = await repository.getMessages(CHAT_ID);
       assert.equal('sources' in messages.at(-1), false);
+    });
+  });
+});
+
+describe('chatMaterializer: projects written under the chat lock', () => {
+  const projects = (fields = {}) => ({ attach: [], maxAttached: 10, ...fields });
+  const turn = (repository, runId, fields) =>
+    settleUserTurn({
+      repository,
+      chatId: CHAT_ID,
+      ownerId: OWNER,
+      identityMode: 'default',
+      appId: 'chat',
+      runId,
+      content: `question of ${runId}`,
+      projects: projects(fields)
+    });
+
+  it('lets only one of two overlapping first turns open the chat in its project', async () => {
+    await withRepository(async ({ repository }) => {
+      // Both turns read the chat before either was stored: no container, no
+      // messages. Each claims a different project.
+      const [a, b] = await Promise.all([
+        turn(repository, 'chat-run-a', { claimContainer: 'prj_a' }),
+        turn(repository, 'chat-run-b', { claimContainer: 'prj_b' })
+      ]);
+      const won = [a, b].filter(result => result.message);
+      const refused = [a, b].filter(result => result.refusal);
+      assert.equal(won.length, 1, 'one turn is stored');
+      assert.equal(refused.length, 1, 'the other is refused');
+      assert.equal(refused[0].refusal.code, 'PROJECT_MISMATCH');
+      assert.equal(refused[0].message, null);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.projectId, won[0] === a ? 'prj_a' : 'prj_b');
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal(messages.length, 1, 'nothing of the refused turn is stored');
+      assert.equal(chat.activeRunId, messages[0].runId, 'the refused turn never claimed the chat');
+    });
+  });
+
+  it('refuses a container claim on a chat that has messages by then, and an asserted container that changed', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const late = await turn(repository, 'chat-run-late', { claimContainer: 'prj_a' });
+      assert.equal(late.refusal?.code, 'PROJECT_MISMATCH');
+      assert.equal((await repository.getChat(CHAT_ID)).projectId ?? null, null);
+      // An explicit "no project" that still holds is no conflict.
+      const plain = await turn(repository, 'chat-run-plain', { expectedContainer: null });
+      assert.ok(plain.message);
+      await repository.updateChat(CHAT_ID, { projectId: 'prj_moved' });
+      const stale = await turn(repository, 'chat-run-stale', { expectedContainer: null });
+      assert.equal(stale.refusal?.code, 'PROJECT_MISMATCH');
+    });
+  });
+
+  it('keeps the attachments of two overlapping turns, within the cap', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository, { projects: projects({ attach: ['prj_a'] }) });
+      // Both tabs read `[prj_a]` and attach one project each.
+      const [b, c] = await Promise.all([
+        turn(repository, 'chat-run-b', { attach: ['prj_b'] }),
+        turn(repository, 'chat-run-c', { attach: ['prj_c'] })
+      ]);
+      assert.ok(b.message && c.message);
+      const attached = (await repository.getChat(CHAT_ID)).attachedProjectIds;
+      assert.equal(attached[0], 'prj_a');
+      assert.deepEqual([...attached].sort(), ['prj_a', 'prj_b', 'prj_c']);
+
+      // The union is capped, however many turns add to it.
+      const many = Array.from({ length: 12 }, (_, index) => `prj_m${index}`);
+      await Promise.all([
+        turn(repository, 'chat-run-m1', { attach: many.slice(0, 6) }),
+        turn(repository, 'chat-run-m2', { attach: many.slice(6) })
+      ]);
+      const capped = (await repository.getChat(CHAT_ID)).attachedProjectIds;
+      assert.equal(capped.length, 10);
+      assert.deepEqual(capped.slice(0, 3), attached, 'the stored ones are kept first');
     });
   });
 });

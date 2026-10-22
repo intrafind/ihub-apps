@@ -321,6 +321,11 @@ export default function registerProjectRoutes(app) {
       if (!canHoldProjects(req.user)) return res.json({ items: [], nextCursor: null });
       const userProjectsOn =
         isUserProjectsConfigured(configCache.getFeatures()) && repo.isAvailable();
+      // Without user projects there is nothing owned or shared: those scopes
+      // answer empty rather than the admin projects the caller did not ask for.
+      if (!userProjectsOn && (scope === 'mine' || scope === 'shared')) {
+        return res.json({ items: [], nextCursor: null });
+      }
       const effectiveScope = userProjectsOn ? scope : 'admin';
       const items = await listProjects(req.user, repo, effectiveScope);
       res.json({ items, nextCursor: null });
@@ -746,10 +751,14 @@ export default function registerProjectRoutes(app) {
         const items = [];
         for (const marker of markers) {
           const chat = await chats.getChat(marker.chatId);
-          // The chat decides; a marker it no longer backs is pruned on the way.
+          // The chat decides; a marker it no longer backs is pruned on the
+          // way, judged again under the chat's lock so a move that is still
+          // settling (or has moved the chat back since) keeps its marker.
           if (!chat || chat.projectId !== req.project.id) {
-            await getProjectRepository()
-              .removeChatMarker(req.project.id, marker.chatId)
+            await chats
+              .unlessInProject(marker.chatId, req.project.id, () =>
+                getProjectRepository().removeChatMarker(req.project.id, marker.chatId)
+              )
               .catch(() => {});
             continue;
           }

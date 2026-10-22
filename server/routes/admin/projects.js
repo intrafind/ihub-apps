@@ -43,6 +43,7 @@ import {
 } from '../../services/projects/projectView.js';
 import {
   addItemSchema,
+  adminProjectCreateSchema,
   adminProjectSchema,
   adminProjectUpdateSchema,
   describeIssues,
@@ -275,7 +276,7 @@ export default function registerAdminProjectsRoutes(app) {
    */
   app.post(route(''), ...gate, contentAdminAuth, async (req, res) => {
     try {
-      const body = parseBody(adminProjectSchema, req, res);
+      const body = parseBody(adminProjectCreateSchema, req, res);
       if (!body) return;
       if (isUserProjectId(body.id) || !isAdminProjectId(body.id)) {
         sendBadRequest(res, 'Admin project ids may not start with "prj_"');
