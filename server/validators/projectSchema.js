@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import { zSafeId } from './common.js';
-import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';
+import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import {
   LINK_MODES,
   MAX_FILES_CEILING,
@@ -57,6 +57,22 @@ export const ITEM_STORAGE = Object.freeze(['text', 'link']);
 const actorSchema = z
   .object({ id: z.string().max(200), name: z.string().max(300).optional() })
   .passthrough();
+
+/**
+ * An item id as the item routes accept it (`isValidId`, the predicate behind
+ * `validateIdForPath`) and as the blob keys need it (no `__`, the separator
+ * of `<project>__<item>__<version>`).
+ */
+const itemIdSchema = zSafeId
+  .min(1)
+  .max(100)
+  .refine(id => isValidId(id) && !id.includes('__'), 'Invalid item id');
+
+/** An admin project id: path-safe, not a user id, and free of the blob separator. */
+const adminProjectIdSchema = zSafeId
+  .min(1)
+  .max(50)
+  .refine(id => !id.includes('__'), 'Invalid project id');
 
 const runRefSchema = z
   .object({
@@ -117,7 +133,7 @@ export const itemTextSchema = z
 /** A stored project item (spec 1 §3). `ref` is validated by the kind, not here. */
 export const projectItemSchema = z
   .object({
-    id: zSafeId.min(1).max(100),
+    id: itemIdSchema,
     kind: zSafeId.min(1).max(50),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH),
     ref: z.record(z.string(), z.unknown()).prefault({}),
@@ -156,7 +172,7 @@ export const projectMemberSchema = z
 export const adminProjectSchema = z
   .object({
     version: z.number().int().positive().prefault(1),
-    id: zSafeId.min(1).max(50),
+    id: adminProjectIdSchema,
     ownership: z.literal('admin').prefault('admin'),
     tier: z.enum(PROJECT_TIERS).prefault('ihub'),
     name: localized(MAX_NAME_LENGTH),
@@ -173,6 +189,44 @@ export const adminProjectSchema = z
   .passthrough()
   .refine(
     project => new Set(project.items.map(item => item.id)).size === project.items.length,
+    'Item ids must be unique within a project'
+  );
+
+/**
+ * An item in `POST /api/admin/projects`: what an admin may say about it. The
+ * rest (`storage`, `status`, `text`, `provenance`, …) is the server's, derived
+ * from the kind when the project is created, never taken from the request.
+ */
+export const adminItemCreateSchema = z
+  .object({
+    id: itemIdSchema.optional(),
+    kind: zSafeId.min(1).max(50),
+    ref: z.record(z.string(), z.unknown()).prefault({}),
+    name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
+    pinned: z.boolean().prefault(false),
+    cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional()
+  })
+  .strict();
+
+/** What `POST /api/admin/projects` accepts: the stored document minus everything the server owns. */
+export const adminProjectCreateSchema = z
+  .object({
+    version: z.number().int().positive().optional(),
+    id: adminProjectIdSchema,
+    tier: z.enum(PROJECT_TIERS).prefault('ihub'),
+    name: localized(MAX_NAME_LENGTH),
+    description: localized(MAX_DESCRIPTION_LENGTH).optional(),
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).prefault(''),
+    enabled: z.boolean().prefault(true),
+    category: z.string().max(100).optional(),
+    tags: z.array(z.string().max(100)).prefault([]),
+    items: z.array(adminItemCreateSchema).max(MAX_FILES_CEILING).prefault([])
+  })
+  .strict()
+  .refine(
+    project =>
+      new Set(project.items.filter(item => item.id).map(item => item.id)).size ===
+      project.items.filter(item => item.id).length,
     'Item ids must be unique within a project'
   );
 

@@ -1264,6 +1264,28 @@ export class ChatRepository {
   }
 
   /**
+   * Run `fn` under the chat's lock unless the chat is in `projectId` right
+   * now. What a project listing prunes a stale chat marker with: a marker
+   * read beside a move is judged again once that move has settled, so the
+   * marker a later move back into the project wrote is never removed on the
+   * strength of an earlier snapshot.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} projectId - The project whose marker is in question.
+   * @param {(chat: Object|null) => Promise<unknown>} fn - Runs while locked.
+   * @returns {Promise<boolean>} Whether `fn` ran.
+   */
+  unlessInProject(chatId, projectId, fn) {
+    if (!this._usable(chatId, 'unlessInProject')) return Promise.resolve(false);
+    return this._withChatLock(chatId, async () => {
+      const chat = await this._readChat(chatId);
+      if (chat && (chat.projectId || null) === projectId) return false;
+      await fn(chat);
+      return true;
+    });
+  }
+
+  /**
    * Release a run's hold on a chat: apply `patch` only while `runId` is still
    * the chat's active run.
    *
