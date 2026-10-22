@@ -45,6 +45,7 @@ import {
   metadata as providerMetadata
 } from '../services/sources/providers/project.js';
 import PromptService from '../services/PromptService.js';
+import { chatPostSchema } from '../validators/index.js';
 
 const ADA = { id: 'user-ada', name: 'Ada', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace', groups: ['authenticated'] };
@@ -359,6 +360,15 @@ describe('scope and planner', () => {
     assert.ok(renderProjectsBlock(cramped).includes('truncated="true"'));
     assert.equal(scopeSummary(cramped).projects[0].cut, 1);
     assert.equal(cramped.tools, true, 'what was cut stays reachable through the tools');
+    // A context project that lost text to the hard limit is not loaded in
+    // full: the plan says so, and the block carries the tool hint.
+    const cappedContext = await planKnowledgeScope(
+      scope.map(entry => ({ ...entry, mode: 'context' })),
+      { model: { contextWindow: 40 }, settings: { loadAllMaxTokens: 50 }, ctx }
+    );
+    assert.equal(cappedContext.projects[0].mode, 'searched');
+    assert.ok(cappedContext.projects[0].cut.length > 0);
+    assert.ok(renderProjectsBlock(cappedContext).includes('tool="knowledge_search"'));
 
     // The hard limit is one limit for the whole scope, not one per project.
     const twice = [
@@ -577,10 +587,34 @@ describe('sources', () => {
       ]
     }));
     const ref = { id: 'itm_page', scope: linked.id };
-    await assert.rejects(
-      providerContent({ ref, user: ADA, format: 'original' }),
-      error => error.status === 409 && error.redirect === '/de/pages/faq'
-    );
+    // A page has no file: preview and download get the text fallback (410),
+    // the card's URL opens the page itself. Never a redirect, which the
+    // XHR clients would follow and show as a broken PDF.
+    for (const format of ['original', 'pdf']) {
+      await assert.rejects(
+        providerContent({ ref, user: ADA, format }),
+        error => error.status === 410 && error.code === 'ORIGINAL_DISCARDED' && !error.redirect
+      );
+    }
+    // The page's own policy applies to the reader of the item: a project is
+    // not a way round `allowedGroups`.
+    configCache.setCacheEntry('config/ui.json', {
+      pages: { faq: { filePath: { en: 'faq.md' }, allowedGroups: ['legal'] } }
+    });
+    try {
+      await assert.rejects(
+        providerContent({ ref, user: ADA, format: 'text' }),
+        error => error.status === 403
+      );
+      const allowed = await providerContent({
+        ref,
+        user: { ...ADA, groups: ['legal'] },
+        format: 'text'
+      });
+      assert.equal(typeof allowed.body, 'string', 'a reader in an allowed group gets the text');
+    } finally {
+      configCache.setCacheEntry('config/ui.json', { pages: {} });
+    }
     configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
     try {
       await assert.rejects(
@@ -603,6 +637,19 @@ describe('sources', () => {
   });
 });
 
+describe('chat request schema', () => {
+  it('keeps the project fields of a chat turn', () => {
+    const parsed = chatPostSchema.body.parse({
+      messages: [],
+      projectId: 'prj_abc',
+      projects: ['faq', 'prj_other']
+    });
+    assert.equal(parsed.projectId, 'prj_abc');
+    assert.deepEqual(parsed.projects, ['faq', 'prj_other']);
+    assert.equal(chatPostSchema.body.parse({ messages: [], projectId: null }).projectId, null);
+  });
+});
+
 describe('prompt injection', () => {
   it('puts the projects block and the instructions into the system prompt', async () => {
     const app = {
@@ -619,6 +666,9 @@ describe('prompt injection', () => {
       null,
       ADA,
       'chat-k1',
+      { en: 'Small', de: 'Klein' },
+      null,
+      null,
       'small'
     );
     const system = messages[0].content;

@@ -114,6 +114,10 @@ import { NotSupportedError } from './errors.js';
  * @property {Document[]} items - The page, in ascending key order.
  * @property {string|null} nextCursor - Cursor for the next page, or null when
  *   this page was the last one.
+ * @property {number} [skipped] - How many documents this page passed over
+ *   because they are present but could not be read (torn, malformed or
+ *   unreadable). Absent when none were. A caller that must know the whole set
+ *   — a sweep deleting what no document names — treats any as incomplete.
  */
 
 /**

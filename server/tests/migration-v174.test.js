@@ -343,6 +343,34 @@ describe('V174 sources_to_projects', () => {
     assert.deepEqual(platform.admin.pages, { apps: true, projects: false });
   });
 
+  it('replaces a project file that is only the shipped default seeded on this start', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'seeded-'));
+    await seed(dir);
+    const shipped = { id: 'faq', name: { en: 'FAQ (shipped)' }, enabled: true, items: [] };
+    const custom = { id: 'ihub-documentation', name: { en: 'Kept by an admin' }, items: [] };
+    await fs.mkdir(path.join(dir, 'projects'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'projects/faq.json'), JSON.stringify(shipped, null, 2));
+    await fs.writeFile(
+      path.join(dir, 'projects/ihub-documentation.json'),
+      JSON.stringify(custom, null, 2)
+    );
+    const ctx = makeCtx(dir);
+    ctx.readDefaultJson = async rel => {
+      if (rel === 'projects/faq.json') return shipped;
+      if (rel === 'projects/ihub-documentation.json') return { id: 'ihub-documentation' };
+      throw new Error('no default');
+    };
+    await up(ctx);
+    // The default copy wrote faq.json moments before the migration; the
+    // admin's source of that id is what the project must hold.
+    const faq = await read(dir, 'projects/faq.json');
+    assert.equal(faq.name.en, 'FAQ');
+    assert.equal(faq.items.length, 1);
+    assert.equal(faq.items[0].provenance.origin, 'migrated');
+    // A project file that differs from the shipped default is an admin's.
+    assert.deepEqual(await read(dir, 'projects/ihub-documentation.json'), custom);
+  });
+
   it('is idempotent', async () => {
     const dir = await fs.mkdtemp(path.join(baseDir, 'twice-'));
     await seed(dir);

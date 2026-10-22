@@ -782,6 +782,8 @@ export class ConfigStore {
    * @param {string} nsOrDir - Namespace name, or a directory under `contents/`
    * @param {Object} [options]
    * @param {string} [options.prefix] - Keep only keys starting with this
+   * @param {boolean} [options.strict=false] - Throw instead of skipping when
+   *   a document cannot be read or the namespace cannot be listed
    * @returns {Promise<Array<{key: string, path: string, data: any}>>} Documents
    *   in ascending key order
    */
@@ -799,6 +801,12 @@ export class ConfigStore {
             limit: LIST_PAGE_SIZE,
             cursor: cursor || undefined
           });
+          // `strict`: a document the store passed over makes the set short.
+          if (strict && page.skipped > 0) {
+            throw new Error(
+              `${page.skipped} configuration document(s) in ${target.dir} could not be read`
+            );
+          }
           for (const item of page.items) {
             items.push({
               key: item.key,

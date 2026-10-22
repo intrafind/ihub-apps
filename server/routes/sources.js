@@ -19,7 +19,6 @@ import { authRequired } from '../middleware/authRequired.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { sendBadRequest, sendErrorResponse } from '../utils/responseHelpers.js';
 import { getSourceProvider, hasSourceProvider } from '../services/sources/providers.js';
-import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -105,14 +104,6 @@ async function resolve(req, res) {
 
 /** Answer a provider's failure with its status (a plain error is a logged 500). */
 function sendFailure(res, error, what) {
-  // A document that lives at its source (a project's link item) is opened
-  // there: a web page by its URL, an iHub page by its path on this server.
-  if (typeof error?.redirect === 'string') {
-    if (/^https?:\/\//i.test(error.redirect)) return res.redirect(302, error.redirect);
-    if (error.redirect.startsWith('/') && !error.redirect.startsWith('//')) {
-      return res.redirect(302, buildServerPath(error.redirect));
-    }
-  }
   const status = Number.isInteger(error?.status) ? error.status : 500;
   if (status >= 500) logger.error(`Source ${what} failed`, { component: 'sources', error });
   return sendErrorResponse(res, status, error?.message || `Source ${what} failed`);

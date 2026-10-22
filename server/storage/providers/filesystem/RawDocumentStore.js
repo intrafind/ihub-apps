@@ -408,7 +408,8 @@ export class RawDocumentStore extends DocumentStore {
    *
    * Files that do not parse are skipped rather than surfaced as empty
    * documents, matching `get()`: a listing must not invent a document whose
-   * body nobody can read.
+   * body nobody can read. The page counts them in `skipped`, so a caller that
+   * must know the whole set can tell a short listing from a complete one.
    *
    * @param {string} ns - Raw namespace
    * @param {Object} [opts]
@@ -417,7 +418,7 @@ export class RawDocumentStore extends DocumentStore {
    * @param {number} [opts.limit=100] - Page size, clamped to 1..1000
    * @param {string} [opts.cursor] - Opaque cursor from a previous page
    * @param {boolean} [opts.includeData=true] - False omits `data` and keeps the metadata
-   * @returns {Promise<{items: Object[], nextCursor: string|null}>}
+   * @returns {Promise<{items: Object[], nextCursor: string|null, skipped?: number}>}
    * @throws {NotSupportedError} When an owner filter is asked for
    * @throws {StorageError} Code `INVALID_CURSOR` when `cursor` cannot be decoded
    */
@@ -438,20 +439,28 @@ export class RawDocumentStore extends DocumentStore {
     }
 
     const items = [];
+    let skipped = 0;
     let index = 0;
     for (; index < keys.length && items.length < pageSize; index++) {
       const key = keys[index];
       const file = await this._readFile(ns, key);
-      // Deleted between the readdir and here, or not readable at all.
-      if (!file) continue;
+      // Deleted between the readdir and here, or not readable at all. Only
+      // the second is counted: a deleted document is not missing from the set.
+      if (!file) {
+        if (await this.exists(ns, key)) skipped += 1;
+        continue;
+      }
       const parsed = this._parse(ns, key, file.bytes);
-      if (parsed === undefined) continue;
+      if (parsed === undefined) {
+        skipped += 1;
+        continue;
+      }
       items.push(this._toDocument(ns, key, file, parsed, includeData !== false));
     }
 
     const nextCursor =
       index < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
-    return { items, nextCursor };
+    return { items, nextCursor, ...(skipped > 0 ? { skipped } : {}) };
   }
 
   /**

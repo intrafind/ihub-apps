@@ -132,6 +132,18 @@ describe('user projects', () => {
       }
     );
     assert.deepEqual(narrowed.removed, ['group:legal']);
+    assert.deepEqual(narrowed.changed, ['user:u-grace'], 'Grace went from editor to user');
+
+    // Same member, another role: nothing added or removed, but the audit
+    // trail must see the permission change.
+    const promoted = await repo.setMembers(
+      project.id,
+      [{ type: 'user', id: GRACE.id, role: 'editor' }],
+      { actor: ADA }
+    );
+    assert.deepEqual(promoted.added, []);
+    assert.deepEqual(promoted.removed, []);
+    assert.deepEqual(promoted.changed, ['user:u-grace']);
     assert.equal(
       (await repo.listSharedWith(['group:legal'])).some(e => e.id === project.id),
       false
@@ -360,6 +372,8 @@ describe('service rules', () => {
       'iFinder kinds are off without the integration'
     );
 
+    const stale = '2020-01-01T00:00:00.000Z';
+    await repo.mutate(project.id, current => current, { now: stale });
     const renamed = await service.updateItem(
       project.id,
       item.id,
@@ -368,12 +382,47 @@ describe('service rules', () => {
     );
     assert.equal(renamed.item.name, 'Doc');
     assert.equal(renamed.item.pinned, true);
+    // Renaming or pinning is using the project: retention must see it.
+    assert.ok(renamed.project.lastActivityAt > stale);
     await assert.rejects(
       service.updateItem(project.id, 'itm_missing', { name: 'x' }, { user: ADA }),
       error => error.code === 'ITEM_NOT_FOUND'
     );
     const after = await service.removeItem(project.id, item.id, { user: ADA });
     assert.deepEqual(after.items, []);
+  });
+
+  it('refuses a switched-off item kind in a new admin project', async () => {
+    await assert.rejects(
+      service.createAdminProject(
+        {
+          id: 'adm-kinds',
+          name: { en: 'Kinds' },
+          items: [{ kind: 'ifinder-document', ref: { documentId: 'd1' } }]
+        },
+        { actor: ADA }
+      ),
+      error => error.code === 'KIND_DISABLED'
+    );
+    assert.equal(await repo.get('adm-kinds'), null);
+  });
+
+  it('refreshes activity for chat turns, at most once per throttle window', async () => {
+    const project = await service.createUserProject({ owner: ADA, content: { name: 'Busy' } });
+    const stale = '2020-01-01T00:00:00.000Z';
+    await repo.mutate(project.id, current => current, { now: stale });
+    assert.equal(await service.noteChatTurn(project.id), true);
+    const touched = (await repo.get(project.id)).lastActivityAt;
+    assert.ok(touched > stale);
+    await repo.mutate(project.id, current => current, { now: stale });
+    // The next turn inside the window is not written again.
+    assert.equal(await service.noteChatTurn(project.id), false);
+    assert.equal((await repo.get(project.id)).lastActivityAt, stale);
+    assert.equal(
+      await service.noteChatTurn('prj_missing'),
+      false,
+      'a missing project is not touched'
+    );
   });
 
   it('caps items per project', async () => {

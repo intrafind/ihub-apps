@@ -32,6 +32,8 @@ import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 
 const COMPONENT = 'ProjectService';
+/** How often one project's activity is refreshed by chat turns at most. */
+export const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 
 export { ProjectError, STATUS_BY_CODE } from './projectErrors.js';
 
@@ -87,6 +89,8 @@ export class ProjectService {
     this.onDeleted = [];
     /** Hooks called with `(projectId, itemId, item)` after an item's text is gone or replaced. */
     this.onItemRemoved = [];
+    /** projectId -> when a chat turn last refreshed its activity. */
+    this.activityTouched = new Map();
   }
 
   settings() {
@@ -150,8 +154,9 @@ export class ProjectService {
         limit: limits.maxFiles
       });
     }
-    for (const item of project.items || [])
-      this._checkKindRef(item.kind, item.ref, { admin: true });
+    // A new project is made of new items: a kind that is switched off is
+    // refused here exactly as the item endpoints refuse it.
+    for (const item of project.items || []) this._checkKindRef(item.kind, item.ref);
     try {
       return await this.repository.createAdmin(project, { actor: actorOf(actor) });
     } catch (error) {
@@ -188,7 +193,7 @@ export class ProjectService {
           }
           return changed ? project : null;
         },
-        { actor: actorOf(actor), authorize, touchActivity: false }
+        { actor: actorOf(actor), authorize, touchActivity: true }
       );
     } catch (error) {
       throw translateError(error);
@@ -416,7 +421,10 @@ export class ProjectService {
    * @param {string} projectId
    * @param {string} itemId
    * @param {{user: Object, authorize?: Function, wait?: boolean}} options
-   * @returns {Promise<{project: Object, item: Object}>}
+   * @returns {Promise<{project: Object, item: Object}>} Without `wait`, the
+   *   item as reserved — carrying `refreshingAt` — while the job runs
+   * @throws {ProjectError} `PROJECT_MISMATCH` while the item is being
+   *   processed, a refresh included
    */
   async refreshItem(projectId, itemId, { user, authorize, wait = false }) {
     if (!this.ingest) {
@@ -441,10 +449,16 @@ export class ProjectService {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
           }
           this._checkKindRef(item.kind, item.ref, { admin: true });
-          // The old snapshot stays readable until the new one is stored:
-          // the status is left alone, the pipeline marks `refreshingAt`.
+          // The old snapshot stays readable until the new one is stored, so
+          // the status is left alone. `refreshingAt` is reserved here, under
+          // the project's lock and before the job is queued: a second refresh
+          // is refused while it is set, so two queued downloads can never
+          // race to install an older snapshot over a newer one. The job
+          // clears it when it finishes, fails or finds nothing changed.
+          const now = nowIso();
           item.error = null;
-          item.updatedAt = nowIso();
+          item.refreshingAt = now;
+          item.updatedAt = now;
           target = { item, kind };
           return project;
         },
@@ -505,7 +519,9 @@ export class ProjectService {
           item.updatedAt = nowIso();
           return project;
         },
-        { actor: actorOf(user), authorize, touchActivity: false }
+        // Someone renaming or pinning a document is using the project:
+        // retention must not count the project as abandoned.
+        { actor: actorOf(user), authorize, touchActivity: true }
       );
     } catch (error) {
       throw translateError(error);
@@ -671,6 +687,26 @@ export class ProjectService {
       'project activity',
       { component: COMPONENT, projectId }
     );
+  }
+
+  /**
+   * A chat turn ran inside the project: refresh its activity, at most once
+   * per {@link ACTIVITY_THROTTLE_MS} per project so a busy chat does not
+   * rewrite the project document on every message. Never throws; the turn
+   * must not fail because the project could not be touched.
+   *
+   * @param {string} projectId
+   * @returns {Promise<boolean>} Whether the project was touched.
+   */
+  async noteChatTurn(projectId) {
+    if (!projectId || !this.repository.isAvailable()) return false;
+    const last = this.activityTouched.get(projectId) || 0;
+    const at = Date.now();
+    if (at - last < ACTIVITY_THROTTLE_MS) return false;
+    this.activityTouched.set(projectId, at);
+    const touched = await this.touchActivity(projectId);
+    if (!touched) this.activityTouched.delete(projectId);
+    return Boolean(touched);
   }
 }
 
