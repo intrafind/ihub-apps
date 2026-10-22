@@ -345,15 +345,8 @@ export default function registerAdminProjectsRoutes(app) {
       }
       // `import` and `managedFile` point the startup importer at a file it
       // reads into the project and then deletes: only the sources migration
-      // and the shipped defaults may write them, never an API caller.
-      if (body.items.some(item => item.import !== undefined || item.managedFile !== undefined)) {
-        return sendErrorResponse(
-          res,
-          400,
-          'Item fields "import" and "managedFile" are set by the server only',
-          { details: { code: 'SERVER_ONLY_FIELDS' } }
-        );
-      }
+      // and the shipped defaults may write them. The strict creation schema
+      // refuses them (and every other stored-only field) for API callers.
       const project = await getProjectService().createAdminProject(body, { actor: req.user });
       logAudit({
         req,

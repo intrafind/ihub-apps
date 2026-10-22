@@ -574,16 +574,17 @@ describe('admin projects', () => {
       provenance: { origin: 'uploaded' },
       ...extra
     });
-    for (const extra of [
-      { import: { file: 'config/platform.json' } },
-      { managedFile: 'config/platform.json' }
+    for (const [field, extra] of [
+      ['import', { import: { file: 'config/platform.json' } }],
+      ['managedFile', { managedFile: 'config/platform.json' }]
     ]) {
       const refused = await drive(route.adminCreate, {
         user: EDITOR,
         body: { id: 'smuggled', name: { en: 'Smuggled' }, items: [item(extra)] }
       });
       assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
-      assert.equal(refused.body.details.code, 'SERVER_ONLY_FIELDS');
+      // The strict creation schema names the field it refuses.
+      assert.match(JSON.stringify(refused.body), new RegExp(field));
     }
     assert.equal(await getProjectRepository().get('smuggled'), null);
   });
