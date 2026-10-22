@@ -86,8 +86,9 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
    * @param {Object} project
    * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
    * @param {{itemIds?: string[]}} [options]
-   * @returns {Promise<{texts: Array<{item: Object, text: string, truncated: boolean}>, unavailable: Array}>}
-   *   `truncated`: the source handed over only the start of the document
+   * @returns {Promise<{texts: Array<{item: Object, text: string, truncated: boolean,
+   *   failed: string[]}>, unavailable: Array}>} `truncated`: the source handed over only
+   *   the start of the document; `failed`: documents of an iFinder search it could not fetch
    */
   async texts(project, ctx, { itemIds } = {}) {
     const wanted = itemIds ? new Set(itemIds) : null;
@@ -105,8 +106,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         continue;
       }
       try {
-        const { text, truncated } = await getItemText(project, item, ctx);
-        texts.push({ item, text, truncated: truncated === true });
+        const { text, truncated, failed = [] } = await getItemText(project, item, ctx);
+        texts.push({ item, text, truncated: truncated === true, failed });
       } catch (error) {
         unavailable.push({
           document: item.id,
@@ -175,6 +176,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
       name: byId.get(hit.docId)?.name || ''
     }));
     const partial = texts.filter(entry => entry.truncated).map(entry => entry.item.id);
+    const missing = texts.filter(entry => entry.failed.length).map(entry => entry.item.id);
     return {
       hits,
       unavailable,
@@ -184,6 +186,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         documents: texts.length,
         // Searched as far as their source handed them over, not to the end.
         ...(partial.length ? { truncatedDocuments: partial } : {}),
+        // Searched without the documents their source could not fetch.
+        ...(missing.length ? { incompleteDocuments: missing } : {}),
         totalSections: index.sections.length,
         totalTokens: index.tokens,
         returnedTokens: Math.round(hits.reduce((sum, hit) => sum + hit.chars, 0) / 4)
@@ -209,7 +213,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         projectId: project.id,
         itemId
       });
-    const { text, truncated } = await getItemText(project, item, ctx);
+    const { text, truncated, failed = [] } = await getItemText(project, item, ctx);
     const selected = selectContent(text, {
       section,
       name: item.name,
@@ -220,23 +224,29 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return {
       doc: docOf(project, item),
       text: selected.content,
-      // The source handed over only the start of the document: even a
-      // `full` read is not the whole of it, and no section reaches the rest.
-      retrieval: truncated ? { ...selected.retrieval, sourceTruncated: true } : selected.retrieval
+      // The source handed over only the start of the document, or lacks
+      // documents it could not fetch: even a `full` read is not the whole of
+      // it, and no section reaches the rest.
+      retrieval: {
+        ...selected.retrieval,
+        ...(truncated ? { sourceTruncated: true } : {}),
+        ...(failed.length ? { sourceFailed: failed.length } : {})
+      }
     };
   }
 
   async loadAll(project, ctx, { itemIds } = {}) {
     const { texts, unavailable } = await this.texts(project, ctx, { itemIds });
     let tokens = 0;
-    const docs = texts.map(({ item, text, truncated }) => {
+    const docs = texts.map(({ item, text, truncated, failed }) => {
       const stats = getContentStats(text);
       tokens += stats.tokens;
       return {
         doc: docOf(project, item),
         text,
         tokens: stats.tokens,
-        ...(truncated ? { truncated: true, sourceTruncated: true } : {})
+        ...(truncated ? { truncated: true, sourceTruncated: true } : {}),
+        ...(failed.length ? { sourceFailed: failed.length } : {})
       };
     });
     return { docs, unavailable, tokens };

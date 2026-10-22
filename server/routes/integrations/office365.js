@@ -18,27 +18,12 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
+import { isValidGraphId } from '../../services/integrations/graphIds.js';
 
 const router = express.Router();
 
 /** Picker source id → the provider's `sources` toggle that enables it. */
 const SOURCE_SETTINGS = { personal: 'personalDrive', sharepoint: 'followedSites', teams: 'teams' };
-
-/**
- * Validate an identifier used in Office 365 / Microsoft Graph URLs.
- * Restricts characters and length to reduce risk when interpolated into URLs.
- *
- * NOTE: Adjust the regex if your environment uses a wider ID character set.
- */
-function isValidGraphId(id) {
-  if (typeof id !== 'string') return false;
-  const trimmed = id.trim();
-  if (!trimmed || trimmed.length > 512) return false;
-  // Allow common safe characters; disallow whitespace and URL control chars.
-  // `!` is part of real Graph IDs: business drive IDs look like `b!Xk3…`,
-  // consumer item IDs like `ABC123!105`. It is a valid path character.
-  return /^[A-Za-z0-9._!\-]+$/.test(trimmed);
-}
 
 // Gate all Office 365 routes behind the integrations feature flag
 router.use(requireFeature('integrations'));

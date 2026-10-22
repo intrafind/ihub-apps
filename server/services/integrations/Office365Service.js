@@ -4,6 +4,8 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { httpFetch } from '../../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
+import { isValidGraphId } from './graphIds.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
@@ -14,6 +16,9 @@ import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshEr
  * Office 365 Service for Microsoft 365 file access integration
  * Provides OAuth 2.0 authentication with PKCE, secure token storage, and Microsoft Graph API access
  */
+/** Redirects a file download may follow. */
+const MAX_DOWNLOAD_REDIRECTS = 5;
+
 class Office365Service extends OAuthIntegrationBase {
   constructor() {
     super({
@@ -761,6 +766,14 @@ class Office365Service extends OAuthIntegrationBase {
    */
   async downloadFile(userId, fileId, driveId = null, providerId, { signal } = {}) {
     try {
+      // The ids go into the Graph path: one safe segment each, so neither can
+      // turn the metadata request into a read of some file's content.
+      if (!isValidGraphId(fileId)) {
+        throw new Error('fileId contains invalid characters or is too long');
+      }
+      if (driveId && !isValidGraphId(driveId)) {
+        throw new Error('driveId contains invalid characters or is too long');
+      }
       // Get file metadata first
       const endpoint = driveId ? `/drives/${driveId}/items/${fileId}` : `/me/drive/items/${fileId}`;
       const fileInfo = await this.makeApiRequest(endpoint, 'GET', null, userId, providerId, 0, {
@@ -779,12 +792,7 @@ class Office365Service extends OAuthIntegrationBase {
 
       // Download file content
       const tokens = await this.getUserTokens(userId, providerId);
-      const response = await httpFetch(downloadUrl, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`
-        },
-        ...(signal ? { signal } : {})
-      });
+      const response = await this._fetchDownload(downloadUrl, tokens, signal);
 
       if (!response.ok) {
         throw new Error(`Failed to download file: ${response.statusText}`);
@@ -809,6 +817,60 @@ class Office365Service extends OAuthIntegrationBase {
         error
       });
       throw error;
+    }
+  }
+
+  /**
+   * The check every hop of a download URL passes (the SSRF guard); a seam
+   * for tests.
+   *
+   * @param {URL} url
+   * @returns {Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
+   */
+  _checkDownloadTarget(url) {
+    return assertPublicTarget(url);
+  }
+
+  /**
+   * Fetch the `@microsoft.graph.downloadUrl` of an item. The URL comes from a
+   * Graph response, so it is treated as untrusted: every hop, redirects
+   * included, must pass the SSRF guard (DNS pinned to the checked
+   * addresses), and the user's bearer token only goes to the Graph origin.
+   * Graph's download URLs are pre-authenticated and need no token.
+   *
+   * @param {string} downloadUrl
+   * @param {{accessToken: string}} tokens
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<Response>} The final, non-redirect response
+   */
+  async _fetchDownload(downloadUrl, tokens, signal) {
+    const graphOrigin = new URL(this.graphApiUrl).origin;
+    let hop = new URL(downloadUrl);
+    for (let redirects = 0; ; redirects += 1) {
+      if (redirects > MAX_DOWNLOAD_REDIRECTS) {
+        throw new Error('Too many redirects while downloading the file');
+      }
+      if (hop.protocol !== 'https:' && hop.protocol !== 'http:') {
+        throw new Error(`Unsupported download URL scheme ${hop.protocol}`);
+      }
+      const target = await this._checkDownloadTarget(hop);
+      if (!target?.ok) {
+        throw new Error(`The download URL is not allowed (${target?.reason || 'blocked'})`);
+      }
+      const response = await httpFetch(hop.href, {
+        headers:
+          hop.origin === graphOrigin ? { Authorization: `Bearer ${tokens.accessToken}` } : {},
+        redirect: 'manual',
+        ...(target.addresses?.length ? { lookup: createPinnedLookup(target.addresses) } : {}),
+        ...(signal ? { signal } : {})
+      });
+      const location = response.headers.get('location');
+      if (response.status >= 300 && response.status < 400 && location) {
+        response.body?.destroy?.();
+        hop = new URL(location, hop);
+        continue;
+      }
+      return response;
     }
   }
 }
