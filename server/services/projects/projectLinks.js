@@ -78,6 +78,35 @@ function collectNodeLinks(nodes, result, depth) {
 }
 
 /**
+ * Every object of a workflow that carries a `projects` list: the workflow,
+ * the config of each project-aware node (inline loop bodies followed) and a
+ * planner's task template. The same places {@link findDependencies} reads, as
+ * the objects themselves, for callers that rewrite the lists.
+ *
+ * @param {Object} workflow
+ * @returns {Object[]}
+ */
+export function workflowLinkOwners(workflow) {
+  const owners = [workflow];
+  const walk = (nodes, depth) => {
+    if (!Array.isArray(nodes) || depth > MAX_BODY_DEPTH) return;
+    for (const node of nodes) {
+      if (node?.type === 'loop') walk(node.config?.body, depth + 1);
+      if (!PROJECT_NODE_TYPES.includes(node?.type)) continue;
+      if (node.config && typeof node.config === 'object') {
+        owners.push(node.config);
+        const template = node.config.taskTemplate;
+        if (node.type === 'planner' && template && typeof template === 'object') {
+          owners.push(template);
+        }
+      }
+    }
+  };
+  walk(workflow?.nodes, 0);
+  return owners;
+}
+
+/**
  * The links of a workflow: its own list plus every project node's, the
  * steps of inline loop bodies included. A planner's `taskTemplate.projects`
  * counts as its node's links: the workers it materializes at run time carry

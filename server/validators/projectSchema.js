@@ -310,6 +310,24 @@ export const itemUpdateSchema = z
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
 
+/** What `POST /api/admin/projects/:id/items/transfer` accepts. */
+export const itemTransferSchema = z
+  .object({
+    itemIds: z.array(zSafeId.min(1).max(100)).min(1).max(MAX_FILES_CEILING),
+    targetProjectId: zSafeId.min(1).max(100),
+    mode: z.enum(['copy', 'move']).prefault('move')
+  })
+  .strict();
+
+/** What `POST /api/admin/projects/_merge` accepts. */
+export const projectMergeSchema = z
+  .object({
+    sourceIds: z.array(zSafeId.min(1).max(50)).min(1).max(100),
+    targetId: zSafeId.min(1).max(50),
+    deleteSources: z.boolean().prefault(false)
+  })
+  .strict();
+
 /** What `PUT /api/projects/:id/items/:itemId/text` accepts. */
 export const itemTextUpdateSchema = z
   .object({

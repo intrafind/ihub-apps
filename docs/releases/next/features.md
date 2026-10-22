@@ -35,6 +35,12 @@ otherwise. The chat shows which happened.
   (`projects.scan`, `none` or a scanner command such as `clamdscan --no-summary --fdpass {path}`).
 - `GET /api/admin/projects/_tokens` reports the size of each project for the app editor;
   `POST /api/admin/projects/:id/test` reads every item the way a chat would.
+- Bring projects together: **move or copy items** into another project from the items table, or
+  **merge** several projects on the list. A merge moves every item into the project you keep,
+  re-points the apps, workflows and agents that linked the others and can delete the emptied
+  projects. This is how the one-item projects that the sources migration made of a website or a
+  department become one project again. Instructions of merged projects are not carried over. See
+  `docs/projects.md`, *Moving, copying and merging*.
 - Workflows iterate and write back: the steps `project-items` (the documents of a project as a
   list for a loop), `project-read` (one document's text without a tool call) and `project-write`
   (store a text the run produced, with the run as its provenance). A write into an admin project

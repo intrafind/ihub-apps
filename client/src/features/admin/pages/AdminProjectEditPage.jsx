@@ -31,6 +31,7 @@ import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import ProjectTestResults from '../components/ProjectTestResults';
+import TransferItemsDialog from '../components/TransferItemsDialog';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useAdminProject } from '../hooks/useAdminProject';
 import {
@@ -104,6 +105,9 @@ function AdminProjectEditPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState(() => new Set());
+  // The items a move or copy dialog is open for, and its starting mode.
+  const [transfer, setTransfer] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
 
@@ -238,6 +242,11 @@ function AdminProjectEditPage() {
         prev ? { ...prev, items: (prev.items || []).filter(entry => entry.id !== item.id) } : prev
       );
     });
+  };
+
+  const handleTransferDone = () => {
+    setSelectedItemIds(new Set());
+    void reload();
   };
 
   const handleTest = async () => {
@@ -552,15 +561,60 @@ function AdminProjectEditPage() {
                 )}
               </p>
             ) : (
-              <ProjectItemsTable
-                items={project?.items || []}
-                kinds={kinds}
-                busyItemId={busyItemId}
-                onTogglePinned={handleTogglePinned}
-                onPreview={setPreviewItem}
-                onRefresh={handleRefresh}
-                onRemove={setRemoveItem}
-              />
+              <>
+                {selectedItemIds.size > 0 && (
+                  <div
+                    data-testid="item-selection-bar"
+                    className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                      {t('admin.projects.items.selectedCount', '{{count}} items selected', {
+                        count: selectedItemIds.size
+                      })}
+                    </span>
+                    <div className="flex gap-2">
+                      {['move', 'copy'].map(mode => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() =>
+                            setTransfer({
+                              mode,
+                              items: (project?.items || []).filter(item =>
+                                selectedItemIds.has(item.id)
+                              )
+                            })
+                          }
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                        >
+                          {mode === 'move'
+                            ? t('admin.projects.items.moveSelected', 'Move to…')
+                            : t('admin.projects.items.copySelected', 'Copy to…')}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItemIds(new Set())}
+                        className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                      >
+                        {t('common.clearSelection', 'Clear')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <ProjectItemsTable
+                  items={project?.items || []}
+                  kinds={kinds}
+                  busyItemId={busyItemId}
+                  selectedIds={selectedItemIds}
+                  onSelectionChange={setSelectedItemIds}
+                  onTogglePinned={handleTogglePinned}
+                  onPreview={setPreviewItem}
+                  onRefresh={handleRefresh}
+                  onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
+                  onRemove={setRemoveItem}
+                />
+              </>
             )}
           </section>
         </div>
@@ -591,6 +645,15 @@ function AdminProjectEditPage() {
             }}
             errorMessage={adminErrorMessage}
           />
+          {transfer && (
+            <TransferItemsDialog
+              project={project}
+              items={transfer.items}
+              initialMode={transfer.mode}
+              onClose={() => setTransfer(null)}
+              onDone={handleTransferDone}
+            />
+          )}
           <ChangeHistoryDrawer
             isOpen={historyOpen}
             onClose={() => setHistoryOpen(false)}

@@ -125,6 +125,44 @@ switch `admin.pages.projects`; content admins and full admins may use it.
 A disabled project is skipped by everything that links it. A project that something still links
 cannot be deleted: the dialog lists the apps, workflows and agents to change first.
 
+### Moving, copying and merging
+
+Projects that belong together are often split: the sources migration made one project per source,
+so a website that was five sources is five projects with one item each. Two tools bring them
+together.
+
+**Move or copy items.** Tick items in a project's items table and choose **Move to…** or
+**Copy to…**, or use **Move or copy to…** in a row's menu. Pick the target project and confirm.
+
+- A move leaves the source and arrives in the target; a copy leaves the source as it is.
+- Stored text is encrypted per project and item, so the text is decrypted and encrypted again under
+  the target with a new key. The kind, reference, pin, status and the original file's details come
+  along, and the item records where it came from (`provenance.transferredFrom`).
+- Items go one at a time. One that is still **Waiting** or **Extracting**, or **Failed**, cannot go
+  yet (`ITEM_NOT_READY`); one that would exceed the target's limits is refused (`QUOTA_*`). The
+  dialog lists these and the other items still go.
+- A moved item keeps its id unless the target already has an item with that id.
+- Items move between admin projects only, not into or out of a user project.
+- A copy of the shipped documentation is an independent document; a moved one keeps syncing with
+  the shipped file.
+
+**Merge projects.** Select two or more projects on the list and choose **Merge…**. Choose the
+project that stays; the dialog shows how many items move and how many apps, workflows and agents
+link the other projects.
+
+1. Every item of the other projects moves into the kept project.
+2. Apps, workflows (steps, loop bodies and planner task templates included) and agents that linked
+   a merged project link the kept project instead. When one list linked several of them, it keeps
+   one link, at the position of the first. The link's mode is the one they shared, or `auto` when
+   they differed, and it may write when any of them could.
+3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
+
+A project whose items did not all move (an item still being processed, a limit) is left alone:
+it keeps its remaining items and its links, nothing is deleted, and the result says why. Run the
+merge again when the cause is gone. The **instructions** of a merged project are not carried over;
+the dialog warns when one has any. Each merged and changed project has an entry in its change
+history, and the links that changed are in the audit log summary.
+
 The edit page warns while uploads are enabled and no malware scanner is configured
 (`platform.projects.scan`).
 
@@ -524,6 +562,11 @@ and `V175__support_bot_knowledge_prompt`):
 Back up `contents/` before upgrading; the migration is forward-only. Details: the breaking-change
 note "Sources are now Projects" in the release notes.
 
+Every source becomes a project of its own, also when several sources belonged together (the pages
+of one website, the documents of one department). Bring them together afterwards with
+[Moving, copying and merging](#moving-copying-and-merging): merge the projects, or move the items
+you want into one project.
+
 ## API
 
 All paths are relative to the server's base path. Project errors carry their code in
@@ -604,6 +647,7 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `GET`    | `/api/admin/projects/_tokens`               | Size of each admin project and the budgets, for the app editor.                             |
 | `GET`    | `/api/admin/projects/_dependencies/:id`     | Apps, workflows and agents that link the project.                                           |
 | `POST`   | `/api/admin/projects/_toggle`               | Enable or disable projects `{ ids, enabled }`.                                              |
+| `POST`   | `/api/admin/projects/_merge`                | Merge projects `{ sourceIds, targetId, deleteSources? }`: moves the items, re-points the links, optionally deletes the emptied projects. Answers `{ target, sources: [{ id, moved, failed, relinked, merged, deleted }] }`. |
 | `POST`   | `/api/admin/projects`                       | Create an admin project.                                                                    |
 | `GET`    | `/api/admin/projects/:id`                   | One project (a user project for full admins).                                               |
 | `PUT`    | `/api/admin/projects/:id`                   | Replace the settings; items change through the item routes.                                 |
@@ -612,6 +656,7 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `POST`   | `/api/admin/projects/:id/items`             | Add an item, as in the user API.                                                            |
 | `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`.                                                                    |
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
+| `POST`   | `/api/admin/projects/:id/items/transfer`    | Copy or move items into another admin project `{ itemIds, targetProjectId, mode: "copy" \| "move" }` (default `move`). Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
 | `POST`   | `/api/admin/projects/:id/items/:itemId/refresh` | Refresh an item.                                                                        |
 | `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |

@@ -3838,7 +3838,10 @@
         "removeConfirm": "Remove \"{{name}}\" from the project?",
         "actions": {
           "remove": "Remove item"
-        }
+        },
+        "selectedCount": "{{count}} items selected",
+        "moveSelected": "Move to…",
+        "copySelected": "Copy to…"
       },
       "unsaved": {
         "title": "Unsaved changes",
@@ -3882,6 +3885,40 @@
         "everyRequest": "sent with every request",
         "searched": "searched, up to ~{{tokens}} per call",
         "largeContextHint": "This project is larger than the ~{{budget}} tokens loaded into a prompt. In \"always in the prompt\" mode it fills the context window of every request; \"auto\" searches it instead."
+      },
+      "mergeSelected": "Merge…",
+      "mergeHint": "Move the items of the selected projects into one of them",
+      "transfer": {
+        "title": "Move or copy items",
+        "subtitle": "{{count}} items of \"{{project}}\"",
+        "mode": "What to do",
+        "move": "Move",
+        "moveHint": "The items leave this project and are in the other one.",
+        "copy": "Copy",
+        "copyHint": "The items stay here and the other project gets its own copy.",
+        "target": "Target project",
+        "chooseTarget": "Choose a project…",
+        "noTargets": "There is no other project yet. Create one first.",
+        "confirmMove": "Move items",
+        "confirmCopy": "Copy items",
+        "resultTitle": "Some items could not be transferred",
+        "resultSummary": "{{done}} of {{total}} items went to \"{{target}}\". The others stay where they are."
+      },
+      "merge": {
+        "title": "Merge projects",
+        "intro": "The items of the other projects move into the one you keep. Apps, workflows and agents that linked them link the kept project instead.",
+        "keep": "Project to keep",
+        "summary": "{{items}} items move from {{projects}} projects into \"{{target}}\".",
+        "dependents": "{{count}} apps, workflows or agents will link the kept project instead.",
+        "instructionsWarning": "Instructions are not carried over. These projects have some: {{names}}.",
+        "deleteSources": "Delete the emptied projects",
+        "deleteHint": "Only a project whose items all moved is deleted.",
+        "confirm": "Merge projects",
+        "resultTitle": "Merge finished",
+        "moved": "{{count}} items moved",
+        "deleted": "deleted",
+        "relinked": "{{count}} links updated",
+        "kept": "Kept with its links, because not every item could move:"
       }
     }
   },
@@ -6290,7 +6327,8 @@
         "refresh": "Refresh",
         "remove": "Remove item",
         "rename": "Rename",
-        "retry": "Retry"
+        "retry": "Retry",
+        "transfer": "Move or copy to…"
       },
       "add": "Add documents",
       "columns": {
@@ -6325,7 +6363,9 @@
         "staleNewer": "Newer version at the source"
       },
       "title": "Documents",
-      "tokens": "~{{tokens}} tokens"
+      "tokens": "~{{tokens}} tokens",
+      "selectAll": "Select all items",
+      "selectItem": "Select {{name}}"
     },
     "list": {
       "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",
