@@ -667,7 +667,8 @@ describe('sources', () => {
     const item = textProject.items[0];
     const input = projectSource(textProject, item, { snippet: 'x' });
     const source = normalizeSource(input);
-    assert.equal(source.id, 'project:itm_contract');
+    assert.equal(source.id, `project:${textProject.id}:itm_contract`);
+    assert.deepEqual(normalizeSource(source), source, 'normalizing again keeps the identity');
     assert.equal(source.kind, 'document');
     assert.equal(source.private, true);
     assert.equal(source.site, 'Case 2026-114');
@@ -686,6 +687,31 @@ describe('sources', () => {
       normalizeSource({ ...input, provenance: { origin: 'stolen' } }).provenance,
       undefined
     );
+  });
+
+  it('keeps items of two projects with the same item id apart', () => {
+    const item = { ...textProject.items[1] };
+    const policyA = projectSource({ id: 'prj_admin_a', name: 'Handbook A' }, item);
+    const policyB = projectSource({ id: 'prj_admin_b', name: 'Handbook B' }, item);
+    const merged = mergeSources(emptySourceSet(), { items: [policyA, policyB] });
+    assert.equal(merged.items.length, 2, 'two documents, two sources');
+    assert.deepEqual(
+      merged.items.map(entry => entry.ref),
+      [
+        { id: item.id, scope: 'prj_admin_a' },
+        { id: item.id, scope: 'prj_admin_b' }
+      ],
+      'each keeps the handle its preview and download open'
+    );
+    // A provider whose scope only says how the document was reached still
+    // merges two sightings of it.
+    const viaProfiles = mergeSources(emptySourceSet(), {
+      items: [
+        { provider: 'ifinder', ref: { id: 'doc-1', scope: 'default' }, title: 'Doc' },
+        { provider: 'ifinder', ref: { id: 'doc-1', scope: 'legal' }, title: 'Doc' }
+      ]
+    });
+    assert.equal(viaProfiles.items.length, 1);
   });
 
   it('is extracted from a tool result through the producer', () => {
