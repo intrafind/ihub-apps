@@ -31,6 +31,7 @@ import {
   useSourcesState
 } from '../sources/sourcesStore';
 import { fileTypeOf, siteOf, sourcesLabel } from '../sources/sourcesView';
+import ItemProvenance from '../../projects/components/ItemProvenance';
 
 // Loaded on demand: the preview pulls in pdf.js, which is a deliberately
 // on-demand bundle chunk. Importing it statically here would put pdf.js in
@@ -660,6 +661,9 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
               {source.fileName}
             </p>
           )}
+          {/* Project documents: "Uploaded", "Picked from SharePoint · text
+              taken 12 Oct 2026", "Linked" (#1036). Nothing for other sources. */}
+          <ItemProvenance provenance={source.provenance} className="mt-0.5" />
           {passages.length > 0 ? (
             <p className="mt-1 line-clamp-3 text-xs italic text-gray-600 dark:text-gray-400">
               “{passages[0].text}”

@@ -8,9 +8,11 @@
  *  - project links (`[{ id, mode, write }]`) on apps, workflow nodes and
  *    agent profiles, and their normalization from bare string ids;
  *  - the project form: defaults, validation and the request body;
- *  - item helpers: status, kinds summary, the "Add item" dialog tabs and the
- *    JSON body each tab sends;
+ *  - the malware-scan warning of the edit page;
  *  - list filtering and the dependency list of a refused delete.
+ *
+ * Item rules (status, the "Add item" dialog, uploads) are shared with the user
+ * project page and live in `features/projects/utils/projectItems.js`.
  *
  * Every function is pure. Validation returns error *codes*; the components
  * turn them into translated messages.
@@ -18,7 +20,7 @@
  * @module features/admin/utils/projectAdmin
  */
 
-import { getLocalizedContent } from '../../../utils/localizeContent';
+import { localizedText } from '../../projects/utils/projectItems';
 
 /** How a linked project reaches the model. `auto` lets the server decide by size. */
 export const PROJECT_LINK_MODES = Object.freeze(['auto', 'context', 'tools']);
@@ -35,68 +37,7 @@ export const MAX_PROJECT_ID_LENGTH = 50;
 /** Characters allowed in a project id (the server's safe id pattern). */
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
-/** Item states in which the server is still working on the text. */
-export const ACTIVE_ITEM_STATUSES = Object.freeze(['pending', 'extracting']);
-
-/** How often the edit page re-reads a project while an item is being extracted. */
-export const ITEM_POLL_INTERVAL_MS = 2000;
-
-/** How much of an item's text the "Preview text" dialog loads. */
-export const ITEM_TEXT_PREVIEW_CHARS = 20000;
-
-/** Cloud storage kinds: listed in the dialog but not offered yet. */
-export const CLOUD_ITEM_KINDS = Object.freeze(['office365', 'google-drive', 'nextcloud']);
-
-/**
- * Tabs of the "Add item" dialog in display order. `kind` is the item kind the
- * tab creates; the text tab writes an `upload` item from pasted text.
- */
-export const ITEM_DIALOG_TABS = Object.freeze([
-  { id: 'upload', kind: 'upload' },
-  { id: 'text', kind: 'upload' },
-  { id: 'url', kind: 'url' },
-  { id: 'page', kind: 'page' },
-  { id: 'ifinder-document', kind: 'ifinder-document' },
-  { id: 'ifinder-query', kind: 'ifinder-query' },
-  ...CLOUD_ITEM_KINDS.map(kind => ({ id: kind, kind }))
-]);
-
-/** Icon of each item kind (names of the shared `Icon` component). */
-const KIND_ICONS = Object.freeze({
-  upload: 'upload',
-  text: 'document-text',
-  url: 'link',
-  page: 'document-text',
-  'ifinder-document': 'magnifying-glass',
-  'ifinder-query': 'magnifying-glass',
-  office365: 'cloud',
-  'google-drive': 'cloud',
-  nextcloud: 'cloud'
-});
-
-/**
- * The `Icon` name for an item kind or dialog tab.
- *
- * @param {string} kind
- * @returns {string}
- */
-export function kindIcon(kind) {
-  return KIND_ICONS[kind] || 'document';
-}
-
 // --- localized text -------------------------------------------------------
-
-/**
- * A project's name or description in one language. Admin projects store
- * localized records; a plain string (hand-edited file) is returned as is.
- *
- * @param {string|Object<string, string>|null|undefined} value
- * @param {string} [language='en']
- * @returns {string}
- */
-export function localizedText(value, language = 'en') {
-  return getLocalizedContent(value, language) || '';
-}
 
 /**
  * A localized record without empty languages; a plain string becomes the
@@ -307,162 +248,7 @@ export function buildProjectPayload(form) {
   };
 }
 
-// --- items ------------------------------------------------------------------------
-
-/**
- * Whether the server is still extracting the text of any item: a new item
- * (`pending` / `extracting`), or a picked document being refreshed — that one
- * keeps its `ready` / `stale` status (the old snapshot stays readable) and
- * carries `refreshingAt` until the new snapshot is stored.
- *
- * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
- * @returns {boolean}
- */
-export function hasActiveItems(items) {
-  return (items || []).some(
-    item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
-  );
-}
-
-/**
- * How many items of each kind a project holds, most frequent first.
- *
- * @param {Array<{kind: string}>|undefined} items
- * @returns {Array<{kind: string, count: number}>}
- */
-export function summarizeItemKinds(items) {
-  const counts = new Map();
-  for (const item of items || []) {
-    if (!item?.kind) continue;
-    counts.set(item.kind, (counts.get(item.kind) || 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([kind, count]) => ({ kind, count }))
-    .sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
-}
-
-/**
- * Sum of the extracted tokens of a project's items.
- *
- * @param {Array<{text?: {tokens?: number}}>|undefined} items
- * @returns {number}
- */
-export function sumItemTokens(items) {
-  return (items || []).reduce((sum, item) => sum + (item?.text?.tokens || 0), 0);
-}
-
-/**
- * The tabs of the "Add item" dialog and whether each can be used.
- *
- * @param {Array<{id: string, enabled: boolean}>} kinds - From `GET /_kinds`.
- * @param {{upload?: {available?: boolean}}|null} config - From `GET /_config`.
- * @returns {Array<{id: string, kind: string, enabled: boolean,
- *   reason: null|'later'|'disabled'|'storageUnavailable'}>}
- *   `reason` explains a disabled tab.
- */
-export function buildItemDialogTabs(kinds, config) {
-  const enabledKinds = new Set((kinds || []).filter(kind => kind.enabled).map(kind => kind.id));
-  const uploadAvailable = config?.upload?.available !== false;
-  return ITEM_DIALOG_TABS.map(tab => {
-    if (CLOUD_ITEM_KINDS.includes(tab.kind)) return { ...tab, enabled: false, reason: 'later' };
-    if (!enabledKinds.has(tab.kind)) return { ...tab, enabled: false, reason: 'disabled' };
-    if (tab.kind === 'upload' && !uploadAvailable) {
-      return { ...tab, enabled: false, reason: 'storageUnavailable' };
-    }
-    return { ...tab, enabled: true, reason: null };
-  });
-}
-
-/**
- * Whether a string is an absolute http(s) URL.
- *
- * @param {string} value
- * @returns {boolean}
- */
-export function isHttpUrl(value) {
-  try {
-    const url = new URL(String(value || '').trim());
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The JSON body `POST /api/admin/projects/:id/items` gets from a dialog tab
- * (every tab but the file upload, which sends multipart).
- *
- * @param {string} tabId - One of {@link ITEM_DIALOG_TABS}.
- * @param {{name?: string, pinned?: boolean, text?: string, url?: string,
- *   pageId?: string, language?: string, documentId?: string, query?: string}} draft
- * @returns {{body: Object|null, error: null|string}} The body, or an error code
- *   (`textRequired`, `urlInvalid`, `pageRequired`, `documentRequired`,
- *   `queryRequired`, `unsupported`).
- *
- * @example
- * buildItemRequest('url', { url: 'https://example.com' })
- * // => { body: { kind: 'url', ref: { url: 'https://example.com' }, pinned: false }, error: null }
- */
-export function buildItemRequest(tabId, draft = {}) {
-  const name = (draft.name || '').trim();
-  const common = { ...(name ? { name } : {}), pinned: draft.pinned === true };
-  const fail = error => ({ body: null, error });
-  switch (tabId) {
-    case 'text': {
-      const text = draft.text || '';
-      if (!text.trim()) return fail('textRequired');
-      return { body: { kind: 'upload', ref: {}, ...common, text }, error: null };
-    }
-    case 'url': {
-      const url = (draft.url || '').trim();
-      if (!isHttpUrl(url)) return fail('urlInvalid');
-      return { body: { kind: 'url', ref: { url }, ...common }, error: null };
-    }
-    case 'page': {
-      const pageId = (draft.pageId || '').trim();
-      if (!pageId) return fail('pageRequired');
-      const ref = { pageId, ...(draft.language ? { language: draft.language } : {}) };
-      return { body: { kind: 'page', ref, ...common }, error: null };
-    }
-    case 'ifinder-document': {
-      const documentId = (draft.documentId || '').trim();
-      if (!documentId) return fail('documentRequired');
-      return { body: { kind: 'ifinder-document', ref: { documentId }, ...common }, error: null };
-    }
-    case 'ifinder-query': {
-      const query = (draft.query || '').trim();
-      if (!query) return fail('queryRequired');
-      return { body: { kind: 'ifinder-query', ref: { query }, ...common }, error: null };
-    }
-    default:
-      return fail('unsupported');
-  }
-}
-
-/**
- * Validate a file upload before it is sent.
- *
- * @param {File|null|undefined} file
- * @param {{limits?: {maxFileBytes?: number}}|null} config
- * @returns {null|'fileRequired'|'fileTooLarge'}
- */
-export function validateUpload(file, config) {
-  if (!file) return 'fileRequired';
-  const maxBytes = config?.limits?.maxFileBytes;
-  if (Number.isFinite(maxBytes) && maxBytes > 0 && file.size > maxBytes) return 'fileTooLarge';
-  return null;
-}
-
-/**
- * The `accept` attribute of the upload input.
- *
- * @param {{upload?: {accept?: string[]}}|null} config
- * @returns {string|undefined}
- */
-export function uploadAccept(config) {
-  const accept = config?.upload?.accept;
-  return Array.isArray(accept) && accept.length > 0 ? accept.join(',') : undefined;
-}
+// --- uploads ------------------------------------------------------------------------
 
 /**
  * Whether uploads are accepted without a malware scan, which the edit page

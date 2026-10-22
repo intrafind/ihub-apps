@@ -3836,29 +3836,8 @@
         "saveFirst": "Create the project first; then you can add items to it.",
         "removeTitle": "Remove item",
         "removeConfirm": "Remove \"{{name}}\" from the project?",
-        "empty": "No items yet",
-        "emptyHint": "Add files, text, web pages, iHub pages or iFinder documents.",
-        "pinItem": "Pin {{name}}",
-        "pinnedHint": "Pinned items are always in the prompt when the project is in context.",
-        "columns": {
-          "kind": "Kind",
-          "name": "Name",
-          "status": "Status",
-          "pinned": "Pinned"
-        },
         "actions": {
-          "preview": "Preview text",
-          "retry": "Retry",
-          "refresh": "Refresh",
           "remove": "Remove item"
-        },
-        "status": {
-          "pending": "Waiting",
-          "extracting": "Extracting",
-          "ready": "Ready",
-          "failed": "Failed",
-          "stale": "Outdated",
-          "staleHint": "The content changed at its origin; refresh to read it again."
         }
       },
       "unsaved": {
@@ -3866,50 +3845,6 @@
         "message": "You have unsaved changes. Leave anyway?",
         "leave": "Leave",
         "stay": "Stay"
-      },
-      "addItem": {
-        "title": "Add item",
-        "kinds": "Item kinds",
-        "tabs": {
-          "upload": "Upload",
-          "text": "Text"
-        },
-        "comingLater": "Coming in a later release.",
-        "storageUnavailable": "Files and text need the project storage, which is not available on this server.",
-        "kindDisabled": "This kind is not enabled on this server.",
-        "file": "File",
-        "accepted": "Accepted: {{types}}",
-        "text": "Text",
-        "url": "URL",
-        "check": "Check",
-        "checking": "Checking...",
-        "urlOk": "The page can be read.",
-        "urlFailed": "The page cannot be read: {{error}}",
-        "page": "Page",
-        "choosePage": "Choose a page",
-        "language": "Language",
-        "userLanguage": "The user's language",
-        "ifinderSearch": "Search iFinder",
-        "search": "Search",
-        "searching": "Searching...",
-        "noResults": "No documents found.",
-        "selectedDocument": "Selected: {{title}}",
-        "query": "Search query",
-        "queryHint": "The documents matching this query are read whenever the project is used.",
-        "name": "Name",
-        "namePlaceholder": "Optional; derived from the content when empty",
-        "pinned": "Pinned (always in the prompt)",
-        "submit": "Add",
-        "errors": {
-          "fileRequired": "Choose a file to upload.",
-          "fileTooLarge": "The file is larger than {{max}}.",
-          "textRequired": "Enter the text to add.",
-          "urlInvalid": "Enter a valid http(s) URL.",
-          "pageRequired": "Choose a page.",
-          "documentRequired": "Search iFinder and choose a document.",
-          "queryRequired": "Enter a search query.",
-          "unsupported": "This kind cannot be added here."
-        }
       },
       "dependencies": {
         "title": "Project is in use",
@@ -3919,11 +3854,6 @@
           "workflow": "Workflow",
           "agent": "Agent"
         }
-      },
-      "preview": {
-        "title": "Text of \"{{name}}\"",
-        "truncated": "Showing the first {{shown}} of {{total}} characters.",
-        "empty": "(no text)"
       },
       "picker": {
         "label": "Projects",
@@ -4226,6 +4156,7 @@
       "searchedOne": "searched",
       "unavailableOne": "unavailable",
       "overBudget": "over budget",
+      "openProject": "Open the project",
       "privateProject": "Private project"
     },
     "answerSource": {
@@ -4867,7 +4798,8 @@
     "prompts": "Prompts",
     "apps": "Apps",
     "chats": "Chats",
-    "tasks": "Scheduled tasks"
+    "tasks": "Scheduled tasks",
+    "projects": "Projects"
   },
   "darkMode": {
     "auto": "Auto (system)",
@@ -5203,7 +5135,8 @@
     "noChatsMatch": "No chats match",
     "chatsUnavailable": "Chats could not be loaded",
     "unseenBadge": "{{count}} new",
-    "tasks": "Scheduled tasks"
+    "tasks": "Scheduled tasks",
+    "projects": "Projects"
   },
   "chatHistory": {
     "title": "Your chats",
@@ -5256,7 +5189,10 @@
     "sharedWithYou": "Shared with you",
     "sharedNew": "New",
     "sharedNewHint": "You have not opened this yet",
-    "scheduled": "Scheduled"
+    "scheduled": "Scheduled",
+    "inProject": "In project {{name}}",
+    "moveToProject": "Move to project",
+    "moved": "Chat moved"
   },
   "transcription": {
     "record": "Record audio for the selected model",
@@ -5550,7 +5486,8 @@
     "breadcrumbs": "Path",
     "loading": "Loading…",
     "detailsUnavailable": "No further details are available.",
-    "documentFromSource": "Document"
+    "documentFromSource": "Document",
+    "project": "Project"
   },
   "prompts": {
     "actions": {
@@ -6145,5 +6082,261 @@
     "inlineLabel": "Usage guide",
     "inlineLabelShort": "Guide",
     "startScreenHint": "New here?"
+  },
+  "projects": {
+    "addItem": {
+      "accepted": "Accepted: {{types}}",
+      "check": "Check",
+      "checking": "Checking...",
+      "choosePage": "Choose a page",
+      "cloudAdd": "Add to project",
+      "cloudHint": "The text of each picked file is taken now, with your account. Refresh an item later to take it again.",
+      "cloudNone": "No connection of this kind is configured.",
+      "cloudProvider": "Connection",
+      "comingLater": "Coming in a later release.",
+      "dropHint": "Or drop files here.",
+      "errors": {
+        "documentRequired": "Search iFinder and choose a document.",
+        "fileRequired": "Choose a file to upload.",
+        "fileTooLarge": "The file is larger than {{max}}.",
+        "pageRequired": "Choose a page.",
+        "queryRequired": "Enter a search query.",
+        "quotaFiles": "A project holds at most {{max}} items; remove some first.",
+        "quotaProjectBytes": "These files do not fit into the {{max}} a project may hold.",
+        "textRequired": "Enter the text to add.",
+        "unsupported": "This kind cannot be added here.",
+        "urlInvalid": "Enter a valid http(s) URL."
+      },
+      "file": "File",
+      "ifinderSearch": "Search iFinder",
+      "kindDisabled": "This kind is not enabled on this server.",
+      "kinds": "Item kinds",
+      "language": "Language",
+      "maxFileSize": "At most {{size}} per file.",
+      "name": "Name",
+      "namePlaceholder": "Optional; derived from the content when empty",
+      "noResults": "No documents found.",
+      "page": "Page",
+      "pinned": "Pinned (always in the prompt)",
+      "query": "Search query",
+      "queryHint": "The documents matching this query are read whenever the project is used.",
+      "search": "Search",
+      "searching": "Searching...",
+      "selectedDocument": "Selected: {{title}}",
+      "storageUnavailable": "Files and text need the project storage, which is not available on this server.",
+      "submit": "Add",
+      "tabs": {
+        "text": "Text",
+        "upload": "Upload"
+      },
+      "text": "Text",
+      "title": "Add item",
+      "url": "URL",
+      "urlFailed": "The page cannot be read: {{error}}",
+      "urlOk": "The page can be read.",
+      "userLanguage": "The user's language"
+    },
+    "chatBar": {
+      "change": "Change project",
+      "inProject": "In project: {{name}}",
+      "move": "Move to project",
+      "open": "Open the project",
+      "unnamed": "Project"
+    },
+    "chats": {
+      "byMe": "by you",
+      "byOther": "by {{name}} (read-only)",
+      "empty": "No chats in this project yet.",
+      "filterLabel": "Show",
+      "filters": {
+        "all": "All chats",
+        "mine": "My chats"
+      },
+      "newChat": "New chat",
+      "noApps": "No app can chat inside projects.",
+      "searchApps": "Search apps",
+      "someone": "another member",
+      "startHint": "Choose the app to chat with. It gets the project’s instructions and documents.",
+      "startTitle": "Start a chat in this project",
+      "title": "Chats"
+    },
+    "create": {
+      "creating": "Creating…",
+      "submit": "Create project",
+      "subtitle": "A project keeps documents, instructions and chats together. It stays private until you share it.",
+      "title": "New project"
+    },
+    "errors": {
+      "accessChanged": "Your access to this project changed in the meantime. Reload the page.",
+      "generic": "Something went wrong. Please try again.",
+      "invalidRef": "The item could not be added: {{message}}",
+      "kindDisabled": "This kind of item is not available here.",
+      "mismatch": "This chat already belongs to another project. Move it from the chat menu instead.",
+      "notFound": "This project does not exist or you no longer have access to it.",
+      "permissionDenied": "You are not allowed to do this.",
+      "quotaFileBytes": "A file may be at most {{limit}}.",
+      "quotaFiles": "This project already holds {{limit}} items, the most it may hold.",
+      "quotaProjectBytes": "This project may hold at most {{limit}}; {{used}} are used.",
+      "quotaProjects": "The owner already has {{limit}} projects, the most one person may own.",
+      "shareTargetInvalid": "One of the people or groups cannot be added: {{message}}",
+      "sourceForbidden": "Connect the integration first, or you have no access to this document. ({{message}})",
+      "sourceGone": "The source document was removed.",
+      "storageUnavailable": "Projects are not available on this installation.",
+      "unsupportedType": "This file type is not supported.",
+      "unsupportedTypeWith": "This file type is not supported. Supported: {{types}}.",
+      "userProjectsDisabled": "User projects are switched off."
+    },
+    "form": {
+      "description": "Description",
+      "instructions": "Instructions",
+      "instructionsHint": "Added to the system prompt of every chat in this project, after the app’s own prompt.",
+      "name": "Name",
+      "nameRequired": "A name is required.",
+      "tooLong": "At most {{max}} characters."
+    },
+    "items": {
+      "actions": {
+        "preview": "Preview text",
+        "refresh": "Refresh",
+        "remove": "Remove item",
+        "rename": "Rename",
+        "retry": "Retry"
+      },
+      "add": "Add documents",
+      "columns": {
+        "kind": "Kind",
+        "name": "Name",
+        "pinned": "Pinned",
+        "status": "Status"
+      },
+      "empty": "No items yet",
+      "emptyHint": "Add files, text, web pages, iHub pages, cloud or iFinder documents.",
+      "errors": {
+        "interrupted": "The upload was interrupted. Upload the file again.",
+        "noText": "This PDF has no text layer (scanned). Run it through OCR and upload the result.",
+        "scanRejected": "Rejected by the malware scanner.",
+        "sourceForbidden": "Connect the integration again; the document could not be read with your account.",
+        "sourceGone": "The source document was removed.",
+        "unsupportedType": "This file type is not supported."
+      },
+      "full": "This project holds as many items as it may.",
+      "pinItem": "Pin {{name}}",
+      "pinnedHint": "Pinned items are always in the prompt, even when the project is searched.",
+      "removeConfirm": "Remove \"{{name}}\" from the project?",
+      "removeTitle": "Remove item",
+      "renameTitle": "Rename item",
+      "status": {
+        "extracting": "Extracting",
+        "failed": "Failed",
+        "pending": "Waiting",
+        "ready": "Ready",
+        "stale": "Outdated",
+        "staleHint": "The content changed at its origin; refresh to read it again.",
+        "staleNewer": "Newer version at the source"
+      },
+      "title": "Documents",
+      "tokens": "~{{tokens}} tokens"
+    },
+    "list": {
+      "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",
+      "emptyTitle": "No projects yet",
+      "filterLabel": "Show",
+      "filters": {
+        "all": "All",
+        "apps": "From apps",
+        "mine": "Mine",
+        "shared": "Shared with me"
+      },
+      "lastActivity": "Active {{date}}",
+      "limitReached": "You have reached the limit of {{limit}} projects",
+      "newProject": "New project",
+      "noMatches": "No projects match",
+      "ownedBy": "Owner: {{name}}",
+      "quota": "{{used}} of {{limit}} own projects",
+      "search": "Search projects",
+      "subtitle": "Documents, instructions and chats in one place, private or shared with your team.",
+      "title": "Projects",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items",
+      "memberCount_one": "{{count}} member",
+      "memberCount_other": "{{count}} members"
+    },
+    "members": {
+      "everyone": "Everyone signed in",
+      "inactive": "inactive",
+      "leave": "Leave project",
+      "leaveConfirm": "You lose access to this project and its chats unless someone shares it with you again.",
+      "leaveTitle": "Leave project",
+      "manage": "Share",
+      "private": "Only the owner — this project is private.",
+      "shareHelp": "“Can use” makes someone a user: they chat with the project and read its documents. “Can edit” makes them an editor: they also add and remove documents, edit the instructions and change members.",
+      "shareTitle": "Share project",
+      "title": "Members",
+      "transfer": "Transfer ownership",
+      "unknownOwner": "Unknown",
+      "count_one": "{{count}} member",
+      "count_other": "{{count}} members"
+    },
+    "moveChat": {
+      "hint": "The chat then uses the project’s instructions and documents, and its members can read it.",
+      "list": "Projects",
+      "none": "You have no other project to move this chat to.",
+      "remove": "Remove from project",
+      "submit": "Move",
+      "title": "Move chat to a project"
+    },
+    "page": {
+      "adminProject": "This project comes with one of your apps. Administrators manage it.",
+      "backToList": "All projects",
+      "breadcrumb": "Breadcrumb",
+      "delete": "Delete project",
+      "deleteConfirm": "Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.",
+      "deleteTitle": "Delete project",
+      "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it."
+    },
+    "preview": {
+      "edit": "Edit text",
+      "editHint": "The saved text replaces the stored document; the model reads the new text from the next question on.",
+      "editLabel": "Text of the document",
+      "empty": "(no text)",
+      "saving": "Saving…",
+      "title": "Text of \"{{name}}\"",
+      "truncated": "Showing the first {{shown}} of {{total}} characters."
+    },
+
+    "provenance": {
+      "linked": "Linked",
+      "picked": "Picked",
+      "pickedFrom": "Picked from {{site}}",
+      "snapshot": "text taken {{date}}",
+      "uploaded": "Uploaded"
+    },
+    "roles": {
+      "admin": "From an app",
+      "editor": "Editor",
+      "owner": "Owner",
+      "user": "User"
+    },
+    "settings": {
+      "editTitle": "Settings",
+      "noInstructions": "No instructions.",
+      "reset": "Discard changes",
+      "saved": "Saved.",
+      "saving": "Saving…",
+      "title": "Instructions"
+    },
+    "transfer": {
+      "hint": "The new owner may change and delete the project. You lose your access unless they share it with you again.",
+      "search": "Search people",
+      "submit": "Transfer",
+      "submitTo": "Transfer to {{name}}",
+      "title": "Transfer ownership"
+    },
+    "usage": {
+      "bytesOf": "{{used}} of {{limit}}",
+      "items": "Items",
+      "itemsOf": "{{used}} of {{limit}}",
+      "storage": "Storage"
+    }
   }
 }

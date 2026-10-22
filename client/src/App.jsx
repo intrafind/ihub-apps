@@ -17,6 +17,8 @@ const SharedChatPage = lazyWithRetry(() => import('./features/chat/pages/SharedC
 const TasksPage = lazyWithRetry(() => import('./features/tasks/pages/TasksPage'));
 const TaskDetailPage = lazyWithRetry(() => import('./features/tasks/pages/TaskDetailPage'));
 const TaskEditorPage = lazyWithRetry(() => import('./features/tasks/pages/TaskEditorPage'));
+const ProjectsPage = lazyWithRetry(() => import('./features/projects/pages/ProjectsPage'));
+const ProjectPage = lazyWithRetry(() => import('./features/projects/pages/ProjectPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
@@ -199,6 +201,7 @@ import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
 import { useChatHistoryRouteState } from './shared/hooks/useChats';
 import { useScheduledTasksRouteState } from './features/tasks/hooks/useScheduledTasks';
+import { useProjectsRouteState } from './features/projects/hooks/useProjects';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
@@ -243,6 +246,20 @@ function ChatHistoryRoute() {
 // auth status, both of which only resolve inside the providers.
 function ScheduledTasksRoute({ component: Component }) {
   const state = useScheduledTasksRouteState();
+  if (state === 'loading') return <AdminLoading />;
+  if (state === 'unavailable') return <NotFound />;
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <Component />
+    </Suspense>
+  );
+}
+
+// User projects (#1036). Gated inside the element for the same reason as
+// ChatHistoryRoute: `platformConfig.projects.userProjects` and the auth status
+// only resolve inside the providers.
+function ProjectsRoute({ component: Component }) {
+  const state = useProjectsRouteState();
   if (state === 'loading') return <AdminLoading />;
   if (state === 'unavailable') return <NotFound />;
   return (
@@ -463,6 +480,9 @@ function App() {
             path="tasks/:taskId/edit"
             element={<ScheduledTasksRoute component={TaskEditorPage} />}
           />
+          {/* User projects — gated in the element (see ProjectsRoute). */}
+          <Route path="projects" element={<ProjectsRoute component={ProjectsPage} />} />
+          <Route path="projects/:projectId" element={<ProjectsRoute component={ProjectPage} />} />
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />

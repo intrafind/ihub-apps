@@ -406,10 +406,10 @@ function NavigationProbe() {
   return null;
 }
 
-function renderChat() {
-  window.history.replaceState({}, '', '/apps/acme/c/chat-1');
+function renderChat(path = '/apps/acme/c/chat-1') {
+  window.history.replaceState({}, '', path);
   return render(
-    <MemoryRouter initialEntries={['/apps/acme/c/chat-1']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/apps/:appId/c/:chatId" element={<AppChat preloadedApp={APP} />} />
       </Routes>
@@ -752,5 +752,41 @@ describe('while voice mode is open', () => {
     act(() => mockVoiceMode.setActive(false));
     expect(document.querySelector('[inert]')).toBeNull();
     expect(screen.queryByTestId('voice-dock')).toBeNull();
+  });
+});
+
+describe('answering a question the app asked in a project chat', () => {
+  // A chat that is not stored server-side has no stored chat the server could
+  // recover the container from: every answer has to carry it (#1036).
+  beforeEach(() => {
+    // A chat with a turn in it, so the transcript is on the page.
+    mockChat.messages = [{ id: 'm1', role: 'assistant', content: 'Which colour?' }];
+  });
+
+  test('sends the container project with every kind of answer', async () => {
+    renderChat('/apps/acme/c/chat-1?project=prj_case');
+    await screen.findAllByTestId('composer');
+    const response = { questionId: 'q1', answered: true, skipped: false, value: 'red' };
+
+    act(() => mockMessageList.props.onClarificationSubmit(response));
+    act(() => mockMessageList.props.onClarificationSkip({ ...response, skipped: true }));
+    mockVoiceMode.options.answerClarification('the second one');
+
+    expect(mockChat.submitClarificationResponse).toHaveBeenCalledTimes(3);
+    for (const [, params] of mockChat.submitClarificationResponse.mock.calls) {
+      expect(params).toEqual(
+        expect.objectContaining({ projectId: 'prj_case', modelId: 'model-x' })
+      );
+    }
+    expect(mockChat.submitClarificationResponse.mock.calls[2][1].voiceMode).toBe(true);
+  });
+
+  test('sends no project outside one', async () => {
+    renderChat();
+    await screen.findAllByTestId('composer');
+    act(() =>
+      mockMessageList.props.onClarificationSubmit({ questionId: 'q1', answered: true, value: 1 })
+    );
+    expect(mockChat.submitClarificationResponse.mock.calls[0][1]).not.toHaveProperty('projectId');
   });
 });

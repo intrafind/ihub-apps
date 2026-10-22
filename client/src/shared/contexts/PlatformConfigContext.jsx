@@ -96,6 +96,12 @@ export function PlatformConfigProvider({ children }) {
         // on an older server: no personal skills.
         userSkills: platformCfg.userSkills,
 
+        // Projects (#1036): whether admin and user projects are on (flags plus
+        // the storage provider) and the limits the dialogs show. Every
+        // projects gate reads it — the sidebar entry, the `/projects` routes,
+        // the chat's project controls — so without it the feature is hidden.
+        projects: platformCfg.projects,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

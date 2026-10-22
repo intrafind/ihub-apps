@@ -7,23 +7,25 @@
  * and the dependency list of a refused delete.
  */
 import {
-  buildItemDialogTabs,
-  buildItemRequest,
   buildProjectPayload,
   dependenciesFromDeleteError,
   filterProjects,
-  hasActiveItems,
   normalizeProjectLinks,
   parseTags,
   projectFormFromProject,
   setProjectLinkMode,
-  summarizeItemKinds,
   toggleProjectLink,
   uploadsAreUnscanned,
   validateProjectForm,
-  validateProjectId,
-  validateUpload
+  validateProjectId
 } from '../../../client/src/features/admin/utils/projectAdmin';
+import {
+  buildItemDialogTabs,
+  buildItemRequest,
+  hasActiveItems,
+  summarizeItemKinds,
+  validateUpload
+} from '../../../client/src/features/projects/utils/projectItems';
 
 describe('project links', () => {
   test('bare string ids become auto links without write access', () => {
@@ -117,9 +119,9 @@ describe('items', () => {
     expect(hasActiveItems([{ status: 'ready' }, { status: 'pending' }])).toBe(true);
     expect(hasActiveItems([{ status: 'extracting' }])).toBe(true);
     expect(hasActiveItems([{ status: 'ready' }, { status: 'failed' }])).toBe(false);
-    // A refresh keeps the readable status but is still in flight.
-    expect(hasActiveItems([{ status: 'ready', refreshingAt: '2026-01-01T00:00:00Z' }])).toBe(true);
-    expect(hasActiveItems([{ status: 'stale', refreshingAt: '2026-01-01T00:00:00Z' }])).toBe(true);
+    // A refresh keeps the old status until the new snapshot is stored.
+    expect(hasActiveItems([{ status: 'ready', refreshingAt: '2026-10-22T08:00:00Z' }])).toBe(true);
+    expect(hasActiveItems([{ status: 'stale', refreshingAt: '2026-10-22T08:00:00Z' }])).toBe(true);
     expect(hasActiveItems([{ status: 'ready', refreshingAt: null }])).toBe(false);
   });
 

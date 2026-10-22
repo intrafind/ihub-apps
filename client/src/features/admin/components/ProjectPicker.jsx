@@ -9,11 +9,11 @@ import ProjectTokenCount from './ProjectTokenCount';
 import {
   PROJECT_LINK_MODES,
   filterProjects,
-  localizedText,
   normalizeProjectLinks,
   setProjectLinkMode,
   toggleProjectLink
 } from '../utils/projectAdmin';
+import { localizedText } from '../../projects/utils/projectItems';
 
 /**
  * Picks the admin projects linked to an app, a workflow prompt node or an

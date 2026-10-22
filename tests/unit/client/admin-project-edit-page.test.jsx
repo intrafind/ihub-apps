@@ -235,6 +235,15 @@ describe('AdminProjectEditPage – items', () => {
           name: 'broken.pdf',
           status: 'failed',
           error: { code: 'EXTRACT_FAILED', message: 'The PDF is encrypted' }
+        },
+        {
+          id: 'i4',
+          kind: 'office365',
+          name: 'Lease.docx',
+          status: 'failed',
+          ref: { providerId: 'o365', fileId: 'f1' },
+          provenance: { origin: 'picked' },
+          error: { code: 'FETCH_FAILED', message: 'The file could not be read' }
         }
       ])
     );
@@ -245,7 +254,15 @@ describe('AdminProjectEditPage – items', () => {
     expect(screen.getByText(/~1.2K tokens|~1,200 tokens|~1200 tokens/)).toBeInTheDocument();
     expect(screen.getByText('Outdated')).toBeInTheDocument();
     expect(screen.getByText('The PDF is encrypted')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // Retry reads the item again from its source: offered for the failed
+    // cloud document, not for the failed upload, which has no source to read.
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    expect(
+      within(screen.getByText('Lease.docx').closest('tr')).getByRole('button', { name: 'Retry' })
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByText('broken.pdf').closest('tr')).queryByRole('button', { name: 'Retry' })
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
     expect(await screen.findByTestId('project-scan-warning')).toBeInTheDocument();
   });

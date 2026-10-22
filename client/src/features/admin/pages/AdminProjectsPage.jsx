@@ -18,13 +18,8 @@ import {
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, FilterSelect, SearchInput } from '../components/data-table';
 import ProjectDependenciesDialog from '../components/ProjectDependenciesDialog';
-import {
-  dependenciesFromDeleteError,
-  filterProjects,
-  kindIcon,
-  localizedText,
-  summarizeItemKinds
-} from '../utils/projectAdmin';
+import { dependenciesFromDeleteError, filterProjects } from '../utils/projectAdmin';
+import { kindIcon, localizedText, summarizeItemKinds } from '../../projects/utils/projectItems';
 
 /**
  * One header statistic.
