@@ -42,8 +42,10 @@ import { evictItemKeys, readText, storeText } from '../services/projects/ItemTex
 import {
   ACCEPTED_TYPES,
   ExtractionError,
+  MSG_MIME,
   acceptedTypeOf,
   extractText,
+  msgContentOf,
   sniffBytes
 } from '../services/projects/extractText.js';
 import {
@@ -84,6 +86,7 @@ const MASTER = crypto.createHash('sha256').update('test-master').digest('hex');
 const PREVIOUS = crypto.createHash('sha256').update('previous-master').digest('hex');
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
+const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
 
 let scratch = null;
 let platform = null;
@@ -539,6 +542,121 @@ describe('ItemTextStore', () => {
   });
 });
 
+/**
+ * A minimal Outlook message as an OLE2 compound file: the subject and the
+ * plain body as UTF-16 property streams in the mini stream, one FAT sector,
+ * one directory sector, one mini FAT sector. Enough for msgreader, and free
+ * of anyone's mail.
+ */
+function makeMsg({ subject, body }) {
+  const SECTOR = 512;
+  const MINI = 64;
+  const ENDOFCHAIN = 0xfffffffe;
+  const FATSECT = 0xfffffffd;
+  const FREESECT = 0xffffffff;
+  const NOSTREAM = 0xffffffff;
+  const streams = [
+    { name: '__substg1.0_0037001F', data: Buffer.from(subject, 'utf16le') },
+    { name: '__substg1.0_1000001F', data: Buffer.from(body, 'utf16le') }
+  ];
+  const miniSectors = [];
+  const miniFat = [];
+  for (const stream of streams) {
+    stream.start = miniSectors.length;
+    const count = Math.max(1, Math.ceil(stream.data.length / MINI));
+    for (let i = 0; i < count; i += 1) {
+      const chunk = Buffer.alloc(MINI);
+      stream.data.copy(chunk, 0, i * MINI, Math.min(stream.data.length, (i + 1) * MINI));
+      miniSectors.push(chunk);
+      miniFat.push(i === count - 1 ? ENDOFCHAIN : stream.start + i + 1);
+    }
+  }
+  const miniStream = Buffer.concat(miniSectors);
+  const containerSectors = Math.ceil(miniStream.length / SECTOR);
+  // Sectors: 0 FAT, 1 directory, 2 mini FAT, 3… the mini stream container.
+  const fat = Buffer.alloc(SECTOR, 0xff);
+  const fatEntries = [FATSECT, ENDOFCHAIN, ENDOFCHAIN];
+  for (let i = 0; i < containerSectors; i += 1) {
+    fatEntries.push(i === containerSectors - 1 ? ENDOFCHAIN : 4 + i);
+  }
+  fatEntries.forEach((value, index) => fat.writeUInt32LE(value, index * 4));
+  const miniFatSector = Buffer.alloc(SECTOR, 0xff);
+  miniFat.forEach((value, index) => miniFatSector.writeUInt32LE(value, index * 4));
+  const entry = ({ name, type, left, right, child, start, size }) => {
+    const buf = Buffer.alloc(128);
+    const utf16 = Buffer.from(name, 'utf16le');
+    utf16.copy(buf, 0);
+    buf.writeUInt16LE(utf16.length + 2, 64);
+    buf.writeUInt8(type, 66);
+    buf.writeUInt8(1, 67); // black
+    buf.writeUInt32LE(left, 68);
+    buf.writeUInt32LE(right, 72);
+    buf.writeUInt32LE(child, 76);
+    buf.writeUInt32LE(start, 116);
+    buf.writeUInt32LE(size, 120);
+    return buf;
+  };
+  const directory = Buffer.concat([
+    entry({
+      name: 'Root Entry',
+      type: 5,
+      left: NOSTREAM,
+      right: NOSTREAM,
+      child: 1,
+      start: 3,
+      size: miniStream.length
+    }),
+    entry({
+      name: streams[0].name,
+      type: 2,
+      left: NOSTREAM,
+      right: 2,
+      child: NOSTREAM,
+      start: streams[0].start,
+      size: streams[0].data.length
+    }),
+    entry({
+      name: streams[1].name,
+      type: 2,
+      left: NOSTREAM,
+      right: NOSTREAM,
+      child: NOSTREAM,
+      start: streams[1].start,
+      size: streams[1].data.length
+    }),
+    Buffer.alloc(128)
+  ]);
+  const header = Buffer.alloc(SECTOR);
+  Buffer.from('d0cf11e0a1b11ae1', 'hex').copy(header, 0);
+  header.writeUInt16LE(0x3e, 24); // minor version
+  header.writeUInt16LE(3, 26); // major version
+  header.writeUInt16LE(0xfffe, 28); // byte order
+  header.writeUInt16LE(9, 30); // sector shift
+  header.writeUInt16LE(6, 32); // mini sector shift
+  header.writeUInt32LE(1, 44); // FAT sectors
+  header.writeUInt32LE(1, 48); // first directory sector
+  header.writeUInt32LE(4096, 56); // mini stream cutoff
+  header.writeUInt32LE(2, 60); // first mini FAT sector
+  header.writeUInt32LE(1, 64); // mini FAT sectors
+  header.writeUInt32LE(ENDOFCHAIN, 68); // first DIFAT sector
+  header.writeUInt32LE(0, 72); // DIFAT sectors
+  for (let i = 0; i < 109; i += 1) header.writeUInt32LE(i === 0 ? 0 : FREESECT, 76 + i * 4);
+  const container = Buffer.alloc(containerSectors * SECTOR);
+  miniStream.copy(container, 0);
+  return Buffer.concat([header, fat, directory, miniFatSector, container]);
+}
+
+/** Compressed RTF in its uncompressed ("MELA") form, as decompressrtf reads it. */
+function uncompressedRtf(rtf) {
+  const raw = Buffer.from(rtf, 'latin1');
+  const header = Buffer.alloc(16);
+  header.writeUInt32LE(raw.length + 12, 0);
+  header.writeUInt32LE(raw.length, 4);
+  header.write('MELA', 8, 'latin1');
+  header.writeUInt32LE(0, 12);
+  return Buffer.concat([header, raw]);
+}
+
 describe('extractText', () => {
   it('decides the type from the declared type and the name', () => {
     assert.equal(acceptedTypeOf({ name: 'notes.md' }), 'text/markdown');
@@ -558,6 +676,89 @@ describe('extractText', () => {
     assert.ok(ACCEPTED_TYPES.extensions.includes('.pdf'));
     assert.equal(sniffBytes(Buffer.from('%PDF-1.7')), 'pdf');
     assert.equal(sniffBytes(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])), 'refused');
+  });
+
+  it('accepts an Outlook message by name or type and refuses legacy Office files', () => {
+    assert.equal(acceptedTypeOf({ name: 'mail.msg' }), MSG_MIME);
+    assert.equal(
+      acceptedTypeOf({ name: 'mail.msg', contentType: 'application/octet-stream' }),
+      MSG_MIME
+    );
+    assert.equal(acceptedTypeOf({ name: 'mail', contentType: MSG_MIME }), MSG_MIME);
+    assert.equal(acceptedTypeOf({ name: 'old.doc', contentType: 'application/msword' }), null);
+    assert.equal(sniffBytes(Buffer.from('d0cf11e0a1b11ae100000000', 'hex')), 'ole2');
+    assert.ok(ACCEPTED_TYPES.extensions.includes('.msg'));
+    assert.ok(ACCEPTED_TYPES.mimeTypes.includes(MSG_MIME));
+  });
+
+  it('reads the subject and the body of an Outlook message, and names a .doc for what it is', async () => {
+    const bytes = makeMsg({
+      subject: 'Quarterly review — Zürich office',
+      body: 'Hello team,\r\n\r\nthe figures are attached; the rent is due monthly.\r\n'
+    });
+    const result = await extractText({ bytes, name: 'review.msg' });
+    assert.equal(result.contentType, MSG_MIME);
+    assert.match(result.text, /^Subject: Quarterly review — Zürich office/);
+    assert.match(result.text, /the rent is due monthly\./);
+    assert.equal(result.truncated, false);
+    // The same bytes under a generic type still read as a message.
+    const generic = await extractText({
+      bytes,
+      name: 'review.msg',
+      contentType: 'application/octet-stream'
+    });
+    assert.equal(generic.contentType, MSG_MIME);
+    await assert.rejects(
+      extractText({ bytes, name: 'old.doc', contentType: 'application/msword' }),
+      error => error instanceof ExtractionError && /legacy Office/.test(error.message)
+    );
+    await assert.rejects(
+      extractText({ bytes: Buffer.from('not a compound file at all'), name: 'broken.msg' }),
+      error => error.code === 'UNSUPPORTED_TYPE' && /Outlook message/.test(error.message)
+    );
+  });
+
+  it('turns the parsed fields of a message into text: headers, recipients, each body form', async () => {
+    const windows1252 = Uint8Array.from([...'<p>Grüße aus München</p>'].map(c => c.charCodeAt(0)));
+    const htmlOnly = await msgContentOf({
+      subject: 'Newsletter',
+      senderName: 'Franz',
+      senderEmail: '/O=EXCHANGE/OU=FIRST/CN=FRANZ',
+      senderSmtpAddress: 'franz@example.com',
+      recipients: [
+        { name: 'Ada', smtpAddress: 'ada@example.com', recipType: 'to' },
+        { name: 'Grace', email: '/O=EXCHANGE/CN=GRACE', recipType: 'cc' }
+      ],
+      messageDeliveryTime: '2026-10-21T08:00:00.000Z',
+      attachments: [{ fileName: 'figures.xlsx' }, { name: 'map.png' }],
+      html: windows1252,
+      internetCodepage: 1252
+    });
+    assert.equal(
+      htmlOnly,
+      [
+        'Subject: Newsletter',
+        'From: Franz <franz@example.com>',
+        'To: Ada <ada@example.com>',
+        'Cc: Grace',
+        'Date: 2026-10-21T08:00:00.000Z',
+        'Attachments: figures.xlsx, map.png',
+        '',
+        'Grüße aus München'
+      ].join('\n')
+    );
+    const plainWins = await msgContentOf({ body: 'plain wins', bodyHtml: '<p>html loses</p>' });
+    assert.equal(plainWins, 'plain wins');
+    const htmlString = await msgContentOf({ bodyHtml: '<h1>Title</h1><p>Para</p>' });
+    assert.equal(htmlString, '# Title\n\nPara');
+    const rtf = await msgContentOf({
+      compressedRtf: uncompressedRtf(
+        '{\\rtf1\\ansi{\\fonttbl{\\f0 Arial;}}\\f0 First line\\par Second line\\par}'
+      )
+    });
+    assert.equal(rtf, 'First line\nSecond line');
+    assert.equal(await msgContentOf({ subject: 'Empty' }), 'Subject: Empty');
+    assert.equal(await msgContentOf(null), '');
   });
 
   it('reads text, markdown, html, e-mail and refuses binary or non-UTF-8 input', async () => {
@@ -876,6 +1077,59 @@ describe('ingest pipeline', () => {
       prefix: `${project.id}__`
     });
     assert.equal(blobs.items.length, 0, 'the blob went with the item');
+  });
+
+  it('replaces the text of a written document in place, and refuses it for a link', async () => {
+    const project = await newProject();
+    const { item } = await service.addItem(
+      project.id,
+      {
+        kind: 'upload',
+        ref: { contentType: 'text/plain' },
+        name: 'Notes.txt',
+        text: 'The rent is due monthly.'
+      },
+      { user: ADA, origin: 'uploaded' }
+    );
+    const oldKey = item.text.blobKey;
+    const edited = await service.replaceItemText(
+      project.id,
+      item.id,
+      '# Notes\n\nThe rent is due on the first of the month.',
+      { user: GRACE }
+    );
+    assert.equal(edited.item.status, 'ready');
+    assert.notEqual(edited.item.text.blobKey, oldKey, 'a new blob holds the new text');
+    assert.equal(edited.item.provenance.origin, 'written');
+    assert.equal(edited.item.provenance.by.id, GRACE.id);
+    assert.equal(edited.item.ref.contentType, 'text/markdown');
+    assert.equal(edited.item.refreshingAt, undefined);
+    assert.equal(edited.item.ingestAttempt, undefined);
+    const stored = await getProjectRepository().get(project.id);
+    const { text } = await getItemText(stored, edited.item, { user: ADA });
+    assert.equal(text, '# Notes\n\nThe rent is due on the first of the month.');
+    assert.equal(stored.usage.bytes, Buffer.byteLength(text));
+    const blobs = await getProjectRepository().blobs.list(PROJECT_FILES_NAMESPACE, {
+      prefix: `${project.id}__`
+    });
+    assert.equal(blobs.items.length, 1, 'the old blob went with the edit');
+    await assert.rejects(
+      service.replaceItemText(project.id, item.id, '   \n', { user: ADA }),
+      error => error.code === 'INVALID_REF'
+    );
+    const { item: link } = await service.addItem(
+      project.id,
+      { kind: 'url', ref: { url: 'https://example.com/policy' } },
+      { user: ADA }
+    );
+    await assert.rejects(
+      service.replaceItemText(project.id, link.id, 'not a stored text', { user: ADA }),
+      error => error.code === 'INVALID_REF'
+    );
+    await assert.rejects(
+      service.replaceItemText(project.id, 'itm_missing', 'x', { user: ADA }),
+      error => error.code === 'ITEM_NOT_FOUND'
+    );
   });
 
   it('extracts an uploaded file on the queue and removes the temp directory', async () => {
@@ -2117,6 +2371,7 @@ describe('routes', () => {
     create: handlersFor(routes, 'post', '/api/projects'),
     addItem: handlersFor(routes, 'post', '/api/projects/:projectId/items'),
     text: handlersFor(routes, 'get', '/api/projects/:projectId/items/:itemId/text'),
+    editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
     refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
     urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check')
@@ -2127,6 +2382,42 @@ describe('routes', () => {
     assert.equal(res.statusCode, 201, JSON.stringify(res.body));
     return res.body;
   }
+
+  it('edits the text of a written item over PUT …/text and refuses an empty one', async () => {
+    const project = await create();
+    const added = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'upload', ref: {}, name: 'Notes.md', text: 'Old notes.' }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    const edited = await drive(route.editText, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id },
+      body: { text: 'New notes.' }
+    });
+    assert.equal(edited.statusCode, 200, JSON.stringify(edited.body));
+    assert.equal(edited.body.item.status, 'ready');
+    assert.equal(edited.body.item.provenance.origin, 'written');
+    const read = await drive(route.text, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id }
+    });
+    assert.equal(read.body, 'New notes.');
+    const empty = await drive(route.editText, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id },
+      body: { text: '  ' }
+    });
+    assert.equal(empty.statusCode, 400);
+    const stranger = await drive(route.editText, {
+      user: GRACE,
+      params: { projectId: project.id, itemId: added.body.item.id },
+      body: { text: 'Not mine.' }
+    });
+    // A project the caller is no member of does not exist for them.
+    assert.equal(stranger.statusCode, 404);
+  });
 
   it('accepts a multipart upload, answers 202 and serves the text once ready', async () => {
     const project = await create();

@@ -1,46 +1,19 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import FileSystemHandler from './FileSystemHandler.js';
 import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
-import { recordSourceLoad } from '../telemetry/metrics.js';
-import { getLocalizedString } from '../utils/localize.js';
-import { RESULT_BUDGET_TOKENS, getContentStats, selectContent } from './documentRetrieval.js';
+
 
 /**
- * Handlers that load one whole text (a file, a web page, an iHub page). A
- * tool over one of them returns the text when it is small, and otherwise the
- * sections the model asks for — see documentRetrieval.js. iFinder runs its
- * own search and is not one of them.
- */
-const DOCUMENT_TYPES = new Set(['filesystem', 'url', 'page']);
-
-const RETRIEVAL_HINT =
-  ' Small content is returned in full. Large content is too big to return at once: ' +
-  'pass `query` with keywords from the question to get the sections that match it, ' +
-  'or `section` with a section id from an earlier result to read that section.';
-
-/**
- * Handler metadata as the model sees it: without the server's absolute path
- * (`fullPath`, and the `file://` link built from it).
- */
-function toolMetadata(metadata) {
-  const { fullPath: _fullPath, link, ...rest } = metadata || {};
-  return typeof link === 'string' && !link.startsWith('file:') ? { ...rest, link } : rest;
-}
-
-// Global registry for source tool functions (persists across SourceManager instances)
-
-/**
- * Source Manager
- *
- * Centralized manager for all source handlers. Provides unified interface
- * for loading content from various sources with caching and tool generation.
+ * The registry of the link handlers (URL, iFinder, page) the project items
+ * read through, and the probes the pickers use to test a link. Loading
+ * sources into a prompt and the source tools went with the sources
+ * themselves (#1036); projects reach a handler through `getHandler`.
  */
 /** How much of a probed URL's body is read to size it. */
 export const URL_TEST_MAX_BYTES = 1024 * 1024;
@@ -183,11 +156,6 @@ class SourceManager {
    */
   initializeHandlers() {
     try {
-      // Register filesystem handler
-      logger.info('Initializing FileSystem handler...');
-      this.registerHandler('filesystem', new FileSystemHandler(this.config.filesystem || {}));
-      logger.info('✓ FileSystem handler registered successfully');
-
       // Register URL handler
       logger.info('Initializing URL handler...');
       this.registerHandler('url', new URLHandler(this.config.url || {}));
@@ -244,258 +212,6 @@ class SourceManager {
   }
 
   /**
-   * Load content from multiple sources
-   * @param {Array} sources - Array of source configurations
-   * @param {Object} context - Context (user, chatId, etc.)
-   * @returns {Promise<Object>} - { sources: Array, content: string, metadata: Object }
-   */
-  async loadSources(sources, context = {}) {
-    if (!Array.isArray(sources) || sources.length === 0) {
-      return {
-        sources: [],
-        content: '',
-        metadata: { totalSources: 0, loadedSources: 0, errors: [] }
-      };
-    }
-
-    const results = [];
-    const errors = [];
-    let totalContent = '';
-
-    for (const source of sources) {
-      try {
-        // Skip loading content for tool sources - they should only be loaded when the tool is called
-        if (source.exposeAs === 'tool') {
-          results.push({
-            id: source.id,
-            name: source.name,
-            type: source.type,
-            link: source.config?.url || source.config?.path || '',
-            exposeAs: 'tool',
-            description: source.description || `Content from ${source.id}`,
-            content: '',
-            metadata: { skipped: true, reason: 'Tool source - loaded on demand' },
-            success: true
-          });
-          continue;
-        }
-
-        // Validate source configuration
-        if (!this.validateSourceConfig(source)) {
-          throw new Error(`Invalid source configuration: ${JSON.stringify(source)}`);
-        }
-
-        const handler = this.getHandler(source.type);
-
-        // Merge context into source config
-        const sourceConfig = {
-          ...source.config,
-          ...context
-        };
-
-        // Load content (instrumented)
-        const sourceLoadStart = Date.now();
-        let result;
-        try {
-          result = await handler.getCachedContent(sourceConfig);
-          recordSourceLoad(source.type, (Date.now() - sourceLoadStart) / 1000);
-        } catch (err) {
-          recordSourceLoad(source.type, (Date.now() - sourceLoadStart) / 1000, err);
-          throw err;
-        }
-
-        // Extract original link from source config for different source types
-        let originalLink = result.metadata?.link || source.link || '';
-        if (!originalLink && source.config) {
-          if (source.type === 'url' && source.config.url) {
-            originalLink = source.config.url;
-          } else if (source.type === 'filesystem' && source.config.path) {
-            originalLink = source.config.path;
-          }
-        }
-
-        results.push({
-          id: source.id,
-          name: source.name,
-          type: source.type,
-          link: originalLink,
-          exposeAs: source.exposeAs || 'prompt',
-          description: source.description || `Content from ${source.id}`,
-          content: result.content,
-          metadata: { ...result.metadata, originalUrl: originalLink },
-          success: true
-        });
-
-        // Accumulate content for prompt integration
-        if (source.exposeAs !== 'tool') {
-          const sourceLink = result.metadata?.link || source.link || '';
-          totalContent += `\n\n<source id="${source.id}" type="${source.type}" link="${sourceLink}">\n${result.content}\n</source>`;
-        }
-      } catch (error) {
-        const errorResult = {
-          id: source.id,
-          name: source.name,
-          type: source.type,
-          exposeAs: source.exposeAs || 'prompt',
-          description: source.description || `Content from ${source.id}`,
-          link: source.config?.url || source.config?.path || '',
-          content: '',
-          metadata: {
-            error: error.message,
-            errorStack: error.stack,
-            errorCode: error.code || 'UNKNOWN_ERROR'
-          },
-          success: false
-        };
-
-        results.push(errorResult);
-        errors.push(`Source ${source.id}: ${error.message}`);
-      }
-    }
-
-    return {
-      sources: results,
-      content: totalContent.trim(),
-      metadata: {
-        totalSources: sources.length,
-        loadedSources: results.filter(r => r.success).length,
-        failedSources: results.filter(r => !r.success).length,
-        errors,
-        loadedAt: new Date().toISOString()
-      }
-    };
-  }
-
-  /**
-   * Validate source configuration
-   * @param {Object} source - Source configuration
-   * @returns {boolean} - True if valid
-   */
-  validateSourceConfig(source) {
-    if (!source || typeof source !== 'object') {
-      logger.error('Source configuration must be an object');
-      return false;
-    }
-
-    const { id, type, config, exposeAs } = source;
-
-    // Required fields
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      logger.error('Source configuration must have a valid id string');
-      return false;
-    }
-
-    if (!type || typeof type !== 'string') {
-      logger.error(`Source ${id}: type must be a non-empty string`);
-      return false;
-    }
-
-    if (!this.handlers.has(type)) {
-      logger.error(
-        `Source ${id}: unknown handler type '${type}'. Available types: ${Array.from(this.handlers.keys()).join(', ')}`
-      );
-      return false;
-    }
-
-    if (!config || typeof config !== 'object') {
-      logger.error(`Source ${id}: config must be an object`);
-      return false;
-    }
-
-    // Validate exposeAs
-    if (exposeAs && !['prompt', 'tool'].includes(exposeAs)) {
-      logger.error(`Source ${id}: exposeAs must be either 'prompt' or 'tool', got '${exposeAs}'`);
-      return false;
-    }
-
-    // Delegate to handler-specific validation
-    try {
-      const handler = this.handlers.get(type);
-      const isValid = handler.validateConfig(config);
-      if (!isValid) {
-        logger.error(`Source ${id}: handler-specific configuration validation failed`);
-      }
-      return isValid;
-    } catch (error) {
-      logger.error(`Source ${id}: error during handler validation:`, error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Get all registered handler types
-   * @returns {Array} - Array of handler types
-   */
-  getHandlerTypes() {
-    return Array.from(this.handlers.keys());
-  }
-
-  /**
-   * Clear all handler caches
-   */
-  clearAllCaches() {
-    for (const handler of this.handlers.values()) {
-      handler.clearCache();
-    }
-  }
-
-  /**
-   * Get cache statistics for all handlers
-   * @returns {Object} - Cache statistics by handler type
-   */
-  getCacheStats() {
-    const stats = {};
-
-    for (const [type, handler] of this.handlers.entries()) {
-      stats[type] = handler.getCacheStats();
-    }
-
-    return stats;
-  }
-
-  /**
-   * Estimated size of a source's content, for the admin UI. Filesystem and
-   * page sources are read (the count is cached by content). A URL source is
-   * fetched only with `fetchRemote` (when an admin tests it), and what an
-   * iFinder source loads depends on its search, so it has no fixed count.
-   *
-   * @param {Object} source - Source configuration
-   * @param {Object} [options]
-   * @param {boolean} [options.fetchRemote=false] - Fetch URL sources to measure them
-   * @returns {Promise<Object>} `{ tokens, characters, bytes? }`, or
-   *   `{ tokens: null, reason: 'remote' | 'dynamic', maxTokens? }`
-   */
-  async estimateSourceTokens(source, { fetchRemote = false } = {}) {
-    const measurable =
-      source.type === 'filesystem' ||
-      source.type === 'page' ||
-      (fetchRemote && source.type === 'url');
-    if (measurable) {
-      const { content, metadata } = await this.getHandler(source.type).getCachedContent({
-        ...source.config
-      });
-      const stats = getContentStats(content);
-      return Number.isFinite(metadata?.size) ? { ...stats, bytes: metadata.size } : stats;
-    }
-    if (source.type === 'ifinder') {
-      // Upper bound: the handler loads at most maxResults documents of at
-      // most maxLength characters each (a single one for a pinned document).
-      const { documentId, maxResults = 10, maxLength = 10000 } = source.config || {};
-      const characters = (documentId ? 1 : maxResults) * maxLength;
-      return { tokens: null, reason: 'dynamic', maxTokens: Math.ceil(characters / 4) };
-    }
-    return { tokens: null, reason: 'remote' };
-  }
-
-  /**
-   * Most tokens one call of a source tool returns (larger content is searched).
-   * @returns {number}
-   */
-  getToolResultBudgetTokens() {
-    return RESULT_BUDGET_TOKENS;
-  }
-
-  /**
    * Test source connection without loading content
    * @param {string} type - Handler type
    * @param {Object} config - Source configuration
@@ -509,8 +225,6 @@ class SourceManager {
 
     // Test connection based on handler type
     switch (type) {
-      case 'filesystem':
-        return await this.testFilesystemSource(config);
       case 'url':
         return await this.testUrlSource(config);
       case 'ifinder':
@@ -519,56 +233,6 @@ class SourceManager {
         return await this.testPageSource(config);
       default:
         throw new Error(`Testing not implemented for handler: ${type}`);
-    }
-  }
-
-  /**
-   * Test filesystem source
-   */
-  async testFilesystemSource(config) {
-    const { path: filePath, encoding = 'utf-8' } = config;
-    const fs = await import('node:fs');
-
-    try {
-      if (!filePath) {
-        throw new Error('File path is required');
-      }
-
-      // Resolve through the filesystem handler itself rather than repeating
-      // the contents/sources boundary here. That handler owns the single
-      // implementation of the check (and honours CONTENTS_DIR), so the test
-      // endpoint can never accept a path the real read/write path rejects.
-      const handler = this.getHandler('filesystem');
-      let fullPath;
-      try {
-        fullPath = await handler.resolveSourcePath(filePath);
-      } catch {
-        throw new Error('Invalid file path: Path must be within the sources directory');
-      }
-
-      const stats = await fs.promises.stat(fullPath);
-
-      if (!stats.isFile()) {
-        throw new Error('Path is not a file');
-      }
-
-      // Try to read the file to verify accessibility
-      const content = await fs.promises.readFile(fullPath, encoding);
-      const fileSize = stats.size;
-
-      return {
-        accessible: true,
-        relativePath: filePath,
-        fileSize,
-        contentLength: Buffer.byteLength(content, encoding),
-        estimatedTokens: getContentStats(content).tokens,
-        encoding,
-        lastModified: stats.mtime.toISOString()
-      };
-    } catch (error) {
-      // Never expose full filesystem paths in error messages
-      const sanitizedMessage = error.message.replace(/\/[^/\s]+/g, '[path]');
-      throw new Error(`Filesystem test failed: ${sanitizedMessage}`);
     }
   }
 
@@ -645,32 +309,6 @@ class SourceManager {
     } catch (error) {
       throw new Error(`Page test failed: ${error.message}`);
     }
-  }
-
-  /**
-   * Load content from a source (for preview functionality)
-   * @param {string} type - Source type
-   * @param {Object} config - Source configuration
-   * @returns {Promise<string>} Content
-   */
-  async loadContent(type, config) {
-    const handler = this.handlers.get(type);
-    if (!handler) {
-      throw new Error(`Unknown source handler: ${type}`);
-    }
-
-    const result = await handler.loadContent(config);
-    return result.content || result;
-  }
-
-  /**
-   * Get source statistics
-   */
-  getSourceStats() {
-    return {
-      registeredHandlers: Array.from(this.handlers.keys()),
-      cacheStats: this.getCacheStats()
-    };
   }
 }
 
