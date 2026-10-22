@@ -202,6 +202,24 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
 }
 
 /**
+ * TLS options for an outbound WebSocket (`ws`) connection to `url`.
+ *
+ * `ws` takes no agent from us, so the SSL whitelist that `createAgent()` applies to
+ * HTTP(S) has to be applied to the socket options directly. Same rule: nothing is
+ * bypassed unless ssl.ignoreInvalidCertificates is true and the host is whitelisted.
+ * Only `wss://` can be affected; plain `ws://` has no certificate to verify.
+ *
+ * @param {string} url - The `ws://` or `wss://` URL about to be dialed
+ * @param {Object} [sslConfig] - SSL configuration (defaults to the platform config)
+ * @returns {{ rejectUnauthorized?: false }} Options to merge into the `ws` constructor options
+ */
+export function getWebSocketTlsOptions(url, sslConfig = null) {
+  if (typeof url !== 'string' || !url.toLowerCase().startsWith('wss://')) return {};
+  // Admin opt-in only, see shouldIgnoreSSLForURL.
+  return shouldIgnoreSSLForURL(url, sslConfig) ? { rejectUnauthorized: false } : {}; // codeql[js/disabling-certificate-validation]
+}
+
+/**
  * Detect a `${VAR}` placeholder that was never substituted.
  *
  * `configCache` resolves `${VAR}` from the environment but deliberately leaves

@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import configCache from '../../configCache.js';
+import { shouldIgnoreSSLForURL } from '../../utils/httpConfig.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -131,12 +132,13 @@ function makePinnedLookup(pinnedAddress, family) {
  * Build an https/http Agent that pins the socket to the IP we already vetted,
  * so the actual TCP connection cannot land on a different host (DNS rebinding).
  */
-function makePinnedAgent(pinnedAddress, family, isHttps) {
+function makePinnedAgent(pinnedAddress, family, isHttps, ignoreSSL = false) {
   const AgentClass = isHttps ? https.Agent : http.Agent;
   return new AgentClass({
     keepAlive: true,
     maxSockets: 8,
-    lookup: makePinnedLookup(pinnedAddress, family)
+    lookup: makePinnedLookup(pinnedAddress, family),
+    ...(isHttps && ignoreSSL && { rejectUnauthorized: false }) // codeql[js/disabling-certificate-validation]
   });
 }
 
@@ -163,7 +165,10 @@ export async function safeFetch(input, init = {}, opts = {}) {
     opts.allowHosts,
     opts.blockPrivateIps !== false
   );
-  const agent = makePinnedAgent(address, family, url.protocol === 'https:');
+  // Same admin opt-in as every other outbound call: only a host on
+  // ssl.domainWhitelist (with ssl.ignoreInvalidCertificates) skips verification.
+  const ignoreSSL = url.protocol === 'https:' && shouldIgnoreSSLForURL(url.toString());
+  const agent = makePinnedAgent(address, family, url.protocol === 'https:', ignoreSSL);
 
   // Pin the connection through an undici dispatcher. The fetch must come from
   // the same undici package as the Agent: Node's bundled `fetch` is a
@@ -183,7 +188,10 @@ export async function safeFetch(input, init = {}, opts = {}) {
   }
   if (typeof undici?.fetch === 'function' && typeof undici?.Agent === 'function') {
     const dispatcher = new undici.Agent({
-      connect: { lookup: makePinnedLookup(address, family) }
+      connect: {
+        lookup: makePinnedLookup(address, family),
+        ...(ignoreSSL && { rejectUnauthorized: false }) // codeql[js/disabling-certificate-validation]
+      }
     });
     return await undici.fetch(url, { ...init, dispatcher });
   }
