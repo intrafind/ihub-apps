@@ -46,6 +46,12 @@ const PAYLOAD_BUDGET_BYTES = RESULT_BUDGET_CHARS;
 const READ_ROOM_BYTES = 1024;
 const READ_ATTEMPTS = 3;
 
+/** What a read of a document its source cut short tells the model. */
+const SOURCE_TRUNCATED_NOTE =
+  'The source of this document handed over only its beginning (its length limit), so this ' +
+  'is not the whole document and no section or search reaches the rest. Say so when the ' +
+  'answer may depend on the missing part.';
+
 /** What the note and a passage number may take, reserved before they are known. */
 const NOTE_ROOM = 'x'.repeat(200);
 const MARKER_ROOM = 999999;
@@ -211,9 +217,14 @@ export async function read(params) {
       name: result.doc.name,
       content: result.text,
       retrieval: result.retrieval,
+      ...(result.retrieval?.sourceTruncated ? { note: SOURCE_TRUNCATED_NOTE } : {}),
       sources: [
         projectSource(entry.project, item, {
-          read: { ok: true, truncated: result.retrieval?.mode !== 'full' }
+          read: {
+            ok: true,
+            truncated:
+              result.retrieval?.mode !== 'full' || result.retrieval?.sourceTruncated === true
+          }
         })
       ].filter(Boolean)
     });
@@ -223,7 +234,11 @@ export async function read(params) {
     // text gets what the envelope leaves; a document over it is outlined and
     // read in sections, each naming the id it continues at.
     const envelope = jsonBytes(
-      respond({ doc: { name: item?.name || '' }, text: '', retrieval: { mode: 'full' } })
+      respond({
+        doc: { name: item?.name || '' },
+        text: '',
+        retrieval: { mode: 'full', sourceTruncated: true }
+      })
     );
     let budgetBytes = PAYLOAD_BUDGET_BYTES - envelope - READ_ROOM_BYTES;
     let response;
