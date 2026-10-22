@@ -151,6 +151,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         fetchText={fetchItemText}
+        onSave={editable ? text => actions.editText(previewItem, text) : undefined}
         errorMessage={messageOf}
       />
       {renaming && (

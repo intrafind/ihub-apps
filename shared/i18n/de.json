@@ -6260,10 +6260,15 @@
       "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt."
     },
     "preview": {
+      "edit": "Text bearbeiten",
+      "editHint": "Der gespeicherte Text ersetzt das abgelegte Dokument; das Modell liest ab der nächsten Frage den neuen Text.",
+      "editLabel": "Text des Dokuments",
       "empty": "(kein Text)",
+      "saving": "Wird gespeichert…",
       "title": "Text von „{{name}}“",
       "truncated": "Die ersten {{shown}} von {{total}} Zeichen werden angezeigt."
     },
+
     "provenance": {
       "linked": "Verknüpft",
       "picked": "Ausgewählt",
