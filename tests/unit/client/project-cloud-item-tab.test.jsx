@@ -32,9 +32,12 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null
 }));
+// The chat uploader's rule; a test narrows it to PDF to tell it apart from
+// the project's own.
+const mockChatRule = { supports: () => true };
 jest.mock('../../../client/src/features/upload/utils/cloudFileProcessing', () => ({
   __esModule: true,
-  isCloudFileSupported: () => true,
+  isCloudFileSupported: (...args) => mockChatRule.supports(...args),
   formatFileSize: bytes => `${bytes} B`
 }));
 
@@ -107,7 +110,8 @@ jest.mock('../../../client/src/features/upload/hooks/useNextcloudBrowser', () =>
 const CloudItemTab =
   require('../../../client/src/features/projects/components/item-dialog/CloudItemTab').default;
 const {
-  cloudBrowserUploadConfig
+  cloudBrowserUploadConfig,
+  projectFileSupported
 } = require('../../../client/src/features/projects/utils/projectItems');
 
 const api = {
@@ -236,5 +240,59 @@ describe('CloudItemTab – adding the picked files', () => {
       settle({ id: 'itm_1' });
     });
     await waitFor(() => expect(api.addItem).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('which cloud files a project can take', () => {
+  const UPLOAD = {
+    mimeTypes: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/*'
+    ],
+    accept: ['.pdf', '.xlsx', '.pptx', '.odt', '.csv']
+  };
+
+  test('follows the project upload formats, by MIME type or extension', () => {
+    const supported = projectFileSupported({ upload: UPLOAD });
+    expect(
+      supported('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Budget.xlsx')
+    ).toBe(true);
+    expect(supported('text/markdown', 'notes.md')).toBe(true);
+    // A store that reports no useful type: the extension decides.
+    expect(supported('application/octet-stream', 'Deck.PPTX')).toBe(true);
+    expect(supported('', 'minutes.odt')).toBe(true);
+    expect(supported('image/png', 'photo.png')).toBe(false);
+    expect(supported('application/zip', 'archive.zip')).toBe(false);
+  });
+
+  test('leaves the browser its own rule without an upload block', () => {
+    expect(projectFileSupported(null)).toBeNull();
+    expect(projectFileSupported({ upload: { available: false } })).toBeNull();
+  });
+
+  test('the browser offers the documents the project reads, even where the chat would not', async () => {
+    const items = mockBrowserState.items;
+    mockBrowserState.items = [
+      {
+        id: 'f_xlsx',
+        name: 'Budget.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: 1024
+      },
+      { id: 'f_png', name: 'photo.png', mimeType: 'image/png', size: 1024 }
+    ];
+    mockChatRule.supports = mimeType => mimeType === 'application/pdf';
+    try {
+      renderTab({ upload: UPLOAD });
+      expect(await screen.findByText('Budget.xlsx')).toBeInTheDocument();
+      // "Show supported files only" hides what the project cannot read.
+      expect(screen.queryByText('photo.png')).toBeNull();
+      const row = screen.getByText('Budget.xlsx').closest('.flex.items-center.p-2');
+      expect(row.querySelector('input[type="checkbox"]')).toBeEnabled();
+    } finally {
+      mockBrowserState.items = items;
+      mockChatRule.supports = () => true;
+    }
   });
 });

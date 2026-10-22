@@ -14,6 +14,8 @@
  * @module shared/documentExtraction/xlsx
  */
 import {
+  MAX_SHEET_CELLS,
+  MAX_SHEET_COLUMNS,
   MAX_SHEET_ROWS,
   MAX_WORKBOOK_CHARS,
   SHEET_NOTICE_RESERVE,
@@ -21,7 +23,14 @@ import {
   renderSheets
 } from './sheets.js';
 
-export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, SHEET_NOTICE_RESERVE, looksLikeHeader };
+export {
+  MAX_SHEET_CELLS,
+  MAX_SHEET_COLUMNS,
+  MAX_SHEET_ROWS,
+  MAX_WORKBOOK_CHARS,
+  SHEET_NOTICE_RESERVE,
+  looksLikeHeader
+};
 
 /**
  * A cell that spans rows shows its text in each row (every row stays self-contained); one that
@@ -33,9 +42,10 @@ export { MAX_SHEET_ROWS, MAX_WORKBOOK_CHARS, SHEET_NOTICE_RESERVE, looksLikeHead
  *
  * @returns {Object} The sheet to read the rows from
  */
-function withVerticalMerges(XLSX, sheet, lastRow) {
+function withVerticalMerges(XLSX, sheet, lastRow, lastColumn = Infinity) {
   let filled = sheet;
   for (const merge of sheet['!merges'] || []) {
+    if (merge.s.c > lastColumn) continue;
     const origin = sheet[XLSX.utils.encode_cell(merge.s)];
     if (!origin) continue;
     for (let row = merge.s.r + 1; row <= Math.min(merge.e.r, lastRow); row += 1) {
@@ -50,13 +60,16 @@ function withVerticalMerges(XLSX, sheet, lastRow) {
  * @param {Object} args
  * @param {Object} args.XLSX - SheetJS
  * @param {Object} args.workbook - `XLSX.read(...)` result
- * @param {{sheetRows?: number, workbookChars?: number}} [args.limits]
+ * @param {{sheetRows?: number, sheetColumns?: number, sheetCells?: number,
+ *   workbookChars?: number}} [args.limits]
  * @param {{truncated?: boolean}} [args.report] - `truncated` is set when rows or sheets were
  *   left out on the limits
  * @returns {string} `[Sheet: name]` blocks; '' when no sheet has content
  */
 export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) {
   const sheetRows = limits.sheetRows ?? MAX_SHEET_ROWS;
+  const sheetColumns = limits.sheetColumns ?? MAX_SHEET_COLUMNS;
+  const sheetCells = limits.sheetCells ?? MAX_SHEET_CELLS;
   const sheets = [];
 
   workbook.SheetNames.forEach((name, index) => {
@@ -69,28 +82,37 @@ export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) 
       // have all of them turned into rows for the few that fit the budget.
       read: () => {
         const range = XLSX.utils.decode_range(sheet['!ref']);
-        const lastRow = Math.min(range.e.r, range.s.r + sheetRows - 1);
-        const rows = XLSX.utils.sheet_to_json(withVerticalMerges(XLSX, sheet, lastRow), {
-          header: 1,
-          raw: false,
-          defval: '',
-          blankrows: false,
-          range: { s: range.s, e: { r: lastRow, c: range.e.c } }
-        });
+        // Width first, then as many rows as the cell limit leaves for that width.
+        const width = Math.min(range.e.c - range.s.c + 1, sheetColumns);
+        const lastColumn = range.s.c + width - 1;
+        const rowLimit = Math.max(1, Math.min(sheetRows, Math.floor(sheetCells / width)));
+        const lastRow = Math.min(range.e.r, range.s.r + rowLimit - 1);
+        const rows = XLSX.utils.sheet_to_json(
+          withVerticalMerges(XLSX, sheet, lastRow, lastColumn),
+          {
+            header: 1,
+            raw: false,
+            defval: '',
+            blankrows: false,
+            range: { s: range.s, e: { r: lastRow, c: lastColumn } }
+          }
+        );
         // Columns that a merged cell of the first row covers: a title over several columns.
         const covered = new Set();
         for (const merge of sheet['!merges'] || []) {
           if (merge.s.r === range.s.r) {
-            for (let c = merge.s.c + 1; c <= merge.e.c; c += 1) covered.add(c - range.s.c);
+            const end = Math.min(merge.e.c, lastColumn);
+            for (let c = merge.s.c + 1; c <= end; c += 1) covered.add(c - range.s.c);
           }
         }
         // Columns whose first cell the file stores as a number, a date or a boolean.
         const typed = new Set();
-        for (let c = 0; c <= range.e.c - range.s.c; c += 1) {
+        for (let c = 0; c < width; c += 1) {
           const cell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: range.s.c + c })];
           if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
         }
-        return { rows, covered, typed, rowsBeyond: Math.max(0, range.e.r - lastRow) };
+        const notices = lastColumn < range.e.c ? [`[… columns beyond ${width} omitted]`] : [];
+        return { rows, covered, typed, rowsBeyond: Math.max(0, range.e.r - lastRow), notices };
       }
     });
   });

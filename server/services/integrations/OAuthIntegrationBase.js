@@ -540,6 +540,7 @@ class OAuthIntegrationBase {
    * @param {string} userId - User ID
    * @param {string} [providerId] - Provider ID
    * @param {number} [retryCount] - Current retry count
+   * @param {{signal?: AbortSignal}} [options] - `signal` aborts the request
    * @returns {Promise<Object>} API response
    */
   async _makeApiRequestWithRetry(
@@ -549,12 +550,15 @@ class OAuthIntegrationBase {
     data,
     userId,
     providerId,
-    retryCount = 0
+    retryCount = 0,
+    options = {}
   ) {
     try {
       const tokens = await this.getUserTokens(userId, providerId);
       const url = resolveApiUrl(apiBaseUrl, endpoint);
-      const response = await httpFetch(url, this._buildApiFetchOptions(tokens, method, data));
+      const fetchOptions = this._buildApiFetchOptions(tokens, method, data);
+      if (options.signal) fetchOptions.signal = options.signal;
+      const response = await httpFetch(url, fetchOptions);
 
       if (response.ok) {
         return await readResponseBody(response);
@@ -569,7 +573,8 @@ class OAuthIntegrationBase {
           data,
           userId,
           providerId,
-          retryCount + 1
+          retryCount + 1,
+          options
         );
       }
 

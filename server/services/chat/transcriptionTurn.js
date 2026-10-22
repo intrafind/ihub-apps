@@ -25,8 +25,9 @@ import { resolvePrincipal } from '../loop/runIdentity.js';
 import { authorizeChat } from './chatAccess.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 import { isChatPersistenceActive } from './chatPersistence.js';
-import { materializeUserTurn, settleAssistantTurn } from './chatMaterializer.js';
+import { settleAssistantTurn, settleUserTurn } from './chatMaterializer.js';
 import { resolveChatProjects } from '../knowledge/chatProjects.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const COMPONENT = 'TranscriptionTurn';
 const MAX_LABEL_CHARS = 300;
@@ -93,7 +94,7 @@ export async function beginTranscriptionTurn({
   const chatProjects = await resolveChatProjects({
     req: { user },
     chat: access.chat,
-    app: configCache.getApps()?.data?.find(entry => entry?.id === appId) || null,
+    app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
     projectId
   });
   if (!chatProjects.ok) {
@@ -118,7 +119,7 @@ export async function beginTranscriptionTurn({
     model: modelId
   });
   const label = String(attachment?.name || '').slice(0, MAX_LABEL_CHARS);
-  const question = await materializeUserTurn({
+  const { message: question, refusal } = await settleUserTurn({
     repository,
     chatId,
     ownerId: principal.id,
@@ -129,10 +130,15 @@ export async function beginTranscriptionTurn({
     content: label,
     clientMessageId,
     attachments: attachment ? [attachment] : [],
-    ...(chatProjects.chatPatch ? { chat: chatProjects.chatPatch } : {}),
+    ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
     // The audio is not kept, so the question cannot be edited or resent.
     message: { transcription: true }
   });
+  if (refusal) {
+    // A first turn that raced this one opened the chat in another project.
+    runLog.endRun(runId, { status: 'error', error: refusal });
+    return { ok: false, code: 'project-refused' };
+  }
   if (!question) {
     runLog.endRun(runId, {
       status: 'error',

@@ -17,6 +17,11 @@
  *
  * Output: `{ project, document, name, text, chars, retrieval, doc }`.
  *
+ * A document longer than the budget is never passed on as its outline: the
+ * step fails with `SECTION_REQUIRED` (no `section` given) or
+ * `SECTION_NOT_FOUND` (the `section` is not in the document), so a loop that
+ * summarizes each document cannot store a summary of an outline instead.
+ *
  * @module services/workflow/executors/ProjectReadNodeExecutor
  */
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
@@ -58,6 +63,23 @@ export class ProjectReadNodeExecutor extends BaseNodeExecutor {
         { itemId: documentId },
         { section, ...(maxChars ? { budgetChars: maxChars } : {}) }
       );
+      // Over the budget without a usable section, the provider answers with
+      // the document's outline: that is not the document's content.
+      if (result.retrieval?.mode === 'outline') {
+        const budget = maxChars ? `the read budget of ${maxChars} characters` : 'the read budget';
+        throw new ProjectNodeError(
+          section ? 'SECTION_NOT_FOUND' : 'SECTION_REQUIRED',
+          section
+            ? `Document "${result.doc.name}" has no section "${section}", and the whole document is over ${budget}`
+            : `Document "${result.doc.name}" is over ${budget}: name a "section" to read, or raise "maxChars"`,
+          {
+            projectId: project.id,
+            itemId: documentId,
+            totalSections: result.retrieval.totalSections,
+            totalTokens: result.retrieval.totalTokens
+          }
+        );
+      }
       const output = {
         project: project.id,
         document: documentId,

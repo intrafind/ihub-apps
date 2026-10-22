@@ -77,10 +77,35 @@ export function isOriginalDiscarded(error) {
   );
 }
 
+/** `value` as a literal inside a regular expression. */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/**
+ * Where `passage` occurs in `text`, as offsets into `text`, or null.
+ * Whitespace runs match flexibly: a source collapses the whitespace of its
+ * passages (`normalizeSource`), so a heading followed by a blank line is
+ * quoted with a single space and must still be found in the original.
+ *
+ * @param {string} text
+ * @param {string} passage
+ * @returns {{start: number, end: number}|null}
+ */
+export function findPassage(text, passage) {
+  const words = String(passage || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return null;
+  const match = new RegExp(words.map(escapeRegExp).join(String.raw`\s+`)).exec(String(text || ''));
+  return match ? { start: match.index, end: match.index + match[0].length } : null;
+}
+
 /**
  * Where a passage sits in the text: the whole passage when it occurs
- * verbatim, else the start of it (passages are excerpts and may have been
- * cut or re-spaced).
+ * (whitespace aside), else the start of it (passages are excerpts and may
+ * have been cut).
  *
  * @param {string} text
  * @param {string} passage
@@ -89,12 +114,11 @@ export function isOriginalDiscarded(error) {
 function locate(text, passage) {
   const wanted = String(passage || '').trim();
   if (!wanted) return null;
-  let start = text.indexOf(wanted);
-  if (start >= 0) return { start, end: start + wanted.length };
+  const whole = findPassage(text, wanted);
+  if (whole) return whole;
   const needle = wanted.slice(0, NEEDLE_LENGTH).trim();
   if (needle.length < 8) return null;
-  start = text.indexOf(needle);
-  return start >= 0 ? { start, end: start + needle.length } : null;
+  return findPassage(text, needle);
 }
 
 /**

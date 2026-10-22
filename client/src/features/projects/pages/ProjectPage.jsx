@@ -55,12 +55,30 @@ function ReadOnlyBanner() {
  * sent; admin projects (reached through an app) are shown read-only here and
  * managed in the admin pages.
  *
+ * React Router keeps the page mounted when only `:projectId` changes (Back,
+ * Forward, a link to another project). The content is remounted per project
+ * instead: an answer to a save, an upload or a member change still out for
+ * the previous project then lands in a component that is gone, rather than
+ * replacing the project now on screen — whose documents and delete action
+ * would otherwise target the previous project under the new URL.
+ *
  * @returns {JSX.Element}
  */
 export default function ProjectPage() {
+  const { projectId } = useParams();
+  return <ProjectPageContent key={projectId} projectId={projectId} />;
+}
+
+/**
+ * One project's page; mounted for a single project id.
+ *
+ * @param {Object} props
+ * @param {string} props.projectId
+ * @returns {JSX.Element}
+ */
+function ProjectPageContent({ projectId }) {
   const { t, i18n } = useTranslation();
   const language = i18n.language;
-  const { projectId } = useParams();
   const navigate = useNavigate();
   const { userId } = useProjectsAvailability();
   const { config } = useProjectsConfig();
@@ -187,7 +205,15 @@ export default function ProjectPage() {
             />
           </div>
           <div className="space-y-6 min-w-0">
-            <ProjectSettingsCard project={project} editable={editable} onSaved={setProject} />
+            <ProjectSettingsCard
+              project={project}
+              editable={editable}
+              onSaved={saved => {
+                setProject(saved);
+                // The list and the chats' project labels show the name too.
+                invalidateProjectsList();
+              }}
+            />
             {isUserProject && (
               <ProjectMembersSection
                 project={project}

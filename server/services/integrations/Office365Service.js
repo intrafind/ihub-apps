@@ -316,9 +316,18 @@ class Office365Service extends OAuthIntegrationBase {
    * @param {string} userId - User ID
    * @param {string} [providerId] - Provider ID for per-tenant token lookup
    * @param {number} retryCount - Current retry count
+   * @param {{signal?: AbortSignal}} [options] - `signal` aborts the request
    * @returns {Promise<Object>} API response
    */
-  makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
+  makeApiRequest(
+    endpoint,
+    method = 'GET',
+    data = null,
+    userId,
+    providerId,
+    retryCount = 0,
+    options = {}
+  ) {
     return this._makeApiRequestWithRetry(
       this.graphApiUrl,
       endpoint,
@@ -326,7 +335,8 @@ class Office365Service extends OAuthIntegrationBase {
       data,
       userId,
       providerId,
-      retryCount
+      retryCount,
+      options
     );
   }
 
@@ -743,13 +753,19 @@ class Office365Service extends OAuthIntegrationBase {
    * @param {string} userId - User ID
    * @param {string} fileId - File ID
    * @param {string} driveId - Drive ID (optional)
-   * @returns {Promise<Object>} File data with content
+   * @param {string} [providerId]
+   * @param {{signal?: AbortSignal}} [options] - `signal` aborts the metadata
+   *   request and the download, body included
+   * @returns {Promise<Object>} File data with content, and `lastModified`
+   *   (ISO) as the drive reports it now
    */
-  async downloadFile(userId, fileId, driveId = null, providerId) {
+  async downloadFile(userId, fileId, driveId = null, providerId, { signal } = {}) {
     try {
       // Get file metadata first
       const endpoint = driveId ? `/drives/${driveId}/items/${fileId}` : `/me/drive/items/${fileId}`;
-      const fileInfo = await this.makeApiRequest(endpoint, 'GET', null, userId, providerId);
+      const fileInfo = await this.makeApiRequest(endpoint, 'GET', null, userId, providerId, 0, {
+        signal
+      });
 
       if (!fileInfo.file) {
         throw new Error('Item is not a file');
@@ -766,7 +782,8 @@ class Office365Service extends OAuthIntegrationBase {
       const response = await httpFetch(downloadUrl, {
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`
-        }
+        },
+        ...(signal ? { signal } : {})
       });
 
       if (!response.ok) {
@@ -783,6 +800,7 @@ class Office365Service extends OAuthIntegrationBase {
         name: fileInfo.name,
         mimeType: fileInfo.file.mimeType,
         size: fileInfo.size,
+        lastModified: fileInfo.lastModifiedDateTime || null,
         content
       };
     } catch (error) {

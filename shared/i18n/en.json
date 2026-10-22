@@ -4816,6 +4816,7 @@
       "projectNodes": {
         "inputTypeProject": "Project",
         "inputTypeProjectHelp": "The user picks one of their projects when starting the run. Project steps read it as {{reference}}.",
+        "inputNameReserved": "A project input cannot be named \"{{name}}\": a chat run passes its message under that name. Choose another name.",
         "outputVariable": "Output variable",
         "project": {
           "label": "Project",

@@ -9,7 +9,8 @@ import NextcloudFileBrowser from '../../../upload/components/NextcloudFileBrowse
 import {
   buildCloudItemRequests,
   cloudBrowserUploadConfig,
-  cloudProvidersForKind
+  cloudProvidersForKind,
+  projectFileSupported
 } from '../../utils/projectItems';
 import { INPUT_CLASS, LABEL_CLASS } from './dialogStyles';
 
@@ -90,6 +91,9 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
   const provider = matching.find(entry => entry.id === providerId) || matching[0] || null;
   const Browser = BROWSERS[kind];
   const uploadConfig = useMemo(() => cloudBrowserUploadConfig(config), [config]);
+  // The formats the project reads (Excel, PowerPoint, OpenDocument …), not
+  // the chat uploader's list.
+  const isFileSupported = useMemo(() => projectFileSupported(config), [config]);
 
   // Resolves to the files that were added: the browser drops them from its
   // selection, so after a partial failure "Add to project" retries only the
@@ -175,6 +179,7 @@ function CloudItemTab({ kind, kindEntry, projectId, api, config = null, onAdded,
                 key={provider.id}
                 provider={provider}
                 uploadConfig={uploadConfig}
+                isFileSupported={isFileSupported || undefined}
                 onClose={onClose}
                 onPick={handlePick}
                 pickLabel={t('projects.addItem.cloudAdd', 'Add to project')}

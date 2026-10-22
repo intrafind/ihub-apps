@@ -463,6 +463,44 @@ describe('resolveNodeProject', () => {
     }
   });
 
+  it('reaches an admin project linked only by a step in a nested inline loop body', async () => {
+    const stepNode = {
+      id: 'read-orphan',
+      type: 'project-read',
+      config: { project: 'orphan', document: '$.data._loopItem.id', projects: ['orphan'] }
+    };
+    const loopNode = (id, body) => ({
+      id,
+      type: 'loop',
+      name: { en: id },
+      position: { x: 0, y: 100 },
+      config: { mode: 'forEach', array: '$.data.docs', body }
+    });
+    const loopWorkflow = workflowOf({
+      id: 'orphan-reader',
+      projects: [],
+      nodes: [...workflowOf().nodes, loopNode('outer', [loopNode('inner', [stepNode])])]
+    });
+    configCache.setCacheEntry('config/workflows.json', [workflowOf(), loopWorkflow]);
+    try {
+      const resolved = await resolveNodeProject({
+        executor,
+        node: stepNode,
+        state: stateOf({}),
+        context: contextOf({ user: GRACE, workflow: loopWorkflow })
+      });
+      assert.equal(resolved.project.id, 'orphan', 'the link inside the body reaches it');
+      assert.equal(resolved.canWrite, false, 'a bare id grants no writes');
+      assert.deepEqual(
+        findDependencies('orphan').filter(entry => entry.type === 'workflow'),
+        [{ type: 'workflow', id: 'orphan-reader', name: 'Memo writer', nodeId: 'read-orphan' }],
+        'the body step counts as a dependency'
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', [workflowOf()]);
+    }
+  });
+
   it('keeps user projects dark while the feature is off', async () => {
     configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
     try {
@@ -684,6 +722,47 @@ describe('project-write and project-read', () => {
       contextOf()
     );
     assert.equal(byObject.output.document, lease.id);
+  });
+
+  it('refuses to pass on an outline as the text of a document over the budget', async () => {
+    const big = await service.createUserProject({ owner: ADA, content: { name: 'Big files' } });
+    const part = title => `## ${title}\n\n${`${title} clause text. `.repeat(1500)}`;
+    const text = `# Contract\n\n${part('Scope')}\n\n${part('Payment')}`;
+    assert.ok(text.length > 40000, 'above the default read budget');
+    const { item } = await service.addItem(
+      big.id,
+      { kind: 'upload', ref: { contentType: 'text/markdown' }, name: 'Contract.md', text },
+      { user: ADA, wait: true }
+    );
+    const readWith = extra =>
+      read.execute(
+        {
+          id: 'n',
+          type: 'project-read',
+          config: { project: big.id, document: item.id, ...extra }
+        },
+        stateOf({}),
+        contextOf()
+      );
+
+    const whole = await readWith({});
+    assert.equal(whole.status, 'failed', 'an outline is not the document');
+    assert.equal(whole.code, 'SECTION_REQUIRED');
+    assert.match(whole.error, /over the read budget: name a "section"/);
+    assert.equal(whole.stateUpdates, undefined, 'nothing reaches the state');
+
+    const missing = await readWith({ section: 'Warranty' });
+    assert.equal(missing.code, 'SECTION_NOT_FOUND');
+    assert.match(missing.error, /no section "Warranty"/);
+
+    const section = await readWith({ section: 'Payment' });
+    assert.equal(section.status, 'completed', section.error);
+    assert.equal(section.output.retrieval.mode, 'section');
+    assert.match(section.output.text, /Payment clause text/);
+
+    const small = await readWith({ maxChars: 100 });
+    assert.equal(small.code, 'SECTION_REQUIRED');
+    assert.match(small.error, /read budget of 100 characters/);
   });
 
   it('refuses a write the user or the link does not allow', async () => {
@@ -1014,5 +1093,22 @@ describe('workflow schema', () => {
       ]
     });
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
+  });
+
+  it('refuses a project input named input, the name a chat run passes its message under', () => {
+    const withInput = name =>
+      workflowConfigSchema.safeParse(
+        workflowOf({
+          nodes: workflowOf().nodes.map(node =>
+            node.type === 'start'
+              ? { ...node, config: { inputVariables: [{ name, type: 'project' }] } }
+              : { ...node, config: { output: 'memo' } }
+          )
+        })
+      );
+    const refused = withInput('input');
+    assert.equal(refused.success, false);
+    assert.match(JSON.stringify(refused.error.issues), /cannot be named \\"input\\"/);
+    assert.equal(withInput('case').success, true);
   });
 });

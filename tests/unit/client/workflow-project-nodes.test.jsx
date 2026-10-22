@@ -423,5 +423,24 @@ describe('the start step', () => {
       />
     );
     expect(screen.getByText(/Project steps read it as \$\.data\.project/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('flags a project input named input, which a chat run uses for its message', () => {
+    const { rerender } = render(
+      <StartForm
+        config={{ inputVariables: [{ name: 'input', type: 'project' }] }}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('cannot be named "input"');
+    // A text input of that name is what the chat fills; it is fine.
+    rerender(
+      <StartForm
+        config={{ inputVariables: [{ name: 'input', type: 'string' }] }}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
