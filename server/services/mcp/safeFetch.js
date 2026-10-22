@@ -134,12 +134,15 @@ function makePinnedLookup(pinnedAddress, family) {
  */
 function makePinnedAgent(pinnedAddress, family, isHttps, ignoreSSL = false) {
   const AgentClass = isHttps ? https.Agent : http.Agent;
-  return new AgentClass({
+  const options = {
     keepAlive: true,
     maxSockets: 8,
-    lookup: makePinnedLookup(pinnedAddress, family),
-    ...(isHttps && ignoreSSL && { rejectUnauthorized: false }) // codeql[js/disabling-certificate-validation]
-  });
+    lookup: makePinnedLookup(pinnedAddress, family)
+  };
+  // Admin opt-in only: ignoreSSL is true solely for a host on ssl.domainWhitelist
+  // (see shouldIgnoreSSLForURL), same as createDirectAgent in httpConfig.js.
+  if (isHttps && ignoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+  return new AgentClass(options);
 }
 
 /**
@@ -187,12 +190,9 @@ export async function safeFetch(input, init = {}, opts = {}) {
     undici = null;
   }
   if (typeof undici?.fetch === 'function' && typeof undici?.Agent === 'function') {
-    const dispatcher = new undici.Agent({
-      connect: {
-        lookup: makePinnedLookup(address, family),
-        ...(ignoreSSL && { rejectUnauthorized: false }) // codeql[js/disabling-certificate-validation]
-      }
-    });
+    const connect = { lookup: makePinnedLookup(address, family) };
+    if (ignoreSSL) connect.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+    const dispatcher = new undici.Agent({ connect });
     return await undici.fetch(url, { ...init, dispatcher });
   }
 
