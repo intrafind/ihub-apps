@@ -53,6 +53,11 @@ export function evictProjectIndex(projectId) {
   }
 }
 
+/** Bytes a text takes inside a JSON document: UTF-8, quotes and escapes included. */
+function serializedBytes(text) {
+  return Buffer.byteLength(JSON.stringify(text), 'utf8');
+}
+
 function hash(value) {
   return createHash('sha256').update(String(value)).digest('hex').slice(0, 16);
 }
@@ -182,7 +187,18 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     };
   }
 
-  async read(project, ctx, { itemId }, { section, budgetChars = RESULT_BUDGET_CHARS } = {}) {
+  /**
+   * One document, or a section of it, within a budget: `budgetBytes` bounds
+   * the text as it serializes into a JSON result (UTF-8, escapes included),
+   * `budgetChars` in characters. A document over the budget comes back as
+   * its outline, and a section read names the id it continues at.
+   */
+  async read(
+    project,
+    ctx,
+    { itemId },
+    { section, budgetChars = RESULT_BUDGET_CHARS, budgetBytes } = {}
+  ) {
     const item = (project.items || []).find(entry => entry.id === itemId);
     if (!item)
       throw new KnowledgeError('ITEM_NOT_FOUND', 'Document not found', {
@@ -190,7 +206,13 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
         itemId
       });
     const { text } = await getItemText(project, item, ctx);
-    const selected = selectContent(text, { section, name: item.name, budgetChars });
+    const selected = selectContent(text, {
+      section,
+      name: item.name,
+      ...(Number.isFinite(budgetBytes)
+        ? { budgetChars: budgetBytes, measure: serializedBytes }
+        : { budgetChars })
+    });
     return { doc: docOf(project, item), text: selected.content, retrieval: selected.retrieval };
   }
 
