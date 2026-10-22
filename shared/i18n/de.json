@@ -6061,11 +6061,14 @@
       "memoryFailedHint": "Die Notizen konnten nach diesem Lauf nicht aktualisiert werden, daher wurden die bisherigen Notizen beibehalten.",
       "delete": "Löschen",
       "deleteTitle": "Läufe löschen?",
-      "deleteText": "Die ausgewählten Läufe und ihre Chats werden gelöscht. Das kann nicht rückgängig gemacht werden. Laufende Läufe bleiben erhalten.",
+      "deleteText": "{{count}} Lauf/Läufe und ihre Chats werden gelöscht. Das kann nicht rückgängig gemacht werden.",
       "deleteSelected": "Ausgewählte löschen ({{count}})",
       "deleteAll": "Alle beendeten Läufe löschen",
       "select": "Auswählen",
-      "selectRun": "Diesen Lauf auswählen"
+      "selectRun": "Diesen Lauf auswählen",
+      "deletedNotice": "{{count}} Lauf/Läufe gelöscht.",
+      "nothingDeleted": "Es wurden keine beendeten Läufe gelöscht.",
+      "deleteAllText": "Alle beendeten Läufe dieser Aufgabe, auch ältere nicht angezeigte, und ihre Chats werden gelöscht. Das kann nicht rückgängig gemacht werden. Laufende Läufe bleiben erhalten."
     },
     "schedule": {
       "at": "Datum und Uhrzeit",
@@ -6185,8 +6188,8 @@
       "maxRuns": "Höchstens so viele Läufe behalten",
       "maxAgeDays": "Läufe löschen, die älter sind als (Tage)",
       "unlimited": "Keine Begrenzung",
-      "platformMax": "Höchstens {{count}} (vom Administrator festgelegt)",
-      "platformDays": "Höchstens {{count}} (vom Administrator festgelegt)",
+      "platformMax": "Standard: {{count}} (vom Administrator festgelegt; ein höherer Wert hat keine Wirkung)",
+      "platformDays": "Standard: {{count}} (vom Administrator festgelegt; ein höherer Wert hat keine Wirkung)",
       "help": "Ältere Läufe und ihre Chats werden automatisch gelöscht. Ein leeres Feld verwendet den Standard. Laufende Läufe werden nie gelöscht."
     }
   },

@@ -15,7 +15,8 @@
  * `null` (task) and `0` (platform) mean "no limit of its own".
  *
  * A run that has not finished (queued, running, awaiting approval) is never
- * selected and does not count toward the limit.
+ * selected and does not count toward the limit. A skipped slot does not count
+ * toward the count limit either; only the age limit removes it.
  *
  * @module services/scheduler/tasks/runRetention
  */
@@ -61,11 +62,19 @@ export function effectiveRetention(task, settings) {
  */
 export function selectRunsToPrune(runs, { maxRuns, maxAgeDays }, now = Date.now()) {
   if (!(maxRuns > 0) && !(maxAgeDays > 0)) return [];
-  const finished = runs
-    .filter(run => isFinalRunStatus(run.status))
-    .sort((a, b) => String(b.queuedAt || b.id).localeCompare(String(a.queuedAt || a.id)));
-  return finished.filter((run, index) => {
-    if (maxRuns > 0 && index >= maxRuns) return true;
+  const newestFirst = (a, b) =>
+    String(b.queuedAt || b.id).localeCompare(String(a.queuedAt || a.id));
+  const finished = runs.filter(run => isFinalRunStatus(run.status)).sort(newestFirst);
+  // Only runs that ran count toward the limit: a skipped slot is a record
+  // without a chat, and counting it would push the last real run out.
+  const ran = new Set(
+    finished
+      .filter(run => run.startedAt && run.status !== 'skipped')
+      .slice(0, maxRuns > 0 ? maxRuns : 0)
+  );
+  return finished.filter(run => {
+    const counts = run.startedAt && run.status !== 'skipped';
+    if (maxRuns > 0 && counts && !ran.has(run)) return true;
     return maxAgeDays > 0 && isOlderThanDays(run.finishedAt || run.queuedAt, maxAgeDays, now);
   });
 }

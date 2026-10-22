@@ -55,6 +55,7 @@ const settingsBodySchema = z
     maxConsecutiveFailures: int(0, 1000),
     approvalTimeoutHours: int(1, 24 * 31),
     runRetentionDays: int(0, 3650),
+    maxRunsPerTask: int(0, 10_000),
     maxRunChatsPerTask: int(0, 10_000),
     maxInstructionLength: int(100, 100_000),
     maxRunMinutes: int(1, 30),

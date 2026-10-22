@@ -15,12 +15,14 @@ import {
   teardownHarness
 } from './helpers/scheduledTaskHarness.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import {
   effectiveRetention,
   parseRetention,
   selectRunsToPrune
 } from '../services/scheduler/tasks/runRetention.js';
+import { ScheduledTaskSource } from '../services/scheduler/tasks/taskSource.js';
 import { newRunDocument } from '../services/scheduler/tasks/taskModel.js';
 import { scheduledTaskSettings } from '../services/scheduler/tasks/taskPolicy.js';
 
@@ -81,7 +83,7 @@ describe('selectRunsToPrune', () => {
   const now = Date.parse('2026-06-30T12:00:00Z');
   const run = (n, status = 'succeeded', ageDays = n) => {
     const at = new Date(now - ageDays * DAY).toISOString();
-    return { id: `run-${n}`, status, queuedAt: at, finishedAt: at };
+    return { id: `run-${n}`, status, queuedAt: at, startedAt: at, finishedAt: at };
   };
 
   it('selects nothing without limits', () => {
@@ -106,6 +108,17 @@ describe('selectRunsToPrune', () => {
     assert.deepEqual(ids, ['run-40']);
     const both = selectRunsToPrune(runs, { maxRuns: 1, maxAgeDays: 30 }, now).map(r => r.id);
     assert.deepEqual(both.sort(), ['run-2', 'run-3', 'run-40']);
+  });
+
+  it('does not let a skipped slot push the last real run out', () => {
+    const skipped = { ...run(1, 'skipped'), startedAt: null };
+    const runs = [skipped, run(2), run(3)];
+    const ids = selectRunsToPrune(runs, { maxRuns: 1, maxAgeDays: 0 }, now).map(r => r.id);
+    assert.deepEqual(ids, ['run-3']);
+    // Only the age limit removes a skip record.
+    const old = { ...run(40, 'skipped'), startedAt: null };
+    assert.deepEqual(selectRunsToPrune([old], { maxRuns: 1, maxAgeDays: 30 }, now), [old]);
+    assert.deepEqual(selectRunsToPrune([old], { maxRuns: 1, maxAgeDays: 0 }, now), []);
   });
 
   it('never selects a run in progress and does not count it', () => {
@@ -135,6 +148,7 @@ describe('deleting and pruning runs', () => {
         status: statuses[i] || 'succeeded',
         now: queuedAt
       });
+      run.startedAt = new Date(queuedAt).toISOString();
       run.finishedAt = new Date(queuedAt).toISOString();
       await repository.putRun(run);
       ids.push(run.id);
@@ -213,6 +227,76 @@ describe('deleting and pruning runs', () => {
     const settings = scheduledTaskSettings({ scheduledTasks: { maxRunsPerTask: 1 } });
     assert.equal(await tasks.pruneTaskRuns(task, settings), 2);
     assert.ok(await repository.getRun(task.id, ids[0]));
+    await cleanup(user);
+  });
+
+  it('after a run applies only the count limit and reads a bounded history', async () => {
+    const { user, task, ids, repository } = await taskWithRuns(6, { ageStepDays: 40 });
+    const settings = scheduledTaskSettings({});
+    const updated = await tasks.updateTask(user, task.id, {
+      retention: { maxRuns: 3, maxAgeDays: 1 }
+    });
+    // The age limit is left to the sweep: only the count rule deletes here.
+    assert.equal(await tasks.pruneTaskRuns(updated, settings, Date.now(), { countOnly: true }), 3);
+    assert.ok(await repository.getRun(task.id, ids[2]));
+    assert.equal(await repository.getRun(task.id, ids[3]), null);
+    // The sweep (full prune) then applies the age limit to what is left.
+    assert.equal(await tasks.pruneTaskRuns(updated, settings), 2);
+    await cleanup(user);
+  });
+
+  it('keeps the run record when its chat cannot be deleted', async () => {
+    const { user, task, ids, repository } = await taskWithRuns(2);
+    const run = await repository.getRun(task.id, ids[1]);
+    // A chat the repository cannot reach: the record must survive so the delete can be retried.
+    const chats = getChatRepository();
+    const original = chats.getChat.bind(chats);
+    chats.getChat = async () => {
+      throw new Error('storage unavailable');
+    };
+    try {
+      await repository.putRun({ ...run, chatId: 'stuck-chat' });
+      const result = await tasks.deleteRuns(user, task.id, { runIds: [ids[1]] });
+      assert.equal(result.deleted, 0);
+      assert.equal(result.failed, 1);
+      assert.ok(await repository.getRun(task.id, ids[1]));
+    } finally {
+      chats.getChat = original;
+    }
+    await cleanup(user);
+  });
+
+  it('lets an admin delete runs of any task', async () => {
+    const { user, task, ids, repository } = await taskWithRuns(2);
+    const result = await tasks.adminDeleteRuns(task.id, { all: true });
+    assert.equal(result.deleted, 2);
+    assert.equal(await repository.getRun(task.id, ids[0]), null);
+    await assert.rejects(
+      () => tasks.adminDeleteRuns('st-00000000-0000-0000-0000-000000000000', { all: true }),
+      error => error.status === 404
+    );
+    await cleanup(user);
+  });
+
+  it('keeps the retention when a task is duplicated', async () => {
+    const { user, task } = await taskWithRuns(0);
+    await tasks.updateTask(user, task.id, { retention: { maxRuns: 3, maxAgeDays: 9 } });
+    const copy = await tasks.duplicateTask(user, task.id);
+    assert.deepEqual(copy.retention, { maxRuns: 3, maxAgeDays: 9 });
+    await cleanup(user);
+  });
+
+  it('sweeps run records whose task is gone, once they are past the retention age', async () => {
+    const { user, task, ids, repository } = await taskWithRuns(2, { ageStepDays: 100 });
+    const settings = scheduledTaskSettings({ scheduledTasks: { runRetentionDays: 90 } });
+    const sweep = ScheduledTaskSource.prototype.sweepOrphanRuns;
+    const self = { repository: () => repository };
+    // The task exists: nothing is an orphan.
+    assert.equal(await sweep.call(self, new Set([task.id]), Date.now(), settings), 0);
+    // The task is gone from the set: only the run past 90 days is removed.
+    assert.equal(await sweep.call(self, new Set(), Date.now(), settings), 1);
+    assert.ok(await repository.getRun(task.id, ids[0]));
+    assert.equal(await repository.getRun(task.id, ids[1]), null);
     await cleanup(user);
   });
 

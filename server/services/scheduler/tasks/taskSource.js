@@ -30,6 +30,7 @@ import { getScheduledTaskRepository } from './ScheduledTaskRepository.js';
 import {
   applyRunOutcome,
   isFinalRunStatus,
+  isOlderThanDays,
   planDueSlot,
   reasonOf,
   runLeaseHeld
@@ -268,16 +269,20 @@ export class ScheduledTaskSource {
 
   /**
    * Apply every task's retention limits (its own and the platform's) to its
-   * run history. The count limit is also applied when a run ends; this sweep
-   * is what makes the age limit take effect for tasks that rarely run.
+   * run history, then remove runs whose task is gone. The count limit is also
+   * applied when a run ends; this sweep is what makes the age limit take
+   * effect for tasks that rarely run.
    *
    * @param {number} now
    * @param {Object} settings
    * @returns {Promise<number>} Runs deleted.
    */
   async sweepRuns(now, settings) {
+    const repository = this.repository();
+    const taskIds = new Set();
     let deleted = 0;
-    for await (const task of this.repository().scanTasks()) {
+    for await (const task of repository.scanTasks()) {
+      taskIds.add(task.id);
       try {
         deleted += await pruneTaskRuns(task, settings, now);
       } catch (error) {
@@ -288,7 +293,31 @@ export class ScheduledTaskSource {
         });
       }
     }
+    deleted += await this.sweepOrphanRuns(taskIds, now, settings);
     return deleted;
+  }
+
+  /**
+   * Delete run records left behind by a deleted task (its delete could not
+   * remove all of them) once they are past `runRetentionDays`.
+   *
+   * @param {Set<string>} taskIds - Tasks that exist.
+   * @param {number} now
+   * @param {Object} settings
+   * @returns {Promise<number>}
+   */
+  async sweepOrphanRuns(taskIds, now, settings) {
+    if (!(settings.runRetentionDays > 0)) return 0;
+    const repository = this.repository();
+    const orphans = [];
+    for await (const run of repository.scanRuns()) {
+      if (taskIds.has(run.taskId) || !isFinalRunStatus(run.status)) continue;
+      if (isOlderThanDays(run.finishedAt || run.queuedAt, settings.runRetentionDays, now)) {
+        orphans.push(run);
+      }
+    }
+    for (const run of orphans) await repository.deleteRun(run.taskId, run.id);
+    return orphans.length;
   }
 
   clear() {

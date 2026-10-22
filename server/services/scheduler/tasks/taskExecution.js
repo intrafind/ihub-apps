@@ -799,7 +799,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     );
     await repository
       .getTask(taskId)
-      .then(stored => (stored ? pruneTaskRuns(stored, settings) : 0))
+      .then(stored =>
+        stored ? pruneTaskRuns(stored, settings, Date.now(), { countOnly: true }) : 0
+      )
       .catch(error =>
         logger.warn('Could not prune the runs of a scheduled task', {
           component: COMPONENT,

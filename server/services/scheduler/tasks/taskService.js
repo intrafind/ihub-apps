@@ -691,6 +691,7 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
       websearchEnabled: task.websearchEnabled,
       // The setting, not the notes: the copy starts with its own first run.
       memory: task.memory,
+      retention: task.retention ?? null,
       schedule: schedule.type === 'once' ? { type: 'manual' } : schedule,
       notify: task.notify
     },
@@ -935,21 +936,28 @@ export async function getRun(user, taskId, runId) {
  * @param {Object[]} runs
  * @param {Object} [options]
  * @param {boolean} [options.deleteChats=true]
- * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
+ * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number, failed: number}>}
  */
 async function removeRuns(task, runs, { deleteChats = true } = {}) {
   const repository = getScheduledTaskRepository();
   let deleted = 0;
   let chatsDeleted = 0;
   let skipped = 0;
+  let failed = 0;
   const removedIds = new Set();
   for (const run of runs) {
     if (!isFinalRunStatus(run.status)) {
       skipped += 1;
       continue;
     }
-    if (deleteChats && run.chatId && !run.chatDeleted && (await deleteRunChat(run.chatId))) {
-      chatsDeleted += 1;
+    if (deleteChats && run.chatId && !run.chatDeleted) {
+      if (await deleteRunChat(run.chatId)) {
+        chatsDeleted += 1;
+      } else if (await chatStillExists(run.chatId)) {
+        // The record is the only pointer to the chat: keep it so the delete can be retried.
+        failed += 1;
+        continue;
+      }
     }
     if (await repository.deleteRun(task.id, run.id)) {
       deleted += 1;
@@ -974,7 +982,16 @@ async function removeRuns(task, runs, { deleteChats = true } = {}) {
       );
     announceTaskChanged(task.id);
   }
-  return { deleted, chatsDeleted, skipped };
+  return { deleted, chatsDeleted, skipped, failed };
+}
+
+/** Whether a chat is still stored (an error counts as yes: do not orphan it). */
+async function chatStillExists(chatId) {
+  try {
+    return Boolean(await getChatRepository().getChat(chatId));
+  } catch {
+    return true;
+  }
 }
 
 /** Every run document of a task, page by page. */
@@ -993,18 +1010,37 @@ async function allRunsOf(taskId) {
   return runs;
 }
 
+/** Finished runs read past the count limit when pruning after a run. */
+const PRUNE_LOOK_PAST = 25;
+
 /**
  * Apply a task's retention limits (its own and the platform's) to its history.
+ *
+ * `countOnly` is what runs after each run ends: it applies only the count
+ * limit and stops paging a little past it (history is newest first and older
+ * runs were pruned by earlier calls), so it does not read a long history on
+ * every run. The age limit is left to the periodic sweep, which reads it all.
  *
  * @param {Object} task
  * @param {Object} [settings]
  * @param {number} [now]
+ * @param {Object} [options]
+ * @param {boolean} [options.countOnly=false]
  * @returns {Promise<number>} Runs deleted.
  */
-export async function pruneTaskRuns(task, settings = currentPolicy().settings, now = Date.now()) {
+export async function pruneTaskRuns(
+  task,
+  settings = currentPolicy().settings,
+  now = Date.now(),
+  { countOnly = false } = {}
+) {
   const limits = effectiveRetention(task, settings);
+  if (countOnly) limits.maxAgeDays = 0;
   if (!(limits.maxRuns > 0) && !(limits.maxAgeDays > 0)) return 0;
-  const stale = selectRunsToPrune(await allRunsOf(task.id), limits, now);
+  const runs = countOnly
+    ? await recentRunsOf(task.id, limits.maxRuns + PRUNE_LOOK_PAST)
+    : await allRunsOf(task.id);
+  const stale = selectRunsToPrune(runs, limits, now);
   if (stale.length === 0) return 0;
   const { deleted } = await removeRuns(task, stale);
   logger.info('Scheduled task runs past retention deleted', {
@@ -1015,6 +1051,26 @@ export async function pruneTaskRuns(task, settings = currentPolicy().settings, n
   return deleted;
 }
 
+/** The newest runs of a task, until `enough` of them ran (newest first). */
+async function recentRunsOf(taskId, enough) {
+  const repository = getScheduledTaskRepository();
+  const runs = [];
+  let ran = 0;
+  let cursor = null;
+  do {
+    const page = await repository.listRuns(taskId, {
+      limit: MAX_RUN_PAGE,
+      ...(cursor ? { cursor } : {})
+    });
+    for (const run of page.items) {
+      runs.push(run);
+      if (run.startedAt && isFinalRunStatus(run.status) && run.status !== 'skipped') ran += 1;
+    }
+    cursor = page.nextCursor;
+  } while (cursor && ran < enough);
+  return runs;
+}
+
 /**
  * Delete chosen runs of a task, or all finished ones.
  *
@@ -1023,7 +1079,7 @@ export async function pruneTaskRuns(task, settings = currentPolicy().settings, n
  * @param {string[]} [selection.runIds]
  * @param {boolean} [selection.all=false]
  * @param {boolean} [selection.deleteChats=true]
- * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
+ * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number, failed: number}>}
  */
 async function deleteSelectedRuns(task, { runIds, all = false, deleteChats = true }) {
   const repository = getScheduledTaskRepository();
@@ -1047,7 +1103,7 @@ async function deleteSelectedRuns(task, { runIds, all = false, deleteChats = tru
     if (runs.length === 0) throw new ScheduledTaskError(404, 'RUN_NOT_FOUND', 'Run not found');
   }
   const result = await removeRuns(task, runs, { deleteChats });
-  if (!all && result.deleted === 0 && result.skipped > 0) {
+  if (!all && result.deleted === 0 && result.skipped > 0 && result.failed === 0) {
     throw new ScheduledTaskError(409, 'RUN_IN_PROGRESS', 'A run in progress cannot be deleted');
   }
   return result;
@@ -1059,7 +1115,7 @@ async function deleteSelectedRuns(task, { runIds, all = false, deleteChats = tru
  * @param {Object} user
  * @param {string} taskId
  * @param {Object} selection - See `deleteSelectedRuns`.
- * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
+ * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number, failed: number}>}
  */
 export async function deleteRuns(user, taskId, selection) {
   assertAvailable();
@@ -1072,7 +1128,7 @@ export async function deleteRuns(user, taskId, selection) {
  *
  * @param {string} taskId
  * @param {Object} selection - See `deleteSelectedRuns`.
- * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
+ * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number, failed: number}>}
  */
 export async function adminDeleteRuns(taskId, selection) {
   const task = isTaskId(taskId) ? await getScheduledTaskRepository().getTask(taskId) : null;
