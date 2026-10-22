@@ -45,6 +45,7 @@ import {
   metadata as providerMetadata
 } from '../services/sources/providers/project.js';
 import PromptService from '../services/PromptService.js';
+import { processMessageTemplates } from '../serverHelpers.js';
 import { chatPostSchema } from '../validators/index.js';
 import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
 import { materializeUserTurn, settleUserTurn } from '../services/chat/chatMaterializer.js';
@@ -1354,5 +1355,87 @@ describe('chat route and projects', () => {
     assert.equal(outcome.status, 'error');
     assert.equal(ended.length, 1, 'the ledger run is ended');
     assert.equal(ended[0].summary.error.code, 'PROJECT_MISMATCH');
+  });
+});
+
+describe('prompt scope through the production path', () => {
+  const ask = [{ role: 'user', content: 'What is the notice period?' }];
+
+  it("sizes the load-all budget by the model id the wrapper forwards, whatever the model's name", async () => {
+    const app = { id: 'chat', system: { en: 'You are helpful.' }, _projectId: textProject.id };
+    await processMessageTemplates(
+      ask,
+      app,
+      null,
+      null,
+      'en',
+      null,
+      ADA,
+      'chat-wrapper',
+      // The display name the request builder passes: localized, so only the
+      // id finds the model.
+      { en: 'Small', de: 'Klein' },
+      null,
+      null,
+      'small',
+      'prep-wrapper'
+    );
+    const scope = PromptService.takeKnowledgeScope('prep-wrapper');
+    assert.equal(scope?.budgetTokens, 3200, "the small model's 40 % share, not the default cap");
+    PromptService.resetPromptSources('chat-wrapper');
+  });
+
+  it('gives overlapping preparations of one chat each their own knowledge scope', async () => {
+    let releaseFirst;
+    const firstWaits = new Promise(resolve => {
+      releaseFirst = resolve;
+    });
+    let secondPrepared;
+    const secondDone = new Promise(resolve => {
+      secondPrepared = resolve;
+    });
+    // A request builder that builds the prompt, then (for the first turn)
+    // waits — the way the real one awaits API-key checks and tool loading —
+    // while the second turn of the same chat is prepared.
+    const requestBuilder = {
+      async prepareChatRequest(params) {
+        await params.processMessageTemplates(
+          ask,
+          params.app,
+          null,
+          null,
+          'en',
+          null,
+          ADA,
+          params.chatId,
+          null,
+          null,
+          null,
+          'small',
+          params.preparationId
+        );
+        if (params.turn === 'first') await firstWaits;
+        else secondPrepared();
+        return { success: true, data: { turn: params.turn } };
+      }
+    };
+    const service = new ChatService({ requestBuilder });
+    const chatId = 'chat-overlap';
+    const first = service.prepareChatRequest({
+      chatId,
+      turn: 'first',
+      app: { id: 'chat', system: { en: 'P' }, _projectId: textProject.id }
+    });
+    const second = service.prepareChatRequest({
+      chatId,
+      turn: 'second',
+      app: { id: 'chat', system: { en: 'P' }, _attachedProjectIds: [textProject.id] }
+    });
+    await secondDone;
+    releaseFirst();
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(a.data.knowledgeScope?.projects[0].origin, 'container');
+    assert.equal(b.data.knowledgeScope?.projects[0].origin, 'attached');
+    PromptService.resetPromptSources(chatId);
   });
 });
