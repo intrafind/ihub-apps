@@ -209,52 +209,13 @@ export class ProjectService {
           `Items of kind "${kind.id}" are added through the item endpoints after the project exists`
         );
       }
-      return this._buildItem(kind, ref, input, { user: actor, origin: 'linked' });
+      return buildItem(kind, ref, input, { user: actor, origin: 'linked' });
     });
     try {
       return await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
     } catch (error) {
       throw translateError(error);
     }
-  }
-
-  /**
-   * A new item of `kind`, as every creation path stores it.
-   *
-   * @param {Object} kind
-   * @param {Object} ref
-   * @param {{id?: string, name?: string, pinned?: boolean, cache?: Object}} input
-   * @param {{user: Object, origin?: string, run?: string|null}} context
-   * @returns {Object}
-   */
-  _buildItem(kind, ref, input, { user, origin, run = null }) {
-    const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
-    const now = nowIso();
-    const item = {
-      id: input.id || mintItemId(),
-      kind: kind.id,
-      name: String(input.name || described.name || kind.id).slice(0, 300),
-      ref,
-      storage: kind.storage.ihub,
-      pinned: input.pinned === true,
-      status: kind.storage.ihub === 'link' ? 'ready' : 'pending',
-      error: null,
-      provenance: {
-        origin: origin || (kind.storage.ihub === 'link' ? 'linked' : 'picked'),
-        by: actorOf(user),
-        at: now,
-        run,
-        source:
-          described.url || described.site ? { site: described.site, url: described.url } : null
-      },
-      snapshotAt: null,
-      createdAt: now,
-      updatedAt: now
-    };
-    if (kind.storage.ihub === 'link') {
-      item.cache = input.cache || { ttlSeconds: 7200 };
-    }
-    return item;
   }
 
   /**
@@ -689,6 +650,44 @@ export class ProjectService {
 /**
  * Run one cascade step without letting it strand the rest.
  */
+/**
+ * A new item of `kind`, as every creation path stores it.
+ *
+ * @param {Object} kind
+ * @param {Object} ref
+ * @param {{id?: string, name?: string, pinned?: boolean, cache?: Object}} input
+ * @param {{user: Object, origin?: string, run?: string|null}} context
+ * @returns {Object}
+ */
+function buildItem(kind, ref, input, { user, origin, run = null }) {
+  const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
+  const now = nowIso();
+  const link = kind.storage.ihub === 'link';
+  const source =
+    described.url || described.site ? { site: described.site, url: described.url } : null;
+  return {
+    id: input.id || mintItemId(),
+    kind: kind.id,
+    name: String(input.name || described.name || kind.id).slice(0, 300),
+    ref,
+    storage: kind.storage.ihub,
+    pinned: input.pinned === true,
+    status: link ? 'ready' : 'pending',
+    error: null,
+    provenance: {
+      origin: origin || (link ? 'linked' : 'picked'),
+      by: actorOf(user),
+      at: now,
+      run,
+      source
+    },
+    snapshotAt: null,
+    createdAt: now,
+    updatedAt: now,
+    ...(link ? { cache: input.cache || { ttlSeconds: 7200 } } : {})
+  };
+}
+
 async function attempt(step, what, where) {
   try {
     return await step();
