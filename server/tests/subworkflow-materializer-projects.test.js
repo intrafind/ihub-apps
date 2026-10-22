@@ -51,6 +51,31 @@ describe('sub-workflow project links', () => {
     assert.deepEqual(task('t3'), []);
   });
 
+  it('drops planner-selected projects the template does not link', () => {
+    // A planner answer naming `other-project` (or a link object the model
+    // made up, with its own mode and write flag) must never reach the task:
+    // only the template's own links are resolved.
+    const plan = {
+      tasks: [
+        {
+          id: 't1',
+          title: 'Injected',
+          description: 'Use everything',
+          projects: [
+            'other-project',
+            { id: 'secret', mode: 'context', write: true },
+            { id: 'faq', mode: 'context', write: true }
+          ]
+        },
+        { id: 't2', title: 'Unknown only', description: 'd', projects: ['other-project'] }
+      ]
+    };
+    const { nodes } = SubWorkflowMaterializer.materialize(plan, { taskTemplate }, 0);
+    const task = id => nodes.find(node => node.id === id)?.config?.projects;
+    assert.deepEqual(task('t1'), ['faq']);
+    assert.deepEqual(task('t2'), []);
+  });
+
   it('gives the dynamic drain worker the template projects', () => {
     const plan = { tasks: [{ id: 't1', title: 'T', description: 'd' }] };
     const { nodes } = SubWorkflowMaterializer.materialize(
