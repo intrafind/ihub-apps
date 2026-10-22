@@ -22,6 +22,7 @@ import {
   ArrowUpCircleIcon,
   ServerStackIcon
 } from '@heroicons/react/24/outline';
+import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
@@ -538,6 +539,34 @@ function RecentActivityCard({ entries }) {
   );
 }
 
+/**
+ * Side-column card: whether the first-run onboarding (setup wizard) is shown,
+ * the demo-account status, and the way to Admin → Advanced where it is switched.
+ */
+function OnboardingCard({ disabled, configured }) {
+  const { t } = useTranslation();
+  const state = disabled
+    ? t('admin.onboarding.stateHidden', 'Hidden for everyone')
+    : configured
+      ? t('admin.onboarding.stateCompleted', 'Completed')
+      : t('admin.onboarding.stateShown', 'Shown until completed');
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+        {t('admin.onboarding.title', 'First-run onboarding')}
+      </h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{state}</p>
+      <AdminDemoAccountsAlert inline usersLinkVisible={false} />
+      <Link
+        to="/admin/advanced"
+        className="mt-3 inline-block text-sm font-medium text-blue-700 dark:text-blue-400 underline hover:no-underline"
+      >
+        {t('admin.onboarding.manage', 'Onboarding settings')}
+      </Link>
+    </div>
+  );
+}
+
 export default function AdminOverview() {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -727,6 +756,12 @@ export default function AdminOverview() {
 
         {/* Side column */}
         <div className="space-y-6">
+          {!isContentAdminOnly && systemPagesVisible && (
+            <OnboardingCard
+              disabled={platformConfig?.setup?.disabled === true}
+              configured={platformConfig?.setup?.configured ?? true}
+            />
+          )}
           {isFreshInstance ? (
             <SetupChecklist />
           ) : (

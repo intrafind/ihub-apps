@@ -9,6 +9,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   CUSTOM_PROVIDER_API_TYPES,
+  LLM_PROVIDER_PRESETS,
   getProviderApiType,
   isCustomLlmProvider,
   isReservedProviderId
@@ -145,6 +146,19 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       if (field === 'id') next.idEdited = true;
       return next;
     });
+  };
+
+  const applyPreset = preset => {
+    setNewProvider(prev => ({
+      ...prev,
+      name: preset.name,
+      id: preset.id,
+      idEdited: true,
+      description: preset.description,
+      apiType: preset.apiType
+    }));
+    setUrl(preset.baseUrl);
+    setDiscoveryError(null);
   };
 
   const newProviderIdProblem = (() => {
@@ -359,6 +373,19 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
 
       {providerChoice === NEW_PROVIDER ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-md border border-gray-200 dark:border-gray-700 p-4">
+          <div className="sm:col-span-2 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <span>{t('admin.models.import.presets', 'Start from:')}</span>
+            {LLM_PROVIDER_PRESETS.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className={SECONDARY_BUTTON}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
           <div>
             <label htmlFor="import-provider-name" className={LABEL}>
               {t('admin.providers.fields.name', 'Name')} <span className="text-red-500">*</span>

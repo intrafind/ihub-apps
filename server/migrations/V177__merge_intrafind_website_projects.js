@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V176 — One project for the IntraFind website
+ * Migration V177 — One project for the IntraFind website
  *
  * The sources of the IntraFind website (home page, iFinder, its features and
  * connectors, iAssistant, iHub) became six admin projects with one web page
@@ -27,7 +27,7 @@
  * six projects is not touched. Running it again changes nothing.
  */
 
-export const version = '176';
+export const version = '177';
 export const description = 'merge_intrafind_website_projects';
 
 const TARGET_ID = 'intrafind-website';
@@ -36,7 +36,7 @@ const TARGET_ID = 'intrafind-website';
  * The projects that shipped as one web page each, in the order their items
  * appear in the merged project.
  *
- * Snapshot as of V176 — do NOT replace with a read of server/defaults/projects/:
+ * Snapshot as of V177 — do NOT replace with a read of server/defaults/projects/:
  * the shipped projects change, this migration must not.
  */
 const SHIPPED_PAGES = Object.freeze({

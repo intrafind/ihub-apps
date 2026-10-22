@@ -1207,6 +1207,7 @@
         "provider": "Provider",
         "newProvider": "+ New provider",
         "providerHint": "The provider holds the API key for all imported models. Create one for a new endpoint, such as T-Systems LLM Hub.",
+        "presets": "Start from:",
         "usesProviderKey": "The API key stored on this provider is used.",
         "noProviderKey": "No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.",
         "url": "Endpoint URL",
@@ -2752,6 +2753,22 @@
       "authSettings": "Authentication settings",
       "users": "Users",
       "dismiss": "Dismiss"
+    },
+    "onboarding": {
+      "title": "First-run onboarding",
+      "description": "The setup wizard is shown to everyone until it has been completed. Turn it off if you configure iHub through platform.json, environment variables or configuration management.",
+      "disable": "Don't show the onboarding (setup wizard)",
+      "disableHint": "Nobody is redirected to /setup any more. An admin can still open /setup directly.",
+      "saved": "Onboarding setting saved",
+      "saveError": "Failed to save the onboarding setting",
+      "demoOk": "No demo account signs in with the shipped password.",
+      "demoWarn": "{{accounts}} still sign in with the shipped password. Change their passwords before you hide the onboarding.",
+      "demoWarnHidden": "{{accounts}} still sign in with the shipped password, but the login page does not list them.",
+      "usersLink": "Users",
+      "stateHidden": "Hidden for everyone",
+      "stateCompleted": "Completed",
+      "stateShown": "Shown until completed",
+      "manage": "Onboarding settings"
     },
     "home": {
       "sections": {
@@ -5053,6 +5070,8 @@
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
     },
+    "skipConfirm": "Skip the onboarding for good? It will not be shown again to anyone. You can turn it back on under Admin → Advanced.\n\nOK: don't show it again. Cancel: skip for this session only.",
+    "skipConfirmDemo": "Warning: {{accounts}} still sign in with the shipped password.\n\n",
     "step2Login": {
       "title": "Sign in to continue",
       "description": "An admin account is required to complete the initial setup.",
