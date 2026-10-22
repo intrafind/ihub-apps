@@ -15,7 +15,6 @@
     "maxIterations": 5,
     "defaultModelId": "gemini-3.0-flash"
   },
-  "sources": ["documentation", "faq"],
   "allowedGroups": [],
   "nodes": [
     {
@@ -25,7 +24,10 @@
         "en": "Start",
         "de": "Start"
       },
-      "position": { "x": 100, "y": 50 },
+      "position": {
+        "x": 100,
+        "y": 50
+      },
       "config": {
         "inputVariables": [
           {
@@ -51,8 +53,20 @@
               "de": "Antwortsprache"
             },
             "options": [
-              { "value": "en", "label": { "en": "English", "de": "Englisch" } },
-              { "value": "de", "label": { "en": "German", "de": "Deutsch" } }
+              {
+                "value": "en",
+                "label": {
+                  "en": "English",
+                  "de": "Englisch"
+                }
+              },
+              {
+                "value": "de",
+                "label": {
+                  "en": "German",
+                  "de": "Deutsch"
+                }
+              }
             ]
           }
         ]
@@ -65,11 +79,14 @@
         "en": "Classify Question",
         "de": "Frage klassifizieren"
       },
-      "position": { "x": 100, "y": 200 },
+      "position": {
+        "x": 100,
+        "y": 200
+      },
       "config": {
         "system": {
-          "en": "You are a question classifier. Analyze the user's question and determine what type of answer is needed. Return a JSON classification.\n\n{{sources}}",
-          "de": "Sie sind ein Frage-Klassifizierer. Analysieren Sie die Frage des Benutzers und bestimmen Sie, welche Art von Antwort benötigt wird. Geben Sie eine JSON-Klassifikation zurück.\n\n{{sources}}"
+          "en": "You are a question classifier. Analyze the user's question and determine what type of answer is needed. Return a JSON classification.\n\n{{projects}}",
+          "de": "Sie sind ein Frage-Klassifizierer. Analysieren Sie die Frage des Benutzers und bestimmen Sie, welche Art von Antwort benötigt wird. Geben Sie eine JSON-Klassifikation zurück.\n\n{{projects}}"
         },
         "prompt": {
           "en": "[Step {{_currentStep}}/{{_totalNodes}}] Classify this question: {{question}}\n\nBased on the available source documentation, determine:\n{\n  \"category\": \"faq|howto|conceptual|troubleshooting|api\",\n  \"complexity\": \"simple|moderate|complex\",\n  \"relevantTopics\": [\"topic1\", \"topic2\"],\n  \"needsExamples\": true/false\n}",
@@ -79,10 +96,21 @@
         "outputSchema": {
           "type": "object",
           "properties": {
-            "category": { "type": "string" },
-            "complexity": { "type": "string" },
-            "relevantTopics": { "type": "array", "items": { "type": "string" } },
-            "needsExamples": { "type": "boolean" }
+            "category": {
+              "type": "string"
+            },
+            "complexity": {
+              "type": "string"
+            },
+            "relevantTopics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "needsExamples": {
+              "type": "boolean"
+            }
           },
           "required": ["category", "complexity", "relevantTopics"]
         }
@@ -98,11 +126,14 @@
         "en": "Generate Answer",
         "de": "Antwort generieren"
       },
-      "position": { "x": 100, "y": 400 },
+      "position": {
+        "x": 100,
+        "y": 400
+      },
       "config": {
         "system": {
-          "en": "You are a knowledgeable support assistant. Answer questions accurately based ONLY on the provided source material. If the answer is not in the sources, say so clearly. Always cite which part of the sources your answer comes from.\n\nAvailable Knowledge Base:\n{{sources}}",
-          "de": "Sie sind ein sachkundiger Support-Assistent. Beantworten Sie Fragen genau und NUR auf Basis des bereitgestellten Quellmaterials. Wenn die Antwort nicht in den Quellen steht, sagen Sie das klar. Zitieren Sie immer, aus welchem Teil der Quellen Ihre Antwort stammt.\n\nVerfügbare Wissensdatenbank:\n{{sources}}"
+          "en": "You are a knowledgeable support assistant. Answer questions accurately based ONLY on the provided source material. If the answer is not in the sources, say so clearly. Always cite which part of the sources your answer comes from.\n\nAvailable Knowledge Base:\n{{projects}}",
+          "de": "Sie sind ein sachkundiger Support-Assistent. Beantworten Sie Fragen genau und NUR auf Basis des bereitgestellten Quellmaterials. Wenn die Antwort nicht in den Quellen steht, sagen Sie das klar. Zitieren Sie immer, aus welchem Teil der Quellen Ihre Antwort stammt.\n\nVerfügbare Wissensdatenbank:\n{{projects}}"
         },
         "prompt": {
           "en": "[Step {{_currentStep}}/{{_totalNodes}} - Final] Answer the following question:\n\n{{question}}\n\nQuestion classification:\n- Category: {{classification.category}}\n- Complexity: {{classification.complexity}}\n- Relevant topics: {{classification.relevantTopics}}\n- Include examples: {{classification.needsExamples}}\n\n{{#compare language \"==\" \"de\"}}Please answer in German.{{/compare}}\n\nProvide a clear, well-structured answer with:\n1. Direct answer to the question\n2. Supporting details from the knowledge base\n3. Code examples if relevant and requested\n4. Related topics the user might want to explore\n5. Source citations",
@@ -121,7 +152,10 @@
         "en": "Complete",
         "de": "Abgeschlossen"
       },
-      "position": { "x": 100, "y": 600 },
+      "position": {
+        "x": 100,
+        "y": 600
+      },
       "config": {
         "output": "answer",
         "outputVariables": ["question", "classification", "answer"]
@@ -143,6 +177,16 @@
       "id": "edge-answer-end",
       "source": "generate-answer",
       "target": "end"
+    }
+  ],
+  "projects": [
+    {
+      "id": "ihub-documentation",
+      "mode": "context"
+    },
+    {
+      "id": "faq",
+      "mode": "context"
     }
   ]
 }

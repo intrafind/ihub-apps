@@ -11,6 +11,7 @@ import {
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { zHttpUrl } from './common.js';
+import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
 
 // Localized string schema - matches client pattern for language codes
@@ -348,9 +349,6 @@ const thinkingSchema = z
   })
   .optional();
 
-// Sources configuration - only supports string references to admin-configured sources
-const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be empty');
-
 // Redirect app configuration schema
 const redirectConfigSchema = z.object({
   // Navigated to by the client, so only http(s) is accepted.
@@ -472,7 +470,9 @@ const baseAppConfigSchema = z.object({
   greeting: localizedGreetingSchema.optional(),
   starterPrompts: z.array(starterPromptSchema).optional(),
   usageGuide: usageGuideSchema,
-  sources: z.array(sourceReferenceSchema).optional(),
+  // Projects linked to the app (#1036, spec 1 §6.1): a bare id or
+  // `{ id, mode: 'auto' | 'context' | 'tools', write }`.
+  projects: projectLinksSchema.optional(),
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional().prefault(false),
   allowEmptyContent: z.boolean().optional().prefault(false),

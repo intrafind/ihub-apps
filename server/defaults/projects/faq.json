@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "id": "faq",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "FAQ",
+    "de": "FAQ"
+  },
+  "description": {
+    "en": "Frequently asked questions",
+    "de": "Häufig gestellte Fragen"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_30de18cc4ea2",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "upload",
+      "name": "faq.md",
+      "ref": {
+        "contentType": "text/markdown"
+      },
+      "storage": "text",
+      "status": "pending",
+      "provenance": {
+        "origin": "migrated",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": null
+      },
+      "snapshotAt": null,
+      "import": {
+        "file": "sources/faq.md",
+        "encoding": "utf-8"
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "updatedAt": "2025-08-05T19:52:27.174Z",
+  "createdBy": null
+}

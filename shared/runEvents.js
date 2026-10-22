@@ -62,6 +62,8 @@ export const RUN_LOG_EVENTS = Object.freeze({
   CONTEXT_COMPACTION: 'context/compaction',
   /** What a tool call, a model adapter or provider search found (`shared/sources`). */
   SOURCES_ADDED: 'sources/added',
+  /** Which projects a turn reached, and whether each was loaded in full or searched (#1036). */
+  KNOWLEDGE_SCOPE: 'knowledge/scope',
   ERROR: 'error'
 });
 
@@ -81,6 +83,7 @@ export const SSE_V2_EVENTS = Object.freeze({
   TOOL_PROGRESS: 'tool/progress',
   TOOL_COMPLETED: 'tool/completed',
   SOURCES_ADDED: 'sources/added',
+  KNOWLEDGE_SCOPE: 'knowledge/scope',
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
   PROGRESS_NODE: 'progress/node',

@@ -107,11 +107,11 @@ function describeChatFeatures(app) {
  *
  * @param {object} app - App configuration (may be an unsaved draft).
  * @param {string} language - Language code the descriptions are taken in.
- * @param {{tools?: Array<object>, sources?: Array<object>}} [catalog] - Configured
- *   tools and sources, to name the ones the app uses.
+ * @param {{tools?: Array<object>, projects?: Array<object>}} [catalog] - Configured
+ *   tools and projects, to name the ones the app uses.
  * @returns {string} Plain-text description.
  */
-export function describeAppForGuide(app, language, { tools = [], sources = [] } = {}) {
+export function describeAppForGuide(app, language, { tools = [], projects = [] } = {}) {
   const text = value => getLocalizedContent(value, language, 'en').trim();
   const lines = [];
   const add = (label, value) => {
@@ -142,9 +142,11 @@ export function describeAppForGuide(app, language, { tools = [], sources = [] } 
   add('The user can attach', describeAttachments(app.upload));
   lines.push(...describeTools(app, tools, text));
 
-  const sourceIds = Array.isArray(app.sources) ? app.sources : [];
-  const sourceNames = sourceIds.map(id => text(sources.find(s => s.id === id)?.name) || id);
-  add('Knowledge the assistant answers from', sourceNames.join(', '));
+  const projectIds = (Array.isArray(app.projects) ? app.projects : [])
+    .map(link => (typeof link === 'string' ? link : link?.id))
+    .filter(Boolean);
+  const projectNames = projectIds.map(id => text(projects.find(p => p.id === id)?.name) || id);
+  add('Knowledge the assistant answers from', projectNames.join(', '));
 
   lines.push(...describeChatFeatures(app));
   return lines.join('\n');
@@ -155,7 +157,7 @@ export function describeAppForGuide(app, language, { tools = [], sources = [] } 
  *
  * @param {object} app - App configuration (may be an unsaved draft).
  * @param {string} language - Language code the guide is written in.
- * @param {{tools?: Array<object>, sources?: Array<object>}} [catalog] - See describeAppForGuide.
+ * @param {{tools?: Array<object>, projects?: Array<object>}} [catalog] - See describeAppForGuide.
  * @returns {Array<{role: string, content: string}>}
  */
 export function buildUsageGuideMessages(app, language, catalog = {}) {

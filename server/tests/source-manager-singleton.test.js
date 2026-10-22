@@ -20,14 +20,14 @@ import { createSourceManager } from '../sources/index.js';
 describe('createSourceManager singleton', () => {
   it('ignores config passed on calls after the first and always returns the same instance', () => {
     const first = createSourceManager();
-    const defaultBasePath = first.getHandler('filesystem').basePath;
+    const urlHandler = first.getHandler('url');
 
     const second = createSourceManager({
-      filesystem: { basePath: '/tmp/should-be-ignored' }
+      url: { timeout: 1 }
     });
 
     expect(second).toBe(first);
-    expect(second.getHandler('filesystem').basePath).toBe(defaultBasePath);
-    expect(second.getHandler('filesystem').basePath).not.toBe('/tmp/should-be-ignored');
+    expect(second.getHandler('url')).toBe(urlHandler);
+    expect(() => second.getHandler('filesystem')).toThrow(/No handler registered/);
   });
 });

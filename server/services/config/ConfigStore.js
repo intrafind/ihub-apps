@@ -394,6 +394,35 @@ async function updateOnDisk(relPath, mutate) {
 }
 
 /**
+ * Delete one configuration file, wherever it lives (see {@link ConfigStore#remove}).
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ * @returns {Promise<boolean>}
+ */
+async function removeNow(relPath) {
+  const location = parseRawRelPath(relPath);
+  const documents = location ? documentsFor(location.ns) : null;
+  if (documents) return documents.delete(location.ns, location.key);
+  const filePath = await resolveConfigPath(relPath);
+  // No `invalidateText` here: the next read's `stat` fails and drops the
+  // entry on that path already. A line that cannot be made to matter is a
+  // line the next reader has to work out is dead.
+  return withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      try {
+        await fs.unlink(filePath);
+        return true;
+      } catch (error) {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+      }
+    },
+    { component: COMPONENT }
+  );
+}
+
+/**
  * List the JSON file names of a directory under `contents/`.
  *
  * Only names the raw store would accept are returned, so a directory lists the
@@ -714,21 +743,22 @@ export class ConfigStore {
    * @returns {Promise<boolean>} True when a file was removed, false when there
    *   was nothing to remove
    */
-  async remove(relPath) {
-    const location = parseRawRelPath(relPath);
-    const documents = location ? documentsFor(location.ns) : null;
-    if (documents) return documents.delete(location.ns, location.key);
-    const filePath = await resolveConfigPath(relPath);
-    // No `invalidateText` here: the next read's `stat` fails and drops the
-    // entry on that path already. A line that cannot be made to matter is a
-    // line the next reader has to work out is dead.
-    try {
-      await fs.unlink(filePath);
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') return false;
-      throw error;
-    }
+  remove(relPath) {
+    // Behind the updates of the same file from this process, and on disk
+    // under the same file lock `updateOnDisk` takes: a delete that slipped
+    // between an update's read and its atomic write was undone by that
+    // write, and reported success for a file that survived.
+    const queueKey = String(relPath);
+    const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
+    const run = previous.then(() => removeNow(relPath));
+    const settled = run.catch(() => {
+      /* a failed removal is reported to its caller, not to the next in line */
+    });
+    this.#updateQueues.set(queueKey, settled);
+    settled.then(() => {
+      if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
+    });
+    return run;
   }
 
   /**
@@ -782,10 +812,12 @@ export class ConfigStore {
    * @param {string} nsOrDir - Namespace name, or a directory under `contents/`
    * @param {Object} [options]
    * @param {string} [options.prefix] - Keep only keys starting with this
+   * @param {boolean} [options.strict=false] - Throw instead of skipping when
+   *   a document cannot be read or the namespace cannot be listed
    * @returns {Promise<Array<{key: string, path: string, data: any}>>} Documents
    *   in ascending key order
    */
-  async listDocuments(nsOrDir, { prefix } = {}) {
+  async listDocuments(nsOrDir, { prefix, strict = false } = {}) {
     const target = resolveTarget(nsOrDir);
     if (!target) return [];
     const documents = target.ns ? documentsFor(target.ns) : null;
@@ -799,6 +831,12 @@ export class ConfigStore {
             limit: LIST_PAGE_SIZE,
             cursor: cursor || undefined
           });
+          // `strict`: a document the store passed over makes the set short.
+          if (strict && page.skipped > 0) {
+            throw new Error(
+              `${page.skipped} configuration document(s) in ${target.dir} could not be read`
+            );
+          }
           for (const item of page.items) {
             items.push({
               key: item.key,
@@ -815,6 +853,9 @@ export class ConfigStore {
           namespace: target.ns,
           error: error.message
         });
+        // `strict`: a caller that must know the whole set (a sweep that
+        // deletes what no document names) gets the failure, not a short list.
+        if (strict) throw error;
         return [];
       }
     }
@@ -823,7 +864,10 @@ export class ConfigStore {
     for (const key of keys) {
       const relPath = `${target.dir}/${key}${RAW_DOC_EXT}`;
       const data = await this.readJson(relPath);
-      if (data === null) continue;
+      if (data === null) {
+        if (strict) throw new Error(`Configuration document ${relPath} could not be read`);
+        continue;
+      }
       items.push({ key, path: relPath, data });
     }
     return items;

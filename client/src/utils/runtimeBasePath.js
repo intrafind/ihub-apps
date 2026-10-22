@@ -28,6 +28,7 @@ export const KNOWN_ROUTES = [
   'prompts', // Prompts listing
   'chats', // Chat history overview
   'tasks', // Scheduled tasks
+  'projects', // User projects (documents, instructions and chats)
   'share', // Read-only shared chat (public or sign-in gated per link)
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes

@@ -24,7 +24,10 @@ import {
   MegaphoneIcon,
   InboxArrowDownIcon,
   InboxIcon,
-  ArchiveBoxIcon
+  ArchiveBoxIcon,
+  FolderOpenIcon,
+  BookOpenIcon,
+  DocumentPlusIcon
 } from '@heroicons/react/24/outline';
 
 /** Icon component per workflow node type. */
@@ -51,7 +54,10 @@ const NODE_TYPE_ICONS = {
   progress: MegaphoneIcon,
   'inbox-load': InboxArrowDownIcon,
   'inbox-finalize': InboxIcon,
-  'memory-finalize': ArchiveBoxIcon
+  'memory-finalize': ArchiveBoxIcon,
+  'project-items': FolderOpenIcon,
+  'project-read': BookOpenIcon,
+  'project-write': DocumentPlusIcon
 };
 
 /**

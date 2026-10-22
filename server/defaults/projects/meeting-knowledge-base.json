@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "id": "meeting-knowledge-base",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "Meeting Knowledge Base",
+    "de": "Meeting-Wissensdatenbank"
+  },
+  "description": {
+    "en": "Organizational reference material consulted by the calendar-aware apps (recurring meetings, glossary, decision frameworks). Replace with a connector to your company wiki / ifinder source for real use.",
+    "de": "Organisatorisches Referenzmaterial für die kalenderbezogenen Apps (wiederkehrende Meetings, Glossar, Entscheidungsmodelle). Für den Produktiveinsatz durch eine Verbindung zum Unternehmenswiki / iFinder ersetzen."
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": ["meetings", "calendar"],
+  "items": [
+    {
+      "id": "itm_3fbc2007dc6e",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "upload",
+      "name": "meeting-knowledge-base.md",
+      "ref": {
+        "contentType": "text/markdown"
+      },
+      "storage": "text",
+      "status": "pending",
+      "provenance": {
+        "origin": "migrated",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": null
+      },
+      "snapshotAt": null,
+      "import": {
+        "file": "sources/meeting-knowledge-base.md",
+        "encoding": "utf-8"
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "updatedAt": "2026-10-21T00:00:00.000Z",
+  "createdBy": null
+}

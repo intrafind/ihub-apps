@@ -505,6 +505,51 @@ describe('the stored form of the activity', () => {
     });
   });
 
+  it('keeps which projects the turn reached, bounded', () => {
+    const stored = boundStoredActivity({
+      knowledgeScope: {
+        budgetTokens: 40000,
+        projects: [
+          {
+            id: 'prj_1',
+            name: 'Case',
+            ownership: 'user',
+            origin: 'container',
+            mode: 'loaded',
+            documents: 2,
+            tokens: 120,
+            pinned: 1,
+            injected: [{ huge: 'x'.repeat(10000) }]
+          },
+          { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'bogus', cut: 1, overBudget: true }
+        ]
+      }
+    });
+    assert.deepEqual(stored.knowledgeScope, {
+      budgetTokens: 40000,
+      projects: [
+        {
+          id: 'prj_1',
+          name: 'Case',
+          ownership: 'user',
+          origin: 'container',
+          mode: 'loaded',
+          documents: 2,
+          tokens: 120,
+          pinned: 1
+        },
+        {
+          id: 'faq',
+          name: 'FAQ',
+          ownership: 'admin',
+          mode: 'unavailable',
+          overBudget: true,
+          cut: 1
+        }
+      ]
+    });
+  });
+
   it('is nothing when there is nothing', () => {
     assert.equal(boundStoredActivity(null), null);
     assert.equal(boundStoredActivity({}), null);
@@ -557,6 +602,22 @@ describe('what a share carries of the activity', () => {
     assert.equal(shared.searchSummary.totalHits, 12);
     assert.deepEqual(shared.searchSummary.applications, []);
     assert.deepEqual(shared.searchSummary.sources, []);
+  });
+
+  it('keeps that a private project was used, not which one', () => {
+    const shared = shareableActivity({
+      knowledgeScope: {
+        budgetTokens: 1,
+        projects: [
+          { id: 'prj_1', name: 'Case', ownership: 'user', mode: 'loaded' },
+          { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'searched' }
+        ]
+      }
+    });
+    assert.deepEqual(shared.knowledgeScope.projects, [
+      { id: null, name: null, ownership: 'user', mode: 'loaded' },
+      { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'searched' }
+    ]);
   });
 
   it('drops what any non-web tool found, whatever its kind or scope', () => {
@@ -1380,6 +1441,59 @@ describe('Chat with Results: a stored chat about an execution', () => {
         'Here are the results from the workflow "Statement review":'
       );
     });
+  });
+
+  /** STATE with these start inputs and data. */
+  const withInputs = (inputVariables, data) => ({
+    ...STATE,
+    data: {
+      ...STATE.data,
+      topic: undefined,
+      ...data,
+      _workflowDefinition: {
+        ...STATE.data._workflowDefinition,
+        nodes: [
+          { type: 'start', config: { inputVariables } },
+          { id: 'end', type: 'end', config: { output: 'finalReport' } }
+        ]
+      }
+    }
+  });
+  const openingOf = async state => {
+    const { createExecutionChat } = await import('../services/workflow/executionChat.js');
+    let opening;
+    await withRepository(async repository => {
+      const { chatId } = await createExecutionChat({
+        repository,
+        state,
+        executionId: 'wf-exec-1',
+        appId: 'chat',
+        ownerId: 'user-1',
+        identityMode: 'default',
+        contextMessage: 'Here are the results from the workflow "Statement review":'
+      });
+      opening = (await repository.getMessages(chatId)).messages[0].content;
+    });
+    return opening;
+  };
+
+  it('opens with the client’s question, not the project id, when the only input is a project', async () => {
+    const state = withInputs([{ name: 'case', type: 'project' }], { case: 'prj_case' });
+    assert.equal(
+      await openingOf(state),
+      'Here are the results from the workflow "Statement review":'
+    );
+  });
+
+  it('leaves a project id out of the opening question of an execution with text inputs too', async () => {
+    const state = withInputs(
+      [
+        { name: 'case', type: 'project' },
+        { name: 'topic', type: 'string' }
+      ],
+      { case: 'prj_case', topic: 'Wind farm statements' }
+    );
+    assert.equal(await openingOf(state), 'Wind farm statements');
   });
 
   it('answers with the output of the end step the execution finished at, as an @workflow run does', async () => {

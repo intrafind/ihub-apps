@@ -23,13 +23,47 @@
  *
  * Not supported (yet): {{else}}, comparisons, custom helpers.
  *
+ * By default a substituted value is part of the text that later passes scan,
+ * so a value holding `{{x}}` is rendered again. With `{ opaqueValues: true }`
+ * only the template itself is interpreted: every substituted value is held
+ * out of the remaining passes (including inside blocks) and inserted
+ * verbatim at the end. Use it whenever a value may carry text the template
+ * author did not write.
+ *
  * @module services/templating/renderTemplate
  */
 
 const MAX_PASSES = 5;
 const MAX_DEPTH = 8;
 
-export function renderTemplate(template, context, depth = 0) {
+// Placeholder for a withheld value in opaque mode: NUL-delimited, no braces,
+// so no later pass can read it as (part of) a `{{…}}` tag.
+const SLOT = '\u0000';
+// Built from the constant so the control character lives in one place.
+const SLOT_RE = new RegExp(`${SLOT}(\\d+)${SLOT}`, 'g');
+
+/**
+ * @param {string} template
+ * @param {Object} context
+ * @param {{ opaqueValues?: boolean }} [options]
+ * @returns {string}
+ */
+export function renderTemplate(template, context, options = {}) {
+  if (typeof template !== 'string') return '';
+  if (options?.opaqueValues !== true) return renderAt(template, context, 0, null);
+  const slots = [];
+  // A NUL the template already holds is itself withheld, so it can never be
+  // mistaken for a slot marker.
+  const safe = template.replaceAll(SLOT, () => withhold(slots, SLOT));
+  return renderAt(safe, context, 0, slots).replaceAll(SLOT_RE, (_m, i) => slots[Number(i)]);
+}
+
+function withhold(slots, text) {
+  slots.push(text);
+  return `${SLOT}${slots.length - 1}${SLOT}`;
+}
+
+function renderAt(template, context, depth, slots) {
   if (typeof template !== 'string') return '';
   if (!context || typeof context !== 'object') context = {};
   if (depth > MAX_DEPTH) return template;
@@ -44,20 +78,20 @@ export function renderTemplate(template, context, depth = 0) {
 
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const before = result;
-    result = renderEach(result, context, depth);
-    result = renderIf(result, context, depth);
-    result = renderUnless(result, context, depth);
-    result = renderVars(result, context);
+    result = renderEach(result, context, depth, slots);
+    result = renderIf(result, context, depth, slots);
+    result = renderUnless(result, context, depth, slots);
+    result = renderVars(result, context, slots);
     if (result === before) break;
   }
   return result;
 }
 
-function renderUnless(template, context, depth) {
+function renderUnless(template, context, depth, slots) {
   return replaceBlock(template, '#unless', '/unless', (header, body) => {
     const path = header.trim();
     const value = getPath(path, context);
-    return isTruthy(value) ? '' : renderTemplate(body, context, depth + 1);
+    return isTruthy(value) ? '' : renderAt(body, context, depth + 1, slots);
   });
 }
 
@@ -73,7 +107,7 @@ function stripStandaloneBlockLines(s) {
   );
 }
 
-function renderEach(template, context, depth) {
+function renderEach(template, context, depth, slots) {
   return replaceBlock(template, '#each', '/each', (header, body) => {
     const listPath = header.trim();
     const list = getPath(listPath, context);
@@ -81,21 +115,22 @@ function renderEach(template, context, depth) {
     return list
       .map((item, index) => {
         const itemContext = { ...context, this: item, '@index': index };
-        return renderTemplate(body, itemContext, depth + 1);
+        return renderAt(body, itemContext, depth + 1, slots);
       })
       .join('');
   });
 }
 
-function renderIf(template, context, depth) {
+function renderIf(template, context, depth, slots) {
   return replaceBlock(template, '#if', '/if', (header, body) => {
     const path = header.trim();
     const value = getPath(path, context);
-    return isTruthy(value) ? renderTemplate(body, context, depth + 1) : '';
+    return isTruthy(value) ? renderAt(body, context, depth + 1, slots) : '';
   });
 }
 
-function renderVars(template, context) {
+function renderVars(template, context, slots) {
+  const insert = text => (slots && text ? withhold(slots, text) : text);
   // {{@index}} first — won't match the regex below (starts with @).
   let result = template.replaceAll('{{@index}}', () => {
     const v = context['@index'];
@@ -106,7 +141,7 @@ function renderVars(template, context) {
   result = result.replaceAll(/\{\{([^#/@}][^}]*)\}\}/g, (_match, expr) => {
     const trimmed = expr.trim();
     const value = getPath(trimmed, context);
-    return value === undefined || value === null ? '' : stringify(value);
+    return value === undefined || value === null ? '' : insert(stringify(value));
   });
   return result;
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { fetchSourceContent } from '../../../api/endpoints/sources';
+import { downloadFormatFor, isOriginalDiscarded } from '../../documentPreview/utils/textPreview';
 import {
   filenameFromContentDisposition,
   openExternalUrl,
@@ -116,6 +117,9 @@ export async function copySourceLink(source) {
   }
 }
 
+/** The status a provider answers when only a document's extracted text is kept. */
+export { ORIGINAL_DISCARDED } from '../../documentPreview/utils/textPreview';
+
 /** Extensions to fall back on when the name the provider sent carries none. */
 const EXTENSION_BY_CONTENT_TYPE = {
   'application/pdf': 'pdf',
@@ -172,6 +176,48 @@ export function resolveSourceFilename(source, response) {
 }
 
 /**
+ * The source's file for a download or an attachment: the original, or its
+ * text where the provider keeps no original (a project item answers
+ * `410 ORIGINAL_DISCARDED`, spec 2 §5.1).
+ *
+ * @param {Object} source
+ * @returns {Promise<{response: import('axios').AxiosResponse, asText: boolean}>}
+ */
+export async function fetchDownloadableContent(source) {
+  const asText = async () => ({
+    response: await fetchSourceContent({ source, format: 'text' }),
+    asText: true
+  });
+  if (downloadFormatFor(source) === 'text') return asText();
+  try {
+    return { response: await fetchSourceContent({ source }), asText: false };
+  } catch (error) {
+    if (!isOriginalDiscarded(error)) throw error;
+    return asText();
+  }
+}
+
+/**
+ * The file name of a downloaded source: a text download always ends in `.txt`.
+ *
+ * @param {Object} source
+ * @param {{response: import('axios').AxiosResponse, asText: boolean}} content
+ * @returns {string}
+ */
+function downloadName(source, { response, asText }) {
+  const name = resolveSourceFilename(source, response);
+  return asText && !name.endsWith('.txt') ? `${name}.txt` : name;
+}
+
+/** The body of a download as a Blob (a text answer may arrive as a string). */
+function downloadBlob({ response, asText }) {
+  if (response.data instanceof Blob) return response.data;
+  return new Blob([response.data ?? ''], {
+    type: asText ? 'text/plain' : 'application/octet-stream'
+  });
+}
+
+/**
  * Download the source's file through its provider and save it.
  *
  * @param {Object} source
@@ -180,8 +226,10 @@ export function resolveSourceFilename(source, response) {
 export async function downloadSource(source) {
   if (!source?.ref) return { ok: false, reason: 'unavailable' };
   try {
-    const response = await fetchSourceContent({ source });
-    return saveBlobAs(response.data, resolveSourceFilename(source, response))
+    // The original, or — for a document of which only the text is kept —
+    // the text as a `.txt`.
+    const content = await fetchDownloadableContent(source);
+    return saveBlobAs(downloadBlob(content), downloadName(source, content))
       ? { ok: true }
       : { ok: false, reason: 'failed' };
   } catch (error) {
@@ -262,12 +310,12 @@ export async function attachSourceToMail(source) {
   if (!canAttachSource()) return { ok: false, reason: 'notComposing' };
 
   try {
-    const response = await fetchSourceContent({ source });
-    const blob = response.data;
+    const content = await fetchDownloadableContent(source);
+    const blob = downloadBlob(content);
     if (blob?.size > MAX_ATTACHMENT_BYTES) {
       return { ok: false, reason: 'tooLarge' };
     }
-    const filename = resolveSourceFilename(source, response);
+    const filename = downloadName(source, content);
     const result = await attachFileToOutlookItem({
       base64: await blobToBase64(blob),
       filename

@@ -242,11 +242,14 @@ function GroupFormEditor({
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Sources)')}
+                      {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Projects)')}
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Allow members to manage Apps, Prompts, and Sources without full admin access
+                    {t(
+                      'admin.groups.contentAdminHint',
+                      'Allow members to manage Apps, Prompts, and Projects without full admin access'
+                    )}
                   </p>
                 </div>
 
@@ -270,6 +273,54 @@ function GroupFormEditor({
                     {t(
                       'admin.groups.scheduledTasksHint',
                       'Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      id="group-permission-projects"
+                      type="checkbox"
+                      checked={group.permissions?.projects || false}
+                      onChange={e => handlePermissionChange('projects', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    />
+                    <label
+                      htmlFor="group-permission-projects"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.groups.projects', 'Projects')}
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.groups.projectsHint',
+                      'Allow members to create projects of their own: documents, instructions and chats (needs the User Projects feature). Inherited by groups that inherit this one.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      id="group-permission-project-sharing"
+                      type="checkbox"
+                      checked={group.permissions?.projectSharing || false}
+                      onChange={e => handlePermissionChange('projectSharing', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    />
+                    <label
+                      htmlFor="group-permission-project-sharing"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.groups.projectSharing', 'Project sharing')}
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.groups.projectSharingHint',
+                      'Allow members to add other users, groups or everyone to the projects they own or edit.'
                     )}
                   </p>
                 </div>

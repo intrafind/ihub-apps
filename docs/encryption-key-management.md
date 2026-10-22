@@ -123,20 +123,26 @@ If using an environment variable:
 
 ## Key Rotation
 
-If you need to rotate the encryption key:
+The same master key wraps the per-document keys of project files (the extracted text of
+uploaded and picked documents, see `docs/projects.md`). Those files are **not** re-entered by
+anyone: a key that is dropped takes every project document with it. Rotate as follows:
 
-1. **Export encrypted data** (optional, for migration):
-   - API keys are stored in `contents/config/providers.json`
-   - User OAuth tokens are in `contents/integrations/{service}/{userId}.json`
+1. **Keep the old key available**: set `TOKEN_ENCRYPTION_KEY_PREVIOUS` to the key that is
+   being replaced (the value of `TOKEN_ENCRYPTION_KEY`, or the content of
+   `contents/.encryption-key`). Project files wrapped under it stay readable; new files are
+   wrapped under the new key.
 
-2. **Set new encryption key**:
-   - Generate a new key using the command above
-   - Update `TOKEN_ENCRYPTION_KEY` in your `.env` file
-   - OR delete `contents/.encryption-key` to generate a new one
+2. **Set the new key**: generate a key with the command above and put it in
+   `TOKEN_ENCRYPTION_KEY`. Do not delete `contents/.encryption-key` while any project holds
+   documents unless its value is in `TOKEN_ENCRYPTION_KEY_PREVIOUS`.
 
-3. **Re-encrypt data**:
-   - Admin users will need to re-enter provider API keys via the admin panel
-   - Users will need to re-authenticate with OAuth integrations
+3. **Re-enter what is not rewrapped**: provider API keys (`contents/config/providers.json`)
+   are re-entered via the admin panel, users re-authenticate their OAuth integrations
+   (`contents/integrations/{service}/{userId}.json`). Project files need nothing.
+
+4. **Keep `TOKEN_ENCRYPTION_KEY_PREVIOUS` set** until every project document has been
+   rewrapped under the new key (a later release adds the rewrap; until then the previous key
+   stays configured). Only one previous key is read, so rotate again only after that.
 
 ## Troubleshooting
 
@@ -147,7 +153,8 @@ If you need to rotate the encryption key:
 **Solutions:**
 1. Check if `TOKEN_ENCRYPTION_KEY` environment variable was recently changed
 2. Verify `contents/.encryption-key` file exists and hasn't been corrupted
-3. If key is lost, you'll need to re-enter encrypted data (API keys, OAuth tokens)
+3. If key is lost, you'll need to re-enter encrypted data (API keys, OAuth tokens); project
+   documents encrypted under it are lost and have to be uploaded again
 
 ### Key File Missing After Deployment
 

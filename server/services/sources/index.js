@@ -27,9 +27,12 @@
  * registerSourceProducer({
  *   id: 'confluence',
  *   matches: ({ toolId, toolDef }) => toolId.startsWith('confluence_'),
- *   fromToolResult: ({ toolId, toolDef, args, result, failed }) => ({ items, queries })
+ *   fromToolResult: ({ toolId, toolDef, args, result, reported, failed }) => ({ items, queries })
  * });
  * ```
+ *
+ * `reported` holds the source inputs the call reported beside its result
+ * (`toolCallScope.js`); a producer that wants them includes them.
  *
  * @module services/sources
  */
@@ -37,6 +40,7 @@ import { emptySourceSet, mergeSources } from '../../../shared/sources/index.js';
 import { declarationOf, declaredSources } from './producers/declared.js';
 import { envelopeSources } from './producers/envelope.js';
 import { iFinderSourceProducer } from './producers/ifinder.js';
+import { projectSourceProducer } from './producers/project.js';
 import { webSourceProducer } from './producers/web.js';
 import { hasSourceProvider } from './providers.js';
 import logger from '../../utils/logger.js';
@@ -66,7 +70,7 @@ function boundFrame(frame) {
   return bounded;
 }
 
-const BUILT_IN_PRODUCERS = [webSourceProducer, iFinderSourceProducer];
+const BUILT_IN_PRODUCERS = [webSourceProducer, iFinderSourceProducer, projectSourceProducer];
 const registered = [];
 
 /**
@@ -168,7 +172,7 @@ export function extractToolSources({
       const declared = declaredSources(declaration, { args, result: parsed });
       return finalizeSourceFrame(declared, { ...defaults, ...declared.defaults });
     }
-    const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, failed };
+    const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, reported, failed };
     const producer = [...registered, ...BUILT_IN_PRODUCERS].find(candidate =>
       candidate.matches(call)
     );

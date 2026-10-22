@@ -8,6 +8,7 @@ import { loadAllPrompts } from './promptsLoader.js';
 import { loadAllWorkflows } from './workflowsLoader.js';
 import { loadAllAgentProfiles } from './agentsLoader.js';
 import { loadAllTools } from './toolsLoader.js';
+import { loadAllProjects } from './projectsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -19,7 +20,6 @@ import { announceConfigChange, announceFullConfigReload, setConfigReloader } fro
 import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
-import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
@@ -248,7 +248,8 @@ const AGGREGATE_KEY_BY_NAMESPACE = Object.freeze({
   prompts: 'config/prompts.json',
   workflows: 'config/workflows.json',
   tools: 'config/tools.json',
-  agents: 'config/agents.json'
+  agents: 'config/agents.json',
+  projects: 'config/projects.json'
 });
 
 /**
@@ -339,6 +340,11 @@ const CONFIG_LOADERS = {
     label: 'tools',
     load: async ({ verbose }) => expandToolFunctions(await loadAllTools(true, verbose))
   },
+  'config/projects.json': {
+    label: 'admin projects',
+    load: ({ verbose }) => loadAllProjects(true, verbose),
+    emptyOnError: []
+  },
   'config/groups.json': {
     label: 'groups with resolved inheritance',
     load: async () => {
@@ -362,9 +368,6 @@ const CONFIG_LOADERS = {
       return decryptCredentials(credentialsData);
     },
     count: data => Object.keys(data.credentials || {}).length
-  },
-  'config/sources.json': {
-    label: 'sources'
   },
   'config/providers.json': {
     label: 'providers',
@@ -449,7 +452,7 @@ class ConfigCache {
       'config/ui.json',
       'config/groups.json',
       'config/users.json',
-      'config/sources.json',
+      'config/projects.json',
       'config/providers.json',
       'config/mimetypes.json',
       'config/features.json',
@@ -1060,6 +1063,22 @@ class ConfigCache {
   }
 
   /**
+   * Admin projects (`contents/projects/*.json`), the successor of sources.
+   *
+   * @param {boolean} [includeDisabled=false]
+   * @returns {{data: Object[], etag: string|null}}
+   */
+  getProjects(includeDisabled = false) {
+    const projects = this.get('config/projects.json');
+    if (projects === null || !projects.data) return { data: [], etag: null };
+    if (includeDisabled) return projects;
+    return {
+      data: projects.data.filter(project => project.enabled !== false),
+      etag: projects.etag
+    };
+  }
+
+  /**
    * Get styles configuration
    */
   getStyles() {
@@ -1158,38 +1177,6 @@ class ConfigCache {
     }
 
     return { data: filtered, etag: userSpecificEtag };
-  }
-
-  /**
-   * Get sources configuration
-   */
-  getSources(includeDisabled = false) {
-    try {
-      const cached = this.get('config/sources.json');
-      if (!cached) {
-        return { data: [], etag: null };
-      }
-
-      // Handle both array format and object format
-      let sources;
-      if (Array.isArray(cached.data)) {
-        sources = { data: cached.data, etag: cached.etag };
-      } else if (cached.data && typeof cached.data === 'object') {
-        sources = cached;
-      } else {
-        return { data: [], etag: null };
-      }
-
-      if (includeDisabled) return sources;
-
-      return {
-        data: sources.data.filter(source => source.enabled !== false),
-        etag: sources.etag
-      };
-    } catch (error) {
-      logger.error('Error loading sources', { component: 'ConfigCache', error });
-      return { data: [], etag: null };
-    }
   }
 
   /**
@@ -1449,6 +1436,18 @@ class ConfigCache {
   }
 
   /**
+   * Refresh the admin projects cache. Called after an admin project was
+   * created, changed or deleted through the admin API or a cascade.
+   */
+  async refreshProjectsCache() {
+    try {
+      await this.refreshCacheEntry('config/projects.json');
+    } catch (error) {
+      logger.error('Error refreshing projects cache', { component: 'ConfigCache', error });
+    }
+  }
+
+  /**
    * Refresh workflows cache (both enabled and all workflows)
    * Should be called when workflows are modified (create, update, delete, toggle)
    */
@@ -1464,37 +1463,6 @@ class ConfigCache {
       });
     } catch (error) {
       logger.error('Error refreshing workflows cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh sources cache
-   * Should be called when sources are modified (create, update, delete, toggle)
-   */
-  async refreshSourcesCache() {
-    logger.info('Refreshing sources cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/sources.json');
-
-      // Validate sources after refresh
-      const { data: sources } = this.getSources(true);
-      for (const source of sources) {
-        const validation = validateSourceConfig(source);
-        if (!validation.success) {
-          logger.warn('Invalid source configuration', {
-            component: 'ConfigCache',
-            sourceId: source.id,
-            errors: validation.errors
-          });
-        }
-      }
-
-      logger.info('Sources cache refreshed', { component: 'ConfigCache', count: sources.length });
-      return true;
-    } catch (error) {
-      logger.error('Failed to refresh sources cache', { component: 'ConfigCache', error });
-      return false;
     }
   }
 

@@ -65,6 +65,10 @@ import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import {
+  startProjectRetentionSweep,
+  stopProjectRetentionSweep
+} from './services/projects/projectRetention.js';
+import {
   startWorkflowStateRetention,
   stopWorkflowStateRetention
 } from './services/workflow/workflowRetention.js';
@@ -511,6 +515,10 @@ if (cluster.isPrimary && workerCount > 1) {
     // the new `<userId>__<providerId>.json` layout. Safe no-op on
     // already-migrated installs.
     await tokenStorageService.migrateLegacyTokenFiles();
+    // Project text (uploads, picked documents) is encrypted under that key;
+    // the pipeline, the reader and the reconciler come up once it exists.
+    const { bootstrapProjects } = await import('./services/projects/bootstrap.js');
+    await bootstrapProjects();
   } catch (error) {
     logger.error('Failed to initialize encryption key or JWT secret', {
       component: 'Server',
@@ -788,6 +796,8 @@ if (cluster.isPrimary && workerCount > 1) {
     // sub-workflow — a state nothing ever deleted. Same daily cadence and the
     // same ownership guard as the sweeps above.
     startWorkflowStateRetention();
+    // Abandoned user projects, when `platform.projects.retentionDays` says so.
+    startProjectRetentionSweep();
   }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
@@ -1158,6 +1168,10 @@ if (cluster.isPrimary && workerCount > 1) {
     // Stop the retention sweeps before storage goes away, so a tick cannot
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
+    stopProjectRetentionSweep();
+    import('./services/projects/bootstrap.js')
+      .then(({ shutdownProjects }) => shutdownProjects())
+      .catch(() => {});
     stopWorkflowStateRetention();
     // Conversation state coalesces its writes on a timer to keep document I/O
     // off the streaming path; drain what is still buffered, or a chat resumes

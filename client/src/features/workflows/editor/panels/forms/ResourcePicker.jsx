@@ -4,7 +4,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 /**
- * Compact searchable picker for platform resources (tools, models, sources).
+ * Compact searchable picker for platform resources (tools, models).
  *
  * @param {object} props
  * @param {string} props.label - Field label

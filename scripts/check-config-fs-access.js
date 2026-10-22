@@ -66,7 +66,8 @@ const CONFIG_DIRS = [
   'workflows',
   'agents/profiles',
   'locales',
-  'pages'
+  'pages',
+  'projects'
 ];
 
 /**

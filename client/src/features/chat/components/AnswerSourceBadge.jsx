@@ -21,8 +21,9 @@ import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
  * @param {Object} [props.workflowResult] - Workflow result metadata when message was produced by a workflow run
  *                                          ({ status, executionId, workflowName })
  */
-function AnswerSourceBadge({ answerSource, workflowResult }) {
+function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null }) {
   const { t } = useTranslation();
+  const scopeBadge = knowledgeScope ? <KnowledgeScopeBadge scope={knowledgeScope} t={t} /> : null;
 
   // Workflow output takes precedence over other sources: the message was produced
   // by a workflow run, not by the LLM responding from its own knowledge.
@@ -63,7 +64,7 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
   }
 
   const sources = Array.isArray(answerSource?.sources) ? answerSource.sources : [];
-  if (sources.length === 0) return null;
+  if (sources.length === 0) return scopeBadge;
 
   // Determine the primary source to display
   let displayText = t('chatMessage.answerSource.mixed');
@@ -149,12 +150,87 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
       : displayText;
 
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border ${colorClasses}`}
-      title={tooltipText}
-    >
-      <Icon name={iconName} className="w-3 h-3" />
-      <span>{displayText}</span>
+    <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+      {scopeBadge}
+      <div
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border ${colorClasses}`}
+        title={tooltipText}
+      >
+        <Icon name={iconName} className="w-3 h-3" />
+        <span>{displayText}</span>
+      </div>
+    </div>
+  );
+}
+
+/** How one project of the scope was used, as a short phrase. */
+function scopeModeText(project, t) {
+  if (project.mode === 'loaded') return t('chatMessage.knowledgeScope.loadedOne', 'loaded in full');
+  if (project.mode === 'searched') return t('chatMessage.knowledgeScope.searchedOne', 'searched');
+  return t('chatMessage.knowledgeScope.unavailableOne', 'unavailable');
+}
+
+/** A scope entry's name; a project the viewer may not see by name stays anonymous. */
+function scopeProjectName(project, t) {
+  return (
+    project.name || project.id || t('chatMessage.knowledgeScope.privateProject', 'Private project')
+  );
+}
+
+/** Whether a scope entry is a user project (it has a page to link to). */
+const isUserProject = project => typeof project?.id === 'string' && project.id.startsWith('prj_');
+
+/**
+ * Which projects the turn reached, and whether each was loaded in full or
+ * searched (#1036, `knowledge/scope`). One project is named (and, for a user
+ * project, links to its page); several are counted: *3 projects · 2 loaded in
+ * full · 1 searched*.
+ */
+function KnowledgeScopeBadge({ scope, t }) {
+  const projects = Array.isArray(scope?.projects) ? scope.projects : [];
+  if (projects.length === 0) return null;
+  const loaded = projects.filter(project => project.mode === 'loaded');
+  const searched = projects.filter(project => project.mode === 'searched');
+  const parts = [];
+  if (loaded.length) parts.push(t('chatMessage.knowledgeScope.loaded', { count: loaded.length }));
+  if (searched.length)
+    parts.push(t('chatMessage.knowledgeScope.searched', { count: searched.length }));
+  const single = projects.length === 1 ? projects[0] : null;
+  const label = single
+    ? `${scopeProjectName(single, t)} · ${scopeModeText(single, t)}`
+    : `${t('chatMessage.knowledgeScope.projects', { count: projects.length })} · ${parts.join(' · ')}`;
+  const tooltip = projects
+    .map(
+      project =>
+        `${scopeProjectName(project, t)}: ${scopeModeText(project, t)}${
+          project.overBudget
+            ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})`
+            : ''
+        }`
+    )
+    .join('\n');
+  const className =
+    'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+  const content = (
+    <>
+      <Icon name="folder" className="w-3 h-3" />
+      <span>{label}</span>
+    </>
+  );
+  if (single && isUserProject(single)) {
+    return (
+      <Link
+        to={`/projects/${encodeURIComponent(single.id)}`}
+        className={`${className} hover:underline`}
+        title={`${tooltip}\n${t('chatMessage.knowledgeScope.openProject', 'Open the project')}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <div className={className} title={tooltip}>
+      {content}
     </div>
   );
 }

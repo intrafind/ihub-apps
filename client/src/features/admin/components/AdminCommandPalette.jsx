@@ -15,7 +15,7 @@ const ADMIN_PAGES = [
   { label: 'Prompts', href: '/admin/prompts' },
   { label: 'Tools', href: '/admin/tools' },
   { label: 'Skills', href: '/admin/skills' },
-  { label: 'Sources', href: '/admin/sources' },
+  { label: 'Projects', href: '/admin/projects' },
   { label: 'Agents', href: '/admin/agents' },
   { label: 'Marketplace', href: '/admin/marketplace' },
   { label: 'Users', href: '/admin/users' },
@@ -76,7 +76,7 @@ const TYPE_ROUTES = {
   model: id => `/admin/models/${id}`,
   group: id => `/admin/groups/${id}`,
   user: () => '/admin/users',
-  source: () => '/admin/sources',
+  project: id => `/admin/projects/${encodeURIComponent(id)}`,
   provider: id => `/admin/providers/${id}`,
   tool: () => '/admin/tools'
 };
@@ -87,7 +87,7 @@ const CATEGORY_TO_TYPE = {
   models: 'model',
   groups: 'group',
   users: 'user',
-  sources: 'source',
+  projects: 'project',
   providers: 'provider',
   tools: 'tool'
 };
@@ -100,8 +100,8 @@ function buildSubtitle(type, entry) {
       return entry.enabled === false ? 'disabled' : entry.category || null;
     case 'user':
       return entry.email || null;
-    case 'source':
-      return entry.type || null;
+    case 'project':
+      return entry.enabled === false ? 'disabled' : entry.category || null;
     case 'group':
       return entry.description || null;
     default:

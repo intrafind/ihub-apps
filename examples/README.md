@@ -6,11 +6,11 @@ These files are only meant to be used as references / examples of what is possib
 
 - **apps/** - Example application configurations, copied into `contents/apps/` to try. CI checks
   them against the app schema.
-  - Apps that list `sources` (`faq-bot`, `multi-source-bot`, `ifinder-research-bot`) only get
-    their content when those sources exist. Copy the matching entries from
-    `config/sources.json` into `contents/config/sources.json`, or create them under
-    **Admin → Sources**. The `faq` source ships with iHub. Without its sources the app still runs,
-    but without that content.
+  - Apps that link `projects` (`faq-bot`, `multi-source-bot`, `ifinder-research-bot`) only get
+    their content when those projects exist. Copy the matching files from `projects/` into
+    `contents/projects/`, or create them under **Admin → Projects**. The `faq` project ships with
+    iHub. Without its projects the app still runs, but without that content.
+- **projects/** - Example admin projects (the knowledge the example apps link)
 - **config/** - Example configuration files
 - **models/** - Example model configurations
   - Includes **Model Hints** examples demonstrating the hint/info/warning/alert feature

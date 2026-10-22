@@ -330,71 +330,335 @@ export const deleteUIAsset = async assetId => {
   return response;
 };
 
-// Sources API functions
-export const fetchAdminSources = async () => {
-  try {
-    const response = await makeAdminApiCall('/admin/sources');
-    const data = response.data;
+// Projects API functions (#1036). Admin projects replace the admin sources:
+// knowledge an admin links to apps, workflow nodes and agent profiles.
 
-    // Ensure we return an array
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error in fetchAdminSources:', error);
-    throw error;
-  }
+const ADMIN_PROJECTS_PATH = '/admin/projects';
+
+/** Path of one admin project, with the id encoded for the URL. */
+const adminProjectPath = projectId => `${ADMIN_PROJECTS_PATH}/${encodeURIComponent(projectId)}`;
+
+/** Path of one item of an admin project. */
+const adminProjectItemPath = (projectId, itemId) =>
+  `${adminProjectPath(projectId)}/items/${encodeURIComponent(itemId)}`;
+
+/**
+ * Every admin project, disabled ones included.
+ *
+ * @returns {Promise<Array<Object>>} Admin projects (`GET /api/admin/projects`).
+ */
+export const fetchAdminProjects = async () => {
+  const response = await makeAdminApiCall(ADMIN_PROJECTS_PATH);
+  return Array.isArray(response.data) ? response.data : [];
 };
 
 /**
- * Estimated token count of every source's content.
- * @returns {Promise<{toolResultBudgetTokens: number, sources: Object}>}
+ * Counts of admin and user projects for the list page header.
+ *
+ * @returns {Promise<{admin: {total: number, enabled: number, disabled: number, byKind: Object},
+ *   user: {total: number, items: number, bytes: number, owners: number}, limits: Object}>}
  */
-export const fetchSourceTokens = async () => {
-  const response = await makeAdminApiCall('/admin/sources/_tokens');
-  return response.data || { sources: {} };
-};
-
-export const fetchAdminSource = async sourceId => {
-  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`);
+export const fetchAdminProjectStats = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_stats`);
   return response.data;
 };
 
-export const createSource = async sourceData => {
-  const response = await makeAdminApiCall('/admin/sources', {
+/**
+ * The item kinds the server knows, with whether each is enabled here.
+ *
+ * @returns {Promise<Array<{id: string, name: Object, icon: string|null, picker: Object,
+ *   storage: 'text'|'link', credentials: string, enabled: boolean}>>}
+ */
+export const fetchAdminProjectKinds = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_kinds`);
+  return Array.isArray(response.data) ? response.data : [];
+};
+
+/**
+ * Upload, malware scan and quota settings the item dialog needs.
+ *
+ * @returns {Promise<{upload: {available: boolean, accept: string[], mimeTypes: string[],
+ *   summary: string}, scan: {provider: string}, limits: Object}>}
+ */
+export const fetchAdminProjectConfig = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_config`);
+  return response.data;
+};
+
+/**
+ * Estimated size of every admin project, for the project picker.
+ *
+ * @returns {Promise<{loadAllBudgetTokens?: number, toolResultBudgetTokens?: number,
+ *   projects: Object<string, {tokens: number, items: number, bytes: number}>}>}
+ */
+export const fetchAdminProjectTokens = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_tokens`);
+  return response.data || { projects: {} };
+};
+
+/**
+ * The apps, workflows and agents that link a project. A linked project
+ * cannot be deleted.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Array<{type: 'app'|'workflow'|'agent', id: string, name: string}>>}
+ */
+export const fetchAdminProjectDependencies = async projectId => {
+  const response = await makeAdminApiCall(
+    `${ADMIN_PROJECTS_PATH}/_dependencies/${encodeURIComponent(projectId)}`
+  );
+  return Array.isArray(response.data?.dependencies) ? response.data.dependencies : [];
+};
+
+/**
+ * One admin project with its items.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} The project.
+ */
+export const fetchAdminProject = async projectId => {
+  const response = await makeAdminApiCall(adminProjectPath(projectId));
+  return response.data;
+};
+
+/**
+ * Create an admin project. A duplicate id answers `409 PROJECT_EXISTS`.
+ *
+ * @param {Object} project - `{ id, name, description?, instructions?, enabled?, category?, tags? }`
+ * @returns {Promise<Object>} The created project.
+ */
+export const createAdminProject = async project => {
+  const response = await makeAdminApiCall(ADMIN_PROJECTS_PATH, {
     method: 'POST',
-    body: sourceData
+    body: project
   });
-  return response.data;
+  return response.data?.project;
 };
 
-export const updateSource = async (sourceId, sourceData) => {
-  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`, {
+/**
+ * Replace an admin project's settings (everything but its items).
+ *
+ * @param {string} projectId
+ * @param {Object} project - The whole project document without `items`.
+ * @returns {Promise<Object>} The updated project.
+ */
+export const updateAdminProject = async (projectId, project) => {
+  const response = await makeAdminApiCall(adminProjectPath(projectId), {
     method: 'PUT',
-    body: sourceData
+    body: project
   });
-  return response.data;
+  return response.data?.project;
 };
 
-export const deleteSource = async sourceId => {
-  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`, {
-    method: 'DELETE'
+/**
+ * Change some settings of an admin project.
+ *
+ * @param {string} projectId
+ * @param {Object} changes - Any of `name`, `description`, `instructions`, `enabled`,
+ *   `category`, `tags`.
+ * @returns {Promise<Object>} The updated project.
+ */
+export const patchAdminProject = async (projectId, changes) => {
+  const response = await makeAdminApiCall(adminProjectPath(projectId), {
+    method: 'PATCH',
+    body: changes
   });
-  return response.data;
+  return response.data?.project;
 };
 
-export const testSource = async (sourceId, testData) => {
-  const response = await makeAdminApiCall(`/admin/sources/${sourceId}/test`, {
-    method: 'POST',
-    body: testData
-  });
-  return response.data;
+/**
+ * Delete a project. A linked admin project answers `400 PROJECT_IN_USE` with
+ * `details.dependencies`.
+ *
+ * @param {string} projectId
+ * @returns {Promise<void>}
+ */
+export const deleteAdminProject = async projectId => {
+  await makeAdminApiCall(adminProjectPath(projectId), { method: 'DELETE' });
 };
 
-export const toggleSources = async (ids, enabled) => {
-  const response = await makeAdminApiCall('/admin/sources/_toggle', {
+/**
+ * Enable or disable several admin projects at once.
+ *
+ * @param {string|string[]} ids
+ * @param {boolean} enabled
+ * @returns {Promise<{message: string, changed: number}>}
+ */
+export const toggleAdminProjects = async (ids, enabled) => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_toggle`, {
     method: 'POST',
     body: { ids: Array.isArray(ids) ? ids : [ids], enabled }
   });
   return response.data;
+};
+
+/**
+ * Read every item of a project the way a chat would.
+ *
+ * @param {string} projectId
+ * @returns {Promise<{success: boolean, duration: number, items: Array<Object>}>}
+ */
+export const testAdminProject = async projectId => {
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/test`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
+ * Add an item described as JSON (every kind but a file upload).
+ *
+ * @param {string} projectId
+ * @param {{kind: string, ref: Object, name?: string, pinned?: boolean, text?: string}} item
+ * @returns {Promise<Object>} The new item (`ready` for link kinds, `pending` for text kinds).
+ */
+export const addAdminProjectItem = async (projectId, item) => {
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/items`, {
+    method: 'POST',
+    body: item
+  });
+  return response.data?.item;
+};
+
+/**
+ * Upload a file as a new item (multipart, field `file`).
+ *
+ * @param {string} projectId
+ * @param {{file: File|Blob, name?: string, pinned?: boolean}} upload
+ * @returns {Promise<Object>} The new item, `pending` until its text is extracted.
+ */
+export const uploadAdminProjectItem = async (projectId, { file, name, pinned = false }) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (name) formData.append('name', name);
+  formData.append('pinned', pinned ? 'true' : 'false');
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/items`, {
+    method: 'POST',
+    body: formData
+  });
+  return response.data?.item;
+};
+
+/**
+ * Rename an item or change whether it is pinned.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @param {{name?: string, pinned?: boolean}} changes
+ * @returns {Promise<Object>} The updated item.
+ */
+export const updateAdminProjectItem = async (projectId, itemId, changes) => {
+  const response = await makeAdminApiCall(adminProjectItemPath(projectId, itemId), {
+    method: 'PATCH',
+    body: changes
+  });
+  return response.data?.item;
+};
+
+/**
+ * Replace the text of a written, uploaded or imported document of an admin project.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @param {string} text
+ * @returns {Promise<Object>} The updated item.
+ */
+export const updateAdminProjectItemText = async (projectId, itemId, text) => {
+  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/text`, {
+    method: 'PUT',
+    body: { text }
+  });
+  return response.data?.item;
+};
+
+/**
+ * Remove an item from a project.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @returns {Promise<void>}
+ */
+export const deleteAdminProjectItem = async (projectId, itemId) => {
+  await makeAdminApiCall(adminProjectItemPath(projectId, itemId), { method: 'DELETE' });
+};
+
+/**
+ * Read an item's content again (a stale item) or retry a failed extraction.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @returns {Promise<Object>} The item.
+ */
+export const refreshAdminProjectItem = async (projectId, itemId) => {
+  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/refresh`, {
+    method: 'POST'
+  });
+  return response.data?.item;
+};
+
+/**
+ * The plain text of an item, cut at `maxChars`.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @param {{maxChars?: number}} [options]
+ * @returns {Promise<{text: string, chars: number|null, truncated: boolean}>}
+ */
+export const fetchAdminProjectItemText = async (projectId, itemId, { maxChars = 20000 } = {}) => {
+  const query = new URLSearchParams({ maxChars: String(maxChars) });
+  const response = await makeAdminApiCall(
+    `${adminProjectItemPath(projectId, itemId)}/text?${query}`,
+    { responseType: 'text' }
+  );
+  const headers = response.headers || {};
+  const chars = Number.parseInt(headers['x-item-chars'], 10);
+  return {
+    text: typeof response.data === 'string' ? response.data : String(response.data ?? ''),
+    chars: Number.isFinite(chars) ? chars : null,
+    truncated: headers['x-item-truncated'] === 'true'
+  };
+};
+
+// Pickers of the project item dialog. They belong to the user projects API
+// (`/api/projects/pickers`), which every signed-in user may call.
+
+/**
+ * iHub pages an item can link.
+ *
+ * @returns {Promise<Array<{id: string, title: string|Object, languages: string[]}>>}
+ */
+export const fetchProjectPickerPages = async () => {
+  const response = await makeAdminApiCall('/projects/pickers/pages');
+  return Array.isArray(response.data?.pages) ? response.data.pages : [];
+};
+
+/**
+ * Search iFinder for documents to link.
+ *
+ * @param {string} query
+ * @param {{profile?: string, limit?: number}} [options]
+ * @returns {Promise<Array<{documentId: string, title: string, mimeType?: string, url?: string}>>}
+ */
+export const searchProjectPickerIFinder = async (query, { profile, limit } = {}) => {
+  const params = new URLSearchParams({ q: query });
+  if (profile) params.set('profile', profile);
+  if (limit) params.set('limit', String(limit));
+  const response = await makeAdminApiCall(`/projects/pickers/ifinder/search?${params}`);
+  return Array.isArray(response.data?.results) ? response.data.results : [];
+};
+
+/**
+ * Check that a URL can be read before it is linked.
+ *
+ * @param {string} url
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+export const checkProjectPickerUrl = async url => {
+  const response = await makeAdminApiCall('/projects/pickers/url/check', {
+    method: 'POST',
+    body: { url }
+  });
+  return response.data || { ok: false };
 };
 
 // Workflow API functions
@@ -1049,17 +1313,30 @@ export const adminApi = {
   uploadUIAsset,
   deleteUIAsset,
 
-  // Sources functions - both name variants for compatibility
-  fetchAdminSources,
-  getSources: fetchAdminSources, // Alias for SourcePicker compatibility
-  fetchSourceTokens,
-  fetchAdminSource,
-  getSource: fetchAdminSource, // Alias
-  createSource,
-  updateSource,
-  deleteSource,
-  testSource,
-  toggleSources,
+  // Projects functions
+  fetchAdminProjects,
+  fetchAdminProjectStats,
+  fetchAdminProjectKinds,
+  fetchAdminProjectConfig,
+  fetchAdminProjectTokens,
+  fetchAdminProjectDependencies,
+  fetchAdminProject,
+  createAdminProject,
+  updateAdminProject,
+  patchAdminProject,
+  deleteAdminProject,
+  toggleAdminProjects,
+  testAdminProject,
+  addAdminProjectItem,
+  uploadAdminProjectItem,
+  updateAdminProjectItem,
+  updateAdminProjectItemText,
+  deleteAdminProjectItem,
+  refreshAdminProjectItem,
+  fetchAdminProjectItemText,
+  fetchProjectPickerPages,
+  searchProjectPickerIFinder,
+  checkProjectPickerUrl,
 
   // Workflow functions
   fetchAdminWorkflows,

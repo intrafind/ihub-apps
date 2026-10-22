@@ -1148,7 +1148,7 @@ For deeper understanding of specific architectural components:
 
 - [Architecture Diagrams](diagrams.md) - Visual system representations and data flows
 - [Developer Onboarding](developer-onboarding.md) - Development environment and patterns
-- [Sources System](sources.md) - Knowledge source integration architecture
+- [Projects](projects.md) - Knowledge architecture: projects, items, provider and tools
 - [External Authentication](external-authentication.md) - Authentication system architecture
 - [Security Guide](security.md) - Security architecture and implementation
 - [Platform Configuration](platform.md) - Configuration system architecture

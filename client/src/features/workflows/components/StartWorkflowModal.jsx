@@ -9,6 +9,8 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { apiClient } from '../../../api/client';
 import { fetchModels } from '../../../api/endpoints/models';
 import UnifiedUploader from '../../upload/components/UnifiedUploader';
+import ProjectInputField from './ProjectInputField';
+import { PROJECT_INPUT_TYPE } from '../utils/projectNodeConfig';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 
 /**
@@ -61,6 +63,16 @@ function FormField({ variable, value, onChange, disabled, language, error, field
             },
             allowMultiple: variable.multiple || false
           }}
+        />
+      ) : variable.type === PROJECT_INPUT_TYPE ? (
+        <ProjectInputField
+          name={variable.name}
+          label={label}
+          value={value}
+          onChange={projectId => onChange(variable.name, projectId)}
+          disabled={disabled}
+          className={baseInputClasses}
+          placeholder={placeholder}
         />
       ) : variable.type === 'select' && variable.options ? (
         <select

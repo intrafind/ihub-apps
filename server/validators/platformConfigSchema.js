@@ -418,7 +418,10 @@ export const platformConfigSchema = z
         includeEmail: z.boolean().prefault(false),
         verbosity: z.enum(['metadata', 'request', 'full']).prefault('metadata'),
         winstonMirror: z.boolean().prefault(false),
-        anonymizeIp: ipAnonymizationSchema
+        anonymizeIp: ipAnonymizationSchema,
+        // Audit every text read of a project item (preview, download, source
+        // content). Off by default: each citation preview would be an event.
+        logReads: z.boolean().prefault(false)
       })
       .passthrough()
       .prefault({}),
@@ -598,6 +601,59 @@ export const platformConfigSchema = z
         memoryEnabled: z.boolean().prefault(true),
         memoryMaxChars: z.number().prefault(16000),
         maxHistoryReadChars: z.number().prefault(8000)
+      })
+      .passthrough()
+      .prefault({}),
+    // Projects (#1036): the one container for documents, instructions and
+    // chats. `tierPolicy` is validated and shown but only `ihub` is active in
+    // this version. `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
+    // of zero or less means no cap; `retentionDays` of zero or less keeps user
+    // projects until deleted. `kinds` switches item kinds off by id.
+    projects: z
+      .object({
+        tierPolicy: z.enum(['ihub', 'both', 'ifinder']).prefault('ihub'),
+        limits: z
+          .object({
+            maxFiles: z.number().int().min(1).max(50).prefault(25),
+            maxFileBytes: z.number().int().positive().prefault(20971520),
+            maxProjectBytes: z.number().int().positive().prefault(209715200),
+            maxProjectsPerUser: z.number().int().prefault(20)
+          })
+          .passthrough()
+          .prefault({}),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(false)
+          })
+          .passthrough()
+          .prefault({}),
+        retentionDays: z.number().prefault(0),
+        loadAllMaxTokens: z.number().int().positive().prefault(50000),
+        kinds: z.record(z.string(), z.boolean()).prefault({}),
+        encryption: z
+          .object({ keyProvider: z.string().prefault('local-file') })
+          .passthrough()
+          .prefault({}),
+        // The malware scan hook of the upload pipeline (spec 3 §7): `none`,
+        // or `command` with a scanner binary and `{path}` for the file.
+        scan: z
+          .object({
+            provider: z.enum(['none', 'command']).prefault('none'),
+            command: z.string().max(1000).prefault(''),
+            timeoutMs: z.number().int().positive().prefault(30000),
+            onError: z.enum(['reject', 'allow']).prefault('reject')
+          })
+          .passthrough()
+          .prefault({}),
+        ingest: z
+          .object({
+            concurrency: z.number().int().min(1).max(8).prefault(2),
+            staleAfterMinutes: z.number().int().positive().prefault(30)
+          })
+          .passthrough()
+          .prefault({})
       })
       .passthrough()
       .prefault({}),

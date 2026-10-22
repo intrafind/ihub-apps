@@ -51,12 +51,13 @@ import {
   structuredOutputSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
-import { recordRunActivity } from './runActivity.js';
+import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
 import {
+  admitTurnProjects,
   materializeAssistantTurn,
-  materializeUserTurn,
-  normalizeAttachments
+  normalizeAttachments,
+  settleUserTurn
 } from './chatMaterializer.js';
 import {
   chatTurnSeam,
@@ -253,8 +254,13 @@ class ChatService {
   }
 
   async prepareChatRequest(params) {
+    // The knowledge scope is noted under this preparation, not the chat: a
+    // turn prepared while another one of the chat still awaits its tools
+    // and API key must not take, or overwrite, the other one's scope.
+    const preparationId = uuidv4();
     const result = await this.requestBuilder.prepareChatRequest({
       ...params,
+      preparationId,
       processMessageTemplates
     });
     // `PromptService` notes the app sources it loaded under the chat id while
@@ -263,7 +269,11 @@ class ChatService {
     // prepared while it still ran (and superseded it).
     const promptSources = PromptService.getPromptSources(params?.chatId);
     PromptService.resetPromptSources(params?.chatId);
-    if (result?.success && result.data) result.data.promptSources = promptSources;
+    const knowledgeScope = PromptService.takeKnowledgeScope(preparationId);
+    if (result?.success && result.data) {
+      result.data.promptSources = promptSources;
+      if (knowledgeScope) result.data.knowledgeScope = knowledgeScope;
+    }
     return result;
   }
 
@@ -405,7 +415,12 @@ class ChatService {
    *   message being sent comes from the request). Optional extras for callers that store more
    *   than the chat UI does (the inference API): `message` (fields on the stored user message:
    *   `variables`, `renderedContent`), `chat` (fields patched onto the chat document with the
-   *   user turn), `assistant` (fields on the stored answer: `model`), `origin` (how a chat
+   *   user turn), `projects` (the container and attachments the turn writes under the chat
+   *   lock, `resolveChatProjects().projectPatch`), `projectId` (the container the turn was
+   *   prepared for; its question is stored only while the chat is still in it) — a conflict
+   *   refuses the turn before the model is called, before it supersedes a running turn when
+   *   the stored chat already shows it, and the summary carries `refusal`; `assistant` (fields on the stored answer:
+   *   `model`), `origin` (how a chat
    *   created by this turn came about) and `clientConnected` (`() => boolean`, whether the
    *   caller is still there to read the answer; default: an SSE client is attached).
    * @param {RunStreamEmitter} [params.emitter] - Stream emitter to use instead of the chat's
@@ -428,7 +443,7 @@ class ChatService {
    * @param {string} [params.clientTimezone] - The user's IANA timezone, handed to the tools
    *   (the scheduling tools read it) and to the scheduling note in the system prompt.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
-   *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput? }`
+   *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal? }`
    */
   async runTurn({
     prep,
@@ -461,7 +476,8 @@ class ChatService {
       responseSchema,
       llmOptions = {},
       userFileData,
-      promptSources = []
+      promptSources = [],
+      knowledgeScope = null
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
@@ -478,6 +494,31 @@ class ChatService {
     // leaving it out of `activeRequests` would make it the one turn Stop can
     // never reach: the endpoint would answer "stopped" while the model ran to
     // completion and billed the tokens.
+    // A turn whose project fields no longer hold (a racing first turn opened
+    // the chat in another project) is refused before it supersedes anything:
+    // otherwise the conflicting request would cancel the accepted turn that
+    // is generating, then fail itself. Checked again under the chat lock when
+    // the question is stored.
+    if (persistence?.repository) {
+      const refusal = await admitTurnProjects({
+        repository: persistence.repository,
+        chatId,
+        projects: persistence.projects || null,
+        projectId: persistence.projectId
+      });
+      if (refusal) {
+        return {
+          runId,
+          status: 'error',
+          content: '',
+          finishReason: 'error',
+          errorInfo: refusal,
+          refusal,
+          knowledgeSources: []
+        };
+      }
+    }
+
     const controller = new AbortController();
     const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
@@ -549,7 +590,7 @@ class ChatService {
       recordRunActivity(runId);
       const attachments = normalizeAttachments(persist.attachments);
       this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
-      await materializeUserTurn({
+      const { refusal } = await settleUserTurn({
         repository: persist.repository,
         chatId,
         ownerId: persist.ownerId,
@@ -567,8 +608,41 @@ class ChatService {
         replaceFromMessageId: persist.replaceFromMessageId,
         message: persist.message,
         chat: persist.chat,
+        projects: persist.projects,
+        projectId: persist.projectId,
         origin: persist.origin
       });
+      // The chat's container changed under this turn (a first turn that
+      // raced it opened the chat in another project): nothing of it was
+      // stored, and it ends here, before the model is called.
+      if (refusal) {
+        discardRunActivity(runId);
+        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, refusal);
+        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+          status: 'error',
+          finishReason: 'error',
+          error: refusal
+        });
+        this._endLedgerRun(runId, {
+          status: 'error',
+          finishReason: 'error',
+          error: refusal,
+          startedAt
+        });
+        if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
+        if (trackRequest && activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+        return {
+          runId,
+          status: 'error',
+          content: '',
+          finishReason: 'error',
+          errorInfo: refusal,
+          refusal,
+          knowledgeSources: []
+        };
+      }
     }
 
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
@@ -576,6 +650,13 @@ class ChatService {
       ...(model?.id ? { model: model.id } : {}),
       refs
     });
+    // Which projects this turn reached, and whether each was loaded in full
+    // or left to the knowledge tools (#1036): on the stream for the badge and
+    // on the ledger so a re-sync and the stored answer carry it too.
+    if (knowledgeScope?.projects?.length) {
+      stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
+      this.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
+    }
     for (const skill of activatedSkills || []) {
       if (!skill?.skillName) continue;
       stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {

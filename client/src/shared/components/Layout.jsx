@@ -95,7 +95,8 @@ function Layout() {
       pathnameEquals(location.pathname, '/apps') ||
       pathnameEquals(location.pathname, '/apps/') ||
       pathnameStartsWith(location.pathname, '/chats') ||
-      pathnameStartsWith(location.pathname, '/tasks'),
+      pathnameStartsWith(location.pathname, '/tasks') ||
+      pathnameStartsWith(location.pathname, '/projects'),
     [isAppPage, location.pathname]
   );
 

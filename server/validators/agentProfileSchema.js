@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { HEX_COLOR_PATTERN, LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+import { projectLinksSchema } from './projectSchema.js';
 
 const AGENT_PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$/;
 const AGENT_PROFILE_ID_MAX_LENGTH = 64;
@@ -25,7 +26,7 @@ const optionalLocalizedStringSchema = z.record(
 // validator validates the full shape when the engine starts.
 // The Profile may omit `workflow.definition` entirely — the
 // profileWorkflowSerializer fills in a default shape on save based on the
-// Profile's `system`/`tools`/`sources`/`apps`/`preferredModel`/Planner/
+// Profile's `system`/`tools`/`projects`/`apps`/`preferredModel`/Planner/
 // Dynamic-Tasks settings. For `external` refs `workflowId` is required.
 const workflowRefSchema = z
   .object({
@@ -216,7 +217,9 @@ const baseAgentProfileSchema = z.object({
   nodeModels: z.record(z.string(), z.string()).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
   tools: z.array(z.string()).optional().prefault([]),
-  sources: z.array(z.string()).optional().prefault([]),
+  // Projects linked to the agent (#1036, spec 1 §6.2), copied into every
+  // generated prompt node.
+  projects: projectLinksSchema.optional(),
   apps: z.array(z.string()).optional().prefault([]),
   // Skills: instructional knowledge the agent can activate at runtime.
   // Mirrors the same field on apps; the agent's planner / task executors /

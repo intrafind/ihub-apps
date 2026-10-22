@@ -43,7 +43,7 @@ export async function generateUsageGuide({ app, language, user }) {
     model,
     messages: buildUsageGuideMessages(app, language, {
       tools: configCache.getTools().data || [],
-      sources: configCache.getSources().data || []
+      projects: configCache.getProjects(true).data || []
     }),
     retries: 0,
     telemetry: {

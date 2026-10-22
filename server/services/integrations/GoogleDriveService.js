@@ -511,17 +511,23 @@ class GoogleDriveService extends OAuthIntegrationBase {
    * Download file content
    * @param {string} userId - User ID
    * @param {string} fileId - File ID
-   * @returns {Promise<Object>} File data with content
+   * @param {string} [providerId]
+   * @param {{signal?: AbortSignal}} [options] - `signal` aborts the metadata
+   *   request and the download, body included
+   * @returns {Promise<Object>} File data with content, and `lastModified`
+   *   (ISO) as Drive reports it now
    */
-  async downloadFile(userId, fileId, providerId) {
+  async downloadFile(userId, fileId, providerId, { signal } = {}) {
     try {
       // Retrieve tokens once for all operations in this method
       const tokens = await this.getUserTokens(userId, providerId);
+      const withSignal = signal ? { signal } : {};
 
       // Get file metadata first
-      const metadataUrl = `${this.driveApiUrl}/files/${fileId}?fields=id,name,mimeType,size,webViewLink`;
+      const metadataUrl = `${this.driveApiUrl}/files/${fileId}?fields=id,name,mimeType,size,webViewLink,modifiedTime`;
       const metadataResponse = await httpFetch(metadataUrl, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` }
+        headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        ...withSignal
       });
 
       if (!metadataResponse.ok) {
@@ -553,7 +559,8 @@ class GoogleDriveService extends OAuthIntegrationBase {
       const response = await httpFetch(downloadUrl, {
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`
-        }
+        },
+        ...withSignal
       });
 
       if (!response.ok) {
@@ -570,6 +577,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
         name: resultName,
         mimeType: resultMimeType,
         size: content.byteLength,
+        lastModified: fileInfo.modifiedTime || null,
         content
       };
     } catch (error) {

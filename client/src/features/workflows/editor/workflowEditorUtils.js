@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import dagre from '@dagrejs/dagre';
+import { PROJECT_NODE_DEFAULT_OUTPUT, PROJECT_NODE_TYPES } from '../utils/projectNodeConfig';
 
 /**
  * Color mapping for each workflow node type.
@@ -30,7 +31,10 @@ export const NODE_TYPE_COLORS = {
   progress: '#64748B',
   'inbox-load': '#92400E',
   'inbox-finalize': '#92400E',
-  'memory-finalize': '#7E22CE'
+  'memory-finalize': '#7E22CE',
+  'project-items': '#4D7C0F',
+  'project-read': '#4D7C0F',
+  'project-write': '#4D7C0F'
 };
 
 /**
@@ -119,8 +123,51 @@ export const NODE_TYPE_META = {
   'memory-finalize': {
     label: 'Memory Finalize',
     description: 'Agent runtime: persist composed memory (advanced).'
+  },
+  // Project steps (#1036). Their label and description are translated through
+  // `nodeTypeLabel` / `nodeTypeDescription` (keys workflows.editor.nodeTypeMeta.*).
+  'project-items': {
+    label: 'Project Documents',
+    description: 'List the documents of a project, to loop over them one by one.'
+  },
+  'project-read': {
+    label: 'Read Project Document',
+    description: "Read one document's text from a project."
+  },
+  'project-write': {
+    label: 'Save to Project',
+    description: 'Store a text the workflow produced as a document of a project.'
   }
 };
+
+/**
+ * The palette/card label of a node type in the UI language. Falls back to the
+ * English label of NODE_TYPE_META for types without a translation.
+ *
+ * @param {string} type - Workflow node type identifier
+ * @param {Function} t - i18next translate function
+ * @returns {string}
+ */
+export function nodeTypeLabel(type, t) {
+  const fallback = NODE_TYPE_META[type]?.label || type;
+  return typeof t === 'function'
+    ? t(`workflows.editor.nodeTypeMeta.${type}.label`, fallback)
+    : fallback;
+}
+
+/**
+ * The one-line description of a node type in the UI language, falling back to
+ * the English description of NODE_TYPE_META.
+ *
+ * @param {string} type - Workflow node type identifier
+ * @param {Function} t - i18next translate function
+ * @returns {string}
+ */
+export function nodeTypeDescription(type, t) {
+  const fallback = NODE_TYPE_META[type]?.description || '';
+  if (!fallback || typeof t !== 'function') return fallback;
+  return t(`workflows.editor.nodeTypeMeta.${type}.description`, fallback);
+}
 
 /**
  * Grouped list of available node types for the palette sidebar.
@@ -134,6 +181,7 @@ export const NODE_TYPES_LIST = [
     label: 'Knowledge',
     types: ['query-plan', 'corpus-search', 'structured-record', 'quote-validator']
   },
+  { group: 'projects', label: 'Projects', types: [...PROJECT_NODE_TYPES] },
   { group: 'data', label: 'Data', types: ['transform', 'template-render'] },
   { group: 'integration', label: 'Integration', types: ['tool', 'http'] },
   { group: 'people', label: 'People', types: ['human', 'progress'] },
@@ -165,6 +213,21 @@ export function defaultConfigForType(type) {
       return { method: 'GET', url: '' };
     case 'human':
       return { message: { en: '' }, options: [] };
+    case 'project-items':
+      return { project: '', outputVariable: PROJECT_NODE_DEFAULT_OUTPUT['project-items'] };
+    case 'project-read':
+      return {
+        project: '',
+        document: '$.data._loopItem.id',
+        outputVariable: PROJECT_NODE_DEFAULT_OUTPUT['project-read']
+      };
+    case 'project-write':
+      return {
+        project: '',
+        name: '',
+        text: '',
+        outputVariable: PROJECT_NODE_DEFAULT_OUTPUT['project-write']
+      };
     default:
       return {};
   }
@@ -563,6 +626,18 @@ export function variablesProducedBy(rfNode) {
     add(cfg.coverageVar || '_coverage', `coverage counters from ${name}`);
   }
 
+  if (type === 'project-items') {
+    add(cfg.outputVariable || PROJECT_NODE_DEFAULT_OUTPUT[type], `documents listed by ${name}`);
+  }
+
+  if (type === 'project-read') {
+    add(cfg.outputVariable || PROJECT_NODE_DEFAULT_OUTPUT[type], `document read by ${name}`);
+  }
+
+  if (type === 'project-write') {
+    add(cfg.outputVariable || PROJECT_NODE_DEFAULT_OUTPUT[type], `document saved by ${name}`);
+  }
+
   if (type === 'structured-record') {
     add(cfg.recordsVar || '_records', `records collected by ${name}`);
   }
@@ -767,10 +842,10 @@ const NODE_TEMPLATE_SCOPES = {
     'generatedAt',
     'data'
   ],
-  // PromptNodeExecutor substitutes the loaded source content for these.
-  prompt: ['sources', 'source'],
-  planner: ['sources', 'source'],
-  verifier: ['sources', 'source']
+  // PromptNodeExecutor substitutes the linked projects' content for this one.
+  prompt: ['projects'],
+  planner: ['projects'],
+  verifier: ['projects']
 };
 
 /** Walks every string in a config value. */

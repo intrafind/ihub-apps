@@ -38,9 +38,10 @@ export default function registerAdminOverviewRoutes(app) {
       const enabledProviders = allProviders.filter(p => p.enabled !== false);
 
       // Sources
-      const sourcesResult = configCache.getSources(true);
-      const allSources = sourcesResult?.data || (Array.isArray(sourcesResult) ? sourcesResult : []);
-      const enabledSources = allSources.filter(s => s.enabled !== false);
+      const sourcesResult = configCache.getProjects(true);
+      const allProjects =
+        sourcesResult?.data || (Array.isArray(sourcesResult) ? sourcesResult : []);
+      const enabledProjects = allProjects.filter(s => s.enabled !== false);
 
       // Tools
       const toolsResult = configCache.getTools(true);
@@ -95,7 +96,7 @@ export default function registerAdminOverviewRoutes(app) {
         apps: { total: apps.length, enabled: enabledApps.length },
         models: { total: allModels.length, enabled: enabledModels.length },
         providers: { total: allProviders.length, enabled: enabledProviders.length },
-        sources: { total: allSources.length, enabled: enabledSources.length },
+        projects: { total: allProjects.length, enabled: enabledProjects.length },
         tools: { total: allTools.length, enabled: enabledTools.length },
         groups: groupCount,
         users: userCount,

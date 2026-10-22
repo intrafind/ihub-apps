@@ -8,6 +8,8 @@ import {
   LANGUAGE_CODE_PATTERN
 } from '../../shared/validationPatterns.js';
 import { hasEndOutput } from '../../shared/workflowEndOutput.js';
+import { reservedProjectInputNames } from '../../shared/workflowProjectInputs.js';
+import { projectLinksSchema } from './projectSchema.js';
 
 /**
  * Workflow Configuration Schema
@@ -136,7 +138,12 @@ const nodeTypeEnum = z.enum([
   // enum must list them.
   'inbox-load',
   'inbox-finalize',
-  'memory-finalize'
+  'memory-finalize',
+  // Project steps (#1036, spec 2 §8): list a project's documents, read one,
+  // write a text back. See services/workflow/projectNodes.js.
+  'project-items',
+  'project-read',
+  'project-write'
 ]);
 
 /**
@@ -517,11 +524,11 @@ const baseWorkflowConfigSchema = z.object({
   edges: z.array(edgeConfigSchema),
 
   /**
-   * Source IDs to load and make available to agent nodes.
-   * Sources are resolved from the admin source configuration (sources.json).
-   * Agent nodes can reference source content via {{sources}} in their prompts.
+   * Projects linked to the workflow (#1036, spec 1 §6.2): a bare id or
+   * `{ id, mode, write }`. Prompt, planner and verifier nodes may name their
+   * own in `config.projects`, which wins over this list.
    */
-  sources: z.array(z.string()).optional(),
+  projects: projectLinksSchema.optional(),
 
   /**
    * Groups that are allowed to execute this workflow
@@ -696,6 +703,19 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
     {
       message:
         'All nodes except the start node and loop-body nodes must have at least one incoming edge',
+      path: ['nodes']
+    }
+  )
+  .refine(
+    data =>
+      // A chat run passes the message as `input`: a project input of that
+      // name would take the sentence for a project id.
+      data.nodes
+        .filter(node => node.type === 'start')
+        .every(node => reservedProjectInputNames(node.config?.inputVariables).length === 0),
+    {
+      message:
+        'A start input of type "project" cannot be named "input": a chat run passes the message under that name',
       path: ['nodes']
     }
   )

@@ -27,9 +27,6 @@ The `contents/` directory contains Markdown (.md) files that can be referenced b
 
 ```
 contents/
-  sources/
-    documentation.md - Main documentation file
-    faq.md          - Frequently asked questions
   pages/
     en/
       faq.md        - FAQ page content

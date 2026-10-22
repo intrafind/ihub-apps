@@ -31,6 +31,8 @@ import MarkdownViewer from '../../../shared/components/MarkdownViewer';
 import { apiClient } from '../../../api/client';
 import { invalidateChatsCache, useChatPersistence } from '../../../shared/hooks/useChats';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
+import { ProjectInputValue } from '../components/ProjectInputField';
+import { PROJECT_INPUT_TYPE } from '../utils/projectNodeConfig';
 import {
   answerOf,
   executionAnswerOf,
@@ -422,7 +424,9 @@ function WorkflowExecutionPage() {
     const startNode = workflowDef?.nodes?.find(n => n.type === 'start');
     const inputVars = startNode?.config?.inputVariables;
     if (inputVars?.length > 0) {
+      // A project input is an id: it says nothing to the chat model.
       const parts = inputVars
+        .filter(v => v.type !== PROJECT_INPUT_TYPE)
         .map(v => state?.data?.[v.name])
         .filter(v => typeof v === 'string' && v.length > 0);
       userInput = parts.join('\n\n');
@@ -1123,7 +1127,11 @@ function WorkflowExecutionPage() {
                           : input.name}
                       </dt>
                       <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                        <InputValueRenderer value={input.value} t={t} />
+                        {input.type === PROJECT_INPUT_TYPE && typeof input.value === 'string' ? (
+                          <ProjectInputValue projectId={input.value} />
+                        ) : (
+                          <InputValueRenderer value={input.value} t={t} />
+                        )}
                       </dd>
                     </div>
                   ))}

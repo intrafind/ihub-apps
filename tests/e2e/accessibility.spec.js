@@ -266,7 +266,6 @@ async function signInAsAdmin(page) {
 //   aria-valid-attr-value - tab whose aria-controls points at a panel that is not rendered
 const KNOWN_VIOLATIONS = {
   '/apps/chat/canvas': { 'select-name': 1 },
-  '/admin/sources': { 'button-name': 1, label: 11 },
   '/admin/auth': { label: 12 },
   '/admin/oauth': { 'aria-valid-attr-value': 1 },
   '/admin/oauth/clients': { 'aria-valid-attr-value': 1 },
@@ -289,6 +288,8 @@ const KNOWN_VIOLATIONS = {
 // with KNOWN_VIOLATIONS this covers every route reachable from the user and admin
 // navigation without opening a dialog or editing a record.
 const CLEAN_PAGES = [
+  '/projects',
+  '/admin/projects',
   '/apps',
   '/tasks',
   '/workflows',

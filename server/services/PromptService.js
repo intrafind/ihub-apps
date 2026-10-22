@@ -4,11 +4,18 @@
 import { getLocalizedContent } from '../../shared/localize.js';
 import { renderUserMessage } from '../../shared/promptContext.js';
 import configCache from '../configCache.js';
-import { createSourceManager } from '../sources/index.js';
-import SourceResolutionService from './SourceResolutionService.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { describeSkillCatalog, prepareActiveSkills } from './skillAccess.js';
 import logger from '../utils/logger.js';
+import { resolveProjectScope } from './knowledge/ProjectScope.js';
+import {
+  planKnowledgeScope,
+  renderProjectInstructions,
+  renderProjectsBlock,
+  scopeSummary
+} from './knowledge/KnowledgeScopePlanner.js';
+import { projectSettings } from './projects/projectSettings.js';
+import { hasProjectScope } from './knowledge/knowledgeTools.js';
 
 /**
  * Module-level knowledge source tracking
@@ -16,6 +23,34 @@ import logger from '../utils/logger.js';
  * @type {Map<string, Set<string>>}
  */
 const promptKnowledgeSources = new Map();
+// The knowledge scope (which projects, loaded or searched) of a prompt being
+// built, taken by `ChatService.prepareChatRequest`. Keyed by the preparation,
+// not the chat: two preparations of one chat can overlap (a turn and the one
+// that supersedes it), and each must report its own scope.
+const knowledgeScopes = new Map();
+
+/**
+ * The model behind the request: its id when the request builder hands it
+ * over, else the display name (an older caller). Matched on both, so a
+ * model named differently from its id still brings its context window.
+ *
+ * @param {Object[]} models
+ * @param {string|null} modelName
+ * @returns {Object|null}
+ */
+function findModel(models, modelName) {
+  if (!modelName || typeof modelName !== 'string') return null;
+  const wanted = modelName;
+  const nameOf = entry =>
+    typeof entry?.name === 'object' && entry.name
+      ? Object.values(entry.name)
+      : [entry?.name].filter(Boolean);
+  return (
+    models.find(entry => entry?.id === wanted) ||
+    models.find(entry => nameOf(entry).includes(wanted)) ||
+    null
+  );
+}
 
 /**
  * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
@@ -117,6 +152,74 @@ class PromptService {
   resetPromptSources(chatId) {
     if (!chatId) return;
     promptKnowledgeSources.delete(chatId);
+  }
+
+  /**
+   * Note the projects a prompt was built with (#1036), for the turn to
+   * report as `knowledge/scope`.
+   * @param {string} key - The preparation id the caller handed to
+   *   `processMessageTemplates`, else the chat id
+   * @param {Object} summary - `scopeSummary(plan)`
+   */
+  trackKnowledgeScope(key, summary) {
+    if (!key || !summary) return;
+    knowledgeScopes.set(key, summary);
+  }
+
+  /**
+   * The knowledge scope noted under a key, and forget it.
+   * @param {string} key - See {@link trackKnowledgeScope}.
+   * @returns {Object|null}
+   */
+  takeKnowledgeScope(key) {
+    if (!key) return null;
+    const summary = knowledgeScopes.get(key) || null;
+    knowledgeScopes.delete(key);
+    return summary;
+  }
+
+  /**
+   * The system prompt with the request's projects applied (spec 2 §6).
+   *
+   * @param {string} systemPrompt
+   * @param {Object|null} app - App with its link fields (`projects`, `_projectId`, …)
+   * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null,
+   *   scopeKey: string|null}} ctx - `scopeKey` is what the knowledge scope is noted under
+   * @returns {Promise<string>}
+   */
+  async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName, scopeKey }) {
+    const placeholder = '{{projects}}';
+    const hasPlaceholder = systemPrompt.includes(placeholder);
+    const scope =
+      hasProjectScope(app) && user ? await resolveProjectScope({ appConfig: app, user }) : [];
+    if (!scope.length) {
+      return hasPlaceholder ? systemPrompt.replace(placeholder, () => '') : systemPrompt;
+    }
+    const platform = configCache.getPlatform() || {};
+    const plan = await planKnowledgeScope(scope, {
+      model: findModel(configCache.getModels?.()?.data || [], modelName),
+      settings: projectSettings(platform),
+      ctx: { user, chatId, language: lang, purpose: 'chat' }
+    });
+    const instructions = renderProjectInstructions(plan);
+    const block = renderProjectsBlock(plan);
+    let out = systemPrompt;
+    if (instructions) out = out.trim() ? `${out}\n\n${instructions}` : instructions;
+    if (hasPlaceholder) out = out.replace(placeholder, () => block);
+    else if (block) out += `\n\nProjects:\n${block}`;
+    // Any injected text — a whole project or the pinned documents of a
+    // searched one — can ground the answer without a tool call.
+    if (plan.projects.some(project => project.injected.length)) {
+      this.trackPromptSources(chatId);
+    }
+    this.trackKnowledgeScope(scopeKey, scopeSummary(plan));
+    logger.info('Projects applied to the prompt', {
+      component: 'PromptService',
+      chatId,
+      projects: plan.projects.map(project => `${project.id}:${project.mode}`).join(','),
+      tokens: plan.usedTokens
+    });
+    return out;
   }
 
   /**
@@ -257,6 +360,11 @@ class PromptService {
    * @param {Object} [preparedSkills] - The turn's active skills from
    *   `prepareActiveSkills`, when the caller resolved them already (it needs
    *   them for the tools as well); resolved here otherwise
+   * @param {string} [modelId] - The model's id, matched before its (possibly
+   *   localized) name for the context window the project budget is sized by
+   * @param {string} [preparationId] - The preparation this prompt is built
+   *   for: the knowledge scope is noted under it (else under the chat id) for
+   *   the caller to take
    * @returns {Array} Processed messages array
    */
   async processMessageTemplates(
@@ -270,7 +378,9 @@ class PromptService {
     chatId = null,
     modelName = null,
     requestedSkills = null,
-    preparedSkills = null
+    preparedSkills = null,
+    modelId = null,
+    preparationId = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -403,74 +513,25 @@ class PromptService {
           : temporalContext;
       }
 
-      // Process sources using unified source resolution system
+      // Projects (#1036): the projects the request reaches — linked on the
+      // app, the chat's container, attached from the picker — loaded in full
+      // or left to the knowledge tools (spec 2 §6). Their instructions go
+      // before the knowledge block; the block replaces `{{projects}}` or is
+      // appended, exactly as sources were.
       try {
-        let sourceContent = '';
-
-        // Handle both admin source references and inline source configs
-        if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
-          // Initialize source resolution service
-          const sourceResolutionService = new SourceResolutionService();
-
-          // Resolve source references to actual configurations
-          const context = {
-            user: user,
-            chatId: chatId,
-            userVariables: userVariables,
-            language: lang
-          };
-
-          const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
-
-          if (resolvedSources.length > 0) {
-            // createSourceManager() is a process-wide singleton; config is only
-            // honored on the very first call, so we rely on FileSystemHandler's
-            // own default basePath here instead of passing a redundant override.
-            const sourceManager = createSourceManager();
-
-            // Load content from resolved sources
-            const result = await sourceManager.loadSources(resolvedSources, context);
-            sourceContent = result.content;
-
-            // Track that prompt-based sources were used if content was loaded
-            if (sourceContent && sourceContent.trim()) {
-              this.trackPromptSources(chatId);
-              logger.info('Prompt-based sources loaded and tracked', {
-                component: 'PromptService',
-                chatId,
-                contentLength: sourceContent.length,
-                sourceCount: resolvedSources.length
-              });
-            }
-
-            if (result.metadata.errors.length > 0) {
-              logger.warn('Source loading errors', {
-                component: 'PromptService',
-                errors: result.metadata.errors
-              });
-            }
-          }
-
-          // Replace {{sources}} template with combined content
-          const hasSourcesPlaceholder = systemPrompt.includes('{{sources}}');
-          const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
-
-          if (hasSourcesPlaceholder) {
-            systemPrompt = systemPrompt.replace('{{sources}}', () => sourceContent || '');
-          }
-          // Also support legacy {{source}} template
-          if (hasSourcePlaceholder) {
-            systemPrompt = systemPrompt.replace('{{source}}', () => sourceContent || '');
-          }
-
-          // If no placeholder was found but we have source content, append it automatically
-          if (!hasSourcesPlaceholder && !hasSourcePlaceholder && sourceContent) {
-            systemPrompt += `\n\nSources:\n<sources>${sourceContent}</sources>`;
-          }
-        }
+        systemPrompt = await this._applyProjects(systemPrompt, app, {
+          user,
+          chatId,
+          lang,
+          modelName: modelId || modelName,
+          scopeKey: preparationId || chatId
+        });
       } catch (error) {
-        logger.error('Error in source resolution system', { component: 'PromptService', error });
-        throw new Error(`Failed to process sources: ${error.message}`);
+        logger.error('Error applying the projects of the request', {
+          component: 'PromptService',
+          error
+        });
+        throw new Error(`Failed to process projects: ${error.message}`);
       }
 
       // Skills: list the skills the model may activate (name + description,

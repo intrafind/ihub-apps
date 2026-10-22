@@ -14,10 +14,7 @@
  * `query` matches, one `section` by id, or an outline — always within one
  * tool result's budget.
  */
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -27,7 +24,6 @@ import {
   splitSections,
   tokenize
 } from '../sources/documentRetrieval.js';
-import SourceManager from '../sources/SourceManager.js';
 
 /** The loop's default `policies.context.spillThresholdBytes`. */
 const SPILL_THRESHOLD_BYTES = 64 * 1024;
@@ -213,141 +209,5 @@ describe('selectContent', () => {
       const bytes = Buffer.byteLength(JSON.stringify({ content: result.content, metadata: {} }));
       assert.ok(bytes < SPILL_THRESHOLD_BYTES, `${JSON.stringify(options)}: ${bytes} bytes`);
     }
-  });
-});
-
-describe('SourceManager source tools', () => {
-  let baseDir;
-  let manager;
-  const docSource = {
-    id: 'big-docs',
-    name: { en: 'Big Docs' },
-    description: { en: 'Product documentation' },
-    type: 'filesystem',
-    exposeAs: 'tool',
-    config: { path: 'sources/big.md', encoding: 'utf-8' }
-  };
-
-  before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-source-tools-'));
-    await fs.mkdir(path.join(baseDir, 'sources'), { recursive: true });
-    await fs.writeFile(path.join(baseDir, 'sources/big.md'), bigDocument(), 'utf8');
-    await fs.writeFile(path.join(baseDir, 'sources/other.md'), '# Other\n\nsecret', 'utf8');
-    await fs.writeFile(path.join(baseDir, 'sources/small.md'), '# Small\n\nAll of it.', 'utf8');
-    manager = new SourceManager({ filesystem: { basePath: baseDir } });
-  });
-
-  after(async () => {
-    await fs.rm(baseDir, { recursive: true, force: true });
-  });
-
-  it('offers query and section, not a file path, and says how to use them', () => {
-    const [tool] = manager.generateTools([docSource]);
-    assert.equal(tool.name, 'source_big-docs');
-    assert.deepEqual(Object.keys(tool.parameters.properties).sort(), ['query', 'section']);
-    assert.match(tool.description, /^Product documentation /);
-    assert.match(tool.description, /pass `query`/);
-  });
-
-  it('returns the matching sections without the server path', async () => {
-    manager.generateTools([docSource]);
-    const result = await manager.executeTool('source_big-docs', {
-      query: 'Azure AD client secret',
-      chatId: 'chat-1'
-    });
-    assert.match(result.content, /<section id="microsoft-azure-ad"/);
-    assert.equal(result.metadata.retrieval.mode, 'search');
-    assert.equal(result.metadata.fullPath, undefined);
-    assert.equal(result.metadata.link, undefined);
-    assert.equal(result.metadata.path, 'sources/big.md');
-    assert.doesNotMatch(
-      JSON.stringify(result),
-      new RegExp(baseDir.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'))
-    );
-  });
-
-  it('reads the configured file even when the model names another one', async () => {
-    manager.generateTools([docSource]);
-    const result = await manager.executeTool('source_big-docs', {
-      path: 'sources/other.md',
-      section: 'microsoft-azure-ad'
-    });
-    assert.equal(result.metadata.path, 'sources/big.md');
-    assert.match(result.content, /clientSecret/);
-  });
-
-  it('still returns a small source whole', async () => {
-    const small = { ...docSource, id: 'small', config: { path: 'sources/small.md' } };
-    manager.generateTools([small]);
-    const result = await manager.executeTool('source_small', { query: 'anything' });
-    assert.equal(result.content, '# Small\n\nAll of it.');
-    assert.equal(result.metadata.retrieval.mode, 'full');
-  });
-
-  it('leaves iFinder tools as they were', () => {
-    const [tool] = manager.generateTools([
-      { id: 'kb', type: 'ifinder', exposeAs: 'tool', description: { en: 'KB' }, config: {} }
-    ]);
-    assert.equal(tool.description, 'KB');
-    assert.deepEqual(Object.keys(tool.parameters.properties).sort(), [
-      'documentId',
-      'maxResults',
-      'query'
-    ]);
-  });
-});
-
-describe('SourceManager.estimateSourceTokens', () => {
-  let baseDir;
-  let manager;
-
-  before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-source-tokens-'));
-    await fs.mkdir(path.join(baseDir, 'sources'), { recursive: true });
-    await fs.writeFile(path.join(baseDir, 'sources/doc.md'), 'x'.repeat(4000), 'utf8');
-    manager = new SourceManager({ filesystem: { basePath: baseDir } });
-  });
-
-  after(async () => {
-    await fs.rm(baseDir, { recursive: true, force: true });
-  });
-
-  it('measures filesystem sources', async () => {
-    const estimate = await manager.estimateSourceTokens({
-      id: 'doc',
-      type: 'filesystem',
-      config: { path: 'sources/doc.md' }
-    });
-    assert.equal(estimate.characters, 4000);
-    assert.equal(estimate.bytes, 4000);
-    assert.ok(estimate.tokens > 0);
-  });
-
-  it('does not fetch URL sources unless asked to', async () => {
-    const estimate = await manager.estimateSourceTokens({
-      id: 'web',
-      type: 'url',
-      config: { url: 'https://example.invalid' }
-    });
-    assert.deepEqual(estimate, { tokens: null, reason: 'remote' });
-  });
-
-  it('gives iFinder sources an upper bound', async () => {
-    const search = await manager.estimateSourceTokens({
-      id: 'kb',
-      type: 'ifinder',
-      config: { query: 'x', maxResults: 5, maxLength: 8000 }
-    });
-    assert.deepEqual(search, { tokens: null, reason: 'dynamic', maxTokens: 10000 });
-    const pinned = await manager.estimateSourceTokens({
-      id: 'kb',
-      type: 'ifinder',
-      config: { documentId: 'd1', maxLength: 8000 }
-    });
-    assert.equal(pinned.maxTokens, 2000);
-  });
-
-  it('reports the budget of one tool result', () => {
-    assert.equal(manager.getToolResultBudgetTokens(), Math.round(RESULT_BUDGET_CHARS / 4));
   });
 });

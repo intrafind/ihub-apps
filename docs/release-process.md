@@ -56,7 +56,7 @@ Because the build then regenerates the **iHub Documentation** knowledge source
 Docker image also ship the current documentation with the release notes of every release up to
 and including `3.4.0`. Installations re-sync that file into `contents/` on startup, so the iHub
 Support Bot answers from the documentation of the version it runs. See
-[Sources System](sources.md#built-in-sources).
+[Projects](projects.md#admin-projects).
 
 ### 4. Build Process
 

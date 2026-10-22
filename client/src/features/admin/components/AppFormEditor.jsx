@@ -22,7 +22,7 @@ import ExportConfigSection from './app-form/ExportConfigSection';
 import CompareModeSection from './app-form/CompareModeSection';
 import FeedbackSection from './app-form/FeedbackSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
-import SourcesConfigSection from './app-form/SourcesConfigSection';
+import ProjectsConfigSection from './app-form/ProjectsConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
 import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -66,8 +66,8 @@ function AppFormEditor({
   const ttsModels = useAdminTtsModels();
   const featureFlags = useFeatureFlags();
 
-  // Check if sources feature is enabled
-  const isSourcesEnabled = featureFlags.isEnabled('sources', true);
+  // Projects (#1036) can be linked only while the projects feature is enabled
+  const isProjectsEnabled = featureFlags.isEnabled('projects', true);
 
   // Validation function
   const validateApp = appData => {
@@ -314,8 +314,8 @@ function AppFormEditor({
               currentLanguage={currentLanguage}
             />
 
-            {/* Sources Configuration - Only show if sources feature is enabled */}
-            {isSourcesEnabled && <SourcesConfigSection app={app} onChange={onChange} t={t} />}
+            {/* Linked projects - only while the projects feature is enabled */}
+            {isProjectsEnabled && <ProjectsConfigSection app={app} onChange={onChange} t={t} />}
 
             {/* Settings Configuration */}
             <SettingsConfigSection app={app} onChange={onChange} t={t} />

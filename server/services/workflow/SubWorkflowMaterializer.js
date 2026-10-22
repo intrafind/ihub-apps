@@ -17,6 +17,22 @@
 
 import logger from '../../utils/logger.js';
 
+/**
+ * Project links as the planner or the template name them: bare ids are kept,
+ * link objects kept by id, duplicates dropped (first wins).
+ */
+function dedupeLinks(links) {
+  const seen = new Set();
+  const out = [];
+  for (const link of Array.isArray(links) ? links : []) {
+    const id = typeof link === 'string' ? link : link?.id;
+    if (typeof id !== 'string' || !id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(link);
+  }
+  return out;
+}
+
 function dedupeStrings(arr) {
   return Array.from(new Set((arr || []).filter(v => typeof v === 'string')));
 }
@@ -32,9 +48,16 @@ export class SubWorkflowMaterializer {
    * @param {boolean} [parentConfig.synthesize] - Whether to add a synthesizer node before end
    * @param {Object} [parentConfig.taskTemplate] - Default config template applied to every task node
    * @param {number} depth - Current sub-workflow nesting depth (for logging)
+   * @param {Object} [options]
+   * @param {Array<Object>} [options.inputProjects] - The project links the
+   *   parent run's project inputs resolved to (`projectInputLinks`). The
+   *   child has no start node declaring those inputs, so they are added to
+   *   every task's and the drain worker's links, after the task's own (the
+   *   first link to an id wins, as in `workflowProjectLinks`).
    * @returns {Object} A complete workflow definition ready for WorkflowEngine.start()
    */
-  static materialize(plan, parentConfig, depth) {
+  static materialize(plan, parentConfig, depth, { inputProjects = [] } = {}) {
+    const inputLinks = dedupeLinks(inputProjects);
     const nodes = [];
     const edges = [];
 
@@ -48,7 +71,7 @@ export class SubWorkflowMaterializer {
     });
 
     // Create agent nodes for each task in the plan.
-    // CRITICAL: Destructure tools/apps/sources from taskTemplate before
+    // CRITICAL: Destructure tools/apps/projects from taskTemplate before
     // spreading — each is additive at the task level (the planner may
     // spotlight a per-task subset on top of the profile-wide template), so
     // the spread of restTemplate must NOT overwrite the merged arrays we
@@ -56,7 +79,7 @@ export class SubWorkflowMaterializer {
     const {
       tools: templateTools,
       apps: templateApps,
-      sources: templateSources,
+      projects: templateProjects,
       ...restTemplate
     } = parentConfig.taskTemplate || {};
 
@@ -128,7 +151,7 @@ export class SubWorkflowMaterializer {
       //   - task.tools === [...non-empty]  → use exactly these
       const taskToolsExplicit = Array.isArray(task.tools);
       const taskAppsExplicit = Array.isArray(task.apps);
-      const taskSourcesExplicit = Array.isArray(task.sources);
+      const taskProjectsExplicit = Array.isArray(task.projects);
       const effectiveTools = taskToolsExplicit
         ? dedupeStrings(task.tools)
         : Array.isArray(templateTools)
@@ -139,11 +162,38 @@ export class SubWorkflowMaterializer {
         : Array.isArray(templateApps)
           ? dedupeStrings(templateApps)
           : [];
-      const effectiveSources = taskSourcesExplicit
-        ? dedupeStrings(task.sources)
-        : Array.isArray(templateSources)
-          ? dedupeStrings(templateSources)
-          : [];
+      // The planner names projects by id (its schema lists the template's
+      // ids); each name is resolved back to the template's link so the
+      // configured mode and write permission survive the selection. The
+      // template is the only authority: a provider-side response schema is
+      // not a server-side check, and a planner answer (possibly steered by
+      // injected content) that names a project the template does not link
+      // would otherwise pull unrelated knowledge the caller can read into
+      // this workflow. Unknown ids are dropped, never taken as given.
+      const templateLinks = dedupeLinks(templateProjects);
+      const templateLinkById = new Map(
+        templateLinks.map(link => [typeof link === 'string' ? link : link.id, link])
+      );
+      let taskProjects = templateLinks;
+      if (taskProjectsExplicit) {
+        taskProjects = [];
+        const dropped = [];
+        for (const link of dedupeLinks(task.projects)) {
+          const id = typeof link === 'string' ? link : link.id;
+          const templateLink = templateLinkById.get(id);
+          if (templateLink) taskProjects.push(templateLink);
+          else dropped.push(id);
+        }
+        if (dropped.length > 0) {
+          logger.warn({
+            component: 'SubWorkflowMaterializer',
+            message: 'Dropped planner-selected projects the task template does not link',
+            taskId: task.id,
+            droppedProjects: dropped
+          });
+        }
+      }
+      const effectiveProjects = dedupeLinks([...taskProjects, ...inputLinks]);
 
       const hasSearchLikeTool = effectiveTools.some(t => {
         if (typeof t !== 'string') return false;
@@ -205,17 +255,17 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Per-task tools / apps / sources — planner-authoritative when the
+          // Per-task tools / apps / projects — planner-authoritative when the
           // planner emitted the field, falling back to the profile-wide
           // template otherwise. See `taskToolsExplicit` block above for the
           // full semantics. The planner's response schema enum-binds each
-          // field (tools/apps/sources) to its catalog when the catalog is
+          // field (tools/apps/projects) to its catalog when the catalog is
           // non-empty, so unknown ids are rejected at structured-output
           // time. Backward-compat for hand-written plans that omit a field
           // is via the explicit-array check (omit → inherit template).
           tools: effectiveTools,
           apps: effectiveApps,
-          sources: effectiveSources
+          projects: effectiveProjects
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
           // PromptNodeExecutor._autoPersistResult. The legacy flat
@@ -293,6 +343,10 @@ export class SubWorkflowMaterializer {
             en: 'Process the current task in `_currentTask`.'
           },
           tools: templateTools || [],
+          // The profile's linked knowledge, like its tools: `projects` was
+          // taken out of restTemplate above and has to be put back here,
+          // with the parent run's project inputs.
+          projects: dedupeLinks([...dedupeLinks(templateProjects), ...inputLinks]),
           // Same as the planner-generated tasks above: drain workers should
           // not own inbox lifecycle. The orchestrator reads/marks the inbox.
           _isPlannerTask: true,

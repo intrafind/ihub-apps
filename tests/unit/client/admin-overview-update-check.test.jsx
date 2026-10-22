@@ -20,14 +20,14 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 const mockMakeAdminApiCall = jest.fn();
 const mockFetchAdminApps = jest.fn();
 const mockFetchAdminPrompts = jest.fn();
-const mockFetchAdminSources = jest.fn();
+const mockFetchAdminProjects = jest.fn();
 
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args),
   fetchAdminApps: (...args) => mockFetchAdminApps(...args),
   fetchAdminPrompts: (...args) => mockFetchAdminPrompts(...args),
-  fetchAdminSources: (...args) => mockFetchAdminSources(...args),
+  fetchAdminProjects: (...args) => mockFetchAdminProjects(...args),
   getAdminApiErrorMessage: err => err?.message ?? 'error'
 }));
 
@@ -46,11 +46,11 @@ beforeEach(() => {
   mockMakeAdminApiCall.mockReset();
   mockFetchAdminApps.mockReset();
   mockFetchAdminPrompts.mockReset();
-  mockFetchAdminSources.mockReset();
+  mockFetchAdminProjects.mockReset();
 
   mockFetchAdminApps.mockResolvedValue([{ id: 'chat', enabled: true }]);
   mockFetchAdminPrompts.mockResolvedValue([]);
-  mockFetchAdminSources.mockResolvedValue([]);
+  mockFetchAdminProjects.mockResolvedValue([]);
 });
 
 describe('useOverviewData', () => {

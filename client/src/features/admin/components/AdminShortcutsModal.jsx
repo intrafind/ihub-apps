@@ -15,7 +15,7 @@ const SHORTCUTS = [
       { keys: ['g', 'p'], label: 'Go to Prompts' },
       { keys: ['g', 'u'], label: 'Go to Users' },
       { keys: ['g', 'g'], label: 'Go to Groups' },
-      { keys: ['g', 's'], label: 'Go to Sources' },
+      { keys: ['g', 'j'], label: 'Go to Projects' },
       { keys: ['g', 'l'], label: 'Go to Audit Log' }
     ]
   },

@@ -3,30 +3,30 @@
 
 import path from 'node:path';
 import configCache from '../../configCache.js';
-import { createSourceManager } from '../../sources/index.js';
+import { providerFor } from '../knowledge/registry.js';
 import {
   getSkillContent,
   getSkillResource,
   validateSkillName
 } from '../../services/skillLoader.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import { getVisibleSourceIds } from './permissions.js';
+import { getVisibleProjectIds } from './permissions.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 
 /**
- * Map iHub sources + skills onto MCP `resources/list` + `resources/read`.
+ * Map iHub projects + skills onto MCP `resources/list` + `resources/read`.
  *
  * URI scheme:
- *   ihub://source/<sourceId>      – static + dynamic source content
+ *   ihub://project/<projectId>    – the text of an admin project's items (#1036)
  *   ihub://skill/<skillName>      – skill SKILL.md body
  *   ihub://skill/<skillName>/<path> – a file the skill bundles, e.g.
  *                                   references/query-cookbook.md
  *
  * The MCP SDK's `McpServer.registerResource` requires a fixed URI per call;
- * we register each visible source/skill individually at gateway build time.
- * Visibility is scoped per caller: sources are limited to those referenced
- * by apps the caller can access (getVisibleSourceIds), and skills are
+ * we register each visible project/skill individually at gateway build time.
+ * Visibility is scoped per caller: projects are limited to those linked by
+ * apps the caller can access (getVisibleProjectIds), and skills are
  * filtered against the caller's group `skills` permission — the same model
  * the web UI applies.
  */
@@ -39,17 +39,17 @@ function extractText(value) {
 }
 
 /**
- * Decide whether a source is visible to a given caller. Sources are scoped
- * through the apps that reference them, so a source is only visible if it is
- * enabled AND referenced by an app the caller can access. `visibleSourceIds`
- * is the union of `app.sources` across the caller's accessible apps (built by
- * ./permissions.js getVisibleSourceIds). Without this filter, any caller with
- * `mcp:resources:read` would see every source on the platform.
+ * Decide whether an admin project is visible to a given caller. Projects are
+ * scoped through the apps that link them, so a project is only visible if it
+ * is enabled AND linked by an app the caller can access. `visibleProjectIds`
+ * is the union of `app.projects` across the caller's accessible apps (built
+ * by ./permissions.js getVisibleProjectIds). Without this filter, any caller
+ * with `mcp:resources:read` would see every project on the platform.
  */
-function isSourceVisible(source, visibleSourceIds) {
-  if (!source || source.enabled === false) return false;
-  if (!(visibleSourceIds instanceof Set)) return false;
-  return visibleSourceIds.has('*') || visibleSourceIds.has(source.id);
+function isProjectVisible(project, visibleProjectIds) {
+  if (!project || project.enabled === false) return false;
+  if (!(visibleProjectIds instanceof Set)) return false;
+  return visibleProjectIds.has('*') || visibleProjectIds.has(project.id);
 }
 
 /**
@@ -106,31 +106,31 @@ function isSkillVisible(skill, user) {
 /**
  * Enumerate resources for the per-request McpServer construction. Returns
  * an array of { uri, name, description, mimeType, kind, ref } where:
- *   - kind: 'source' | 'skill' | 'skill-resource'
- *   - ref: the underlying source / skill object (so the read callback
+ *   - kind: 'project' | 'skill' | 'skill-resource'
+ *   - ref: the underlying project / skill object (so the read callback
  *     can use it without re-resolving by id)
  */
 export async function listMcpResources({ user, platform, expose }) {
   if (!expose?.resources) return [];
 
   const resources = [];
-  const visibleSourceIds = await getVisibleSourceIds(user, platform);
+  const visibleProjectIds = await getVisibleProjectIds(user, platform);
 
   try {
-    const { data: sources = [] } = configCache.getSources();
-    for (const s of sources) {
-      if (!isSourceVisible(s, visibleSourceIds)) continue;
+    const { data: projects = [] } = configCache.getProjects(true);
+    for (const project of projects) {
+      if (!isProjectVisible(project, visibleProjectIds)) continue;
       resources.push({
-        uri: `ihub://source/${encodeURIComponent(s.id)}`,
-        name: extractText(s.name) || s.id,
-        description: extractText(s.description) || `iHub source: ${s.id}`,
-        mimeType: 'text/plain',
-        kind: 'source',
-        ref: s
+        uri: `ihub://project/${encodeURIComponent(project.id)}`,
+        name: extractText(project.name) || project.id,
+        description: extractText(project.description) || `iHub project: ${project.id}`,
+        mimeType: 'text/markdown',
+        kind: 'project',
+        ref: project
       });
     }
   } catch (err) {
-    logger.warn('listMcpResources: source enumeration failed', {
+    logger.warn('listMcpResources: project enumeration failed', {
       component: 'McpResourceAdapter',
       error: err.message
     });
@@ -209,32 +209,28 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
     throw new Error(`Invalid resource id: ${rawId}`);
   }
 
-  if (kind === 'source') {
-    // Sources are single documents; nothing addresses a path inside one.
+  if (kind === 'project') {
+    // A project is read whole; nothing addresses a path inside one.
     if (relativePath !== null) {
-      throw new Error(`Source not found: ${safeId}/${relativePath}`);
+      throw new Error(`Project not found: ${safeId}/${relativePath}`);
     }
-    // Reject anything outside the source-id charset before any path build.
     if (!isValidId(safeId)) {
-      throw new Error(`Source not found: ${safeId}`);
+      throw new Error(`Project not found: ${safeId}`);
     }
-    // Recompute the caller's visible source set so a read can't reach a
-    // source outside the apps they can access (same check as list).
-    const visibleSourceIds = await getVisibleSourceIds(user, platform);
-    const { data: sources = [] } = configCache.getSources();
-    const source = sources.find(s => s.id === safeId);
-    if (!source || !isSourceVisible(source, visibleSourceIds)) {
-      throw new Error(`Source not found: ${safeId}`);
+    // Recompute the caller's visible project set so a read can't reach a
+    // project outside the apps they can access (same check as list).
+    const visibleProjectIds = await getVisibleProjectIds(user, platform);
+    const { data: projects = [] } = configCache.getProjects(true);
+    const project = projects.find(entry => entry.id === safeId);
+    if (!project || !isProjectVisible(project, visibleProjectIds)) {
+      throw new Error(`Project not found: ${safeId}`);
     }
-    // From this point on, only properties of the admin-managed `source`
-    // object flow downstream. The user-controlled `safeId` is used solely
-    // as a Map lookup key.
-    const text = await readSourceContent(source, { user, language });
+    const text = await readProjectContent(project, { user, language });
     return {
       contents: [
         {
           uri,
-          mimeType: 'text/plain',
+          mimeType: 'text/markdown',
           text
         }
       ]
@@ -292,19 +288,22 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
   throw new Error(`Unknown resource kind: ${kind}`);
 }
 
-async function readSourceContent(source, { user, language }) {
-  // Tool-exposed sources don't have static content — return a sentinel
-  // describing the tool route so the agent doesn't get an empty payload.
-  if (source.exposeAs === 'tool') {
-    return `This source is exposed as a tool (\`source_${source.id}_*\`), not as static content. Call the tool via MCP \`tools/call\` to query it.`;
+/**
+ * The text of a project's items, each under its name, through the
+ * knowledge provider (spec 2 §2): what a chat with the project loaded would
+ * see. Items that cannot be read are named with their reason.
+ */
+async function readProjectContent(project, { user, language }) {
+  const provider = providerFor(project);
+  const result = await provider.loadAll(project, {
+    user,
+    language,
+    chatId: `mcp-${project.id}`,
+    purpose: 'mcp'
+  });
+  const parts = result.docs.map(({ doc, text }) => `# ${doc.name}\n\n${text}`);
+  for (const entry of result.unavailable || []) {
+    parts.push(`# ${entry.name || entry.document}\n\n_unavailable: ${entry.reason}_`);
   }
-  const manager = createSourceManager();
-  const result = await manager.loadSources([source], { user, language });
-  if (!result || !Array.isArray(result.sources)) return '';
-  const loaded = result.sources[0];
-  if (!loaded) return '';
-  if (!loaded.success && loaded.error) {
-    throw new Error(`Source load failed: ${loaded.error}`);
-  }
-  return loaded.content || result.content || '';
+  return parts.join('\n\n');
 }

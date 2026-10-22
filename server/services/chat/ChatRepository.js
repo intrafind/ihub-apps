@@ -398,6 +398,24 @@ export function normalizeChatVariables(variables) {
 }
 
 /**
+ * Whether a chat's container contradicts the project fields of a turn: a
+ * claim of a container (allowed while the chat has none and no messages, or
+ * already has this one), or the container the turn asserted (`null` for "in
+ * no project"; `undefined` asserts nothing).
+ *
+ * @param {Object|null} chat - The chat as it stands.
+ * @param {{claimContainer?: string|null, expectedContainer?: string|null}} projects
+ * @returns {boolean}
+ */
+export function chatProjectConflict(chat, { claimContainer = null, expectedContainer } = {}) {
+  const current = chat?.projectId || null;
+  if (claimContainer) {
+    return current !== claimContainer && (Boolean(current) || Number(chat?.messageCount) > 0);
+  }
+  return expectedContainer !== undefined && current !== (expectedContainer || null);
+}
+
+/**
  * Apply a patch to a chat, protecting the immutable fields and re-deriving
  * the values that are computed rather than set.
  *
@@ -1221,6 +1239,127 @@ export class ChatRepository {
   }
 
   /**
+   * Patch a chat for a turn that names projects, under its lock: the
+   * project fields are checked against the chat as it stands now, not as
+   * the turn read it before its prompt was prepared.
+   *
+   * - `claimContainer` opens the chat in that project only while it has no
+   *   container and no messages (or already has this one): of two first
+   *   turns naming different projects, the later is refused, so a transcript
+   *   never moves to another project's members by a race.
+   * - `expectedContainer` (null for "in no project") refuses the patch when
+   *   the chat's container changed since the turn read it.
+   * - `attach` is added to the attached ids stored by now, never replacing
+   *   them, and the union is capped at `maxAttached`.
+   *
+   * Nothing is written when the patch is refused.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {import('../knowledge/chatProjects.js').ProjectPatch} projects
+   * @param {Object} [patch] - Further fields to apply with the projects.
+   * @returns {Promise<{chat: Object|null, conflict: boolean}>} The chat as it
+   *   stands (null when it does not exist or cannot be stored) and whether the
+   *   project fields were refused.
+   */
+  updateChatProjects(chatId, projects, patch = {}) {
+    if (!this._usable(chatId, 'updateChatProjects')) return { chat: null, conflict: false };
+    const { claimContainer = null, expectedContainer, attach = [], maxAttached } = projects || {};
+    const limit = Number.isInteger(maxAttached) && maxAttached >= 0 ? maxAttached : Infinity;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, conflict: false };
+      if (chatProjectConflict(existing, { claimContainer, expectedContainer })) {
+        return { chat: existing, conflict: true };
+      }
+      const current = existing.projectId || null;
+      const projectId = claimContainer || current;
+      const stored = Array.isArray(existing.attachedProjectIds) ? existing.attachedProjectIds : [];
+      const attached = [];
+      for (const id of [...stored, ...(Array.isArray(attach) ? attach : [])]) {
+        if (attached.length >= limit) break;
+        if (typeof id !== 'string' || !id || id === projectId || attached.includes(id)) continue;
+        attached.push(id);
+      }
+      const attachedChanged =
+        attached.length !== stored.length || attached.some((id, index) => id !== stored[index]);
+      const chat = await this._writeChat(
+        applyChatPatch(existing, {
+          ...patch,
+          ...(projectId !== current ? { projectId } : {}),
+          ...(attachedChanged ? { attachedProjectIds: attached } : {})
+        }),
+        etag
+      );
+      return { chat, conflict: false };
+    });
+  }
+
+  /**
+   * Move a chat between projects only while it is still where the caller saw
+   * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
+   * (null for "in no project"). The compare runs inside the chat's lock, so a
+   * delete cascade, retention sweep or rollback that reaches a chat after the
+   * owner moved it elsewhere leaves the newer move alone.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string|null} expectedProjectId - The project the chat must still be in.
+   * @param {string|null} nextProjectId - The project to put it in, or null.
+   * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
+   *   stands and whether the association changed.
+   */
+  moveProjectIf(chatId, expectedProjectId, nextProjectId, { settle } = {}) {
+    if (!this._usable(chatId, 'moveProjectIf')) return { chat: null, moved: false };
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, moved: false };
+      if ((existing.projectId || null) !== (expectedProjectId || null)) {
+        return { chat: existing, moved: false };
+      }
+      const chat = await this._writeChat(
+        applyChatPatch(existing, { projectId: nextProjectId || null }),
+        etag
+      );
+      if (typeof settle !== 'function') return { chat, moved: true };
+      // The project-side bookkeeping runs while the chat is still locked, so
+      // a move that lands right after this one cannot have its markers undone
+      // by the tail of this one. A failure puts the chat back as it was.
+      try {
+        await settle(chat);
+      } catch (error) {
+        const { etag: current } = await this._loadChat(chatId);
+        await this._writeChat(
+          applyChatPatch(chat, { projectId: expectedProjectId || null }),
+          current
+        );
+        throw error;
+      }
+      return { chat, moved: true };
+    });
+  }
+
+  /**
+   * Run `fn` under the chat's lock unless the chat is in `projectId` right
+   * now. What a project listing prunes a stale chat marker with: a marker
+   * read beside a move is judged again once that move has settled, so the
+   * marker a later move back into the project wrote is never removed on the
+   * strength of an earlier snapshot.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} projectId - The project whose marker is in question.
+   * @param {(chat: Object|null) => Promise<unknown>} fn - Runs while locked.
+   * @returns {Promise<boolean>} Whether `fn` ran.
+   */
+  unlessInProject(chatId, projectId, fn) {
+    if (!this._usable(chatId, 'unlessInProject')) return Promise.resolve(false);
+    return this._withChatLock(chatId, async () => {
+      const chat = await this._readChat(chatId);
+      if (chat && (chat.projectId || null) === projectId) return false;
+      await fn(chat);
+      return true;
+    });
+  }
+
+  /**
    * Release a run's hold on a chat: apply `patch` only while `runId` is still
    * the chat's active run.
    *
@@ -1376,10 +1515,17 @@ export class ChatRepository {
    *   place of this stored one, at its position, instead of appending it. Write
    *   nothing when that message is no longer stored — another writer replaced
    *   it first, under the same lock.
-   * @returns {Promise<{message: Object, messages: Object[], skipped?: true}|null>}
+   * @param {string|null} [options.expectedProjectId] - Write nothing unless the
+   *   chat is in this project (`null`: in none) when the message is written,
+   *   checked under the chat lock: a question is stored only in the container
+   *   its turn was prepared for, never in one a racing turn claimed since.
+   *   Omitted, the container is not checked.
+   * @returns {Promise<{message: Object|null, messages: Object[], skipped?: true,
+   *   conflict?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
    *   `unlessAnswered` found the run answered (`message` is that answer), or
-   *   `supersedeMessageId` is gone (`message` is the run's answer, if any).
+   *   `supersedeMessageId` is gone (`message` is the run's answer, if any);
+   *   `conflict` when the chat is not in `expectedProjectId` (nothing written).
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
@@ -1390,7 +1536,8 @@ export class ChatRepository {
       replaceFromMessageId = null,
       insertAfterRunId = null,
       unlessAnswered = false,
-      supersedeMessageId = null
+      supersedeMessageId = null,
+      expectedProjectId
     } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
@@ -1406,6 +1553,9 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      if (chatProjectConflict(chat, { expectedContainer: expectedProjectId })) {
+        return { message: null, messages, conflict: true };
+      }
       if (unlessAnswered && message?.runId) {
         const answer = messages.find(
           entry => entry.role === 'assistant' && entry.runId === message.runId

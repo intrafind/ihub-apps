@@ -70,6 +70,9 @@ class URLHandler extends SourceHandler {
           statusCode: result.metadata?.statusCode,
           finalUrl: result.metadata?.finalUrl || url,
           contentType: result.metadata?.contentType,
+          // Only the first `maxContentLength` characters (or the reader's
+          // own cap) came back: a consumer must not take this as the page.
+          truncated: result.truncated === true || result.incomplete === true,
           loadedAt: new Date().toISOString()
         }
       };
@@ -163,13 +166,15 @@ class URLHandler extends SourceHandler {
           }
 
           // Truncate content if too long
-          if (content.length > maxContentLength) {
+          const truncated = content.length > maxContentLength;
+          if (truncated) {
             content = content.substring(0, maxContentLength);
             logger.info(`Fallback extractor: Content truncated to ${maxContentLength} characters`);
           }
 
           return {
             content: content,
+            truncated,
             metadata: {
               statusCode: response.status,
               contentType: response.headers.get('content-type') || 'unknown',
