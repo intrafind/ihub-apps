@@ -257,7 +257,8 @@ All of them run **sequentially** — none sets `concurrency`. Each round accumul
 ## Projects in a workflow
 
 A workflow reads knowledge from **projects** (Admin → Projects, and the projects users keep) the
-way an app does. Three things bring a project into a run:
+way an app does (see [Projects](projects.md) for items, modes and settings). Three things bring a
+project into a run:
 
 - **Links.** The workflow's `projects` list, with the same shape as on an app: a project id, or
   `{ "id", "mode", "write" }`. `mode` is `context` (the text goes into the prompt), `tools` (the

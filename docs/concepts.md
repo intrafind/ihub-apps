@@ -89,67 +89,34 @@ iHub also ships **system skills**: read-only skills delivered with iHub that bri
 
 ---
 
-## Sources: giving the model knowledge
+## Projects: giving the model knowledge
 
-[Sources](sources.md) supply the domain context. Supported types include local files, URLs, iFinder documents, and internal iHub pages.
+[Projects](projects.md) supply the domain context. A project holds documents and instructions:
+uploaded files whose text is extracted and stored encrypted, web pages, iHub pages, iFinder
+documents or searches, and files picked from cloud drives. Admins link projects to apps, workflows
+and agents; users keep their own projects and share them.
 
-### Local files vs. URLs
+### Uploaded documents vs. links
 
-| Source type    | Best for                                          | Trade-off                                                       |
-| -------------- | ------------------------------------------------- | --------------------------------------------------------------- |
-| **Local file** | Curated content — Markdown, text, PDF, JSON       | Controlled, predictable context, but must be updated by hand    |
-| **URL**        | Content that changes regularly                    | Always current, but page boilerplate can add noise to the context |
+| Item kind         | Best for                                               | Trade-off                                                                 |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| **Upload**        | Curated content — PDF, Office, Markdown, text          | Controlled, predictable text, but updated by uploading again              |
+| **Web page**      | Content that changes regularly                         | Always current, but the page is fetched on use and boilerplate adds noise |
+| **iFinder**       | Documents already indexed, read with the user's rights | Users only ever see what they are allowed to see                          |
+| **Cloud file**    | Files that live in OneDrive, Google Drive or Nextcloud | A snapshot of the text, refreshed on demand                               |
 
-For URL sources, enable content cleaning and set a `maxContentLength` so navigation, footers, and cookie banners do not consume context that should hold the actual answer.
+### Loaded in full or searched
 
-### iFinder as a source
-
-Documents from [iFinder](iFinder-Integration.md) can be used directly as a source — pinned to a specific document ID or driven by a search query that loads the top matching documents. The connection is configured once centrally; documents are always fetched with the identity of the current user, so users only ever see what they are allowed to see.
-
-### Loaded up front or fetched on demand
-
-Each source is exposed either as a **prompt source** (its content is interpolated into the system prompt for every request) or as a **tool source** (the model fetches it only when it needs to). Prompt sources guarantee the content is present; tool sources keep the context small and scale to many sources.
-
-### A note on wikis and linked content
-
-When wiring up an internal wiki, point at concrete pages or at prepared, condensed content. Do not assume the model will navigate deep chains of links on its own — the more specific the source, the better the answer.
-
----
-
-## Tools: letting the model act
-
-[Tools](tool-calling.md) extend iHub beyond text generation: [web search and content extraction](web-tools.md), API calls, screenshots, people search, [Jira](JIRA_INTEGRATION.md), iFinder, and further systems connected via [MCP](mcp-integration.md). Tools are enabled per app, and the model calls them when the task requires it.
-
-Note that tool calling requires a model that supports it — check the model's `supportsTools` setting (anything but `none`).
-
----
-
-## Integrations and data flow
-
-- **Authentication**: [LDAP](ldap-ntlm-authentication.md), [OIDC/SSO](oidc-authentication.md), local accounts, proxy headers, or anonymous access — combinable. External groups are mapped onto iHub groups, which is what makes group-based app rollout work. See [Authentication Architecture](authentication-architecture.md).
-- **Outlook add-in**: can be distributed centrally by IT and made available group-based. See [Outlook Add-in Rollout](outlook-add-in.md).
-- **Speech-to-text**: which service transcribes matters. Browser-based speech recognition can send audio to the browser vendor's cloud. For sensitive environments, use the [self-hosted realtime transcription stack](voice-transcription.md), where audio is relayed by the iHub server to your own GPU host and nothing is persisted.
-- **MCP servers and cloud models**: as with any external endpoint, check whether data leaves your own infrastructure before enabling them.
-
----
-
-## Further capabilities
-
-| Capability                                   | Notes                                                                                                              |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Vision / image understanding**             | Depends on the model. It must support images (`supportsImages`) and be configured accordingly. See [Image Upload](image-upload-feature.md). |
-| **[Magic Prompt](magic-prompt-feature.md)**  | Rewrites a short or incomplete user input into a better prompt, with an undo option.                               |
-| **[Compare Mode](compare-mode.md)**          | Sends one input to two models and shows the answers side by side — useful for evaluating models against each other. |
-| **Chat history**                             | Users can keep a conversation across reloads. There is no persistent memory spanning different conversations in chat apps — keeping chat history and long-term memory are separate things. Long-term memory exists only for agents in the [Agent Factory](agents.md). |
-| **[Structured output](structured-output.md)**| JSON-schema-validated responses for apps whose output feeds another system.                                        |
-
----
+Each link has a mode. `context` puts every document into the prompt for every request; `tools`
+leaves the project to the knowledge tools, so the model searches and reads what it needs; `auto`
+loads the project in full while it fits the budget and searches it otherwise. Pinned documents are
+always in the prompt.
 
 ## Related documentation
 
 - [App Configuration](apps.md)
 - [Models](models.md)
-- [Sources System](sources.md)
+- [Projects](projects.md)
 - [Tool Calling](tool-calling.md)
 - [Prompts Library](prompts.md)
 - [Architecture Overview](architecture.md)

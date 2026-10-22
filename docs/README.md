@@ -25,7 +25,7 @@ New here? Start with [Getting Started](GETTING_STARTED.md), then take the tour i
 - [Styles](styles.md) - Writing styles and output formatting
 - [Prompts Database](prompts.md) - Reusable prompt templates
 - [Content Management](content-management.md) - Page and content management
-- [Sources System](sources.md) - Knowledge source integration
+- [Projects](projects.md) - Knowledge for apps, workflows, agents and users
 - [Mimetype Configuration](mimetypes.md) - File type mapping
 - [Configuration Validation](configuration-validation.md) - Config validation and troubleshooting
 - [Configuration Migrations](configuration-migrations.md) - Version migration system

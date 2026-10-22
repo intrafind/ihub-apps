@@ -6,7 +6,7 @@ chat lists every source in one **Sources** panel under the answer, turns every c
 same numbered badge, and offers each source the actions its data allows. It stores the sources
 with the answer and leaves out of a share whatever was found with the user's own permissions.
 
-> Not to be confused with [knowledge sources](sources.md) (`sources.json`), the documents and
+> Not to be confused with [projects](projects.md) (`contents/projects/`), the documents and
 > websites an app can *search*. Answer sources are what a turn *found*.
 
 Building a new integration step by step: [Building an Integration](integration-development.md).

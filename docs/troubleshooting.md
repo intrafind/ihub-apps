@@ -715,104 +715,35 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 
 ---
 
-## Source Handlers Issues
+## Projects Issues
 
-### Source Not Working
+### A project's documents do not reach the model
 
 **Symptoms:**
-- Sources don't appear in applications
-- "Source reference not found" warnings
-- Empty source content in chat responses
+- The answer badge says the project was unavailable
+- A document stays in "Waiting" or "Extracting"
+- A linked project is missing from an app's knowledge
 
 **Debugging Steps:**
 
-1. **Check Source Configuration:**
+1. **Check the document status** on the project page (Admin → Projects, or the user's project
+   page): a failed document shows its reason (no text layer, scanner rejected, too large).
+2. **Check the link:** the app, workflow or agent must list the project in `projects`, and the
+   project must be enabled. Admin projects are reachable only through such a link.
+3. **Check the flags:** user projects need the `userProjects` feature flag and the `projects`
+   group permission; a project the running user may not use is skipped silently.
+4. **Look for interrupted extraction:** after a restart, documents that were being extracted are
+   marked interrupted and can be retried from the page.
+
 ```bash
-# Verify source exists and is enabled
-jq '.sources[] | select(.enabled == true)' contents/config/sources.json
+# Admin projects on disk
+ls contents/projects/
 
-# Check source validation
-grep "Invalid source configuration" server/logs/*.log
+# Extraction and scan failures
+grep -i "project" server/logs/*.log | grep -i "fail\|reject\|interrupted"
 ```
 
-2. **Test Source Handler:**
-```bash
-# Check if handler files exist
-ls -la server/sources/handlers/
-
-# Test specific handler
-node -e "
-const handler = require('./server/sources/handlers/staticText.js');
-console.log('Handler loaded:', typeof handler.execute);
-"
-```
-
-**Common Issues:**
-
-1. **Source Disabled:**
-```json
-// Enable source in sources.json
-{
-  "sources": [{
-    "id": "my-source",
-    "enabled": true  // Make sure this is true
-  }]
-}
-```
-
-2. **Handler Missing:**
-- Ensure handler file exists in `server/sources/handlers/`
-- Check handler exports proper `execute` function
-
-3. **Configuration Errors:**
-```json
-// Ensure all required fields are present
-{
-  "id": "my-source",
-  "name": "My Source",
-  "type": "static",
-  "handler": "staticText",  // Must match handler filename
-  "config": {},             // Handler-specific config
-  "enabled": true
-}
-```
-
-### Handler Execution Errors
-
-**Symptoms:**
-- Handler throws exceptions during execution
-- Partial or malformed source content
-- Handler timeouts
-
-**Debugging Steps:**
-
-1. **Check Handler Logs:**
-```bash
-# Look for handler-specific errors
-grep "Handler execution error" server/logs/*.log
-grep "Source.*failed" server/logs/*.log
-```
-
-2. **Test Handler Manually:**
-```javascript
-// Create test script: test-handler.js
-const handler = require('./server/sources/handlers/yourHandler.js');
-
-handler.execute({
-  // your test config
-}).then(result => {
-  console.log('Handler result:', result);
-}).catch(error => {
-  console.error('Handler error:', error);
-});
-```
-
-**Solutions:**
-- Implement proper error handling in custom handlers
-- Add timeout protection for external API calls
-- Validate handler configuration before execution
-
----
+See [Projects](projects.md) for statuses, limits and settings.
 
 ## LLM Provider Problems
 
