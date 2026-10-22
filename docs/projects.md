@@ -420,9 +420,16 @@ A scanner configuration, for example with ClamAV:
 - **Where it lives.** Admin projects are JSON under `contents/projects/`; user projects are runtime
   documents of the storage provider; the encrypted text of both is in
   `contents/data/blobs/project-files`. Back up `contents/` as a whole.
-- **Several instances** need the same `TOKEN_ENCRYPTION_KEY` (or the same
-  `contents/.encryption-key`) and a shared volume, or the same storage provider, for
-  `contents/data/blobs/project-files`. Extraction runs on the instance that received the upload.
+- **Cluster workers, not separate instances.** The worker processes of one installation on one
+  machine share its master key and `contents/data/blobs/project-files`, so they need no extra
+  setup; extraction runs in the worker that received the upload. Separate server instances
+  pointed at one `contents/` directory or one blob volume (several hosts, several containers, a
+  load-balanced pair) are not supported: the shipped filesystem storage provider reports
+  `multiInstance: false` and locks only within one machine, so concurrent writes from another
+  instance are not coordinated. Do not share `contents/` or the blob directory between
+  installations, not even with the same `TOKEN_ENCRYPTION_KEY`. Running several instances needs a
+  storage provider that reports multi-instance support; see
+  [Storage Providers → Choosing a provider](storage.md#choosing-a-provider).
 - **Malware scan.** Configure `platform.projects.scan` for production installations; without it
   uploads are not scanned.
 - **Audit.** Creating, changing and deleting projects and items, sharing, transfers, moving chats
@@ -445,8 +452,24 @@ The MCP gateway lists admin projects as resources `ihub://project/<id>`.
 Upgrading to this version migrates sources to admin projects (migrations `V174__sources_to_projects`
 and `V175__support_bot_knowledge_prompt`):
 
-- Every entry of `config/sources.json` becomes `contents/projects/<id>.json` with the same id and
-  one item of the source's kind. A source id that starts with `prj_` becomes `legacy-<id>`.
+- Every entry of `config/sources.json` becomes `contents/projects/<id>.json` with one item of the
+  source's kind. The project keeps the source id when it is a valid admin project id: at most 50
+  characters and not starting with `prj_`. Every other id is remapped, in the project file and in
+  every reference to it:
+
+  | Source id                                    | Project id                                  |
+  | -------------------------------------------- | ------------------------------------------- |
+  | Valid admin id (`faq`)                       | Unchanged (`faq`)                           |
+  | Starts with `prj_` (`prj_case`)              | `legacy-<id>` (`legacy-prj_case`)           |
+  | `legacy-<id>` would exceed 50 characters     | `legacy-` and a 12-character hash of the id |
+  | `legacy-<id>` is another source's project id | `legacy-` and a 12-character hash of the id |
+
+  For example, with the sources `prj_case` and `legacy-prj_case`, `legacy-prj_case` keeps its id
+  and `prj_case` gets a hashed id. The migration logs every remap at level `info` as
+  `Source "<old>" is remapped to "<new>"` (component `Migration`, version `174`) in the server log,
+  `logs/app.log` when file logging is on (see [Logging](logging.md)). Search the startup log for
+  these lines to find a renamed project and to update API clients and external references that
+  use the old id.
 - `sources` on apps, workflows, workflow steps, planner task templates and agent profiles becomes
   `projects`: a prompt source `{ "id": "…", "mode": "context" }`, a tool source
   `{ "id": "…", "mode": "tools" }`. A configuration that still says `sources` fails validation.
