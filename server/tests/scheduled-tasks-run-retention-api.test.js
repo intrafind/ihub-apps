@@ -22,6 +22,8 @@ const { default: registerRoutes } = await import('../routes/scheduledTasks.js');
 const { default: registerAdminRoutes } = await import('../routes/admin/scheduledTasks.js');
 const tasks = await import('../services/scheduler/tasks/taskService.js');
 const { newRunDocument } = await import('../services/scheduler/tasks/taskModel.js');
+const { default: configStore } = await import('../services/config/ConfigStore.js');
+const { default: configCache } = await import('../configCache.js');
 const { getScheduledTaskRepository } =
   await import('../services/scheduler/tasks/ScheduledTaskRepository.js');
 
@@ -160,6 +162,30 @@ describe('deleting runs through the owner routes', () => {
 });
 
 describe('the admin settings route', () => {
+  // The platform file lives in memory here: the real config store writes outside the test's temp dir.
+  let stored;
+  let originals;
+  before(() => {
+    stored = { scheduledTasks: {} };
+    originals = {
+      readJson: configStore.readJson,
+      writeJson: configStore.writeJson,
+      refresh: configCache.refreshCacheEntry
+    };
+    configStore.readJson = async () => structuredClone(stored);
+    configStore.writeJson = async (_file, value) => {
+      stored = structuredClone(value);
+    };
+    configCache.refreshCacheEntry = async _file => {
+      configCache.setCacheEntry('config/platform.json', structuredClone(stored));
+    };
+  });
+  after(() => {
+    configStore.readJson = originals.readJson;
+    configStore.writeJson = originals.writeJson;
+    configCache.refreshCacheEntry = originals.refresh;
+  });
+
   it('saves the full body the settings page sends, including maxRunsPerTask', async () => {
     const body = {
       enabled: true,
@@ -188,6 +214,7 @@ describe('the admin settings route', () => {
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
     assert.equal(res.body.settings.maxRunsPerTask, 25);
     assert.ok(res.body.changed.includes('scheduledTasks.maxRunsPerTask'));
+    assert.equal(stored.scheduledTasks.maxRunsPerTask, 25);
   });
 
   it('still rejects unknown keys', async () => {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V176 — Scheduled task run retention by count
+ * Migration V177 — Scheduled task run retention by count
  *
  * Adds `platform.scheduledTasks.maxRunsPerTask`: the most finished runs a
  * scheduled task keeps (0 = no limit). A task can set a stricter limit of its
@@ -10,7 +10,7 @@
  * nothing on its own.
  */
 
-export const version = '176';
+export const version = '177';
 export const description = 'scheduled_task_run_retention';
 
 export async function precondition(ctx) {
