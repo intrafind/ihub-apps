@@ -144,16 +144,11 @@ npm run install:all
 #### 2. Configure Environment (Optional)
 
 ```bash
-# Copy example environment file
+# Optional: create .env for process settings such as PORT
 cp config.env .env
-
-# Edit .env with your API keys (optional for basic development)
-# OPENAI_API_KEY=your_openai_key
-# ANTHROPIC_API_KEY=your_anthropic_key
-# GOOGLE_API_KEY=your_google_key
 ```
 
-**Note**: API keys are optional for UI development. The app works without them.
+**Note**: Add provider API keys in the setup wizard or under **Admin → Providers** once the app is running. They are optional for UI development.
 
 #### 3. Start Development Environment
 
