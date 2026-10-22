@@ -23,6 +23,7 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import llmClient, { usageToBudget, extractJson } from '../../loop/LLMClient.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
+import { projectInputLinks } from '../projectNodes.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
 import {
@@ -271,8 +272,12 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         });
       }
 
-      // Materialize the plan into a runnable workflow definition
-      const workflowDef = SubWorkflowMaterializer.materialize(plan, config, currentDepth);
+      // Materialize the plan into a runnable workflow definition. The run's
+      // project inputs are declared on this workflow's start node, which the
+      // child does not have, so their links travel into the tasks here.
+      const workflowDef = SubWorkflowMaterializer.materialize(plan, config, currentDepth, {
+        inputProjects: projectInputLinks(context.workflow, state)
+      });
 
       // Propagate the remaining wall-time budget from the parent into the
       // sub-workflow. The engine's default sub-workflow wall budget is 5 min

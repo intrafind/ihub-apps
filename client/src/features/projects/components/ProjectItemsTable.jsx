@@ -16,8 +16,18 @@ function isRefreshable(item) {
 }
 
 /**
+ * Whether a failed item can be retried. Retry is a refresh, which reads the
+ * item again from its source; an upload (a file or a written text) has no
+ * source to read, so the server refuses it (`INVALID_REF`) — the file has to
+ * be added again.
+ */
+function isRetryable(item) {
+  return item.status === 'failed' && item.kind !== 'upload';
+}
+
+/**
  * The items of a project with their status, a pinned toggle and the actions
- * that fit the status: preview the text, retry a failed item, refresh a
+ * that fit the status: preview the text, retry a failed picked item, refresh a
  * stale or picked one, rename, remove. The admin project editor and the user
  * project page share it; a reader (`readOnly`) sees the items and may preview
  * them, nothing else.
@@ -31,7 +41,8 @@ function isRefreshable(item) {
  * @param {boolean} [props.readOnly=false] - Hide every action that changes an item.
  * @param {(item: Object) => void} [props.onTogglePinned]
  * @param {(item: Object) => void} [props.onPreview]
- * @param {(item: Object) => void} [props.onRefresh] - Retry (failed) or refresh (stale, picked).
+ * @param {(item: Object) => void} [props.onRefresh] - Retry (failed, not an upload) or
+ *   refresh (stale, picked).
  * @param {(item: Object) => void} [props.onRename]
  * @param {(item: Object) => void} [props.onRemove]
  * @returns {JSX.Element}
@@ -128,7 +139,7 @@ function ProjectItemsTable({
       label: t('projects.items.actions.retry', 'Retry'),
       icon: 'arrow-path',
       priority: 'primary',
-      hidden: item => !canChange(onRefresh) || item.status !== 'failed',
+      hidden: item => !canChange(onRefresh) || !isRetryable(item),
       busy: item => busyItemId === item.id,
       onClick: item => onRefresh(item)
     },

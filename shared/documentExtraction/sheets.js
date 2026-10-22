@@ -74,9 +74,10 @@ export const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
 /**
  * @param {SheetData[]} sheets
  * @param {{workbookChars?: number}} [limits]
+ * @param {{truncated?: boolean}} [report] - `truncated` is set when rows or sheets were left out
  * @returns {string} `[Sheet: name]` blocks; '' when no sheet has content
  */
-export function renderSheets(sheets, limits = {}) {
+export function renderSheets(sheets, limits = {}, report = null) {
   let budget = limits.workbookChars ?? MAX_WORKBOOK_CHARS;
   const blocks = [];
   let leftOut = 0;
@@ -133,10 +134,15 @@ export function renderSheets(sheets, limits = {}) {
     const notices = [];
     if (omitted > 0) notices.push(`[… ${omitted}${shown === 0 ? '' : ' more'} rows omitted]`);
     notices.push(...(sheet.notices ?? []));
+    // Every notice says what was cut off.
+    if (report && notices.length > 0) report.truncated = true;
     for (const notice of notices) budget -= notice.length + 1;
     out.push(...notices);
     blocks.push(out.join('\n'));
   }
-  if (leftOut > 0) blocks.push(`[… ${leftOut} more sheets omitted]`);
+  if (leftOut > 0) {
+    blocks.push(`[… ${leftOut} more sheets omitted]`);
+    if (report) report.truncated = true;
+  }
   return blocks.join('\n\n').trim();
 }

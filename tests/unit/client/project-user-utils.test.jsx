@@ -296,6 +296,15 @@ describe('project page rules', () => {
     expect(
       appsForProjectChats([{ id: 'a' }, { id: 'b', features: { userProjects: false } }])
     ).toEqual([{ id: 'a' }]);
+    // Only chat apps start a chat; an omitted type is a chat app.
+    expect(
+      appsForProjectChats([
+        { id: 'a' },
+        { id: 'c', type: 'chat' },
+        { id: 'frame', type: 'iframe' },
+        { id: 'away', type: 'redirect' }
+      ]).map(app => app.id)
+    ).toEqual(['a', 'c']);
     expect(chatMoveTargets([mine, shared, admin], 'prj_a')).toEqual([shared]);
   });
 });

@@ -20,6 +20,12 @@ import { useEffect, useState } from 'react';
  */
 export function createViewerStore(loader, { ttlMs = 30_000 } = {}) {
   let cache = null; // { key, data, at, promise }
+  // Bumped by every request that goes out and by `invalidate()`. A request
+  // that finds it moved on by the time it completes was superseded: its
+  // answer may be older than what the newer request returns (or than the
+  // change that invalidated it), so it must neither land in the cache nor
+  // reach a consumer.
+  let generation = 0;
   const listeners = new Set();
   const notify = () => listeners.forEach(listener => listener());
   const fresh = key =>
@@ -29,14 +35,16 @@ export function createViewerStore(loader, { ttlMs = 30_000 } = {}) {
     if (!force && fresh(key)) return Promise.resolve(cache.data);
     if (cache && cache.key === key && cache.promise) return cache.promise;
     const previous = cache && cache.key === key ? cache : null;
+    const requestGeneration = ++generation;
     const promise = loader()
       .then(data => {
+        if (requestGeneration !== generation) return data;
         cache = { key, data, at: Date.now(), promise: null };
         notify();
         return data;
       })
       .catch(error => {
-        if (cache && cache.promise === promise) cache = previous;
+        if (requestGeneration === generation) cache = previous;
         throw error;
       });
     cache = { key, data: previous?.data, at: previous?.at ?? 0, promise };
@@ -44,6 +52,7 @@ export function createViewerStore(loader, { ttlMs = 30_000 } = {}) {
   };
 
   const invalidate = () => {
+    generation += 1;
     cache = null;
     notify();
   };
@@ -68,9 +77,20 @@ export function createViewerStore(loader, { ttlMs = 30_000 } = {}) {
           return;
         }
         setState(prev => (prev.loading ? prev : { ...prev, loading: true }));
-        load(key)
-          .then(data => mounted && setState({ data, loading: false, error: null }))
-          .catch(error => mounted && setState(prev => ({ ...prev, loading: false, error })));
+        const request = load(key);
+        // The generation this answer belongs to: a request just started, the
+        // one already in flight, or the fresh cache — all current right now.
+        // Once it has moved on, the newer request's `notify()` brings this
+        // consumer up to date; the superseded answer is dropped.
+        const requestGeneration = generation;
+        const current = () => mounted && requestGeneration === generation;
+        request
+          .then(data => {
+            if (current()) setState({ data, loading: false, error: null });
+          })
+          .catch(error => {
+            if (current()) setState(prev => ({ ...prev, loading: false, error }));
+          });
       };
       listeners.add(sync);
       sync();

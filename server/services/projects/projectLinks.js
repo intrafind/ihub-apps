@@ -3,8 +3,9 @@
 
 /**
  * Where projects are linked from configuration (spec 1 §6.1, §6.2): the
- * `projects` lists on apps, workflows (top level, and the prompt, planner,
- * verifier and project step nodes) and agent profiles.
+ * `projects` lists on apps, workflows (top level; the prompt, planner,
+ * verifier and project step nodes; and a planner's task template) and agent
+ * profiles.
  *
  * Two questions are answered here:
  *
@@ -54,7 +55,10 @@ export function linkedIdsOf(links) {
 }
 
 /**
- * The links of a workflow: its own list plus every project node's.
+ * The links of a workflow: its own list plus every project node's. A
+ * planner's `taskTemplate.projects` counts as its node's links: the workers
+ * it materializes at run time carry them, so a caller who may run the
+ * workflow must reach them, and deleting one must see the dependency.
  *
  * @param {Object} workflow
  * @returns {Array<{ids: string[], nodeId: string|null}>}
@@ -64,7 +68,8 @@ function workflowLinks(workflow) {
   for (const node of Array.isArray(workflow?.nodes) ? workflow.nodes : []) {
     if (!PROJECT_NODE_TYPES.includes(node?.type)) continue;
     const ids = linkedIdsOf(node?.config?.projects);
-    if (ids.length) result.push({ ids, nodeId: node.id || null });
+    if (node.type === 'planner') ids.push(...linkedIdsOf(node?.config?.taskTemplate?.projects));
+    if (ids.length) result.push({ ids: [...new Set(ids)], nodeId: node.id || null });
   }
   return result;
 }

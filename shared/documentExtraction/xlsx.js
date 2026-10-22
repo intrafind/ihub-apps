@@ -51,9 +51,11 @@ function withVerticalMerges(XLSX, sheet, lastRow) {
  * @param {Object} args.XLSX - SheetJS
  * @param {Object} args.workbook - `XLSX.read(...)` result
  * @param {{sheetRows?: number, workbookChars?: number}} [args.limits]
+ * @param {{truncated?: boolean}} [args.report] - `truncated` is set when rows or sheets were
+ *   left out on the limits
  * @returns {string} `[Sheet: name]` blocks; '' when no sheet has content
  */
-export function extractXlsxText({ XLSX, workbook, limits = {} }) {
+export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) {
   const sheetRows = limits.sheetRows ?? MAX_SHEET_ROWS;
   const sheets = [];
 
@@ -92,5 +94,5 @@ export function extractXlsxText({ XLSX, workbook, limits = {} }) {
       }
     });
   });
-  return renderSheets(sheets, limits);
+  return renderSheets(sheets, limits, report);
 }

@@ -82,16 +82,21 @@ export const projectSourceProducer = {
   },
 
   /**
-   * The tools put their sources into the result envelope already; this
-   * producer only adds the query and keeps a failed call quiet.
+   * The tools hand over their sources already — `knowledge_read` in the
+   * result envelope, `knowledge_search` beside the result
+   * (`services/sources/toolCallScope.js`), so its passages reach the model
+   * once; this producer only adds the query and keeps a failed call quiet.
    *
-   * @param {{toolId: string, args?: Object, result: unknown, failed?: boolean}} call
+   * @param {{toolId: string, args?: Object, result: unknown, reported?: Array, failed?: boolean}} call
    * @returns {{items: Array, queries: string[]}}
    */
-  fromToolResult({ toolId, args, result, failed }) {
+  fromToolResult({ toolId, args, result, reported = [], failed }) {
     if (failed) return { items: [], queries: [] };
     const parsed = parseResult(result);
-    const items = Array.isArray(parsed?.sources) ? parsed.sources : [];
+    const items = [
+      ...(Array.isArray(parsed?.sources) ? parsed.sources : []),
+      ...(Array.isArray(reported) ? reported : [])
+    ];
     const query =
       String(toolId).toLowerCase() === 'knowledge_search' &&
       typeof args?.query === 'string' &&

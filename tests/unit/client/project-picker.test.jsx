@@ -120,6 +120,19 @@ describe('ProjectPicker', () => {
     expect(within(faq).getByText('sent with every request')).toBeInTheDocument();
   });
 
+  test('does not promise that a fitting auto project is loaded', async () => {
+    // The real budget also depends on the model and the other linked
+    // projects, which the picker does not know.
+    render(<ProjectPicker value={[{ id: 'faq', mode: 'auto' }]} onChange={jest.fn()} />);
+
+    const faq = await screen.findByTestId('project-link-faq');
+    await waitFor(() =>
+      expect(within(faq).getByTestId('project-token-note')).toHaveTextContent(
+        'fits the prompt limit; loaded if the model and other linked projects leave room'
+      )
+    );
+  });
+
   test('renders nothing when the projects feature is disabled', async () => {
     mockFetchAdminProjects.mockRejectedValue({
       response: { status: 403, data: { code: 'FEATURE_DISABLED' } }

@@ -215,8 +215,16 @@ export async function resolveNodeProject({ executor, node, state, context }) {
     throw new ProjectNodeError('FORBIDDEN', `${node.type}: the run has no user to act as`);
 
   const links = workflowProjectLinks(config, context.workflow, state);
-  const link =
-    links.map(entry => normalizeProjectLink(entry)).find(entry => entry.id === projectId) || null;
+  const linkTo = list =>
+    (Array.isArray(list) ? list : [])
+      .map(entry => normalizeProjectLink(entry))
+      .find(entry => entry.id === projectId) || null;
+  let link = linkTo(links);
+  // The editor saves a read-only step link for an admin project the author
+  // chose, so the project is reachable and listed as a dependency. That link
+  // does not take away a write grant the workflow's own link to it gives.
+  const workflowLink = Array.isArray(config.projects) ? linkTo(context.workflow?.projects) : null;
+  if (link && !link.write && workflowLink?.write) link = { ...link, write: true };
   const scope = await resolveProjectScope({
     appConfig: { projects: link ? [link] : [{ id: projectId, mode: 'auto' }] },
     user: context.user
@@ -243,7 +251,9 @@ export async function resolveNodeProject({ executor, node, state, context }) {
 
 /**
  * The error result of a step for a failure, with its code beside the
- * message so the execution view and the audit can tell them apart.
+ * message so the execution view and the audit can tell them apart. The code
+ * sits at the top of the result (where `WorkflowEngine.executeNode` reads
+ * it for the node error) and in `details`.
  *
  * @param {Object} executor
  * @param {Object} node
@@ -252,10 +262,11 @@ export async function resolveNodeProject({ executor, node, state, context }) {
  */
 export function projectNodeFailure(executor, node, error, resolvedInputs) {
   const code = error?.code || 'PROJECT_STEP_FAILED';
-  return executor.createErrorResult(`${node.type}: ${error?.message || String(error)}`, {
+  const result = executor.createErrorResult(`${node.type}: ${error?.message || String(error)}`, {
     nodeId: node.id,
     code,
     ...(error?.details || {}),
     ...(resolvedInputs ? { resolvedInputs } : {})
   });
+  return { ...result, code };
 }

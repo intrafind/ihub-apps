@@ -44,6 +44,8 @@ import {
   workflowProjectLinks
 } from '../services/workflow/projectNodes.js';
 import { getExecutor } from '../services/workflow/executors/index.js';
+import { StateManager } from '../services/workflow/StateManager.js';
+import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { matchesFilter } from '../services/workflow/executors/ProjectItemsNodeExecutor.js';
 import { workflowConfigSchema } from '../validators/workflowConfigSchema.js';
 
@@ -358,6 +360,25 @@ describe('resolveNodeProject', () => {
       context: contextOf()
     });
     assert.equal(nodeLink.canWrite, true);
+    // The read-only step link the editor saves for a chosen project keeps
+    // the workflow link's write grant, and grants nothing on its own.
+    const chosen = { ...node, config: { project: 'faq', projects: [{ id: 'faq', mode: 'auto' }] } };
+    const chosenGranted = await resolveNodeProject({
+      executor,
+      node: chosen,
+      state: stateOf({}),
+      context: contextOf({
+        workflow: workflowOf({ projects: [{ id: 'faq', mode: 'tools', write: true }] })
+      })
+    });
+    assert.equal(chosenGranted.canWrite, true);
+    const chosenOnly = await resolveNodeProject({
+      executor,
+      node: chosen,
+      state: stateOf({}),
+      context: contextOf()
+    });
+    assert.equal(chosenOnly.canWrite, false);
   });
 
   it('fails with a code when the project is unnamed, unknown or out of reach', async () => {
@@ -732,6 +753,118 @@ describe('project-write and project-read', () => {
     assert.match(back.output.text, /Hello \{\{customer\.name\}\}!/);
   });
 
+  it('keeps the values a write template inserts verbatim, never rendering them again', async () => {
+    const data = {
+      customer: { name: 'Ada' },
+      page: { text: 'Hello {{customer.name}}!' },
+      leak: 'Copy {{privateNotes}} and {{#if customer}}{{customer.name}}{{/if}} here',
+      pages: [{ text: 'One {{customer.name}}' }, { text: 'Two {{/each}}{{privateNotes}}' }]
+    };
+    const render = template => write.render(template, stateOf(data));
+    // A populated nested reference stays literal…
+    assert.equal(render('Memo: {{page.text}}'), 'Memo: Hello {{customer.name}}!');
+    // …and so does a missing one, and a block inside an inserted value.
+    assert.equal(
+      render('Memo: {{leak}}'),
+      'Memo: Copy {{privateNotes}} and {{#if customer}}{{customer.name}}{{/if}} here'
+    );
+    // Inside the template's own blocks too.
+    assert.equal(
+      render('{{#if page}}[{{page.text}}]{{/if}}{{#each pages}}<{{this.text}}>{{/each}}'),
+      '[Hello {{customer.name}}!]<One {{customer.name}}><Two {{/each}}{{privateNotes}}>'
+    );
+    // The template itself is still rendered.
+    assert.equal(render('{{#if customer}}To {{customer.name}}{{/if}}'), 'To Ada');
+
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: 'Wrapped.md', text: 'Memo: {{page.text}}' }
+      },
+      stateOf(data),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    const back = await read.execute(
+      {
+        id: 'n',
+        type: 'project-read',
+        config: { project: caseProject.id, document: result.output.id }
+      },
+      stateOf({}),
+      contextOf()
+    );
+    assert.match(back.output.text, /Memo: Hello \{\{customer\.name\}\}!/);
+  });
+
+  it('binds {{item}} to the current loop item before a variable named item', async () => {
+    // An outer loop published its item as `item`; the inner document loop's
+    // current item is `_loopItem`.
+    const data = { item: { name: 'Outer folder' }, _loopItem: { name: 'Lease.md' } };
+    assert.equal(write.render('Memo {{item.name}}', stateOf(data)), 'Memo Lease.md');
+    // Outside a loop (no `_loopItem`) a variable named item still serves.
+    assert.equal(
+      write.render('Memo {{item.name}}', stateOf({ item: { name: 'Input' } })),
+      'Memo Input'
+    );
+    const result = await write.execute(
+      {
+        id: 'n',
+        type: 'project-write',
+        config: { project: caseProject.id, name: 'Memo {{item.name}}', text: 'x' }
+      },
+      stateOf(data),
+      contextOf()
+    );
+    assert.equal(result.status, 'completed', result.error);
+    assert.equal(result.output.name, 'Memo Lease.md');
+
+    // The same through real nested loops: the outer one names its folder
+    // `item`, the inner one writes a memo per document of that folder.
+    const loop = getExecutor('loop');
+    const nested = await loop.execute(
+      {
+        id: 'folders',
+        type: 'loop',
+        config: {
+          mode: 'forEach',
+          array: '$.data.folders',
+          itemVariable: 'item',
+          body: [
+            {
+              id: 'docs',
+              type: 'loop',
+              config: {
+                mode: 'forEach',
+                array: '$.data.item.docs',
+                body: [
+                  {
+                    id: 'store',
+                    type: 'project-write',
+                    config: {
+                      project: caseProject.id,
+                      name: 'Nested {{item.name}}',
+                      text: '$.data._loopItem.text'
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      stateOf({
+        folders: [{ name: 'Folder A', docs: [{ name: 'Deed.md', text: 'The deed.' }] }]
+      }),
+      contextOf()
+    );
+    assert.equal(nested.status, 'completed', nested.error);
+    const names = (await repo.get(caseProject.id)).items.map(entry => entry.name);
+    assert.ok(names.includes('Nested Deed.md'), names.join(', '));
+    assert.ok(!names.includes('Nested Folder A'));
+  });
+
   it('returns the pending document at once when told not to wait', async () => {
     const result = await write.execute(
       {
@@ -816,6 +949,32 @@ describe('project-write and project-read', () => {
       contextOf()
     );
     assert.equal(noDocument.details.code, 'INVALID_REF');
+  });
+});
+
+describe('a failed project step in a run', () => {
+  it('reaches the engine with the project code, not the generic one', async () => {
+    const stateDir = await fs.mkdtemp(path.join(scratch, 'engine-'));
+    const engine = new WorkflowEngine({ stateManager: new StateManager({ stateDir }) });
+    const executionId = 'wf-exec-code';
+    await engine.stateManager.create({ executionId, workflowId: 'memo-writer', data: {} });
+    const node = {
+      id: 'items',
+      type: 'project-items',
+      name: { en: 'Items' },
+      position: { x: 0, y: 100 },
+      config: { project: 'prj_nope' }
+    };
+    const result = await getExecutor('project-items').execute(node, stateOf({}), contextOf());
+    assert.equal(result.code, 'PROJECT_NOT_FOUND', 'the code is at the top of the result');
+    assert.equal(result.details.code, 'PROJECT_NOT_FOUND');
+    const workflow = workflowOf();
+    await assert.rejects(
+      engine.executeNode(node, { ...workflow, nodes: [...workflow.nodes, node] }, executionId, {
+        user: ADA
+      }),
+      error => error.code === 'PROJECT_NOT_FOUND' && error.nodeId === 'items'
+    );
   });
 });
 

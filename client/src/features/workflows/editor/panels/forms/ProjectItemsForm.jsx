@@ -18,7 +18,8 @@ import {
   toggleListValue,
   withListFilter,
   withPinnedChoice,
-  withStatuses
+  withStatuses,
+  withProjectValue
 } from '../../../utils/projectNodeConfig';
 
 /** Status labels: the ones the project pages already show. */
@@ -94,7 +95,7 @@ function ProjectItemsForm({ config, onChange, variables }) {
     <div className="space-y-3">
       <ProjectRefField
         value={config.project}
-        onChange={v => onChange({ ...config, project: v })}
+        onChange={(v, options) => onChange(withProjectValue(config, v, options))}
         variables={variables}
       />
       <CheckboxGroupField

@@ -271,10 +271,15 @@ project into a run:
   person who starts the run pick a project they may use; the run dialog shows a picker. The id
   lands in state like every other input (`$.data.<name>` / `{{<name>}}`), the project joins the
   links of every step in mode `auto`, and the three project steps below accept the reference as
-  their `project`. The server refuses a run whose project input names a project the caller may
-  not use.
+  their `project` — including the tasks a planner step generates. The server refuses a run whose
+  project input names a project the caller may not use. A run started from a chat puts the
+  message into the first text input, never into a project input.
 - **The project steps.** They name a project directly or through a reference, and reach it with
-  the running user's rights.
+  the running user's rights. An admin project chosen from the list in the editor also gets a
+  read-only link in the step's own `projects` (`{ "id": "faq", "mode": "auto", "write": false }`),
+  so whoever may run the workflow reaches it and the project lists the workflow as a dependency;
+  a link the step already has to that project is kept as it is. A typed id or a `$.data`
+  reference adds no link.
 
 ### Project steps: list, read, write back
 
@@ -285,7 +290,9 @@ project into a run:
 | `project-write`   | `project`, `name`, `text`, `contentType` (default `text/markdown`), `pinned`, `wait` (default true), `outputVariable` (default `_writtenDocument`)              | The stored document, with provenance `written` and the run (`executionId`, step id) that wrote it. |
 
 `name` and `text` of a write accept `$.data.<var>` references and `{{…}}` templates over the
-state; inside a loop `{{item.name}}` is the current item. A document that fits the read budget
+state; inside a loop `{{item.name}}` is the current item. Only the configured template is
+rendered: a value it inserts (such as a model's answer holding `{{…}}`) is stored as it is, never
+rendered again. A document that fits the read budget
 comes back whole whatever `section` says; a longer one is cut to the section, and the
 `retrieval` field says which happened.
 
@@ -306,7 +313,8 @@ Together with a loop container the three steps make the common shape "one memo p
 
 **Who may write.** A `project-write` into a user project needs the running user to be its owner
 or an editor. An admin project takes writes only through a link that says so: `{ "id": "faq",
-"mode": "tools", "write": true }` on the workflow (or on the step's own `projects`). There is no
+"mode": "tools", "write": true }` on the workflow (or on the step's own `projects`); a read-only
+step link to the project does not take away the workflow link's grant. There is no
 chat tool that writes into a project: a write happens in a step the author placed, with the
 run recorded as the document's provenance. A failed step reports the reason as its error code
 (`PROJECT_NOT_FOUND`, `FORBIDDEN`, `ITEM_NOT_FOUND`, `INVALID_REF`, or the ingest error such as

@@ -169,6 +169,31 @@ describe('project step config rules', () => {
     expect(config.projectNodeSummary('project-read', {})).toBe('');
   });
 
+  it('saves a read-only link for a chosen project and drops it with the choice', () => {
+    const link = id => ({ id, mode: 'auto', write: false });
+    const chosen = config.withProjectValue({}, 'handbook', { picked: true });
+    expect(chosen).toEqual({ project: 'handbook', projects: [link('handbook')] });
+    // Another choice replaces the link added for the previous one…
+    expect(config.withProjectValue(chosen, 'faq', { picked: true })).toEqual({
+      project: 'faq',
+      projects: [link('faq')]
+    });
+    // …clearing the choice or typing another id removes it…
+    expect(config.withProjectValue(chosen, '', { picked: true })).toEqual({ project: '' });
+    expect(config.withProjectValue(chosen, '$.data.case')).toEqual({ project: '$.data.case' });
+    // …but a link the author changed since, or wrote, stays.
+    const edited = { project: 'handbook', projects: [{ ...link('handbook'), write: true }, 'faq'] };
+    expect(config.withProjectValue(edited, 'faq', { picked: true })).toEqual({
+      project: 'faq',
+      projects: edited.projects
+    });
+    // A reference or a typed id never gets one.
+    expect(config.withProjectValue({}, '$.data.case', { picked: true })).toEqual({
+      project: '$.data.case'
+    });
+    expect(config.withProjectValue({}, 'prj_abc')).toEqual({ project: 'prj_abc' });
+  });
+
   it('groups the projects of the run dialog like the project list', () => {
     const groups = config.groupProjectOptions([
       { id: 'a', name: { en: 'Zeta' }, ownership: 'admin' },
@@ -191,7 +216,42 @@ describe('the project field', () => {
     await waitFor(() => expect(within(select).getByText('Employee handbook')).toBeInTheDocument());
     expect(within(select).queryByText(/Old archive/)).not.toBeInTheDocument();
     fireEvent.change(select, { target: { value: 'handbook' } });
-    expect(onChange).toHaveBeenCalledWith({ project: 'handbook' });
+    // A chosen admin project brings the read-only step link the server
+    // reaches it through (and lists as a dependency).
+    expect(onChange).toHaveBeenCalledWith({
+      project: 'handbook',
+      projects: [{ id: 'handbook', mode: 'auto', write: false }]
+    });
+  });
+
+  it('keeps an existing link to the chosen project as it is, in every project step', async () => {
+    const granted = { id: 'handbook', mode: 'tools', write: true };
+    for (const Form of [ProjectItemsForm, ProjectReadForm, ProjectWriteForm]) {
+      const onChange = jest.fn();
+      const { unmount } = render(
+        <Form config={{ projects: ['faq', granted] }} onChange={onChange} variables={VARIABLES} />
+      );
+      const select = await screen.findByLabelText('Project');
+      await waitFor(() =>
+        expect(within(select).getByText('Employee handbook')).toBeInTheDocument()
+      );
+      fireEvent.change(select, { target: { value: 'handbook' } });
+      expect(onChange).toHaveBeenLastCalledWith({
+        project: 'handbook',
+        projects: ['faq', granted]
+      });
+      unmount();
+    }
+  });
+
+  it('adds no link for a typed id or a reference', async () => {
+    const onChange = jest.fn();
+    render(<ProjectWriteForm config={{ project: '$.data.project' }} onChange={onChange} />);
+    const input = await screen.findByLabelText('Project');
+    fireEvent.change(input, { target: { value: 'handbook' } });
+    expect(onChange).toHaveBeenLastCalledWith({ project: 'handbook' });
+    fireEvent.change(input, { target: { value: '$.data.case' } });
+    expect(onChange).toHaveBeenLastCalledWith({ project: '$.data.case' });
   });
 
   it('opens on the text input for a reference and suggests variables as $.data references', async () => {

@@ -6,7 +6,8 @@ import FormField from './FormField';
 import ProjectRefField from './ProjectRefField';
 import {
   PROJECT_NODE_DEFAULT_OUTPUT,
-  referenceSuggestions
+  referenceSuggestions,
+  withProjectValue
 } from '../../../utils/projectNodeConfig';
 
 /** The usual document reference inside a `forEach` loop over a `project-items` list. */
@@ -43,7 +44,7 @@ function ProjectReadForm({ config, onChange, variables }) {
     <div className="space-y-3">
       <ProjectRefField
         value={config.project}
-        onChange={v => onChange({ ...config, project: v })}
+        onChange={(v, options) => onChange(withProjectValue(config, v, options))}
         variables={variables}
       />
       <FormField

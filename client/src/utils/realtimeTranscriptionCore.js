@@ -361,8 +361,9 @@ export const isCompletionClose = evt =>
  * @param {Object} [options]
  * @param {'mic'|'file'} [options.source] - `file`: a whole recording sent faster
  *   than real time, which the server paces for rate-limited live models.
- * @param {{chatId: string, appId: string, ephemeral?: boolean,
+ * @param {{chatId: string, appId: string, ephemeral?: boolean, projectId?: string,
  *   clientMessageId?: string, attachment?: {name: string, type?: string, bytes?: number}}} [options.chat]
+ *   `projectId` is the project the chat opens inside (#1036).
  * @returns {string}
  */
 export const startFrame = (modelId, { source, chat } = {}) =>
