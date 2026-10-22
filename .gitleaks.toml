@@ -43,6 +43,12 @@ stopwords = [
 ]
 
 [[allowlists]]
+description = "Streaming AEAD test vectors: published data keys that only open the fixture ciphertexts"
+paths = [
+  '''^server/tests/fixtures/streaming-aead/vectors\.json$''',
+]
+
+[[allowlists]]
 description = "Truncated PEM blocks used as format examples in docs"
 regexTarget = "match"
 regexes = [
