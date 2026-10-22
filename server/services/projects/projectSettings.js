@@ -8,10 +8,9 @@
  *
  * Two feature flags sit above the `platform.projects` block:
  *
- *  - `projects` gates the admin pages, the admin API and the picker
- *    endpoints. It is the successor of the `sources` flag; admin projects
- *    linked to an app keep working at runtime whatever it says, exactly as
- *    sources did (the flag hides the pages, it does not unload knowledge).
+ *  - `projects` gates the admin pages, the admin API, the picker endpoints
+ *    and every project at runtime: with it off, no project (admin or user)
+ *    reaches a chat's knowledge scope or the `project` source provider.
  *  - `userProjects` gates projects users create themselves: the project
  *    pages, the chat-input picker and container-first chats. It is the phase
  *    1 feature flag of #1036 and ships off.
@@ -22,7 +21,7 @@
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
 
-/** Feature flag gating admin projects, the admin pages and the picker endpoints. */
+/** Feature flag gating all projects, the admin pages and the picker endpoints. */
 export const PROJECTS_FEATURE = 'projects';
 
 /** Feature flag gating projects users create themselves. */
