@@ -656,7 +656,8 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `POST`   | `/api/admin/projects/:id/items`             | Add an item, as in the user API.                                                            |
 | `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`.                                                                    |
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
-| `POST`   | `/api/admin/projects/:id/items/transfer`    | Copy or move items into another admin project `{ itemIds, targetProjectId, mode: "copy" \| "move" }` (default `move`). Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
+| `POST`   | `/api/admin/projects/_move`                 | Move items into another admin project `{ sourceId, targetId, itemIds }`. Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
+| `POST`   | `/api/admin/projects/_copy`                 | The same body and answer; the items stay in the source.                                     |
 | `POST`   | `/api/admin/projects/:id/items/:itemId/refresh` | Refresh an item.                                                                        |
 | `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |

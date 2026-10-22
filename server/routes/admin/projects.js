@@ -575,51 +575,57 @@ export default function registerAdminProjectsRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/projects/{id}/items/transfer:
+   * /api/admin/projects/_move:
    *   post:
-   *     summary: Copy or move items into another admin project
+   *     summary: Move items into another admin project
    *     description: >
-   *       The answer lists what `transferred` and what `failed` (an item still
-   *       being processed, over the target's quota, ...); the items that could go
-   *       went, whatever the status code of the others.
+   *       Body `{ sourceId, targetId, itemIds }`. The answer lists what
+   *       `transferred` and what `failed` (an item still being processed, over the
+   *       target's quota, ...); the items that could go went, whatever the others
+   *       did. `POST /api/admin/projects/_copy` takes the same body and leaves the
+   *       items in the source.
    *     tags: [Admin Projects]
    */
-  app.post(route('/:id/items/transfer'), ...gate, contentAdminAuth, async (req, res) => {
-    try {
-      const source = await loadAdminProject(req, res);
-      if (!source) return;
-      const body = parseBody(itemTransferSchema, req, res);
-      if (!body) return;
-      if (!validateIdForPath(body.targetProjectId, 'project', res)) return;
-      const repo = getProjectRepository();
-      const target = await repo.get(body.targetProjectId);
-      if (!target || target.ownership !== 'admin') return sendNotFound(res, 'Target project');
-      const result = await getProjectService().transferItems(source.id, body.itemIds, target.id, {
-        mode: body.mode,
-        user: req.user
-      });
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'projectItem',
-        resourceId: source.id,
-        summary: `${body.mode === 'move' ? 'Moved' : 'Copied'} ${result.transferred.length} item(s) from admin project "${projectName(source)}" to "${projectName(target)}"${
-          result.failed.length ? `; ${result.failed.length} could not be transferred` : ''
-        }`
-      });
-      await snapshot(req, target.id, target, result.target);
-      if (body.mode === 'move') await snapshot(req, source.id, source, result.source);
-      res.json({
-        mode: result.mode,
-        transferred: result.transferred,
-        failed: result.failed,
-        source: adminView(result.source),
-        target: adminView(result.target)
-      });
-    } catch (error) {
-      sendProjectError(res, error, 'transfer project items');
-    }
-  });
+  for (const mode of ['move', 'copy']) {
+    app.post(route(`/_${mode}`), ...gate, contentAdminAuth, async (req, res) => {
+      try {
+        const body = parseBody(itemTransferSchema, req, res);
+        if (!body) return;
+        if (!validateIdForPath(body.sourceId, 'project', res)) return;
+        if (!validateIdForPath(body.targetId, 'project', res)) return;
+        const repo = getProjectRepository();
+        const [source, target] = await Promise.all([
+          repo.get(body.sourceId),
+          repo.get(body.targetId)
+        ]);
+        if (!source || source.ownership !== 'admin') return sendNotFound(res, 'Project');
+        if (!target || target.ownership !== 'admin') return sendNotFound(res, 'Target project');
+        const result = await getProjectService().transferItems(source.id, body.itemIds, target.id, {
+          mode,
+          user: req.user
+        });
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'projectItem',
+          resourceId: source.id,
+          summary: `${mode === 'move' ? 'Moved' : 'Copied'} ${result.transferred.length} item(s) from admin project "${projectName(source)}" to "${projectName(target)}"${
+            result.failed.length ? `; ${result.failed.length} could not be transferred` : ''
+          }`
+        });
+        await snapshot(req, target.id, target, result.target);
+        if (mode === 'move') await snapshot(req, source.id, source, result.source);
+        res.json({
+          transferred: result.transferred,
+          failed: result.failed,
+          source: adminView(result.source),
+          target: adminView(result.target)
+        });
+      } catch (error) {
+        sendProjectError(res, error, `${mode} project items`);
+      }
+    });
+  }
 
   app.patch(route('/:id/items/:itemId'), ...gate, contentAdminAuth, async (req, res) => {
     try {

@@ -519,7 +519,7 @@ export const mergeAdminProjects = async ({ sourceIds, targetId, deleteSources = 
  *
  * @param {string} projectId - The project the items are in.
  * @param {{itemIds: string[], targetProjectId: string, mode?: 'copy'|'move'}} transfer
- * @returns {Promise<{mode: string, transferred: Array<{itemId: string, newItemId: string, name: string}>,
+ * @returns {Promise<{transferred: Array<{itemId: string, newItemId: string, name: string}>,
  *   failed: Array<{itemId: string, name?: string, code: string, message: string}>,
  *   source: Object, target: Object}>}
  */
@@ -527,10 +527,10 @@ export const transferAdminProjectItems = async (
   projectId,
   { itemIds, targetProjectId, mode = 'move' }
 ) => {
-  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/items/transfer`, {
-    method: 'POST',
-    body: { itemIds, targetProjectId, mode }
-  });
+  const response = await makeAdminApiCall(
+    `${ADMIN_PROJECTS_PATH}/${mode === 'copy' ? '_copy' : '_move'}`,
+    { method: 'POST', body: { sourceId: projectId, targetId: targetProjectId, itemIds } }
+  );
   return response.data;
 };
 

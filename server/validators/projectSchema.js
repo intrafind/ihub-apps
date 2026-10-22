@@ -310,12 +310,12 @@ export const itemUpdateSchema = z
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
 
-/** What `POST /api/admin/projects/:id/items/transfer` accepts. */
+/** What `POST /api/admin/projects/_move` and `_copy` accept. */
 export const itemTransferSchema = z
   .object({
-    itemIds: z.array(zSafeId.min(1).max(100)).min(1).max(MAX_FILES_CEILING),
-    targetProjectId: zSafeId.min(1).max(100),
-    mode: z.enum(['copy', 'move']).prefault('move')
+    sourceId: zSafeId.min(1).max(100),
+    targetId: zSafeId.min(1).max(100),
+    itemIds: z.array(zSafeId.min(1).max(100)).min(1).max(MAX_FILES_CEILING)
   })
   .strict();
 
