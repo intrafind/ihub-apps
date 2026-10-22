@@ -175,6 +175,8 @@ describe('estimateProject', () => {
     assert.equal(byId.itm_small.tokens, project.items.find(e => e.id === 'itm_small').text.tokens);
     assert.equal(estimate.tokens, byId.itm_small.tokens + byId.itm_large.tokens);
     assert.equal(estimate.unmeasured, 1, 'the dynamic search is not a failure; the broken item is');
+    // A search the model has to run with its own terms means the project is searched.
+    assert.deepEqual([estimate.recommendation, estimate.reason], ['search', 'dynamic']);
     assert.equal(estimate.budgetTokens, 50000);
     assert.equal(estimate.minContextWindow, Math.ceil(estimate.tokens / 0.4));
   });

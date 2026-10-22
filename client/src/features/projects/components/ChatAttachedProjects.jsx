@@ -46,6 +46,7 @@ function ChatAttachedProjects({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const rootRef = useRef(null);
+  const addButtonRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -53,7 +54,10 @@ function ChatAttachedProjects({
       if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
     };
     const onKey = event => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      // Back to the button that opened the list, where the keyboard user was.
+      addButtonRef.current?.focus();
     };
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
@@ -133,11 +137,11 @@ function ChatAttachedProjects({
       ))}
       {offered.length > 0 && (
         <button
+          ref={addButtonRef}
           type="button"
           onClick={() => setOpen(prev => !prev)}
           disabled={disabled}
           aria-expanded={open}
-          aria-haspopup="true"
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
         >
           <Icon name="plus" size="xs" />
@@ -153,7 +157,7 @@ function ChatAttachedProjects({
           <p className="px-2 pb-1 text-xs text-gray-500 dark:text-gray-400">
             {t(
               'projects.attach.hint',
-              'The answers can use the documents and instructions of the projects you tick.'
+              'The answers can use the documents of the projects you tick. Their instructions do not apply.'
             )}
           </p>
           {offered.map(project => {
@@ -166,7 +170,7 @@ function ChatAttachedProjects({
                 <input
                   type="checkbox"
                   checked={checked}
-                  disabled={saving || (!checked && full)}
+                  disabled={disabled || saving || (!checked && full)}
                   onChange={() => toggle(project.id)}
                   className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
                 />

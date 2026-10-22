@@ -15,13 +15,12 @@
  */
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { getItemText } from '../knowledge/ItemTextService.js';
+import { CONTEXT_SHARE } from '../knowledge/KnowledgeScopePlanner.js';
 
 /** The share of the load-all budget a project may take and still be put into the prompt as is. */
 const COMFORTABLE_SHARE = 0.5;
 /** The share of the load-all budget one document may take and still be pinned. */
 const PIN_SHARE = 0.2;
-/** The planner loads a project in `auto` mode up to this share of the context window. */
-const CONTEXT_SHARE = 0.4;
 
 /**
  * The recommendation for one document.
@@ -149,11 +148,15 @@ export async function estimateProject(
       });
     }
   }
-  // The planner searches a project whose documents it could not load whole.
+  // The planner searches a project whose documents it could not load whole,
+  // and one with an iFinder search it can only run with the model's terms.
+  const dynamic = items.some(entry => entry.dynamic);
   const partial = items.some(entry => entry.truncated || entry.incomplete);
-  const verdict = partial
-    ? { recommendation: 'search', reason: 'partial' }
-    : recommendForProject(total, budgetTokens, { unmeasured });
+  const verdict = dynamic
+    ? { recommendation: 'search', reason: 'dynamic' }
+    : partial
+      ? { recommendation: 'search', reason: 'partial' }
+      : recommendForProject(total, budgetTokens, { unmeasured });
   return {
     projectId: project.id,
     tokens: total,

@@ -53,10 +53,9 @@ function Card({ title, children }) {
  *
  * @returns {JSX.Element}
  */
-function AdminProjectViewPage() {
+function AdminProjectViewPageContent({ id }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
-  const { id } = useParams();
   const navigate = useNavigate();
   const { project, setProject, loading, error: loadError } = useAdminProject(id);
   const [kinds, setKinds] = useState([]);
@@ -369,6 +368,17 @@ function AdminProjectViewPage() {
       />
     </div>
   );
+}
+
+/**
+ * The view of the project in the URL. Mounted per id, so the links, the test
+ * result and the estimate of one project never show under another.
+ *
+ * @returns {JSX.Element}
+ */
+function AdminProjectViewPage() {
+  const { id } = useParams();
+  return <AdminProjectViewPageContent key={id} id={id} />;
 }
 
 export default AdminProjectViewPage;

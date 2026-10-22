@@ -62,10 +62,18 @@ upload in parallel and each gets its own status.
 
 The server extracts the text, encrypts it and stores it. **The original file is discarded.** A
 PDF of at most 500 pages is read; extracted text longer than 10,000,000 characters (about 10 MB,
-2.5 million tokens; the search indexes it in about two seconds, once) is cut at that length. A file
-that iHub imports from the server itself, such as the shipped documentation, is not cut below
-20,000,000. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
+2.5 million tokens) is cut at that length. A file that iHub imports from the server itself, such as
+the shipped documentation, is not cut below 20,000,000. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
 Run it through OCR and upload the result.
+
+A large text costs memory and time. The first search after a start, or after any document of the
+project changed, builds the search index of the project: about 1.5 seconds per 10,000,000
+characters, during which that worker does nothing else. A 10 MB text needs about 130 MB of heap
+while it is searched (its index, the decrypted text and, for `knowledge_read`, a second index of
+that one document). The indexes are kept for at most 30,000,000 characters per worker; past that
+the oldest are dropped and built again when needed. A search of an unchanged project with a warm
+index does not decrypt its texts again. Plan for a few such documents per project, not for the
+largest allowed.
 
 ### Writing and editing text
 
@@ -442,12 +450,14 @@ Every member may open the chats in a project; chats of other members are read-on
 
 A chat does not have to start in a project to use one. Above the message box, **Add project** lists
 your own and the shared user projects; tick one and the answers of that chat can use its
-documents and instructions (the project is loaded or searched like one the chat runs in). A chip
-names each attached project and links to it; its **×** takes the project away again. Up to 10
+documents (the project is loaded or searched like one the chat runs in); its instructions do not
+apply, only those of the project the chat runs in and of the app's own links. A chip names each
+attached project and links to it; its **×** takes the project away again. Up to 10
 projects can be attached. For a stored chat the change is saved at once and is still there when the
 chat is opened later; a chat that is not stored yet keeps the choice for its messages. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
-see it.
+see it. When the chat runs in a shared project, its members read the answers, including what was
+drawn from an attached private project.
 
 ### Retention
 

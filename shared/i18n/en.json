@@ -117,7 +117,9 @@
     "mainNavigation": "Main navigation",
     "mobileNavigation": "Mobile navigation",
     "selectLanguage": "Select language",
-    "export": "Export"
+    "export": "Export",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2359,7 +2361,8 @@
       "feedback": "Feedback",
       "localization": "Localization",
       "scheduledTasks": "Scheduled Tasks",
-      "projects": "Projects"
+      "projects": "Projects",
+      "overview": "Overview"
     },
     "mcp": {
       "common": {
@@ -6339,7 +6342,8 @@
         "first": "First page",
         "previous": "Previous page",
         "next": "Next page",
-        "last": "Last page"
+        "last": "Last page",
+        "page": "Page {{number}}"
       }
     },
     "create": {
@@ -6548,7 +6552,8 @@
         "exceeds": "Do not put it into the prompt. It is larger than the budget, so \"auto\" searches it. Link it in \"search with tools\" mode and pin only the few documents that must always be present.",
         "partial": "At least one source delivered only part of its text, so the project is searched, not loaded in full.",
         "incomplete": "Some documents could not be read, so the size is not complete. Fix them and estimate again.",
-        "empty": "There is no text to measure yet."
+        "empty": "There is no text to measure yet.",
+        "dynamic": "Part of this project is a search that runs with the model's terms and is never loaded in full, so the project is searched, not loaded in full."
       },
       "item": {
         "prompt": "Prompt",
@@ -6566,7 +6571,7 @@
     "attach": {
       "add": "Add project",
       "title": "Projects for this chat",
-      "hint": "The answers can use the documents and instructions of the projects you tick.",
+      "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
       "remove": "Remove {{name}} from this chat",
       "full": "A chat can use at most {{max}} projects."
     }

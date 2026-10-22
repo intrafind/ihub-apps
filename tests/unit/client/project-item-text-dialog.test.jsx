@@ -80,6 +80,17 @@ describe('isItemTextEditable', () => {
     expect(isItemTextEditable({ ...written, text: null })).toBe(false);
     expect(isItemTextEditable(null)).toBe(false);
   });
+
+  it('refuses a text longer than the editor loads, which saving would cut', () => {
+    expect(isItemTextEditable({ ...written, text: { chars: ITEM_TEXT_EDIT_CHARS } })).toBe(true);
+    expect(
+      isItemTextEditable({
+        ...written,
+        provenance: { origin: 'imported' },
+        text: { chars: ITEM_TEXT_EDIT_CHARS + 1 }
+      })
+    ).toBe(false);
+  });
 });
 
 describe('ProjectItemTextDialog', () => {

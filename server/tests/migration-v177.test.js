@@ -306,6 +306,40 @@ describe('V177 — one IntraFind website project', () => {
     assert.equal(await exists(dir, 'projects/intrafind-website-home.json'), false);
   });
 
+  it('leaves a project an admin gave a category or tags', async () => {
+    const dir = path.join(baseDir, 'organised');
+    await seed(dir, {
+      projects: {
+        'intrafind-website-ihub': oldProject('intrafind-website-ihub', { category: 'marketing' }),
+        'intrafind-website-iassistant': oldProject('intrafind-website-iassistant', {
+          tags: ['product']
+        })
+      }
+    });
+    await up(makeCtx(dir));
+    assert.equal(await exists(dir, 'projects/intrafind-website-ihub.json'), true);
+    assert.equal(await exists(dir, 'projects/intrafind-website-iassistant.json'), true);
+    assert.equal(await exists(dir, 'projects/intrafind-website-home.json'), false);
+  });
+
+  it('is disabled only when every merged project was, and enabled otherwise', async () => {
+    const off = path.join(baseDir, 'all-off');
+    const disabled = {};
+    for (const id of MERGED_PROJECT_IDS) disabled[id] = oldProject(id, { enabled: false });
+    await seed(off, { projects: disabled });
+    await up(makeCtx(off));
+    assert.equal((await read(off, 'projects/intrafind-website.json')).enabled, false);
+
+    const some = path.join(baseDir, 'some-off');
+    await seed(some, {
+      projects: {
+        'intrafind-website-home': oldProject('intrafind-website-home', { enabled: false })
+      }
+    });
+    await up(makeCtx(some));
+    assert.equal((await read(some, 'projects/intrafind-website.json')).enabled, true);
+  });
+
   it('does nothing twice', async () => {
     const dir = path.join(baseDir, 'twice');
     await seed(dir, {

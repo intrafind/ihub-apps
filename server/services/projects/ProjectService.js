@@ -35,6 +35,7 @@ import './kinds/cloudKinds.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 import { relinkProjects } from './projectRelink.js';
+import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
 
 const COMPONENT = 'ProjectService';
 /** How often one project's activity is refreshed by chat turns at most. */
@@ -606,6 +607,14 @@ export class ProjectService {
             throw new ProjectError(
               'INVALID_REF',
               'Only the text of an uploaded, written or imported document can be edited'
+            );
+          }
+          // An imported text may be longer than an edit may be (20 000 000 against
+          // 10 000 000 characters): saving a cut text would silently drop its end.
+          if (Number(item.text?.chars) > MAX_ITEM_TEXT_CHARS) {
+            throw new ProjectError(
+              'INVALID_REF',
+              'This text is longer than the editor takes; replace the document instead'
             );
           }
           if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {

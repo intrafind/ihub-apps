@@ -22,8 +22,8 @@
  *     and it may write when any of them could.
  *
  * What is left alone: a project that an admin changed beyond the shipped shape
- * (instructions, an item that is not a web page, a user-owned id) is not
- * merged and stays linked where it was. An installation that has none of the
+ * (instructions, a category or tags, another page or a further item, a user-owned
+ * id) is not merged and stays linked where it was. An installation that has none of the
  * six projects is not touched. Running it again changes nothing.
  */
 
@@ -101,6 +101,9 @@ function isPlainWebsiteProject(project) {
   if (!project || typeof project !== 'object') return false;
   if (project.ownership !== 'admin') return false;
   if (typeof project.instructions === 'string' && project.instructions.trim()) return false;
+  // A category or tags are an admin's: the project was organised, not shipped.
+  if (typeof project.category === 'string' && project.category.trim()) return false;
+  if (Array.isArray(project.tags) && project.tags.length > 0) return false;
   const items = Array.isArray(project.items) ? project.items : [];
   if (items.length !== 1) return false;
   const [item] = items;
@@ -228,10 +231,8 @@ export async function up(ctx) {
     seen.add(item.id);
     return true;
   });
-  // Disabled only when every merged project was.
-  if (target.enabled !== false || merging.some(project => project.enabled !== false)) {
-    target.enabled = true;
-  }
+  // Disabled when every merged project was; otherwise as the target is.
+  if (merging.every(project => project.enabled === false)) target.enabled = false;
   target.updatedAt = new Date().toISOString();
   await ctx.writeJson(projectFile(TARGET_ID), target);
 

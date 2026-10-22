@@ -18,6 +18,9 @@
  */
 export const MAX_ITEM_TEXT_CHARS = 10_000_000;
 
+/** Most projects a chat may have attached besides its own container. */
+export const MAX_ATTACHED_PROJECTS = 10;
+
 /** Member target types. */
 export const MEMBER_TARGET_TYPES = Object.freeze(['user', 'group', 'everyone']);
 

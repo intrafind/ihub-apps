@@ -81,7 +81,15 @@ export function projectDescription(
       ? project.description
       : getLocalizedContent(project?.description, language) || '';
   const text = String(raw).replace(/\s+/g, ' ').trim();
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+  // Cut by code point: a UTF-16 cut inside an emoji leaves a lone surrogate
+  // that a provider may refuse, and with it every chat that has the project.
+  const points = Array.from(text);
+  return points.length > maxLength
+    ? `${points
+        .slice(0, maxLength - 1)
+        .join('')
+        .trimEnd()}…`
+    : text;
 }
 
 /**

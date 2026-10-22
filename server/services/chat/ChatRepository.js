@@ -1351,8 +1351,20 @@ export class ChatRepository {
       if ((existing.projectId || null) !== (expectedProjectId || null)) {
         return { chat: existing, moved: false };
       }
+      // The chat's new container is no longer an attachment: it would count
+      // twice against the cap and show as two chips.
+      const storedAttached = Array.isArray(existing.attachedProjectIds)
+        ? existing.attachedProjectIds
+        : [];
+      const attached = nextProjectId
+        ? storedAttached.filter(id => id !== nextProjectId)
+        : storedAttached;
+      const stripped = attached.length !== storedAttached.length;
       const chat = await this._writeChat(
-        applyChatPatch(existing, { projectId: nextProjectId || null }),
+        applyChatPatch(existing, {
+          projectId: nextProjectId || null,
+          ...(stripped ? { attachedProjectIds: attached } : {})
+        }),
         etag
       );
       if (typeof settle !== 'function') return { chat, moved: true };
@@ -1364,7 +1376,10 @@ export class ChatRepository {
       } catch (error) {
         const { etag: current } = await this._loadChat(chatId);
         await this._writeChat(
-          applyChatPatch(chat, { projectId: expectedProjectId || null }),
+          applyChatPatch(chat, {
+            projectId: expectedProjectId || null,
+            ...(stripped ? { attachedProjectIds: storedAttached } : {})
+          }),
           current
         );
         throw error;

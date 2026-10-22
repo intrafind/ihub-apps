@@ -142,7 +142,9 @@ export function isItemTextEditable(item) {
     item?.storage === 'text' &&
     Boolean(item.text) &&
     isItemReadable(item) &&
-    EDITABLE_TEXT_ORIGINS.includes(item.provenance?.origin)
+    EDITABLE_TEXT_ORIGINS.includes(item.provenance?.origin) &&
+    // An imported text can be longer than the editor loads: saving it would cut it.
+    !(item.text.chars > ITEM_TEXT_EDIT_CHARS)
   );
 }
 

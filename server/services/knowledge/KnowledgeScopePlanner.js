@@ -35,7 +35,7 @@ import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 
-const CONTEXT_SHARE = 0.4;
+export const CONTEXT_SHARE = 0.4;
 
 /** The share of the context window no injection may exceed, pinned or not. */
 const HARD_CONTEXT_SHARE = 0.75;

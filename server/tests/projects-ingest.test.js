@@ -2420,6 +2420,31 @@ describe('routes', () => {
     assert.equal(stranger.statusCode, 404);
   });
 
+  it('refuses to edit a text longer than an edit may be', async () => {
+    const project = await create();
+    const added = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'upload', ref: {}, name: 'Big.md', text: 'Old notes.' }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    // An imported text can be longer than an upload may be.
+    await getProjectService().patchItem(project.id, added.body.item.id, item => {
+      item.text.chars = 20_000_000;
+    });
+    const refused = await drive(route.editText, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id },
+      body: { text: 'Cut.' }
+    });
+    assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+    const read = await drive(route.text, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id }
+    });
+    assert.equal(read.body, 'Old notes.', 'nothing was replaced');
+  });
+
   it('accepts a multipart upload, answers 202 and serves the text once ready', async () => {
     const project = await create();
     const req = multipartRequest({

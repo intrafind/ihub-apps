@@ -958,6 +958,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
+  // The chat exists server-side, with its attached projects: they are changed
+  // with `PATCH`, never by a message (a stale tab would put back a project
+  // that another tab removed). Only a chat that is not stored yet carries its
+  // picks on the message.
+  const chatStoredServerSide = serverBackedChat && (Boolean(routeChatId) || chatStarted);
   useEffect(() => {
     if (
       embedded ||
@@ -1853,7 +1858,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
-      ...(attachedProjectIds.length > 0 ? { projects: attachedProjectIds } : {}),
+      ...(!chatStoredServerSide && attachedProjectIds.length > 0
+        ? { projects: attachedProjectIds }
+        : {}),
       ...extra
     }),
     [
@@ -1862,7 +1869,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       selectedOutputFormat,
       currentLanguage,
       containerProjectId,
-      attachedProjectIds
+      attachedProjectIds,
+      chatStoredServerSide
     ]
   );
 
@@ -2521,7 +2529,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // keeps a chat that is not stored server-side inside its project.
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
       // The projects picked for this chat; the server adds them to the chat's own.
-      ...(attachedProjectIds.length > 0 ? { projects: attachedProjectIds } : {})
+      ...(!chatStoredServerSide && attachedProjectIds.length > 0
+        ? { projects: attachedProjectIds }
+        : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -3047,7 +3057,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         <ChatProjectBar
           chatId={chatId}
           projectId={containerProjectId}
-          canMove={serverBackedChat && (Boolean(routeChatId) || chatStarted)}
+          canMove={chatStoredServerSide}
           onMoved={setChatProjectId}
         />
       )}
@@ -3055,11 +3065,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       {!embedded && app?.features?.userProjects !== false && (
         <ChatAttachedProjects
           chatId={chatId}
-          stored={serverBackedChat && (Boolean(routeChatId) || chatStarted)}
+          stored={chatStoredServerSide}
           containerProjectId={containerProjectId}
           value={attachedProjectIds}
           onChange={setAttachedProjectIds}
-          disabled={processing}
+          disabled={processing || hydrating}
         />
       )}
 

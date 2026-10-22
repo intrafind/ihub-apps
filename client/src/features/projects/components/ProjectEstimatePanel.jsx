@@ -28,6 +28,11 @@ function useVerdictText() {
           'projects.estimate.verdict.exceeds',
           'Do not put it into the prompt. It is larger than the budget, so "auto" searches it. Link it in "search with tools" mode and pin only the few documents that must always be present.'
         );
+      case 'search:dynamic':
+        return t(
+          'projects.estimate.verdict.dynamic',
+          "Part of this project is a search that runs with the model's terms and is never loaded in full, so the project is searched, not loaded in full."
+        );
       case 'search:partial':
         return t(
           'projects.estimate.verdict.partial',
@@ -80,6 +85,7 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
   return (
     <section
       data-testid="project-estimate"
+      role="status"
       aria-label={t('projects.estimate.title', 'Token estimate')}
       className={`rounded-lg border p-4 ${tone}`}
     >
@@ -99,8 +105,8 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
             )}
           </p>
           <p className="mt-2 text-sm">{verdictText(estimate.recommendation, estimate.reason)}</p>
-          {estimate.tokens > 0 && (
-            <p className="mt-2 text-xs opacity-80">
+          {estimate.tokens > 0 && estimate.recommendation === 'prompt' && (
+            <p className="mt-2 text-xs">
               {t(
                 'projects.estimate.minContext',
                 'A model needs a context window of about {{tokens}} tokens to load it in full (the prompt takes at most 40 % of it).',
@@ -109,7 +115,7 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
             </p>
           )}
           {estimate.unmeasured > 0 && (
-            <p className="mt-1 text-xs opacity-80">
+            <p className="mt-1 text-xs">
               {t('projects.estimate.unmeasured', {
                 count: estimate.unmeasured,
                 defaultValue_one: '{{count}} document could not be read and is not counted.',
@@ -117,7 +123,7 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
               })}
             </p>
           )}
-          <p className="mt-2 text-xs opacity-80">
+          <p className="mt-2 text-xs">
             {t(
               'projects.estimate.approximate',
               'An estimate: the model counts its own tokens, within about 10–20 %.'

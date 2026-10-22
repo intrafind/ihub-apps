@@ -169,7 +169,10 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
           onTogglePinned={actions.togglePinned}
-          onRefresh={actions.refresh}
+          onRefresh={item => {
+            clearEstimate();
+            return actions.refresh(item);
+          }}
           onRename={setRenaming}
           onRemove={setRemoving}
         />
@@ -187,7 +190,10 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           hideUnavailable
           multipleUploads
           project={project}
-          onAdded={() => void reload()}
+          onAdded={() => {
+            clearEstimate();
+            void reload();
+          }}
         />
       )}
       <ProjectItemTextDialog
@@ -195,7 +201,14 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         fetchText={fetchItemText}
-        onSave={editable ? text => actions.editText(previewItem, text) : undefined}
+        onSave={
+          editable
+            ? text => {
+                clearEstimate();
+                return actions.editText(previewItem, text);
+              }
+            : undefined
+        }
         errorMessage={messageOf}
       />
       {renaming && (
@@ -216,6 +229,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         onConfirm={() => {
           const item = removing;
           setRemoving(null);
+          clearEstimate();
           void actions.remove(item);
         }}
         onDeny={() => setRemoving(null)}

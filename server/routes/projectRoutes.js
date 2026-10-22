@@ -67,7 +67,7 @@ import {
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { estimateProject } from '../services/projects/projectEstimate.js';
-import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
+import { RESULT_BUDGET_TOKENS } from '../sources/documentRetrieval.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
 import {
   addItemSchema,
@@ -574,7 +574,7 @@ export default function registerProjectRoutes(app) {
             user: req.user,
             language: req.user?.language || 'en',
             budgetTokens: settings.loadAllMaxTokens,
-            toolResultBudgetTokens: Math.floor(RESULT_BUDGET_CHARS / 4)
+            toolResultBudgetTokens: RESULT_BUDGET_TOKENS
           })
         );
       } catch (error) {

@@ -203,6 +203,44 @@ describe('AdminProjectViewPage', () => {
     );
   });
 
+  test('names the context window only for a project that fits, and a dynamic search as searched', async () => {
+    mockApi.estimateAdminProject.mockResolvedValueOnce({ ...ESTIMATE, minContextWindow: 78000 });
+    renderView();
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate tokens' }));
+    const fits = await screen.findByTestId('project-estimate');
+    expect(fits).toHaveAttribute('role', 'status');
+    expect(fits).toHaveTextContent('context window of about 78.0K tokens');
+
+    mockApi.estimateAdminProject.mockResolvedValueOnce({
+      ...ESTIMATE,
+      tokens: 500000,
+      share: 10,
+      minContextWindow: 1250000,
+      recommendation: 'search',
+      reason: 'exceeds'
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate tokens' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('project-estimate')).toHaveTextContent(
+        'Do not put it into the prompt'
+      )
+    );
+    expect(screen.getByTestId('project-estimate')).not.toHaveTextContent('context window');
+
+    mockApi.estimateAdminProject.mockResolvedValueOnce({
+      ...ESTIMATE,
+      recommendation: 'search',
+      reason: 'dynamic'
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate tokens' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('project-estimate')).toHaveTextContent(
+        'search that runs with the model'
+      )
+    );
+  });
+
   test('says so when the estimate fails', async () => {
     mockApi.estimateAdminProject.mockRejectedValue(new Error('boom'));
     renderView();

@@ -112,7 +112,11 @@ export function describeScope(scope, language = 'en') {
         item => item.status === 'ready' || item.status === 'stale'
       ).length;
       const how = entry.effective === 'loaded' ? 'loaded in full' : 'search it';
-      const holds = projectDescription(entry.project, language, 200);
+      // The tool descriptions are a higher-trust channel than the prompt's
+      // project block: only what an admin wrote goes there, not the text of a
+      // user project that an editor may change.
+      const holds =
+        entry.project.ownership === 'admin' ? projectDescription(entry.project, language, 200) : '';
       return `${entry.project.id} ("${projectName(entry.project, language)}", ${ready} documents, ${how}${holds ? `; ${holds}` : ''})`;
     })
     .join('; ');

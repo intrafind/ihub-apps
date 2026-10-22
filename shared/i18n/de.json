@@ -119,7 +119,9 @@
     "mainNavigation": "Hauptnavigation",
     "mobileNavigation": "Mobile Navigation",
     "selectLanguage": "Sprache auswählen",
-    "export": "Exportieren"
+    "export": "Exportieren",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -2642,7 +2644,8 @@
       "feedback": "Feedback",
       "localization": "Lokalisierung",
       "scheduledTasks": "Geplante Aufgaben",
-      "projects": "Projekte"
+      "projects": "Projekte",
+      "overview": "Übersicht"
     },
     "mcp": {
       "common": {
@@ -6304,7 +6307,8 @@
         "first": "Erste Seite",
         "previous": "Vorherige Seite",
         "next": "Nächste Seite",
-        "last": "Letzte Seite"
+        "last": "Letzte Seite",
+        "page": "Seite {{number}}"
       }
     },
     "create": {
@@ -6513,7 +6517,8 @@
         "exceeds": "Nicht in den Prompt aufnehmen. Es ist größer als das Budget, daher durchsucht \"automatisch\" es. Verknüpfen Sie es im Modus \"mit Tools durchsuchen\" und pinnen Sie nur die wenigen Dokumente, die immer vorhanden sein müssen.",
         "partial": "Mindestens eine Quelle hat nur einen Teil ihres Textes geliefert, daher wird das Projekt durchsucht und nicht vollständig geladen.",
         "incomplete": "Einige Dokumente konnten nicht gelesen werden, die Größe ist daher unvollständig. Beheben Sie das und schätzen Sie erneut.",
-        "empty": "Es gibt noch keinen Text zu messen."
+        "empty": "Es gibt noch keinen Text zu messen.",
+        "dynamic": "Ein Teil dieses Projekts ist eine Suche, die mit den Begriffen des Modells läuft und nie vollständig geladen wird, daher wird das Projekt durchsucht und nicht vollständig geladen."
       },
       "item": {
         "prompt": "Prompt",
@@ -6531,7 +6536,7 @@
     "attach": {
       "add": "Projekt hinzufügen",
       "title": "Projekte für diesen Chat",
-      "hint": "Die Antworten können die Dokumente und Anweisungen der angehakten Projekte nutzen.",
+      "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
       "remove": "{{name}} aus diesem Chat entfernen",
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
     }

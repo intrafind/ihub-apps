@@ -7,6 +7,7 @@ import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import {
   LINK_MODES,
   MAX_FILES_CEILING,
+  MAX_ATTACHED_PROJECTS,
   MAX_ITEM_TEXT_CHARS,
   MAX_MEMBERS,
   MEMBER_ROLES,
@@ -242,7 +243,12 @@ export const adminItemCreateSchema = z
 export const adminProjectCreateSchema = z
   .object({
     version: z.number().int().positive().optional(),
-    id: adminProjectIdSchema,
+    // `new` is the route of the admin create form. Only a new project is refused
+    // it: one that already has the id must keep loading.
+    id: adminProjectIdSchema.refine(
+      id => id.toLowerCase() !== 'new',
+      'The id "new" is reserved for the create form'
+    ),
     tier: z.enum(PROJECT_TIERS).prefault('ihub'),
     name: localized(MAX_NAME_LENGTH),
     description: localized(MAX_DESCRIPTION_LENGTH).optional(),
@@ -362,7 +368,7 @@ export const chatProjectSchema = z
 
 /** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */
 export const attachedProjectsSchema = z
-  .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(50) })
+  .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(MAX_ATTACHED_PROJECTS) })
   .strict();
 
 /**

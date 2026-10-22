@@ -181,7 +181,8 @@ function ProjectChatsSection({ project }) {
               first: t('projects.chats.pager.first', 'First page'),
               previous: t('projects.chats.pager.previous', 'Previous page'),
               next: t('projects.chats.pager.next', 'Next page'),
-              last: t('projects.chats.pager.last', 'Last page')
+              last: t('projects.chats.pager.last', 'Last page'),
+              page: number => t('projects.chats.pager.page', 'Page {{number}}', { number })
             }}
           />
         </div>
