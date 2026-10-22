@@ -6,7 +6,8 @@ import { ITEM_POLL_INTERVAL_MS, hasActiveItems } from '../utils/projectItems';
 
 /**
  * Loads one project and keeps its items current: while any item is
- * `pending` or `extracting`, the project is read again every
+ * `pending` or `extracting`, or being refreshed (`refreshingAt`), the
+ * project is read again every
  * {@link ITEM_POLL_INTERVAL_MS} ms until every item has settled. The admin
  * editor and the user project page share it; each passes its own loader.
  *

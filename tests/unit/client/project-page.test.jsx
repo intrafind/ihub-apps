@@ -227,6 +227,31 @@ describe('ProjectPage – owner', () => {
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
   });
 
+  test('follows a refresh until the new snapshot is stored', async () => {
+    // A refresh keeps the item `ready` (its old snapshot stays readable) and
+    // marks it with `refreshingAt` until the queued job has stored the new one.
+    const refreshing = { ...ITEMS[0], refreshingAt: '2026-10-22T09:00:00Z' };
+    const refreshed = { ...ITEMS[0], snapshotAt: '2026-10-22T09:00:05Z' };
+    mockApi.fetchProject
+      .mockResolvedValueOnce(makeProject())
+      .mockResolvedValueOnce(makeProject({ items: [refreshing, ITEMS[1]] }))
+      .mockResolvedValue(makeProject({ items: [refreshed, ITEMS[1]] }));
+    mockApi.refreshProjectItem.mockResolvedValue(refreshing);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }));
+    await waitFor(() =>
+      expect(mockApi.refreshProjectItem).toHaveBeenCalledWith('prj_a', 'itm_ready')
+    );
+    expect(screen.getByText('text taken 12 Oct 2026')).toBeInTheDocument();
+
+    // The page keeps polling while the item is being refreshed.
+    expect(
+      await screen.findByText('text taken 22 Oct 2026', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(mockApi.fetchProject).toHaveBeenCalledTimes(3);
+  });
+
   test('pins an item and deletes the project after confirmation', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     mockApi.updateProjectItem.mockResolvedValue({ ...ITEMS[0], pinned: true });
