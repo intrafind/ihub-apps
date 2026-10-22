@@ -202,7 +202,9 @@ describe('ProjectPage – owner', () => {
     expect(screen.getByText('Picked from OneDrive / SharePoint')).toBeInTheDocument();
     expect(screen.getByText('text taken 12 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText(/Run it through OCR/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // A failed upload has no source to read again: the file has to be added
+    // anew, so no Retry (the server would refuse the refresh).
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     // A picked, ready document can be read again from its source.
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
     expect(await screen.findByText('2 of 25')).toBeInTheDocument();
