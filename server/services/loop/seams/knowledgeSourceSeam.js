@@ -18,6 +18,8 @@ export function classifyKnowledgeSource(toolId) {
   if (!id) return null;
   // iFinder searches the organisation's own document index, not the web.
   if (id.startsWith('ifinder')) return 'ifinder';
+  // The project knowledge tools search the organisation's projects.
+  if (id.startsWith('knowledge_')) return 'sources';
   if (id === 'web-search' || id === 'websearch' || id.includes('search')) {
     if (id.includes('people') || id.includes('planner')) return null;
     if (id === 'deepresearch' || id === 'researchplanner') return null;

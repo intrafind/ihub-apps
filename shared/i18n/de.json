@@ -551,6 +551,19 @@
     "downloadMessage": "Nachricht herunterladen",
     "downloadOptions": "Download-Optionen",
     "deleteMessage": "Nachricht löschen",
+    "knowledgeScope": {
+      "projects_one": "{{count}} Projekt",
+      "projects_other": "{{count}} Projekte",
+      "loaded_one": "{{count}} vollständig geladen",
+      "loaded_other": "{{count}} vollständig geladen",
+      "searched_one": "{{count}} durchsucht",
+      "searched_other": "{{count}} durchsucht",
+      "loadedOne": "vollständig geladen",
+      "searchedOne": "durchsucht",
+      "unavailableOne": "nicht verfügbar",
+      "overBudget": "über dem Budget",
+      "privateProject": "Privates Projekt"
+    },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
       "websearch": "Basierend auf Websuche",
@@ -5071,6 +5084,7 @@
   "documentPreview": {
     "title": "Dokumentvorschau",
     "loading": "Dokument wird geladen…",
+    "textOnly": "Extrahierter Text (das Original wird nicht aufbewahrt)",
     "pageCount": "{{count}} Seite",
     "pageCount_plural": "{{count}} Seiten",
     "matchPosition": "{{current}} von {{total}}",

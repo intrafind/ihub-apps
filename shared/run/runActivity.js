@@ -128,6 +128,7 @@ export function buildRunActivity(run, childRuns = []) {
   if (run.skills?.length) activity.activeSkills = run.skills;
   const answerSource = answerSourceOf(run);
   if (answerSource) activity.answerSource = answerSource;
+  if (run.knowledgeScope?.projects?.length) activity.knowledgeScope = run.knowledgeScope;
 
   let steps = [];
   for (const workflowRun of [run, ...(childRuns || [])]) {

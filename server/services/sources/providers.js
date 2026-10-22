@@ -30,7 +30,8 @@
 
 /** Built-in providers, loaded on first use so the loop does not import their services. */
 const BUILT_IN = {
-  ifinder: () => import('./providers/ifinder.js')
+  ifinder: () => import('./providers/ifinder.js'),
+  project: () => import('./providers/project.js')
 };
 
 const registered = new Map();

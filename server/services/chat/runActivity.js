@@ -150,6 +150,9 @@ function slim(envelope) {
     // set is stored as the message's `sources`, not here.
     case SSE_V2_EVENTS.SOURCES_ADDED:
       return data?.callId ? envelope : null;
+    // Which projects the turn reached and how: shown with the stored answer.
+    case SSE_V2_EVENTS.KNOWLEDGE_SCOPE:
+      return envelope;
     case SSE_V2_EVENTS.PROGRESS_NODE:
       // A reconnecting client is sent the steps again (`replayChatWorkflowProgress`);
       // folding the replay would list every running step twice.
@@ -276,6 +279,32 @@ function strings(list, max = MAX_STORED_LIST, chars = MAX_LABEL_CHARS) {
     .filter(value => typeof value === 'string' && value)
     .slice(0, max)
     .map(value => text(value, chars));
+}
+
+function integer(value) {
+  return Number.isInteger(value) ? value : undefined;
+}
+
+const SCOPE_MODES = new Set(['loaded', 'searched', 'unavailable']);
+
+/** One project of a stored `knowledge/scope`, bounded. */
+function boundScopeProject(project) {
+  return compact({
+    id: text(project?.id, 100),
+    name: text(project?.name, MAX_LABEL_CHARS),
+    ownership:
+      project?.ownership === 'user' || project?.ownership === 'admin'
+        ? project.ownership
+        : undefined,
+    origin: text(project?.origin, 20),
+    mode: SCOPE_MODES.has(project?.mode) ? project.mode : 'unavailable',
+    documents: integer(project?.documents),
+    tokens: integer(project?.tokens),
+    pinned: integer(project?.pinned),
+    overBudget: project?.overBudget === true ? true : undefined,
+    cut: integer(project?.cut),
+    unavailable: integer(project?.unavailable)
+  });
 }
 
 function compact(object) {
@@ -426,6 +455,15 @@ export function boundStoredActivity(activity) {
   if (typeof activity.outputFormat === 'string' && activity.outputFormat) {
     out.outputFormat = text(activity.outputFormat, 50);
   }
+  // Which projects the turn reached and how (#1036): the badge of the stored
+  // answer. Counts and modes only; the names are what the badge shows.
+  const scopeProjects = activity.knowledgeScope?.projects;
+  if (Array.isArray(scopeProjects) && scopeProjects.length > 0) {
+    out.knowledgeScope = compact({
+      budgetTokens: integer(activity.knowledgeScope.budgetTokens),
+      projects: scopeProjects.slice(0, MAX_STORED_LIST).map(boundScopeProject)
+    });
+  }
 
   if (out.toolActivity && jsonBytes(out) > MAX_STORED_ACTIVITY_BYTES) {
     const trims = [
@@ -536,6 +574,16 @@ export function shareableActivity(activity) {
   if (activity.workflowResult) {
     const { executionId: _execution, ...result } = activity.workflowResult;
     out.workflowResult = result;
+  }
+  // A user project's id and name are the owner's; a viewer of the shared
+  // chat learns that a project was used and how, not which one.
+  if (Array.isArray(activity.knowledgeScope?.projects)) {
+    out.knowledgeScope = {
+      ...activity.knowledgeScope,
+      projects: activity.knowledgeScope.projects.map(project =>
+        project?.ownership === 'user' ? { ...project, id: null, name: null } : project
+      )
+    };
   }
   return out;
 }

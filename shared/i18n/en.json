@@ -4040,6 +4040,19 @@
     "downloadMessage": "Download message",
     "downloadOptions": "Download Options",
     "deleteMessage": "Delete message",
+    "knowledgeScope": {
+      "projects_one": "{{count}} project",
+      "projects_other": "{{count}} projects",
+      "loaded_one": "{{count}} loaded in full",
+      "loaded_other": "{{count}} loaded in full",
+      "searched_one": "{{count}} searched",
+      "searched_other": "{{count}} searched",
+      "loadedOne": "loaded in full",
+      "searchedOne": "searched",
+      "unavailableOne": "unavailable",
+      "overBudget": "over budget",
+      "privateProject": "Private project"
+    },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
       "websearch": "Based on web search",
@@ -5106,6 +5119,7 @@
   "documentPreview": {
     "title": "Document preview",
     "loading": "Loading document…",
+    "textOnly": "Extracted text (the original is not kept)",
     "pageCount": "{{count}} page",
     "pageCount_plural": "{{count}} pages",
     "matchPosition": "{{current}} of {{total}}",

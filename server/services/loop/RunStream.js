@@ -593,6 +593,8 @@ export function projectLedgerEvent(ev) {
       ];
     case RUN_LOG_EVENTS.SOURCES_ADDED:
       return [wrap(SSE_V2_EVENTS.SOURCES_ADDED, d)];
+    case RUN_LOG_EVENTS.KNOWLEDGE_SCOPE:
+      return [wrap(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, d)];
     case RUN_LOG_EVENTS.INTERACTION_RAISED:
       return d.interaction
         ? [wrap(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: d.interaction })]

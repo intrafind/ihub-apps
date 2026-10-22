@@ -21,8 +21,9 @@ import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
  * @param {Object} [props.workflowResult] - Workflow result metadata when message was produced by a workflow run
  *                                          ({ status, executionId, workflowName })
  */
-function AnswerSourceBadge({ answerSource, workflowResult }) {
+function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null }) {
   const { t } = useTranslation();
+  const scopeBadge = knowledgeScope ? <KnowledgeScopeBadge scope={knowledgeScope} t={t} /> : null;
 
   // Workflow output takes precedence over other sources: the message was produced
   // by a workflow run, not by the LLM responding from its own knowledge.
@@ -63,7 +64,7 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
   }
 
   const sources = Array.isArray(answerSource?.sources) ? answerSource.sources : [];
-  if (sources.length === 0) return null;
+  if (sources.length === 0) return scopeBadge;
 
   // Determine the primary source to display
   let displayText = t('chatMessage.answerSource.mixed');
@@ -149,12 +150,52 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
       : displayText;
 
   return (
+    <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+      {scopeBadge}
+      <div
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border ${colorClasses}`}
+        title={tooltipText}
+      >
+        <Icon name={iconName} className="w-3 h-3" />
+        <span>{displayText}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Which projects the turn reached, and whether each was loaded in full or
+ * searched (#1036, `knowledge/scope`).
+ */
+function KnowledgeScopeBadge({ scope, t }) {
+  const projects = Array.isArray(scope?.projects) ? scope.projects : [];
+  if (projects.length === 0) return null;
+  const loaded = projects.filter(project => project.mode === 'loaded');
+  const searched = projects.filter(project => project.mode === 'searched');
+  const parts = [];
+  if (loaded.length) parts.push(t('chatMessage.knowledgeScope.loaded', { count: loaded.length }));
+  if (searched.length)
+    parts.push(t('chatMessage.knowledgeScope.searched', { count: searched.length }));
+  const label = `${t('chatMessage.knowledgeScope.projects', { count: projects.length })} · ${parts.join(' · ')}`;
+  const tooltip = projects
+    .map(
+      project =>
+        `${project.name || project.id || t('chatMessage.knowledgeScope.privateProject', 'Private project')}: ${
+          project.mode === 'loaded'
+            ? t('chatMessage.knowledgeScope.loadedOne', 'loaded in full')
+            : project.mode === 'searched'
+              ? t('chatMessage.knowledgeScope.searchedOne', 'searched')
+              : t('chatMessage.knowledgeScope.unavailableOne', 'unavailable')
+        }${project.overBudget ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})` : ''}`
+    )
+    .join('\n');
+  return (
     <div
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border ${colorClasses}`}
-      title={tooltipText}
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+      title={tooltip}
     >
-      <Icon name={iconName} className="w-3 h-3" />
-      <span>{displayText}</span>
+      <Icon name="folder" className="w-3 h-3" />
+      <span>{label}</span>
     </div>
   );
 }

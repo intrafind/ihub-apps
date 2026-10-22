@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
+import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -683,6 +684,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     });
     if (streaming) return outcome;
 
+    if (outcome.refusal) {
+      return res.status(409).json({ error: outcome.refusal.message, code: outcome.refusal.code });
+    }
     if (outcome.status === 'error') {
       if (outcome.error) return sendLLMError(res, outcome.error, { context: 'chat' });
       return res
@@ -833,7 +837,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           ephemeral,
           sendChatHistory,
           mcpAppContext,
-          voiceMode
+          voiceMode,
+          projectId: requestedProjectId,
+          projects: requestedProjects
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -841,6 +847,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // — and, through the stream, read back — another user's chat.
         const access = await authorizeChat(chatId, req.user, { intent: 'write' });
         if (!access.ok) return sendNotFound(res, 'Chat session');
+        // The chat's container project and the projects attached from the
+        // picker (#1036): checked against the caller's access here, carried
+        // on the request to the prompt builder, persisted with the chat.
+        const chatProjects = await resolveChatProjects({
+          req,
+          chat: access.chat,
+          // Case-insensitive like the request builder, which accepts the id
+          // in any case: a missed app would skip its `userProjects` gate.
+          app: findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null,
+          projectId: requestedProjectId,
+          projects: requestedProjects
+        });
+        if (!chatProjects.ok) {
+          return res
+            .status(chatProjects.status)
+            .json({ error: chatProjects.message, code: chatProjects.code });
+        }
 
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -1001,6 +1024,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             })
               ? { metadata: { inputMode: VOICE_INPUT_MODE } }
               : undefined,
+            // The container project and the attached projects this turn
+            // names (`chatProjects`): written with the question under the
+            // chat lock, against the chat as it stands then — a container
+            // claimed by a racing first turn refuses this one with 409 — and
+            // a new container records the chat in its project once that is
+            // stored (`materializeUserTurn`), on the @workflow path too.
+            ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
+            projectId: chatProjects.containerId,
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
             // the keys this request actually carried: the repository merges
@@ -1061,7 +1092,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           documentIds,
           voiceMode,
           user: req.user,
-          chatId
+          chatId,
+          projectId: chatProjects.containerId,
+          attachedProjectIds: chatProjects.attachedIds
         };
 
         // Resolve the SSE sink once, up front. In cluster mode the stream for
@@ -1158,7 +1191,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // announced when they were activated.
           const activatedSkills = announcedSkills(prep.data.activeSkills);
 
-          await processChatRequest({
+          const outcome = await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
@@ -1172,6 +1205,13 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             user: req.user,
             persistence
           });
+          // Refused at persistence: the chat's container changed under the
+          // turn (`settleUserTurn`), and nothing of it was stored.
+          if (outcome?.refusal) {
+            return res
+              .status(409)
+              .json({ error: outcome.refusal.message, code: outcome.refusal.code });
+          }
 
           return res.json({ status: 'streaming', chatId });
         }

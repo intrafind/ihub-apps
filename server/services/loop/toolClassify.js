@@ -60,5 +60,10 @@ export function classifyToolResult(toolMessage) {
 export function isCitationProducingTool(toolId) {
   const id = String(toolId || '').toLowerCase();
   if (!id) return false;
-  return id.includes('search') || id === 'read_url' || id.startsWith('source_');
+  return (
+    id.includes('search') ||
+    id === 'read_url' ||
+    id.startsWith('source_') ||
+    id.startsWith('knowledge_')
+  );
 }

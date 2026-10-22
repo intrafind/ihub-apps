@@ -340,7 +340,10 @@ class RequestBuilder {
     voiceMode,
     processMessageTemplates,
     user,
-    chatId
+    chatId,
+    preparationId = null,
+    projectId = null,
+    attachedProjectIds = []
   }) {
     try {
       const { data: apps } = configCache.getApps();
@@ -350,12 +353,25 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const app = findByIdCaseInsensitive(apps, appId);
-      if (!app) {
+      const configuredApp = findByIdCaseInsensitive(apps, appId);
+      if (!configuredApp) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';
         return { success: false, error };
       }
+      // The chat's container project and the projects attached from the
+      // picker travel on the app object, the way the active skills do, so
+      // the prompt builder and the tool loader see one scope (#1036).
+      const app =
+        projectId || attachedProjectIds?.length
+          ? {
+              ...configuredApp,
+              ...(projectId ? { _projectId: projectId } : {}),
+              ...(attachedProjectIds?.length
+                ? { _attachedProjectIds: [...attachedProjectIds] }
+                : {})
+            }
+          : configuredApp;
 
       const { data: models } = configCache.getModels();
       if (!models) {
@@ -529,6 +545,9 @@ class RequestBuilder {
 
       // Get model name for global prompt variables
       const modelName = model?.name || model?.id || resolvedModelId;
+      // The id, not the (localized) display name: the knowledge planner
+      // looks the model up for its context window.
+      const modelIdForPrompt = model?.id || resolvedModelId || null;
 
       // The skills this turn runs with: named in the request or the message,
       // or activated earlier in the chat. Resolved once, here, because the
@@ -567,7 +586,9 @@ class RequestBuilder {
         chatId,
         modelName,
         requestedSkills,
-        preparedSkills
+        preparedSkills,
+        modelIdForPrompt,
+        preparationId
       );
       // The raw file/image data of the last user message, next to its rendered
       // content: workflow tools receive the structured file object for their

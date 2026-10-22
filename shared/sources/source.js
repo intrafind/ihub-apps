@@ -34,12 +34,17 @@
  * @property {{ok: boolean, words?: number, truncated?: boolean}} [read] - a read of its content
  * @property {boolean} [cited] - the provider reports that the answer relies on it
  * @property {string[]} [markers] - provider inline markers that point at it (iAssistant `r:3`)
+ * @property {{origin: 'uploaded'|'picked'|'linked'|'written', kind?: string, at?: string}} [provenance] -
+ *   where a project document came from: uploaded by a user, picked from an
+ *   integration (snapshotted at `at`), linked at its source, or written by a
+ *   run. The citation panel shows it as the "uploaded" or "picked" marker.
  * @property {boolean} [private] - found with the user's own permissions or
  *   network; never included in a share
  *
  * @typedef {SourceInput & {id: string, provider: string, kind: SourceKind, private: boolean}} Source
- *   `id` identifies the source within an answer: `provider:ref.id`, else
- *   `provider:id`, else `url:<urlKey>`.
+ *   `id` identifies the source within an answer: `provider:ref.id` (for a
+ *   project item `project:<projectId>:<itemId>`), else `provider:id`, else
+ *   `url:<urlKey>`.
  *
  * Pure functions only, no DOM and no Node APIs, so both sides import it.
  *
@@ -126,6 +131,19 @@ function refOf(value) {
 }
 
 /** A read status `{ ok, words?, truncated? }`, or null when `ok` is not a boolean. */
+const PROVENANCE_ORIGINS = new Set(['uploaded', 'picked', 'linked', 'written']);
+
+function provenanceOf(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (!PROVENANCE_ORIGINS.has(value.origin)) return null;
+  const provenance = { origin: value.origin };
+  const kind = text(value.kind, 50);
+  if (kind) provenance.kind = kind;
+  const at = dateOf(value.at);
+  if (at) provenance.at = at;
+  return provenance;
+}
+
 function readOf(value) {
   if (!value || typeof value !== 'object') return null;
   if (value.ok !== true && value.ok !== false) return null;
@@ -163,13 +181,26 @@ function markersOf(value) {
 }
 
 /**
+ * Providers whose `ref.id` is unique only within its `ref.scope`: a project
+ * item id names an item of one project (`ref: { id: itemId, scope:
+ * projectId }`), so two projects' `itm_policy` are two sources. Elsewhere the
+ * scope is a way to reach the same document (an iFinder search profile) and
+ * two sightings of it are one source.
+ */
+const SCOPED_IDENTITY_PROVIDERS = new Set(['project']);
+
+/**
  * The identity of a source within an answer.
  *
- * @param {{provider: string, ref?: {id: string}, localId?: string|null, url?: string}} parts
+ * @param {{provider: string, ref?: {id: string, scope?: string}, localId?: string|null, url?: string}} parts
  * @returns {string|null}
  */
 function identity({ provider, ref, localId, url }) {
-  if (ref) return `${provider}:${ref.id}`;
+  if (ref) {
+    return ref.scope && SCOPED_IDENTITY_PROVIDERS.has(provider)
+      ? `${provider}:${ref.scope}:${ref.id}`
+      : `${provider}:${ref.id}`;
+  }
   if (localId) return `${provider}:${localId}`;
   const key = url ? urlKey(url) : null;
   return key ? `url:${key}` : null;
@@ -231,6 +262,8 @@ export function normalizeSource(input, defaults = {}) {
   const type = text(input.type, 100);
   if (type) source.type = type;
   if (ref) source.ref = ref;
+  const provenance = provenanceOf(input.provenance);
+  if (provenance) source.provenance = provenance;
   const read = readOf(input.read);
   if (read) source.read = read;
   if (input.cited === true) source.cited = true;
