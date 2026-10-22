@@ -48,3 +48,10 @@ regexTarget = "match"
 regexes = [
   '''-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]{0,120}\.\.\.''',
 ]
+
+[[allowlists]]
+description = "Example project-files blob key in the projects specs (a format sample, not a credential)"
+regexTarget = "match"
+regexes = [
+  '''prj_8Zt1aq__itm_k3Fq__01JB4R2''',
+]
