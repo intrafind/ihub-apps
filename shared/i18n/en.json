@@ -3641,7 +3641,8 @@
         "maxRunMinutes": "Longest run (minutes)",
         "memoryEnabled": "Allow memory between runs",
         "memoryMaxChars": "Longest notes (characters)",
-        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)"
+        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)",
+        "maxRunsPerTask": "Keep at most this many runs per task"
       },
       "memory": {
         "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
@@ -6174,7 +6175,17 @@
       "memoryTooLong": "Memory full",
       "memoryTooLongHint": "The new notes were over the size limit, so the previous notes were kept.",
       "memoryFailed": "Memory not updated",
-      "memoryFailedHint": "The notes could not be updated after this run, so the previous notes were kept."
+      "memoryFailedHint": "The notes could not be updated after this run, so the previous notes were kept.",
+      "delete": "Delete",
+      "deleteTitle": "Delete runs?",
+      "deleteText": "{{count}} run(s) and their chats are deleted. This cannot be undone.",
+      "deleteSelected": "Delete selected ({{count}})",
+      "deleteAll": "Delete all finished runs",
+      "select": "Select",
+      "selectRun": "Select this run",
+      "deletedNotice": "{{count}} run(s) deleted.",
+      "nothingDeleted": "No finished runs were deleted.",
+      "deleteAllText": "All finished runs of this task, including older ones not shown, and their chats are deleted. This cannot be undone. Runs in progress are kept."
     },
     "reconnect": "Reconnect",
     "chatRemoved": "Chat removed (older runs keep only their record)",
@@ -6237,6 +6248,14 @@
       "clearHint": "If you changed what the task does, consider clearing its memory.",
       "tooLong": "The notes are too long ({{chars}} of {{max}} characters). Shorten them and save again.",
       "error": "The notes could not be saved"
+    },
+    "retention": {
+      "maxRuns": "Keep at most this many runs",
+      "maxAgeDays": "Delete runs older than (days)",
+      "unlimited": "No limit",
+      "platformMax": "Default: {{count}} (set by your administrator; a higher value has no effect)",
+      "platformDays": "Default: {{count}} (set by your administrator; a higher value has no effect)",
+      "help": "Older runs and their chats are deleted automatically. Leave a field empty to use the default. Runs in progress are never deleted."
     }
   },
   "memoryEditor": {

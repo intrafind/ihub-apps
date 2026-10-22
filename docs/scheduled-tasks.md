@@ -60,7 +60,8 @@ restart.
 | `catchUpWindowHours`       | `24`    | How old a missed slot may be and still get one catch-up run             |
 | `maxConsecutiveFailures`   | `3`     | Failed runs in a row after which a task pauses itself (`0` = never)      |
 | `approvalTimeoutHours`     | `24`    | How long a run waits for an approval before it fails                    |
-| `runRetentionDays`         | `90`    | Run history older than this is deleted by the daily sweep               |
+| `runRetentionDays`         | `90`    | Run history older than this is deleted by the sweep (`0` = never); a task can set a shorter age of its own |
+| `maxRunsPerTask`           | `0`     | Finished runs kept per task, newest first (`0` = no limit); a task can set a lower count of its own |
 | `maxRunChatsPerTask`       | `20`    | Run chats kept per task; older ones are deleted after each run           |
 | `maxInstructionLength`     | `8000`  | Characters in a task's instructions                                     |
 | `maxRunMinutes`            | `30`    | Wall-clock limit of one run                                             |
@@ -179,6 +180,27 @@ chat.
 | `failed`            | The turn errored, an integration needs reconnecting, or an approval timed out |
 | `skipped`           | The slot did not run: the previous run was still going, the owner lost access, or the scheduler was down |
 | `cancelled`         | Stopped by the owner, an admin, or a rejected approval                  |
+
+#### Keeping and deleting runs
+
+Run history does not grow forever. Two limits decide which finished runs are kept:
+
+- **Count** — keep at most N runs, newest first.
+- **Age** — delete runs older than D days.
+
+Both are optional and combine: a run is deleted when it breaks either one. The owner sets them per
+task under **Keep at most this many runs** and **Delete runs older than (days)** in the task
+editor (the API field is `retention: { maxRuns, maxAgeDays }`, `null` for no limit of its own).
+The platform's `maxRunsPerTask` and `runRetentionDays` apply to every task as well, and the
+stricter value wins: an owner can keep less than the installation allows, never more. The count
+is applied when a run ends; the age limit by the periodic sweep. Deleting a run also deletes its
+chat. A run that has not finished is never deleted and does not count toward the limit.
+
+Runs can also be deleted by hand from the task page: one run, a selection, or **Delete all
+finished runs** (`DELETE /api/scheduled-tasks/:taskId/runs/:runId` and
+`POST /api/scheduled-tasks/:taskId/runs/delete` with `{ "runIds": [...] }` or `{ "all": true }`).
+A run in progress cannot be deleted (`409 RUN_IN_PROGRESS`); cancel it first. Admins can delete
+runs of any task with `POST /api/admin/scheduled-tasks/:taskId/runs/delete`.
 
 **Run now** queues a run immediately (`manual`); it is refused while another run
 of the same task is in progress (`409 RUN_IN_PROGRESS`).
