@@ -170,7 +170,7 @@ function AddProjectItemDialog({ isOpen, onClose, projectId, kinds, config, onAdd
     event.preventDefault();
     setError(null);
     try {
-      let item;
+      let item = null;
       if (tab.id === 'upload') {
         const uploadError = validateUpload(file, config);
         if (uploadError) {
