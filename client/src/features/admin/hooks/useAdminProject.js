@@ -31,6 +31,18 @@ export function useAdminProject(projectId) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(Boolean(projectId));
   const [error, setError] = useState(null);
+  // Another project id (React Router keeps the editor mounted when only the
+  // `:projectId` param changes): drop the previous project and its error
+  // before the first load of the new one, so a failed load of B shows B's
+  // error instead of A's editable settings under B's URL (state adjusted
+  // during render, so not even one frame shows the old project).
+  const [shownId, setShownId] = useState(projectId);
+  if (shownId !== projectId) {
+    setShownId(projectId);
+    setProject(null);
+    setError(null);
+    setLoading(Boolean(projectId));
+  }
   // Ignore answers for a project the page no longer shows.
   const currentIdRef = useRef(projectId);
   currentIdRef.current = projectId;
