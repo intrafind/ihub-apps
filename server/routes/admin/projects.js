@@ -252,8 +252,12 @@ export default function registerAdminProjectsRoutes(app) {
       const projects = {};
       for (const project of admin) {
         const items = project.items || [];
+        // A link item is fetched at request time and a pending import has no
+        // text yet: their size is not known, so the total is not either (the
+        // editor shows "size not known" rather than a too-small number).
+        const measured = items.every(item => Number.isFinite(item.text?.tokens));
         projects[project.id] = {
-          tokens: items.reduce((sum, item) => sum + (item.text?.tokens || 0), 0),
+          tokens: measured ? items.reduce((sum, item) => sum + item.text.tokens, 0) : null,
           items: items.length,
           bytes: project.usage?.bytes || 0,
           pending: items.filter(item => item.status === 'pending' || item.status === 'extracting')
