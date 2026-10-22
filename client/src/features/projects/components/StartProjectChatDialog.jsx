@@ -8,7 +8,7 @@ import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import useApps from '../../../shared/hooks/useApps';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { resetChatId } from '../../../utils/chatId';
+import { clearConversationId, resetChatId } from '../../../utils/chatId';
 import { appsForProjectChats, projectChatStartPath } from '../utils/projectView';
 import { INPUT_CLASS } from './item-dialog/dialogStyles';
 
@@ -48,6 +48,9 @@ function StartProjectChatDialog({ projectId, onClose }) {
   // a fresh id for the bare app route anyway.
   const startChat = appId => {
     resetChatId(appId);
+    // An iAssistant app resumes the conversation id it keeps in localStorage
+    // into an empty chat; drop it too, as the chat page's own "new chat" does.
+    clearConversationId(appId);
     navigate(projectChatStartPath(appId, projectId));
   };
 
