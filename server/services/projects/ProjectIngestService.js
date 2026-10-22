@@ -307,7 +307,7 @@ export class ProjectIngestService {
       }
 
       // 4. Extract.
-      let extracted;
+      let extracted = null;
       if (text !== null) {
         const normalized = normalizeText(text, { maxChars: MAX_TEXT_CHARS });
         extracted = { text: normalized.text, contentType, truncated: normalized.truncated };
@@ -585,7 +585,7 @@ export class ProjectIngestService {
    */
   async cleanTempDir({ now = Date.now() } = {}) {
     let removed = 0;
-    let entries;
+    let entries = [];
     try {
       entries = await fs.readdir(this.tempDir, { withFileTypes: true });
     } catch {

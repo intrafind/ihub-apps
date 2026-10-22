@@ -75,8 +75,8 @@ const PREVIOUS = crypto.createHash('sha256').update('previous-master').digest('h
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
 
-let scratch;
-let platform;
+let scratch = null;
+let platform = null;
 
 function setPlatform(overrides = {}) {
   platform = {
@@ -115,7 +115,9 @@ function captureRoutes(register) {
     put: record('put'),
     patch: record('patch'),
     delete: record('delete'),
-    use: () => {}
+    use: () => {
+      // Middleware registrations are not part of what the tests look at.
+    }
   });
   return routes;
 }
@@ -186,7 +188,9 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, req: 
     // A middleware that hands the request to a stream (multer) calls `next`
     // or answers later than its own return.
     if (!advanced && !responded) {
-      await waitFor(() => advanced || responded, { timeoutMs: 3000, stepMs: 5 }).catch(() => {});
+      await waitFor(() => advanced || responded, { timeoutMs: 3000, stepMs: 5 }).catch(() => {
+        // A middleware that never answers is reported through `failure` below.
+      });
     }
     if (failure) throw failure;
     if (!advanced) break;
@@ -242,7 +246,7 @@ async function itemOf(projectId, itemId) {
   return (project?.items || []).find(entry => entry.id === itemId) || null;
 }
 
-async function settled(projectId, itemId) {
+function settled(projectId, itemId) {
   return waitFor(async () => {
     const item = await itemOf(projectId, itemId);
     return item && item.status !== 'pending' && item.status !== 'extracting' ? item : null;
@@ -649,8 +653,8 @@ describe('MalwareScanner', () => {
 });
 
 describe('ingest pipeline', () => {
-  let service;
-  let fakeFetch;
+  let service = null;
+  let fakeFetch = null;
 
   before(() => {
     service = getProjectService();
@@ -771,7 +775,13 @@ describe('ingest pipeline', () => {
     assert.equal(failed.status, 'failed');
     assert.equal(failed.error.code, 'UNSUPPORTED_TYPE');
     assert.equal(failed.text, undefined);
-    await assert.rejects(fs.stat(dir));
+    // The directory goes once the job has recorded the failure.
+    await waitFor(() =>
+      fs.stat(dir).then(
+        () => null,
+        () => true
+      )
+    );
     await assert.rejects(
       service.addItem(project.id, { kind: 'upload', ref: {}, name: 'nothing' }, { user: ADA }),
       error => error instanceof ProjectError && error.code === 'INVALID_REF'
@@ -1129,7 +1139,7 @@ describe('ingest pipeline', () => {
     repository.listAdmin = async () => {
       throw new Error('projects directory unreadable');
     };
-    let kept;
+    let kept = null;
     try {
       kept = await ingest.reconcile();
     } finally {
@@ -1387,7 +1397,7 @@ describe('routes', () => {
         })
     };
   }
-  const loopback = { checkTarget: async () => ({ ok: true, addresses: ['127.0.0.1'] }) };
+  const loopback = { checkTarget: () => Promise.resolve({ ok: true, addresses: ['127.0.0.1'] }) };
 
   it('sends the configured probe headers to the original origin only', async () => {
     const other = await probeServer((req, res) => res.end('elsewhere'));
