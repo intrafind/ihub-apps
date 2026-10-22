@@ -927,6 +927,57 @@ describe('ingest pipeline', () => {
     );
   });
 
+  it('reserves a refresh before queueing it, so a second one is refused', async () => {
+    const project = await newProject();
+    const { item } = await service.addItem(
+      project.id,
+      { kind: 'fake-cloud', ref: { fileId: 'busy' } },
+      { user: ADA }
+    );
+    const picked = await settled(project.id, item.id);
+    assert.equal(picked.status, 'ready', JSON.stringify(picked.error));
+    const ingest = service.ingest;
+    // Every slot taken: the refresh waits in the queue, not yet in `_run`.
+    const occupied = ingest.settings().ingest.concurrency;
+    ingest.running += occupied;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      ingest.running -= occupied;
+      ingest._pump();
+    };
+    try {
+      const queued = await service.refreshItem(project.id, item.id, { user: ADA });
+      assert.equal(typeof queued.item.refreshingAt, 'string');
+      assert.equal(queued.item.status, 'ready');
+      assert.equal(queued.item.text.blobKey, picked.text.blobKey);
+      assert.equal(ingest.queue.filter(entry => entry.job.itemId === item.id).length, 1);
+      await assert.rejects(
+        service.refreshItem(project.id, item.id, { user: ADA }),
+        error => error.code === 'PROJECT_MISMATCH'
+      );
+      assert.equal(ingest.queue.filter(entry => entry.job.itemId === item.id).length, 1);
+      // The old snapshot stays readable while the refresh waits.
+      const waiting = await itemOf(project.id, item.id);
+      assert.match(
+        (await getItemText({ id: project.id }, waiting, { user: ADA })).text,
+        /Picked from the cloud/
+      );
+      release();
+      const done = await waitFor(async () => {
+        const current = await itemOf(project.id, item.id);
+        return current.refreshingAt === undefined && !ingest.isActive(item.id) && current;
+      });
+      assert.equal(done.status, 'ready');
+      // Once it is done, the item can be refreshed again.
+      const again = await service.refreshItem(project.id, item.id, { user: ADA, wait: true });
+      assert.equal(again.item.refreshingAt, undefined);
+    } finally {
+      release();
+    }
+  });
+
   it('rejects what the scanner flags and honours onError', async () => {
     const ingest = service.ingest;
     const exec = code => (_binary, _args, _options, cb) => {

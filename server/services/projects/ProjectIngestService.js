@@ -236,7 +236,10 @@ export class ProjectIngestService {
       const extracting = await this.service.patchItem(projectId, itemId, item => {
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
-        if (refresh) item.refreshingAt = new Date().toISOString();
+        // `refreshItem` reserved it before queueing; that reservation is kept,
+        // not restamped, so the reconciler counts from the request (as it
+        // counts a queued upload from its `updatedAt`).
+        if (refresh) item.refreshingAt = item.refreshingAt || new Date().toISOString();
         else item.status = 'extracting';
         item.error = null;
       });
