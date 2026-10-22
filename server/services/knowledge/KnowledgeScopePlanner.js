@@ -180,8 +180,11 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     tokens = injected.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
     remaining = Math.max(0, remaining - tokens);
     limitRemaining = Math.max(0, limitRemaining - tokens);
-    // What was cut from the prompt stays reachable through the tools.
-    if (effective === 'searched' || capped.cut.length > 0) tools = true;
+    // What was cut from the prompt stays reachable through the tools, and a
+    // project that lost text to the cap is not "loaded in full": the model
+    // and the badge are told to search for the rest.
+    if (capped.cut.length > 0) effective = 'searched';
+    if (effective === 'searched') tools = true;
     projects.push({
       id: project.id,
       name,
