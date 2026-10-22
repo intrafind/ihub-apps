@@ -33,6 +33,37 @@ import { resolvePrincipal, isAnonymousUser, isAdminUser } from '../loop/runIdent
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 
 /**
+ * Whether `user` may use the user project a chat lives in. Loaded lazily: the
+ * project modules import the chat repository for their own cascade.
+ *
+ * Only a user project opens its chats to its members, and only while the
+ * `userProjects` feature is on: an admin project is configuration linked to
+ * apps, never a container that shares transcripts, and switching the feature
+ * off revokes the member reads with it (the saved association stays).
+ */
+async function isProjectMember(projectId, user) {
+  try {
+    const [
+      { getProjectRepository },
+      { callerContext, permissionsFor },
+      { isUserProjectsConfigured },
+      { default: configCache }
+    ] = await Promise.all([
+      import('../projects/ProjectRepository.js'),
+      import('../../middleware/projectAccess.js'),
+      import('../projects/projectSettings.js'),
+      import('../../configCache.js')
+    ]);
+    if (!isUserProjectsConfigured(configCache.getFeatures())) return false;
+    const project = await getProjectRepository().get(projectId);
+    if (!project || project.ownership !== 'user') return false;
+    return permissionsFor(project, user, callerContext(user)).canUse === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Decide whether `user` may act on chat `chatId`.
  *
  * A storage failure is not caught: an authorization decision that cannot read
@@ -78,5 +109,12 @@ export async function authorizeChat(
   // An admin who is not the owner may read, never write — a write gets the
   // same 404 as anyone else.
   if (isAdminUser(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
+  // A chat inside a project is readable by the project's members (#1036,
+  // spec 1 §6.4): the project page lists them, and a member opens another's
+  // chat read-only. Never a write, and never the live stream: `viaProject`
+  // lets the stream routes keep the member at the transcript.
+  if (intent === 'read' && chat.projectId && (await isProjectMember(chat.projectId, user))) {
+    return { ok: true, chat, viaProject: true };
+  }
   return { ok: false, status: 404 };
 }

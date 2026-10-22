@@ -42,6 +42,7 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
+import { logAudit } from '../services/AuditLogService.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -175,13 +176,132 @@ async function resolveOwnerId(user) {
  * @param {'read'|'write'} [intent='read'] - What the caller is about to do.
  *   The admin bypass covers reads only, so a rename or a delete of someone
  *   else's chat is refused even for an admin.
- * @returns {Promise<{chat: Object, viaAdmin: boolean}|null>} The chat and how
- *   it was authorized, or null once a 404 is due.
+ * @returns {Promise<{chat: Object, viaAdmin: boolean, viaProject: boolean, nonOwner: boolean}|null>}
+ *   The chat and how it was authorized, or null once a 404 is due. `nonOwner`
+ *   is set for every read that does not rest on ownership (an admin's or a
+ *   project member's), so the owner's side effects can be skipped.
  */
 async function loadOwnedChat(chatId, user, repository, intent = 'read') {
   const auth = await authorizeChat(chatId, user, { repository, intent });
   if (!auth.ok || !auth.chat) return null;
-  return { chat: auth.chat, viaAdmin: auth.viaAdmin === true };
+  const viaAdmin = auth.viaAdmin === true;
+  const viaProject = auth.viaProject === true;
+  return { chat: auth.chat, viaAdmin, viaProject, nonOwner: viaAdmin || viaProject };
+}
+
+/**
+ * Move a chat into a project, or out of one with `projectId: null`. Sends the
+ * refusal itself and returns null when the request cannot go on.
+ */
+async function moveChatToProject(req, res, repository, chat) {
+  const [
+    { chatProjectSchema, describeIssues },
+    { getProjectRepository },
+    access,
+    { getProjectService },
+    { isUserProjectsConfigured }
+  ] = await Promise.all([
+    import('../validators/projectSchema.js'),
+    import('../services/projects/ProjectRepository.js'),
+    import('../middleware/projectAccess.js'),
+    import('../services/projects/ProjectService.js'),
+    import('../services/projects/projectSettings.js')
+  ]);
+  let mayUse = null;
+  const parsed = chatProjectSchema.safeParse({ projectId: req.body.projectId });
+  if (!parsed.success) {
+    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+    return null;
+  }
+  const targetId = parsed.data.projectId;
+  if (targetId) {
+    // Chat containers are the user-project feature: while it is off a chat
+    // joins no project (leaving one stays possible, it only undoes a share).
+    if (!isUserProjectsConfigured(configCache.getFeatures())) {
+      sendErrorResponse(res, 403, 'User projects are switched off', {
+        details: { code: 'USER_PROJECTS_DISABLED' }
+      });
+      return null;
+    }
+    access.ensurePrincipal(req);
+    const project = await getProjectRepository().get(targetId);
+    const context = access.callerContext(req.user);
+    const permissions = access.permissionsFor(project, req.user, context);
+    // Admin projects are configuration linked to apps, not containers for
+    // user data: a chat can only move into a user project.
+    if (!project || !permissions.canUse || project.ownership !== 'user') {
+      sendNotFound(res, 'Project');
+      return null;
+    }
+    // Judged again under the target's lock when the marker is written.
+    mayUse = current => access.permissionsFor(current, req.user, context).canUse;
+  }
+  if ((chat.projectId || null) === targetId) return chat;
+  const service = getProjectService();
+  const from = chat.projectId || null;
+  // Compared under the chat's lock: a move that raced this one wins, and the
+  // caller learns the chat is no longer where they saw it. The markers change
+  // under the same lock, so two moves of one chat cannot interleave their
+  // bookkeeping, and the target is checked again under its own lock: a
+  // project deleted since the access check above refuses the marker and the
+  // chat goes back where it was, as does one the caller may no longer use.
+  let targetGone = false;
+  let accessChanged = false;
+  const { chat: updated, moved } = await repository
+    .moveProjectIf(chat.id, from, targetId, {
+      settle: async () => {
+        if (targetId) {
+          const attached = await service.attachChat(targetId, chat.id, {
+            ownerId: chat.ownerId || null,
+            authorize: mayUse
+          });
+          if (!attached) {
+            targetGone = true;
+            throw new Error('Project is gone');
+          }
+        }
+        if (from) {
+          await service.detachChat(from, chat.id).catch(() => {
+            /* the source project may already be gone */
+          });
+        }
+      }
+    })
+    .catch(error => {
+      if (error?.code === 'PROJECT_ACCESS_CHANGED') accessChanged = true;
+      if (!targetGone && !accessChanged) throw error;
+      return { chat: null, moved: false };
+    });
+  if (targetGone) {
+    sendNotFound(res, 'Project');
+    return null;
+  }
+  if (accessChanged) {
+    sendErrorResponse(res, 403, 'Your access to this project changed', {
+      details: { code: 'PROJECT_ACCESS_CHANGED' }
+    });
+    return null;
+  }
+  if (!updated) {
+    sendNotFound(res, 'Chat');
+    return null;
+  }
+  if (!moved) {
+    sendErrorResponse(res, 409, 'The chat was moved by someone else; reload and try again', {
+      details: { code: 'CHAT_MOVED' }
+    });
+    return null;
+  }
+  logAudit({
+    req,
+    action: 'update',
+    resource: 'project',
+    resourceId: targetId || chat.projectId,
+    summary: targetId
+      ? `Moved chat ${chat.id} into project ${targetId}`
+      : `Removed chat ${chat.id} from project ${chat.projectId}`
+  });
+  return updated;
 }
 
 /**
@@ -222,7 +342,7 @@ export default function registerChatRoutes(app) {
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'read');
       if (!access) return sendNotFound(res, 'Chat');
-      const { viaAdmin } = access;
+      const { nonOwner } = access;
       // Before the transcript is read, so an interrupted turn's closing answer
       // is part of it — and the client does not re-attach to a dead run.
       const chat = await settleInterruptedChat(access.chat, { repository, runLog });
@@ -234,14 +354,14 @@ export default function registerChatRoutes(app) {
       // Opening a chat is what "seen" means — for its owner. Only write when
       // the flag is actually set: the clear is a locked read-modify-write, and
       // a plain read should not contend with a turn that is producing into
-      // this chat. An admin reading someone else's chat clears nothing: the
-      // owner has not seen the answer, and a support read should not tell them
-      // they have.
+      // this chat. An admin or a project member reading someone else's chat
+      // clears nothing: the owner has not seen the answer, and another's read
+      // should not tell them they have.
       const seen =
-        chat.hasUnseenActivity && !viaAdmin ? await repository.clearUnseen(chatId) : null;
+        chat.hasUnseenActivity && !nonOwner ? await repository.clearUnseen(chatId) : null;
       // A scheduled run's chat, opened by its owner, is also the end of that
       // run's notification on the Tasks page.
-      if (!viaAdmin && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
+      if (!nonOwner && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
         markRunChatSeen(chat);
       }
       // `messages` is the array, not the stored envelope — a hydrating client
@@ -318,18 +438,29 @@ export default function registerChatRoutes(app) {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const title = req.body?.title;
-      if (typeof title !== 'string') {
+      const hasProject = req.body && Object.hasOwn(req.body, 'projectId');
+      if (typeof title !== 'string' && !hasProject) {
         return sendBadRequest(res, 'title is required and must be a string');
       }
       const repository = requireRepository(res);
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
-      // The repository caps and marks the title as user-set so no later turn
-      // derives over it; an empty title clears that mark instead.
-      const renamed = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
-      if (!renamed) return sendNotFound(res, 'Chat');
-      res.json({ chat: renamed });
+      let chat = access.chat;
+      if (hasProject) {
+        // Moving a chat into (or out of) a project (#1036, spec 1 §6.4). The
+        // target must be one the caller may use; the markers follow the chat.
+        const moved = await moveChatToProject(req, res, repository, chat);
+        if (!moved) return;
+        chat = moved;
+      }
+      if (typeof title === 'string') {
+        // The repository caps and marks the title as user-set so no later turn
+        // derives over it; an empty title clears that mark instead.
+        chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
+        if (!chat) return sendNotFound(res, 'Chat');
+      }
+      res.json({ chat });
     } catch (error) {
       sendChatStorageError(res, error, 'rename chat');
     }
@@ -373,6 +504,16 @@ export default function registerChatRoutes(app) {
         removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
         component: COMPONENT
       });
+      // The chat is gone, so its project's marker has nothing to list; the
+      // listing would prune it on its next read, the cascade does it now.
+      if (access.chat?.projectId) {
+        const { getProjectService } = await import('../services/projects/ProjectService.js');
+        await getProjectService()
+          .detachChat(access.chat.projectId, chatId)
+          .catch(() => {
+            /* the project may already be gone */
+          });
+      }
       // True even when a concurrent delete won the race: the postcondition the
       // caller asked for — this chat no longer exists — holds either way.
       res.json({ deleted: true });

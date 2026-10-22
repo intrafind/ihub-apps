@@ -1221,6 +1221,71 @@ export class ChatRepository {
   }
 
   /**
+   * Move a chat between projects only while it is still where the caller saw
+   * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
+   * (null for "in no project"). The compare runs inside the chat's lock, so a
+   * delete cascade, retention sweep or rollback that reaches a chat after the
+   * owner moved it elsewhere leaves the newer move alone.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string|null} expectedProjectId - The project the chat must still be in.
+   * @param {string|null} nextProjectId - The project to put it in, or null.
+   * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
+   *   stands and whether the association changed.
+   */
+  moveProjectIf(chatId, expectedProjectId, nextProjectId, { settle } = {}) {
+    if (!this._usable(chatId, 'moveProjectIf')) return { chat: null, moved: false };
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, moved: false };
+      if ((existing.projectId || null) !== (expectedProjectId || null)) {
+        return { chat: existing, moved: false };
+      }
+      const chat = await this._writeChat(
+        applyChatPatch(existing, { projectId: nextProjectId || null }),
+        etag
+      );
+      if (typeof settle !== 'function') return { chat, moved: true };
+      // The project-side bookkeeping runs while the chat is still locked, so
+      // a move that lands right after this one cannot have its markers undone
+      // by the tail of this one. A failure puts the chat back as it was.
+      try {
+        await settle(chat);
+      } catch (error) {
+        const { etag: current } = await this._loadChat(chatId);
+        await this._writeChat(
+          applyChatPatch(chat, { projectId: expectedProjectId || null }),
+          current
+        );
+        throw error;
+      }
+      return { chat, moved: true };
+    });
+  }
+
+  /**
+   * Run `fn` under the chat's lock unless the chat is in `projectId` right
+   * now. What a project listing prunes a stale chat marker with: a marker
+   * read beside a move is judged again once that move has settled, so the
+   * marker a later move back into the project wrote is never removed on the
+   * strength of an earlier snapshot.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} projectId - The project whose marker is in question.
+   * @param {(chat: Object|null) => Promise<unknown>} fn - Runs while locked.
+   * @returns {Promise<boolean>} Whether `fn` ran.
+   */
+  unlessInProject(chatId, projectId, fn) {
+    if (!this._usable(chatId, 'unlessInProject')) return Promise.resolve(false);
+    return this._withChatLock(chatId, async () => {
+      const chat = await this._readChat(chatId);
+      if (chat && (chat.projectId || null) === projectId) return false;
+      await fn(chat);
+      return true;
+    });
+  }
+
+  /**
    * Release a run's hold on a chat: apply `patch` only while `runId` is still
    * the chat's active run.
    *

@@ -71,7 +71,9 @@ export function resolveGroupInheritance(groupsConfig) {
         tools: new Set(),
         adminAccess: false,
         contentAdmin: false,
-        scheduledTasks: false
+        scheduledTasks: false,
+        projects: false,
+        projectSharing: false
       };
 
       // Merge from parent groups first (in order)
@@ -122,6 +124,12 @@ export function resolveGroupInheritance(groupsConfig) {
         if (parentPerms.scheduledTasks === true) {
           mergedPermissions.scheduledTasks = true;
         }
+        if (parentPerms.projects === true) {
+          mergedPermissions.projects = true;
+        }
+        if (parentPerms.projectSharing === true) {
+          mergedPermissions.projectSharing = true;
+        }
       }
 
       // Merge own permissions on top (overrides parents)
@@ -153,6 +161,12 @@ export function resolveGroupInheritance(groupsConfig) {
       if (ownPerms.scheduledTasks === true) {
         mergedPermissions.scheduledTasks = true;
       }
+      if (ownPerms.projects === true) {
+        mergedPermissions.projects = true;
+      }
+      if (ownPerms.projectSharing === true) {
+        mergedPermissions.projectSharing = true;
+      }
 
       // Update the group with resolved permissions
       groups[groupId] = {
@@ -166,7 +180,9 @@ export function resolveGroupInheritance(groupsConfig) {
           tools: Array.from(mergedPermissions.tools),
           adminAccess: mergedPermissions.adminAccess,
           contentAdmin: mergedPermissions.contentAdmin,
-          scheduledTasks: mergedPermissions.scheduledTasks
+          scheduledTasks: mergedPermissions.scheduledTasks,
+          projects: mergedPermissions.projects,
+          projectSharing: mergedPermissions.projectSharing
         }
       };
 
@@ -269,6 +285,8 @@ export function loadGroupPermissions() {
       adminAccess: group.permissions?.adminAccess || false,
       contentAdmin: group.permissions?.contentAdmin || false,
       scheduledTasks: group.permissions?.scheduledTasks === true,
+      projects: group.permissions?.projects === true,
+      projectSharing: group.permissions?.projectSharing === true,
       description: group.description || ''
     };
   }
@@ -383,7 +401,9 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     tools: new Set(),
     adminAccess: false,
     contentAdmin: false,
-    scheduledTasks: false
+    scheduledTasks: false,
+    projects: false,
+    projectSharing: false
   };
 
   if (!Array.isArray(userGroups)) {
@@ -449,6 +469,14 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     // Content admin access
     if (groupPerms.contentAdmin) {
       permissions.contentAdmin = true;
+    }
+
+    // Projects of their own, and sharing them (#1036)
+    if (groupPerms.projects === true) {
+      permissions.projects = true;
+    }
+    if (groupPerms.projectSharing === true) {
+      permissions.projectSharing = true;
     }
 
     // May create and run scheduled tasks
@@ -703,7 +731,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       workflows: new Set(), // OAuth clients don't have workflow permissions
       skills: new Set(), // OAuth clients don't have skill permissions
       adminAccess: false, // OAuth clients never have admin access
-      scheduledTasks: false // nor may they plant recurring work
+      scheduledTasks: false, // nor may they plant recurring work
+      projects: false, // nor hold projects
+      projectSharing: false
     };
   } else {
     user.permissions = getPermissionsForUser(user.groups);
@@ -722,6 +752,13 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       // Nor create scheduled tasks: a leaked token must not be able to plant
       // work that keeps running as the user after the token is revoked.
       user.permissions.scheduledTasks = false;
+      // A third-party app acting for the user neither creates nor shares
+      // projects: a project outlives the token. A personal API key is the
+      // user's own hand (projectAccess.js) and keeps the owner's grants.
+      if (user.authMode === 'oauth_authorization_code') {
+        user.permissions.projects = false;
+        user.permissions.projectSharing = false;
+      }
     }
   }
 
