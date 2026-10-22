@@ -253,8 +253,13 @@ class ChatService {
   }
 
   async prepareChatRequest(params) {
+    // The knowledge scope is noted under this preparation, not the chat: a
+    // turn prepared while another one of the chat still awaits its tools
+    // and API key must not take, or overwrite, the other one's scope.
+    const preparationId = uuidv4();
     const result = await this.requestBuilder.prepareChatRequest({
       ...params,
+      preparationId,
       processMessageTemplates
     });
     // `PromptService` notes the app sources it loaded under the chat id while
@@ -263,7 +268,7 @@ class ChatService {
     // prepared while it still ran (and superseded it).
     const promptSources = PromptService.getPromptSources(params?.chatId);
     PromptService.resetPromptSources(params?.chatId);
-    const knowledgeScope = PromptService.takeKnowledgeScope(params?.chatId);
+    const knowledgeScope = PromptService.takeKnowledgeScope(preparationId);
     if (result?.success && result.data) {
       result.data.promptSources = promptSources;
       if (knowledgeScope) result.data.knowledgeScope = knowledgeScope;
