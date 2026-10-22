@@ -505,6 +505,13 @@ export default function registerProjectRoutes(app) {
           authorize: req.projectContext.authorize('edit')
         });
         if (!result) return sendNotFound(res, 'Project');
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'projectItem',
+          resourceId: req.project.id,
+          summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in project "${projectName(req.project)}"`
+        });
         res.json(serializeItem(result.item));
       } catch (error) {
         sendProjectError(res, error, 'update project item');

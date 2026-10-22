@@ -572,18 +572,24 @@ export class ProjectService {
    * @param {string} chatId
    * @param {{ownerId?: string|null}} [options]
    */
-  async attachChat(projectId, chatId, { ownerId = null } = {}) {
+  async attachChat(projectId, chatId, { ownerId = null, authorize } = {}) {
     // Under the project's lock, so a deletion that lists the markers cannot
     // slip between the existence check and the marker; a project that is
-    // gone answers null and gets no marker.
-    const stored = await this.repository.mutate(
-      projectId,
-      async project => {
-        await this.repository.addChatMarker(projectId, chatId, { ownerId });
-        return project;
-      },
-      { touchActivity: true, touchUpdated: false }
-    );
+    // gone answers null and gets no marker, and `authorize` is judged again
+    // against the project as it is now (PROJECT_ACCESS_CHANGED).
+    let stored;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        async project => {
+          await this.repository.addChatMarker(projectId, chatId, { ownerId });
+          return project;
+        },
+        { authorize, touchActivity: true, touchUpdated: false }
+      );
+    } catch (error) {
+      throw translateError(error);
+    }
     return Boolean(stored);
   }
 

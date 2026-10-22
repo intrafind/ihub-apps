@@ -207,6 +207,7 @@ async function moveChatToProject(req, res, repository, chat) {
     import('../services/projects/ProjectService.js'),
     import('../services/projects/projectSettings.js')
   ]);
+  let mayUse = null;
   const parsed = chatProjectSchema.safeParse({ projectId: req.body.projectId });
   if (!parsed.success) {
     sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
@@ -224,13 +225,16 @@ async function moveChatToProject(req, res, repository, chat) {
     }
     access.ensurePrincipal(req);
     const project = await getProjectRepository().get(targetId);
-    const permissions = access.permissionsFor(project, req.user, access.callerContext(req.user));
+    const context = access.callerContext(req.user);
+    const permissions = access.permissionsFor(project, req.user, context);
     // Admin projects are configuration linked to apps, not containers for
     // user data: a chat can only move into a user project.
     if (!project || !permissions.canUse || project.ownership !== 'user') {
       sendNotFound(res, 'Project');
       return null;
     }
+    // Judged again under the target's lock when the marker is written.
+    mayUse = current => access.permissionsFor(current, req.user, context).canUse;
   }
   if ((chat.projectId || null) === targetId) return chat;
   const service = getProjectService();
@@ -240,14 +244,16 @@ async function moveChatToProject(req, res, repository, chat) {
   // under the same lock, so two moves of one chat cannot interleave their
   // bookkeeping, and the target is checked again under its own lock: a
   // project deleted since the access check above refuses the marker and the
-  // chat goes back where it was.
+  // chat goes back where it was, as does one the caller may no longer use.
   let targetGone = false;
+  let accessChanged = false;
   const { chat: updated, moved } = await repository
     .moveProjectIf(chat.id, from, targetId, {
       settle: async () => {
         if (targetId) {
           const attached = await service.attachChat(targetId, chat.id, {
-            ownerId: chat.ownerId || null
+            ownerId: chat.ownerId || null,
+            authorize: mayUse
           });
           if (!attached) {
             targetGone = true;
@@ -258,11 +264,18 @@ async function moveChatToProject(req, res, repository, chat) {
       }
     })
     .catch(error => {
-      if (!targetGone) throw error;
+      if (error?.code === 'PROJECT_ACCESS_CHANGED') accessChanged = true;
+      if (!targetGone && !accessChanged) throw error;
       return { chat: null, moved: false };
     });
   if (targetGone) {
     sendNotFound(res, 'Project');
+    return null;
+  }
+  if (accessChanged) {
+    sendErrorResponse(res, 403, 'Your access to this project changed', {
+      details: { code: 'PROJECT_ACCESS_CHANGED' }
+    });
     return null;
   }
   if (!updated) {
