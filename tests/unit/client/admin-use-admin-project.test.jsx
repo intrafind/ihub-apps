@@ -23,6 +23,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
 }));
 
 const { useAdminProject } = require('../../../client/src/features/admin/hooks/useAdminProject');
+const { ITEM_POLL_INTERVAL_MS } = require('../../../client/src/features/admin/utils/projectAdmin');
 
 beforeEach(() => {
   mockFetch.mockClear();
@@ -85,4 +86,35 @@ test("a late answer for A does not land on B's page", async () => {
     pending.prj_b.resolve({ id: 'prj_b', items: [] });
   });
   expect(result.current.project).toEqual({ id: 'prj_b', items: [] });
+});
+
+test('keeps polling while an item is being refreshed', async () => {
+  jest.useFakeTimers();
+  try {
+    const { result } = renderHook(() => useAdminProject('prj_a'));
+    const refreshing = { id: 'itm_1', status: 'ready', refreshingAt: '2026-01-01T00:00:00Z' };
+    await act(async () => {
+      pending.prj_a.resolve({ id: 'prj_a', items: [refreshing] });
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    // The refresh outlasts the first read: the next poll picks up the new text.
+    await act(async () => {
+      jest.advanceTimersByTime(ITEM_POLL_INTERVAL_MS);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const done = { id: 'itm_1', status: 'ready', refreshingAt: null, text: { chars: 9 } };
+    await act(async () => {
+      pending.prj_a.resolve({ id: 'prj_a', items: [done] });
+    });
+    expect(result.current.project.items[0]).toEqual(done);
+
+    // Settled: no further polls.
+    await act(async () => {
+      jest.advanceTimersByTime(ITEM_POLL_INTERVAL_MS * 2);
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+  }
 });

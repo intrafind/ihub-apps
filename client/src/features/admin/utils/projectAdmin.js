@@ -310,13 +310,18 @@ export function buildProjectPayload(form) {
 // --- items ------------------------------------------------------------------------
 
 /**
- * Whether the server is still extracting the text of any item.
+ * Whether the server is still extracting the text of any item: a new item
+ * (`pending` / `extracting`), or a picked document being refreshed — that one
+ * keeps its `ready` / `stale` status (the old snapshot stays readable) and
+ * carries `refreshingAt` until the new snapshot is stored.
  *
- * @param {Array<{status: string}>|undefined} items
+ * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
  * @returns {boolean}
  */
 export function hasActiveItems(items) {
-  return (items || []).some(item => ACTIVE_ITEM_STATUSES.includes(item?.status));
+  return (items || []).some(
+    item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
+  );
 }
 
 /**

@@ -117,6 +117,10 @@ describe('items', () => {
     expect(hasActiveItems([{ status: 'ready' }, { status: 'pending' }])).toBe(true);
     expect(hasActiveItems([{ status: 'extracting' }])).toBe(true);
     expect(hasActiveItems([{ status: 'ready' }, { status: 'failed' }])).toBe(false);
+    // A refresh keeps the readable status but is still in flight.
+    expect(hasActiveItems([{ status: 'ready', refreshingAt: '2026-01-01T00:00:00Z' }])).toBe(true);
+    expect(hasActiveItems([{ status: 'stale', refreshingAt: '2026-01-01T00:00:00Z' }])).toBe(true);
+    expect(hasActiveItems([{ status: 'ready', refreshingAt: null }])).toBe(false);
   });
 
   test('summarizes the kinds, most frequent first', () => {
