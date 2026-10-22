@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
-import { recordChatInProject, resolveChatProjects } from '../../services/knowledge/chatProjects.js';
+import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
 import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
@@ -1020,7 +1020,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               ? { metadata: { inputMode: VOICE_INPUT_MODE } }
               : undefined,
             // The container project and the attached projects, when this
-            // turn changed them (`chatProjects`); merged over the stored chat.
+            // turn changed them (`chatProjects`); merged over the stored chat,
+            // and a new container records the chat in its project once that
+            // is stored (`materializeUserTurn`), on the @workflow path too.
             ...(chatProjects.chatPatch ? { chat: chatProjects.chatPatch } : {}),
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
@@ -1093,15 +1095,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // anywhere and the answer has to come back on this POST instead.
         // Deciding from the sink itself (rather than checking membership and
         // fetching separately) keeps the two in step.
-        // A chat that starts inside a project is recorded there (the marker
-        // the project page lists chats by); the chat's own `projectId`, set
-        // by the persistence below, stays the authority.
-        if (persistence && chatProjects.newContainer) {
-          await recordChatInProject(chatProjects.containerId, chatId, {
-            ownerId: persistence.ownerId
-          });
-        }
-
         const streamOpen = hasChatClient(chatId);
 
         // From here the turn owns the chat. A persisted turn has to survive the
