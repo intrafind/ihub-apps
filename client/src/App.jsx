@@ -316,12 +316,13 @@ function SetupCheck({ children }) {
   const sessionConfigured = useSessionFlag('setup_configured');
 
   // Derive setup state: null = still loading, true/false = known
+  // `setup.disabled` is the admin's persistent "don't show the onboarding" switch.
   const setupConfigured =
     sessionConfigured || sessionSkipped
       ? true
       : platformLoading || !platformConfig
         ? null
-        : (platformConfig.setup?.configured ?? true);
+        : platformConfig.setup?.disabled === true || (platformConfig.setup?.configured ?? true);
 
   useEffect(() => {
     if (setupConfigured === null) return;

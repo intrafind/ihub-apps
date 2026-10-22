@@ -223,10 +223,36 @@ export default function SetupWizard() {
     }
   };
 
-  const handleSkip = () => {
-    // Remember the skip for this session only so the wizard doesn't interrupt
-    // again. Next session/tab will re-check with the server.
+  const handleSkip = async () => {
     sessionStorage.removeItem('setup_wizard_step');
+    // Signed-in admins may hide the onboarding for everyone; with default
+    // credentials still live, say so before they do. Everyone else (and an admin
+    // who cancels) skips for this session only; the next session asks again.
+    if (user?.isAdmin) {
+      let warning = '';
+      try {
+        const response = await fetch(buildApiUrl('admin/auth/demo-accounts'), {
+          credentials: 'include'
+        });
+        const status = response.ok ? await response.json() : null;
+        if (status?.accounts?.length) {
+          warning = t('setup.skipConfirmDemo', { accounts: status.accounts.join(', ') });
+        }
+      } catch {
+        // Best effort: without an answer there is nothing to warn about.
+      }
+      if (window.confirm(warning + t('setup.skipConfirm'))) {
+        try {
+          const response = await fetch(buildApiUrl('setup/disable'), {
+            method: 'POST',
+            credentials: 'include'
+          });
+          if (response.ok) refreshConfig();
+        } catch {
+          // Falls back to the session skip below.
+        }
+      }
+    }
     sessionStorage.setItem('setup_skipped', '1');
     navigate('/', { replace: true });
   };

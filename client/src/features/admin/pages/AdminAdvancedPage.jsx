@@ -1,15 +1,62 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
 
 function AdminAdvancedPage() {
   const { t } = useTranslation();
   const [forceRefreshLoading, setForceRefreshLoading] = useState(false);
   const [forceRefreshMessage, setForceRefreshMessage] = useState('');
+  const { refreshConfig } = usePlatformConfig();
+  const [onboardingDisabled, setOnboardingDisabled] = useState(null);
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingMessage, setOnboardingMessage] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
+      .then(response => {
+        if (!cancelled) setOnboardingDisabled(response.data?.setup?.disabled === true);
+      })
+      .catch(() => {
+        if (!cancelled) setOnboardingDisabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleOnboardingToggle = async disabled => {
+    setOnboardingSaving(true);
+    setOnboardingMessage(null);
+    try {
+      // Read-modify-write: platform.json carries settings this page does not show.
+      const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
+      const platform = response.data || {};
+      platform.setup = { ...platform.setup, disabled };
+      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      setOnboardingDisabled(disabled);
+      setOnboardingMessage({
+        type: 'success',
+        text: t('admin.onboarding.saved', 'Onboarding setting saved')
+      });
+      refreshConfig();
+    } catch (error) {
+      setOnboardingMessage({
+        type: 'error',
+        text:
+          t('admin.onboarding.saveError', 'Failed to save the onboarding setting') +
+          (error.message ? `: ${error.message}` : '')
+      });
+    } finally {
+      setOnboardingSaving(false);
+    }
+  };
 
   const handleForceRefresh = async () => {
     setForceRefreshLoading(true);
@@ -50,6 +97,52 @@ function AdminAdvancedPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Onboarding Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            {t('admin.onboarding.title', 'First-run onboarding')}
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.onboarding.description',
+              'The setup wizard is shown to everyone until it has been completed. Turn it off if you configure iHub through platform.json, environment variables or configuration management.'
+            )}
+          </p>
+          <label className="flex items-start gap-3 mb-4">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-gray-300"
+              checked={onboardingDisabled === true}
+              disabled={onboardingDisabled === null || onboardingSaving}
+              onChange={e => handleOnboardingToggle(e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">
+                {t('admin.onboarding.disable', "Don't show the onboarding (setup wizard)")}
+              </span>
+              <span className="block text-sm text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.onboarding.disableHint',
+                  'Nobody is redirected to /setup any more. An admin can still open /setup directly.'
+                )}
+              </span>
+            </span>
+          </label>
+          {onboardingMessage && (
+            <p
+              role="status"
+              className={`text-sm mb-4 ${
+                onboardingMessage.type === 'success'
+                  ? 'text-green-700 dark:text-green-300'
+                  : 'text-red-700 dark:text-red-300'
+              }`}
+            >
+              {onboardingMessage.text}
+            </p>
+          )}
+          <AdminDemoAccountsAlert inline />
+        </div>
+
         {/* Force Refresh Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-start space-x-4">

@@ -54,6 +54,15 @@ You can add more providers and models at any time under **Admin → Providers** 
 environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
 `MISTRAL_API_KEY` — see [Models](models.md) and [Environment Variables](environment-variables.md).
 
+### Skipping or turning off the wizard
+
+**Skip** only skips for the current browser session: until the wizard is completed, every new tab,
+browser or user is sent back to it. A signed-in administrator who skips is asked whether to hide the
+wizard for good (and is warned if a demo account still uses the shipped password). The same switch
+is under **Admin → Advanced → First-run onboarding** (`setup.disabled` in `platform.json`), next to
+the demo-account status. With it on, nobody is redirected to `/setup`; the page stays reachable by
+direct URL.
+
 ## 3. Look around
 
 ![The start page after setup](assets/screenshots/start-page.png)
