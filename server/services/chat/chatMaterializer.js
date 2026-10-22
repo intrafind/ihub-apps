@@ -50,7 +50,7 @@ export function boundStoredAuthPrompts(prompts) {
   return out;
 }
 import logger from '../../utils/logger.js';
-import { deriveChatTitle } from './ChatRepository.js';
+import { chatProjectConflict, deriveChatTitle } from './ChatRepository.js';
 import { getProjectService } from '../projects/ProjectService.js';
 import { recordChatInProject } from '../knowledge/chatProjects.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -262,6 +262,11 @@ function failedError(info) {
  *   (`resolveChatProjects`), applied with the chat patch under the chat lock against the
  *   chat as it stands then (`ChatRepository.updateChatProjects`); a claimed container also
  *   records the chat in that project once it is stored
+ * @param {string|null} [params.projectId] - the container this turn was prepared for
+ *   (`resolveChatProjects().containerId`, null for none): the question is appended only
+ *   while the chat is still in it, checked in the same lock as the append, so a question
+ *   asked outside a project never lands in a chat a racing turn opened in one. Omitted,
+ *   the container is not checked.
  * @param {Object} [params.origin] - how a chat created by this turn came about
  *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @param {string} [params.titleText] - what a chat this turn names is named after,
@@ -299,6 +304,7 @@ export async function settleUserTurn({
   message = null,
   chat: chatPatch = null,
   projects = null,
+  projectId: preparedProjectId,
   origin = null,
   titleText = null
 }) {
@@ -353,21 +359,8 @@ export async function settleUserTurn({
     if (projects && typeof projects === 'object') {
       const applied = await repository.updateChatProjects(chatId, projects, turnPatch);
       if (applied?.conflict) {
-        logger.warn('Chat user turn refused: the chat project changed under the turn', {
-          component: COMPONENT,
-          chatId,
-          runId,
-          projectId: applied.chat?.projectId || null
-        });
-        return {
-          message: null,
-          refusal: {
-            code: 'PROJECT_MISMATCH',
-            message: applied.chat?.projectId
-              ? 'This chat already runs inside a project; move it with PATCH /api/chats/:id'
-              : 'This chat already has messages outside a project; move it with PATCH /api/chats/:id'
-          }
-        };
+        logRefusal(chatId, runId, applied.chat);
+        return { message: null, refusal: projectRefusal(applied.chat) };
       }
       stored = applied?.chat ?? null;
       // A chat that opens inside a project is recorded there (the marker the
@@ -391,8 +384,20 @@ export async function settleUserTurn({
         ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
         ...(descriptors.length > 0 ? { attachments: descriptors } : {})
       },
-      replaceFromMessageId ? { replaceFromMessageId } : {}
+      {
+        ...(replaceFromMessageId ? { replaceFromMessageId } : {}),
+        ...(preparedProjectId !== undefined ? { expectedProjectId: preparedProjectId } : {})
+      }
     );
+    if (appended?.conflict) {
+      // The container changed between this turn's patch and its question (a
+      // racing first turn claimed it): nothing is appended, and the chat is
+      // handed back unless the racing turn already holds it.
+      const current = await repository.getChat(chatId);
+      logRefusal(chatId, runId, current);
+      await repository.releaseRun(chatId, runId, { activeRunId: null, status: 'active' });
+      return { message: null, refusal: projectRefusal(current) };
+    }
     // A turn inside a project is activity on the project (retention counts
     // conversations, not only attachments); throttled and never fatal.
     const projectId = stored?.projectId ?? chat.projectId ?? null;
@@ -410,6 +415,53 @@ export async function settleUserTurn({
       error: error.message
     });
     return none;
+  }
+}
+
+/** The refusal of a turn whose chat is, by now, in another container. */
+function projectRefusal(chat) {
+  return {
+    code: 'PROJECT_MISMATCH',
+    message: chat?.projectId
+      ? 'This chat already runs inside a project; move it with PATCH /api/chats/:id'
+      : 'This chat already has messages outside a project; move it with PATCH /api/chats/:id'
+  };
+}
+
+function logRefusal(chatId, runId, chat) {
+  logger.warn('Chat user turn refused: the chat project changed under the turn', {
+    component: COMPONENT,
+    chatId,
+    runId,
+    projectId: chat?.projectId || null
+  });
+}
+
+/**
+ * Whether a turn's project fields still hold against the stored chat, read
+ * before the turn takes the chat over: a turn refused here supersedes nothing,
+ * so a conflicting request leaves the accepted turn running. Advisory only —
+ * {@link settleUserTurn} checks again under the chat lock.
+ *
+ * @param {Object} params
+ * @param {import('./ChatRepository.js').default} params.repository
+ * @param {string} params.chatId
+ * @param {import('../knowledge/chatProjects.js').ProjectPatch|null} [params.projects]
+ * @param {string|null} [params.projectId] - See {@link materializeUserTurn}.
+ * @returns {Promise<{code: string, message: string}|null>} The refusal, or null.
+ */
+export async function admitTurnProjects({ repository, chatId, projects = null, projectId }) {
+  if (!repository || (!projects && projectId === undefined)) return null;
+  try {
+    const chat = await repository.getChat(chatId);
+    if (!chat) return null;
+    const conflict =
+      (projects && chatProjectConflict(chat, projects)) ||
+      (!projects?.claimContainer && chatProjectConflict(chat, { expectedContainer: projectId }));
+    return conflict ? projectRefusal(chat) : null;
+  } catch {
+    // A read that failed admits the turn: the check under the lock still runs.
+    return null;
   }
 }
 
