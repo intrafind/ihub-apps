@@ -71,35 +71,50 @@ export function hardLimit(model, settings) {
 }
 
 /**
- * Keep injected documents within the hard limit: the first document that
- * does not fit is truncated to the room left, the rest are dropped.
+ * Keep the injected documents of the whole scope within the hard limit:
+ * every project's pinned documents first, in scope order, then the other
+ * documents in scope order. A pinned document of a later project is never
+ * dropped for unpinned text of an earlier one. The first document that does
+ * not fit is truncated to the room left, the rest are dropped.
  *
- * @param {Array<{doc: Object, text: string, tokens?: number}>} docs
+ * @param {Array<{injected: Array<{doc: Object, text: string, tokens?: number}>}>} projects
  * @param {number} limitTokens
- * @returns {{docs: Array, cut: string[]}}
+ * @returns {Array<{docs: Array, cut: string[]}>} Per project, in its order.
  */
-function capInjected(docs, limitTokens) {
+function allocateHardLimit(projects, limitTokens) {
+  const result = projects.map(() => ({ docs: [], cut: [] }));
+  const queue = [];
+  for (const pinned of [true, false]) {
+    projects.forEach((project, index) => {
+      for (const entry of project.injected || []) {
+        if (Boolean(entry.doc.pinned) === pinned) queue.push({ index, entry });
+      }
+    });
+  }
   let used = 0;
-  const kept = [];
-  const cut = [];
-  for (const entry of docs) {
+  for (const { index, entry } of queue) {
     const tokens = entry.tokens ?? estimateTokens(entry.text);
     if (used + tokens <= limitTokens) {
-      kept.push(entry);
+      result[index].docs.push(entry);
       used += tokens;
       continue;
     }
-    cut.push(entry.doc.id);
+    result[index].cut.push(entry.doc.id);
     const room = limitTokens - used;
     if (room > 0 && tokens > 0) {
       const chars = Math.floor(entry.text.length * (room / tokens));
       if (chars > 0) {
-        kept.push({ ...entry, text: entry.text.slice(0, chars), tokens: room, truncated: true });
+        result[index].docs.push({
+          ...entry,
+          text: entry.text.slice(0, chars),
+          tokens: room,
+          truncated: true
+        });
         used = limitTokens;
       }
     }
   }
-  return { docs: kept, cut };
+  return result;
 }
 
 /** The same documents, pinned ones ahead, otherwise in their order. */
@@ -121,8 +136,6 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
   const budgetTokens = loadAllBudget(model, settings);
   const limitTokens = hardLimit(model, settings);
   let remaining = budgetTokens;
-  // The hard limit bounds the whole prompt, not each project of it.
-  let limitRemaining = limitTokens;
   const projects = [];
   let tools = false;
   for (const entry of scope) {
@@ -195,17 +208,8 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     if (effective === 'loaded' && injected.some(doc => doc.sourceTruncated || doc.sourceFailed)) {
       effective = 'searched';
     }
-    // Pinned first, so the cap drops unpinned text before anything pinned.
-    const capped = capInjected(pinnedFirst(injected), limitRemaining);
-    injected = capped.docs;
     tokens = injected.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
     remaining = Math.max(0, remaining - tokens);
-    limitRemaining = Math.max(0, limitRemaining - tokens);
-    // What was cut from the prompt stays reachable through the tools, and a
-    // project that lost text to the cap is not "loaded in full": the model
-    // and the badge are told to search for the rest.
-    if (capped.cut.length > 0) effective = 'searched';
-    if (effective === 'searched') tools = true;
     projects.push({
       id: project.id,
       name,
@@ -216,13 +220,37 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       documents: usable.length,
       tokens,
       pinned: pinnedIds.length,
-      overBudget: tokens > budgetTokens || capped.cut.length > 0,
+      overBudget: false,
       injected,
-      cut: capped.cut,
+      cut: [],
       unavailable
     });
   }
-  return { projects, budgetTokens, limitTokens, usedTokens: budgetTokens - remaining, tools };
+  // The hard limit bounds the whole prompt, not each project of it, and
+  // pinned text of every project comes before unpinned text of any.
+  const allocated = allocateHardLimit(projects, limitTokens);
+  let usedTokens = 0;
+  projects.forEach((planned, index) => {
+    if (planned.mode === 'unavailable') return;
+    const { docs, cut } = allocated[index];
+    planned.injected = pinnedFirst(docs);
+    planned.cut = cut;
+    planned.tokens = docs.reduce((sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)), 0);
+    usedTokens += planned.tokens;
+    // What was cut from the prompt stays reachable through the tools, and a
+    // project that lost text to the cap is not "loaded in full": the model
+    // and the badge are told to search for the rest.
+    if (cut.length > 0) planned.mode = 'searched';
+    planned.overBudget = planned.tokens > budgetTokens || cut.length > 0;
+    if (planned.mode === 'searched') tools = true;
+  });
+  return {
+    projects,
+    budgetTokens,
+    limitTokens,
+    usedTokens: Math.min(budgetTokens, usedTokens),
+    tools
+  };
 }
 
 function escapeAttribute(value) {
