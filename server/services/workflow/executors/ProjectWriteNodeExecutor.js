@@ -13,14 +13,16 @@
  *
  * Config:
  *   project         a project id or a `$.data…` reference
- *   name            the document name; `$.data…` references and `{{…}}`
- *                   templates over the state are resolved (`{{item.name}}`
- *                   is the current loop item)
+ *   name            the document name: a whole `$.data…` reference is used
+ *                   verbatim; otherwise a `{{…}}` template over the state
+ *                   (`{{item.name}}` is the current loop item) or a text
+ *                   with embedded `${$.data…}` references
  *   text            the text, resolved the same way (usually `$.data.<var>`)
  *   contentType     default `text/markdown`
  *   pinned          default false
  *   wait            wait for the document to be ready (default true), so a
- *                   later step of the run can read it
+ *                   later step of the run can read it; `false` stores it
+ *                   `pending` and moves on
  *   outputVariable  state key for the stored document (default `_writtenDocument`)
  *
  * Output: the stored `KnowledgeDoc`.
@@ -42,14 +44,22 @@ function asText(value) {
 
 export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
   /**
-   * Resolve a config value: `$.data…` references first, then `{{…}}`
-   * templates against the state's data with `item` as the loop item.
+   * Resolve a config value. A whole `$.…` reference returns the state's
+   * value verbatim: a text that came out of the run is data, never another
+   * template. Only a string written in the config is a template — `{{…}}`
+   * against the state's data with `item` as the loop item — or, without
+   * `{{`, a text with embedded `${$.…}` references.
+   *
+   * @param {*} value - The configured value.
+   * @param {Object} state
+   * @returns {*}
    */
   render(value, state) {
-    const resolved = this.resolveVariables(value, state);
-    if (typeof resolved !== 'string' || !resolved.includes('{{')) return resolved;
+    if (typeof value !== 'string') return this.resolveVariables(value, state);
+    if (value.startsWith('$.')) return this.resolveVariable(value, state);
+    if (!value.includes('{{')) return this.resolveVariables(value, state);
     const data = state?.data || {};
-    return renderTemplate(resolved, { ...data, item: data.item ?? data._loopItem ?? null });
+    return renderTemplate(value, { ...data, item: data.item ?? data._loopItem ?? null });
   }
 
   async execute(node, state, context) {
@@ -68,7 +78,7 @@ export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
       if (!name) throw new ProjectNodeError('INVALID_REF', '"name" resolved to an empty value');
       if (!text.trim())
         throw new ProjectNodeError('INVALID_REF', '"text" resolved to an empty value');
-      const { project, provider, ctx, canWrite } = await resolveNodeProject({
+      const { project, provider, ctx, canWrite, authorizeWrite } = await resolveNodeProject({
         executor: this,
         node,
         state,
@@ -83,7 +93,16 @@ export class ProjectWriteNodeExecutor extends BaseNodeExecutor {
             : `The running user may not write to project "${project.id}"`,
           { projectId: project.id }
         );
-      const doc = await provider.put(project, ctx, { name, text, contentType, pinned, wait });
+      // The rule is checked again on the current project under the write's
+      // lock: an editor removed since `canWrite` was computed adds nothing.
+      const doc = await provider.put(project, ctx, {
+        name,
+        text,
+        contentType,
+        pinned,
+        wait,
+        authorize: authorizeWrite
+      });
       this.logger.info('Project document written', {
         component: 'ProjectWriteNodeExecutor',
         nodeId: node.id,

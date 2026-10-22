@@ -3,8 +3,8 @@
 
 /**
  * Where projects are linked from configuration (spec 1 §6.1, §6.2): the
- * `projects` lists on apps, workflows (top level and prompt, planner and
- * verifier nodes) and agent profiles.
+ * `projects` lists on apps, workflows (top level, and the prompt, planner,
+ * verifier and project step nodes) and agent profiles.
  *
  * Two questions are answered here:
  *
@@ -22,8 +22,19 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { effectiveGroups } from './projectAccess.js';
 
-/** Node types whose `config.projects` is honoured. */
-export const PROJECT_NODE_TYPES = Object.freeze(['prompt', 'planner', 'verifier']);
+/**
+ * Node types whose `config.projects` is honoured: the model steps and the
+ * project steps (`project-items`, `project-read`, `project-write`), whose
+ * own links win over the workflow's (`workflowProjectLinks`).
+ */
+export const PROJECT_NODE_TYPES = Object.freeze([
+  'prompt',
+  'planner',
+  'verifier',
+  'project-items',
+  'project-read',
+  'project-write'
+]);
 
 /**
  * The project ids a `projects` list names, whatever shape each entry has.
