@@ -1007,13 +1007,36 @@ export class ProjectService {
     }
     const sources = [];
     for (const id of ids) {
-      const source = await this.repository.get(id);
-      const result = await this.transferItems(
-        id,
-        (source?.items || []).map(entry => entry.id),
-        targetId,
-        { mode: 'move', user }
-      );
+      let result;
+      try {
+        const source = await this.repository.get(id);
+        result = await this.transferItems(
+          id,
+          (source?.items || []).map(entry => entry.id),
+          targetId,
+          { mode: 'move', user }
+        );
+      } catch (cause) {
+        // A source deleted meanwhile, a storage error: this source is
+        // reported and the others are still merged.
+        const translated = translateError(cause);
+        logger.error('Merging a project could not start', {
+          component: COMPONENT,
+          sourceId: id,
+          targetId,
+          error: translated.message
+        });
+        sources.push({
+          id,
+          moved: 0,
+          failed: [],
+          relinked: [],
+          merged: false,
+          deleted: false,
+          error: translated.message
+        });
+        continue;
+      }
       const merged = result.failed.length === 0 && (result.source.items || []).length === 0;
       let relinked = [];
       let deleted = false;

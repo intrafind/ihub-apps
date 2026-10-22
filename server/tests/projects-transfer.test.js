@@ -465,6 +465,40 @@ describe('merging projects', () => {
     assert.equal((await repository.get('nodel-src')).items.length, 0);
   });
 
+  it('reports a source that fails and still merges the others', async () => {
+    await createProject('iso');
+    await createProject('iso-bad');
+    await createProject('iso-good');
+    await addText('iso-bad', 'bad.md', 'bad');
+    await addText('iso-good', 'good.md', 'good');
+    const original = service.transferItems.bind(service);
+    service.transferItems = (sourceId, ...rest) =>
+      sourceId === 'iso-bad'
+        ? Promise.reject(new Error('storage went away'))
+        : original(sourceId, ...rest);
+    try {
+      const result = await service.mergeProjects(['iso-bad', 'iso-good'], 'iso', {
+        user: ADMIN,
+        deleteSources: true
+      });
+      const [bad, good] = result.sources;
+      assert.equal(bad.id, 'iso-bad');
+      assert.equal(bad.merged, false);
+      assert.equal(bad.error, 'storage went away');
+      assert.deepEqual(
+        [good.id, good.moved, good.merged, good.deleted],
+        ['iso-good', 1, true, true]
+      );
+      assert.equal((await repository.get('iso-bad')).items.length, 1);
+      assert.deepEqual(
+        (await repository.get('iso')).items.map(entry => entry.name),
+        ['good.md']
+      );
+    } finally {
+      service.transferItems = original;
+    }
+  });
+
   it('refuses the target as a source and unknown projects', async () => {
     await createProject('self');
     await assert.rejects(service.mergeProjects(['self'], 'self', { user: ADMIN }), {
