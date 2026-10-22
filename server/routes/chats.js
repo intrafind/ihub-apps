@@ -240,7 +240,16 @@ async function moveChatToProject(req, res, repository, chat) {
     return null;
   }
   if (chat.projectId) await service.detachChat(chat.projectId, chat.id).catch(() => {});
-  if (targetId) await service.attachChat(targetId, chat.id, { ownerId: chat.ownerId || null });
+  if (targetId) {
+    try {
+      await service.attachChat(targetId, chat.id, { ownerId: chat.ownerId || null });
+    } catch (error) {
+      // Without its marker the chat would be missing from the project's
+      // list: put the chat back where it was and report the failure.
+      await repository.updateChat(chat.id, { projectId: chat.projectId || null }).catch(() => {});
+      throw error;
+    }
+  }
   logAudit({
     req,
     action: 'update',
