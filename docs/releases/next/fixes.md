@@ -35,3 +35,10 @@ dismissible ones have a labelled "Dismiss" button instead of an unlabelled icon.
 Each card in the prompt library was one big button that also held the favourite, copy, details and
 edit buttons, which screen readers handle unpredictably. The prompt's name is now the button that
 opens it, stretched over the whole card, so clicking anywhere on the card still works.
+
+## Scheduled tasks with memory now compare against what they reported before
+
+A task that remembers between runs sometimes reported items again without checking its notes. Each
+run is now told explicitly to compare the current state with the saved watermark (latest version or
+date, item titles or ids) and the previous report, and to leave out everything already covered. You
+no longer need to add this to the task's prompt.
