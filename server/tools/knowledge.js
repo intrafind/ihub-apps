@@ -52,6 +52,20 @@ const SOURCE_TRUNCATED_NOTE =
   'is not the whole document and no section or search reaches the rest. Say so when the ' +
   'answer may depend on the missing part.';
 
+/** What a read of an iFinder search that could not fetch some documents tells the model. */
+const SOURCE_FAILED_NOTE =
+  'Some documents this search found could not be loaded from their source, so they are ' +
+  'missing from this text; it is not the complete result. Say so when the answer may ' +
+  'depend on them.';
+
+/** The note a read's source completeness calls for, or null. */
+function sourceNote(retrieval) {
+  const notes = [];
+  if (retrieval?.sourceTruncated) notes.push(SOURCE_TRUNCATED_NOTE);
+  if (retrieval?.sourceFailed > 0) notes.push(SOURCE_FAILED_NOTE);
+  return notes.length ? notes.join(' ') : null;
+}
+
 /** What the note and a passage number may take, reserved before they are known. */
 const NOTE_ROOM = 'x'.repeat(200);
 const MARKER_ROOM = 999999;
@@ -217,13 +231,15 @@ export async function read(params) {
       name: result.doc.name,
       content: result.text,
       retrieval: result.retrieval,
-      ...(result.retrieval?.sourceTruncated ? { note: SOURCE_TRUNCATED_NOTE } : {}),
+      ...(sourceNote(result.retrieval) ? { note: sourceNote(result.retrieval) } : {}),
       sources: [
         projectSource(entry.project, item, {
           read: {
             ok: true,
             truncated:
-              result.retrieval?.mode !== 'full' || result.retrieval?.sourceTruncated === true
+              result.retrieval?.mode !== 'full' ||
+              result.retrieval?.sourceTruncated === true ||
+              result.retrieval?.sourceFailed > 0
           }
         })
       ].filter(Boolean)
@@ -237,7 +253,7 @@ export async function read(params) {
       respond({
         doc: { name: item?.name || '' },
         text: '',
-        retrieval: { mode: 'full', sourceTruncated: true }
+        retrieval: { mode: 'full', sourceTruncated: true, sourceFailed: 999 }
       })
     );
     let budgetBytes = PAYLOAD_BUDGET_BYTES - envelope - READ_ROOM_BYTES;
