@@ -4664,7 +4664,16 @@
       "aboutTitle": "About this workflow",
       "aboutSteps": "{{count}} steps",
       "aboutSteps_one": "{{count}} step",
-      "fieldRequired": "This field is required"
+      "fieldRequired": "This field is required",
+      "project": {
+        "choose": "Select a project…",
+        "loading": "Loading projects...",
+        "empty": "You have no projects to choose from yet.",
+        "idPlaceholder": "Project id",
+        "loadError": "Your projects could not be loaded.",
+        "unavailable": "Projects are not available to you here. Enter a project id.",
+        "notListed": "{{id}} (not in your projects)"
+      }
     },
     "emptyState": {
       "available": {
@@ -4754,7 +4763,8 @@
         "data": "Data",
         "integration": "Integration",
         "people": "People",
-        "agentRuntime": "Agent runtime"
+        "agentRuntime": "Agent runtime",
+        "projects": "Projects"
       },
       "jsonTab": "JSON",
       "loadFailed": "Failed to load workflow",
@@ -4788,7 +4798,86 @@
       "type": "Type",
       "unknownVariables": "These names are used but never set — they will be empty at run time:",
       "variablesHint": "Click a name to copy it as a template reference.",
-      "variablesTab": "Variables"
+      "variablesTab": "Variables",
+      "nodeTypeMeta": {
+        "project-items": {
+          "label": "Project Documents",
+          "description": "List the documents of a project, to loop over them one by one."
+        },
+        "project-read": {
+          "label": "Read Project Document",
+          "description": "Read one document's text from a project."
+        },
+        "project-write": {
+          "label": "Save to Project",
+          "description": "Store a text the workflow produced as a document of a project."
+        }
+      },
+      "projectNodes": {
+        "inputTypeProject": "Project",
+        "inputTypeProjectHelp": "The user picks one of their projects when starting the run. Project steps read it as {{reference}}.",
+        "outputVariable": "Output variable",
+        "project": {
+          "label": "Project",
+          "modeLabel": "How to name the project",
+          "modePick": "Choose",
+          "modeReference": "ID or variable",
+          "choose": "Select a project…",
+          "notListed": "{{id}} (not in the list)",
+          "disabledOption": "{{name}} (disabled)",
+          "featureDisabled": "Projects are switched off on this server. Enter a project id or a $.data reference.",
+          "loadError": "The projects could not be loaded. Enter a project id or a $.data reference.",
+          "pickHelp": "Admin projects you can see. For a user project, or the project the user picks when starting the run, switch to \"ID or variable\".",
+          "referenceHelp": "A project id, or a $.data reference such as a workflow input of type Project (e.g. $.data.project)."
+        },
+        "origins": {
+          "uploaded": "Uploaded",
+          "written": "Written by a run",
+          "picked": "Picked from a source",
+          "linked": "Linked",
+          "migrated": "Migrated"
+        },
+        "items": {
+          "kinds": "Item kinds",
+          "kindsHelp": "Only documents of these kinds. None ticked: every kind.",
+          "status": "Status",
+          "statusHelp": "Default: ready and outdated, the documents whose text can be read. None ticked: every status.",
+          "pinnedLabel": "Pinned",
+          "pinned": {
+            "any": "Any",
+            "pinned": "Pinned only",
+            "unpinned": "Not pinned"
+          },
+          "origin": "Origin",
+          "originHelp": "Where the document came from. None ticked: any origin.",
+          "limit": "Max documents",
+          "limitHelp": "At most this many documents. Default and maximum: {{max}}",
+          "outputHelp": "State variable for the list of documents. Default: {{name}}. Loop over it with a Repeat step (for each item); each round reads $.data._loopItem.id."
+        },
+        "read": {
+          "document": "Document",
+          "documentHelp": "The item id, or a $.data reference to one. Inside a loop over a document list: {{reference}}",
+          "loopItem": "Current loop item",
+          "section": "Section",
+          "sectionHelp": "Optional. A heading or section id to read instead of the whole document.",
+          "maxChars": "Max characters",
+          "maxCharsHelp": "Optional budget for the text. Empty: the server default.",
+          "outputHelp": "State variable for the document. Default: {{name}}. Its text is {{name}}.text, its name {{name}}.name."
+        },
+        "write": {
+          "permissionHelp": "The running user must own or edit a user project. An admin project needs a workflow project link with write access (\"write\": true in the JSON tab).",
+          "name": "Document name",
+          "namePlaceholder": "Summary of {{example}}",
+          "nameHelp": "Text with {{template}} variables, or a $.data reference. Inside a loop, {{example}} is the current item.",
+          "text": "Text",
+          "textHelp": "Usually a $.data reference to an earlier step’s output; a text with {{template}} variables works too. Objects are stored as JSON.",
+          "contentType": "Content type",
+          "contentTypeHelp": "Default: {{type}}",
+          "pinned": "Pin the document",
+          "wait": "Wait until the document is ready",
+          "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
+        }
+      }
     }
   },
   "documentTitle": {

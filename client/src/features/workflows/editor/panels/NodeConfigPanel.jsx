@@ -7,7 +7,7 @@ import { nodeFormRegistry } from './forms/index';
 import FormField from './forms/FormField';
 import VariablesPanel from './VariablesPanel';
 import LocalizedField from './forms/LocalizedField';
-import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
+import { NODE_TYPE_COLORS, nodeTypeDescription, nodeTypeLabel } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
 
 /**
@@ -193,7 +193,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
             <NodeTypeIcon type={nodeType} className="w-3 h-3" />
           </span>
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-            {NODE_TYPE_META[nodeType]?.label || nodeType}
+            {nodeTypeLabel(nodeType, t)}
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -230,9 +230,9 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
-        {NODE_TYPE_META[nodeType]?.description && (
+        {nodeTypeDescription(nodeType, t) && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {NODE_TYPE_META[nodeType].description}
+            {nodeTypeDescription(nodeType, t)}
           </p>
         )}
         <div>

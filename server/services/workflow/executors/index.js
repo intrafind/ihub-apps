@@ -53,6 +53,9 @@ export { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
 export { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
 export { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
 export { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
+export { ProjectItemsNodeExecutor } from './ProjectItemsNodeExecutor.js';
+export { ProjectReadNodeExecutor } from './ProjectReadNodeExecutor.js';
+export { ProjectWriteNodeExecutor } from './ProjectWriteNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -78,6 +81,9 @@ import { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
 import { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
 import { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
 import { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
+import { ProjectItemsNodeExecutor } from './ProjectItemsNodeExecutor.js';
+import { ProjectReadNodeExecutor } from './ProjectReadNodeExecutor.js';
+import { ProjectWriteNodeExecutor } from './ProjectWriteNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -106,7 +112,11 @@ const executorRegistry = {
   'template-render': TemplateRenderNodeExecutor,
   'query-plan': QueryPlanNodeExecutor,
   'corpus-search': CorpusSearchNodeExecutor,
-  progress: ProgressNodeExecutor
+  progress: ProgressNodeExecutor,
+  // Project steps (#1036, spec 2 §8): list, read and write back.
+  'project-items': ProjectItemsNodeExecutor,
+  'project-read': ProjectReadNodeExecutor,
+  'project-write': ProjectWriteNodeExecutor
 };
 
 /**

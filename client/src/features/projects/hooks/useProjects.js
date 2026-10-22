@@ -107,6 +107,30 @@ export function useMyProjects() {
 }
 
 /**
+ * The projects the viewer may use wherever a project is picked outside the
+ * project pages (#1036 slice 6: the workflow run dialog's input of type
+ * `project`). Unlike {@link useMyProjects} it is open whenever projects are
+ * on, user projects or not: with user projects off the server lists the admin
+ * projects of the viewer's apps. Shares the cached list with the other
+ * consumers.
+ *
+ * @returns {{projects: Array<Object>, loading: boolean, error: Error|null,
+ *   available: boolean, reload: () => Promise<Array>}}
+ */
+export function useUsableProjects() {
+  const { projectsEnabled, loading: gateLoading } = useProjectsAvailability();
+  const { key } = useViewer();
+  const { data, loading, error, reload } = listStore.use(key, projectsEnabled);
+  return {
+    projects: Array.isArray(data) ? data : [],
+    loading: gateLoading || loading,
+    error,
+    available: projectsEnabled,
+    reload
+  };
+}
+
+/**
  * One project with its items, re-read while an item is being extracted.
  *
  * @param {string|null} projectId

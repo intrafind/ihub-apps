@@ -137,7 +137,12 @@ const nodeTypeEnum = z.enum([
   // enum must list them.
   'inbox-load',
   'inbox-finalize',
-  'memory-finalize'
+  'memory-finalize',
+  // Project steps (#1036, spec 2 §8): list a project's documents, read one,
+  // write a text back. See services/workflow/projectNodes.js.
+  'project-items',
+  'project-read',
+  'project-write'
 ]);
 
 /**

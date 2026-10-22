@@ -205,12 +205,16 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return { docs, unavailable, tokens };
   }
 
-  async put(project, ctx, { name, text, contentType = 'text/markdown', pinned = false }) {
+  async put(
+    project,
+    ctx,
+    { name, text, contentType = 'text/markdown', pinned = false, wait = false }
+  ) {
     const service = getProjectService();
     const { item } = await service.addItem(
       project.id,
       { kind: 'upload', ref: { contentType }, name, text, pinned },
-      { user: ctx.user, origin: 'written', run: ctx.run || null }
+      { user: ctx.user, origin: 'written', run: ctx.run || null, wait }
     );
     evictProjectIndex(project.id);
     return docOf(project, item);

@@ -137,7 +137,8 @@ export class KnowledgeProvider {
    *
    * @param {Object} _project
    * @param {KnowledgeContext} _ctx
-   * @param {{name: string, text: string, contentType?: string, pinned?: boolean}} _input
+   * @param {{name: string, text: string, contentType?: string, pinned?: boolean,
+   *   wait?: boolean}} _input - `wait` holds the call until the document is ready.
    * @returns {Promise<KnowledgeDoc>}
    */
   async put(_project, _ctx, _input) {

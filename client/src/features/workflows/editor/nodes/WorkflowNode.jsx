@@ -3,7 +3,8 @@
 
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
+import { NODE_TYPE_COLORS, nodeTypeDescription, nodeTypeLabel } from '../workflowEditorUtils';
+import { projectNodeSummary } from '../../utils/projectNodeConfig';
 import { useTranslation } from 'react-i18next';
 import { NodeTypeIcon } from './nodeIcons';
 import { endOutputLabel } from '../../../../../../shared/workflowEndOutput.js';
@@ -69,6 +70,10 @@ function nodeSummary(type, cfg) {
       return (typeof cfg.template === 'string' ? cfg.template : '').split('\n')[0];
     case 'memory':
       return cfg.operation ? `${cfg.operation} ${cfg.key || ''}`.trim() : '';
+    case 'project-items':
+    case 'project-read':
+    case 'project-write':
+      return projectNodeSummary(type, cfg);
     default:
       return '';
   }
@@ -86,12 +91,12 @@ function nodeSummary(type, cfg) {
  */
 export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
   const color = NODE_TYPE_COLORS[data.nodeType] || '#6B7280';
-  const meta = NODE_TYPE_META[data.nodeType] || {};
   const isStart = data.nodeType === 'start';
   const isEnd = data.nodeType === 'end';
   const isDecision = data.nodeType === 'decision';
 
   const { t } = useTranslation();
+  const typeLabel = nodeTypeLabel(data.nodeType, t);
   let preview = nodeSummary(data.nodeType, data.nodeConfig || {});
   // An end step without an output cannot be saved: say so on the card.
   const lacksOutput = isEnd && !preview;
@@ -110,10 +115,10 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
       <div
         className="px-3 py-1.5 text-xs font-semibold text-white rounded-t-md flex items-center gap-1.5"
         style={{ backgroundColor: color }}
-        title={meta.description || ''}
+        title={nodeTypeDescription(data.nodeType, t)}
       >
         <NodeTypeIcon type={data.nodeType} className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">{meta.label || data.nodeType}</span>
+        <span className="truncate">{typeLabel}</span>
       </div>
 
       {!isStart && !isEnd && data.onDelete && (
@@ -132,7 +137,7 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
 
       <div className="px-3 py-2">
         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-          {data.nodeName || meta.label || data.nodeType}
+          {data.nodeName || typeLabel}
         </div>
         {preview && (
           <div

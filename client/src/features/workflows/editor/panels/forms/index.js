@@ -24,6 +24,9 @@ import ProgressForm from './ProgressForm';
 import InboxLoadForm from './InboxLoadForm';
 import InboxFinalizeForm from './InboxFinalizeForm';
 import MemoryFinalizeForm from './MemoryFinalizeForm';
+import ProjectItemsForm from './ProjectItemsForm';
+import ProjectReadForm from './ProjectReadForm';
+import ProjectWriteForm from './ProjectWriteForm';
 
 export const nodeFormRegistry = {
   start: StartForm,
@@ -48,5 +51,8 @@ export const nodeFormRegistry = {
   progress: ProgressForm,
   'inbox-load': InboxLoadForm,
   'inbox-finalize': InboxFinalizeForm,
-  'memory-finalize': MemoryFinalizeForm
+  'memory-finalize': MemoryFinalizeForm,
+  'project-items': ProjectItemsForm,
+  'project-read': ProjectReadForm,
+  'project-write': ProjectWriteForm
 };

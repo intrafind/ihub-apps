@@ -42,6 +42,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { filterByPermissions, isAdmin } from '../../services/workflow/workflowAccess.js';
 import { createExecutionChat } from '../../services/workflow/executionChat.js';
+import { assertProjectInputs } from '../../services/workflow/projectNodes.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import runLog from '../../services/loop/RunLog.js';
@@ -883,6 +884,16 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           : filterByPermissions([workflow], req.user);
         if (accessible.length === 0) {
           return sendInsufficientPermissions(res, 'workflow execution');
+        }
+
+        // A project input must name a project the caller may use (#1036).
+        try {
+          await assertProjectInputs(workflow, initialData, req.user);
+        } catch (error) {
+          if (error?.code === 'PROJECT_NOT_FOUND') return sendNotFound(res, 'Project');
+          if (error?.code === 'INVALID_REF')
+            return sendBadRequest(res, error.message, error.details);
+          throw error;
         }
 
         // Store workflow definition in initial data for resume support
