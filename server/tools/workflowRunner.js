@@ -16,6 +16,7 @@
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { runnerAccess } from '../services/workflow/workflowAccess.js';
+import { PROJECT_INPUT_TYPE } from '../services/workflow/projectNodes.js';
 import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
@@ -189,6 +190,23 @@ function coerceErrorMessage(value) {
   }
 }
 
+/** Input types that never take the chat message: uploads and project picks. */
+const NON_TEXT_INPUT_TYPES = new Set(['file', 'image', PROJECT_INPUT_TYPE]);
+
+/**
+ * The start-node input variable a chat message fills: the first one that is
+ * not a file, an image or a project. With the current input shape (files,
+ * project picks and one user text slot) this picks the text slot without an
+ * explicit marker; a project input takes a project id, never the sentence.
+ *
+ * @param {Array<{name: string, type?: string}>} inputVars
+ * @returns {Object|undefined}
+ */
+export function chatTextVariable(inputVars) {
+  if (!Array.isArray(inputVars)) return undefined;
+  return inputVars.find(v => v && !NON_TEXT_INPUT_TYPES.has(v.type));
+}
+
 /**
  * Run a workflow as a chat tool.
  *
@@ -273,14 +291,12 @@ export default async function workflowRunner(params = {}) {
   const appId = typeof _appConfig?.id === 'string' && _appConfig.id ? _appConfig.id : null;
   const chatRefs = chatId && _chatStored === true ? { chatId, appId } : null;
 
-  // Map the chat-message `input` to the workflow's first non-file/image
-  // input variable. With the current input shape (files + one user text
-  // slot), this picks the text slot correctly without needing an explicit
-  // marker.
+  // Map the chat-message `input` to the workflow's text slot (see
+  // `chatTextVariable`). A project id given separately stays where it is.
   const startNode = (workflow.nodes || []).find(n => n.type === 'start');
   const inputVars = startNode?.config?.inputVariables;
   if (inputVars?.length > 0 && input) {
-    const textVar = inputVars.find(v => v.type !== 'file' && v.type !== 'image');
+    const textVar = chatTextVariable(inputVars);
     if (textVar && textVar.name !== 'input' && !initialData[textVar.name]) {
       initialData[textVar.name] = input;
     }
