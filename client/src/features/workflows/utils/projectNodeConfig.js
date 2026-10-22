@@ -95,6 +95,64 @@ export function isProjectReference(value) {
   return typeof value === 'string' && value.trim().startsWith(STATE_REFERENCE_PREFIX);
 }
 
+/** The link id of a `projects` entry, whatever its shape. */
+function linkIdOf(link) {
+  return typeof link === 'string' ? link : link?.id;
+}
+
+/** Whether a link is exactly the read-only one {@link withProjectValue} adds. */
+function isChooserLink(link, id) {
+  return (
+    link &&
+    typeof link === 'object' &&
+    link.id === id &&
+    link.mode === 'auto' &&
+    link.write !== true &&
+    Object.keys(link).every(key => ['id', 'mode', 'write'].includes(key))
+  );
+}
+
+/**
+ * Set a project step's `project`. An admin project the author *chose* from
+ * the list also gets a read-only step link in `config.projects`
+ * (`{ id, mode: 'auto', write: false }`): the server reaches admin projects
+ * and lists their dependencies through links, not through `project`. An
+ * existing link to that project is kept as it is (with its mode and write
+ * grant). A typed id or a `$.data` reference adds no link, so it stays
+ * subject to the running user's own rights.
+ *
+ * When the project changes, the read-only link added for the previous
+ * choice goes with it, provided it is still exactly as added; a list left
+ * empty is removed so the workflow's links apply to the step again.
+ *
+ * @param {Object} config - The step config.
+ * @param {string} value - The new `project` value.
+ * @param {{picked?: boolean}} [options] - `picked`: chosen from the admin list.
+ * @returns {Object} A new config.
+ *
+ * @example
+ * withProjectValue({}, 'handbook', { picked: true });
+ * // { project: 'handbook', projects: [{ id: 'handbook', mode: 'auto', write: false }] }
+ */
+export function withProjectValue(config, value, { picked = false } = {}) {
+  const next = { ...(config || {}), project: value };
+  const previous = typeof config?.project === 'string' ? config.project.trim() : '';
+  const id = typeof value === 'string' ? value.trim() : '';
+  let links = Array.isArray(next.projects) ? next.projects : null;
+  if (links && previous && previous !== id) {
+    links = links.filter(link => !isChooserLink(link, previous));
+  }
+  if (picked && id && !isProjectReference(id)) {
+    const current = links || [];
+    if (!current.some(link => linkIdOf(link) === id)) {
+      links = [...current, { id, mode: 'auto', write: false }];
+    }
+  }
+  if (links && links.length > 0) next.projects = links;
+  else delete next.projects;
+  return next;
+}
+
 /**
  * The variables visible to a step as `$.data.<name>` references, for the
  * suggestions of the project field.

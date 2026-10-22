@@ -360,6 +360,25 @@ describe('resolveNodeProject', () => {
       context: contextOf()
     });
     assert.equal(nodeLink.canWrite, true);
+    // The read-only step link the editor saves for a chosen project keeps
+    // the workflow link's write grant, and grants nothing on its own.
+    const chosen = { ...node, config: { project: 'faq', projects: [{ id: 'faq', mode: 'auto' }] } };
+    const chosenGranted = await resolveNodeProject({
+      executor,
+      node: chosen,
+      state: stateOf({}),
+      context: contextOf({
+        workflow: workflowOf({ projects: [{ id: 'faq', mode: 'tools', write: true }] })
+      })
+    });
+    assert.equal(chosenGranted.canWrite, true);
+    const chosenOnly = await resolveNodeProject({
+      executor,
+      node: chosen,
+      state: stateOf({}),
+      context: contextOf()
+    });
+    assert.equal(chosenOnly.canWrite, false);
   });
 
   it('fails with a code when the project is unnamed, unknown or out of reach', async () => {

@@ -274,7 +274,11 @@ way an app does. Three things bring a project into a run:
   project input names a project the caller may not use. A run started from a chat puts the
   message into the first text input, never into a project input.
 - **The project steps.** They name a project directly or through a reference, and reach it with
-  the running user's rights.
+  the running user's rights. An admin project chosen from the list in the editor also gets a
+  read-only link in the step's own `projects` (`{ "id": "faq", "mode": "auto", "write": false }`),
+  so whoever may run the workflow reaches it and the project lists the workflow as a dependency;
+  a link the step already has to that project is kept as it is. A typed id or a `$.data`
+  reference adds no link.
 
 ### Project steps: list, read, write back
 
@@ -308,7 +312,8 @@ Together with a loop container the three steps make the common shape "one memo p
 
 **Who may write.** A `project-write` into a user project needs the running user to be its owner
 or an editor. An admin project takes writes only through a link that says so: `{ "id": "faq",
-"mode": "tools", "write": true }` on the workflow (or on the step's own `projects`). There is no
+"mode": "tools", "write": true }` on the workflow (or on the step's own `projects`); a read-only
+step link to the project does not take away the workflow link's grant. There is no
 chat tool that writes into a project: a write happens in a step the author placed, with the
 run recorded as the document's provenance. A failed step reports the reason as its error code
 (`PROJECT_NOT_FOUND`, `FORBIDDEN`, `ITEM_NOT_FOUND`, `INVALID_REF`, or the ingest error such as

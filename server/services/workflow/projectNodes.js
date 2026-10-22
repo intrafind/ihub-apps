@@ -215,8 +215,16 @@ export async function resolveNodeProject({ executor, node, state, context }) {
     throw new ProjectNodeError('FORBIDDEN', `${node.type}: the run has no user to act as`);
 
   const links = workflowProjectLinks(config, context.workflow, state);
-  const link =
-    links.map(entry => normalizeProjectLink(entry)).find(entry => entry.id === projectId) || null;
+  const linkTo = list =>
+    (Array.isArray(list) ? list : [])
+      .map(entry => normalizeProjectLink(entry))
+      .find(entry => entry.id === projectId) || null;
+  let link = linkTo(links);
+  // The editor saves a read-only step link for an admin project the author
+  // chose, so the project is reachable and listed as a dependency. That link
+  // does not take away a write grant the workflow's own link to it gives.
+  const workflowLink = Array.isArray(config.projects) ? linkTo(context.workflow?.projects) : null;
+  if (link && !link.write && workflowLink?.write) link = { ...link, write: true };
   const scope = await resolveProjectScope({
     appConfig: { projects: link ? [link] : [{ id: projectId, mode: 'auto' }] },
     user: context.user

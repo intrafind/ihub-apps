@@ -7,7 +7,8 @@ import ProjectRefField from './ProjectRefField';
 import {
   PROJECT_NODE_DEFAULT_OUTPUT,
   PROJECT_WRITE_CONTENT_TYPES,
-  referenceSuggestions
+  referenceSuggestions,
+  withProjectValue
 } from '../../../utils/projectNodeConfig';
 
 /** Content type the server stores when the step names none. */
@@ -48,7 +49,7 @@ function ProjectWriteForm({ config, onChange, variables }) {
     <div className="space-y-3">
       <ProjectRefField
         value={config.project}
-        onChange={v => onChange({ ...config, project: v })}
+        onChange={(v, options) => onChange(withProjectValue(config, v, options))}
         variables={variables}
         helpText={t(
           'workflows.editor.projectNodes.write.permissionHelp',

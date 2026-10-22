@@ -26,9 +26,13 @@ const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 m
  * The field opens in the second mode when the value already is a reference,
  * and stays in it when the project list cannot be loaded.
  *
+ * A value chosen from the list is reported with `{ picked: true }`, so the
+ * form can save the step link the server needs to reach an admin project
+ * (`withProjectValue`); a typed value is not.
+ *
  * @param {Object} props
  * @param {string} [props.value] - Project id or `$.data…` reference.
- * @param {(value: string) => void} props.onChange
+ * @param {(value: string, options: {picked: boolean}) => void} props.onChange
  * @param {Array<{value: string, label: string}>} [props.variables] - Variables visible to the step.
  * @param {string} [props.helpText] - Extra help shown below the field.
  * @returns {JSX.Element}
@@ -102,7 +106,7 @@ function ProjectRefField({ value, onChange, variables, helpText }) {
         <select
           id={inputId}
           value={current}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value, { picked: true })}
           disabled={loading}
           className={inputClass}
         >
@@ -134,7 +138,7 @@ function ProjectRefField({ value, onChange, variables, helpText }) {
             id={inputId}
             type="text"
             value={current}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => onChange(e.target.value, { picked: false })}
             placeholder="$.data.project"
             list={suggestions.length > 0 ? datalistId : undefined}
             className={`${inputClass} font-mono`}
