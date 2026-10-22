@@ -498,19 +498,24 @@ export class ProjectRepository {
     let scanned = 0;
     let next = cursor;
     do {
+      // Each read is capped by what is left of both budgets, so a scan only
+      // ever stops at a page boundary and `nextCursor` continues after the
+      // last document read, never at the start of a page already seen.
+      const remaining = Math.min(PAGE_SIZE, maxScanned - scanned, max - projects.length);
+      if (remaining <= 0) return { projects, truncated: true, nextCursor: next };
       const page = await this.documents.list(USER_PROJECTS_NAMESPACE, {
-        limit: PAGE_SIZE,
+        limit: remaining,
         includeData: true,
         ...(next ? { cursor: next } : {})
       });
       for (const doc of page.items) {
-        if (scanned >= maxScanned || projects.length >= max) {
-          return { projects, truncated: true, nextCursor: next };
-        }
         scanned += 1;
         if (doc?.data && filter(doc.data)) projects.push(doc.data);
       }
       next = page.nextCursor;
+      if (next && (scanned >= maxScanned || projects.length >= max)) {
+        return { projects, truncated: true, nextCursor: next };
+      }
     } while (next);
     return { projects, truncated: false, nextCursor: null };
   }
@@ -736,10 +741,21 @@ export class ProjectRepository {
         if (!project) return null;
         assertAuthorized(authorize, project);
         await this.documents.delete(USER_PROJECTS_NAMESPACE, projectId);
-        await this._removeMemberMarkers(
-          projectId,
-          (project.members || []).map(member => memberTargetKey(member))
-        );
+        // The document is gone; a marker left behind is pruned by
+        // `listSharedWith`, while the caller's cascade (blobs, chat markers,
+        // chats) must still run.
+        try {
+          await this._removeMemberMarkers(
+            projectId,
+            (project.members || []).map(member => memberTargetKey(member))
+          );
+        } catch (error) {
+          this.logger.warn('Member marker cleanup failed after project delete', {
+            component: 'ProjectRepository',
+            projectId,
+            error: error.message
+          });
+        }
         return project;
       });
     }
