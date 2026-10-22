@@ -181,8 +181,9 @@ function assertPageReadable(pageId, user, where) {
  * @param {Object} item
  * @param {import('./KnowledgeProvider.js').KnowledgeContext} ctx
  * @returns {Promise<{text: string, cached: boolean, truncated: boolean}>} `truncated`
- *   says the source handed over only part of the document (a link item past its
- *   handler's length limit): the text is a prefix, and nothing here reaches the rest.
+ *   says the text holds only part of the document: a stored text cut by the
+ *   extraction limits (`item.text.truncated`), or a link item past its handler's
+ *   length limit. Nothing here reaches the rest.
  * @throws {KnowledgeError} `ITEM_NOT_READY`, `TEXT_UNAVAILABLE`, `SOURCE_FORBIDDEN`,
  *   `SOURCE_GONE`, `KIND_UNKNOWN`.
  */
@@ -194,8 +195,10 @@ export async function getItemText(project, item, ctx = {}) {
   if (item.storage === 'text') {
     const key = item.text?.blobKey;
     if (!key) throw new KnowledgeError('TEXT_UNAVAILABLE', 'The item holds no text yet', where);
+    // Recorded at ingest: the extraction cut the document (pages, rows, characters).
+    const truncated = item.text.truncated === true;
     const cached = cacheGet(key);
-    if (cached !== null) return { text: cached, cached: true, truncated: false };
+    if (cached !== null) return { text: cached, cached: true, truncated };
     if (!textReader) {
       throw new KnowledgeError(
         'TEXT_UNAVAILABLE',
@@ -205,7 +208,7 @@ export async function getItemText(project, item, ctx = {}) {
     }
     const text = await textReader(project, item);
     cacheSet(key, text);
-    return { text, cached: false, truncated: false };
+    return { text, cached: false, truncated };
   }
   const call = handlerCallOf(item, ctx);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
