@@ -136,6 +136,7 @@ export function newTaskDocument(
     memory: { enabled: fields.memory?.enabled === true },
     memorySummary: null,
     schedule: fields.schedule,
+    retention: fields.retention || null,
     notify: fields.notify || 'always',
     status: 'active',
     statusReason: null,

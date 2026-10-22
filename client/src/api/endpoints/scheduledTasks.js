@@ -65,6 +65,16 @@ export const fetchScheduledTaskRuns = (taskId, { limit = 20, cursor = null } = {
 export const fetchScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.get(`${task(taskId)}/runs/${encodeURIComponent(runId)}`));
 
+/**
+ * Delete finished runs (and by default their chats).
+ *
+ * @param {string} taskId
+ * @param {{runIds?: string[], all?: boolean, deleteChats?: boolean}} selection
+ * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
+ */
+export const deleteScheduledTaskRuns = (taskId, selection) =>
+  call(() => apiClient.post(`${task(taskId)}/runs/delete`, selection));
+
 export const cancelScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.post(`${task(taskId)}/runs/${encodeURIComponent(runId)}/cancel`));
 

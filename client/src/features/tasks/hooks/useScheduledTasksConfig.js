@@ -22,7 +22,8 @@ export function useScheduledTasksEnabled() {
  * the size limit of a task's notes.
  *
  * @returns {{minIntervalMinutes: number, staggerMinutes: number, maxTasksPerUser: number,
- *   maxInstructionLength: number, memoryEnabled: boolean, memoryMaxChars: number}}
+ *   maxInstructionLength: number, memoryEnabled: boolean, memoryMaxChars: number,
+ *   maxRunsPerTask: number, runRetentionDays: number}}
  */
 export function useScheduledTaskLimits() {
   const { platformConfig } = usePlatformConfig() || {};
@@ -33,6 +34,8 @@ export function useScheduledTaskLimits() {
     maxTasksPerUser: cfg.maxTasksPerUser ?? 10,
     maxInstructionLength: cfg.maxInstructionLength ?? 8000,
     memoryEnabled: cfg.memoryEnabled !== false,
-    memoryMaxChars: cfg.memoryMaxChars ?? 16000
+    memoryMaxChars: cfg.memoryMaxChars ?? 16000,
+    maxRunsPerTask: cfg.maxRunsPerTask ?? 0,
+    runRetentionDays: cfg.runRetentionDays ?? 0
   };
 }
