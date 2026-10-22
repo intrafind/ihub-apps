@@ -85,6 +85,7 @@ import {
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
+import { getWebSocketTlsOptions } from '../utils/httpConfig.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 import { tidyTranscript } from '../transcription/transcriptFormat.js';
 import {
@@ -585,6 +586,15 @@ export function diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, r
   const normal = code === 1000 || code === 1005;
   if (normal && (gotTranscription || upstreamReady)) return null;
   return `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`;
+}
+
+/**
+ * Options for `new WebSocket()`: what the provider asked for plus the TLS policy
+ * of the platform's SSL whitelist, so a `wss://` endpoint with a private CA works
+ * the same way an HTTPS model endpoint does.
+ */
+function dialOptions(dial) {
+  return { ...(dial.options || {}), ...getWebSocketTlsOptions(dial.url) };
 }
 
 function sendJson(ws, obj) {
@@ -1142,7 +1152,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     let sock;
     try {
       const dial = provider.connect(cfg);
-      sock = createUpstream(dial.url, dial.options || {});
+      sock = createUpstream(dial.url, dialOptions(dial));
     } catch (err) {
       failBridge('upstream-unreachable', 'Failed to reach transcription service', {
         reason: 'construct error',
@@ -2345,7 +2355,7 @@ function testStreamingUpstream(provider, cfg, { timeoutMs, createUpstream }) {
 
     try {
       const dial = provider.connect(cfg);
-      ws = createUpstream(dial.url, dial.options || {});
+      ws = createUpstream(dial.url, dialOptions(dial));
     } catch (err) {
       finish({ ok: false, message: `Failed to open socket: ${err.message}` });
       return;

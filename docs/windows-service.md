@@ -20,7 +20,7 @@ The zip contains all files the service needs, including `install-service.cmd`.
 
 ### Step 2 — Configure iHub Apps (optional but recommended)
 
-Create or edit `C:\ihub-apps\config.env` to set your API keys and port before the service is installed:
+Create or edit `C:\ihub-apps\config.env` to set the port before the service is installed. API keys are not set here — add your provider in the setup wizard or under **Admin → Providers** after the first start:
 
 ```ini
 PORT=3000

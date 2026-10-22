@@ -647,6 +647,43 @@ describe('bridgeConnection — Mistral realtime (fake sockets)', () => {
     }
   });
 
+  describe('TLS policy for the upstream socket', () => {
+    const dialOnce = async () => {
+      const client = new FakeWs();
+      const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+      limiter.tryAcquire(user.id);
+      const createUpstream = jest.fn(() => new FakeWs(WebSocket.CONNECTING));
+      bridgeConnection(client, user, limiter, { createUpstream });
+      client.emit(
+        'message',
+        JSON.stringify({ type: 'start', modelId: 'voxtral-mini-transcribe-realtime' }),
+        false
+      );
+      client.emit('message', Buffer.from([1, 2, 3, 4]), true);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(createUpstream).toHaveBeenCalledTimes(1);
+      return createUpstream.mock.calls[0][1];
+    };
+    const withSsl = ssl =>
+      configCache.setCacheEntry('config/platform.json', {
+        jwt: { algorithm: 'HS256' },
+        auth: { jwtSecret: 'realtime-stt-test-secret' },
+        ssl
+      });
+
+    test('skips certificate verification for a whitelisted wss host', async () => {
+      withSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['api.mistral.ai'] });
+      const options = await dialOnce();
+      expect(options.rejectUnauthorized).toBe(false);
+      expect(options.headers.Authorization).toBe('Bearer mistral-test-key');
+    });
+
+    test('keeps verification for a wss host that is not whitelisted', async () => {
+      withSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['other.example'] });
+      expect((await dialOnce()).rejectUnauthorized).toBeUndefined();
+    });
+  });
+
   test('golden path: session.created → session.update → audio → flush + end → deltas, done → final', async () => {
     const client = new FakeWs();
     const upstream = new FakeWs(WebSocket.CONNECTING);

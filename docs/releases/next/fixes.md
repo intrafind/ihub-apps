@@ -1,6 +1,7 @@
 # Fixes — Unreleased
 
 - **Voice mode no longer makes translation apps answer instead of translate.** The voice style instruction used to tell the model that the user was talking to it, which overrode apps whose messages are meant for someone else, such as Babelfish: saying "Wie heißen Sie?" returned "English" instead of "What is your name?". The instruction now only describes how the answer sounds and leaves the app's own role and instructions in force.
+- **Voice transcription over `wss://` honors the SSL whitelist.** Connecting the microphone input to a realtime speech-to-text endpoint such as vLLM Voxtral over `wss://` failed with "unable to verify the first certificate" when the server used a private CA, even if its host was in `ssl.domainWhitelist`. Hosts on the whitelist (with `ssl.ignoreInvalidCertificates` enabled) now connect; all other hosts are still verified. The same whitelist now also applies to MCP servers over HTTP(S) and to Gemini batch transcription, which previously ignored it.
 
 ## "Skip to content" links now skip to the content
 
