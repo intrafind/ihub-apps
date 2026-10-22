@@ -87,16 +87,6 @@ export const featureRegistry = [
     default: true
   },
   {
-    id: 'sources',
-    name: { en: 'Sources', de: 'Quellen' },
-    description: {
-      en: 'Add custom knowledge sources directly to prompts',
-      de: 'Benutzerdefinierte Wissensquellen direkt zu Prompts hinzufügen'
-    },
-    category: 'ai',
-    default: true
-  },
-  {
     id: 'projects',
     name: { en: 'Projects', de: 'Projekte' },
     description: {

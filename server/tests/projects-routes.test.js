@@ -562,6 +562,33 @@ describe('admin projects', () => {
     );
   });
 
+  it('refuses import pointers and managed files from API callers', async () => {
+    // The startup importer reads such a file into the project and deletes
+    // it: a content admin must not be able to aim it at config/platform.json.
+    const item = extra => ({
+      id: 'itm_x',
+      kind: 'upload',
+      name: 'platform.json',
+      storage: 'text',
+      status: 'pending',
+      provenance: { origin: 'uploaded' },
+      ...extra
+    });
+    for (const [field, extra] of [
+      ['import', { import: { file: 'config/platform.json' } }],
+      ['managedFile', { managedFile: 'config/platform.json' }]
+    ]) {
+      const refused = await drive(route.adminCreate, {
+        user: EDITOR,
+        body: { id: 'smuggled', name: { en: 'Smuggled' }, items: [item(extra)] }
+      });
+      assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+      // The strict creation schema names the field it refuses.
+      assert.match(JSON.stringify(refused.body), new RegExp(field));
+    }
+    assert.equal(await getProjectRepository().get('smuggled'), null);
+  });
+
   it('is reached through a workflow by the same rule that lets the user run it', async () => {
     // `allowedGroups` is not part of the execution policy (`permissions.workflows`
     // is), so it must not hide the linked project from a user who may run it.
@@ -650,6 +677,41 @@ describe('admin projects', () => {
       (await drive(route.adminDelete, { user: EDITOR, params: { id: 'built' } })).statusCode,
       204
     );
+  });
+
+  it("is reached through a planner's task template and blocks its deletion", async () => {
+    // The planner's generated workers carry `taskTemplate.projects`; a
+    // non-admin who may run the workflow (RUNNER: `wf-link`) must reach
+    // them, and the admin
+    // page must list the dependency.
+    configCache.setCacheEntry('config/workflows.json', [
+      {
+        id: 'wf-link',
+        name: { en: 'Planner' },
+        enabled: true,
+        nodes: [
+          {
+            id: 'plan',
+            type: 'planner',
+            config: { taskTemplate: { projects: [{ id: 'faq', mode: 'tools' }] } }
+          }
+        ]
+      }
+    ]);
+    try {
+      const linked = await drive(route.get, { user: RUNNER, params: { projectId: 'faq' } });
+      assert.equal(linked.statusCode, 200, JSON.stringify(linked.body));
+      assert.equal(linked.body.role, 'linked');
+      const deps = await drive(route.adminDeps, { user: EDITOR, params: { id: 'faq' } });
+      assert.ok(
+        deps.body.dependencies.some(
+          dep => dep.type === 'workflow' && dep.id === 'wf-link' && dep.nodeId === 'plan'
+        ),
+        JSON.stringify(deps.body)
+      );
+    } finally {
+      configCache.setCacheEntry('config/workflows.json', []);
+    }
   });
 
   it('is listed for a delegated token that reaches it through an app', async () => {

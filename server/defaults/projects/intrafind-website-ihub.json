@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "intrafind-website-ihub",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "IntraFind Website: iHub"
+  },
+  "description": {
+    "en": "Website about the iHub"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_3d40989dffb4",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ihub",
+      "ref": {
+        "url": "https://intrafind.com/en/ihub",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ihub"
+        }
+      },
+      "snapshotAt": null
+    }
+  ],
+  "createdAt": "2025-08-05T19:48:15.997Z",
+  "updatedAt": "2025-08-05T19:48:15.997Z",
+  "createdBy": null
+}

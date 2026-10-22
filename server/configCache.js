@@ -20,7 +20,6 @@ import { announceConfigChange, announceFullConfigReload, setConfigReloader } fro
 import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
-import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
@@ -370,9 +369,6 @@ const CONFIG_LOADERS = {
     },
     count: data => Object.keys(data.credentials || {}).length
   },
-  'config/sources.json': {
-    label: 'sources'
-  },
   'config/providers.json': {
     label: 'providers',
     count: data => (Array.isArray(data) ? data : data.providers || []).length
@@ -456,7 +452,6 @@ class ConfigCache {
       'config/ui.json',
       'config/groups.json',
       'config/users.json',
-      'config/sources.json',
       'config/projects.json',
       'config/providers.json',
       'config/mimetypes.json',
@@ -1185,38 +1180,6 @@ class ConfigCache {
   }
 
   /**
-   * Get sources configuration
-   */
-  getSources(includeDisabled = false) {
-    try {
-      const cached = this.get('config/sources.json');
-      if (!cached) {
-        return { data: [], etag: null };
-      }
-
-      // Handle both array format and object format
-      let sources;
-      if (Array.isArray(cached.data)) {
-        sources = { data: cached.data, etag: cached.etag };
-      } else if (cached.data && typeof cached.data === 'object') {
-        sources = cached;
-      } else {
-        return { data: [], etag: null };
-      }
-
-      if (includeDisabled) return sources;
-
-      return {
-        data: sources.data.filter(source => source.enabled !== false),
-        etag: sources.etag
-      };
-    } catch (error) {
-      logger.error('Error loading sources', { component: 'ConfigCache', error });
-      return { data: [], etag: null };
-    }
-  }
-
-  /**
    * Get providers configuration
    */
   getProviders(includeDisabled = false) {
@@ -1500,37 +1463,6 @@ class ConfigCache {
       });
     } catch (error) {
       logger.error('Error refreshing workflows cache', { component: 'ConfigCache', error });
-    }
-  }
-
-  /**
-   * Refresh sources cache
-   * Should be called when sources are modified (create, update, delete, toggle)
-   */
-  async refreshSourcesCache() {
-    logger.info('Refreshing sources cache', { component: 'ConfigCache' });
-
-    try {
-      await this.refreshCacheEntry('config/sources.json');
-
-      // Validate sources after refresh
-      const { data: sources } = this.getSources(true);
-      for (const source of sources) {
-        const validation = validateSourceConfig(source);
-        if (!validation.success) {
-          logger.warn('Invalid source configuration', {
-            component: 'ConfigCache',
-            sourceId: source.id,
-            errors: validation.errors
-          });
-        }
-      }
-
-      logger.info('Sources cache refreshed', { component: 'ConfigCache', count: sources.length });
-      return true;
-    } catch (error) {
-      logger.error('Failed to refresh sources cache', { component: 'ConfigCache', error });
-      return false;
     }
   }
 

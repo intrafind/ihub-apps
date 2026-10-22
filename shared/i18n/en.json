@@ -822,6 +822,9 @@
           "invalidJson": "Params must be valid JSON: {{msg}}",
           "success": "Wrote section \"{{section}}\" (memory v{{version}}). The textarea below now shows the latest memory — edit and Save if you want to tweak it further."
         }
+      },
+      "edit": {
+        "projects": "Projects"
       }
     },
     "providers": {
@@ -2353,7 +2356,8 @@
       "changelog": "What's New",
       "feedback": "Feedback",
       "localization": "Localization",
-      "scheduledTasks": "Scheduled Tasks"
+      "scheduledTasks": "Scheduled Tasks",
+      "projects": "Projects"
     },
     "mcp": {
       "common": {
@@ -3008,7 +3012,9 @@
           "content": "Guide (Markdown)",
           "confirmRegenerate": "Replace the current guide text for this language with a newly generated one?",
           "confirmDelete": "Delete the usage guide of this app?"
-        }
+        },
+        "projects": "Projects",
+        "projectsDesc": "Link admin projects whose knowledge this app uses. Choose per project whether it is loaded into the prompt, searched with tools, or decided automatically by size."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3208,7 +3214,9 @@
       "projects": "Projects",
       "projectsHint": "Allow members to create projects of their own: documents, instructions and chats (needs the User Projects feature). Inherited by groups that inherit this one.",
       "projectSharing": "Project sharing",
-      "projectSharingHint": "Allow members to add other users, groups or everyone to the projects they own or edit."
+      "projectSharingHint": "Allow members to add other users, groups or everyone to the projects they own or edit.",
+      "contentAdmin": "Content Admin (Apps, Prompts, Projects)",
+      "contentAdminHint": "Allow members to manage Apps, Prompts, and Projects without full admin access"
     },
     "contentAccess": {
       "title": "Group access",
@@ -3245,52 +3253,6 @@
         "tools": "tools",
         "workflows": "workflows"
       }
-    },
-    "sources": {
-      "ifinderConnectionInfo": "The iFinder connection (URL and authentication) is managed centrally in the iFinder integration settings under Admin → Providers. Here you only choose which documents this source loads: pin a single document by ID, or use a search query to load the top matching documents.",
-      "ifinderDocumentId": "Document ID",
-      "ifinderDocumentIdPlaceholder": "e.g. 5f2c9a1b3d4e…",
-      "ifinderDocumentIdHelp": "Pin this source to one specific iFinder document. Use Connect to load its metadata and verify it is the right one.",
-      "ifinderConnect": "Connect",
-      "ifinderConnecting": "Connecting...",
-      "ifinderMetadataFailed": "Failed to load document metadata",
-      "ifinderUntitledDocument": "Untitled document",
-      "ifinderMetaAuthor": "Author",
-      "ifinderMetaMediaType": "Media type",
-      "ifinderMetaFilename": "File name",
-      "ifinderMetaSize": "Size",
-      "ifinderMetaLanguage": "Language",
-      "ifinderMetaModified": "Modified",
-      "ifinderMetaSource": "Source",
-      "ifinderMetaProfile": "Search profile",
-      "ifinderOpenDocument": "Open document",
-      "ifinderOr": "or",
-      "ifinderQuery": "Search Query",
-      "ifinderQueryPlaceholder": "e.g. product manual OR title:\"user guide\"",
-      "ifinderQueryHelp": "Documents matching this query are loaded as source content, up to the configured maximum. Ignored when a document ID is set.",
-      "ifinderTestQuery": "Test Query",
-      "ifinderTestingQuery": "Searching...",
-      "ifinderQueryFailed": "Failed to run search query",
-      "ifinderQueryMatches": "{{total}} documents found — the first {{shown}} would be loaded",
-      "searchProfile": "Search Profile",
-      "searchProfilePlaceholder": "Platform default",
-      "searchProfileHelp": "Leave empty to use the profile configured in the iFinder integration.",
-      "maxResults": "Max Results",
-      "maxResultsHelp": "Number of documents loaded when using a search query.",
-      "maxLength": "Max Content Length",
-      "maxLengthHelp": "Maximum characters loaded per document; longer content is truncated.",
-      "validation": {
-        "ifinderContentRequired": "Provide a document ID or a search query so the source knows which documents to load"
-      },
-      "tokens": "Size",
-      "tokenCount": "~{{tokens}} tokens",
-      "tokensAtMost": "≤ ~{{tokens}} tokens",
-      "tokensRemote": "Loaded from the web when used; testing the source measures it",
-      "tokensDynamic": "Depends on what the search finds; at most the configured results × maximum length",
-      "tokensSearched": "searched, up to ~{{tokens}} per call",
-      "tokensEveryRequest": "sent with every request",
-      "tokensLargePromptHint": "This source is added to the prompt of every request. Expose it as a tool so only the sections a question needs are loaded.",
-      "promptTokensTotal": "Prompt sources add ~{{tokens}} tokens to every request of this app."
     },
     "auditLog": {
       "title": "Audit Log",
@@ -3672,6 +3634,16 @@
         "label": "Disk space",
         "value": "{{free}} free",
         "valueTitle": "{{percent}} of {{total}} used"
+      },
+      "projects": {
+        "label": "Projects",
+        "enabledCount": "{{count}} enabled"
+      },
+      "stats": {
+        "projects": "Projects"
+      },
+      "actions": {
+        "manageProjects": "Manage Projects"
       }
     },
     "copilotAgent": {
@@ -3777,6 +3749,209 @@
           "endWithoutOutput": "The end step {{nodes}} has no output. The workflow cannot be saved, and a run that reaches that step fails, until you set its Output in the visual editor."
         },
         "jsonInvalid": "Fix the JSON below to change these settings."
+      }
+    },
+    "projects": {
+      "itemCount": "{{count}} items",
+      "deleteTitle": "Delete project",
+      "deleteConfirm": "Delete \"{{name}}\" and all of its items? This cannot be undone.",
+      "selectAll": "Select all projects",
+      "selectProject": "Select {{name}}",
+      "columns": {
+        "name": "Name",
+        "items": "Items",
+        "enabled": "Status",
+        "categoryTags": "Category / tags",
+        "updated": "Updated"
+      },
+      "actions": {
+        "edit": "Edit project",
+        "toggle": "Enable or disable",
+        "delete": "Delete project"
+      },
+      "filters": {
+        "allKinds": "All kinds",
+        "kind": "Kind",
+        "status": "Status",
+        "allStatuses": "All statuses"
+      },
+      "description": "Knowledge you link to apps, workflows and agents: uploaded files, web pages, iHub pages and iFinder documents.",
+      "createNew": "New project",
+      "stats": {
+        "total": "Total",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "userProjects": "User projects"
+      },
+      "searchPlaceholder": "Search projects...",
+      "selectedCount": "{{count}} projects selected",
+      "enableSelected": "Enable",
+      "disableSelected": "Disable",
+      "empty": "No projects yet",
+      "noMatches": "No projects match your filters",
+      "emptyHint": "Create your first project to get started.",
+      "adjustFilters": "Try adjusting your search and filters.",
+      "summary": "Showing {{filtered}} of {{total}} projects",
+      "validation": {
+        "idRequired": "The project ID is required.",
+        "idInvalid": "Use only letters, numbers, dots, underscores and hyphens.",
+        "idTooLong": "At most {{max}} characters.",
+        "idReserved": "IDs starting with \"prj_\" are reserved for user projects.",
+        "nameRequired": "A name is required.",
+        "idExists": "A project with this ID already exists."
+      },
+      "notFound": "Project not found",
+      "backToList": "Back to projects",
+      "history": "History",
+      "test": {
+        "running": "Testing...",
+        "button": "Test",
+        "success": "Every item can be read",
+        "failed": "Some items cannot be read",
+        "duration": "{{duration}} ms",
+        "noItems": "The project has no items to test.",
+        "itemOk": "{{chars}} characters, ~{{tokens}} tokens"
+      },
+      "scanWarning": "Uploads are not scanned for malware. Configure platform.projects.scan to scan them.",
+      "fields": {
+        "id": "Project ID",
+        "idFixed": "The ID cannot be changed after creation.",
+        "enabled": "Enabled",
+        "name": "Name",
+        "namePlaceholder": "Project name",
+        "description": "Description",
+        "descriptionPlaceholder": "What this project contains",
+        "instructions": "Instructions",
+        "instructionsHint": "Instructions apply when the project is in context.",
+        "category": "Category",
+        "categoryPlaceholder": "Optional category",
+        "tags": "Tags",
+        "tagsPlaceholder": "hr, policies",
+        "tagsHint": "Separate tags with commas."
+      },
+      "createAndContinue": "Create and add items",
+      "items": {
+        "title": "Items",
+        "add": "Add item",
+        "saveFirst": "Create the project first; then you can add items to it.",
+        "removeTitle": "Remove item",
+        "removeConfirm": "Remove \"{{name}}\" from the project?",
+        "empty": "No items yet",
+        "emptyHint": "Add files, text, web pages, iHub pages or iFinder documents.",
+        "pinItem": "Pin {{name}}",
+        "pinnedHint": "Pinned items are always in the prompt when the project is in context.",
+        "columns": {
+          "kind": "Kind",
+          "name": "Name",
+          "status": "Status",
+          "pinned": "Pinned"
+        },
+        "actions": {
+          "preview": "Preview text",
+          "retry": "Retry",
+          "refresh": "Refresh",
+          "remove": "Remove item"
+        },
+        "status": {
+          "pending": "Waiting",
+          "extracting": "Extracting",
+          "ready": "Ready",
+          "failed": "Failed",
+          "stale": "Outdated",
+          "staleHint": "The content changed at its origin; refresh to read it again."
+        }
+      },
+      "unsaved": {
+        "title": "Unsaved changes",
+        "message": "You have unsaved changes. Leave anyway?",
+        "leave": "Leave",
+        "stay": "Stay"
+      },
+      "addItem": {
+        "title": "Add item",
+        "kinds": "Item kinds",
+        "tabs": {
+          "upload": "Upload",
+          "text": "Text"
+        },
+        "comingLater": "Coming in a later release.",
+        "storageUnavailable": "Files and text need the project storage, which is not available on this server.",
+        "kindDisabled": "This kind is not enabled on this server.",
+        "file": "File",
+        "accepted": "Accepted: {{types}}",
+        "text": "Text",
+        "url": "URL",
+        "check": "Check",
+        "checking": "Checking...",
+        "urlOk": "The page can be read.",
+        "urlFailed": "The page cannot be read: {{error}}",
+        "page": "Page",
+        "choosePage": "Choose a page",
+        "language": "Language",
+        "userLanguage": "The user's language",
+        "ifinderSearch": "Search iFinder",
+        "search": "Search",
+        "searching": "Searching...",
+        "noResults": "No documents found.",
+        "selectedDocument": "Selected: {{title}}",
+        "query": "Search query",
+        "queryHint": "The documents matching this query are read whenever the project is used.",
+        "name": "Name",
+        "namePlaceholder": "Optional; derived from the content when empty",
+        "pinned": "Pinned (always in the prompt)",
+        "submit": "Add",
+        "errors": {
+          "fileRequired": "Choose a file to upload.",
+          "fileTooLarge": "The file is larger than {{max}}.",
+          "textRequired": "Enter the text to add.",
+          "urlInvalid": "Enter a valid http(s) URL.",
+          "pageRequired": "Choose a page.",
+          "documentRequired": "Search iFinder and choose a document.",
+          "queryRequired": "Enter a search query.",
+          "unsupported": "This kind cannot be added here."
+        }
+      },
+      "dependencies": {
+        "title": "Project is in use",
+        "message": "\"{{name}}\" cannot be deleted while these apps, workflows or agents link it. Remove the project from them first.",
+        "types": {
+          "app": "App",
+          "workflow": "Workflow",
+          "agent": "Agent"
+        }
+      },
+      "preview": {
+        "title": "Text of \"{{name}}\"",
+        "truncated": "Showing the first {{shown}} of {{total}} characters.",
+        "empty": "(no text)"
+      },
+      "picker": {
+        "label": "Projects",
+        "loadError": "Failed to load the projects. Please try again.",
+        "modes": {
+          "auto": "Auto",
+          "context": "Always in the prompt",
+          "tools": "Search tools only"
+        },
+        "linked": "Linked projects ({{count}})",
+        "missing": "This project does not exist.",
+        "disabled": "This project is disabled.",
+        "mode": "Mode",
+        "modeFor": "Mode of {{name}}",
+        "unlink": "Unlink {{name}}",
+        "searchPlaceholder": "Search projects...",
+        "loading": "Loading projects...",
+        "empty": "No projects yet. Create projects under Admin → Projects first.",
+        "noMatches": "No projects match your search."
+      },
+      "tokens": {
+        "count": "~{{tokens}} tokens",
+        "unknown": "Size not known yet",
+        "autoPrompt": "fits the prompt limit; loaded if the model and other linked projects leave room",
+        "autoSearched": "too large to load; searched with tools",
+        "everyRequest": "sent with every request",
+        "searched": "searched, up to ~{{tokens}} per call",
+        "largeContextHint": "This project is larger than the ~{{budget}} tokens loaded into a prompt. In \"always in the prompt\" mode it fills the context window of every request; \"auto\" searches it instead."
       }
     }
   },

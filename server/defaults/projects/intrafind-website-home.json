@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "intrafind-website-home",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "IntraFind.com"
+  },
+  "description": {
+    "en": "Website from IntraFind.com"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_d41c5655bcec",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://www.intrafind.com",
+      "ref": {
+        "url": "https://www.intrafind.com",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "www.intrafind.com",
+          "url": "https://www.intrafind.com"
+        }
+      },
+      "snapshotAt": null
+    }
+  ],
+  "createdAt": "2025-08-05T19:41:15.191Z",
+  "updatedAt": "2025-08-05T19:41:15.191Z",
+  "createdBy": null
+}

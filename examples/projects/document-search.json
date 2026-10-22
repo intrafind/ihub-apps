@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "document-search",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "Document Search"
+  },
+  "description": {
+    "en": "Search for documents in iFinder"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_5696a319db07",
+      "pinned": false,
+      "error": null,
+      "snapshotAt": null,
+      "createdAt": "2026-10-21T08:03:52.903Z",
+      "updatedAt": "2026-10-21T08:03:52.903Z",
+      "kind": "ifinder-query",
+      "name": "iFinder search",
+      "ref": {
+        "query": "",
+        "searchProfile": "default",
+        "maxLength": 15000,
+        "maxResults": 10
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "Sources migration"
+        },
+        "at": "2026-10-21T08:03:52.903Z",
+        "run": null,
+        "source": {
+          "site": "iFinder"
+        }
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T08:03:52.903Z",
+  "updatedAt": "2026-10-21T08:03:52.903Z",
+  "createdBy": null
+}

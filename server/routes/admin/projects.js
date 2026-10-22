@@ -60,6 +60,8 @@ import {
   sendProjectError
 } from '../projectItemRoutes.js';
 import { getItemText } from '../../services/knowledge/ItemTextService.js';
+import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
+import { RESULT_BUDGET_CHARS } from '../../sources/documentRetrieval.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -222,6 +224,59 @@ export default function registerAdminProjectsRoutes(app) {
     }
   });
 
+  app.get(route('/_config'), ...gate, contentAdminAuth, (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const settings = projectSettings(platform);
+      const repo = getProjectRepository();
+      res.json({
+        upload: {
+          available: Boolean(getProjectService().ingest) && repo.hasBlobs(),
+          accept: ACCEPTED_TYPES.extensions,
+          mimeTypes: ACCEPTED_TYPES.mimeTypes,
+          summary: ACCEPTED_TYPES.summary
+        },
+        scan: { provider: settings.scan.provider },
+        limits: settings.limits,
+        loadAllMaxTokens: settings.loadAllMaxTokens
+      });
+    } catch (error) {
+      sendFailedOperationError(res, 'load project configuration', error);
+    }
+  });
+
+  // The sizes the app editor shows beside a linked project (the successor
+  // of `/api/admin/sources/_tokens`).
+  app.get(route('/_tokens'), ...gate, contentAdminAuth, async (req, res) => {
+    try {
+      const settings = projectSettings(configCache.getPlatform() || {});
+      const admin = await getProjectRepository().listAdmin({ includeDisabled: true });
+      const projects = {};
+      for (const project of admin) {
+        const items = project.items || [];
+        // A link item is fetched at request time and a pending import has no
+        // text yet: their size is not known, so the total is not either (the
+        // editor shows "size not known" rather than a too-small number).
+        const measured = items.every(item => Number.isFinite(item.text?.tokens));
+        projects[project.id] = {
+          tokens: measured ? items.reduce((sum, item) => sum + item.text.tokens, 0) : null,
+          items: items.length,
+          bytes: project.usage?.bytes || 0,
+          pending: items.filter(item => item.status === 'pending' || item.status === 'extracting')
+            .length,
+          links: items.filter(item => item.storage === 'link').length
+        };
+      }
+      res.json({
+        loadAllBudgetTokens: settings.loadAllMaxTokens,
+        toolResultBudgetTokens: Math.floor(RESULT_BUDGET_CHARS / 4),
+        projects
+      });
+    } catch (error) {
+      sendFailedOperationError(res, 'load project token counts', error);
+    }
+  });
+
   app.get(route('/_dependencies/:id'), ...gate, contentAdminAuth, (req, res) => {
     try {
       const { id } = req.params;
@@ -289,6 +344,10 @@ export default function registerAdminProjectsRoutes(app) {
         sendBadRequest(res, `The "${body.tier}" tier is not available yet; use "ihub"`);
         return;
       }
+      // `import` and `managedFile` point the startup importer at a file it
+      // reads into the project and then deletes: only the sources migration
+      // and the shipped defaults may write them. The strict creation schema
+      // refuses them (and every other stored-only field) for API callers.
       const project = await getProjectService().createAdminProject(body, { actor: req.user });
       logAudit({
         req,

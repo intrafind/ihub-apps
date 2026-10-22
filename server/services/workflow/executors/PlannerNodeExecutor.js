@@ -523,7 +523,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // Citations (URLs + snippets) accumulated by task workers' tool
         // calls — the grounding ledger the synthesizer uses to cite facts.
         // Named `_citations` (NOT `_sources`) so it doesn't shadow
-        // `profile.sources` (configured knowledge bases the agent can
+        // `profile.projects` (configured knowledge the agent can
         // look up). Citations are the runtime ledger of URLs the agent
         // actually consulted; sources is the configured catalog.
         if (Array.isArray(childData._citations) && childData._citations.length > 0) {
@@ -832,11 +832,15 @@ them and re-invokes you with the activated skill bodies in context.`
       Array.isArray(arr) ? Array.from(new Set(arr.filter(v => typeof v === 'string'))) : [];
     const toolCatalog = uniqStrings(tt.tools);
     const appCatalog = uniqStrings(tt.apps);
-    const sourceCatalog = uniqStrings(tt.sources);
+    const projectCatalog = uniqStrings(
+      Array.isArray(tt.projects)
+        ? tt.projects.map(link => (typeof link === 'string' ? link : link?.id))
+        : []
+    );
     const skillCatalog = uniqStrings(availableSkillNames);
 
     // Skeleton lines for the JSON example. We deliberately DO NOT add empty
-    // `"tools": []` / `"apps": []` / `"sources": []` placeholders here —
+    // `"tools": []` / `"apps": []` / `"projects": []` placeholders here —
     // see TOOL_SELECTION_GUIDANCE above: an empty array means "no tools",
     // and an empty literal in the skeleton would nudge the LLM toward
     // emitting `[]` (defeating the per-task split that prevents Gemini's
@@ -856,8 +860,8 @@ them and re-invokes you with the activated skill bodies in context.`
     if (appCatalog.length > 0) {
       taskFieldLines.push(`      "apps": ["${appCatalog[0]}"]`);
     }
-    if (sourceCatalog.length > 0) {
-      taskFieldLines.push(`      "sources": ["${sourceCatalog[0]}"]`);
+    if (projectCatalog.length > 0) {
+      taskFieldLines.push(`      "projects": ["${projectCatalog[0]}"]`);
     }
     taskFieldLines.push('      "dependsOn": []');
 
@@ -868,8 +872,8 @@ them and re-invokes you with the activated skill bodies in context.`
     if (appCatalog.length > 0) {
       catalogsBlock.push(`apps: ${appCatalog.map(s => `"${s}"`).join(', ')}`);
     }
-    if (sourceCatalog.length > 0) {
-      catalogsBlock.push(`sources: ${sourceCatalog.map(s => `"${s}"`).join(', ')}`);
+    if (projectCatalog.length > 0) {
+      catalogsBlock.push(`projects: ${projectCatalog.map(s => `"${s}"`).join(', ')}`);
     }
     const catalogsGuidance =
       catalogsBlock.length > 0
@@ -938,7 +942,7 @@ Output rules:
     // prompt doesn't show as part of the JSON example is omitted — otherwise
     // the model tries to fill it and (observed with gemini-flash-latest)
     // degenerates into hallucinating dozens of look-alike string values
-    // until it hits maxTokens. Per-task `apps`/`sources`/`skills` aren't
+    // until it hits maxTokens. Per-task `apps`/`projects`/`skills` aren't
     // consumed downstream anyway — the profile's taskTemplate supplies those.
     // `tools` is REPLACE-when-provided in SubWorkflowMaterializer (the
     // planner's array becomes the task's tool list, the template is
@@ -972,11 +976,11 @@ Output rules:
         maxItems: Math.max(1, appCatalog.length)
       };
     }
-    if (sourceCatalog.length > 0) {
-      taskItemProperties.sources = {
+    if (projectCatalog.length > 0) {
+      taskItemProperties.projects = {
         type: 'array',
-        items: { type: 'string', enum: sourceCatalog },
-        maxItems: Math.max(1, sourceCatalog.length)
+        items: { type: 'string', enum: projectCatalog },
+        maxItems: Math.max(1, projectCatalog.length)
       };
     }
 

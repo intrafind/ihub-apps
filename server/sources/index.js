@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Source Handlers Module
- *
- * Exports all source-related components for loading content from various sources.
- * This module provides a unified interface for handling different source types
- * including filesystem, URLs, iFinder document management system, and pages.
+ * Link handlers of the project items (#1036): the URL, iFinder and page
+ * handlers behind the `url`, `page`, `ifinder-document` and `ifinder-query`
+ * kinds, and the manager that registers them and probes a URL for the
+ * picker. The prompt-time loading of the former sources is gone with them.
  */
 
 import SourceHandler from './SourceHandler.js';
-import FileSystemHandler from './FileSystemHandler.js';
 import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
@@ -32,16 +30,5 @@ export const createSourceManager = (config = {}) => {
   return singletonSourceManager;
 };
 
-// Helper to validate source configurations
-export const validateSourceConfig = sourceConfig => {
-  const manager = createSourceManager();
-  return manager.validateSourceConfig(sourceConfig);
-};
-
-// Helper to get available handler types
-export const getAvailableHandlerTypes = () => {
-  return ['filesystem', 'url', 'ifinder', 'page'];
-};
-
 // Export all components
-export { SourceHandler, FileSystemHandler, URLHandler, IFinderHandler, PageHandler, SourceManager };
+export { SourceHandler, URLHandler, IFinderHandler, PageHandler, SourceManager };

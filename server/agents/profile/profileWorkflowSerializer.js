@@ -304,7 +304,7 @@ function basePromptConfig(profile, { systemFallbackKey, fallbackIterations }) {
     maxIterations: pickIterations(profile, fallbackIterations),
     tools: Array.isArray(profile.tools) ? profile.tools.slice() : [],
     apps: Array.isArray(profile.apps) ? profile.apps.slice() : [],
-    sources: Array.isArray(profile.sources) ? profile.sources.slice() : [],
+    projects: Array.isArray(profile.projects) ? profile.projects.slice() : [],
     // Skills the agent can activate (instructional knowledge). The
     // PromptNodeExecutor reads this list to inject <available_skills> into
     // the system prompt and auto-attach `activate_skill` to the tool set.

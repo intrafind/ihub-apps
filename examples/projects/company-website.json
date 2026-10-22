@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "company-website",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "Company Website"
+  },
+  "description": {
+    "en": "Latest information from company website"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_4f742f693830",
+      "pinned": false,
+      "error": null,
+      "snapshotAt": null,
+      "createdAt": "2026-10-21T08:03:52.903Z",
+      "updatedAt": "2026-10-21T08:03:52.903Z",
+      "kind": "url",
+      "name": "https://intrafind.com/",
+      "ref": {
+        "url": "https://intrafind.com/",
+        "maxContentLength": 10000
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "Sources migration"
+        },
+        "at": "2026-10-21T08:03:52.903Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/"
+        }
+      }
+    }
+  ],
+  "createdAt": "2026-10-21T08:03:52.903Z",
+  "updatedAt": "2026-10-21T08:03:52.903Z",
+  "createdBy": null
+}

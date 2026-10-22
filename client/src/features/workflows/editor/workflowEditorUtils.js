@@ -767,10 +767,10 @@ const NODE_TEMPLATE_SCOPES = {
     'generatedAt',
     'data'
   ],
-  // PromptNodeExecutor substitutes the loaded source content for these.
-  prompt: ['sources', 'source'],
-  planner: ['sources', 'source'],
-  verifier: ['sources', 'source']
+  // PromptNodeExecutor substitutes the linked projects' content for this one.
+  prompt: ['projects'],
+  planner: ['projects'],
+  verifier: ['projects']
 };
 
 /** Walks every string in a config value. */

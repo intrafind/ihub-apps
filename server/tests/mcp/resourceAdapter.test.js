@@ -30,16 +30,16 @@ describe('MCP resource adapter — URI parsing', () => {
     );
   });
 
-  it('rejects unknown source ids', async () => {
-    await expect(readMcpResource('ihub://source/does-not-exist', { user: {} })).rejects.toThrow(
+  it('rejects unknown project ids', async () => {
+    await expect(readMcpResource('ihub://project/does-not-exist', { user: {} })).rejects.toThrow(
       /not found/
     );
   });
 
-  it('rejects URL-encoded path-traversal in source ids', async () => {
+  it('rejects URL-encoded path-traversal in project ids', async () => {
     // The path.basename sanitiser rejects the decoded `../config` before any
-    // source lookup, so the failure surfaces as "Invalid resource id".
-    await expect(readMcpResource('ihub://source/..%2Fconfig', { user: {} })).rejects.toThrow(
+    // project lookup, so the failure surfaces as "Invalid resource id".
+    await expect(readMcpResource('ihub://project/..%2Fconfig', { user: {} })).rejects.toThrow(
       /Invalid resource id/
     );
   });
@@ -73,9 +73,9 @@ describe('MCP resource adapter — skill sub-resources', () => {
     ).rejects.toThrow(/Skill (resource )?not found/);
   });
 
-  it('rejects a path under a source', async () => {
+  it('rejects a path under a project', async () => {
     await expect(
-      readMcpResource('ihub://source/some-source/secret.md', { user: {} })
-    ).rejects.toThrow(/Source not found/);
+      readMcpResource('ihub://project/some-project/secret.md', { user: {} })
+    ).rejects.toThrow(/Project not found/);
   });
 });

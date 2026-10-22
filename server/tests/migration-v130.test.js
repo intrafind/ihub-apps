@@ -110,10 +110,13 @@ describe('V130 identity', () => {
   });
 
   it('matches what fresh installations ship', async () => {
-    const defaults = JSON.parse(
-      await fs.readFile(path.join(__dirname, '../defaults/config/sources.json'), 'utf8')
+    // Since V174 the documentation ships as an admin project, not a source.
+    const shipped = JSON.parse(
+      await fs.readFile(
+        path.join(__dirname, '../defaults/projects/ihub-documentation.json'),
+        'utf8'
+      )
     );
-    const shipped = defaults.find(s => s.id === 'ihub-documentation');
     assert.deepEqual(shipped.description, { ...DESCRIPTION });
   });
 

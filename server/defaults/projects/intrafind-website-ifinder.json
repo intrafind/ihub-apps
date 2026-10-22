@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "intrafind-website-ifinder",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "IntraFind Website: iFinder"
+  },
+  "description": {
+    "en": "Website about the iFinder product"
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_0a1b1d7c83a8",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ifinder",
+      "ref": {
+        "url": "https://intrafind.com/en/ifinder",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ifinder"
+        }
+      },
+      "snapshotAt": null
+    }
+  ],
+  "createdAt": "2025-08-05T19:46:00.049Z",
+  "updatedAt": "2025-08-05T19:46:00.048Z",
+  "createdBy": null
+}

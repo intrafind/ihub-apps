@@ -42,7 +42,7 @@ jest.unstable_mockModule('../../services/skillLoader.js', () => ({
 
 jest.unstable_mockModule('../../services/mcp/permissions.js', () => ({
   __esModule: true,
-  getVisibleSourceIds: async () => new Set()
+  getVisibleProjectIds: async () => new Set()
 }));
 
 jest.unstable_mockModule('../../utils/logger.js', () => ({

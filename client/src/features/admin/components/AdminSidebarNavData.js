@@ -12,7 +12,7 @@ import {
   WindowIcon,
   DocumentTextIcon,
   WrenchIcon,
-  CircleStackIcon,
+  FolderIcon,
   CodeBracketIcon,
   UsersIcon,
   UserGroupIcon,
@@ -123,11 +123,11 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: showAdminPage('skills') && ff('skills', false)
         },
         {
-          key: 'sources',
-          label: t('admin.nav.sources', 'Sources'),
-          href: '/admin/sources',
-          icon: CircleStackIcon,
-          visible: showAdminPage('sources')
+          key: 'projects',
+          label: t('admin.nav.projects', 'Projects'),
+          href: '/admin/projects',
+          icon: FolderIcon,
+          visible: showAdminPage('projects') && ff('projects', true)
         },
         {
           key: 'workflows',

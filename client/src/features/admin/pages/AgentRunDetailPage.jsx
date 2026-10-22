@@ -180,8 +180,8 @@ export default function AgentRunDetailPage() {
   // toolId, query?, capturedAt }.
   //
   // Naming: `_citations` (NOT `_sources`) so it doesn't shadow
-  // `profile.sources`, which is the catalog of configured knowledge bases
-  // the agent CAN look up via `source_*` tools. Citations are the run-time
+  // `profile.projects`, the knowledge linked to the agent, which it
+  // CAN look up with the project tools. Citations are the run-time
   // record of what the agent actually visited.
   const runCitations = Array.isArray(run?.data?._citations) ? run.data._citations : [];
   const dedupedCitations = (() => {
@@ -903,8 +903,8 @@ export default function AgentRunDetailPage() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     URLs the agent actually consulted during this run, captured from every search /
                     extract tool call. The synthesizer cites these by number in the final report.
-                    Distinct from the profile's configured knowledge-base sources — citations are
-                    what was visited, sources are what could be queried.
+                    Distinct from the projects linked to the profile — citations are what was
+                    visited, projects are what could be queried.
                   </p>
                   <ol className="text-sm space-y-1 list-decimal list-inside">
                     {(citationsExpanded

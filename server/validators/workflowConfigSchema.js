@@ -518,13 +518,6 @@ const baseWorkflowConfigSchema = z.object({
   edges: z.array(edgeConfigSchema),
 
   /**
-   * Source IDs to load and make available to agent nodes.
-   * Sources are resolved from the admin source configuration (sources.json).
-   * Agent nodes can reference source content via {{sources}} in their prompts.
-   */
-  sources: z.array(z.string()).optional(),
-
-  /**
    * Projects linked to the workflow (#1036, spec 1 §6.2): a bare id or
    * `{ id, mode, write }`. Prompt, planner and verifier nodes may name their
    * own in `config.projects`, which wins over this list.

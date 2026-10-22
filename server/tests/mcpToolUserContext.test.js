@@ -38,7 +38,7 @@ jest.unstable_mockModule('../services/mcp/permissions.js', () => ({
   // Real base-id logic: `iFinder_search` matches the visible base id `iFinder`.
   toolVisibleInSet: (toolId, set) =>
     set instanceof Set && (set.has('*') || set.has(toolId) || set.has(toolId.split('_')[0])),
-  getVisibleSourceIds: async () => new Set()
+  getVisibleProjectIds: async () => new Set()
 }));
 
 const { buildMcpServer } = await import('../services/mcp/McpServerService.js');
