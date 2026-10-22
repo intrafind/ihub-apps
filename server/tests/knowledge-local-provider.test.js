@@ -977,6 +977,43 @@ describe('tools', () => {
     assert.equal(listed.projects[0].documents.find(d => d.id === 'itm_policy').origin, 'uploaded');
   });
 
+  it('list pages a long document list within its byte budget, and the pages reach every document', async () => {
+    const long = await repo.createUser({ owner: ADA, content: { name: 'Links' } });
+    const items = Array.from({ length: 50 }, (_, i) =>
+      textItem(`itm_link${String(i).padStart(2, '0')}`, `Link ${i}.md`, `# Link ${i}`, {
+        provenance: {
+          origin: 'picked',
+          by: { id: ADA.id, name: ADA.name },
+          at: '2026-10-20T10:00:00Z',
+          source: { url: `https://example.com/${i}/${'x'.repeat(2000)}` }
+        }
+      })
+    );
+    await repo.mutate(long.id, p => ({ ...p, items }));
+    const listParams = extra => ({
+      ...params(extra),
+      appConfig: { id: 'chat', _projectId: textProject.id, _attachedProjectIds: [long.id] }
+    });
+    const seen = [];
+    let cursor;
+    let pages = 0;
+    do {
+      const page = await list(listParams(cursor ? { cursor } : {}));
+      assert.equal(page.error, undefined, page.error);
+      const bytes = Buffer.byteLength(JSON.stringify(page), 'utf8');
+      assert.ok(bytes <= 40000, `a page serializes to ${bytes} bytes`);
+      for (const project of page.projects) seen.push(...project.documents.map(doc => doc.id));
+      cursor = page.nextCursor;
+      if (cursor) assert.match(page.note, /cursor/);
+      pages += 1;
+    } while (cursor && pages < 10);
+    assert.ok(pages > 1, 'the list came in pages');
+    assert.equal(seen.length, 52, 'every document of both projects, once');
+    assert.equal(new Set(seen).size, 52);
+    const bad = await list(listParams({ cursor: '%%%' }));
+    assert.equal(bad.code, 'INVALID_REF');
+  });
+
   it('is classified as project knowledge, never as web search', () => {
     assert.equal(classifyKnowledgeSource('knowledge_search'), 'sources');
     assert.equal(toolKind('knowledge_search'), 'search');
