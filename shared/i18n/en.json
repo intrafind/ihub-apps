@@ -575,13 +575,13 @@
         "usersCount": "{{count}} user(s)"
       },
       "status": {
-        "active": "Chats of signed-in users are stored on the server.",
+        "active": "Chats are kept in a history that signed-in users can reopen.",
         "chatsEnabled": "History enabled",
         "chatsEnabledHelp": "The \"Keep chats in a history\" setting below.",
         "chatsHeading": "Chat history",
         "feature": "Chat History feature",
         "featureHelp": "Turned on in Admin → Features.",
-        "inactive": "Chats are not stored on the server. Every check below must pass.",
+        "inactive": "The chat history is off: every chat is stored as a temporary chat and deleted after the temporary retention period. Every check below must pass to keep a history.",
         "ledgerActive": "Ledger recording",
         "ledgerEnabled": "Ledger enabled",
         "ledgerEnabledHelp": "The \"Record the run ledger\" setting below.",

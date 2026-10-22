@@ -830,13 +830,13 @@
         "usersCount": "{{count}} Benutzer"
       },
       "status": {
-        "active": "Chats angemeldeter Benutzer werden auf dem Server gespeichert.",
+        "active": "Chats werden in einem Verlauf behalten, den angemeldete Benutzer wieder öffnen können.",
         "chatsEnabled": "Verlauf aktiviert",
         "chatsEnabledHelp": "Die Einstellung „Chats im Verlauf behalten“ weiter unten.",
         "chatsHeading": "Chatverlauf",
         "feature": "Funktion „Chatverlauf“",
         "featureHelp": "Wird unter Admin → Funktionen aktiviert.",
-        "inactive": "Chats werden nicht auf dem Server gespeichert. Alle folgenden Prüfungen müssen erfüllt sein.",
+        "inactive": "Der Chatverlauf ist aus: Jeder Chat wird als temporärer Chat gespeichert und nach der Aufbewahrungsdauer für temporäre Chats gelöscht. Damit ein Verlauf behalten wird, müssen alle Prüfungen unten erfüllt sein.",
         "ledgerActive": "Ledger zeichnet auf",
         "ledgerEnabled": "Ledger aktiviert",
         "ledgerEnabledHelp": "Die Einstellung „Run-Ledger aufzeichnen“ weiter unten.",

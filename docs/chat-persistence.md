@@ -459,8 +459,11 @@ none of the questions.
 **A temporary chat is a chat like any other**, with `temporary: true` on its
 document. The turn that creates it decides, from
 [How a chat is stored](#how-a-chat-is-stored); nothing changes it afterwards
-except `PATCH /api/chats/:chatId { "temporary": false }`, which keeps it (409
-`CHAT_TEMPORARY` is what sharing one answers until then). It is:
+except `PATCH /api/chats/:chatId { "temporary": false }`, which keeps it — for
+an owner who can keep a history: a signed-in user on an installation with the
+Chat History feature on. A guest's chats are always temporary. Until then,
+sharing it answers 409 `CHAT_TEMPORARY` and so does moving it into a project.
+It is:
 
 - **never listed** — `GET /api/chats` filters it out, the project page does not
   show it even when it runs in a project (it still gets the project's

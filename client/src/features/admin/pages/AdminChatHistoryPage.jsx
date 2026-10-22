@@ -478,11 +478,11 @@ function AdminChatHistoryPage() {
             {status.chatPersistenceActive
               ? t(
                   'admin.chatHistory.status.active',
-                  'Chats of signed-in users are stored on the server.'
+                  'Chats are kept in a history that signed-in users can reopen.'
                 )
               : t(
                   'admin.chatHistory.status.inactive',
-                  'Chats are not stored on the server. Every check below must pass.'
+                  'The chat history is off: every chat is stored as a temporary chat and deleted after the temporary retention period. Every check below must pass to keep a history.'
                 )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

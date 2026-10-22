@@ -55,7 +55,7 @@ soon as the user leaves it.
   cookies cannot be continued after its first turn.
 - Switching incognito on in a saved chat starts a new temporary chat; switching it off in a
   temporary chat saves that chat to the history. The toggle only appears where the history is on.
-- New setting **Admin → Chat History → Temporary chats (hours)**
+- New setting **Admin → Observability → Chat History → Temporary chats (hours)**
   (`platform.chats.temporaryRetentionHours`, default 24, at least 1), checked hourly. Kept chats
   follow the existing retention rules, which still only run while the history is on.
 - `POST /api/apps/:appId/chat/:chatId` accepts exactly one message for every caller. Posting the

@@ -1008,10 +1008,15 @@ export class ChatRepository {
   }
 
   /**
-   * Page an owner's chat documents out of the store, without the memo.
+   * Page an owner's kept chats out of the store, without the memo.
+   *
+   * Temporary chats are skipped as they are read, and they do not count
+   * towards {@link MAX_OWNER_CHATS}: an owner with many short-lived incognito
+   * or compare-mode chats must not have them crowd kept chats out of the
+   * listing. The listing is the only reader, and it never shows them.
    *
    * @param {string} ownerId - Owning principal id.
-   * @returns {Promise<Object[]>} The owner's chats, in key order.
+   * @returns {Promise<Object[]>} The owner's kept chats, in key order.
    * @private
    */
   async _scanOwnerChats(ownerId) {
@@ -1025,7 +1030,7 @@ export class ChatRepository {
       });
       for (const doc of page.items) {
         const chat = toChat(doc);
-        if (chat) chats.push(chat);
+        if (chat && chat.temporary !== true) chats.push(chat);
       }
       cursor = page.nextCursor;
     } while (cursor && chats.length < MAX_OWNER_CHATS);
@@ -1080,10 +1085,8 @@ export class ChatRepository {
     const after = cursor ? decodeCursor(cursor) : null;
 
     // A temporary chat is stored like any other but never listed: it is the
-    // conversation its owner asked not to keep.
-    const sorted = (await this._loadOwnerChats(ownerId))
-      .filter(chat => chat.temporary !== true)
-      .sort(compareChatsDesc);
+    // conversation its owner asked not to keep (`_scanOwnerChats` skips it).
+    const sorted = (await this._loadOwnerChats(ownerId)).sort(compareChatsDesc);
     const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
     const items = remaining.slice(0, pageSize);
     const nextCursor =

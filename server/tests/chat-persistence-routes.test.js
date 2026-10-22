@@ -602,6 +602,23 @@ describe('temporary chats and guests', () => {
     );
   });
 
+  it('a temporary chat cannot be moved into a project until it is kept', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-tmp-project',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    const res = await drive(patchHandlers, {
+      params: { chatId: 'chat-tmp-project' },
+      body: { projectId: 'prj_team' },
+      user: ADA
+    });
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.body.details.code, 'CHAT_TEMPORARY');
+    assert.equal((await getChatRepository().getChat('chat-tmp-project')).projectId, undefined);
+  });
+
   it('keeping needs a history to keep it in', async () => {
     await getChatRepository().ensureChat({
       chatId: 'chat-keep-no-history',

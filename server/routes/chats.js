@@ -226,6 +226,14 @@ async function moveChatToProject(req, res, repository, chat) {
     return null;
   }
   const targetId = parsed.data.projectId;
+  if (targetId && chat.temporary === true) {
+    // Its members would see a chat its owner asked not to keep. Keeping it
+    // first (`temporary: false` in the same request) is the way.
+    sendErrorResponse(res, 409, 'A temporary chat cannot be moved into a project; keep it first', {
+      details: { code: 'CHAT_TEMPORARY' }
+    });
+    return null;
+  }
   if (targetId) {
     // Chat containers are the user-project feature: while it is off a chat
     // joins no project (leaving one stays possible, it only undoes a share).
