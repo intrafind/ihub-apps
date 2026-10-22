@@ -26,7 +26,8 @@ function memberView(member) {
  * @returns {Object}
  */
 export function serializeItem(item) {
-  const { text, ...rest } = item;
+  // `ingestAttempt` is the server's fencing token of a running ingest job.
+  const { text, ingestAttempt: _attempt, ...rest } = item;
   return {
     ...rest,
     ref: item.ref || {},

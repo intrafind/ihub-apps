@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { zSafeId } from './common.js';
+import { isHttpUrl, zSafeId } from './common.js';
 import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import {
   LINK_MODES,
@@ -138,6 +138,7 @@ export const itemTextSchema = z
         wrapped: z.string().max(4096)
       })
       .strict(),
+    tenant: z.string().max(100).optional(),
     extractedAt: z.string(),
     truncated: z.boolean().optional(),
     original: z
@@ -170,6 +171,10 @@ export const projectItemSchema = z
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
     provenance: itemProvenanceSchema,
     snapshotAt: z.string().nullable().optional(),
+    /** Set while a refresh runs; the status keeps the readable snapshot. */
+    refreshingAt: z.string().nullable().optional(),
+    /** The ingest job (upload, pick, write or refresh) that may record the item's outcome. */
+    ingestAttempt: z.string().max(64).optional(),
     import: z
       .object({ file: z.string().max(1024), encoding: z.string().max(32).optional() })
       .strict()
@@ -305,6 +310,16 @@ export const itemUpdateSchema = z
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
 
+/** What `PUT /api/projects/:id/items/:itemId/text` accepts. */
+export const itemTextUpdateSchema = z
+  .object({
+    text: z
+      .string()
+      .max(2_000_000)
+      .refine(value => value.trim().length > 0, 'The text is empty')
+  })
+  .strict();
+
 /** What `PUT /api/projects/:id/members` accepts. */
 export const membersUpdateSchema = z
   .object({ members: z.array(projectMemberSchema).max(MAX_MEMBERS) })
@@ -357,3 +372,19 @@ export function normalizeProjectLink(link) {
     write: link?.write === true
   };
 }
+
+/** Query of `GET /api/projects/pickers/ifinder/search`. */
+export const ifinderPickerSchema = z
+  .object({
+    q: z.string().trim().min(1).max(1000),
+    profile: z.string().trim().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(50).prefault(10)
+  })
+  .passthrough();
+
+/** Body of `POST /api/projects/pickers/url/check`. */
+export const urlCheckSchema = z
+  .object({
+    url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed')
+  })
+  .strict();

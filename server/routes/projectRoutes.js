@@ -39,7 +39,17 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
-import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
+import { getProjectService } from '../services/projects/ProjectService.js';
+import {
+  addUploadedItem,
+  isMultipart,
+  receiveUpload,
+  refreshItem,
+  replaceItemText,
+  registerProjectPickerRoutes,
+  sendItemText,
+  sendProjectError
+} from './projectItemRoutes.js';
 import {
   UNSHAREABLE_GROUPS,
   canHoldProjects,
@@ -55,6 +65,7 @@ import {
   projectsClientConfig
 } from '../services/projects/projectSettings.js';
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
+import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
 import {
   addItemSchema,
@@ -87,17 +98,7 @@ function parseBody(schema, req, res) {
   return parsed.data;
 }
 
-/**
- * Answer a project error, or fall back to the generic 500.
- */
-export function sendProjectError(res, error, operation) {
-  if (error instanceof ProjectError) {
-    return sendErrorResponse(res, error.status, error.message, {
-      details: { code: error.code, ...(error.details || {}) }
-    });
-  }
-  return sendFailedOperationError(res, operation, error);
-}
+export { sendProjectError };
 
 /**
  * Gate for every route that reads or writes user projects. Sends the refusal
@@ -200,6 +201,8 @@ async function listProjects(user, repo, scope) {
 export default function registerProjectRoutes(app) {
   const gate = [requireFeature(PROJECTS_FEATURE)];
   const route = suffix => buildServerPath(`/api/projects${suffix}`);
+  // `/api/projects/pickers/*` must be registered before `/:projectId`.
+  registerProjectPickerRoutes(app);
 
   /**
    * @swagger
@@ -231,7 +234,13 @@ export default function registerProjectRoutes(app) {
           maxProjects: settings.limits.maxProjectsPerUser,
           used
         },
-        kinds: enabledItemKinds({ platform, features, settings })
+        kinds: enabledItemKinds({ platform, features, settings }),
+        upload: {
+          available: Boolean(getProjectService().ingest) && repo.hasBlobs(),
+          accept: ACCEPTED_TYPES.extensions,
+          mimeTypes: ACCEPTED_TYPES.mimeTypes,
+          summary: ACCEPTED_TYPES.summary
+        }
       });
     } catch (error) {
       sendFailedOperationError(res, 'load project configuration', error);
@@ -461,7 +470,14 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('edit'),
+    (req, res, next) => (isMultipart(req) ? receiveUpload(req, res, next) : next()),
     async (req, res) => {
+      if (isMultipart(req)) {
+        return addUploadedItem(req, res, {
+          project: req.project,
+          authorize: req.projectContext.authorize('edit')
+        });
+      }
       try {
         const body = parseBody(addItemSchema, req, res);
         if (!body) return;
@@ -526,6 +542,38 @@ export default function registerProjectRoutes(app) {
         sendProjectError(res, error, 'update project item');
       }
     }
+  );
+
+  app.get(
+    route('/:projectId/items/:itemId/text'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    (req, res) => sendItemText(req, res, { project: req.project })
+  );
+
+  app.put(
+    route('/:projectId/items/:itemId/text'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('edit'),
+    (req, res) =>
+      replaceItemText(req, res, {
+        project: req.project,
+        authorize: req.projectContext.authorize('edit')
+      })
+  );
+
+  app.post(
+    route('/:projectId/items/:itemId/refresh'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('edit'),
+    (req, res) =>
+      refreshItem(req, res, {
+        project: req.project,
+        authorize: req.projectContext.authorize('edit')
+      })
   );
 
   app.delete(

@@ -50,7 +50,16 @@ import {
   itemUpdateSchema,
   toggleSchema
 } from '../../validators/projectSchema.js';
-import { sendProjectError } from '../projectRoutes.js';
+import {
+  addUploadedItem,
+  isMultipart,
+  receiveUpload,
+  refreshItem,
+  replaceItemText,
+  sendItemText,
+  sendProjectError
+} from '../projectItemRoutes.js';
+import { getItemText } from '../../services/knowledge/ItemTextService.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -420,25 +429,40 @@ export default function registerAdminProjectsRoutes(app) {
 
   // --- items of admin projects ---------------------------------------------
 
-  app.post(route('/:id/items'), ...gate, contentAdminAuth, async (req, res) => {
-    try {
+  app.post(
+    route('/:id/items'),
+    ...gate,
+    contentAdminAuth,
+    async (req, res, next) => {
+      if (!isMultipart(req)) return next();
       const project = await loadAdminProject(req, res);
       if (!project) return;
-      const body = parseBody(addItemSchema, req, res);
-      if (!body) return;
-      const { item } = await getProjectService().addItem(project.id, body, { user: req.user });
-      logAudit({
-        req,
-        action: 'create',
-        resource: 'projectItem',
-        resourceId: project.id,
-        summary: `Added ${item.kind} item "${item.name}" to admin project "${projectName(project)}"`
-      });
-      res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
-    } catch (error) {
-      sendProjectError(res, error, 'add project item');
+      req.project = project;
+      receiveUpload(req, res, next);
+    },
+    async (req, res) => {
+      if (isMultipart(req)) {
+        return addUploadedItem(req, res, { project: req.project, admin: true });
+      }
+      try {
+        const project = await loadAdminProject(req, res);
+        if (!project) return;
+        const body = parseBody(addItemSchema, req, res);
+        if (!body) return;
+        const { item } = await getProjectService().addItem(project.id, body, { user: req.user });
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'projectItem',
+          resourceId: project.id,
+          summary: `Added ${item.kind} item "${item.name}" to admin project "${projectName(project)}"`
+        });
+        res.status(item.status === 'ready' ? 201 : 202).json({ item: serializeItem(item) });
+      } catch (error) {
+        sendProjectError(res, error, 'add project item');
+      }
     }
-  });
+  );
 
   app.patch(route('/:id/items/:itemId'), ...gate, contentAdminAuth, async (req, res) => {
     try {
@@ -462,6 +486,72 @@ export default function registerAdminProjectsRoutes(app) {
       res.json({ item: serializeItem(result.item) });
     } catch (error) {
       sendProjectError(res, error, 'update project item');
+    }
+  });
+
+  app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req, res);
+    if (!project) return;
+    return sendItemText(req, res, { project });
+  });
+
+  app.put(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req, res);
+    if (!project) return;
+    return replaceItemText(req, res, { project });
+  });
+
+  app.post(route('/:id/items/:itemId/refresh'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req, res);
+    if (!project) return;
+    return refreshItem(req, res, { project });
+  });
+
+  // Read every item the way a chat would, with the admin's own credentials
+  // for link kinds: the successor of the sources test button.
+  app.post(route('/:id/test'), ...gate, contentAdminAuth, async (req, res) => {
+    try {
+      const project = await loadAdminProject(req, res);
+      if (!project) return;
+      const started = Date.now();
+      const items = [];
+      for (const item of project.items || []) {
+        const at = Date.now();
+        try {
+          const { text } = await getItemText(project, item, {
+            user: req.user,
+            chatId: `admin-project-test-${project.id}-${item.id}`,
+            language: req.user?.language || 'en',
+            purpose: 'test'
+          });
+          items.push({
+            id: item.id,
+            name: item.name,
+            kind: item.kind,
+            ok: true,
+            chars: text.length,
+            tokens: item.text?.tokens ?? Math.ceil(text.length / 4),
+            duration: Date.now() - at
+          });
+        } catch (error) {
+          items.push({
+            id: item.id,
+            name: item.name,
+            kind: item.kind,
+            ok: false,
+            error: error.message,
+            code: error.code || 'ERROR',
+            duration: Date.now() - at
+          });
+        }
+      }
+      res.json({
+        success: items.every(entry => entry.ok),
+        duration: Date.now() - started,
+        items
+      });
+    } catch (error) {
+      sendFailedOperationError(res, 'test project', error);
     }
   });
 

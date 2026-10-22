@@ -812,10 +812,12 @@ export class ConfigStore {
    * @param {string} nsOrDir - Namespace name, or a directory under `contents/`
    * @param {Object} [options]
    * @param {string} [options.prefix] - Keep only keys starting with this
+   * @param {boolean} [options.strict=false] - Throw instead of skipping when
+   *   a document cannot be read or the namespace cannot be listed
    * @returns {Promise<Array<{key: string, path: string, data: any}>>} Documents
    *   in ascending key order
    */
-  async listDocuments(nsOrDir, { prefix } = {}) {
+  async listDocuments(nsOrDir, { prefix, strict = false } = {}) {
     const target = resolveTarget(nsOrDir);
     if (!target) return [];
     const documents = target.ns ? documentsFor(target.ns) : null;
@@ -829,6 +831,12 @@ export class ConfigStore {
             limit: LIST_PAGE_SIZE,
             cursor: cursor || undefined
           });
+          // `strict`: a document the store passed over makes the set short.
+          if (strict && page.skipped > 0) {
+            throw new Error(
+              `${page.skipped} configuration document(s) in ${target.dir} could not be read`
+            );
+          }
           for (const item of page.items) {
             items.push({
               key: item.key,
@@ -845,6 +853,9 @@ export class ConfigStore {
           namespace: target.ns,
           error: error.message
         });
+        // `strict`: a caller that must know the whole set (a sweep that
+        // deletes what no document names) gets the failure, not a short list.
+        if (strict) throw error;
         return [];
       }
     }
@@ -853,7 +864,10 @@ export class ConfigStore {
     for (const key of keys) {
       const relPath = `${target.dir}/${key}${RAW_DOC_EXT}`;
       const data = await this.readJson(relPath);
-      if (data === null) continue;
+      if (data === null) {
+        if (strict) throw new Error(`Configuration document ${relPath} could not be read`);
+        continue;
+      }
       items.push({ key, path: relPath, data });
     }
     return items;

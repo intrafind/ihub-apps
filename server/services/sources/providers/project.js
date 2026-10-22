@@ -17,6 +17,8 @@
  */
 import configCache from '../../../configCache.js';
 import { callerContext, permissionsFor } from '../../../middleware/projectAccess.js';
+import { logAudit } from '../../AuditLogService.js';
+import { projectName } from '../../projects/projectView.js';
 import { getItemText } from '../../knowledge/ItemTextService.js';
 import { KnowledgeError, docOf } from '../../knowledge/types.js';
 import { getProjectRepository } from '../../projects/ProjectRepository.js';
@@ -67,6 +69,18 @@ async function content({ ref, user, format = 'original' }) {
   }
   try {
     const { text } = await getItemText(project, item, { user, purpose: 'ui' });
+    // The same read event the item-text route writes (`audit.logReads`):
+    // a citation's preview or download is a read of the document too.
+    if (configCache.getPlatform()?.audit?.logReads === true) {
+      logAudit({
+        actor: user,
+        action: 'read',
+        resource: 'projectItem',
+        resourceId: project.id,
+        source: 'sources',
+        summary: `Read ${item.kind} item "${item.name}" (${item.text?.format || 'link'}) of project "${projectName(project)}" through a citation`
+      });
+    }
     return {
       contentType: 'text/plain; charset=utf-8',
       fileName: safeName(item.name, 'txt'),

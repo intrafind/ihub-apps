@@ -17,6 +17,14 @@ import { markdownTableLines } from './markdown.js';
 /** Rows read from one sheet. */
 export const MAX_SHEET_ROWS = 2000;
 
+/**
+ * Columns read from one sheet, and cells read from one sheet in all: a sheet's range is not
+ * bounded by its file size (one value in the last column of the last row spans the whole grid),
+ * and the rows are materialized before the character budget applies.
+ */
+export const MAX_SHEET_COLUMNS = 1000;
+export const MAX_SHEET_CELLS = 200000;
+
 /** Characters of all sheets together; the next row that would go beyond is left out. */
 export const MAX_WORKBOOK_CHARS = 300000;
 
@@ -74,9 +82,10 @@ export const oneLine = text => String(text).replace(/\s+/g, ' ').trim();
 /**
  * @param {SheetData[]} sheets
  * @param {{workbookChars?: number}} [limits]
+ * @param {{truncated?: boolean}} [report] - `truncated` is set when rows or sheets were left out
  * @returns {string} `[Sheet: name]` blocks; '' when no sheet has content
  */
-export function renderSheets(sheets, limits = {}) {
+export function renderSheets(sheets, limits = {}, report = null) {
   let budget = limits.workbookChars ?? MAX_WORKBOOK_CHARS;
   const blocks = [];
   let leftOut = 0;
@@ -133,10 +142,15 @@ export function renderSheets(sheets, limits = {}) {
     const notices = [];
     if (omitted > 0) notices.push(`[… ${omitted}${shown === 0 ? '' : ' more'} rows omitted]`);
     notices.push(...(sheet.notices ?? []));
+    // Every notice says what was cut off.
+    if (report && notices.length > 0) report.truncated = true;
     for (const notice of notices) budget -= notice.length + 1;
     out.push(...notices);
     blocks.push(out.join('\n'));
   }
-  if (leftOut > 0) blocks.push(`[… ${leftOut} more sheets omitted]`);
+  if (leftOut > 0) {
+    blocks.push(`[… ${leftOut} more sheets omitted]`);
+    if (report) report.truncated = true;
+  }
   return blocks.join('\n\n').trim();
 }

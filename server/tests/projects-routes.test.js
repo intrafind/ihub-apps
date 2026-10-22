@@ -472,8 +472,8 @@ describe('user projects', () => {
       params: { projectId: project.id },
       body: { kind: 'upload', ref: {}, name: 'x.txt' }
     });
-    assert.equal(upload.statusCode, 400, 'the upload kind is not registered before slice 3');
-    assert.equal(upload.body.details.code, 'KIND_UNKNOWN');
+    assert.equal(upload.statusCode, 400, 'an upload without a file or text has nothing to ingest');
+    assert.equal(upload.body.details.code, 'INVALID_REF');
     const removed = await drive(route.removeItem, {
       user: ADA,
       params: { projectId: project.id, itemId: added.body.item.id }

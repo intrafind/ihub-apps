@@ -418,7 +418,10 @@ export const platformConfigSchema = z
         includeEmail: z.boolean().prefault(false),
         verbosity: z.enum(['metadata', 'request', 'full']).prefault('metadata'),
         winstonMirror: z.boolean().prefault(false),
-        anonymizeIp: ipAnonymizationSchema
+        anonymizeIp: ipAnonymizationSchema,
+        // Audit every text read of a project item (preview, download, source
+        // content). Off by default: each citation preview would be an event.
+        logReads: z.boolean().prefault(false)
       })
       .passthrough()
       .prefault({}),
@@ -631,6 +634,24 @@ export const platformConfigSchema = z
         kinds: z.record(z.string(), z.boolean()).prefault({}),
         encryption: z
           .object({ keyProvider: z.string().prefault('local-file') })
+          .passthrough()
+          .prefault({}),
+        // The malware scan hook of the upload pipeline (spec 3 §7): `none`,
+        // or `command` with a scanner binary and `{path}` for the file.
+        scan: z
+          .object({
+            provider: z.enum(['none', 'command']).prefault('none'),
+            command: z.string().max(1000).prefault(''),
+            timeoutMs: z.number().int().positive().prefault(30000),
+            onError: z.enum(['reject', 'allow']).prefault('reject')
+          })
+          .passthrough()
+          .prefault({}),
+        ingest: z
+          .object({
+            concurrency: z.number().int().min(1).max(8).prefault(2),
+            staleAfterMinutes: z.number().int().positive().prefault(30)
+          })
           .passthrough()
           .prefault({})
       })
