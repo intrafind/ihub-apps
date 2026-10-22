@@ -57,7 +57,7 @@ Every new outbound connection — HTTP(S), WebSocket (`wss://`), a new SDK or cl
 
 - HTTP(S): use `httpFetch()` / `createAgent()` from `server/utils/httpConfig.js` (also applies the proxy config).
 - WebSocket: merge `getWebSocketTlsOptions(url)` into the `ws` options.
-- Anything else (undici dispatcher, `tls.connect`, a library with its own agent): call `shouldIgnoreSSLForURL(url)` and set `rejectUnauthorized: false` only when it returns true. The bypass is host-whitelist-only; never a global switch.
+- Anything else (undici dispatcher, `tls.connect`, a library with its own agent): spread `getTlsBypassOptions(url)` into its TLS options instead of writing `rejectUnauthorized: false` yourself. The bypass is host-whitelist-only; never a global switch.
 - Add a test with a whitelisted and a non-whitelisted host. Known gap: the MCP `websocket` transport (`WebSocketClientTransport` takes no TLS options).
 
 ### Breaking Changes

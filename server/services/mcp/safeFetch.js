@@ -6,7 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import configCache from '../../configCache.js';
-import { shouldIgnoreSSLForURL } from '../../utils/httpConfig.js';
+import { getTlsBypassOptions } from '../../utils/httpConfig.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -128,21 +128,23 @@ function makePinnedLookup(pinnedAddress, family) {
   };
 }
 
+/** Whitelisted https hosts skip certificate verification (see getTlsBypassOptions). */
+function tlsBypassOptions(url) {
+  return url.protocol === 'https:' ? getTlsBypassOptions(url.toString()) : {};
+}
+
 /**
  * Build an https/http Agent that pins the socket to the IP we already vetted,
  * so the actual TCP connection cannot land on a different host (DNS rebinding).
  */
-function makePinnedAgent(pinnedAddress, family, isHttps, ignoreSSL = false) {
+function makePinnedAgent(pinnedAddress, family, isHttps, tlsOptions = {}) {
   const AgentClass = isHttps ? https.Agent : http.Agent;
-  const options = {
+  return new AgentClass({
     keepAlive: true,
     maxSockets: 8,
-    lookup: makePinnedLookup(pinnedAddress, family)
-  };
-  // Admin opt-in only: ignoreSSL is true solely for a host on ssl.domainWhitelist
-  // (see shouldIgnoreSSLForURL), same as createDirectAgent in httpConfig.js.
-  if (isHttps && ignoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
-  return new AgentClass(options);
+    lookup: makePinnedLookup(pinnedAddress, family),
+    ...(isHttps ? tlsOptions : {})
+  });
 }
 
 /**
@@ -168,10 +170,8 @@ export async function safeFetch(input, init = {}, opts = {}) {
     opts.allowHosts,
     opts.blockPrivateIps !== false
   );
-  // Same admin opt-in as every other outbound call: only a host on
-  // ssl.domainWhitelist (with ssl.ignoreInvalidCertificates) skips verification.
-  const ignoreSSL = url.protocol === 'https:' && shouldIgnoreSSLForURL(url.toString());
-  const agent = makePinnedAgent(address, family, url.protocol === 'https:', ignoreSSL);
+  const tlsOptions = tlsBypassOptions(url);
+  const agent = makePinnedAgent(address, family, url.protocol === 'https:', tlsOptions);
 
   // Pin the connection through an undici dispatcher. The fetch must come from
   // the same undici package as the Agent: Node's bundled `fetch` is a
@@ -190,9 +190,9 @@ export async function safeFetch(input, init = {}, opts = {}) {
     undici = null;
   }
   if (typeof undici?.fetch === 'function' && typeof undici?.Agent === 'function') {
-    const connect = { lookup: makePinnedLookup(address, family) };
-    if (ignoreSSL) connect.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
-    const dispatcher = new undici.Agent({ connect });
+    const dispatcher = new undici.Agent({
+      connect: { lookup: makePinnedLookup(address, family), ...tlsOptions }
+    });
     return await undici.fetch(url, { ...init, dispatcher });
   }
 
