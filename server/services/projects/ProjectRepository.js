@@ -38,6 +38,7 @@ import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js
 import configStore from '../config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { memberTargetKey } from './projectAccess.js';
+import { isReservedAdminProjectId } from '../../validators/projectSchema.js';
 
 const COMPONENT = 'ProjectRepository';
 
@@ -87,6 +88,19 @@ export const ACCESS_CHANGED = 'PROJECT_ACCESS_CHANGED';
 function assertAuthorized(authorize, project) {
   if (typeof authorize === 'function' && !authorize(project)) {
     throw new StorageError('Your access to this project changed', { code: ACCESS_CHANGED });
+  }
+}
+
+/**
+ * Code of the error a write throws on a project whose delete has begun
+ * (`markDeleting`): nothing may join or change it until the delete finishes.
+ */
+export const DELETING = 'PROJECT_DELETING';
+
+function assertWritable(authorize, project) {
+  assertAuthorized(authorize, project);
+  if (project.deleting === true) {
+    throw new StorageError('The project is being deleted', { code: DELETING });
   }
 }
 
@@ -144,7 +158,8 @@ export function isAdminProjectId(id) {
     id.length <= 50 &&
     isValidId(id) &&
     !id.startsWith(USER_PROJECT_ID_PREFIX) &&
-    !id.includes(ID_SEPARATOR)
+    !id.includes(ID_SEPARATOR) &&
+    !isReservedAdminProjectId(id)
   );
 }
 
@@ -609,7 +624,7 @@ export class ProjectRepository {
       return this._withLock(projectId, async () => {
         const { project, etag } = await this._loadUser(projectId);
         if (!project) return null;
-        assertAuthorized(authorize, project);
+        assertWritable(authorize, project);
         const next = await fn(structuredClone(project));
         if (!next) return project;
         return this._writeUser(stamp(next), etag);
@@ -624,7 +639,7 @@ export class ProjectRepository {
           missing = true;
           return undefined;
         }
-        assertAuthorized(authorize, current);
+        assertWritable(authorize, current);
         const next = await fn(structuredClone(current));
         if (!next) {
           result = current;
@@ -660,7 +675,7 @@ export class ProjectRepository {
     return this._withLock(projectId, async () => {
       const { project, etag } = await this._loadUser(projectId);
       if (!project) return null;
-      assertAuthorized(authorize, project);
+      assertWritable(authorize, project);
       const roleBefore = new Map(
         (project.members || []).map(member => [memberTargetKey(member), member.role || 'user'])
       );
@@ -770,7 +785,7 @@ export class ProjectRepository {
     return this._withLock(projectId, async () => {
       const { project, etag } = await this._loadUser(projectId);
       if (!project) return null;
-      assertAuthorized(authorize, project);
+      assertWritable(authorize, project);
       const owner = actorOf(newOwner);
       const ownerKey = memberTargetKey({ type: 'user', id: owner.id });
       const members = (project.members || []).filter(m => memberTargetKey(m) !== ownerKey);
@@ -802,6 +817,45 @@ export class ProjectRepository {
    * @param {(project: Object) => boolean} [options.authorize]
    * @returns {Promise<Object|null>} The project as it was, or null.
    */
+  /**
+   * Begin a delete: under the project's lock, judge `authorize` and record
+   * `deleting` on the document. From then on every other write (`mutate`,
+   * `setMembers`, `transfer`, and so a chat joining the project) is refused
+   * with {@link DELETING}, so the caller's cascade runs on a project nobody
+   * can change, and a cascade that fails can be retried against the same
+   * mark. Idempotent.
+   *
+   * @param {string} projectId
+   * @param {Object} [options]
+   * @param {(project: Object) => boolean} [options.authorize]
+   * @returns {Promise<Object|null>} The project as marked, or null.
+   * @throws {StorageError} Code `PROJECT_ACCESS_CHANGED` when `authorize` refuses.
+   */
+  markDeleting(projectId, { authorize } = {}) {
+    if (isUserProjectId(projectId)) {
+      if (!this.isAvailable()) return Promise.resolve(null);
+      return this._withLock(projectId, async () => {
+        const { project, etag } = await this._loadUser(projectId);
+        if (!project) return null;
+        assertAuthorized(authorize, project);
+        if (project.deleting === true) return project;
+        return this._writeUser({ ...project, deleting: true }, etag);
+      });
+    }
+    if (!isAdminProjectId(projectId)) return Promise.resolve(null);
+    return this._withLock(projectId, async () => {
+      let marked = null;
+      await this.config.updateJson(adminPath(projectId), current => {
+        if (!current || typeof current !== 'object') return undefined;
+        assertAuthorized(authorize, current);
+        marked = current.deleting === true ? current : { ...current, deleting: true };
+        return marked === current ? undefined : marked;
+      });
+      if (marked) await this._afterAdminChange();
+      return marked;
+    });
+  }
+
   delete(projectId, { authorize } = {}) {
     if (isUserProjectId(projectId)) {
       if (!this.isAvailable()) return Promise.resolve(null);
