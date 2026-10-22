@@ -7,6 +7,7 @@ import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import {
   LINK_MODES,
   MAX_FILES_CEILING,
+  MAX_ITEM_TEXT_CHARS,
   MAX_MEMBERS,
   MEMBER_ROLES,
   MEMBER_TARGET_TYPES,
@@ -297,7 +298,7 @@ export const addItemSchema = z
     ref: z.record(z.string(), z.unknown()).prefault({}),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
-    text: z.string().max(2_000_000).optional()
+    text: z.string().max(MAX_ITEM_TEXT_CHARS).optional()
   })
   .strict();
 
@@ -333,7 +334,7 @@ export const itemTextUpdateSchema = z
   .object({
     text: z
       .string()
-      .max(2_000_000)
+      .max(MAX_ITEM_TEXT_CHARS)
       .refine(value => value.trim().length > 0, 'The text is empty')
   })
   .strict();
@@ -357,6 +358,11 @@ export const toggleSchema = z
 /** The `projectId` field `PATCH /api/chats/:chatId` accepts. */
 export const chatProjectSchema = z
   .object({ projectId: zSafeId.min(1).max(100).nullable() })
+  .strict();
+
+/** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */
+export const attachedProjectsSchema = z
+  .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(50) })
   .strict();
 
 /**

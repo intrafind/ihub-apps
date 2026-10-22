@@ -11,7 +11,8 @@ import {
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
   getAdminApiErrorMessage,
-  testAdminProject
+  testAdminProject,
+  updateAdminProjectItemText
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
@@ -47,7 +48,7 @@ function Card({ title, children }) {
 /**
  * Admin → Projects → one project (read-only). The name of a project in the
  * list opens this view: its description and instructions, its items with the
- * text preview, what links it, and the checks (test, token estimate). **Edit**
+ * text preview (whose text an admin can edit there), what links it, and the checks (test, token estimate). **Edit**
  * leads to the form.
  *
  * @returns {JSX.Element}
@@ -57,7 +58,7 @@ function AdminProjectViewPage() {
   const language = i18n?.language || 'en';
   const { id } = useParams();
   const navigate = useNavigate();
-  const { project, loading, error: loadError } = useAdminProject(id);
+  const { project, setProject, loading, error: loadError } = useAdminProject(id);
   const [kinds, setKinds] = useState([]);
   const [dependencies, setDependencies] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
@@ -322,6 +323,24 @@ function AdminProjectViewPage() {
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         fetchText={fetchAdminItemText}
+        onSave={async text => {
+          const updated = await updateAdminProjectItemText(id, previewItem.id, text);
+          // The stored text changed: the item's size and the estimate are old.
+          if (updated) {
+            setProject(prev =>
+              prev
+                ? {
+                    ...prev,
+                    items: (prev.items || []).map(entry =>
+                      entry.id === updated.id ? updated : entry
+                    )
+                  }
+                : prev
+            );
+            clearEstimate();
+          }
+          return updated;
+        }}
         errorMessage={adminErrorMessage}
       />
       <ChangeHistoryDrawer

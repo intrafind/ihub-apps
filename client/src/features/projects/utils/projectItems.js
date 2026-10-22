@@ -63,7 +63,7 @@ export const ITEM_DIALOG_TABS = Object.freeze([
 /** Icon of each item kind (names of the shared `Icon` component). */
 const KIND_ICONS = Object.freeze({
   upload: 'upload',
-  text: 'document-text',
+  text: 'pencil',
   url: 'link',
   page: 'document-text',
   'ifinder-document': 'magnifying-glass',
@@ -123,7 +123,7 @@ export function isItemReadable(item) {
 }
 
 /** The longest text the edit dialog loads and sends (the server's own cap). */
-export const ITEM_TEXT_EDIT_CHARS = 2_000_000;
+export const ITEM_TEXT_EDIT_CHARS = 10_000_000;
 
 /** The origins whose stored text an editor may replace (mirrors the server). */
 export const EDITABLE_TEXT_ORIGINS = Object.freeze(['written', 'uploaded', 'imported']);

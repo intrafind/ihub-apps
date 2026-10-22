@@ -17,7 +17,8 @@ const mockApi = {
   fetchAdminProjectDependencies: jest.fn(),
   estimateAdminProject: jest.fn(),
   testAdminProject: jest.fn(),
-  fetchAdminProjectItemText: jest.fn()
+  fetchAdminProjectItemText: jest.fn(),
+  updateAdminProjectItemText: jest.fn()
 };
 
 jest.mock('../../../client/src/api/adminApi', () => {
@@ -32,6 +33,7 @@ jest.mock('../../../client/src/api/adminApi', () => {
     estimateAdminProject: forward('estimateAdminProject'),
     testAdminProject: forward('testAdminProject'),
     fetchAdminProjectItemText: forward('fetchAdminProjectItemText'),
+    updateAdminProjectItemText: forward('updateAdminProjectItemText'),
     getAdminApiErrorMessage: err => err?.response?.data?.error ?? err?.message ?? 'error'
   };
 });
@@ -81,6 +83,7 @@ const PROJECT = {
       storage: 'text',
       status: 'ready',
       pinned: false,
+      provenance: { origin: 'uploaded' },
       text: { tokens: 1200 }
     }
   ]
@@ -170,6 +173,34 @@ describe('AdminProjectViewPage', () => {
     expect(screen.getByTestId('item-estimate-itm_home')).toHaveTextContent('~30.0K tokens');
     expect(screen.getByTestId('item-estimate-itm_home')).toHaveTextContent('Search');
     expect(screen.getByTestId('item-estimate-itm_docs')).toHaveTextContent('Prompt');
+  });
+
+  test('lets an admin edit the text of an uploaded or written document from its preview', async () => {
+    mockApi.fetchAdminProjectItemText.mockResolvedValue({
+      text: 'Old text',
+      chars: 8,
+      truncated: false
+    });
+    mockApi.updateAdminProjectItemText.mockResolvedValue({
+      ...PROJECT.items[1],
+      text: { tokens: 3 }
+    });
+    renderView();
+    await screen.findByRole('heading', { level: 1 });
+
+    // The web page has no stored text to edit; only the uploaded document offers it.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Preview text' })[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit text' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New text' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockApi.updateAdminProjectItemText).toHaveBeenCalledWith(
+        'intrafind-website',
+        'itm_docs',
+        'New text'
+      )
+    );
   });
 
   test('says so when the estimate fails', async () => {

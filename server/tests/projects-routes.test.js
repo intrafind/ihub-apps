@@ -932,6 +932,81 @@ describe('chats in a project', () => {
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
   });
 
+  it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-attach-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Attach'
+    });
+    assert.ok(chat);
+    const mine = await create(ADA, { name: 'Mine' });
+    const other = await create(ADA, { name: 'Other' });
+    const strangers = await create(GRACE, { name: 'Strangers' });
+
+    const attached = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [mine.id, other.id, mine.id] }
+    });
+    assert.equal(attached.statusCode, 200, JSON.stringify(attached.body));
+    assert.deepEqual(attached.body.chat.attachedProjectIds, [mine.id, other.id]);
+    assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [mine.id, other.id]);
+
+    // The list replaces the attached ones: taking a project away is the same call.
+    const removed = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [other.id] }
+    });
+    assert.equal(removed.statusCode, 200);
+    assert.deepEqual(removed.body.chat.attachedProjectIds, [other.id]);
+
+    // A project the caller may not use is a 404 and nothing changes.
+    const refused = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [other.id, strangers.id] }
+    });
+    assert.equal(refused.statusCode, 404);
+    assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [other.id]);
+
+    // Taking one away needs no access: a project the caller lost stays removable.
+    const clearing = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [] }
+    });
+    assert.equal(clearing.statusCode, 200);
+    assert.deepEqual(clearing.body.chat.attachedProjectIds, []);
+
+    const bad = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: 'prj_x' }
+    });
+    assert.equal(bad.statusCode, 400);
+
+    // Not the caller's chat.
+    const notMine = await drive(route.chatPatch, {
+      user: GRACE,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [strangers.id] }
+    });
+    assert.equal(notMine.statusCode, 404);
+
+    // While the feature is off a project cannot be added.
+    setFeatures({ userProjects: false });
+    const off = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [mine.id] }
+    });
+    setFeatures();
+    assert.equal(off.statusCode, 403);
+  });
+
   it('puts a chat back when its target project is gone', async () => {
     const chats = getChatRepository();
     const chat = await chats.ensureChat({

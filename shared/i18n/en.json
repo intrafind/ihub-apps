@@ -6529,6 +6529,13 @@
         "partial": "Only part of the text could be read",
         "unmeasured": "Could not be read"
       }
+    },
+    "attach": {
+      "add": "Add project",
+      "title": "Projects for this chat",
+      "hint": "The answers can use the documents and instructions of the projects you tick.",
+      "remove": "Remove {{name}} from this chat",
+      "full": "A chat can use at most {{max}} projects."
     }
   }
 }

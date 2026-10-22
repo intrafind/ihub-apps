@@ -254,10 +254,11 @@ describe('importPendingProjects', () => {
   it('keeps the whole of a large managed file, its last chapter included', async () => {
     const repository = getProjectRepository();
     // The consolidated documentation is about 3 000 000 characters and its
-    // release notes come last: the upload cap (2 000 000) must not cut them.
+    // release notes come last. An item keeps 10 000 000 characters; a file iHub imports
+    // from the server may be larger (20 000 000), so the last chapter is not cut.
     const filler = `${'Configuration of the platform. '.repeat(40)}\n\n`;
-    const big = `# Documentation\n\n${filler.repeat(2300)}# Release Notes\n\nVersion 5.6.0-RC2 added projects.`;
-    assert.ok(big.length > 2_000_000, 'the file is past the upload cap');
+    const big = `# Documentation\n\n${filler.repeat(8800)}# Release Notes\n\nVersion 5.6.0-RC2 added projects.`;
+    assert.ok(big.length > 10_000_000, 'the file is past the item cap');
     await write(path.join(defaultsDir, 'sources/big-docs.md'), big);
     await repository.createAdmin(
       {

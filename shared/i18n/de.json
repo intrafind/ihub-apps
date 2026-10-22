@@ -6494,6 +6494,13 @@
         "partial": "Nur ein Teil des Textes konnte gelesen werden",
         "unmeasured": "Konnte nicht gelesen werden"
       }
+    },
+    "attach": {
+      "add": "Projekt hinzufügen",
+      "title": "Projekte für diesen Chat",
+      "hint": "Die Antworten können die Dokumente und Anweisungen der angehakten Projekte nutzen.",
+      "remove": "{{name}} aus diesem Chat entfernen",
+      "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
     }
   }
 }

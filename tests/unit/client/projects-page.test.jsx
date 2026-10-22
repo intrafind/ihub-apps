@@ -128,13 +128,15 @@ beforeEach(() => {
 });
 
 describe('ProjectsPage', () => {
-  test('lists owned, shared and app projects with filters', async () => {
+  test('lists owned and shared projects with filters, and not the ones admins created', async () => {
     renderPage();
     expect(await screen.findByText('Case 2026-114')).toBeInTheDocument();
     expect(screen.getByText('Team wiki')).toBeInTheDocument();
-    expect(screen.getByText('FAQ')).toBeInTheDocument();
+    // An admin project is linked to apps and managed by admins: no chat can start in it.
+    expect(screen.queryByText('FAQ')).not.toBeInTheDocument();
+    expect(screen.queryByText('From an app')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /From apps/ })).not.toBeInTheDocument();
     expect(screen.getByText('Owner: Ann')).toBeInTheDocument();
-    expect(screen.getByText('From an app')).toBeInTheDocument();
     expect(await screen.findByText('1 of 20 own projects')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Shared with me/ }));

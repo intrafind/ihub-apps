@@ -24,6 +24,9 @@ import {
   projectDisplayName
 } from '../utils/projectView';
 
+/** The list shows the viewer's own and shared projects; admin ones are not listed. */
+const USER_PROJECT_LIST_FILTERS = PROJECT_LIST_FILTERS.filter(id => id !== 'apps');
+
 /** A date in the user's language. */
 function formatDate(value, language) {
   const date = new Date(value);
@@ -103,7 +106,13 @@ export default function ProjectsPage() {
   const language = i18n.language;
   const navigate = useNavigate();
   const { config } = useProjectsConfig();
-  const { projects, loading, error } = useMyProjects();
+  const { projects: allProjects, loading, error } = useMyProjects();
+  // Projects an admin created are linked to apps and managed by admins: a user
+  // cannot start a chat in one, so they are not listed here.
+  const projects = useMemo(
+    () => allProjects.filter(project => project.ownership === 'user'),
+    [allProjects]
+  );
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
@@ -117,8 +126,7 @@ export default function ProjectsPage() {
   const filterLabels = {
     all: t('projects.list.filters.all', 'All'),
     mine: t('projects.list.filters.mine', 'Mine'),
-    shared: t('projects.list.filters.shared', 'Shared with me'),
-    apps: t('projects.list.filters.apps', 'From apps')
+    shared: t('projects.list.filters.shared', 'Shared with me')
   };
 
   const handleCreated = project => {
@@ -179,7 +187,7 @@ export default function ProjectsPage() {
             aria-label={t('projects.list.filterLabel', 'Show')}
             className="flex flex-wrap gap-1"
           >
-            {PROJECT_LIST_FILTERS.map(id => (
+            {USER_PROJECT_LIST_FILTERS.map(id => (
               <button
                 key={id}
                 type="button"

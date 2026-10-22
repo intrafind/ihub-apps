@@ -61,9 +61,10 @@ attachments themselves are not read. Each file is one request, so several files
 upload in parallel and each gets its own status.
 
 The server extracts the text, encrypts it and stores it. **The original file is discarded.** A
-PDF of at most 500 pages is read; extracted text longer than 2,000,000 characters is cut at that
-length (a file iHub imports from the server itself, such as the shipped documentation, is not cut
-below 20,000,000). There is no OCR: a scanned PDF without a text layer fails with a message that says so.
+PDF of at most 500 pages is read; extracted text longer than 10,000,000 characters (about 10 MB,
+2.5 million tokens; the search indexes it in about two seconds, once) is cut at that length. A file
+that iHub imports from the server itself, such as the shipped documentation, is not cut below
+20,000,000. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
 Run it through OCR and upload the result.
 
 ### Writing and editing text
@@ -364,9 +365,9 @@ available on this installation.
 
 ### The Projects page
 
-**Projects** in the sidebar lists the projects you own, the projects shared with you, and the
-admin projects your apps bring along (**From apps**, read-only). Filter by all, mine, shared or
-from apps, search by name, and create a project with **New project** (name, description,
+**Projects** in the sidebar lists the projects you own and the projects shared with you. Projects
+that administrators created are not listed: they are linked to apps and managed by administrators,
+and no chat can start in one. Filter by all, mine or shared, search by name, and create a project with **New project** (name, description,
 instructions). The button shows how many projects you have against `maxProjectsPerUser`.
 
 A project page shows:
@@ -430,6 +431,17 @@ moves into a project, or out of it, from the chat page (**Move to project**, **C
 from the chat history. Both show which project a chat belongs to. Only user projects hold chats.
 
 Every member may open the chats in a project; chats of other members are read-only.
+
+### Using a project in any chat
+
+A chat does not have to start in a project to use one. Above the message box, **Add project** lists
+your own and the shared user projects; tick one and the answers of that chat can use its
+documents and instructions (the project is loaded or searched like one the chat runs in). A chip
+names each attached project and links to it; its **×** takes the project away again. Up to 10
+projects can be attached. For a stored chat the change is saved at once and is still there when the
+chat is opened later; a chat that is not stored yet keeps the choice for its messages. Attaching
+does not move the chat into the project: it stays where it is, and the project's members do not
+see it.
 
 ### Retention
 
@@ -644,7 +656,7 @@ changing it takes a content admin.
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
 | `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project; `?filter=all`, `mine` or `others`.                                     |
-| `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ projectId }` moves a chat into a user project, `{ projectId: null }` out of it.             |
+| `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ projectId }` moves a chat into a user project, `{ projectId: null }` out of it. `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). |
 
 The chat request (`POST /api/apps/:appId/chat/:chatId`) accepts `projectId`, the project the chat
 runs in (first turn; a different one later answers `PROJECT_MISMATCH`), and `projects`, projects
