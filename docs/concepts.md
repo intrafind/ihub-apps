@@ -1,4 +1,4 @@
-# Core Concepts: Providers, Models, Apps, Skills, Sources & Tools
+# Core Concepts: Providers, Models, Apps, Skills, Projects & Tools
 
 This guide explains the building blocks of iHub Apps and, more importantly, **when to use which**. It is the write-up we use when introducing iHub to a new team: once these boundaries are clear, designing use cases for a department and rolling them out to the right people becomes straightforward.
 
@@ -10,7 +10,7 @@ This guide explains the building blocks of iHub Apps and, more importantly, **wh
 | **Model**          | Which model answers, with which limits and abilities? | Admin → Models                   |
 | **App**            | What is the concrete use case and its frame?          | Admin → Apps                     |
 | **Skill**          | Which reusable procedure, rules, or know-how apply?   | Admin → Skills                   |
-| **Source**         | What domain knowledge does the model need?            | Admin → Sources                  |
+| **Project**        | What domain knowledge does the model need?            | Admin → Projects                 |
 | **Tool**           | What can the model *do* beyond producing text?        | Admin → Tools / MCP servers      |
 | **Prompt library** | Which reusable text can a user drop into a chat?      | Admin → Prompts                  |
 | **Group**          | Who sees all of the above?                            | Admin → Groups                   |
@@ -19,7 +19,7 @@ The short version:
 
 - **Apps** model the concrete use case and its frame.
 - **Skills** define reusable procedures, rules, and behaviour.
-- **Sources** supply the factual context and knowledge.
+- **Projects** supply the factual context and knowledge.
 - **Tools** give the model the ability to act and to fetch live data.
 
 ---
@@ -56,7 +56,7 @@ These three overlap in what they can achieve, and the difference is mostly about
 
 ### Apps
 
-An [app](apps.md) is a standardized use case with a fixed frame: system prompt, input variables, output format, preferred/allowed models, plus the tools and sources it may use. Use apps when the result should be reproducible and the user should not have to know anything about prompting.
+An [app](apps.md) is a standardized use case with a fixed frame: system prompt, input variables, output format, preferred/allowed models, plus the tools and projects it may use. Use apps when the result should be reproducible and the user should not have to know anything about prompting.
 
 Apps are the unit of rollout: via group permissions — including groups mapped from [LDAP](ldap-ntlm-authentication.md) or [OIDC](oidc-authentication.md) — an app can be made available to exactly one department or role.
 
