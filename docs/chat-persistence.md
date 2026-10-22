@@ -82,7 +82,7 @@ than a conversation nobody could continue.
 
 The first three limits are switched **off** by a value of zero or less — see
 [Retention](#retention). `temporaryRetentionHours` cannot be: a temporary chat
-always expires, and a value of zero or less falls back to 24. Migration V176
+always expires, and a value of zero or less falls back to 24. Migration V178
 writes it into an existing installation. What a turn *produced* is stored separately and
 configured separately, under `platform.artifacts` — see
 [Artifacts](artifacts.md).

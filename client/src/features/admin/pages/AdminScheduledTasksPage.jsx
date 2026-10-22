@@ -32,6 +32,7 @@ const NUMBER_SETTINGS = [
   ['maxConsecutiveFailures', 0, 1000],
   ['approvalTimeoutHours', 1, 744],
   ['runRetentionDays', 0, 3650],
+  ['maxRunsPerTask', 0, 10000],
   ['maxRunChatsPerTask', 0, 10000],
   ['maxInstructionLength', 100, 100000],
   ['maxRunMinutes', 1, 30],

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V176 — Every chat is stored; temporary chats expire (#2947)
+ * Migration V178 — Every chat is stored; temporary chats expire (#2947)
  *
  * The browser no longer holds a chat: an incognito chat, an anonymous
  * visitor's and every chat of an installation without chat history are stored
@@ -12,7 +12,7 @@
  * Chat History page shows it.
  */
 
-export const version = '176';
+export const version = '178';
 export const description = 'temporary_chat_retention';
 
 export async function precondition(ctx) {

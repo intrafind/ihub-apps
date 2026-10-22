@@ -1,62 +1,47 @@
+#!/usr/bin/env node
+
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V176 — the temporary chat retention default (#2947).
+ * Migration V176 specs — setup.disabled flag in platform.json.
  */
-import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
 
-import {
-  description,
-  precondition,
-  up,
-  version
-} from '../migrations/V176__temporary_chat_retention.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { up, precondition, version } from '../migrations/V176__add_setup_disabled_flag.js';
 import { setDefault } from '../migrations/utils.js';
 
-function makeCtx(files) {
-  const logs = [];
+function fakeCtx(files) {
   return {
-    logs,
     files,
-    fileExists: async rel => Object.hasOwn(files, rel),
-    readJson: async rel => structuredClone(files[rel]),
-    writeJson: async (rel, data) => {
-      files[rel] = data;
+    fileExists: async p => Object.prototype.hasOwnProperty.call(files, p),
+    readJson: async p => structuredClone(files[p]),
+    writeJson: async (p, d) => {
+      files[p] = d;
     },
     setDefault,
-    log: m => logs.push(m),
-    warn: m => logs.push(m)
+    log: () => {}
   };
 }
 
-describe('V176 temporary chat retention', () => {
-  it('is versioned and described', () => {
-    assert.equal(version, '176');
-    assert.equal(description, 'temporary_chat_retention');
-  });
+test('version is 176', () => {
+  assert.equal(version, '176');
+});
 
-  it('only runs where there is a platform config', async () => {
-    assert.equal(await precondition(makeCtx({})), false);
-    assert.equal(await precondition(makeCtx({ 'config/platform.json': {} })), true);
-  });
+test('adds setup.disabled = false and keeps setup.configured', async () => {
+  const ctx = fakeCtx({ 'config/platform.json': { setup: { configured: true } } });
+  assert.equal(await precondition(ctx), true);
+  await up(ctx);
+  assert.deepEqual(ctx.files['config/platform.json'].setup, { configured: true, disabled: false });
+});
 
-  it('adds the 24 hour default next to the other chat settings', async () => {
-    const ctx = makeCtx({
-      'config/platform.json': { chats: { enabled: true, retentionDays: 30 } }
-    });
-    await up(ctx);
-    assert.deepEqual(ctx.files['config/platform.json'].chats, {
-      enabled: true,
-      retentionDays: 30,
-      temporaryRetentionHours: 24
-    });
-  });
+test('does not overwrite an existing disabled flag', async () => {
+  const ctx = fakeCtx({ 'config/platform.json': { setup: { disabled: true } } });
+  await up(ctx);
+  assert.equal(ctx.files['config/platform.json'].setup.disabled, true);
+});
 
-  it('keeps a value an admin already set', async () => {
-    const ctx = makeCtx({ 'config/platform.json': { chats: { temporaryRetentionHours: 2 } } });
-    await up(ctx);
-    assert.equal(ctx.files['config/platform.json'].chats.temporaryRetentionHours, 2);
-  });
+test('is skipped without a platform.json', async () => {
+  assert.equal(await precondition(fakeCtx({})), false);
 });

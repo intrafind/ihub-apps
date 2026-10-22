@@ -44,6 +44,7 @@ function emptyDraft(defaultAppId) {
     enabledTools: null,
     notify: 'always',
     memory: { enabled: false },
+    retention: { maxRuns: '', maxAgeDays: '' },
     schedule: { type: 'daily', time: '08:00', timezone: browserTimezone() }
   };
 }
@@ -91,6 +92,10 @@ export default function TaskEditorPage() {
           enabledTools: task.enabledTools ?? null,
           notify: task.notify || 'always',
           memory: { enabled: task.memory?.enabled === true },
+          retention: {
+            maxRuns: task.retention?.maxRuns ?? '',
+            maxAgeDays: task.retention?.maxAgeDays ?? ''
+          },
           schedule: task.schedule
         });
         setScheduleForm(scheduleToForm(task.schedule, browserTimezone()));
@@ -168,6 +173,10 @@ export default function TaskEditorPage() {
       enabledTools: customTools ? draft.enabledTools : null,
       notify: draft.notify,
       memory: { enabled: memoryOn },
+      retention: {
+        maxRuns: draft.retention?.maxRuns === '' ? null : Number(draft.retention?.maxRuns),
+        maxAgeDays: draft.retention?.maxAgeDays === '' ? null : Number(draft.retention?.maxAgeDays)
+      },
       schedule: formToSchedule(scheduleForm)
     };
     try {
@@ -557,6 +566,66 @@ export default function TaskEditorPage() {
             )}
             {errors.notify && <p className="mt-1 text-xs text-red-600">{errors.notify}</p>}
           </div>
+          <div className="sm:w-1/2">
+            <label htmlFor="task-retention-runs" className={label}>
+              {t('scheduledTasks.retention.maxRuns', 'Keep at most this many runs')}
+            </label>
+            <input
+              id="task-retention-runs"
+              type="number"
+              min="1"
+              max="10000"
+              className={input}
+              value={draft.retention?.maxRuns ?? ''}
+              placeholder={
+                limits.maxRunsPerTask > 0
+                  ? t(
+                      'scheduledTasks.retention.platformMax',
+                      'Up to {{count}} (set by your administrator)',
+                      { count: limits.maxRunsPerTask }
+                    )
+                  : t('scheduledTasks.retention.unlimited', 'No limit')
+              }
+              aria-describedby="task-retention-help"
+              onChange={e => set({ retention: { ...draft.retention, maxRuns: e.target.value } })}
+            />
+            {errors['retention.maxRuns'] && (
+              <p className="mt-1 text-xs text-red-600">{errors['retention.maxRuns']}</p>
+            )}
+          </div>
+          <div className="sm:w-1/2">
+            <label htmlFor="task-retention-days" className={label}>
+              {t('scheduledTasks.retention.maxAgeDays', 'Delete runs older than (days)')}
+            </label>
+            <input
+              id="task-retention-days"
+              type="number"
+              min="1"
+              max="3650"
+              className={input}
+              value={draft.retention?.maxAgeDays ?? ''}
+              placeholder={
+                limits.runRetentionDays > 0
+                  ? t(
+                      'scheduledTasks.retention.platformDays',
+                      'Up to {{count}} (set by your administrator)',
+                      { count: limits.runRetentionDays }
+                    )
+                  : t('scheduledTasks.retention.unlimited', 'No limit')
+              }
+              aria-describedby="task-retention-help"
+              onChange={e => set({ retention: { ...draft.retention, maxAgeDays: e.target.value } })}
+            />
+            {errors['retention.maxAgeDays'] && (
+              <p className="mt-1 text-xs text-red-600">{errors['retention.maxAgeDays']}</p>
+            )}
+          </div>
+          <p id="task-retention-help" className="w-full text-xs text-gray-600 dark:text-gray-400">
+            {t(
+              'scheduledTasks.retention.help',
+              'Older runs and their chats are deleted automatically. Leave a field empty to use the default. Runs in progress are never deleted.'
+            )}
+          </p>
         </section>
 
         <div className="flex items-center justify-end gap-3">

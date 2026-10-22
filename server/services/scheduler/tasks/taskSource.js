@@ -36,7 +36,7 @@ import {
   runLeaseHeld
 } from './taskModel.js';
 import { onTaskChanged, announceTaskChanged } from './taskEvents.js';
-import { currentPolicy, failAwaitingRun } from './taskService.js';
+import { currentPolicy, failAwaitingRun, pruneTaskRuns } from './taskService.js';
 import { ScheduledTaskRunner } from './taskRunner.js';
 
 const COMPONENT = 'ScheduledTaskSource';
@@ -268,30 +268,56 @@ export class ScheduledTaskSource {
   }
 
   /**
-   * Delete run records older than the retention period (their chats age out
-   * with the chat retention rules).
+   * Apply every task's retention limits (its own and the platform's) to its
+   * run history, then remove runs whose task is gone. The count limit is also
+   * applied when a run ends; this sweep is what makes the age limit take
+   * effect for tasks that rarely run.
    *
+   * @param {number} now
+   * @param {Object} settings
+   * @returns {Promise<number>} Runs deleted.
+   */
+  async sweepRuns(now, settings) {
+    const repository = this.repository();
+    const taskIds = new Set();
+    let deleted = 0;
+    for await (const task of repository.scanTasks()) {
+      taskIds.add(task.id);
+      try {
+        deleted += await pruneTaskRuns(task, settings, now);
+      } catch (error) {
+        logger.warn('Could not prune the runs of a scheduled task', {
+          component: COMPONENT,
+          taskId: task.id,
+          error: error.message
+        });
+      }
+    }
+    deleted += await this.sweepOrphanRuns(taskIds, now, settings);
+    return deleted;
+  }
+
+  /**
+   * Delete run records left behind by a deleted task (its delete could not
+   * remove all of them) once they are past `runRetentionDays`.
+   *
+   * @param {Set<string>} taskIds - Tasks that exist.
    * @param {number} now
    * @param {Object} settings
    * @returns {Promise<number>}
    */
-  async sweepRuns(now, settings) {
-    if (!settings.runRetentionDays || settings.runRetentionDays <= 0) return 0;
+  async sweepOrphanRuns(taskIds, now, settings) {
+    if (!(settings.runRetentionDays > 0)) return 0;
     const repository = this.repository();
-    const stale = [];
+    const orphans = [];
     for await (const run of repository.scanRuns()) {
-      const at = run.finishedAt || run.queuedAt;
-      if (run.status && ['queued', 'running', 'awaiting_approval'].includes(run.status)) continue;
-      if (isOlderThanDays(at, settings.runRetentionDays, now)) stale.push(run);
+      if (taskIds.has(run.taskId) || !isFinalRunStatus(run.status)) continue;
+      if (isOlderThanDays(run.finishedAt || run.queuedAt, settings.runRetentionDays, now)) {
+        orphans.push(run);
+      }
     }
-    for (const run of stale) await repository.deleteRun(run.taskId, run.id);
-    if (stale.length > 0) {
-      logger.info('Scheduled run records past retention deleted', {
-        component: COMPONENT,
-        deleted: stale.length
-      });
-    }
-    return stale.length;
+    for (const run of orphans) await repository.deleteRun(run.taskId, run.id);
+    return orphans.length;
   }
 
   clear() {

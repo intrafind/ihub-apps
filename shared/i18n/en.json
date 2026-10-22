@@ -1203,6 +1203,7 @@
         "provider": "Provider",
         "newProvider": "+ New provider",
         "providerHint": "The provider holds the API key for all imported models. Create one for a new endpoint, such as T-Systems LLM Hub.",
+        "presets": "Start from:",
         "usesProviderKey": "The API key stored on this provider is used.",
         "noProviderKey": "No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.",
         "url": "Endpoint URL",
@@ -2749,6 +2750,22 @@
       "users": "Users",
       "dismiss": "Dismiss"
     },
+    "onboarding": {
+      "title": "First-run onboarding",
+      "description": "The setup wizard is shown to everyone until it has been completed. Turn it off if you configure iHub through platform.json, environment variables or configuration management.",
+      "disable": "Don't show the onboarding (setup wizard)",
+      "disableHint": "Nobody is redirected to /setup any more. An admin can still open /setup directly.",
+      "saved": "Onboarding setting saved",
+      "saveError": "Failed to save the onboarding setting",
+      "demoOk": "No demo account signs in with the shipped password.",
+      "demoWarn": "{{accounts}} still sign in with the shipped password. Change their passwords before you hide the onboarding.",
+      "demoWarnHidden": "{{accounts}} still sign in with the shipped password, but the login page does not list them.",
+      "usersLink": "Users",
+      "stateHidden": "Hidden for everyone",
+      "stateCompleted": "Completed",
+      "stateShown": "Shown until completed",
+      "manage": "Onboarding settings"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
@@ -3617,7 +3634,8 @@
         "maxRunMinutes": "Longest run (minutes)",
         "memoryEnabled": "Allow memory between runs",
         "memoryMaxChars": "Longest notes (characters)",
-        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)"
+        "maxHistoryReadChars": "Longest earlier answer a run may read (characters)",
+        "maxRunsPerTask": "Keep at most this many runs per task"
       },
       "memory": {
         "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
@@ -5038,6 +5056,8 @@
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
     },
+    "skipConfirm": "Skip the onboarding for good? It will not be shown again to anyone. You can turn it back on under Admin → Advanced.\n\nOK: don't show it again. Cancel: skip for this session only.",
+    "skipConfirmDemo": "Warning: {{accounts}} still sign in with the shipped password.\n\n",
     "step2Login": {
       "title": "Sign in to continue",
       "description": "An admin account is required to complete the initial setup.",
@@ -6137,7 +6157,17 @@
       "memoryTooLong": "Memory full",
       "memoryTooLongHint": "The new notes were over the size limit, so the previous notes were kept.",
       "memoryFailed": "Memory not updated",
-      "memoryFailedHint": "The notes could not be updated after this run, so the previous notes were kept."
+      "memoryFailedHint": "The notes could not be updated after this run, so the previous notes were kept.",
+      "delete": "Delete",
+      "deleteTitle": "Delete runs?",
+      "deleteText": "{{count}} run(s) and their chats are deleted. This cannot be undone.",
+      "deleteSelected": "Delete selected ({{count}})",
+      "deleteAll": "Delete all finished runs",
+      "select": "Select",
+      "selectRun": "Select this run",
+      "deletedNotice": "{{count}} run(s) deleted.",
+      "nothingDeleted": "No finished runs were deleted.",
+      "deleteAllText": "All finished runs of this task, including older ones not shown, and their chats are deleted. This cannot be undone. Runs in progress are kept."
     },
     "reconnect": "Reconnect",
     "chatRemoved": "Chat removed (older runs keep only their record)",
@@ -6200,6 +6230,14 @@
       "clearHint": "If you changed what the task does, consider clearing its memory.",
       "tooLong": "The notes are too long ({{chars}} of {{max}} characters). Shorten them and save again.",
       "error": "The notes could not be saved"
+    },
+    "retention": {
+      "maxRuns": "Keep at most this many runs",
+      "maxAgeDays": "Delete runs older than (days)",
+      "unlimited": "No limit",
+      "platformMax": "Default: {{count}} (set by your administrator; a higher value has no effect)",
+      "platformDays": "Default: {{count}} (set by your administrator; a higher value has no effect)",
+      "help": "Older runs and their chats are deleted automatically. Leave a field empty to use the default. Runs in progress are never deleted."
     }
   },
   "memoryEditor": {
@@ -6446,7 +6484,6 @@
       "title": "Text of \"{{name}}\"",
       "truncated": "Showing the first {{shown}} of {{total}} characters."
     },
-
     "provenance": {
       "linked": "Linked",
       "picked": "Picked",
