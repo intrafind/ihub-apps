@@ -1233,7 +1233,7 @@ export class ChatRepository {
    * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
    *   stands and whether the association changed.
    */
-  async moveProjectIf(chatId, expectedProjectId, nextProjectId) {
+  async moveProjectIf(chatId, expectedProjectId, nextProjectId, { settle } = {}) {
     if (!this._usable(chatId, 'moveProjectIf')) return { chat: null, moved: false };
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
@@ -1245,6 +1245,20 @@ export class ChatRepository {
         applyChatPatch(existing, { projectId: nextProjectId || null }),
         etag
       );
+      if (typeof settle !== 'function') return { chat, moved: true };
+      // The project-side bookkeeping runs while the chat is still locked, so
+      // a move that lands right after this one cannot have its markers undone
+      // by the tail of this one. A failure puts the chat back as it was.
+      try {
+        await settle(chat);
+      } catch (error) {
+        const { etag: current } = await this._loadChat(chatId);
+        await this._writeChat(
+          applyChatPatch(chat, { projectId: expectedProjectId || null }),
+          current
+        );
+        throw error;
+      }
       return { chat, moved: true };
     });
   }

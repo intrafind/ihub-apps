@@ -28,7 +28,7 @@ import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
-import { resolveGroupInheritance } from '../utils/authorization.js';
+import { enhanceUserWithPermissions, resolveGroupInheritance } from '../utils/authorization.js';
 import { locateConfigFile } from '../utils/configFileLocation.js';
 import registerProjectRoutes from '../routes/projectRoutes.js';
 import registerAdminProjectsRoutes from '../routes/admin/projects.js';
@@ -36,6 +36,9 @@ import registerChatRoutes from '../routes/chats.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
+import { getProjectService } from '../services/projects/ProjectService.js';
+import { cleanUpProjectsOfUser } from '../services/projects/projectUserCleanup.js';
+import { listSnapshots } from '../services/ChangeHistoryService.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', groups: ['authenticated'] };
@@ -666,6 +669,19 @@ describe('admin projects', () => {
     );
   });
 
+  it('creates only the iHub tier and keeps no snapshot of a deleted user project', async () => {
+    const ifinder = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'ifinder-tier', name: { en: 'Later' }, tier: 'ifinder' }
+    });
+    assert.equal(ifinder.statusCode, 400);
+    assert.match(ifinder.body.error, /tier/);
+    const project = await create(ADA, { name: 'Private matter' });
+    const gone = await drive(route.adminDelete, { user: ROOT, params: { id: project.id } });
+    assert.equal(gone.statusCode, 204);
+    assert.deepEqual(await listSnapshots('project', project.id), []);
+  });
+
   it('lists user projects for full admins only', async () => {
     await create(ADA, { name: 'Compliance' });
     const asRoot = await drive(route.adminList, { user: ROOT, query: { ownership: 'user' } });
@@ -759,6 +775,110 @@ describe('chats in a project', () => {
     assert.equal(out.statusCode, 200);
     assert.equal(out.body.chat.projectId, null);
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+
+  it('puts a chat back when its target project is gone', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-move-3',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Orphan'
+    });
+    const project = await create(ADA, { name: 'Vanishing' });
+    const service = getProjectService();
+    const attach = service.attachChat;
+    // The project passes the access check but is deleted before the marker
+    // is written: attachChat answers false from under the project's lock.
+    service.attachChat = async () => false;
+    try {
+      const moved = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { projectId: project.id }
+      });
+      assert.equal(moved.statusCode, 404, JSON.stringify(moved.body));
+    } finally {
+      service.attachChat = attach;
+    }
+    assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
+    assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+
+  it("keeps a personal key its owner's project grants", () => {
+    const personal = enhanceUserWithPermissions(
+      { ...ADA, authMode: 'oauth_personal_key' },
+      {},
+      platform
+    );
+    assert.equal(personal.permissions.projects, true);
+    assert.equal(personal.permissions.projectSharing, true);
+    assert.equal(personal.permissions.adminAccess, false);
+    assert.equal(personal.permissions.scheduledTasks, false);
+    const delegated = enhanceUserWithPermissions({ ...THIRD_PARTY }, {}, platform);
+    assert.equal(delegated.permissions.projects, false);
+    assert.equal(delegated.permissions.projectSharing, false);
+  });
+
+  it('reports what the cleanup of a deleted user could not remove', async () => {
+    const owner = { id: 'user-gone', name: 'Gone' };
+    const kept = await getProjectService().createUserProject({ owner, content: { name: 'Stuck' } });
+    const removed = await getProjectService().createUserProject({
+      owner,
+      content: { name: 'Removable' }
+    });
+    const repo = getProjectRepository();
+    const original = repo.delete.bind(repo);
+    repo.delete = async (projectId, options) => {
+      if (projectId === kept.id) throw new Error('lock timeout');
+      return original(projectId, options);
+    };
+    try {
+      await assert.rejects(cleanUpProjectsOfUser(owner.id), error => {
+        assert.ok(error instanceof AggregateError);
+        assert.equal(error.errors.length, 1);
+        assert.match(error.errors[0].message, /lock timeout/);
+        return true;
+      });
+    } finally {
+      repo.delete = original;
+    }
+    assert.equal(await repo.get(removed.id), null, 'the other project is still removed');
+    assert.ok(await repo.get(kept.id), 'the stuck project is reported, not forgotten');
+  });
+
+  it('puts a chat back when the caller lost the project while moving', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-move-4',
+      ownerId: GRACE.id,
+      appId: 'chat',
+      title: 'Revoked'
+    });
+    const project = await create(ADA, { name: 'Members only' });
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    const repo = getProjectRepository();
+    const mutate = repo.mutate.bind(repo);
+    // The membership goes while the move waits for the target's lock.
+    repo.mutate = async (projectId, fn, options) => {
+      if (projectId === project.id && options?.authorize) {
+        await mutate(projectId, current => ({ ...current, members: [] }), {});
+      }
+      return mutate(projectId, fn, options);
+    };
+    try {
+      const moved = await drive(route.chatPatch, {
+        user: GRACE,
+        params: { chatId: chat.id },
+        body: { projectId: project.id }
+      });
+      assert.equal(moved.statusCode, 403, JSON.stringify(moved.body));
+      assert.equal(moved.body.details?.code, 'PROJECT_ACCESS_CHANGED');
+    } finally {
+      repo.mutate = mutate;
+    }
+    assert.equal((await chats.getChat(chat.id)).projectId ?? null, null);
+    assert.deepEqual(await repo.listChatMarkers(project.id), []);
   });
 
   it('keeps a chat that moved on while its old project is deleted', async () => {
