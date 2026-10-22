@@ -19,11 +19,13 @@ import { StorageError } from '../../storage/errors.js';
 import {
   ACCESS_CHANGED,
   DELETING,
+  PROJECT_FILES_NAMESPACE,
   getProjectRepository,
   isAdminProjectId,
   isUserProjectId,
   mintItemId
 } from './ProjectRepository.js';
+import { evictItemKeys, readText, storeText } from './ItemTextStore.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 import { ProjectError } from './projectErrors.js';
 // Registering the built-in kinds is a side effect of loading them.
@@ -32,6 +34,7 @@ import './kinds/uploadKind.js';
 import './kinds/cloudKinds.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
+import { relinkProjects } from './projectRelink.js';
 
 const COMPONENT = 'ProjectService';
 /** How often one project's activity is refreshed by chat turns at most. */
@@ -93,6 +96,8 @@ export class ProjectService {
     this.onDeleted = [];
     /** Hooks called with `(projectId, itemId, item)` after an item's text is gone or replaced. */
     this.onItemRemoved = [];
+    /** Hooks called with `(projectId, itemId, item)` after an item arrived by a copy or move. */
+    this.onItemAdded = [];
     /** projectId -> when a chat turn last refreshed its activity. */
     this.activityTouched = new Map();
   }
@@ -687,10 +692,11 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{user: Object, authorize?: Function}} options
+   * @param {{user: Object, authorize?: Function, expectUpdatedAt?: string}} options
+   *   `expectUpdatedAt`: remove only an item still stamped so (`PROJECT_MISMATCH` otherwise).
    * @returns {Promise<Object|null>} The project after the removal, or null.
    */
-  async removeItem(projectId, itemId, { user, authorize }) {
+  async removeItem(projectId, itemId, { user, authorize, expectUpdatedAt }) {
     let stored = null;
     let found = false;
     let removed = null;
@@ -700,6 +706,11 @@ export class ProjectService {
         project => {
           const before = (project.items || []).length;
           removed = (project.items || []).find(entry => entry.id === itemId) || null;
+          // A move removes the item it copied: if it was changed meanwhile
+          // (a refresh, an edit, a rename) the copy is stale and the item stays.
+          if (expectUpdatedAt !== undefined && removed && removed.updatedAt !== expectUpdatedAt) {
+            throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was being moved');
+          }
           project.items = (project.items || []).filter(entry => entry.id !== itemId);
           found = project.items.length !== before;
           return found ? project : null;
@@ -752,6 +763,326 @@ export class ProjectService {
       { touchActivity: true }
     );
     return stored?.items?.find(entry => entry.id === itemId) || null;
+  }
+
+  // --- moving items ---------------------------------------------------------
+
+  /**
+   * Copy or move items of one project into another of the same ownership.
+   *
+   * A stored text is bound to its project and item by its encryption's
+   * associated data, so the blob cannot simply change owner: the text is
+   * decrypted, then encrypted again under the target (a fresh data key), with
+   * everything else about the item (kind, reference, pin, provenance, the
+   * original file's metadata) carried over. A link item is copied as is.
+   *
+   * Items go one at a time and each is independent: one that cannot go (not
+   * ready yet, over the target's quota, unreadable text) is reported in
+   * `failed` and the rest continue. A move writes the target first and
+   * removes the source's item afterwards, so an interruption leaves a copy
+   * rather than nothing; a source that cannot be changed rolls the target's
+   * copy back.
+   *
+   * @param {string} sourceId
+   * @param {string[]} itemIds
+   * @param {string} targetId
+   * @param {Object} options
+   * @param {'copy'|'move'} [options.mode='copy']
+   * @param {Object} options.user - The acting user.
+   * @param {Function} [options.authorizeSource]
+   * @param {Function} [options.authorizeTarget]
+   * @returns {Promise<{mode: string, source: Object, target: Object,
+   *   transferred: Array<{itemId: string, newItemId: string, name: string}>,
+   *   failed: Array<{itemId: string, name?: string, code: string, message: string}>}>}
+   * @throws {ProjectError} `PROJECT_NOT_FOUND`, `PROJECT_MISMATCH` (same
+   *   project, or an admin and a user project)
+   */
+  async transferItems(
+    sourceId,
+    itemIds,
+    targetId,
+    { mode = 'copy', user, authorizeSource, authorizeTarget } = {}
+  ) {
+    if (mode !== 'copy' && mode !== 'move') {
+      throw new ProjectError('INVALID_REF', `Unknown transfer mode: ${mode}`);
+    }
+    if (sourceId === targetId) {
+      throw new ProjectError('PROJECT_MISMATCH', 'Choose a different project as the target');
+    }
+    const [source, target] = await Promise.all([
+      this.repository.get(sourceId),
+      this.repository.get(targetId)
+    ]);
+    if (!source || !target) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    if (source.ownership !== target.ownership) {
+      throw new ProjectError(
+        'PROJECT_MISMATCH',
+        'Items move between admin projects or between user projects, not across'
+      );
+    }
+    const transferred = [];
+    const failed = [];
+    for (const itemId of new Set(itemIds || [])) {
+      const name = (source.items || []).find(entry => entry.id === itemId)?.name;
+      try {
+        transferred.push(
+          await this._transferItem(sourceId, itemId, targetId, {
+            mode,
+            user,
+            authorizeSource,
+            authorizeTarget
+          })
+        );
+      } catch (error) {
+        const translated = translateError(error);
+        if (!(translated instanceof ProjectError)) {
+          logger.warn('A project item could not be transferred', {
+            component: COMPONENT,
+            sourceId,
+            targetId,
+            itemId,
+            code: translated.code,
+            error: translated.message
+          });
+        }
+        failed.push({
+          itemId,
+          ...(name ? { name } : {}),
+          code: translated.code || 'ERROR',
+          message: translated.message
+        });
+      }
+    }
+    const [after, targetAfter] = await Promise.all([
+      this.repository.get(sourceId),
+      this.repository.get(targetId)
+    ]);
+    return { mode, source: after || source, target: targetAfter || target, transferred, failed };
+  }
+
+  async _transferItem(
+    sourceId,
+    itemId,
+    targetId,
+    { mode, user, authorizeSource, authorizeTarget }
+  ) {
+    // Read again: an earlier item of the same call changed both projects.
+    const source = await this.repository.get(sourceId);
+    const target = await this.repository.get(targetId);
+    if (!source || !target) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    const item = (source.items || []).find(entry => entry.id === itemId);
+    if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
+    const isText = item.storage === 'text';
+    if (
+      item.refreshingAt ||
+      (isText && !item.text?.blobKey) ||
+      !['ready', 'stale'].includes(item.status)
+    ) {
+      throw new ProjectError(
+        'ITEM_NOT_READY',
+        'The item is still being processed or failed; wait for it or retry it first'
+      );
+    }
+    const newId = (target.items || []).some(entry => entry.id === item.id) ? mintItemId() : item.id;
+    // Refuse before the text is decrypted and encrypted again: a full target
+    // would otherwise cost every item a round trip through the blob store.
+    // The binding check runs again under the target's lock below.
+    this._checkItemQuota(target, { bytes: Number(item.text?.original?.bytes) || 0 });
+    const now = nowIso();
+
+    let block = null;
+    if (isText) {
+      const text = await readText(source, item, {
+        platform: this._platform(),
+        repository: this.repository
+      });
+      block = await storeText({
+        projectId: targetId,
+        itemId: newId,
+        text,
+        original: item.text.original || {},
+        truncated: item.text.truncated === true,
+        platform: this._platform(),
+        repository: this.repository,
+        tenant: item.text.tenant || 'default'
+      });
+      // The text is the same text: it keeps the age of the extraction.
+      if (item.text.extractedAt) block.extractedAt = item.text.extractedAt;
+    }
+
+    const copy = structuredClone(item);
+    copy.id = newId;
+    delete copy.ingestAttempt;
+    delete copy.refreshingAt;
+    delete copy.import;
+    // The shipped documentation keeps syncing wherever it lives; a copy of it
+    // is an independent document.
+    if (mode === 'copy') {
+      delete copy.managedFile;
+      delete copy.managedSha256;
+    }
+    if (block) copy.text = block;
+    copy.provenance = {
+      ...(copy.provenance || {}),
+      transferredFrom: { projectId: sourceId, itemId, mode, by: actorOf(user), at: now }
+    };
+    copy.updatedAt = now;
+
+    const dropBlob = async () => {
+      if (!block) return;
+      await this.repository.blobs.delete(PROJECT_FILES_NAMESPACE, block.blobKey).catch(() => false);
+      evictItemKeys(block.blobKey);
+    };
+    let stored = null;
+    try {
+      stored = await this.repository.mutate(
+        targetId,
+        project => {
+          if ((project.items || []).some(entry => entry.id === newId)) {
+            throw new ProjectError('PROJECT_MISMATCH', 'The target project changed; try again');
+          }
+          this._checkItemQuota(project, { bytes: Number(item.text?.original?.bytes) || 0 });
+          project.items = [...(project.items || []), copy];
+          return project;
+        },
+        { actor: actorOf(user), authorize: authorizeTarget }
+      );
+    } catch (error) {
+      await dropBlob();
+      throw translateError(error);
+    }
+    if (!stored) {
+      await dropBlob();
+      throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    }
+    for (const hook of this.onItemAdded) {
+      await attempt(() => hook(targetId, newId, copy), 'an item hook', {
+        component: COMPONENT,
+        projectId: targetId,
+        itemId: newId
+      });
+    }
+
+    if (mode === 'move') {
+      let removed = null;
+      try {
+        removed = await this.removeItem(sourceId, itemId, {
+          user,
+          authorize: authorizeSource,
+          expectUpdatedAt: item.updatedAt
+        });
+      } catch (error) {
+        await this.removeItem(targetId, newId, { user }).catch(() => null);
+        throw translateError(error);
+      }
+      if (!removed) {
+        await this.removeItem(targetId, newId, { user }).catch(() => null);
+        throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+      }
+    }
+    return { itemId, newItemId: newId, name: copy.name };
+  }
+
+  /**
+   * Merge admin projects into one: every item of each source is moved into
+   * the target, the apps, workflows and agents that linked the source link
+   * the target instead, and, when asked, the emptied source is deleted.
+   *
+   * A source whose items did not all move (an item still being processed, a
+   * quota) is left as it is, with its links: its remaining items stay
+   * reachable where they were, and the same merge can be run again.
+   *
+   * @param {string[]} sourceIds
+   * @param {string} targetId
+   * @param {Object} options
+   * @param {Object} options.user
+   * @param {boolean} [options.deleteSources=false]
+   * @returns {Promise<{target: Object, sources: Array<Object>}>} One entry per
+   *   source: `{id, moved, failed, relinked, merged, deleted}`.
+   */
+  async mergeProjects(sourceIds, targetId, { user, deleteSources = false } = {}) {
+    if (!isAdminProjectId(targetId)) {
+      throw new ProjectError('PROJECT_MISMATCH', 'Only admin projects can be merged');
+    }
+    const ids = [...new Set(sourceIds || [])];
+    if (ids.includes(targetId)) {
+      throw new ProjectError('PROJECT_MISMATCH', 'The target cannot also be a source');
+    }
+    for (const id of ids) {
+      if (!isAdminProjectId(id)) {
+        throw new ProjectError('PROJECT_MISMATCH', 'Only admin projects can be merged');
+      }
+      if (!(await this.repository.get(id))) {
+        throw new ProjectError('PROJECT_NOT_FOUND', `Project not found: ${id}`);
+      }
+    }
+    if (!(await this.repository.get(targetId))) {
+      throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+    }
+    const sources = [];
+    for (const id of ids) {
+      let result;
+      try {
+        const source = await this.repository.get(id);
+        result = await this.transferItems(
+          id,
+          (source?.items || []).map(entry => entry.id),
+          targetId,
+          { mode: 'move', user }
+        );
+      } catch (cause) {
+        // A source deleted meanwhile, a storage error: this source is
+        // reported and the others are still merged.
+        const translated = translateError(cause);
+        logger.error('Merging a project could not start', {
+          component: COMPONENT,
+          sourceId: id,
+          targetId,
+          error: translated.message
+        });
+        sources.push({
+          id,
+          moved: 0,
+          failed: [],
+          relinked: [],
+          merged: false,
+          deleted: false,
+          error: translated.message
+        });
+        continue;
+      }
+      const merged = result.failed.length === 0 && (result.source.items || []).length === 0;
+      let relinked = [];
+      let deleted = false;
+      let error = null;
+      if (merged) {
+        try {
+          relinked = await relinkProjects([id], targetId);
+          // An emptied source nothing links any more is only clutter.
+          if (deleteSources) deleted = Boolean(await this.deleteProject(id));
+        } catch (cause) {
+          // The items are in the target already; what is left is the links
+          // (or the delete), which the same merge can finish.
+          logger.error('Merging a project could not finish', {
+            component: COMPONENT,
+            sourceId: id,
+            targetId,
+            error: cause.message
+          });
+          error = cause.message;
+        }
+      }
+      sources.push({
+        id,
+        moved: result.transferred.length,
+        failed: result.failed,
+        relinked,
+        merged,
+        deleted,
+        ...(error ? { error } : {})
+      });
+    }
+    return { target: await this.repository.get(targetId), sources };
   }
 
   // --- members --------------------------------------------------------------
@@ -983,6 +1314,7 @@ export function getProjectService() {
     if (previous) {
       cachedService.onDeleted = previous.onDeleted;
       cachedService.onItemRemoved = previous.onItemRemoved;
+      cachedService.onItemAdded = previous.onItemAdded;
     }
   }
   return cachedService;

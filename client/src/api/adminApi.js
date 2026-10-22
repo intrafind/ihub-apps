@@ -493,6 +493,48 @@ export const toggleAdminProjects = async (ids, enabled) => {
 };
 
 /**
+ * Merge admin projects into one: every item of the sources moves into the
+ * target, apps, workflows and agents that linked a source link the target, and
+ * with `deleteSources` the emptied sources are deleted. A source whose items
+ * did not all move is kept, with its links.
+ *
+ * @param {{sourceIds: string[], targetId: string, deleteSources?: boolean}} merge
+ * @returns {Promise<{target: Object, sources: Array<{id: string, moved: number,
+ *   failed: Array<{itemId: string, name?: string, code: string, message: string}>,
+ *   relinked: Array<{type: string, id: string, name: string}>, merged: boolean,
+ *   deleted: boolean, error?: string}>}>}
+ */
+export const mergeAdminProjects = async ({ sourceIds, targetId, deleteSources = false }) => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_merge`, {
+    method: 'POST',
+    body: { sourceIds, targetId, deleteSources }
+  });
+  return response.data;
+};
+
+/**
+ * Copy or move items of a project into another admin project. Items that
+ * cannot go (still being processed, over the target's quota) come back in
+ * `failed`; the others went.
+ *
+ * @param {string} projectId - The project the items are in.
+ * @param {{itemIds: string[], targetProjectId: string, mode?: 'copy'|'move'}} transfer
+ * @returns {Promise<{transferred: Array<{itemId: string, newItemId: string, name: string}>,
+ *   failed: Array<{itemId: string, name?: string, code: string, message: string}>,
+ *   source: Object, target: Object}>}
+ */
+export const transferAdminProjectItems = async (
+  projectId,
+  { itemIds, targetProjectId, mode = 'move' }
+) => {
+  const response = await makeAdminApiCall(
+    `${ADMIN_PROJECTS_PATH}/${mode === 'copy' ? '_copy' : '_move'}`,
+    { method: 'POST', body: { sourceId: projectId, targetId: targetProjectId, itemIds } }
+  );
+  return response.data;
+};
+
+/**
  * Read every item of a project the way a chat would.
  *
  * @param {string} projectId
@@ -1326,6 +1368,8 @@ export const adminApi = {
   patchAdminProject,
   deleteAdminProject,
   toggleAdminProjects,
+  mergeAdminProjects,
+  transferAdminProjectItems,
   testAdminProject,
   addAdminProjectItem,
   uploadAdminProjectItem,

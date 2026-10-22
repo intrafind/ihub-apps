@@ -14,6 +14,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 const mockApi = {
   fetchAdminProject: jest.fn(),
+  fetchAdminProjects: jest.fn(),
   fetchAdminProjectKinds: jest.fn(),
   fetchAdminProjectConfig: jest.fn(),
   createAdminProject: jest.fn(),
@@ -37,6 +38,7 @@ jest.mock('../../../client/src/api/adminApi', () => {
       mockApi[name](...args);
   return {
     fetchAdminProject: forward('fetchAdminProject'),
+    fetchAdminProjects: forward('fetchAdminProjects'),
     fetchAdminProjectKinds: forward('fetchAdminProjectKinds'),
     fetchAdminProjectConfig: forward('fetchAdminProjectConfig'),
     createAdminProject: forward('createAdminProject'),
@@ -276,6 +278,33 @@ describe('AdminProjectEditPage – items', () => {
     expect(await screen.findByText('Waiting')).toBeInTheDocument();
     expect(await screen.findByText('Ready', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(mockApi.fetchAdminProject).toHaveBeenCalledTimes(2);
+  });
+
+  test('offers to move the ticked items and forgets one that is gone', async () => {
+    const pending = { ...READY, id: 'i2', name: 'draft.pdf', status: 'pending', text: null };
+    mockApi.fetchAdminProjects.mockResolvedValue([
+      makeProject([]),
+      { id: 'other', name: { en: 'Other' }, items: [] }
+    ]);
+    mockApi.fetchAdminProject
+      .mockResolvedValueOnce(makeProject([READY, pending]))
+      // The poll finds the first item gone (moved or removed by someone else).
+      .mockResolvedValue(makeProject([{ ...pending, status: 'ready' }]));
+    renderAt('/admin/projects/handbook');
+
+    fireEvent.click(await screen.findByLabelText('Select policies.pdf'));
+    const bar = screen.getByTestId('item-selection-bar');
+    expect(bar).toHaveTextContent('1 items selected');
+    fireEvent.click(within(bar).getByRole('button', { name: 'Move to…' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Move or copy items')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('1 items of "Employee handbook"');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await waitFor(() => expect(screen.queryByTestId('item-selection-bar')).toBeNull(), {
+      timeout: 4000
+    });
   });
 
   test('uploads a file through the multipart helper from the dialog', async () => {

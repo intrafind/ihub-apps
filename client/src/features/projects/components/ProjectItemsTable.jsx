@@ -45,6 +45,10 @@ function isRetryable(item) {
  *   refresh (stale, picked).
  * @param {(item: Object) => void} [props.onRename]
  * @param {(item: Object) => void} [props.onRemove]
+ * @param {(item: Object) => void} [props.onTransfer] - Move or copy into another project.
+ * @param {Set<string>} [props.selectedIds] - With `onSelectionChange`, a checkbox column
+ *   selects items for a bulk action the page offers.
+ * @param {(ids: Set<string>) => void} [props.onSelectionChange]
  * @returns {JSX.Element}
  */
 function ProjectItemsTable({
@@ -56,7 +60,10 @@ function ProjectItemsTable({
   onPreview,
   onRefresh,
   onRename,
-  onRemove
+  onRemove,
+  onTransfer,
+  selectedIds,
+  onSelectionChange
 }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
@@ -67,7 +74,47 @@ function ProjectItemsTable({
     return entry ? localizedText(entry.name, language) || kind : kind;
   };
 
+  const selectable = canChange(onSelectionChange);
+  const selected = selectedIds || new Set();
+  const allSelected = (items || []).length > 0 && selected.size === (items || []).length;
+  const checkboxClass =
+    'h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500';
+
+  const selectColumn = {
+    key: 'select',
+    header: (
+      <input
+        type="checkbox"
+        aria-label={t('projects.items.selectAll', 'Select all items')}
+        checked={allSelected}
+        onChange={e =>
+          onSelectionChange(
+            e.target.checked ? new Set((items || []).map(item => item.id)) : new Set()
+          )
+        }
+        className={checkboxClass}
+      />
+    ),
+    width: 'w-10',
+    render: item => (
+      <input
+        type="checkbox"
+        aria-label={t('projects.items.selectItem', 'Select {{name}}', { name: item.name })}
+        checked={selected.has(item.id)}
+        onChange={e => {
+          const next = new Set(selected);
+          if (e.target.checked) next.add(item.id);
+          else next.delete(item.id);
+          onSelectionChange(next);
+        }}
+        onClick={e => e.stopPropagation()}
+        className={checkboxClass}
+      />
+    )
+  };
+
   const columns = [
+    ...(selectable ? [selectColumn] : []),
     {
       key: 'kind',
       header: t('projects.items.columns.kind', 'Kind'),
@@ -159,6 +206,14 @@ function ProjectItemsTable({
       hidden: () => !canChange(onRename),
       disabled: item => busyItemId === item.id,
       onClick: item => onRename(item)
+    },
+    {
+      id: 'transfer',
+      label: t('projects.items.actions.transfer', 'Move or copy to…'),
+      icon: 'arrow-right',
+      hidden: () => !canChange(onTransfer),
+      disabled: item => busyItemId === item.id,
+      onClick: item => onTransfer(item)
     },
     {
       id: 'remove',

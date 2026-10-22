@@ -4121,7 +4121,10 @@
         "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
         "actions": {
           "remove": "Element entfernen"
-        }
+        },
+        "selectedCount": "{{count}} Elemente ausgewählt",
+        "moveSelected": "Verschieben nach…",
+        "copySelected": "Kopieren nach…"
       },
       "unsaved": {
         "title": "Ungespeicherte Änderungen",
@@ -4165,6 +4168,42 @@
         "everyRequest": "wird mit jeder Anfrage gesendet",
         "searched": "durchsucht, bis zu ~{{tokens}} pro Aufruf",
         "largeContextHint": "Dieses Projekt ist größer als die ~{{budget}} Tokens, die in einen Prompt geladen werden. Im Modus „Immer im Prompt“ füllt es das Kontextfenster jeder Anfrage; „Automatisch“ durchsucht es stattdessen."
+      },
+      "mergeSelected": "Zusammenführen…",
+      "mergeHint": "Die Elemente der ausgewählten Projekte in eines davon verschieben",
+      "transfer": {
+        "title": "Elemente verschieben oder kopieren",
+        "subtitle": "{{count}} Elemente aus „{{project}}“",
+        "mode": "Was soll passieren?",
+        "move": "Verschieben",
+        "moveHint": "Die Elemente verlassen dieses Projekt und liegen im anderen.",
+        "copy": "Kopieren",
+        "copyHint": "Die Elemente bleiben hier, das andere Projekt erhält eine eigene Kopie.",
+        "target": "Zielprojekt",
+        "chooseTarget": "Projekt auswählen…",
+        "noTargets": "Es gibt noch kein weiteres Projekt. Legen Sie zuerst eines an.",
+        "confirmMove": "Elemente verschieben",
+        "confirmCopy": "Elemente kopieren",
+        "resultTitle": "Einige Elemente konnten nicht übertragen werden",
+        "resultSummary": "{{done}} von {{total}} Elementen wurden nach „{{target}}“ übertragen. Die übrigen bleiben, wo sie sind."
+      },
+      "merge": {
+        "title": "Projekte zusammenführen",
+        "intro": "Die Elemente der anderen Projekte wandern in das Projekt, das Sie behalten. Apps, Workflows und Agenten, die sie verknüpft hatten, verknüpfen stattdessen das behaltene Projekt.",
+        "keep": "Projekt, das bleibt",
+        "summary": "{{items}} Elemente aus {{projects}} Projekten werden nach „{{target}}“ verschoben.",
+        "dependents": "{{count}} Apps, Workflows oder Agenten verknüpfen stattdessen das behaltene Projekt.",
+        "instructionsWarning": "Anweisungen werden nicht übernommen. Diese Projekte haben welche: {{names}}.",
+        "deleteSources": "Geleerte Projekte löschen",
+        "deleteHint": "Gelöscht wird nur ein Projekt, dessen Elemente alle verschoben wurden.",
+        "confirm": "Projekte zusammenführen",
+        "resultTitle": "Zusammenführung abgeschlossen",
+        "moved": "{{count}} Elemente verschoben",
+        "deleted": "gelöscht",
+        "relinked": "{{count}} Verknüpfungen aktualisiert",
+        "kept": "Mit seinen Verknüpfungen behalten, weil nicht alle Elemente verschoben werden konnten:",
+        "shipped": "Dieses Projekt wird mit iHub ausgeliefert und kommt beim nächsten Serverstart zurück. Deaktivieren Sie es dann, damit es nicht stört.",
+        "dependentsUnknown": "Welche Apps, Workflows oder Agenten diese Projekte verknüpfen, konnte nicht geprüft werden; die Zusammenführung aktualisiert ihre Verknüpfungen trotzdem."
       }
     }
   },
@@ -6255,7 +6294,8 @@
         "refresh": "Aktualisieren",
         "remove": "Element entfernen",
         "rename": "Umbenennen",
-        "retry": "Erneut versuchen"
+        "retry": "Erneut versuchen",
+        "transfer": "Verschieben oder kopieren nach…"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -6290,7 +6330,9 @@
         "staleNewer": "Neuere Version an der Quelle"
       },
       "title": "Dokumente",
-      "tokens": "~{{tokens}} Tokens"
+      "tokens": "~{{tokens}} Tokens",
+      "selectAll": "Alle Elemente auswählen",
+      "selectItem": "{{name}} auswählen"
     },
     "list": {
       "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",
