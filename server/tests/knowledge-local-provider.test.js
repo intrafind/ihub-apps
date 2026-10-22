@@ -639,6 +639,75 @@ describe('tools', () => {
     evictProjectIndex(big.id);
   });
 
+  it('search lets a matching project fill the limit when an unrelated one is attached', async () => {
+    const section = n => `## Deposit rule ${n}\nThe deposit rule ${n} covers the deposit return.`;
+    const rules = await repo.createUser({ owner: ADA, content: { name: 'Rules' } });
+    await repo.mutate(rules.id, p => ({
+      ...p,
+      items: [
+        textItem(
+          'itm_rules',
+          'Rules.md',
+          `# Rules\n\n${Array.from({ length: 12 }, (_, i) => section(i + 1)).join('\n\n')}`
+        )
+      ]
+    }));
+    const unrelated = await repo.createUser({ owner: ADA, content: { name: 'Unrelated' } });
+    await repo.mutate(unrelated.id, p => ({
+      ...p,
+      items: [textItem('itm_weather', 'Weather.md', '# Weather\n\nSunny with light wind.')]
+    }));
+    const result = await runToolCallScope([], () =>
+      search({
+        ...params({ query: 'deposit rule' }),
+        appConfig: { id: 'chat', _projectId: rules.id, _attachedProjectIds: [unrelated.id] }
+      })
+    );
+    assert.equal(result.hits.length, 8, 'the default limit, all from the matching project');
+    assert.ok(result.hits.every(hit => hit.project === rules.id));
+    evictProjectIndex(rules.id);
+    evictProjectIndex(unrelated.id);
+  });
+
+  it('read bounds its serialized bytes and reaches every part of a long multi-byte document', async () => {
+    // 30 000 characters of Japanese: within a 40 000-character budget, but
+    // some 90 KB as UTF-8 JSON.
+    const body = n => `第${n}章の本文です。契約の条件について説明します。`.repeat(200);
+    const chapters = Array.from({ length: 6 }, (_, i) => `## Chapter ${i + 1}\n${body(i + 1)}`);
+    const text = `# Handbook\n\n${chapters.join('\n\n')}`;
+    const jp = await repo.createUser({ owner: ADA, content: { name: 'Japanese' } });
+    await repo.mutate(jp.id, p => ({ ...p, items: [textItem('itm_jp', 'Handbook.md', text)] }));
+    const readJp = section =>
+      read({
+        ...params({ document: 'itm_jp', ...(section ? { section } : {}) }),
+        appConfig: { id: 'chat', _projectId: jp.id }
+      });
+    const bytesOf = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+    const whole = await readJp();
+    assert.notEqual(whole.retrieval.mode, 'full', 'too long in bytes to return whole');
+    assert.ok(bytesOf(whole) <= 40000, `the outline serializes to ${bytesOf(whole)} bytes`);
+    assert.equal(whole.sources[0].read.truncated, true);
+
+    // A section read of the whole tree names where it continues, and the
+    // sections after that it still spans, until every chapter was read.
+    const seen = new Set();
+    const queue = ['handbook'];
+    const asked = new Set();
+    while (queue.length && asked.size < 12) {
+      const section = queue.shift();
+      if (asked.has(section)) continue;
+      asked.add(section);
+      const part = await readJp(section);
+      assert.ok(bytesOf(part) <= 40000, `a section read serializes to ${bytesOf(part)} bytes`);
+      for (let n = 1; n <= 6; n++) if (part.content.includes(`第${n}章`)) seen.add(n);
+      const footer = part.content.split('The section continues:')[1] || '';
+      queue.push(...[...footer.matchAll(/"([^"]+)"/g)].map(match => match[1]));
+    }
+    assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5, 6]);
+    evictProjectIndex(jp.id);
+  });
+
   it('read and list work by document id', async () => {
     const doc = await read(params({ document: 'itm_policy' }));
     assert.equal(doc.name, 'Policy.md');
