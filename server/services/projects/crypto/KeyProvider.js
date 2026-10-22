@@ -119,7 +119,9 @@ export class LocalFileKeyProvider extends KeyProvider {
     const [current] = this._keys();
     if (!current) throw new KeyAccessDenied('The master key is not initialized', null);
     const iv = crypto.randomBytes(IV_BYTES);
-    const cipher = crypto.createCipheriv('aes-256-gcm', current.key, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', current.key, iv, {
+      authTagLength: TAG_BYTES
+    });
     cipher.setAAD(Buffer.from(String(aad ?? ''), 'utf8'));
     const body = Buffer.concat([cipher.update(dataKey), cipher.final()]);
     const tag = cipher.getAuthTag();
@@ -144,7 +146,9 @@ export class LocalFileKeyProvider extends KeyProvider {
     const body = wrapped.subarray(1 + IV_BYTES + TAG_BYTES);
     for (const candidate of candidates) {
       try {
-        const decipher = crypto.createDecipheriv('aes-256-gcm', candidate.key, iv);
+        const decipher = crypto.createDecipheriv('aes-256-gcm', candidate.key, iv, {
+          authTagLength: TAG_BYTES
+        });
         decipher.setAAD(Buffer.from(String(aad ?? ''), 'utf8'));
         decipher.setAuthTag(tag);
         return Buffer.concat([decipher.update(body), decipher.final()]);

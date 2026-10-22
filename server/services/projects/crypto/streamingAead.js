@@ -108,7 +108,9 @@ export function encrypt(
     const piece = input.subarray(offset, end);
     offset = end;
     const last = offset >= input.length;
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonceOf(noncePrefix, index, last));
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, nonceOf(noncePrefix, index, last), {
+      authTagLength: TAG_BYTES
+    });
     chunks.push(cipher.update(piece), cipher.final(), cipher.getAuthTag());
     index += 1;
     if (index > 0xffffffff) throw new StreamingAeadError('Too many segments');
@@ -153,7 +155,12 @@ export function decrypt(
     const last = end >= ciphertext.length;
     const body = segment.subarray(0, segment.length - TAG_BYTES);
     const tag = segment.subarray(segment.length - TAG_BYTES);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonceOf(noncePrefix, index, last));
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      key,
+      nonceOf(noncePrefix, index, last),
+      { authTagLength: TAG_BYTES }
+    );
     decipher.setAuthTag(tag);
     try {
       chunks.push(decipher.update(body), decipher.final());
