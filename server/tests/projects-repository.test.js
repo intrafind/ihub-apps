@@ -213,6 +213,29 @@ describe('user projects', () => {
     );
   });
 
+  it('scans in pages without repeating a document when a budget stops it', async () => {
+    const owner = { id: 'user-scan', name: 'Scan' };
+    const made = [];
+    for (const name of ['S1', 'S2', 'S3']) {
+      made.push((await repo.createUser({ owner, content: { name } })).id);
+    }
+    const mine = project => project.owner?.id === owner.id;
+    const seen = [];
+    let cursor = null;
+    let rounds = 0;
+    do {
+      const page = await repo.scanUser({ filter: mine, max: 1, cursor });
+      assert.ok(page.projects.length <= 1, 'at most one project per round');
+      seen.push(...page.projects.map(project => project.id));
+      cursor = page.truncated ? page.nextCursor : null;
+      rounds += 1;
+    } while (cursor && rounds < 50);
+    assert.deepEqual([...seen].sort(), [...made].sort(), 'every project exactly once');
+    const all = await repo.scanUser({ filter: mine });
+    assert.equal(all.truncated, false);
+    assert.equal(all.projects.length, 3);
+  });
+
   it("removes a project's blobs by prefix", async () => {
     const blobs = getStorage().blobs;
     await blobs.put(PROJECT_FILES_NAMESPACE, 'prj_a__itm_1__v1', 'one');
