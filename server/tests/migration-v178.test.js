@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V177 — the six IntraFind website projects become one.
+ * Migration V178 — the six IntraFind website projects become one.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -17,7 +17,7 @@ import {
   relinkList,
   up,
   version
-} from '../migrations/V177__merge_intrafind_website_projects.js';
+} from '../migrations/V178__merge_intrafind_website_projects.js';
 
 const SHIPPED = JSON.parse(
   await fs.readFile(new URL('../defaults/projects/intrafind-website.json', import.meta.url), 'utf8')
@@ -111,16 +111,16 @@ async function seed(dir, { ids = MERGED_PROJECT_IDS, projects = {}, extra = {} }
   for (const [rel, doc] of Object.entries(extra)) await ctx.writeJson(rel, doc);
 }
 
-describe('V177 — one IntraFind website project', () => {
+describe('V178 — one IntraFind website project', () => {
   before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v177-'));
+    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'v178-'));
   });
   after(async () => {
     await fs.rm(baseDir, { recursive: true, force: true });
   });
 
   it('exports its identity', () => {
-    assert.equal(version, '177');
+    assert.equal(version, '178');
     assert.equal(description, 'merge_intrafind_website_projects');
   });
 
