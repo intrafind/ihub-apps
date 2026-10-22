@@ -287,7 +287,7 @@ export class ProjectService {
     // then project, see `moveChatToProject`); a detach that fails keeps the
     // marked project, its marker and the chat's association, and the same
     // delete can be retried. The document goes only once every chat is gone.
-    let project;
+    let project = null;
     try {
       project = await this.repository.markDeleting(projectId, { authorize });
     } catch (error) {
@@ -303,7 +303,7 @@ export class ProjectService {
         { project: { id: projectId, ownership: project.ownership }, deleted: false, chats: failed }
       );
     }
-    let removed;
+    let removed = null;
     try {
       removed = await this.repository.delete(projectId, { authorize });
     } catch (error) {
