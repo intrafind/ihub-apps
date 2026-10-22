@@ -237,7 +237,9 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
           {/* Zoom */}
           <div className={isText ? 'hidden' : 'hidden sm:flex items-center gap-1'}>
             <button
-              onClick={() => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)))}
+              onClick={() =>
+                setScale(s => Math.max(MIN_SCALE, Number((s - SCALE_STEP).toFixed(2))))
+              }
               className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
               title={t('documentPreview.zoomOut', 'Zoom out')}
               aria-label={t('documentPreview.zoomOut', 'Zoom out')}
@@ -250,7 +252,9 @@ function DocumentPreviewModal({ source, title, passages = [], initialPassageInde
               {Math.round(scale * 100)}%
             </span>
             <button
-              onClick={() => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)))}
+              onClick={() =>
+                setScale(s => Math.min(MAX_SCALE, Number((s + SCALE_STEP).toFixed(2))))
+              }
               className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
               title={t('documentPreview.zoomIn', 'Zoom in')}
               aria-label={t('documentPreview.zoomIn', 'Zoom in')}

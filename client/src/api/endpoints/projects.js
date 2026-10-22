@@ -42,8 +42,7 @@ const call = request => handleApiResponse(request, null, null, false);
  *   kinds: Array<Object>, upload: {available: boolean, accept: string[], mimeTypes: string[],
  *   summary: string}}>}
  */
-export const fetchProjectsConfig = async () =>
-  call(() => apiClient.get(`${PROJECTS_PATH}/_config`));
+export const fetchProjectsConfig = () => call(() => apiClient.get(`${PROJECTS_PATH}/_config`));
 
 /**
  * The projects the caller may use: owned, shared with them, and admin
@@ -63,7 +62,7 @@ export const fetchProjects = async ({ scope = 'all' } = {}) => {
  * @param {{name: string, description?: string, instructions?: string}} project
  * @returns {Promise<Object>} The created project.
  */
-export const createProject = async project => call(() => apiClient.post(PROJECTS_PATH, project));
+export const createProject = project => call(() => apiClient.post(PROJECTS_PATH, project));
 
 /**
  * One project with its items and the caller's permissions.
@@ -71,7 +70,7 @@ export const createProject = async project => call(() => apiClient.post(PROJECTS
  * @param {string} projectId
  * @returns {Promise<Object>}
  */
-export const fetchProject = async projectId => call(() => apiClient.get(projectPath(projectId)));
+export const fetchProject = projectId => call(() => apiClient.get(projectPath(projectId)));
 
 /**
  * Change a project's name, description or instructions (owner and editors).
@@ -80,7 +79,7 @@ export const fetchProject = async projectId => call(() => apiClient.get(projectP
  * @param {{name?: string, description?: string, instructions?: string}} changes
  * @returns {Promise<Object>} The updated project.
  */
-export const updateProject = async (projectId, changes) =>
+export const updateProject = (projectId, changes) =>
   call(() => apiClient.patch(projectPath(projectId), changes));
 
 /**
@@ -134,7 +133,7 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
  * @param {{name?: string, pinned?: boolean}} changes
  * @returns {Promise<Object>} The updated item.
  */
-export const updateProjectItem = async (projectId, itemId, changes) =>
+export const updateProjectItem = (projectId, itemId, changes) =>
   call(() => apiClient.patch(itemPath(projectId, itemId), changes));
 
 /**
@@ -190,7 +189,7 @@ export const fetchProjectItemText = async (projectId, itemId, { maxChars = 20000
  * @param {Array<{type: 'user'|'group'|'everyone', id?: string, role: 'user'|'editor'}>} members
  * @returns {Promise<Object>} The project with its new member list.
  */
-export const updateProjectMembers = async (projectId, members) =>
+export const updateProjectMembers = (projectId, members) =>
   call(() => apiClient.put(`${projectPath(projectId)}/members`, { members }));
 
 /**
@@ -201,7 +200,7 @@ export const updateProjectMembers = async (projectId, members) =>
  *   users: Array<{id: string, name: string, email: string|null}>,
  *   groups: Array<{id: string, name: string, description: string}>}>}
  */
-export const fetchProjectShareTargets = async (query = '') =>
+export const fetchProjectShareTargets = (query = '') =>
   call(() => apiClient.get(`${PROJECTS_PATH}/share-targets`, { params: { q: query } }));
 
 /**
@@ -212,7 +211,7 @@ export const fetchProjectShareTargets = async (query = '') =>
  * @returns {Promise<Object>} The project, or `{ id, transferred: true }` when
  *   the caller can no longer see it.
  */
-export const transferProject = async (projectId, ownerId) =>
+export const transferProject = (projectId, ownerId) =>
   call(() => apiClient.post(`${projectPath(projectId)}/transfer`, { ownerId }));
 
 /**
@@ -237,7 +236,7 @@ export const fetchProjectChats = async (projectId, { filter = 'all' } = {}) => {
  * @param {string|null} projectId
  * @returns {Promise<{chat: Object}>}
  */
-export const moveChatToProject = async (chatId, projectId) =>
+export const moveChatToProject = (chatId, projectId) =>
   call(() => apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, { projectId }));
 
 // --- pickers of the "Add item" dialog ---------------------------------------------

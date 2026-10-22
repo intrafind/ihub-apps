@@ -19,17 +19,21 @@ const ICONS = { uploaded: 'upload', picked: 'cloud', linked: 'link' };
  * @param {string} [props.className]
  * @returns {JSX.Element|null}
  */
+function provenanceLabel(view, t) {
+  if (view.marker === 'uploaded') return t('projects.provenance.uploaded', 'Uploaded');
+  if (view.marker === 'linked') return t('projects.provenance.linked', 'Linked');
+  if (view.site) {
+    return t('projects.provenance.pickedFrom', 'Picked from {{site}}', { site: view.site });
+  }
+  return t('projects.provenance.picked', 'Picked');
+}
+
 function ItemProvenance({ provenance, item, className = '' }) {
   const { t, i18n } = useTranslation();
   const view = provenanceView(provenance, item);
   if (!view) return null;
   const date = formatSnapshotDate(view.at, i18n?.language);
-  let label;
-  if (view.marker === 'uploaded') label = t('projects.provenance.uploaded', 'Uploaded');
-  else if (view.marker === 'linked') label = t('projects.provenance.linked', 'Linked');
-  else if (view.site) {
-    label = t('projects.provenance.pickedFrom', 'Picked from {{site}}', { site: view.site });
-  } else label = t('projects.provenance.picked', 'Picked');
+  const label = provenanceLabel(view, t);
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ${className}`}
