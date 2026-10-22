@@ -8,7 +8,6 @@ import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 
-
 /**
  * The registry of the link handlers (URL, iFinder, page) the project items
  * read through, and the probes the pickers use to test a link. Loading
