@@ -23,7 +23,9 @@ jest.mock('../../../client/src/api/adminApi', () => ({
 }));
 
 const { useAdminProject } = require('../../../client/src/features/admin/hooks/useAdminProject');
-const { ITEM_POLL_INTERVAL_MS } = require('../../../client/src/features/admin/utils/projectAdmin');
+const {
+  ITEM_POLL_INTERVAL_MS
+} = require('../../../client/src/features/projects/utils/projectItems');
 
 beforeEach(() => {
   mockFetch.mockClear();
