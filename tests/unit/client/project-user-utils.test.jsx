@@ -199,16 +199,30 @@ describe('project items — documents linked from other projects', () => {
     ).toMatchObject({ enabled: true });
   });
 
-  test('lists every project the viewer uses but this one and compliance views', () => {
+  test('lists only own and published projects, each once, but this one', () => {
+    const own = { canUse: true, isOwner: true };
+    const uses = { canUse: true, isOwner: false };
     const projects = [
-      { id: 'faq', ownership: 'admin', role: 'linked', permissions: { canUse: true } },
-      { id: 'prj_here', ownership: 'user', role: 'owner', permissions: { canUse: true } },
-      { id: 'prj_shared', ownership: 'user', role: 'user', permissions: { canUse: true } },
-      { id: 'prj_someone', ownership: 'user', role: 'admin', permissions: { canUse: true } }
+      { id: 'faq', ownership: 'admin', role: 'linked', permissions: uses },
+      { id: 'docs', ownership: 'admin', role: 'catalog', published: true, permissions: uses },
+      { id: 'prj_here', ownership: 'user', role: 'owner', permissions: own },
+      { id: 'prj_mine', ownership: 'user', role: 'owner', permissions: own },
+      { id: 'prj_shared', ownership: 'user', role: 'user', permissions: uses },
+      {
+        id: 'prj_public',
+        ownership: 'user',
+        role: 'catalog',
+        audience: { catalog: true },
+        permissions: uses
+      },
+      { id: 'prj_someone', ownership: 'user', role: 'admin', permissions: uses },
+      // The catalog lists a project the list has already.
+      { id: 'prj_mine', ownership: 'user', role: 'owner', permissions: own }
     ];
     expect(linkSourceProjects(projects, 'prj_here').map(project => project.id)).toEqual([
-      'prj_shared',
-      'faq'
+      'prj_mine',
+      'prj_public',
+      'docs'
     ]);
   });
 
@@ -379,7 +393,11 @@ describe('project page rules', () => {
       '/apps/chat?attachProject=prj_a'
     );
     expect(
-      appsForProjectChats([{ id: 'a' }, { id: 'b', features: { userProjects: false } }])
+      appsForProjectChats([
+        { id: 'a' },
+        { id: 'b', features: { userProjects: false } },
+        { id: 'c', features: { projects: false } }
+      ])
     ).toEqual([{ id: 'a' }]);
     // Only chat apps start a chat; an omitted type is a chat app.
     expect(

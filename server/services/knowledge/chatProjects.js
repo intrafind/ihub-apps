@@ -16,7 +16,11 @@ import logger from '../../utils/logger.js';
 import { callerContext, ensurePrincipal, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository, isProjectId } from '../projects/ProjectRepository.js';
 import { getProjectService } from '../projects/ProjectService.js';
-import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
+import {
+  appAllowsUserProjects,
+  isProjectsConfigured,
+  isUserProjectsConfigured
+} from '../projects/projectSettings.js';
 import { canHoldProjects } from '../projects/projectAccess.js';
 import { MAX_ATTACHED_PROJECTS } from '../projects/projectConstants.js';
 
@@ -91,7 +95,7 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
     isProjectsConfigured(features) &&
     isUserProjectsConfigured(features) &&
     canHoldProjects(req.user) &&
-    app?.features?.userProjects !== false;
+    appAllowsUserProjects(app);
   if (!allowed) {
     logger.warn('Project fields on a chat request were ignored', {
       component: 'chatProjects',

@@ -4,7 +4,7 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { isToolSelected } from '../../utils/toolSelection.js';
-import { isProjectsConfigured } from '../projects/projectSettings.js';
+import { appUsesProjects, isProjectsConfigured } from '../projects/projectSettings.js';
 
 /**
  * Sources have no standalone group-level permission — they are scoped through
@@ -101,7 +101,7 @@ export async function getVisibleProjectIds(user, platform) {
   const apps = await getAccessibleApps(user, platform);
   const ids = new Set();
   for (const app of apps) {
-    if (!Array.isArray(app.projects)) continue;
+    if (!appUsesProjects(app) || !Array.isArray(app.projects)) continue;
     for (const link of app.projects) {
       const id = typeof link === 'string' ? link : link?.id;
       if (typeof id === 'string' && id) ids.add(id);

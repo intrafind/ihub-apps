@@ -3,6 +3,7 @@
   "id": "ihub-documentation",
   "ownership": "admin",
   "tier": "ihub",
+  "published": true,
   "name": {
     "en": "iHub Documentation",
     "de": "iHub-Dokumentation"

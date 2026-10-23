@@ -14,6 +14,7 @@ import ProjectMembersSection from '../components/ProjectMembersSection';
 import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
 import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
+import { PANEL_CARD } from '../components/ProjectPanelRow';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -192,10 +193,15 @@ function ProjectPageContent({ projectId }) {
         {readOnlyOwnerGone && <ReadOnlyBanner />}
         {project.ownership === 'admin' && (
           <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'projects.page.adminProject',
-              'This project comes with one of your apps. Administrators manage it.'
-            )}
+            {project.role === 'catalog'
+              ? t(
+                  'projects.page.publishedAdminProject',
+                  'Administrators published this project for everyone. They manage it.'
+                )
+              : t(
+                  'projects.page.adminProject',
+                  'This project comes with one of your apps. Administrators manage it.'
+                )}
           </p>
         )}
         {(error || deleteError) && (
@@ -229,7 +235,8 @@ function ProjectPageContent({ projectId }) {
               reload={reload}
             />
           </div>
-          <div className="space-y-6 min-w-0">
+          {/* The side panel: one card of compact rows; editing opens a dialog. */}
+          <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
             <ProjectSettingsCard
               project={project}
               editable={editable}

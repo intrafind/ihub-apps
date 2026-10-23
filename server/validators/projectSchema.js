@@ -212,6 +212,9 @@ export const adminProjectSchema = z
     description: localized(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).prefault(''),
     enabled: z.boolean().prefault(true),
+    // Published: everyone signed in may use it and link its documents into
+    // their own projects, not only the apps, workflows and agents linking it.
+    published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).prefault([]),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
@@ -256,6 +259,9 @@ export const adminProjectCreateSchema = z
     description: localized(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).prefault(''),
     enabled: z.boolean().prefault(true),
+    // Published: everyone signed in may use it and link its documents into
+    // their own projects, not only the apps, workflows and agents linking it.
+    published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).prefault([]),
     items: z.array(adminItemCreateSchema).max(MAX_FILES_CEILING).prefault([])
@@ -296,6 +302,7 @@ export const adminProjectUpdateSchema = z
     description: localized(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     enabled: z.boolean().optional(),
+    published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).optional()
   })

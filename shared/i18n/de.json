@@ -3322,7 +3322,11 @@
           "confirmDelete": "Die Anleitung dieser App löschen?"
         },
         "projects": "Projekte",
-        "projectsDesc": "Verknüpfen Sie Admin-Projekte, deren Wissen diese App nutzt. Legen Sie pro Projekt fest, ob es in den Prompt geladen, mit Tools durchsucht oder automatisch nach Größe entschieden wird."
+        "projectsDesc": "Verknüpfen Sie Admin-Projekte, deren Wissen diese App nutzt. Legen Sie pro Projekt fest, ob es in den Prompt geladen, mit Tools durchsucht oder automatisch nach Größe entschieden wird.",
+        "projectsEnabled": "Projekte in dieser App nutzen",
+        "projectsEnabledNote": "Wenn deaktiviert, nutzt die App kein Projekt: weder die unten verknüpften noch Chats, die in einem Projekt begonnen wurden, noch im Chat angehängte Projekte.",
+        "userProjectsEnabled": "Persönliche Projekte erlauben",
+        "userProjectsEnabledNote": "Benutzer können Chats dieser App in eigenen Projekten beginnen und eigene Projekte im Chat anhängen. Die plattformweite Funktion für persönliche Projekte muss ebenfalls aktiviert sein."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -4061,6 +4065,12 @@
       }
     },
     "projects": {
+      "settings": "Einstellungen",
+      "publish": {
+        "confirmTitle": "Dieses Projekt veröffentlichen?",
+        "confirmMessage": "Alle angemeldeten Benutzer können dann seine Dokumente und Anweisungen lesen und mit eigenen Projekten verknüpfen, auch wer die Apps, Workflows oder Agenten, die es verknüpfen, nicht nutzen darf. Nur Administratoren können es ändern.",
+        "confirm": "Veröffentlichen"
+      },
       "itemCount": "{{count}} Elemente",
       "deleteTitle": "Projekt löschen",
       "deleteConfirm": "„{{name}}“ mit allen Elementen löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -4126,6 +4136,8 @@
         "id": "Projekt-ID",
         "idFixed": "Die ID kann nach dem Anlegen nicht geändert werden.",
         "enabled": "Aktiviert",
+        "published": "Veröffentlicht",
+        "publishedHint": "Alle angemeldeten Benutzer können es nutzen und seine Dokumente mit eigenen Projekten verknüpfen, auch ohne Zugriff auf die Apps, die es verknüpfen.",
         "name": "Name",
         "namePlaceholder": "Projektname",
         "description": "Beschreibung",
@@ -4234,6 +4246,10 @@
       "view": {
         "edit": "Bearbeiten",
         "noDescription": "Keine Beschreibung.",
+        "visibility": "Sichtbarkeit",
+        "editDescription": "Beschreibung bearbeiten",
+        "changeVisibility": "Sichtbarkeit ändern",
+        "notPublished": "Nur die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, nutzen es.",
         "noInstructions": "Keine Anweisungen.",
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",
@@ -5251,6 +5267,7 @@
     "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."
   },
   "startPage": {
+    "messageTooLong": "Diese Nachricht ist zu lang, um sie von hier zu senden.",
     "greetingMorning": "Guten Morgen",
     "greetingAfternoon": "Guten Tag",
     "greetingEvening": "Guten Abend",
@@ -6314,6 +6331,7 @@
       "linkNoProjects": "Es gibt kein anderes Projekt, das Sie nutzen können.",
       "linkProject": "Projekt",
       "linkChooseProject": "Projekt wählen…",
+      "linkPublished": "{{name}} (veröffentlicht)",
       "linkFromApps": "{{name}} (aus Apps)",
       "linkNoItems": "Dieses Projekt hat keine Dokumente.",
       "linkDocuments": "Dokumente",
@@ -6483,6 +6501,7 @@
       "count_other": "{{count}} Mitglieder"
     },
     "page": {
+      "publishedAdminProject": "Administratoren haben dieses Projekt für alle veröffentlicht. Sie verwalten es.",
       "adminProject": "Dieses Projekt gehört zu einer Ihrer Apps. Administratoren verwalten es.",
       "backToList": "Alle Projekte",
       "breadcrumb": "Brotkrumennavigation",
@@ -6515,7 +6534,19 @@
       "user": "Benutzer",
       "catalog": "Aus dem Katalog"
     },
+    "panel": {
+      "add": "Hinzufügen",
+      "view": "Anzeigen",
+      "change": "Ändern"
+    },
     "settings": {
+      "addInstructions": "Anweisungen hinzufügen",
+      "details": "Name und Beschreibung",
+      "editDetails": "Name und Beschreibung bearbeiten",
+      "editInstructions": "Anweisungen bearbeiten",
+      "viewInstructions": "Anweisungen anzeigen",
+      "changeDefaultApp": "Standard-App ändern",
+      "noDefaultApp": "Keine — die erste App wird verwendet",
       "editTitle": "Einstellungen",
       "noInstructions": "Keine Anweisungen.",
       "reset": "Änderungen verwerfen",
@@ -6594,12 +6625,9 @@
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
     },
     "composer": {
-      "title": "Chat in diesem Projekt beginnen",
       "placeholder": "Neuer Chat in {{name}}",
       "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
-      "app": "App",
-      "send": "Senden",
-      "tooLong": "Diese Nachricht ist zu lang, um sie von hier zu senden."
+      "app": "App"
     },
     "appSelect": {
       "unavailable": "{{id}} (nicht verfügbar)"

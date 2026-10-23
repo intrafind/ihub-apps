@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatTokenCount } from '../utils/tokenStats';
@@ -18,10 +19,17 @@ import { formatTokenCount } from '../utils/tokenStats';
 function ProjectTestResults({ result, onDismiss }) {
   const { t } = useTranslation();
   const items = result.items || [];
+  const ref = useRef(null);
+  // A result that lands below the fold would look as if the button did nothing.
+  useEffect(() => {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [result]);
 
   return (
     <section
       className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6"
+      ref={ref}
       data-testid="project-test-results"
     >
       <div className="flex items-center mb-4">

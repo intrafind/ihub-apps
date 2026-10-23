@@ -41,6 +41,7 @@ import {
   scopeSummary
 } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeToolsFor } from '../services/knowledge/knowledgeTools.js';
+import { linkedProjectIds } from '../services/projects/projectLinks.js';
 import { list, read, search } from '../tools/knowledge.js';
 import { projectSource, projectSourceProducer } from '../services/sources/producers/project.js';
 import { extractToolSources } from '../services/sources/index.js';
@@ -1253,6 +1254,29 @@ describe('sources', () => {
 });
 
 describe('feature switches', () => {
+  it('grants no project through an app that switched projects off', () => {
+    const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, projects: ['kb'] },
+      {
+        id: 'dark',
+        name: { en: 'Dark' },
+        enabled: true,
+        projects: ['kb-dark'],
+        features: { projects: false }
+      }
+    ]);
+    try {
+      const ids = linkedProjectIds(reader);
+      assert.ok(ids.has('kb'));
+      assert.equal(ids.has('kb-dark'), false, 'the switched-off app grants nothing');
+    } finally {
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+    }
+  });
+
   it('darkens admin and user projects with the master switch, user projects with their own', async () => {
     const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
     await repo.createAdmin(
@@ -1278,6 +1302,20 @@ describe('feature switches', () => {
         'admin projects stay available without user projects'
       );
       assert.ok((await providerContent({ ref: kbRef, user: reader, format: 'text' })).body);
+
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
+      // An app the admin switched projects off for reaches none of its own;
+      // a workflow's links are the workflow's.
+      const appOff = { ...appConfig, features: { projects: false } };
+      assert.deepEqual(await resolveProjectScope({ appConfig: appOff, user: reader }), []);
+      const workflowLinks = await resolveProjectScope({
+        appConfig: { ...appOff, _workflowProjects: ['kb'] },
+        user: reader
+      });
+      assert.deepEqual(
+        workflowLinks.map(entry => entry.project.id),
+        ['kb']
+      );
 
       configCache.setCacheEntry('config/features.json', { projects: false, userProjects: true });
       assert.deepEqual(await resolveProjectScope({ appConfig, user: reader }), []);
@@ -1363,6 +1401,17 @@ describe('chat container', () => {
     } finally {
       configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
     }
+
+    // So are they for an app the admin switched projects off for.
+    const appOff = await resolveChatProjects({
+      req: req(),
+      chat: null,
+      app: { id: 'chat', features: { projects: false } },
+      projectId: textProject.id
+    });
+    assert.equal(appOff.ok, true);
+    assert.equal(appOff.newContainer, false);
+    assert.equal(appOff.containerId, null);
   });
 });
 

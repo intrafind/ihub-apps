@@ -235,17 +235,26 @@ system prompt.
 </projects>
 ```
 
-### Switching user projects off for an app
+### Switching projects off for an app
 
-`features.userProjects` on an app (default `true`) decides whether chats in this app may run inside
-a user project. An app that answers from a fixed knowledge set turns it off:
+Two switches on an app decide what it does with projects. Both are on unless set to `false`, and
+both are under **Admin → Apps → Edit → Projects**:
+
+| Setting                 | Admin label                  | When `false`                                                                                                                               |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `features.projects`     | **Use projects in this app** | The app uses no project at all: not its linked admin projects, no chat runs inside a project and none can be attached from the chat input. |
+| `features.userProjects` | **Allow personal projects**  | The app keeps its admin project links, but no chat of it runs inside a user project or attaches one.                                       |
+
+An app that answers from a fixed knowledge set turns personal projects off:
 
 ```json
 { "features": { "userProjects": false } }
 ```
 
-The app's own admin project links keep working. The project page offers only apps that allow
-projects when you start a chat.
+The project page offers only apps that allow personal projects when you start a chat. The
+installation-wide feature flags `projects` and `userProjects` still have to be on; the app
+switches can only narrow them. A workflow step's own project links are the workflow's and are not
+affected.
 
 ### Checking a project
 
@@ -381,13 +390,13 @@ instructions). The button shows how many projects you have against `maxProjectsP
 
 A project page shows:
 
-- **A chat field** at the top, the main action: type a message and press Enter (or **Send**) to
-  start a chat in the project, with that message already sent. The app next to the button is the
-  project's default app (see **Settings**); pick another one to chat with it this time. Without a
-  message the button reads **New chat** and opens an empty chat. The message goes to the chat in
-  the link that opens it. A message whose link would be longer than 7,500 characters (a little over
-  7,000 characters of ordinary text, fewer for text with many non-English characters) shows an error
-  when you click **Send** and no chat is started.
+- **A chat input** at the top, the main action: the same input as the start page, with
+  attachments, the model selector, tools, web search, magic prompt and dictation. Send a message to
+  start a chat in the project, with that message already sent. The app above the input is the
+  project's default app; pick another one to chat with it this time. **New chat** opens an empty
+  chat. The message goes to the chat in the link that opens it. A message whose link would be
+  longer than 7,500 characters (a little over 7,000 characters of ordinary text, fewer for text
+  with many non-English characters) shows an error when you send it and no chat is started.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
   page pages its list the same way; a list on these pages never grows with its content.
@@ -395,11 +404,13 @@ A project page shows:
   documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
   and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
   document and the project weigh.
-- **Settings**: name (up to 200 characters), description (up to 2,000 characters),
-  instructions (up to 20,000 characters) and the **default app**. The instructions apply to every
-  chat in the project. The default app is where new chats of the project start; everyone can still
-  pick another app in the chat field. If you cannot use the default app (it was removed, or it is
-  not shared with you), the first app that allows projects is used instead.
+- **A side panel** of compact rows: the **Instructions** (a preview), the **default app**, the
+  **Members** and, where it applies, the **Catalog**. Owners and editors click **Edit** or
+  **Change** to open the settings: name (up to 200 characters), description (up to 2,000
+  characters), instructions (up to 20,000 characters) and the default app. The instructions apply
+  to every chat in the project. The default app is where new chats of the project start; everyone
+  can still pick another app above the chat input. If you cannot use the default app (it was
+  removed, or it is not shared with you), the first app that allows projects is used instead.
 - **Members**: the owner, the members, **Share**, **Transfer ownership**, **Leave project** and
   **Delete project**.
 
@@ -414,14 +425,17 @@ picked cloud file is taken with your account; refresh the item later to take it 
 
 **From another project** links documents instead of copying them, so one document can serve several
 projects without being duplicated: for example the shipped iHub documentation (an admin project)
-next to your own notes in a project about an iHub delivery. Pick one of the projects you use (your
-own, shared ones, and the admin projects of your apps), tick its documents and link them.
+next to your own notes in a project about an iHub delivery. Pick one of your own projects or a
+published one, tick its documents and link them.
 
 - Nothing is copied. A chat reads the original as it is now, so a change to the original shows in
   every project that links it. A linked document counts as one item against the project's limit,
   and none of its bytes.
-- You can link a document only from a project you own, are a member of, or reach through an app.
-  A full administrator's compliance view of someone else's project is not enough.
+- You can link documents only from a project you own or a published one: a user project in the
+  catalog (while the catalog is on) or an admin project switched to **Published**. A project
+  shared with you, an admin project you reach only through an app, or a full administrator's
+  compliance view of someone else's project is not enough. Into an admin project, an
+  administrator also links from the admin projects they manage. Links added earlier keep working.
 - Everyone reads a linked document with their own rights: a member of your project who may not use
   the source project gets nothing from it, and the document shows **No access** for them. Sharing
   your project does not share the projects it links.
@@ -430,6 +444,14 @@ own, shared ones, and the admin projects of your apps), tick its documents and l
   link another document. Linked documents are not refreshed: they always read the source.
 - Moving an admin project's document to another project, or merging admin projects, does not
   re-point the links to it: they show **Source removed** and are linked again from the new place.
+
+### Publishing admin projects
+
+**Published** on an admin project (**Admin → Projects → Edit**, `"published": true` in
+`contents/projects/<id>.json`) makes it available to everyone signed in: they can use it and link
+its documents into their own projects, without an app that links it. Only administrators change
+it. The shipped iHub documentation project is published; installations that upgrade get it
+published too (migration V181), unless an administrator already set the switch.
 
 ### Roles and sharing
 

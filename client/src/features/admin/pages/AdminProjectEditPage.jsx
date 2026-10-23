@@ -1,18 +1,16 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   addAdminProjectItem,
   checkProjectPickerUrl,
   createAdminProject,
   deleteAdminProjectItem,
-  estimateAdminProject,
   fetchAdminProjectConfig,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
@@ -20,7 +18,6 @@ import {
   getAdminApiErrorMessage,
   refreshAdminProjectItem,
   searchProjectPickerIFinder,
-  testAdminProject,
   updateAdminProject,
   updateAdminProjectItem,
   updateAdminProjectItemText,
@@ -31,10 +28,13 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
-import ProjectTestResults from '../components/ProjectTestResults';
-import EstimateTokensButton from '../../projects/components/EstimateTokensButton';
-import ProjectEstimatePanel from '../../projects/components/ProjectEstimatePanel';
-import { useProjectEstimate } from '../../projects/hooks/useProjectEstimate';
+import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
+import {
+  AdminProjectCheckResults,
+  AdminProjectHeaderActions,
+  ProjectDetailLayout,
+  useAdminProjectChecks
+} from '../components/AdminProjectDetail';
 import TransferItemsDialog from '../components/TransferItemsDialog';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useAdminProject } from '../hooks/useAdminProject';
@@ -48,10 +48,6 @@ import {
   validateProjectForm
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
-
-const INPUT_CLASS =
-  'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
-const LABEL_CLASS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
 
 /**
  * What the shared "Add item" dialog calls for an admin project: the admin
@@ -108,8 +104,6 @@ function AdminProjectEditPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const [busyItemId, setBusyItemId] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState(() => new Set());
   // The items a move or copy dialog is open for, and its starting mode.
@@ -117,15 +111,8 @@ function AdminProjectEditPage() {
 
   const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
 
-  const estimateCall = useCallback(() => estimateAdminProject(id), [id]);
-  const {
-    estimate,
-    byItem: estimateByItem,
-    loading: estimating,
-    error: estimateError,
-    run: runEstimate,
-    clear: clearEstimate
-  } = useProjectEstimate(estimateCall, adminErrorMessage);
+  const checks = useAdminProjectChecks(id);
+  const { estimate, byItem: estimateByItem, clearEstimate } = checks;
 
   // The form is filled once per loaded project (state adjusted during render,
   // not in an effect); polling later only refreshes the items.
@@ -268,23 +255,6 @@ function AdminProjectEditPage() {
     void reload();
   };
 
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      setTestResult(await testAdminProject(id));
-    } catch (err) {
-      setTestResult({
-        success: false,
-        duration: 0,
-        items: [],
-        error: getAdminApiErrorMessage(err)
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
-
   if (loading || (!isNew && (!project || !form) && !loadError)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -332,6 +302,108 @@ function AdminProjectEditPage() {
       : validationMessages.id[validationErrors.id]
     : null;
 
+  const settingsForm = (
+    <AdminProjectSettingsForm
+      form={form}
+      isNew={isNew}
+      saving={saving}
+      idError={idError}
+      nameError={validationErrors.name ? validationMessages.name.required : null}
+      tagsText={tagsText}
+      onFieldChange={handleChange}
+      onTagsTextChange={text => {
+        setTagsText(text);
+        setForm(prev => ({ ...prev, tags: parseTags(text) }));
+      }}
+      onSubmit={handleSave}
+      onCancel={() =>
+        navigate(isNew ? '/admin/projects' : `/admin/projects/${encodeURIComponent(id)}`)
+      }
+    />
+  );
+
+  const itemsSection = (
+    <section className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+          {t('admin.projects.items.title', 'Items')}
+        </h2>
+        {!isNew && (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
+          >
+            <Icon name="plus" className="h-4 w-4 mr-2" />
+            {t('admin.projects.items.add', 'Add item')}
+          </button>
+        )}
+      </div>
+      {isNew ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {t(
+            'admin.projects.items.saveFirst',
+            'Create the project first; then you can add items to it.'
+          )}
+        </p>
+      ) : (
+        <>
+          {selectedItems.length > 0 && (
+            <div
+              data-testid="item-selection-bar"
+              className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
+            >
+              <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                {t('admin.projects.items.selectedCount', '{{count}} items selected', {
+                  count: selectedItems.length
+                })}
+              </span>
+              <div className="flex gap-2">
+                {['move', 'copy'].map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() =>
+                      setTransfer({
+                        mode,
+                        items: selectedItems
+                      })
+                    }
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                  >
+                    {mode === 'move'
+                      ? t('admin.projects.items.moveSelected', 'Move to…')
+                      : t('admin.projects.items.copySelected', 'Copy to…')}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemIds(new Set())}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
+                >
+                  {t('common.clearSelection', 'Clear')}
+                </button>
+              </div>
+            </div>
+          )}
+          <ProjectItemsTable
+            items={project?.items || []}
+            kinds={kinds}
+            busyItemId={busyItemId}
+            estimates={estimate ? estimateByItem : undefined}
+            selectedIds={new Set(selectedItems.map(item => item.id))}
+            onSelectionChange={setSelectedItemIds}
+            onTogglePinned={handleTogglePinned}
+            onPreview={setPreviewItem}
+            onRefresh={handleRefresh}
+            onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
+            onRemove={setRemoveItem}
+          />
+        </>
+      )}
+    </section>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto py-6 px-4">
@@ -349,30 +421,7 @@ function AdminProjectEditPage() {
             {title}
           </h1>
           {!isNew && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setHistoryOpen(true)}
-                className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                {t('admin.projects.history', 'History')}
-              </button>
-              <EstimateTokensButton loading={estimating} onClick={runEstimate} />
-              <button
-                type="button"
-                onClick={handleTest}
-                disabled={testing}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium flex items-center"
-              >
-                <Icon
-                  name={testing ? 'arrow-path' : 'beaker'}
-                  className={`h-4 w-4 mr-2 ${testing ? 'animate-spin' : ''}`}
-                />
-                {testing
-                  ? t('admin.projects.test.running', 'Testing...')
-                  : t('admin.projects.test.button', 'Test')}
-              </button>
-            </div>
+            <AdminProjectHeaderActions checks={checks} onHistory={() => setHistoryOpen(true)} />
           )}
         </div>
 
@@ -410,248 +459,25 @@ function AdminProjectEditPage() {
           </div>
         )}
 
-        <div className="space-y-6">
-          <form
-            onSubmit={handleSave}
-            noValidate
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6 space-y-6"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="project-id" className={LABEL_CLASS}>
-                  {t('admin.projects.fields.id', 'Project ID')} *
-                </label>
-                <input
-                  id="project-id"
-                  type="text"
-                  value={form.id}
-                  disabled={!isNew}
-                  maxLength={MAX_PROJECT_ID_LENGTH}
-                  onChange={e => handleChange('id', e.target.value)}
-                  placeholder="employee-handbook"
-                  aria-invalid={Boolean(idError)}
-                  className={`${INPUT_CLASS} ${!isNew ? 'opacity-60 cursor-not-allowed' : ''} ${
-                    idError ? 'border-red-400' : ''
-                  }`}
-                />
-                {idError && <p className="mt-1 text-sm text-red-600">{idError}</p>}
-                {!isNew && (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.projects.fields.idFixed', 'The ID cannot be changed after creation.')}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={form.enabled}
-                    onChange={e => handleChange('enabled', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-                  />
-                  {t('admin.projects.fields.enabled', 'Enabled')}
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label className={LABEL_CLASS}>{t('admin.projects.fields.name', 'Name')} *</label>
-              <DynamicLanguageEditor
-                value={form.name}
-                onChange={value => handleChange('name', value)}
-                placeholder={t('admin.projects.fields.namePlaceholder', 'Project name')}
-                error={validationErrors.name ? validationMessages.name.required : null}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL_CLASS}>
-                {t('admin.projects.fields.description', 'Description')}
-              </label>
-              <DynamicLanguageEditor
-                value={form.description}
-                onChange={value => handleChange('description', value)}
-                placeholder={t(
-                  'admin.projects.fields.descriptionPlaceholder',
-                  'What this project contains'
-                )}
-                type="textarea"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="project-instructions" className={LABEL_CLASS}>
-                {t('admin.projects.fields.instructions', 'Instructions')}
-              </label>
-              <textarea
-                id="project-instructions"
-                rows={5}
-                value={form.instructions}
-                onChange={e => handleChange('instructions', e.target.value)}
-                className={INPUT_CLASS}
-              />
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.projects.fields.instructionsHint',
-                  'Added to the system prompt of every app, workflow step or agent that links this project, in every link mode. Say how the knowledge is to be used; put facts into documents.'
-                )}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="project-category" className={LABEL_CLASS}>
-                  {t('admin.projects.fields.category', 'Category')}
-                </label>
-                <input
-                  id="project-category"
-                  type="text"
-                  value={form.category}
-                  maxLength={100}
-                  onChange={e => handleChange('category', e.target.value)}
-                  placeholder={t('admin.projects.fields.categoryPlaceholder', 'Optional category')}
-                  className={INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label htmlFor="project-tags" className={LABEL_CLASS}>
-                  {t('admin.projects.fields.tags', 'Tags')}
-                </label>
-                <input
-                  id="project-tags"
-                  type="text"
-                  value={tagsText}
-                  onChange={e => {
-                    setTagsText(e.target.value);
-                    setForm(prev => ({ ...prev, tags: parseTags(e.target.value) }));
-                  }}
-                  placeholder={t('admin.projects.fields.tagsPlaceholder', 'hr, policies')}
-                  className={INPUT_CLASS}
-                />
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.projects.fields.tagsHint', 'Separate tags with commas.')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(isNew ? '/admin/projects' : `/admin/projects/${encodeURIComponent(id)}`)
-                }
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center"
-              >
-                {saving && <Icon name="arrow-path" className="animate-spin h-4 w-4 mr-2" />}
-                {saving
-                  ? t('common.saving', 'Saving...')
-                  : isNew
-                    ? t('admin.projects.createAndContinue', 'Create and add items')
-                    : t('common.save', 'Save')}
-              </button>
-            </div>
-          </form>
-
-          {estimateError && (
-            <div
-              role="alert"
-              className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-800 dark:text-red-200"
-            >
-              {t('projects.estimate.failed', 'The estimate could not be made.')} {estimateError}
-            </div>
-          )}
-          {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
-          {testResult && (
-            <ProjectTestResults result={testResult} onDismiss={() => setTestResult(null)} />
-          )}
-
-          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                {t('admin.projects.items.title', 'Items')}
-              </h2>
-              {!isNew && (
-                <button
-                  type="button"
-                  onClick={() => setAddOpen(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.projects.items.add', 'Add item')}
-                </button>
-              )}
-            </div>
-            {isNew ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.projects.items.saveFirst',
-                  'Create the project first; then you can add items to it.'
-                )}
-              </p>
-            ) : (
+        {isNew ? (
+          <div className="space-y-6">
+            {settingsForm}
+            {itemsSection}
+          </div>
+        ) : (
+          // The items are what an admin works on here: they take the wide
+          // column (and come first on a narrow screen); the settings sit in a
+          // compact form beside them.
+          <ProjectDetailLayout
+            main={
               <>
-                {selectedItems.length > 0 && (
-                  <div
-                    data-testid="item-selection-bar"
-                    className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
-                  >
-                    <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                      {t('admin.projects.items.selectedCount', '{{count}} items selected', {
-                        count: selectedItems.length
-                      })}
-                    </span>
-                    <div className="flex gap-2">
-                      {['move', 'copy'].map(mode => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() =>
-                            setTransfer({
-                              mode,
-                              items: selectedItems
-                            })
-                          }
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
-                        >
-                          {mode === 'move'
-                            ? t('admin.projects.items.moveSelected', 'Move to…')
-                            : t('admin.projects.items.copySelected', 'Copy to…')}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedItemIds(new Set())}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
-                      >
-                        {t('common.clearSelection', 'Clear')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <ProjectItemsTable
-                  items={project?.items || []}
-                  kinds={kinds}
-                  busyItemId={busyItemId}
-                  estimates={estimate ? estimateByItem : undefined}
-                  selectedIds={new Set(selectedItems.map(item => item.id))}
-                  onSelectionChange={setSelectedItemIds}
-                  onTogglePinned={handleTogglePinned}
-                  onPreview={setPreviewItem}
-                  onRefresh={handleRefresh}
-                  onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
-                  onRemove={setRemoveItem}
-                />
+                <AdminProjectCheckResults checks={checks} />
+                {itemsSection}
               </>
-            )}
-          </section>
-        </div>
+            }
+            side={settingsForm}
+          />
+        )}
       </div>
 
       {!isNew && (

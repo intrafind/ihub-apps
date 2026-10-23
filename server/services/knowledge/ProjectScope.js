@@ -19,7 +19,12 @@
 import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository } from '../projects/ProjectRepository.js';
-import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
+import {
+  appAllowsUserProjects,
+  appUsesProjects,
+  isProjectsConfigured,
+  isUserProjectsConfigured
+} from '../projects/projectSettings.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 
@@ -53,16 +58,21 @@ export async function resolveProjectScope({ appConfig, user }) {
     seen.add(id);
     wanted.push({ id, mode, write, origin, instructions });
   };
-  if (typeof appConfig._projectId === 'string')
-    add(appConfig._projectId, 'auto', false, 'container', true);
-  for (const link of Array.isArray(appConfig.projects) ? appConfig.projects : []) {
-    const { id, mode, write } = normalizeProjectLink(link);
-    add(id, mode, write, 'app', true);
-  }
-  for (const id of Array.isArray(appConfig._attachedProjectIds)
-    ? appConfig._attachedProjectIds
-    : []) {
-    if (typeof id === 'string') add(id, 'auto', false, 'attached', false);
+  // An app the admin switched projects off for (`features.projects: false`)
+  // reaches none of its own: no container, no linked or attached project.
+  // A workflow's links are the workflow's, not the app's.
+  if (appUsesProjects(appConfig)) {
+    if (typeof appConfig._projectId === 'string')
+      add(appConfig._projectId, 'auto', false, 'container', true);
+    for (const link of Array.isArray(appConfig.projects) ? appConfig.projects : []) {
+      const { id, mode, write } = normalizeProjectLink(link);
+      add(id, mode, write, 'app', true);
+    }
+    for (const id of Array.isArray(appConfig._attachedProjectIds)
+      ? appConfig._attachedProjectIds
+      : []) {
+      if (typeof id === 'string') add(id, 'auto', false, 'attached', false);
+    }
   }
   for (const link of Array.isArray(appConfig._workflowProjects)
     ? appConfig._workflowProjects
@@ -78,8 +88,7 @@ export async function resolveProjectScope({ appConfig, user }) {
   // this app: a saved container or attachment stays on the chat, dark until
   // the feature returns. Admin projects linked to apps keep working as long
   // as the master switch is on.
-  const userProjectsOn =
-    isUserProjectsConfigured(features) && appConfig?.features?.userProjects !== false;
+  const userProjectsOn = isUserProjectsConfigured(features) && appAllowsUserProjects(appConfig);
   const scope = [];
   for (const entry of wanted) {
     const project = await repository.get(entry.id);

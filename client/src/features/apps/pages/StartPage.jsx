@@ -1,41 +1,30 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import Icon from '../../../shared/components/Icon';
-import { fetchAppDetails, fetchModels } from '../../../api';
 import useApps from '../../../shared/hooks/useApps';
 import useChats, { useChatPersistence } from '../../../shared/hooks/useChats';
-import useAuthKey from '../../../shared/hooks/useAuthKey';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { rankAppShortcuts, readAppShortcutConfig } from '../../../utils/appShortcuts';
 import { getRecentAppIds } from '../../../utils/recentApps';
 import { pickDefaultChatApp } from '../../../utils/homePage';
-import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
-import ChatInput from '../../chat/components/ChatInput';
-import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
-import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
-import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
-import { setPendingChatStart } from '../../chat/startChatHandoff';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import AppChatStarter from '../../chat/components/AppChatStarter';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
-import { loadAppSettings } from '../../../utils/appSettings';
 
 export default function StartPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { user } = useAuth();
-  const authKey = useAuthKey();
   const { uiConfig, resetHeaderColor } = useUIConfig();
-  const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
@@ -44,27 +33,6 @@ export default function StartPage() {
   const chatsEnabled = useChatPersistence();
   const { chats } = useChats();
   const { favorites: favoriteAppIds } = useFavorites('ihub_favorite_apps');
-  const [draft, setDraft] = useState('');
-  const [defaultAppDetails, setDefaultAppDetails] = useState(null);
-  const [detailsFailed, setDetailsFailed] = useState(false);
-  // Models the viewer may use, tagged with the identity they were loaded for.
-  const [modelsState, setModelsState] = useState({ key: null, models: [], loaded: false });
-  const [selectedModel, setSelectedModel] = useState(null);
-
-  // Per-chat feature toggles offered by the input's actions menu (the `+`).
-  // The start page renders the default app's real chat input, so it has to
-  // own this state too — otherwise the menu shows the app's tools with no way
-  // to toggle them and hides web search entirely (issue #2322). `null` for
-  // the tools means "not resolved yet", matching AppChat's convention of
-  // passing `null` to hide the tools section outright.
-  const [enabledTools, setEnabledTools] = useState(null);
-  const [websearchEnabled, setWebsearchEnabled] = useState(false);
-  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
-  const [imageQuality, setImageQuality] = useState('Medium');
-
-  const inputRef = useRef(null);
-  const formRef = useRef(null);
-  const fileUploadHandler = useFileUploadHandler();
 
   // Leaving an app for "/" must not keep that app's colour on the classic header.
   useEffect(() => {
@@ -73,14 +41,6 @@ export default function StartPage() {
 
   // Admins can hide the start-page chat input entirely.
   const showDefaultApp = uiConfig?.startPage?.showDefaultApp !== false;
-
-  // Voice dictation handler — writes the transcript into the draft, mirroring
-  // the in-app chat behaviour.
-  const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
-    setInput: setDraft,
-    currentText: draft,
-    sendMessage: () => formRef.current?.requestSubmit?.()
-  });
 
   // Time-based greeting with the viewer's name, unless the admin turned the
   // name off or configured a heading of their own (startPage.title).
@@ -131,130 +91,6 @@ export default function StartPage() {
     [apps, favoriteAppIds, uiConfig]
   );
 
-  // Load the full default-app config so the chat input renders exactly what the
-  // app is configured for (uploads, input mode, placeholder, etc.).
-  useEffect(() => {
-    setDetailsFailed(false);
-    if (!defaultApp?.id) {
-      setDefaultAppDetails(null);
-      return;
-    }
-    let mounted = true;
-    fetchAppDetails(defaultApp.id)
-      .then(details => {
-        if (!mounted) return;
-        if (details) setDefaultAppDetails(details);
-        else setDetailsFailed(true);
-      })
-      .catch(() => {
-        // Don't leave the skeleton pulsing forever — offer the app link instead.
-        if (mounted) setDetailsFailed(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [defaultApp?.id]);
-
-  // Load models so the start-page input can offer the model selector when the
-  // app allows it (mirrors the in-app chat). The list is permission-filtered
-  // per viewer, so wait for authentication to resolve and reload it whenever
-  // the viewer signs in or out — the page stays mounted across a sidebar
-  // sign-in, so a one-off fetch would keep showing the anonymous list.
-  useEffect(() => {
-    if (!authKey) return undefined; // auth still resolving
-    let mounted = true;
-    fetchModels()
-      .then(data => {
-        if (mounted) {
-          setModelsState({ key: authKey, models: Array.isArray(data) ? data : [], loaded: true });
-        }
-      })
-      .catch(() => {
-        if (mounted) setModelsState({ key: authKey, models: [], loaded: true });
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [authKey]);
-
-  // Only trust a list that was loaded for the current identity.
-  const modelsLoaded = modelsState.key === authKey && modelsState.loaded;
-
-  // Models the default app is actually allowed to use (from the list loaded
-  // for the current identity only).
-  const compatibleModels = useMemo(() => {
-    if (!defaultAppDetails || modelsState.key !== authKey) return [];
-    return filterModelsForApp(modelsState.models, defaultAppDetails);
-  }, [modelsState, authKey, defaultAppDetails]);
-
-  // Pick an initial model once the app + models are available.
-  useEffect(() => {
-    if (!defaultAppDetails || compatibleModels.length === 0) return;
-    setSelectedModel(prev => {
-      if (prev && compatibleModels.some(m => m.id === prev)) return prev;
-      return pickInitialModelForApp(compatibleModels, defaultAppDetails) || compatibleModels[0].id;
-    });
-  }, [defaultAppDetails, compatibleModels]);
-
-  // Seed the actions-menu toggles from the app config, then let anything the
-  // user already chose for this app in the current session win — the same
-  // precedence `useAppSettings` applies inside the app, so the `+` menu shows
-  // the same state on both surfaces.
-  useEffect(() => {
-    if (!defaultAppDetails) {
-      setEnabledTools(null);
-      return;
-    }
-    const saved = loadAppSettings(defaultAppDetails.id) || {};
-    setEnabledTools(
-      Array.isArray(saved.enabledTools) ? saved.enabledTools : defaultAppDetails.tools || []
-    );
-    setWebsearchEnabled(
-      saved.websearchEnabled ?? defaultAppDetails.websearch?.enabledByDefault ?? false
-    );
-    setImageAspectRatio(
-      saved.imageAspectRatio || defaultAppDetails.imageGeneration?.aspectRatio || '1:1'
-    );
-    setImageQuality(saved.imageQuality || defaultAppDetails.imageGeneration?.quality || 'Medium');
-  }, [defaultAppDetails]);
-
-  // Platform-wide kill switch for tools, mirroring AppChat: `null` keeps the
-  // tools section out of the actions menu entirely.
-  const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
-  const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
-
-  // Magic prompt rewrites the draft in place, exactly as it does in the app.
-  const magicPromptHandler = useMagicPrompt();
-  const magicPromptEnabled = featureFlags.isAppFeatureEnabled(
-    defaultAppDetails,
-    'magicPrompt.enabled',
-    false
-  );
-  const handleMagicPrompt = useCallback(async () => {
-    const enhanced = await magicPromptHandler.handleMagicPrompt(
-      draft,
-      defaultAppDetails,
-      defaultAppDetails?.id
-    );
-    if (enhanced) setDraft(enhanced);
-  }, [draft, defaultAppDetails, magicPromptHandler]);
-  const handleUndoMagicPrompt = useCallback(() => {
-    const restored = magicPromptHandler.handleUndoMagicPrompt();
-    if (restored !== null) setDraft(restored);
-  }, [magicPromptHandler]);
-
-  // Same rule as the in-app chat; ChatInput shows its "No models available"
-  // notice when the list is empty, so a misconfigured group is visible rather
-  // than silently hiding the selector. Kept hidden until the list has loaded.
-  const showModelSelector =
-    defaultAppDetails?.disallowModelSelection !== true &&
-    defaultAppDetails?.settings?.model?.enabled !== false &&
-    modelsLoaded;
-
-  const micEnabled =
-    (defaultAppDetails?.inputMode?.microphone?.enabled ??
-      defaultAppDetails?.microphone?.enabled) !== false;
-
   // Featured apps: the top of the shared ranking, capped by the admin's count.
   const featuredApps = useMemo(
     () => rankedApps.slice(0, startPageCount),
@@ -278,71 +114,6 @@ export default function StartPage() {
     });
   }, [chatsEnabled, chats, apps]);
 
-  // The model object (not just its id) drives the image-generation controls and
-  // the upload config's vision/audio gating, same as in the app chat.
-  const selectedModelObject = useMemo(
-    () => compatibleModels.find(m => m.id === selectedModel) || null,
-    [compatibleModels, selectedModel]
-  );
-
-  const uploadConfig = useMemo(
-    () =>
-      defaultAppDetails
-        ? fileUploadHandler.createUploadConfig(defaultAppDetails, selectedModelObject)
-        : undefined,
-    [defaultAppDetails, fileUploadHandler, selectedModelObject]
-  );
-
-  // Start the chat: carry the message via prefill+send (so refresh/shared links
-  // work) and hand off any attachment payload through the in-memory bridge.
-  const handleSubmit = useCallback(
-    e => {
-      if (e?.preventDefault) e.preventDefault();
-      if (!defaultApp) return;
-      const text = draft.trim();
-      const hasFile = fileUploadHandler.selectedFile != null;
-      if (!text && !hasFile && !defaultAppDetails?.allowEmptyContent) return;
-
-      // Hand the app the toggles picked here (and any processed attachment) so
-      // the auto-sent first message runs with the same features the user saw
-      // in the `+` menu — issue #2322.
-      setPendingChatStart({
-        appId: defaultApp.id,
-        ...(hasFile ? { files: fileUploadHandler.selectedFile } : {}),
-        settings: {
-          ...(effectiveEnabledTools !== null ? { enabledTools: effectiveEnabledTools } : {}),
-          websearchEnabled,
-          imageAspectRatio,
-          imageQuality
-        }
-      });
-
-      const params = new URLSearchParams();
-      if (text) {
-        params.set('prefill', text);
-        params.set('send', 'true');
-      }
-      // Carry the chosen model so the app starts with the same selection.
-      if (selectedModel && selectedModel !== defaultAppDetails?.preferredModel) {
-        params.set('model', selectedModel);
-      }
-      const qs = params.toString();
-      navigate(`/apps/${defaultApp.id}${qs ? `?${qs}` : ''}`);
-    },
-    [
-      draft,
-      defaultApp,
-      defaultAppDetails,
-      fileUploadHandler,
-      navigate,
-      selectedModel,
-      effectiveEnabledTools,
-      websearchEnabled,
-      imageAspectRatio,
-      imageQuality
-    ]
-  );
-
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
   const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
 
@@ -365,7 +136,7 @@ export default function StartPage() {
         </div>
 
         {/* Default chat input — renders the real app input (uploads, prompts,
-            placeholder, input mode) and starts the chat on submit. */}
+            placeholder, input mode, tools) and starts the chat on submit. */}
         {showDefaultApp && defaultApp && (
           <div className="mb-8">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -388,72 +159,7 @@ export default function StartPage() {
               </button>
             </div>
 
-            {detailsFailed && !defaultAppDetails ? (
-              <button
-                type="button"
-                onClick={() => navigate(`/apps/${defaultApp.id}`)}
-                className="w-full border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 px-5 py-4 text-sm text-left text-gray-500 dark:text-gray-400 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
-              >
-                {t(
-                  'startPage.inputUnavailable',
-                  'The chat input could not be loaded. Open the app to start a conversation.'
-                )}
-              </button>
-            ) : defaultAppDetails ? (
-              <ChatInput
-                app={defaultAppDetails}
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                onSubmit={handleSubmit}
-                isProcessing={false}
-                onCancel={() => {}}
-                inputRef={inputRef}
-                formRef={formRef}
-                uploadConfig={uploadConfig}
-                onFileSelect={fileUploadHandler.handleFileSelect}
-                selectedFile={fileUploadHandler.selectedFile}
-                showUploader={fileUploadHandler.showUploader}
-                onToggleUploader={fileUploadHandler.toggleUploader}
-                allowEmptySubmit={
-                  defaultAppDetails?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                }
-                onVoiceInput={micEnabled ? handleVoiceInput : undefined}
-                onVoiceCommand={micEnabled ? handleVoiceCommand : undefined}
-                magicPromptEnabled={magicPromptEnabled}
-                onMagicPrompt={handleMagicPrompt}
-                showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                onUndoMagicPrompt={handleUndoMagicPrompt}
-                magicPromptLoading={magicPromptHandler.magicLoading}
-                enabledTools={effectiveEnabledTools}
-                onEnabledToolsChange={toolsFeatureEnabled ? setEnabledTools : undefined}
-                websearchEnabled={websearchEnabled}
-                onWebsearchEnabledChange={
-                  defaultAppDetails?.websearch?.enabled ? setWebsearchEnabled : undefined
-                }
-                model={selectedModelObject}
-                imageAspectRatio={imageAspectRatio}
-                imageQuality={imageQuality}
-                onImageAspectRatioChange={setImageAspectRatio}
-                onImageQualityChange={setImageQuality}
-                models={compatibleModels}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                showModelSelector={showModelSelector}
-                currentLanguage={currentLanguage}
-              />
-            ) : (
-              // Skeleton shaped like the chat input so the hero doesn't flash a spinner.
-              <div
-                className="border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 px-5 py-4 animate-pulse"
-                aria-hidden="true"
-              >
-                <div className="h-4 w-2/3 bg-gray-100 dark:bg-gray-700 rounded-sm mb-3" />
-                <div className="flex items-center justify-between">
-                  <div className="h-7 w-7 bg-gray-100 dark:bg-gray-700 rounded-lg" />
-                  <div className="h-9 w-9 bg-gray-100 dark:bg-gray-700 rounded-xl" />
-                </div>
-              </div>
-            )}
+            <AppChatStarter app={defaultApp} />
           </div>
         )}
 

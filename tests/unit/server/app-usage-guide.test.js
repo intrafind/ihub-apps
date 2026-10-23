@@ -88,6 +88,17 @@ describe('usage guide generation prompt', () => {
     expect(description).toContain('documents');
   });
 
+  it('names the knowledge only while the app uses projects', () => {
+    const linked = { ...app, projects: ['faq'] };
+    const catalog = { projects: [{ id: 'faq', name: { en: 'FAQ' } }] };
+
+    expect(describeAppForGuide(linked, 'en', catalog)).toContain(
+      'Knowledge the assistant answers from: FAQ'
+    );
+    const off = { ...linked, features: { ...linked.features, projects: false } };
+    expect(describeAppForGuide(off, 'en', catalog)).not.toContain('Knowledge the assistant');
+  });
+
   it('asks for the guide in the language, without quoting the instructions', () => {
     const [system, user] = buildUsageGuideMessages(app, 'de');
 

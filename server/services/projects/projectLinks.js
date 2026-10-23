@@ -23,6 +23,7 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { visibleToUser as profileVisibleToUser } from '../../routes/agents/profiles.js';
 import { filterByPermissions } from '../workflow/workflowAccess.js';
+import { appUsesProjects } from './projectSettings.js';
 
 /**
  * Node types whose `config.projects` is honoured: the model steps and the
@@ -154,7 +155,11 @@ export function linkedProjectIds(user) {
   if (!user) return ids;
   const apps = configCache.getApps()?.data || [];
   const usableApps = filterResourcesByPermissions(apps, user.permissions?.apps || new Set());
-  for (const app of usableApps) for (const id of linkedIdsOf(app?.projects)) ids.add(id);
+  for (const app of usableApps) {
+    // An app with projects switched off grants none of its links.
+    if (!appUsesProjects(app)) continue;
+    for (const id of linkedIdsOf(app?.projects)) ids.add(id);
+  }
 
   for (const workflow of configCache.getWorkflows?.()?.data || []) {
     if (!workflowUsableBy(workflow, user)) continue;

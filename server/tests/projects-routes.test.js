@@ -682,6 +682,60 @@ describe('documents linked from another project', () => {
     assert.equal(missing.body.details.code, 'ITEM_NOT_FOUND');
   });
 
+  it('links only from the caller’s own projects and published ones', async () => {
+    // A project shared with Grace is hers to use, not to link from.
+    const shared = await create(ADA, { name: 'Shared notes' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: shared.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/shared' } }
+    });
+    await setMembers(ADA, shared.id, [{ type: 'user', id: GRACE.id, role: 'editor' }]);
+    const target = await create(GRACE, { name: 'Grace space' });
+    const fromShared = await addLink(GRACE, target.id, {
+      projectId: shared.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(fromShared.statusCode, 403, JSON.stringify(fromShared.body));
+    assert.equal(fromShared.body.details.code, 'PERMISSION_DENIED');
+
+    // An admin project is linked once it is published, by everyone signed in.
+    const repo = getProjectRepository();
+    await repo.createAdmin({
+      id: 'link-docs',
+      name: { en: 'Docs' },
+      items: [{ id: 'itm_doc', kind: 'url', name: 'Doc', status: 'ready', pinned: false }]
+    });
+    try {
+      const ref = { projectId: 'link-docs', itemId: 'itm_doc' };
+      const hidden = await addLink(GRACE, target.id, ref);
+      assert.equal(hidden.statusCode, 404, JSON.stringify(hidden.body));
+      const published = await drive(route.adminPatch, {
+        user: EDITOR,
+        params: { id: 'link-docs' },
+        body: { published: true }
+      });
+      assert.equal(published.statusCode, 200, JSON.stringify(published.body));
+      assert.equal(published.body.project.published, true);
+      const linked = await addLink(GRACE, target.id, ref);
+      assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+      const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });
+      assert.ok(listed.body.items.some(project => project.id === 'link-docs'));
+
+      // A published project that is switched off reaches nobody.
+      await drive(route.adminPatch, {
+        user: EDITOR,
+        params: { id: 'link-docs' },
+        body: { enabled: false }
+      });
+      const another = await create(GRACE, { name: 'Grace later' });
+      const disabled = await addLink(GRACE, another.id, ref);
+      assert.equal(disabled.statusCode, 404, JSON.stringify(disabled.body));
+    } finally {
+      await repo.delete('link-docs');
+    }
+  });
+
   it("reads the source with the reader's own access, and says when it is gone", async () => {
     const source = await create(ADA, { name: 'Handbook' });
     const original = await drive(route.addItem, {
@@ -732,6 +786,33 @@ describe('the project catalog', () => {
     assert.equal(on.statusCode, 200, JSON.stringify(on.body));
     assert.deepEqual(on.body.audience, { everyone: false, catalog: true });
     assert.ok(on.body.catalog.publishedAt);
+  });
+
+  it('lets others link documents of a published project while the catalog is on', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const source = await create(ADA, { name: 'Published docs' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/published' } }
+    });
+    await publish(ADA, source.id);
+    const link = (user, projectId) =>
+      drive(route.addItem, {
+        user,
+        params: { projectId },
+        body: { kind: 'project-item', ref: { projectId: source.id, itemId: original.body.item.id } }
+      });
+
+    const target = await create(GRACE, { name: 'From the catalog' });
+    const linked = await link(GRACE, target.id);
+    assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+
+    // With the catalog off the project reaches nobody but its members.
+    setProjectSettings({ sharing: { allowCatalog: false } });
+    const later = await create(GRACE, { name: 'After the catalog' });
+    const refused = await link(GRACE, later.id);
+    assert.equal(refused.statusCode, 404, JSON.stringify(refused.body));
   });
 
   it("lets everyone signed in browse and add a published project, without the members' chats", async () => {
@@ -1385,6 +1466,34 @@ describe('chats in a project', () => {
     assert.equal(bad.items.length, 5);
     assert.equal(bad.total, 5);
     assert.equal((await page({ limit: '1000' })).items.length, 5);
+  });
+
+  it('attaches no project to a chat whose app takes none', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-attach-dark',
+      ownerId: ADA.id,
+      appId: 'dark',
+      title: 'Dark app'
+    });
+    const mine = await create(ADA, { name: 'Mine (dark)' });
+    const apps = configCache.getApps();
+    configCache.setCacheEntry('config/apps.json', [
+      ...(apps?.data || []),
+      { id: 'dark', name: { en: 'Dark' }, enabled: true, features: { userProjects: false } }
+    ]);
+    try {
+      const refused = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { attachedProjectIds: [mine.id] }
+      });
+      assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
+      assert.equal(refused.body.details.code, 'APP_PROJECTS_DISABLED');
+      assert.equal((await chats.getChat(chat.id)).attachedProjectIds, undefined);
+    } finally {
+      configCache.setCacheEntry('config/apps.json', apps?.data || []);
+    }
   });
 
   it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {

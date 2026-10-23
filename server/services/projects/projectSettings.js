@@ -21,6 +21,9 @@
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
 
+// The per-app switches live in shared/ so the browser reads them alike.
+export { appAllowsUserProjects, appUsesProjects } from '../../../shared/appProjects.js';
+
 /** Feature flag gating all projects, the admin pages and the picker endpoints. */
 export const PROJECTS_FEATURE = 'projects';
 

@@ -9,6 +9,7 @@
  * @module utils/appUsageGuide
  */
 import { getLocalizedContent } from '../../shared/localize.js';
+import { appUsesProjects } from '../../shared/appProjects.js';
 
 /** Upper bound of the app's own instructions quoted to the generating model. */
 const MAX_INSTRUCTIONS_CHARS = 8000;
@@ -142,7 +143,8 @@ export function describeAppForGuide(app, language, { tools = [], projects = [] }
   add('The user can attach', describeAttachments(app.upload));
   lines.push(...describeTools(app, tools, text));
 
-  const projectIds = (Array.isArray(app.projects) ? app.projects : [])
+  // An app with projects switched off answers from none of its links.
+  const projectIds = (appUsesProjects(app) && Array.isArray(app.projects) ? app.projects : [])
     .map(link => (typeof link === 'string' ? link : link?.id))
     .filter(Boolean);
   const projectNames = projectIds.map(id => text(projects.find(p => p.id === id)?.name) || id);

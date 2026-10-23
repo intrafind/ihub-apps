@@ -35,6 +35,7 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { auditPublished } from '../services/projects/projectAudit.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { resolveShares } from './promptRoutes.js';
@@ -55,6 +56,7 @@ import {
   canHoldProjects,
   mayCreateProjects,
   mayShareProjects,
+  isPublished,
   memberRoleFor,
   principalMemberKeys
 } from '../services/projects/projectAccess.js';
@@ -200,7 +202,12 @@ async function listProjects(user, repo, scope) {
   }
   if (scope === 'all' || scope === 'admin') {
     for (const project of await repo.listAdmin({ includeDisabled: false })) {
-      if (!context.linked.has(project.id) && !context.isContentAdmin) continue;
+      // Published ones reach everyone signed in who may hold projects.
+      const reaches =
+        context.linked.has(project.id) ||
+        context.isContentAdmin ||
+        (isPublished(project) && canHoldProjects(user));
+      if (!reaches) continue;
       items.push(serializeFor(project, user, context, { includeItems: false }));
     }
   }
@@ -500,6 +507,7 @@ export default function registerProjectRoutes(app) {
           resourceId: project.id,
           summary: `Updated project "${projectName(project)}" (${Object.keys(body).join(', ')})`
         });
+        auditPublished(req, req.project, project);
         res.json(serializeFor(project, req.user, req.projectContext));
       } catch (error) {
         sendProjectError(res, error, 'update project');
@@ -924,7 +932,9 @@ export default function registerProjectRoutes(app) {
       try {
         const deps = requireUserProjects(req, res);
         if (!deps) return;
-        if (req.projectPermissions.role !== 'catalog') {
+        // A published admin project reaches everyone already; there is no
+        // list to add it to.
+        if (req.projectPermissions.role !== 'catalog' || !isUserProjectId(req.project.id)) {
           return sendBadRequest(res, 'Only projects reached through the catalog are added');
         }
         await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);

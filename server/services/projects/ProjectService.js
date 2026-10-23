@@ -211,7 +211,7 @@ export class ProjectService {
    */
   async updateProject(projectId, patch, { actor, authorize }) {
     const allowed = isAdminProjectId(projectId)
-      ? ['name', 'description', 'instructions', 'enabled', 'category', 'tags']
+      ? ['name', 'description', 'instructions', 'enabled', 'published', 'category', 'tags']
       : ['name', 'description', 'instructions', 'defaultAppId'];
     try {
       return await this.repository.mutate(

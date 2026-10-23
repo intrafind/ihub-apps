@@ -27,6 +27,7 @@ import {
   sendNotFound
 } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { auditPublished } from '../../services/projects/projectAudit.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import {
@@ -550,6 +551,7 @@ export default function registerAdminProjectsRoutes(app) {
           description: body.description,
           instructions: body.instructions,
           enabled: body.enabled,
+          published: body.published,
           category: body.category,
           tags: body.tags
         },
@@ -563,6 +565,7 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: project.id,
         summary: `Updated admin project "${projectName(project)}"`
       });
+      auditPublished(req, before, project);
       await snapshot(req, project.id, before, project);
       res.json({ project: adminView(project) });
     } catch (error) {
@@ -585,6 +588,7 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: project.id,
         summary: `Updated admin project "${projectName(project)}" (${Object.keys(body).join(', ')})`
       });
+      auditPublished(req, before, project);
       await snapshot(req, project.id, before, project);
       res.json({ project: adminView(project) });
     } catch (error) {

@@ -149,11 +149,15 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
                 </option>
                 {projects.map(candidate => (
                   <option key={candidate.id} value={candidate.id}>
-                    {candidate.ownership === 'admin'
-                      ? t('projects.addItem.linkFromApps', '{{name}} (from apps)', {
-                          name: projectDisplayName(candidate, language)
-                        })
-                      : projectDisplayName(candidate, language)}
+                    {candidate.ownership !== 'admin'
+                      ? projectDisplayName(candidate, language)
+                      : candidate.published === true
+                        ? t('projects.addItem.linkPublished', '{{name}} (published)', {
+                            name: projectDisplayName(candidate, language)
+                          })
+                        : t('projects.addItem.linkFromApps', '{{name}} (from apps)', {
+                            name: projectDisplayName(candidate, language)
+                          })}
                   </option>
                 ))}
               </select>

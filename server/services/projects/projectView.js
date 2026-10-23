@@ -122,6 +122,7 @@ export function serializeProject(
     ...(project.ownership === 'admin'
       ? {
           enabled: project.enabled !== false,
+          published: project.published === true,
           category: project.category || '',
           tags: project.tags || []
         }

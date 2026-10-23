@@ -12,6 +12,7 @@ import {
   fetchPickerCloudProviders,
   fetchPickerPages,
   fetchProject,
+  fetchProjectCatalog,
   fetchProjectItemText,
   fetchProjects,
   searchPickerIFinder,
@@ -43,7 +44,15 @@ function userItemApi(errorMessage) {
     searchIFinder: query => searchPickerIFinder(query),
     checkUrl: url => checkPickerUrl(url),
     fetchCloudProviders: () => fetchPickerCloudProviders(),
-    fetchLinkSources: () => fetchProjects(),
+    // Own projects, and published ones: the catalog lists those the viewer
+    // has not added (an empty list while it is off).
+    fetchLinkSources: async () => {
+      const [projects, catalog] = await Promise.all([
+        fetchProjects(),
+        fetchProjectCatalog().catch(() => ({ items: [] }))
+      ]);
+      return [...projects, ...(catalog?.items || [])];
+    },
     fetchLinkSource: projectId => fetchProject(projectId),
     errorMessage
   };
@@ -117,7 +126,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
                   ? undefined
                   : t('projects.items.full', 'This project holds as many items as it may.')
               }
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
             >
               <Icon name="plus" size="sm" />
               {t('projects.items.add', 'Add documents')}

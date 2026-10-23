@@ -66,13 +66,15 @@ export const NO_ACCESS = Object.freeze({
 });
 
 /**
- * Whether a user project is published to the catalog.
+ * Whether a project is published: a user project to the catalog, an admin
+ * project by its `published` switch (everyone signed in may use it).
  *
  * @param {Object|null|undefined} project - Stored project.
  * @returns {boolean}
  */
 export function isPublished(project) {
-  return project?.ownership !== 'admin' && Boolean(project?.catalog?.publishedAt);
+  if (project?.ownership === 'admin') return project.published === true;
+  return Boolean(project?.catalog?.publishedAt);
 }
 
 /**
@@ -263,7 +265,13 @@ export function projectPermissions(
     // included (the app's own permission check already ran). Changing it
     // takes a signed-in content admin.
     const admin = isContentAdmin && !isAnonymousUser(user);
-    if (!admin && !linked) return NO_ACCESS;
+    if (!admin && !linked) {
+      // A published admin project reaches everyone signed in who may hold
+      // projects, to use and to link from; nobody but an admin changes it.
+      if (!isPublished(project) || project.enabled === false) return NO_ACCESS;
+      if (isAnonymousUser(user) || !canHoldProjects(user)) return NO_ACCESS;
+      return { ...NO_ACCESS, canView: true, canUse: true, role: 'catalog', readOnly: true };
+    }
     return {
       canView: true,
       canUse: project.enabled !== false || admin,
