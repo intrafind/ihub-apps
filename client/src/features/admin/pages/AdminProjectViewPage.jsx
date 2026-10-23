@@ -1,28 +1,29 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
-  estimateAdminProject,
   fetchAdminProjectDependencies,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
   getAdminApiErrorMessage,
-  testAdminProject,
   updateAdminProjectItemText
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
-import ProjectTestResults from '../components/ProjectTestResults';
-import EstimateTokensButton from '../../projects/components/EstimateTokensButton';
-import ProjectEstimatePanel from '../../projects/components/ProjectEstimatePanel';
+import {
+  AdminProjectCheckResults,
+  AdminProjectHeaderActions,
+  FILLED_HEADER_BUTTON,
+  ProjectDetailLayout,
+  useAdminProjectChecks
+} from '../components/AdminProjectDetail';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
-import { useProjectEstimate } from '../../projects/hooks/useProjectEstimate';
 import { useAdminProject } from '../hooks/useAdminProject';
 import { localizedText } from '../../projects/utils/projectItems';
 
@@ -65,18 +66,8 @@ function AdminProjectViewPageContent({ id }) {
   const [dependenciesFailed, setDependenciesFailed] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-
-  const estimateCall = useCallback(() => estimateAdminProject(id), [id]);
-  const {
-    estimate,
-    byItem,
-    loading: estimating,
-    error: estimateError,
-    run: runEstimate,
-    clear: clearEstimate
-  } = useProjectEstimate(estimateCall, adminErrorMessage);
+  const checks = useAdminProjectChecks(id);
+  const { estimate, byItem, clearEstimate } = checks;
 
   useEffect(() => {
     fetchAdminProjectKinds()
@@ -90,23 +81,6 @@ function AdminProjectViewPageContent({ id }) {
         setDependenciesFailed(true);
       });
   }, [id]);
-
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      setTestResult(await testAdminProject(id));
-    } catch (err) {
-      setTestResult({
-        success: false,
-        duration: 0,
-        items: [],
-        error: getAdminApiErrorMessage(err)
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
 
   if (loading && !project) {
     return (
@@ -190,221 +164,192 @@ function AdminProjectViewPageContent({ id }) {
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">{project.id}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(true)}
-              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-            >
-              {t('admin.projects.history', 'History')}
-            </button>
-            <EstimateTokensButton loading={estimating} onClick={runEstimate} />
-            <button
-              type="button"
-              onClick={handleTest}
-              disabled={testing}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg border border-transparent text-sm font-medium flex items-center"
-            >
-              <Icon
-                name={testing ? 'arrow-path' : 'beaker'}
-                className={`h-4 w-4 mr-2 ${testing ? 'animate-spin' : ''}`}
-              />
-              {testing
-                ? t('admin.projects.test.running', 'Testing...')
-                : t('admin.projects.test.button', 'Test')}
-            </button>
+          <AdminProjectHeaderActions checks={checks} onHistory={() => setHistoryOpen(true)}>
             <Link
               to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg border border-transparent text-sm font-medium flex items-center"
+              className={FILLED_HEADER_BUTTON}
             >
               <Icon name="pencil" className="h-4 w-4 mr-2" />
               {t('admin.projects.view.edit', 'Edit')}
             </Link>
-          </div>
+          </AdminProjectHeaderActions>
         </div>
-
-        {estimateError && (
-          <div
-            role="alert"
-            className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-800 dark:text-red-200"
-          >
-            {t('projects.estimate.failed', 'The estimate could not be made.')} {estimateError}
-          </div>
-        )}
 
         {/* The same layout as a user's project page: the documents in the wide
             column, the settings as compact rows beside them. */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className="lg:col-span-2 space-y-6 min-w-0">
-            {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
-            {testResult && (
-              <ProjectTestResults result={testResult} onDismiss={() => setTestResult(null)} />
-            )}
+        <ProjectDetailLayout
+          main={
+            <>
+              <AdminProjectCheckResults checks={checks} />
 
-            <Card title={t('admin.projects.items.title', 'Items')}>
-              <ProjectItemsTable
-                items={project.items || []}
-                kinds={kinds}
-                readOnly
-                estimates={estimate ? byItem : undefined}
-                onPreview={setPreviewItem}
-              />
-            </Card>
+              <Card title={t('admin.projects.items.title', 'Items')}>
+                <ProjectItemsTable
+                  items={project.items || []}
+                  kinds={kinds}
+                  readOnly
+                  estimates={estimate ? byItem : undefined}
+                  onPreview={setPreviewItem}
+                />
+              </Card>
 
-            <Card title={t('admin.projects.view.usedBy', 'Used by')}>
-              {dependenciesFailed ? (
-                <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-                  {t(
-                    'admin.projects.view.usedByFailed',
-                    'The apps, workflows and agents that link this project could not be loaded.'
-                  )}
-                </p>
-              ) : dependencies === null ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t('common.loading', 'Loading...')}
-                </p>
-              ) : dependencies.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.projects.view.notLinked',
-                    'No app, workflow or agent links this project.'
-                  )}
-                </p>
-              ) : (
-                <ul className="space-y-2" data-testid="project-dependencies">
-                  {dependencies.map(dependency => {
-                    const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
-                    const label = dependency.name || dependency.id;
-                    return (
-                      <li
-                        key={`${dependency.type}:${dependency.id}:${dependency.nodeId || ''}`}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                          {typeLabels[dependency.type] || dependency.type}
-                        </span>
-                        {href ? (
-                          <Link
-                            to={href}
-                            className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
-                          >
-                            {label}
-                          </Link>
-                        ) : (
-                          <span className="truncate">{label}</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
-          </div>
-
-          <div className={`${PANEL_CARD} min-w-0`} data-testid="project-side-panel">
-            <ProjectPanelRow
-              icon="information-circle"
-              title={t('admin.projects.fields.description', 'Description')}
-              titleId="admin-project-description-title"
-              action={
-                <Link
-                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                  className={ROW_ACTION}
-                  aria-label={t('admin.projects.view.editDescription', 'Edit description')}
-                >
-                  {t('common.edit', 'Edit')}
-                </Link>
-              }
-            >
-              {description ? (
-                <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words">
-                  {description}
-                </p>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400">
-                  {t('admin.projects.view.noDescription', 'No description.')}
-                </p>
-              )}
-              {(project.category || (project.tags || []).length > 0) && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {project.category && (
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {project.category}
-                    </span>
-                  )}
-                  {(project.tags || []).map(tag => (
-                    <span
-                      key={tag}
-                      className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </ProjectPanelRow>
-            <ProjectPanelRow
-              icon="document-text"
-              title={t('admin.projects.fields.instructions', 'Instructions')}
-              titleId="admin-project-instructions-title"
-              action={
-                <Link
-                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                  className={ROW_ACTION}
-                  aria-label={
-                    project.instructions
-                      ? t('projects.settings.editInstructions', 'Edit instructions')
-                      : t('projects.settings.addInstructions', 'Add instructions')
-                  }
-                >
-                  {project.instructions ? t('common.edit', 'Edit') : t('projects.panel.add', 'Add')}
-                </Link>
-              }
-            >
-              {project.instructions ? (
-                <pre className="max-h-48 overflow-y-auto text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words font-sans">
-                  {project.instructions}
-                </pre>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400">
-                  {t('admin.projects.view.noInstructions', 'No instructions.')}
-                </p>
-              )}
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.projects.view.instructionsHint',
-                  'The instructions are added to the system prompt of every app, workflow step or agent that links this project.'
-                )}
-              </p>
-            </ProjectPanelRow>
-            <ProjectPanelRow
-              icon="globe"
-              title={t('admin.projects.view.visibility', 'Visibility')}
-              titleId="admin-project-visibility-title"
-              action={
-                <Link
-                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                  className={ROW_ACTION}
-                  aria-label={t('admin.projects.view.changeVisibility', 'Change visibility')}
-                >
-                  {t('projects.panel.change', 'Change')}
-                </Link>
-              }
-            >
-              <p className="text-gray-600 dark:text-gray-400">
-                {project.published === true
-                  ? t(
-                      'admin.projects.fields.publishedHint',
-                      'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
-                    )
-                  : t(
-                      'admin.projects.view.notPublished',
-                      'Only the apps, workflows and agents that link this project use it.'
+              <Card title={t('admin.projects.view.usedBy', 'Used by')}>
+                {dependenciesFailed ? (
+                  <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                    {t(
+                      'admin.projects.view.usedByFailed',
+                      'The apps, workflows and agents that link this project could not be loaded.'
                     )}
-              </p>
-            </ProjectPanelRow>
-          </div>
-        </div>
+                  </p>
+                ) : dependencies === null ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('common.loading', 'Loading...')}
+                  </p>
+                ) : dependencies.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.projects.view.notLinked',
+                      'No app, workflow or agent links this project.'
+                    )}
+                  </p>
+                ) : (
+                  <ul className="space-y-2" data-testid="project-dependencies">
+                    {dependencies.map(dependency => {
+                      const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
+                      const label = dependency.name || dependency.id;
+                      return (
+                        <li
+                          key={`${dependency.type}:${dependency.id}:${dependency.nodeId || ''}`}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {typeLabels[dependency.type] || dependency.type}
+                          </span>
+                          {href ? (
+                            <Link
+                              to={href}
+                              className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                            >
+                              {label}
+                            </Link>
+                          ) : (
+                            <span className="truncate">{label}</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Card>
+            </>
+          }
+          side={
+            <div className={`${PANEL_CARD} min-w-0`} data-testid="project-side-panel">
+              <ProjectPanelRow
+                icon="information-circle"
+                title={t('admin.projects.fields.description', 'Description')}
+                titleId="admin-project-description-title"
+                action={
+                  <Link
+                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                    className={ROW_ACTION}
+                    aria-label={t('admin.projects.view.editDescription', 'Edit description')}
+                  >
+                    {t('common.edit', 'Edit')}
+                  </Link>
+                }
+              >
+                {description ? (
+                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words">
+                    {description}
+                  </p>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {t('admin.projects.view.noDescription', 'No description.')}
+                  </p>
+                )}
+                {(project.category || (project.tags || []).length > 0) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {project.category && (
+                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                        {project.category}
+                      </span>
+                    )}
+                    {(project.tags || []).map(tag => (
+                      <span
+                        key={tag}
+                        className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </ProjectPanelRow>
+              <ProjectPanelRow
+                icon="document-text"
+                title={t('admin.projects.fields.instructions', 'Instructions')}
+                titleId="admin-project-instructions-title"
+                action={
+                  <Link
+                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                    className={ROW_ACTION}
+                    aria-label={
+                      project.instructions
+                        ? t('projects.settings.editInstructions', 'Edit instructions')
+                        : t('projects.settings.addInstructions', 'Add instructions')
+                    }
+                  >
+                    {project.instructions
+                      ? t('common.edit', 'Edit')
+                      : t('projects.panel.add', 'Add')}
+                  </Link>
+                }
+              >
+                {project.instructions ? (
+                  <pre className="max-h-48 overflow-y-auto text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words font-sans">
+                    {project.instructions}
+                  </pre>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {t('admin.projects.view.noInstructions', 'No instructions.')}
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.projects.view.instructionsHint',
+                    'The instructions are added to the system prompt of every app, workflow step or agent that links this project.'
+                  )}
+                </p>
+              </ProjectPanelRow>
+              <ProjectPanelRow
+                icon="globe"
+                title={t('admin.projects.view.visibility', 'Visibility')}
+                titleId="admin-project-visibility-title"
+                action={
+                  <Link
+                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                    className={ROW_ACTION}
+                    aria-label={t('admin.projects.view.changeVisibility', 'Change visibility')}
+                  >
+                    {t('projects.panel.change', 'Change')}
+                  </Link>
+                }
+              >
+                <p className="text-gray-600 dark:text-gray-400">
+                  {project.published === true
+                    ? t(
+                        'admin.projects.fields.publishedHint',
+                        'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
+                      )
+                    : t(
+                        'admin.projects.view.notPublished',
+                        'Only the apps, workflows and agents that link this project use it.'
+                      )}
+                </p>
+              </ProjectPanelRow>
+            </div>
+          }
+        />
       </div>
 
       <ProjectItemTextDialog
