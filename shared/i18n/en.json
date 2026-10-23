@@ -3847,6 +3847,8 @@
         "id": "Project ID",
         "idFixed": "The ID cannot be changed after creation.",
         "enabled": "Enabled",
+        "published": "Published",
+        "publishedHint": "Everyone signed in can use it and link its documents into their own projects.",
         "name": "Name",
         "namePlaceholder": "Project name",
         "description": "Description",

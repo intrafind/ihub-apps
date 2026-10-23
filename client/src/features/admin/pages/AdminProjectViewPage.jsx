@@ -175,6 +175,17 @@ function AdminProjectViewPageContent({ id }) {
               >
                 {enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
               </span>
+              {project.published === true && (
+                <span
+                  className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
+                  title={t(
+                    'admin.projects.fields.publishedHint',
+                    'Everyone signed in can use it and link its documents into their own projects.'
+                  )}
+                >
+                  {t('admin.projects.fields.published', 'Published')}
+                </span>
+              )}
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">{project.id}</p>
           </div>

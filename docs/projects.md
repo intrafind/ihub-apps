@@ -425,14 +425,17 @@ picked cloud file is taken with your account; refresh the item later to take it 
 
 **From another project** links documents instead of copying them, so one document can serve several
 projects without being duplicated: for example the shipped iHub documentation (an admin project)
-next to your own notes in a project about an iHub delivery. Pick one of the projects you use (your
-own, shared ones, and the admin projects of your apps), tick its documents and link them.
+next to your own notes in a project about an iHub delivery. Pick one of your own projects or a
+published one, tick its documents and link them.
 
 - Nothing is copied. A chat reads the original as it is now, so a change to the original shows in
   every project that links it. A linked document counts as one item against the project's limit,
   and none of its bytes.
-- You can link a document only from a project you own, are a member of, or reach through an app.
-  A full administrator's compliance view of someone else's project is not enough.
+- You can link documents only from a project you own or a published one: a user project in the
+  catalog (while the catalog is on) or an admin project switched to **Published**. A project
+  shared with you, an admin project you reach only through an app, or a full administrator's
+  compliance view of someone else's project is not enough. Into an admin project, an
+  administrator also links from the admin projects they manage. Links added earlier keep working.
 - Everyone reads a linked document with their own rights: a member of your project who may not use
   the source project gets nothing from it, and the document shows **No access** for them. Sharing
   your project does not share the projects it links.
@@ -441,6 +444,14 @@ own, shared ones, and the admin projects of your apps), tick its documents and l
   link another document. Linked documents are not refreshed: they always read the source.
 - Moving an admin project's document to another project, or merging admin projects, does not
   re-point the links to it: they show **Source removed** and are linked again from the new place.
+
+### Publishing admin projects
+
+**Published** on an admin project (**Admin → Projects → Edit**, `"published": true` in
+`contents/projects/<id>.json`) makes it available to everyone signed in: they can use it and link
+its documents into their own projects, without an app that links it. Only administrators change
+it. The shipped iHub documentation project is published; installations that upgrade get it
+published too (migration V181), unless an administrator already set the switch.
 
 ### Roles and sharing
 

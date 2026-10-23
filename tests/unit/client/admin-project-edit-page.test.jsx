@@ -202,6 +202,7 @@ describe('AdminProjectEditPage – create', () => {
       name: { en: 'Employee handbook' },
       instructions: '',
       enabled: true,
+      published: false,
       tags: ['hr', 'policy']
     });
     await waitFor(() =>

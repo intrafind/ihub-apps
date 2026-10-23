@@ -23,8 +23,12 @@ The projects a chat draws on, and the project it runs in, now sit beside the mes
 ## Projects: link documents from other projects
 
 A project can now use documents of another project without copying them. **Add documents → From
-another project** lists the projects you use (your own, shared ones, and the admin projects of your
-apps, such as the shipped iHub documentation); tick documents and link them.
+another project** lists your own projects and published ones (catalog projects, and admin projects
+an administrator published, such as the shipped iHub documentation); tick documents and link them.
+
+- Administrators publish an admin project with **Published** under **Admin → Projects → Edit**:
+  everyone signed in can then use it and link its documents. The iHub documentation project is
+  published by default, also on upgraded installations.
 
 - Chats read the original as it is now, so a change there shows in every project that links it.
   A link counts as one item and takes no storage.

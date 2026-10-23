@@ -710,7 +710,13 @@ describe('documents linked from another project', () => {
       const ref = { projectId: 'link-docs', itemId: 'itm_doc' };
       const hidden = await addLink(GRACE, target.id, ref);
       assert.equal(hidden.statusCode, 404, JSON.stringify(hidden.body));
-      await repo.mutate('link-docs', current => ({ ...current, published: true }));
+      const published = await drive(route.adminPatch, {
+        user: EDITOR,
+        params: { id: 'link-docs' },
+        body: { published: true }
+      });
+      assert.equal(published.statusCode, 200, JSON.stringify(published.body));
+      assert.equal(published.body.project.published, true);
       const linked = await addLink(GRACE, target.id, ref);
       assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
       const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });

@@ -355,15 +355,32 @@ function AdminProjectEditPage() {
               <code className="font-mono">{form.id}</code>
             </p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 flex-none">
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={e => handleChange('enabled', e.target.checked)}
-              className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-            />
-            {t('admin.projects.fields.enabled', 'Enabled')}
-          </label>
+          <div className="flex flex-col items-start gap-1 flex-none">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 flex-none">
+              <input
+                type="checkbox"
+                checked={form.enabled}
+                onChange={e => handleChange('enabled', e.target.checked)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+              />
+              {t('admin.projects.fields.enabled', 'Enabled')}
+            </label>
+            <label
+              title={t(
+                'admin.projects.fields.publishedHint',
+                'Everyone signed in can use it and link its documents into their own projects.'
+              )}
+              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 flex-none"
+            >
+              <input
+                type="checkbox"
+                checked={form.published}
+                onChange={e => handleChange('published', e.target.checked)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+              />
+              {t('admin.projects.fields.published', 'Published')}
+            </label>
+          </div>
         </div>
       )}
       {isNew && (
@@ -392,7 +409,7 @@ function AdminProjectEditPage() {
               </p>
             )}
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-6">
             <label className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
@@ -401,6 +418,21 @@ function AdminProjectEditPage() {
                 className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
               />
               {t('admin.projects.fields.enabled', 'Enabled')}
+            </label>
+            <label
+              title={t(
+                'admin.projects.fields.publishedHint',
+                'Everyone signed in can use it and link its documents into their own projects.'
+              )}
+              className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300"
+            >
+              <input
+                type="checkbox"
+                checked={form.published}
+                onChange={e => handleChange('published', e.target.checked)}
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+              />
+              {t('admin.projects.fields.published', 'Published')}
             </label>
           </div>
         </div>

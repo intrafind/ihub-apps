@@ -4131,6 +4131,8 @@
         "id": "Projekt-ID",
         "idFixed": "Die ID kann nach dem Anlegen nicht geändert werden.",
         "enabled": "Aktiviert",
+        "published": "Veröffentlicht",
+        "publishedHint": "Alle angemeldeten Benutzer können es nutzen und seine Dokumente in eigene Projekte verknüpfen.",
         "name": "Name",
         "namePlaceholder": "Projektname",
         "description": "Beschreibung",

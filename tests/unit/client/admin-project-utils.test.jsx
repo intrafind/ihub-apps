@@ -95,6 +95,7 @@ describe('project form', () => {
       name: { en: 'Handbook' },
       instructions: 'Answer in German.',
       enabled: false,
+      published: false,
       tags: ['hr']
     });
   });
@@ -108,6 +109,7 @@ describe('project form', () => {
       description: { en: '' },
       instructions: '',
       enabled: true,
+      published: false,
       category: '',
       tags: ['x']
     });
