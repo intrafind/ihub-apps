@@ -11,3 +11,15 @@ A company CA that is installed on the machine (Linux CA store, Windows or macOS 
 such as LLM endpoints, MCP servers and `wss://` voice transcription, in addition to Node's built-in roots.
 Nothing needs to be configured, and the Docker image, binaries and `npm start` all behave the same. Set `NODE_USE_SYSTEM_CA=0` to turn it off. 
 This needs Node 24.5 or later; on older runtimes set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` instead.
+
+## Projects: link documents from other projects
+
+A project can now use documents of another project without copying them. **Add documents → From
+another project** lists the projects you use (your own, shared ones, and the admin projects of your
+apps, such as the shipped iHub documentation); tick documents and link them.
+
+- Chats read the original as it is now, so a change there shows in every project that links it.
+  A link counts as one item and takes no storage.
+- Everyone reads a linked document with their own rights: a member who may not use the source
+  project sees **No access** for it and the chat does not get its text.
+- A removed original shows **Source removed**.

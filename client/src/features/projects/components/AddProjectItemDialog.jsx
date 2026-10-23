@@ -7,12 +7,14 @@ import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import {
   CLOUD_ITEM_KINDS,
+  PROJECT_ITEM_KIND,
   buildItemDialogTabs,
   kindIcon,
   localizedText,
   visibleItemDialogTabs
 } from '../utils/projectItems';
 import ItemFormBody from './item-dialog/ItemFormBody';
+import ProjectLinkTab from './item-dialog/ProjectLinkTab';
 import ProjectUsageBar from './ProjectUsageBar';
 
 // The cloud tab pulls in the cloud file browsers; load it only when a cloud
@@ -28,6 +30,10 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @property {(query: string) => Promise<Array<Object>>} searchIFinder
  * @property {(url: string) => Promise<{ok: boolean, error?: string}>} checkUrl
  * @property {() => Promise<Array<Object>>} [fetchCloudProviders] - Cloud connections.
+ * @property {() => Promise<Array<Object>>} [fetchLinkSources] - Projects whose
+ *   documents can be linked (`projectLinks`).
+ * @property {(projectId: string) => Promise<Object>} [fetchLinkSource] - One of
+ *   them with its documents.
  * @property {(error: Error) => string} errorMessage
  */
 
@@ -52,6 +58,8 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @param {(item: Object) => void} props.onAdded - Called with each item added.
  * @param {ProjectItemApi} props.api
  * @param {boolean} [props.cloud=false] - Offer the cloud kinds.
+ * @param {boolean} [props.projectLinks=false] - Offer linking documents of
+ *   other projects.
  * @param {boolean} [props.hideUnavailable=false] - Hide the tabs of kinds this
  *   installation does not offer instead of showing them disabled.
  * @param {boolean} [props.multipleUploads=false] - Allow several files at once.
@@ -67,6 +75,7 @@ function AddProjectItemDialog({
   onAdded,
   api,
   cloud = false,
+  projectLinks = false,
   hideUnavailable = false,
   multipleUploads = false,
   project = null
@@ -74,16 +83,17 @@ function AddProjectItemDialog({
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const tabs = useMemo(() => {
-    const all = buildItemDialogTabs(kinds, config, { cloud });
+    const all = buildItemDialogTabs(kinds, config, { cloud, projectLinks });
     const shown = hideUnavailable ? visibleItemDialogTabs(all) : all;
     return shown.length > 0 ? shown : all;
-  }, [kinds, config, cloud, hideUnavailable]);
+  }, [kinds, config, cloud, projectLinks, hideUnavailable]);
   const firstEnabled = tabs.find(tab => tab.enabled)?.id || tabs[0].id;
   // `null` until a tab is picked: follows the first usable one, which may
   // change while the kinds are still loading.
   const [chosenTab, setChosenTab] = useState(null);
   const tab = tabs.find(candidate => candidate.id === (chosenTab ?? firstEnabled)) || tabs[0];
   const isCloudTab = CLOUD_ITEM_KINDS.includes(tab.kind) && tab.enabled;
+  const isLinkTab = tab.kind === PROJECT_ITEM_KIND && tab.enabled;
 
   const tabLabel = candidate => {
     if (candidate.id === 'upload') return t('projects.addItem.tabs.upload', 'Upload');
@@ -135,7 +145,15 @@ function AddProjectItemDialog({
         </div>
       </div>
 
-      {isCloudTab ? (
+      {isLinkTab ? (
+        <ProjectLinkTab
+          projectId={projectId}
+          project={project}
+          api={api}
+          onAdded={onAdded}
+          onClose={onClose}
+        />
+      ) : isCloudTab ? (
         <Suspense
           fallback={
             <p className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">

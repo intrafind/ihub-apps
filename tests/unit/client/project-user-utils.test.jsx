@@ -14,7 +14,9 @@ import {
   cloudProvidersForKind,
   isItemReadable,
   validateUploads,
-  visibleItemDialogTabs
+  visibleItemDialogTabs,
+  linkSourceProjects,
+  linkableItems
 } from '../../../client/src/features/projects/utils/projectItems';
 import {
   appsForProjectChats,
@@ -182,6 +184,54 @@ describe('project items — dialog tabs and uploads', () => {
   test('a stale item keeps its readable text', () => {
     expect(isItemReadable({ status: 'stale' })).toBe(true);
     expect(isItemReadable({ status: 'extracting' })).toBe(false);
+  });
+});
+
+describe('project items — documents linked from other projects', () => {
+  test('offers the link tab only where the dialog can pick projects', () => {
+    const kinds = [{ id: 'url' }, { id: 'project-item' }];
+    expect(buildItemDialogTabs(kinds, {}).some(tab => tab.kind === 'project-item')).toBe(false);
+    expect(
+      buildItemDialogTabs(kinds, {}, { projectLinks: true }).find(
+        tab => tab.kind === 'project-item'
+      )
+    ).toMatchObject({ enabled: true });
+  });
+
+  test('lists every project the viewer uses but this one and compliance views', () => {
+    const projects = [
+      { id: 'faq', ownership: 'admin', role: 'linked', permissions: { canUse: true } },
+      { id: 'prj_here', ownership: 'user', role: 'owner', permissions: { canUse: true } },
+      { id: 'prj_shared', ownership: 'user', role: 'user', permissions: { canUse: true } },
+      { id: 'prj_someone', ownership: 'user', role: 'admin', permissions: { canUse: true } }
+    ];
+    expect(linkSourceProjects(projects, 'prj_here').map(project => project.id)).toEqual([
+      'prj_shared',
+      'faq'
+    ]);
+  });
+
+  test('marks documents the target has already, also through a link of a link', () => {
+    const source = {
+      id: 'prj_src',
+      items: [
+        { id: 'itm_a', kind: 'upload' },
+        { id: 'itm_b', kind: 'upload' },
+        { id: 'itm_c', kind: 'project-item', ref: { projectId: 'prj_here', itemId: 'itm_own' } }
+      ]
+    };
+    const target = {
+      id: 'prj_here',
+      items: [
+        { id: 'itm_own', kind: 'upload' },
+        { id: 'itm_link', kind: 'project-item', ref: { projectId: 'prj_src', itemId: 'itm_a' } }
+      ]
+    };
+    expect(linkableItems(source, target).map(({ item, linked }) => [item.id, linked])).toEqual([
+      ['itm_a', true],
+      ['itm_b', false],
+      ['itm_c', true]
+    ]);
   });
 });
 

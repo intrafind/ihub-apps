@@ -6292,7 +6292,18 @@
       "url": "URL",
       "urlFailed": "Die Seite kann nicht gelesen werden: {{error}}",
       "urlOk": "Die Seite kann gelesen werden.",
-      "userLanguage": "Sprache des Benutzers"
+      "userLanguage": "Sprache des Benutzers",
+      "linkHint": "Verknüpfte Dokumente werden nicht kopiert: Chats lesen das Original, Änderungen dort wirken also auch hier. Wer dieses Projekt nutzt, sieht ein verknüpftes Dokument nur, wenn er auch dessen Projekt nutzen darf.",
+      "linkNoProjects": "Es gibt kein anderes Projekt, das Sie nutzen können.",
+      "linkProject": "Projekt",
+      "linkChooseProject": "Projekt wählen…",
+      "linkFromApps": "{{name}} (aus Apps)",
+      "linkNoItems": "Dieses Projekt hat keine Dokumente.",
+      "linkDocuments": "Dokumente",
+      "linkAlready": "Schon verknüpft",
+      "linkSubmit_one": "{{count}} Dokument verknüpfen",
+      "linkSubmit_other": "{{count}} Dokumente verknüpfen",
+      "linkSubmitNone": "Dokumente verknüpfen"
     },
     "chatBar": {
       "change": "Projekt wechseln",
@@ -6401,7 +6412,11 @@
         "ready": "Bereit",
         "stale": "Veraltet",
         "staleHint": "Der Inhalt hat sich an der Quelle geändert; aktualisieren Sie, um ihn neu zu lesen.",
-        "staleNewer": "Neuere Version an der Quelle"
+        "staleNewer": "Neuere Version an der Quelle",
+        "linkForbidden": "Kein Zugriff",
+        "linkForbiddenHint": "Sie dürfen das Projekt nicht nutzen, aus dem dieses Dokument verknüpft ist.",
+        "linkGone": "Quelle entfernt",
+        "linkGoneHint": "Das Originaldokument oder sein Projekt wurde entfernt."
       },
       "title": "Dokumente",
       "tokens": "~{{tokens}} Tokens",
@@ -6483,7 +6498,8 @@
       "picked": "Ausgewählt",
       "pickedFrom": "Ausgewählt aus {{site}}",
       "snapshot": "Text vom {{date}}",
-      "uploaded": "Hochgeladen"
+      "uploaded": "Hochgeladen",
+      "linkedFrom": "Verknüpft aus {{project}}"
     },
     "roles": {
       "admin": "Aus einer App",

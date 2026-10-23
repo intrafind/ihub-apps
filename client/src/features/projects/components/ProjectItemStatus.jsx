@@ -12,13 +12,51 @@ const BADGE = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium ro
  * Status of one project item (spec 3 §9): `pending` grey "waiting",
  * `extracting` with a spinner, `ready` green with its token count, `failed`
  * red with the error message, `stale` amber with "newer version at the
- * source".
+ * source". A document linked from another project shows the original's
+ * status, or that the viewer may not read it or it is gone.
  *
  * @param {{item: Object}} props
  * @returns {JSX.Element}
  */
 function ProjectItemStatus({ item }) {
   const { t } = useTranslation();
+  // A document linked from another project reads the original: its state
+  // for this viewer comes from there (`item.link`, sent with the project).
+  if (item.link?.state === 'forbidden') {
+    return (
+      <div className="min-w-0">
+        <span
+          className={`${BADGE} bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300`}
+        >
+          {t('projects.items.status.linkForbidden', 'No access')}
+        </span>
+        <div className="mt-1 text-xs text-amber-700 dark:text-amber-400 break-words">
+          {t(
+            'projects.items.status.linkForbiddenHint',
+            'You may not use the project this document is linked from.'
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (item.link?.state === 'gone') {
+    return (
+      <div className="min-w-0">
+        <span className={`${BADGE} bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300`}>
+          {t('projects.items.status.linkGone', 'Source removed')}
+        </span>
+        <div className="mt-1 text-xs text-red-700 dark:text-red-400 break-words">
+          {t(
+            'projects.items.status.linkGoneHint',
+            'The original document or its project was removed.'
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (item.link?.status && item.link.status !== item.status) {
+    return <ProjectItemStatus item={{ ...item, link: null, status: item.link.status }} />;
+  }
   switch (item.status) {
     case 'pending':
       return (

@@ -486,6 +486,80 @@ describe('ProjectPage – owner', () => {
   });
 });
 
+describe('ProjectPage – documents linked from other projects', () => {
+  const SOURCE = makeProject({
+    id: 'prj_docs',
+    name: 'Delivery docs',
+    items: [
+      { id: 'itm_install', kind: 'upload', name: 'Install.md', status: 'ready' },
+      { id: 'itm_ops', kind: 'upload', name: 'Operations.md', status: 'ready' }
+    ]
+  });
+
+  test('links the ticked documents of another project', async () => {
+    const config = {
+      ...CONFIG,
+      kinds: [
+        ...CONFIG.kinds,
+        { id: 'project-item', name: { en: 'From another project' }, picker: { type: 'project' } }
+      ]
+    };
+    mockApi.fetchProjectsConfig.mockResolvedValue(config);
+    mockApi.fetchProject.mockImplementation(async id =>
+      id === 'prj_docs'
+        ? SOURCE
+        : makeProject({
+            items: [
+              {
+                id: 'itm_link',
+                kind: 'project-item',
+                name: 'Install.md',
+                status: 'ready',
+                ref: { projectId: 'prj_docs', itemId: 'itm_install' },
+                provenance: { origin: 'linked', source: { site: 'Delivery docs' } },
+                link: { state: 'forbidden' }
+              }
+            ]
+          })
+    );
+    mockApi.fetchProjects.mockResolvedValue([
+      makeProject({ items: undefined }),
+      { ...SOURCE, items: undefined, role: 'user' }
+    ]);
+    mockApi.addProjectItem.mockResolvedValue({ id: 'itm_new', kind: 'project-item' });
+    renderPage();
+
+    // A link the viewer may not read says so.
+    expect(await screen.findByText('No access')).toBeInTheDocument();
+    expect(screen.getByText('Linked from Delivery docs')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add documents' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'From another project' }));
+    const select = await screen.findByLabelText('Project');
+    // Only the other project is offered.
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map(option => option.value)
+    ).toEqual(['', 'prj_docs']);
+    fireEvent.change(select, { target: { value: 'prj_docs' } });
+
+    // The document linked already cannot be ticked again.
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByRole('checkbox', { name: /Install\.md/ })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Operations\.md/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Link 1 documents' }));
+
+    await waitFor(() =>
+      expect(mockApi.addProjectItem).toHaveBeenCalledWith('prj_a', {
+        kind: 'project-item',
+        ref: { projectId: 'prj_docs', itemId: 'itm_ops' },
+        pinned: false
+      })
+    );
+  });
+});
+
 describe('ProjectPage – transfer ownership', () => {
   async function pickNewOwner() {
     fireEvent.click(await screen.findByRole('button', { name: 'Transfer ownership' }));

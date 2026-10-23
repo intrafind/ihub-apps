@@ -36,6 +36,7 @@ stores, or links to content that is fetched when it is used.
 | `office365`         | A file picked from OneDrive or SharePoint            | Text, taken at pick | The user who picked it (and refreshes it later) | A cloud storage provider of that type is enabled |
 | `google-drive`      | A file picked from Google Drive                      | Text, taken at pick | The user who picked it                          | As above                                         |
 | `nextcloud`         | A file picked from Nextcloud                         | Text, taken at pick | The user who picked it                          | As above                                         |
+| `project-item`      | A document of another project                        | Link to it          | The reading user (the source project's members) | Always                                           |
 
 - An `ifinder-query` item with an empty query is a dynamic search: the model's search terms become
   the iFinder query. Such an item only takes part in `knowledge_search`; it is never loaded in
@@ -401,6 +402,25 @@ drop), text, web page (checked before it is added), iHub page, iFinder document 
 OneDrive / SharePoint, Google Drive and Nextcloud through the cloud file browsers. The text of a
 picked cloud file is taken with your account; refresh the item later to take it again.
 
+### Linking documents from other projects
+
+**From another project** links documents instead of copying them, so one document can serve several
+projects without being duplicated: for example the shipped iHub documentation (an admin project)
+next to your own notes in a project about an iHub delivery. Pick one of the projects you use (your
+own, shared ones, and the admin projects of your apps), tick its documents and link them.
+
+- Nothing is copied. A chat reads the original as it is now, so a change to the original shows in
+  every project that links it. A linked document counts as one item against the project's limit,
+  and none of its bytes.
+- You can link a document only from a project you own, are a member of, or reach through an app.
+  A full administrator's compliance view of someone else's project is not enough.
+- Everyone reads a linked document with their own rights: a member of your project who may not use
+  the source project gets nothing from it, and the document shows **No access** for them. Sharing
+  your project does not share the projects it links.
+- A link to a linked document points to the original, and a project cannot link its own documents.
+- When the original or its project is removed, the link shows **Source removed**; remove it or
+  link another document. Linked documents are not refreshed: they always read the source.
+
 ### Roles and sharing
 
 | Can                                                                  | Owner | Editor | User |
@@ -474,6 +494,9 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ### Not available yet
 
+- **Linking a whole project** into another (projects in projects): link its documents one by one.
+  Documents added to the source later are not linked by themselves.
+- **Linking documents in the admin project editor**: the tab is offered on the project page only.
 - **Search box** on the project page: there is no project search endpoint yet; search happens in
   chats through `knowledge_search`.
 - **Attaching projects from the chat input**: the chat request accepts `projects`, but there is no

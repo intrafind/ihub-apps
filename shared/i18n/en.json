@@ -6327,7 +6327,18 @@
       "url": "URL",
       "urlFailed": "The page cannot be read: {{error}}",
       "urlOk": "The page can be read.",
-      "userLanguage": "The user's language"
+      "userLanguage": "The user's language",
+      "linkHint": "Linked documents are not copied: chats read the original, so changes there show here too. Someone who uses this project sees a linked document only if they may use its project as well.",
+      "linkNoProjects": "There is no other project you can use.",
+      "linkProject": "Project",
+      "linkChooseProject": "Choose a project…",
+      "linkFromApps": "{{name}} (from apps)",
+      "linkNoItems": "This project has no documents.",
+      "linkDocuments": "Documents",
+      "linkAlready": "Already linked",
+      "linkSubmit_one": "Link {{count}} document",
+      "linkSubmit_other": "Link {{count}} documents",
+      "linkSubmitNone": "Link documents"
     },
     "chatBar": {
       "change": "Change project",
@@ -6436,7 +6447,11 @@
         "ready": "Ready",
         "stale": "Outdated",
         "staleHint": "The content changed at its origin; refresh to read it again.",
-        "staleNewer": "Newer version at the source"
+        "staleNewer": "Newer version at the source",
+        "linkForbidden": "No access",
+        "linkForbiddenHint": "You may not use the project this document is linked from.",
+        "linkGone": "Source removed",
+        "linkGoneHint": "The original document or its project was removed."
       },
       "title": "Documents",
       "tokens": "~{{tokens}} tokens",
@@ -6518,7 +6533,8 @@
       "picked": "Picked",
       "pickedFrom": "Picked from {{site}}",
       "snapshot": "text taken {{date}}",
-      "uploaded": "Uploaded"
+      "uploaded": "Uploaded",
+      "linkedFrom": "Linked from {{project}}"
     },
     "roles": {
       "admin": "From an app",

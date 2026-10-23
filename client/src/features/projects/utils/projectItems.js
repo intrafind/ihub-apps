@@ -36,6 +36,9 @@ export const ITEM_TEXT_PREVIEW_CHARS = 20000;
 /** Cloud storage kinds: picked through the cloud file browsers. */
 export const CLOUD_ITEM_KINDS = Object.freeze(['office365', 'google-drive', 'nextcloud']);
 
+/** The kind of a document linked from another project. */
+export const PROJECT_ITEM_KIND = 'project-item';
+
 /**
  * The `platform.cloudStorage.providers[].type` each cloud kind reads from
  * (the kind's `picker.provider` says the same; this is the fallback).
@@ -57,7 +60,8 @@ export const ITEM_DIALOG_TABS = Object.freeze([
   { id: 'page', kind: 'page' },
   { id: 'ifinder-document', kind: 'ifinder-document' },
   { id: 'ifinder-query', kind: 'ifinder-query' },
-  ...CLOUD_ITEM_KINDS.map(kind => ({ id: kind, kind }))
+  ...CLOUD_ITEM_KINDS.map(kind => ({ id: kind, kind })),
+  { id: PROJECT_ITEM_KIND, kind: PROJECT_ITEM_KIND }
 ]);
 
 /** Icon of each item kind (names of the shared `Icon` component). */
@@ -70,7 +74,8 @@ const KIND_ICONS = Object.freeze({
   'ifinder-query': 'magnifying-glass',
   office365: 'cloud',
   'google-drive': 'cloud',
-  nextcloud: 'cloud'
+  nextcloud: 'cloud',
+  [PROJECT_ITEM_KIND]: 'folder'
 });
 
 /**
@@ -192,16 +197,21 @@ function enabledKindIds(kinds) {
  * @param {Array<{id: string, enabled?: boolean}>} kinds - Admin `GET /_kinds` or
  *   user `GET /api/projects/_config` `kinds`.
  * @param {{upload?: {available?: boolean}}|null} config - The `_config` answer.
- * @param {{cloud?: boolean}} [options] - `cloud: true` offers the cloud kinds
- *   (the dialog has a cloud picker); otherwise they are shown as coming later.
+ * @param {{cloud?: boolean, projectLinks?: boolean}} [options] - `cloud: true`
+ *   offers the cloud kinds (the dialog has a cloud picker); otherwise they are
+ *   shown as coming later. `projectLinks: true` offers linking documents of
+ *   other projects; otherwise that tab is left out.
  * @returns {Array<{id: string, kind: string, enabled: boolean,
  *   reason: null|'later'|'disabled'|'storageUnavailable'}>}
  *   `reason` explains a disabled tab.
  */
-export function buildItemDialogTabs(kinds, config, { cloud = false } = {}) {
+export function buildItemDialogTabs(kinds, config, { cloud = false, projectLinks = false } = {}) {
   const enabledKinds = enabledKindIds(kinds);
   const uploadAvailable = config?.upload?.available !== false;
-  return ITEM_DIALOG_TABS.map(tab => {
+  const offered = projectLinks
+    ? ITEM_DIALOG_TABS
+    : ITEM_DIALOG_TABS.filter(tab => tab.kind !== PROJECT_ITEM_KIND);
+  return offered.map(tab => {
     if (CLOUD_ITEM_KINDS.includes(tab.kind) && !cloud) {
       return { ...tab, enabled: false, reason: 'later' };
     }
@@ -490,4 +500,51 @@ export function validateUploads(files, config, usage) {
 export function uploadAccept(config) {
   const accept = config?.upload?.accept;
   return Array.isArray(accept) && accept.length > 0 ? accept.join(',') : undefined;
+}
+
+// --- documents linked from other projects --------------------------------------
+
+/**
+ * The projects whose documents the viewer may link into `projectId`: every
+ * project they use (own, shared, and the admin projects of their apps) but
+ * that one. A full admin's compliance view of someone else's project does
+ * not count; the server refuses those links too.
+ *
+ * @param {Array<Object>} projects - `GET /api/projects` items.
+ * @param {string} projectId - The project the links go into.
+ * @returns {Array<Object>} User projects first, then admin projects.
+ */
+export function linkSourceProjects(projects, projectId) {
+  return (projects || [])
+    .filter(
+      project =>
+        project &&
+        project.id !== projectId &&
+        project.permissions?.canUse !== false &&
+        !(project.ownership === 'user' && project.role === 'admin')
+    )
+    .sort((a, b) => (a.ownership === b.ownership ? 0 : a.ownership === 'user' ? -1 : 1));
+}
+
+/** The original a document stands for: itself, or the one it links. */
+function originalKey(projectId, item) {
+  return item.kind === PROJECT_ITEM_KIND && item.ref?.projectId
+    ? `${item.ref.projectId}/${item.ref.itemId}`
+    : `${projectId}/${item.id}`;
+}
+
+/**
+ * The documents of `source` with whether `target` has each already: it links
+ * the same original, or the original is one of its own documents.
+ *
+ * @param {Object} source - A project with its items.
+ * @param {Object|null} target - The project the links go into.
+ * @returns {Array<{item: Object, linked: boolean}>}
+ */
+export function linkableItems(source, target) {
+  const present = new Set((target?.items || []).map(item => originalKey(target.id, item)));
+  return (source?.items || []).map(item => ({
+    item,
+    linked: present.has(originalKey(source.id, item))
+  }));
 }
