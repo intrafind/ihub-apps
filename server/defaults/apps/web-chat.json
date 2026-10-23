@@ -19,9 +19,6 @@
   "preferredStyle": "normal",
   "enabled": true,
   "order": 1,
-  "prompt": {
-    "en": "{{content}}"
-  },
   "variables": [],
   "starterPrompts": [],
   "websearch": {

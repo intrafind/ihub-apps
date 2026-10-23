@@ -79,6 +79,9 @@ restrictions) or **Off** (a draft, or a paused project that nothing uses). The l
 and the list column **Status** is now **Available to**. The stored `enabled` and `published` flags do not change; **Off** is `enabled: false`.
 A project that was disabled and published now shows as **Off**, which is what it behaved like.
 
+**Apps no longer carry a prompt template that is only `{{content}}`.**
+Such a template changed nothing, because the message is sent as typed anyway. The app creator stops adding it, and an upgrade removes it from existing apps. Templates with other text around `{{content}}` are kept.
+
 ## Admin Projects: knowledge for apps, workflows and agents
 
 Admins manage knowledge as **projects** (Admin → Projects), the successor of sources. A project
