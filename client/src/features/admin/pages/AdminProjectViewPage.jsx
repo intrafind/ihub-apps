@@ -21,6 +21,7 @@ import EstimateTokensButton from '../../projects/components/EstimateTokensButton
 import ProjectEstimatePanel from '../../projects/components/ProjectEstimatePanel';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
+import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
 import { useProjectEstimate } from '../../projects/hooks/useProjectEstimate';
 import { useAdminProject } from '../hooks/useAdminProject';
 import { localizedText } from '../../projects/utils/projectItems';
@@ -38,8 +39,8 @@ const adminErrorMessage = err => getAdminApiErrorMessage(err);
 /** One labelled block of the view. */
 function Card({ title, children }) {
   return (
-    <section className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6">
-      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">{title}</h2>
+    <section className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -231,117 +232,174 @@ function AdminProjectViewPageContent({ id }) {
           </div>
         )}
 
-        <div className="space-y-6">
-          {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
-          {testResult && (
-            <ProjectTestResults result={testResult} onDismiss={() => setTestResult(null)} />
-          )}
+        {/* The same layout as a user's project page: the documents in the wide
+            column, the settings as compact rows beside them. */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
+            {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
+            {testResult && (
+              <ProjectTestResults result={testResult} onDismiss={() => setTestResult(null)} />
+            )}
 
-          <Card title={t('admin.projects.fields.description', 'Description')}>
-            {description ? (
-              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                {description}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.projects.view.noDescription', 'No description.')}
-              </p>
-            )}
-            {(project.category || (project.tags || []).length > 0) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {project.category && (
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {project.category}
-                  </span>
-                )}
-                {(project.tags || []).map(tag => (
-                  <span
-                    key={tag}
-                    className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </Card>
+            <Card title={t('admin.projects.items.title', 'Items')}>
+              <ProjectItemsTable
+                items={project.items || []}
+                kinds={kinds}
+                readOnly
+                estimates={estimate ? byItem : undefined}
+                onPreview={setPreviewItem}
+              />
+            </Card>
 
-          <Card title={t('admin.projects.fields.instructions', 'Instructions')}>
-            {project.instructions ? (
-              <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">
-                {project.instructions}
-              </pre>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.projects.view.noInstructions', 'No instructions.')}
-              </p>
-            )}
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              {t(
-                'admin.projects.view.instructionsHint',
-                'The instructions are added to the system prompt of every app, workflow step or agent that links this project.'
+            <Card title={t('admin.projects.view.usedBy', 'Used by')}>
+              {dependenciesFailed ? (
+                <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                  {t(
+                    'admin.projects.view.usedByFailed',
+                    'The apps, workflows and agents that link this project could not be loaded.'
+                  )}
+                </p>
+              ) : dependencies === null ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
+              ) : dependencies.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.projects.view.notLinked',
+                    'No app, workflow or agent links this project.'
+                  )}
+                </p>
+              ) : (
+                <ul className="space-y-2" data-testid="project-dependencies">
+                  {dependencies.map(dependency => {
+                    const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
+                    const label = dependency.name || dependency.id;
+                    return (
+                      <li
+                        key={`${dependency.type}:${dependency.id}:${dependency.nodeId || ''}`}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          {typeLabels[dependency.type] || dependency.type}
+                        </span>
+                        {href ? (
+                          <Link
+                            to={href}
+                            className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+                          >
+                            {label}
+                          </Link>
+                        ) : (
+                          <span className="truncate">{label}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
-            </p>
-          </Card>
+            </Card>
+          </div>
 
-          <Card title={t('admin.projects.items.title', 'Items')}>
-            <ProjectItemsTable
-              items={project.items || []}
-              kinds={kinds}
-              readOnly
-              estimates={estimate ? byItem : undefined}
-              onPreview={setPreviewItem}
-            />
-          </Card>
-
-          <Card title={t('admin.projects.view.usedBy', 'Used by')}>
-            {dependenciesFailed ? (
-              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-                {t(
-                  'admin.projects.view.usedByFailed',
-                  'The apps, workflows and agents that link this project could not be loaded.'
-                )}
-              </p>
-            ) : dependencies === null ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('common.loading', 'Loading...')}
-              </p>
-            ) : dependencies.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.projects.view.notLinked',
-                  'No app, workflow or agent links this project.'
-                )}
-              </p>
-            ) : (
-              <ul className="space-y-2" data-testid="project-dependencies">
-                {dependencies.map(dependency => {
-                  const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
-                  const label = dependency.name || dependency.id;
-                  return (
-                    <li
-                      key={`${dependency.type}:${dependency.id}:${dependency.nodeId || ''}`}
-                      className="flex items-center gap-2 text-sm"
+          <div className={`${PANEL_CARD} min-w-0`} data-testid="project-side-panel">
+            <ProjectPanelRow
+              icon="information-circle"
+              title={t('admin.projects.fields.description', 'Description')}
+              titleId="admin-project-description-title"
+              action={
+                <Link
+                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                  className={ROW_ACTION}
+                  aria-label={t('admin.projects.view.editDescription', 'Edit description')}
+                >
+                  {t('common.edit', 'Edit')}
+                </Link>
+              }
+            >
+              {description ? (
+                <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words">
+                  {description}
+                </p>
+              ) : (
+                <p className="text-gray-400 dark:text-gray-500">
+                  {t('admin.projects.view.noDescription', 'No description.')}
+                </p>
+              )}
+              {(project.category || (project.tags || []).length > 0) && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {project.category && (
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {project.category}
+                    </span>
+                  )}
+                  {(project.tags || []).map(tag => (
+                    <span
+                      key={tag}
+                      className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
                     >
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {typeLabels[dependency.type] || dependency.type}
-                      </span>
-                      {href ? (
-                        <Link
-                          to={href}
-                          className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
-                        >
-                          {label}
-                        </Link>
-                      ) : (
-                        <span className="truncate">{label}</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </ProjectPanelRow>
+            <ProjectPanelRow
+              icon="document-text"
+              title={t('admin.projects.fields.instructions', 'Instructions')}
+              titleId="admin-project-instructions-title"
+              action={
+                <Link
+                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                  className={ROW_ACTION}
+                  aria-label={t('projects.settings.editInstructions', 'Edit instructions')}
+                >
+                  {project.instructions ? t('common.edit', 'Edit') : t('projects.panel.add', 'Add')}
+                </Link>
+              }
+            >
+              {project.instructions ? (
+                <pre className="max-h-48 overflow-y-auto text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words font-sans">
+                  {project.instructions}
+                </pre>
+              ) : (
+                <p className="text-gray-400 dark:text-gray-500">
+                  {t('admin.projects.view.noInstructions', 'No instructions.')}
+                </p>
+              )}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.projects.view.instructionsHint',
+                  'The instructions are added to the system prompt of every app, workflow step or agent that links this project.'
+                )}
+              </p>
+            </ProjectPanelRow>
+            <ProjectPanelRow
+              icon="globe"
+              title={t('admin.projects.view.visibility', 'Visibility')}
+              titleId="admin-project-visibility-title"
+              action={
+                <Link
+                  to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
+                  className={ROW_ACTION}
+                  aria-label={t('admin.projects.view.changeVisibility', 'Change visibility')}
+                >
+                  {t('projects.panel.change', 'Change')}
+                </Link>
+              }
+            >
+              <p className="text-gray-600 dark:text-gray-400">
+                {project.published === true
+                  ? t(
+                      'admin.projects.fields.publishedHint',
+                      'Everyone signed in can use it and link its documents into their own projects.'
+                    )
+                  : t(
+                      'admin.projects.view.notPublished',
+                      'Only the apps, workflows and agents that link it use it.'
+                    )}
+              </p>
+            </ProjectPanelRow>
+          </div>
         </div>
       </div>
 

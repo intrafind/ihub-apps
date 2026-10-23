@@ -62,5 +62,7 @@ in `platform.json`.
 
 ## Admin Projects: the items come first
 
-The edit page of an admin project shows its items in the wide column and the settings in a compact
-form beside them, so the documents are no longer pushed below a long form.
+The view and edit pages of an admin project now share the layout of a user's project page: the
+items in the wide column, the settings beside them (compact rows on the view page, a compact form
+on the edit page), so the documents are no longer pushed below a long form. The results of
+**Test** and **Estimate tokens** appear above the items.

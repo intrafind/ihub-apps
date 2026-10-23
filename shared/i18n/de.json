@@ -4241,6 +4241,10 @@
       "view": {
         "edit": "Bearbeiten",
         "noDescription": "Keine Beschreibung.",
+        "visibility": "Sichtbarkeit",
+        "editDescription": "Beschreibung bearbeiten",
+        "changeVisibility": "Sichtbarkeit ändern",
+        "notPublished": "Nur die Apps, Workflows und Agenten, die es verknüpfen, nutzen es.",
         "noInstructions": "Keine Anweisungen.",
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",

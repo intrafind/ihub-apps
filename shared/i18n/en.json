@@ -3957,6 +3957,10 @@
       "view": {
         "edit": "Edit",
         "noDescription": "No description.",
+        "visibility": "Visibility",
+        "editDescription": "Edit description",
+        "changeVisibility": "Change visibility",
+        "notPublished": "Only the apps, workflows and agents that link it use it.",
         "noInstructions": "No instructions.",
         "instructionsHint": "The instructions are added to the system prompt of every app, workflow step or agent that links this project.",
         "usedBy": "Used by",
