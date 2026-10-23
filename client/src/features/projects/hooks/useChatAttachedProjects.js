@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { setChatAttachedProjects } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
@@ -25,22 +25,36 @@ export const MAX_ATTACHED_PROJECTS = 10;
 export function useChatAttachedProjects({ chatId, stored, value, onChange }) {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  // A failure belongs to the chat it happened in: another chat opened since
+  // shows none.
+  const [failure, setFailure] = useState(null);
+  const error = failure && failure.chatId === chatId ? failure.message : null;
+  // The chat the page shows now. A save that is still out when another chat
+  // opens belongs to the old one: its answer, or its error, must not land in
+  // the new chat's projects.
+  const currentChatIdRef = useRef(chatId);
+  useEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
 
   const apply = async next => {
-    setError(null);
+    setFailure(null);
     if (!stored || !chatId) {
       onChange(next);
       return;
     }
     setSaving(true);
+    const origin = chatId;
     try {
-      const result = await setChatAttachedProjects(chatId, next);
+      const result = await setChatAttachedProjects(origin, next);
+      if (currentChatIdRef.current !== origin) return;
       onChange(
         Array.isArray(result?.chat?.attachedProjectIds) ? result.chat.attachedProjectIds : next
       );
     } catch (err) {
-      setError(projectErrorMessage(err, t));
+      if (currentChatIdRef.current === origin) {
+        setFailure({ chatId: origin, message: projectErrorMessage(err, t) });
+      }
     } finally {
       setSaving(false);
     }

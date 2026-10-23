@@ -230,6 +230,38 @@ describe('projects menu section', () => {
   });
 });
 
+describe('a save that outlives its chat', () => {
+  function Switchable({ chatId, onChange }) {
+    return (
+      <Harness
+        params={context({ chatId, onChange, containerProjectId: CASE.id })}
+        showChips={false}
+      />
+    );
+  }
+
+  test('neither its answer nor its error reaches the chat opened meanwhile', async () => {
+    let finish;
+    mockSetAttached.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const onChange = jest.fn();
+    const { rerender } = render(<Switchable chatId="chat-1" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    rerender(<Switchable chatId="chat-2" onChange={onChange} />);
+    finish({ chat: { attachedProjectIds: [HANDBOOK.id] } });
+    await waitFor(() => expect(mockSetAttached).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(onChange).not.toHaveBeenCalled();
+
+    // The same for a failure: no error appears in the new chat.
+    mockSetAttached.mockRejectedValue(new Error('nope'));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    rerender(<Switchable chatId="chat-3" onChange={onChange} />);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('an app that opts out of projects', () => {
   test('offers no projects to tick but still names the project the chat runs in', () => {
     const params = context({ attachDisabled: true, containerProjectId: CASE.id });
