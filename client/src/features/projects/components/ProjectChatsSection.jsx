@@ -29,8 +29,7 @@ function formatWhen(value, language) {
 /**
  * The chats inside a project (spec 1 §6.4): everyone's, or only the
  * caller's (`filter=mine`); each links into its app, read-only for the chats
- * of other members. "New chat" is in the project page's header, the main
- * action of a project.
+ * of other members. Starting a chat is the composer above this card.
  *
  * @param {Object} props
  * @param {Object} props.project

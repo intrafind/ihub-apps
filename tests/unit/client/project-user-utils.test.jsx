@@ -20,7 +20,6 @@ import {
   appsForProjectChats,
   buildCreateProjectBody,
   buildProjectChanges,
-  chatMoveTargets,
   chatPath,
   countProjectGroups,
   filterProjectList,
@@ -29,10 +28,12 @@ import {
   ownMemberEntry,
   projectChatStartPath,
   projectCreation,
+  projectFormFrom,
   projectListGroup,
   projectUsage,
   quotaState,
   reconcileProjectForm,
+  resolveProjectChatApp,
   sharesToMembers,
   validateProjectForm
 } from '../../../client/src/features/projects/utils/projectView';
@@ -229,6 +230,27 @@ describe('project page rules', () => {
     });
   });
 
+  test('sets, changes and clears the default app of a project', () => {
+    expect(buildCreateProjectBody({ name: 'Case', defaultAppId: 'summarizer' })).toEqual({
+      name: 'Case',
+      defaultAppId: 'summarizer'
+    });
+    expect(buildCreateProjectBody({ name: 'Case', defaultAppId: '' })).toEqual({ name: 'Case' });
+    const project = { name: 'Case', description: '', instructions: '', defaultAppId: 'chat' };
+    const form = projectFormFrom(project);
+    expect(form.defaultAppId).toBe('chat');
+    expect(buildProjectChanges(form, project)).toBeNull();
+    expect(buildProjectChanges({ ...form, defaultAppId: 'summarizer' }, project)).toEqual({
+      defaultAppId: 'summarizer'
+    });
+    // Choosing "no default" is sent as null, the server's way to clear it.
+    expect(buildProjectChanges({ ...form, defaultAppId: '' }, project)).toEqual({
+      defaultAppId: null
+    });
+    // A project that never had one is unchanged by an untouched form.
+    expect(buildProjectChanges(projectFormFrom({ name: 'Case' }), { name: 'Case' })).toBeNull();
+  });
+
   test('takes another editor’s update into untouched fields only', () => {
     const base = { name: 'Case', description: 'd', instructions: 'Be brief.' };
     const form = { ...base, name: 'Case 2' };
@@ -242,7 +264,8 @@ describe('project page rules', () => {
     expect(next.form).toEqual({
       name: 'Case 2',
       description: 'd',
-      instructions: 'Answer in German.'
+      instructions: 'Answer in German.',
+      defaultAppId: ''
     });
     // Only the user's own edit goes out; the other editor's text is kept.
     expect(buildProjectChanges(next.form, next.base)).toEqual({ name: 'Case 2' });
@@ -289,7 +312,7 @@ describe('project page rules', () => {
     expect(membersWithout(project, 'u1')).toHaveLength(2);
   });
 
-  test('links chats, starts project chats and lists move targets', () => {
+  test('links chats and starts project chats', () => {
     expect(chatPath({ id: 'c1', appId: 'chat' })).toBe('/apps/chat/c/c1');
     expect(chatPath({ id: 'c1' })).toBe('/chats');
     expect(projectChatStartPath('chat', 'prj_a')).toBe('/apps/chat?project=prj_a');
@@ -305,7 +328,19 @@ describe('project page rules', () => {
         { id: 'away', type: 'redirect' }
       ]).map(app => app.id)
     ).toEqual(['a', 'c']);
-    expect(chatMoveTargets([mine, shared, admin], 'prj_a')).toEqual([shared]);
+    // With a first message the chat sends it at once.
+    expect(projectChatStartPath('chat', 'prj_a', '  Summarize the lease  ')).toBe(
+      '/apps/chat?project=prj_a&prefill=Summarize+the+lease&send=true'
+    );
+    expect(projectChatStartPath('chat', 'prj_a', '   ')).toBe('/apps/chat?project=prj_a');
+  });
+
+  test('starts in the default app while it is usable, else the first app', () => {
+    const apps = [{ id: 'chat' }, { id: 'summarizer' }];
+    expect(resolveProjectChatApp(apps, 'summarizer')).toBe('summarizer');
+    expect(resolveProjectChatApp(apps, 'removed')).toBe('chat');
+    expect(resolveProjectChatApp(apps, null)).toBe('chat');
+    expect(resolveProjectChatApp([], 'chat')).toBeNull();
   });
 });
 

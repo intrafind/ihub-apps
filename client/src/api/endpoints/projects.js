@@ -266,16 +266,6 @@ export const fetchProjectChats = async (projectId, { filter = 'all', limit, curs
   };
 };
 
-/**
- * Move a stored chat into a user project, or out of its project with `null`.
- *
- * @param {string} chatId
- * @param {string|null} projectId
- * @returns {Promise<{chat: Object}>}
- */
-export const moveChatToProject = (chatId, projectId) =>
-  call(() => apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, { projectId }));
-
 // --- pickers of the "Add item" dialog ---------------------------------------------
 
 /**

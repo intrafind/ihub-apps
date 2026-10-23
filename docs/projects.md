@@ -13,7 +13,7 @@ Projects come in two kinds behind one model:
 | Stored as           | Configuration, `contents/projects/<id>.json`                      | Runtime data in the storage provider                             |
 | Id                  | Chosen by the admin (`faq`, at most 50 characters, not `prj_…`)   | Minted, `prj_` followed by 22 characters                         |
 | Name, description   | Localized (`{ "en": "…", "de": "…" }`)                            | Plain text                                                       |
-| Chats               | None                                                              | Chats started in the project, or moved into it                   |
+| Chats               | None                                                              | Chats started in the project                                     |
 | Feature flag        | `projects` (on by default)                                        | `projects` and `userProjects` (preview, off by default)          |
 
 Admin projects are the successor of sources. An upgrade turns every source into an admin project
@@ -244,7 +244,7 @@ a user project. An app that answers from a fixed knowledge set turns it off:
 ```
 
 The app's own admin project links keep working. The project page offers only apps that allow
-projects for **New chat**.
+projects when you start a chat.
 
 ### Checking a project
 
@@ -380,8 +380,11 @@ instructions). The button shows how many projects you have against `maxProjectsP
 
 A project page shows:
 
-- **New chat** in the header, the main action: it asks for an app and starts a chat with the
-  project attached.
+- **A chat field** at the top, the main action: type a message and press Enter (or **Send**) to
+  start a chat in the project, with that message already sent. The app next to the button is the
+  project's default app (see **Settings**); pick another one to chat with it this time. Without a
+  message the button reads **New chat** and opens an empty chat. A message can have up to 2,000
+  characters here.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
   page pages its list the same way; a list on these pages never grows with its content.
@@ -389,8 +392,11 @@ A project page shows:
   documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
   and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
   document and the project weigh.
-- **Settings**: name (up to 200 characters), description (up to 2,000 characters) and
-  instructions (up to 20,000 characters). The instructions apply to every chat in the project.
+- **Settings**: name (up to 200 characters), description (up to 2,000 characters),
+  instructions (up to 20,000 characters) and the **default app**. The instructions apply to every
+  chat in the project. The default app is where new chats of the project start; everyone can still
+  pick another app in the chat field. If you cannot use the default app (it was removed, or it is
+  not shared with you), the first app that allows projects is used instead.
 - **Members**: the owner, the members, **Share**, **Transfer ownership**, **Leave project** and
   **Delete project**.
 
@@ -440,19 +446,21 @@ never edit one.
 ### Chats in a project
 
 A chat started from the project page runs inside the project: it answers with the project's
-instructions and documents (mode `auto`), next to whatever the app itself links. A stored chat
-moves into a project, or out of it, from the chat page (**Move to project**, **Change project**) or
-from the chat history. Both show which project a chat belongs to. Only user projects hold chats.
+instructions and documents (mode `auto`), next to whatever the app itself links. A chat belongs to
+a project from its first message on: it is started from the project page and cannot be moved into
+or out of a project afterwards. A chip beside the message box and the chat history show which
+project a chat belongs to. Only user projects hold chats.
 
 Every member may open the chats in a project; chats of other members are read-only.
 
 ### Using a project in any chat
 
-A chat does not have to start in a project to use one. Above the message box, **Add project** lists
-your own and the shared user projects; tick one and the answers of that chat can use its
-documents (the project is loaded or searched like one the chat runs in); its instructions do not
-apply, only those of the project the chat runs in and of the app's own links. A chip names each
-attached project and links to it; its **×** takes the project away again. Up to 10
+A chat does not have to start in a project to use one. In the message box's **+** menu, the
+**Projects for this chat** section lists your own and the shared user projects; tick one and the
+answers of that chat can use its documents (the project is loaded or searched like one the chat
+runs in); its instructions do not apply, only those of the project the chat runs in and of the
+app's own links. A chip beside the message box names each attached project and links to it; its
+**×** takes the project away again. Up to 10
 projects can be attached. For a stored chat the change is saved at once and is still there when the
 chat is opened later; a chat that is not stored yet keeps the choice for its messages. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
@@ -464,7 +472,7 @@ drawn from an attached private project.
 With `platform.projects.retentionDays` above 0, a daily sweep deletes user projects without
 activity for that many days, with all their documents. Activity is anything that changes the
 project or is done in it: documents added, refreshed, renamed, pinned or removed; settings or
-members changed; chats started in or moved into the project; and a message sent in one of its
+members changed; chats started in the project; and a message sent in one of its
 chats (counted at most once every five minutes). As with **Delete project**, the project's chats are
 kept: they leave the project and stay in their owners' chat history. The deletion is audited. The
 default, 0, keeps projects until someone deletes them. Admin projects have no retention.

@@ -75,8 +75,6 @@ import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors
 import { startLiveTranscription } from '../../../utils/liveTranscription';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
-import ChatAttachedProjects from '../../projects/components/ChatAttachedProjects';
-import ChatProjectBar from '../../projects/components/ChatProjectBar';
 import { PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 
 /**
@@ -2762,6 +2760,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
+      // The project the chat runs in (started from the project page) and the
+      // ones it draws on, chosen in the "+" menu. A chat is never moved into a
+      // project once it exists.
+      projectContext:
+        !embedded && app?.features?.userProjects !== false
+          ? {
+              chatId,
+              stored: chatStoredServerSide,
+              containerProjectId,
+              value: attachedProjectIds,
+              onChange: setAttachedProjectIds,
+              disabled: processing || hydrating
+            }
+          : undefined,
       // Ephemeral chat toggle (rendered next to the send button)
       // Only where there is a history to keep a chat in: without one every
       // chat is temporary already, and the toggle would change nothing.
@@ -2958,26 +2970,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         showEditAppButton={!embedded}
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
-
-      {!embedded && (
-        <ChatProjectBar
-          chatId={chatId}
-          projectId={containerProjectId}
-          canMove={chatPersistence && !chatTemporary && (Boolean(routeChatId) || chatStarted)}
-          onMoved={setChatProjectId}
-        />
-      )}
-
-      {!embedded && app?.features?.userProjects !== false && (
-        <ChatAttachedProjects
-          chatId={chatId}
-          stored={chatStoredServerSide}
-          containerProjectId={containerProjectId}
-          value={attachedProjectIds}
-          onChange={setAttachedProjectIds}
-          disabled={processing || hydrating}
-        />
-      )}
 
       {chatOrigin?.createdVia === 'scheduled-task' && (
         <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />

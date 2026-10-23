@@ -271,16 +271,18 @@ export const userProjectCreateSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required').max(MAX_NAME_LENGTH, 'Name is too long'),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
-    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional()
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
+    defaultAppId: zSafeId.min(1).max(100).optional()
   })
   .strict();
 
-/** What `PATCH /api/projects/:id` accepts. */
+/** What `PATCH /api/projects/:id` accepts. `defaultAppId: null` clears the default app. */
 export const userProjectUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
-    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional()
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');

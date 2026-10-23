@@ -7,6 +7,7 @@ import {
   MAX_PROJECT_INSTRUCTIONS_LENGTH,
   MAX_PROJECT_NAME_LENGTH
 } from '../utils/projectView';
+import ProjectAppSelect from './ProjectAppSelect';
 import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS } from './item-dialog/dialogStyles';
 
 /**
@@ -30,14 +31,16 @@ function fieldError(t, field, code) {
 
 /**
  * Name, description and instructions of a project — the create dialog and
- * the settings card use the same fields.
+ * the settings card use the same fields. The settings card adds the default
+ * app (`showDefaultApp`).
  *
  * @param {Object} props
- * @param {{name: string, description: string, instructions: string}} props.form
+ * @param {{name: string, description: string, instructions: string, defaultAppId?: string}} props.form
  * @param {(field: string, value: string) => void} props.onChange
  * @param {Object<string, string>} [props.errors] - Field → validation code.
  * @param {string} [props.idPrefix='project'] - Prefix of the input ids.
  * @param {boolean} [props.disabled=false]
+ * @param {boolean} [props.showDefaultApp=false]
  * @returns {JSX.Element}
  */
 function ProjectFormFields({
@@ -45,7 +48,8 @@ function ProjectFormFields({
   onChange,
   errors = {},
   idPrefix = 'project',
-  disabled = false
+  disabled = false,
+  showDefaultApp = false
 }) {
   const { t } = useTranslation();
   const fields = [
@@ -89,6 +93,27 @@ function ProjectFormFields({
           </div>
         );
       })}
+      {showDefaultApp && (
+        <div>
+          <label htmlFor={`${idPrefix}-defaultAppId`} className={LABEL_CLASS}>
+            {t('projects.form.defaultApp', 'Default app')}
+          </label>
+          <ProjectAppSelect
+            id={`${idPrefix}-defaultAppId`}
+            value={form.defaultAppId || ''}
+            disabled={disabled}
+            noneLabel={t('projects.form.defaultAppNone', 'No default — ask when starting a chat')}
+            onChange={value => onChange('defaultAppId', value)}
+            className={INPUT_CLASS}
+          />
+          <p className={HINT_CLASS}>
+            {t(
+              'projects.form.defaultAppHint',
+              'New chats of this project start in this app. Anyone can still pick another app when they start a chat.'
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,8 +18,7 @@ import { CHAT_GROUPS, chatRecencyGroup } from '../../../utils/chatGroups';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { START_PAGE_PATH } from '../../../utils/homePage';
 import ChatTitleEditor from '../components/ChatTitleEditor';
-import MoveChatToProjectDialog from '../../projects/components/MoveChatToProjectDialog';
-import { useMyProjects, useProjectsAvailability } from '../../projects/hooks/useProjects';
+import { useMyProjects } from '../../projects/hooks/useProjects';
 import { projectDisplayName } from '../../projects/utils/projectView';
 
 // Grouping modes
@@ -104,20 +103,9 @@ function EmptyState({ icon, title, description, children }) {
  * @param {(title: string) => void} props.onRename - Commit a new title.
  * @param {() => void} props.onCancelRename - Leave rename mode unchanged.
  * @param {() => void} props.onDelete - Ask to delete this chat.
- * @param {(() => void)|null} [props.onMove] - Move the chat into or out of a
- *   project; not offered while user projects are off.
  * @returns {JSX.Element} The chat row.
  */
-function ChatRow({
-  chat,
-  editing,
-  timeLabel,
-  onStartRename,
-  onRename,
-  onCancelRename,
-  onDelete,
-  onMove = null
-}) {
+function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRename, onDelete }) {
   const { t } = useTranslation();
   // Where the keyboard goes when the rename ends. The button itself is swapped
   // out for the editor, so it has to be reached through a ref that points at
@@ -240,17 +228,6 @@ function ChatRow({
             >
               <Icon name="pencil" size="sm" />
             </button>
-            {onMove && (
-              <button
-                type="button"
-                onClick={onMove}
-                aria-label={t('chatHistory.moveToProject', 'Move to project')}
-                title={t('chatHistory.moveToProject', 'Move to project')}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-              >
-                <Icon name="folder-open" size="sm" />
-              </button>
-            )}
             <button
               type="button"
               onClick={onDelete}
@@ -351,11 +328,8 @@ export default function ChatHistoryPage() {
   const [query, setQuery] = useState('');
   const [grouping, setGrouping] = useState('date');
   const [editingId, setEditingId] = useState(null);
-  // User projects (#1036): a chat's project shows on its row, and a stored
-  // chat can be moved into or out of one.
-  const { userProjectsEnabled } = useProjectsAvailability();
+  // User projects (#1036): a chat's project shows on its row.
   const { projects } = useMyProjects();
-  const [movingChat, setMovingChat] = useState(null);
   const projectNames = useMemo(
     () =>
       new Map(projects.map(project => [project.id, projectDisplayName(project, currentLanguage)])),
@@ -884,7 +858,6 @@ export default function ChatHistoryPage() {
                       onRename={title => handleRename(chat, title)}
                       onCancelRename={() => setEditingId(null)}
                       onDelete={() => handleDelete(chat)}
-                      onMove={userProjectsEnabled ? () => setMovingChat(chat) : null}
                     />
                   ))}
                 </div>
@@ -912,20 +885,6 @@ export default function ChatHistoryPage() {
           </div>
         )}
       </div>
-
-      {movingChat && (
-        <MoveChatToProjectDialog
-          chatId={movingChat.id}
-          currentProjectId={movingChat.projectId || null}
-          onClose={() => setMovingChat(null)}
-          onMoved={projectId => {
-            patchChatInCache(movingChat.id, { projectId });
-            setMovingChat(null);
-            setActionStatus(t('chatHistory.moved', 'Chat moved'));
-            invalidateChatsCache();
-          }}
-        />
-      )}
 
       <ConfirmDialog
         isOpen={!!confirmDialog}

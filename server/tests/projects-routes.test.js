@@ -361,6 +361,32 @@ describe('user projects', () => {
     assert.equal(direct.statusCode, 404, 'an unshared project does not confirm it exists');
   });
 
+  it('keeps a default app per project: set on create, changed, cleared, validated', async () => {
+    const project = await create(ADA, { defaultAppId: 'chat' });
+    assert.equal(project.defaultAppId, 'chat');
+    const params = { projectId: project.id };
+
+    const changed = await drive(route.update, {
+      user: ADA,
+      params,
+      body: { defaultAppId: 'summarizer' }
+    });
+    assert.equal(changed.statusCode, 200, JSON.stringify(changed.body));
+    assert.equal(changed.body.defaultAppId, 'summarizer');
+    const reread = await drive(route.get, { user: ADA, params });
+    assert.equal(reread.body.defaultAppId, 'summarizer');
+
+    const cleared = await drive(route.update, { user: ADA, params, body: { defaultAppId: null } });
+    assert.equal(cleared.statusCode, 200, JSON.stringify(cleared.body));
+    assert.equal(cleared.body.defaultAppId, null);
+
+    for (const bad of ['', '../etc', 42]) {
+      const refused = await drive(route.update, { user: ADA, params, body: { defaultAppId: bad } });
+      assert.equal(refused.statusCode, 400, `refuses ${JSON.stringify(bad)}`);
+    }
+    assert.equal((await create(ADA)).defaultAppId, null, 'a project starts without one');
+  });
+
   it('gives an editor and a user their roles, and revokes at once', async () => {
     const project = await create(ADA);
     const shared = await setMembers(ADA, project.id, [

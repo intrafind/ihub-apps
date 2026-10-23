@@ -2,24 +2,21 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Projects in the chat (#1036, slice 5): the open chat names its project and
- * links to it, a stored chat moves into a project or out of it
- * (`PATCH /api/chats/:chatId { projectId }`), the knowledge badge names a
- * single project and links a user project, a citation shows where a
- * project document came from, and the preview falls back to the text when
- * the original is discarded (spec 2 §5.1).
+ * Projects in the chat (#1036, slice 5): the knowledge badge names a single
+ * project and links a user project, a citation shows where a project document
+ * came from, and the preview falls back to the text when the original is
+ * discarded (spec 2 §5.1). The chat's own project chips are covered in
+ * `chat-attached-projects.test.jsx`.
  */
-import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 
 const mockApi = {
-  fetchProjects: jest.fn(),
-  moveChatToProject: jest.fn()
+  fetchProjects: jest.fn()
 };
 jest.mock('../../../client/src/api', () => ({
   fetchProjects: (...args) => mockApi.fetchProjects(...args),
-  moveChatToProject: (...args) => mockApi.moveChatToProject(...args),
   fetchProjectsConfig: () => Promise.resolve({})
 }));
 const mockFetchSourceContent = jest.fn();
@@ -57,8 +54,6 @@ const mockT = (key, defaultOrOptions, maybeOptions) => {
 const mockI18n = { t: mockT, i18n: { language: 'en-GB' } };
 jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
 
-const ChatProjectBar =
-  require('../../../client/src/features/projects/components/ChatProjectBar').default;
 const ItemProvenance =
   require('../../../client/src/features/projects/components/ItemProvenance').default;
 const AnswerSourceBadge =
@@ -83,57 +78,8 @@ beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockFetchSourceContent.mockReset();
   mockApi.fetchProjects.mockResolvedValue(PROJECTS);
-  mockApi.moveChatToProject.mockResolvedValue({ chat: {} });
   mockPlatform = { projects: { enabled: true, userProjects: true } };
   invalidateProjectsList();
-});
-
-describe('ChatProjectBar', () => {
-  test('names the project of the chat and links to it', async () => {
-    renderInRouter(<ChatProjectBar chatId="c1" projectId="prj_case" canMove onMoved={() => {}} />);
-    const link = await screen.findByRole('link', { name: 'In project: Case 2026-114' });
-    expect(link).toHaveAttribute('href', '/projects/prj_case');
-    expect(screen.getByRole('button', { name: 'Change project' })).toBeInTheDocument();
-  });
-
-  test('moves a stored chat into one of the user projects', async () => {
-    const onMoved = jest.fn();
-    renderInRouter(<ChatProjectBar chatId="c1" projectId={null} canMove onMoved={onMoved} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Move to project' }));
-    const dialog = await screen.findByRole('dialog');
-    // Admin projects are not containers.
-    expect(await within(dialog).findByText('Team wiki')).toBeInTheDocument();
-    expect(within(dialog).queryByText('FAQ')).not.toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByText('Case 2026-114'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }));
-    await waitFor(() => expect(mockApi.moveChatToProject).toHaveBeenCalledWith('c1', 'prj_case'));
-    expect(onMoved).toHaveBeenCalledWith('prj_case');
-  });
-
-  test('takes a chat out of its project', async () => {
-    const onMoved = jest.fn();
-    renderInRouter(<ChatProjectBar chatId="c1" projectId="prj_case" canMove onMoved={onMoved} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Change project' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove from project' }));
-    await waitFor(() => expect(mockApi.moveChatToProject).toHaveBeenCalledWith('c1', null));
-    expect(onMoved).toHaveBeenCalledWith(null);
-  });
-
-  test('renders nothing while user projects are off or for an unstored chat outside projects', () => {
-    const { container, rerender } = renderInRouter(
-      <ChatProjectBar chatId="c1" projectId={null} canMove={false} onMoved={() => {}} />
-    );
-    expect(container).toBeEmptyDOMElement();
-    mockPlatform = { projects: { enabled: true, userProjects: false } };
-    rerender(
-      <MemoryRouter>
-        <ChatProjectBar chatId="c1" projectId="prj_case" canMove onMoved={() => {}} />
-      </MemoryRouter>
-    );
-    expect(container).toBeEmptyDOMElement();
-  });
 });
 
 describe('knowledge badge and provenance', () => {

@@ -288,18 +288,15 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
     <div data-testid="transcript">{messages.map(m => m.content).join('|')}</div>
   )
 }));
-// The project chip: only the project it is handed.
-jest.mock('../../../client/src/features/projects/components/ChatProjectBar', () => ({
-  __esModule: true,
-  default: ({ projectId }) => <div data-testid="project-bar">{projectId || ''}</div>
-}));
 // A real <form> bound to `formRef`, because the auto-send path dispatches a
 // submit event on it — that is how the start-page handoff sends its message.
-// The incognito toggle is exposed as a button when the page offers it.
+// The incognito toggle is exposed as a button when the page offers it. The
+// project the chat runs in is what the composer is handed as `projectContext`.
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
   __esModule: true,
-  default: ({ formRef, onSubmit, ephemeral, onEphemeralChange }) => (
+  default: ({ formRef, onSubmit, ephemeral, onEphemeralChange, projectContext }) => (
     <form ref={formRef} onSubmit={onSubmit} data-testid="composer">
+      <span data-testid="project-bar">{projectContext?.containerProjectId || ''}</span>
       {onEphemeralChange && (
         <button
           type="button"

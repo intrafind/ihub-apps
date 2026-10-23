@@ -34,7 +34,6 @@ import {
   fetchProjectChats,
   fetchProjectItemText,
   fetchProjects,
-  moveChatToProject,
   searchPickerIFinder,
   updateProjectMembers,
   uploadProjectItem
@@ -114,16 +113,12 @@ describe('user projects API', () => {
     });
   });
 
-  test('searches iFinder with q and moves a chat with PATCH /chats', async () => {
-    const requests = captureRequests({ data: { results: [], chat: {} }, status: 200, headers: {} });
+  test('searches iFinder with q', async () => {
+    const requests = captureRequests({ data: { results: [] }, status: 200, headers: {} });
     await searchPickerIFinder('contract', { limit: 5 });
     expect(requests[0]).toMatchObject({
       url: '/projects/pickers/ifinder/search',
       params: { q: 'contract', limit: 5 }
     });
-
-    await moveChatToProject('chat-1', null);
-    expect(requests[1]).toMatchObject({ url: '/chats/chat-1', method: 'patch' });
-    expect(JSON.parse(requests[1].data)).toEqual({ projectId: null });
   });
 });
