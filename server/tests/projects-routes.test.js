@@ -721,6 +721,16 @@ describe('documents linked from another project', () => {
       assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
       const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });
       assert.ok(listed.body.items.some(project => project.id === 'link-docs'));
+
+      // A published project that is switched off reaches nobody.
+      await drive(route.adminPatch, {
+        user: EDITOR,
+        params: { id: 'link-docs' },
+        body: { enabled: false }
+      });
+      const another = await create(GRACE, { name: 'Grace later' });
+      const disabled = await addLink(GRACE, another.id, ref);
+      assert.equal(disabled.statusCode, 404, JSON.stringify(disabled.body));
     } finally {
       await repo.delete('link-docs');
     }
@@ -776,6 +786,33 @@ describe('the project catalog', () => {
     assert.equal(on.statusCode, 200, JSON.stringify(on.body));
     assert.deepEqual(on.body.audience, { everyone: false, catalog: true });
     assert.ok(on.body.catalog.publishedAt);
+  });
+
+  it('lets others link documents of a published project while the catalog is on', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const source = await create(ADA, { name: 'Published docs' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/published' } }
+    });
+    await publish(ADA, source.id);
+    const link = (user, projectId) =>
+      drive(route.addItem, {
+        user,
+        params: { projectId },
+        body: { kind: 'project-item', ref: { projectId: source.id, itemId: original.body.item.id } }
+      });
+
+    const target = await create(GRACE, { name: 'From the catalog' });
+    const linked = await link(GRACE, target.id);
+    assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+
+    // With the catalog off the project reaches nobody but its members.
+    setProjectSettings({ sharing: { allowCatalog: false } });
+    const later = await create(GRACE, { name: 'After the catalog' });
+    const refused = await link(GRACE, later.id);
+    assert.equal(refused.statusCode, 404, JSON.stringify(refused.body));
   });
 
   it("lets everyone signed in browse and add a published project, without the members' chats", async () => {
