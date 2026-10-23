@@ -4068,9 +4068,21 @@
       "settings": "Einstellungen",
       "availability": {
         "legend": "Wer kann dieses Projekt nutzen?",
-        "apps": { "label": "Nur verknüpfte Apps", "badge": "Nur verknüpfte Apps", "hint": "Wird von den Apps, Workflows und Agenten genutzt, die es verknüpfen, und steht allen offen, die diese nutzen dürfen." },
-        "everyone": { "label": "Alle angemeldeten Benutzer", "badge": "Alle angemeldeten Benutzer", "hint": "Alle angemeldeten Benutzer können Dokumente und Anweisungen lesen und in eigene Projekte verknüpfen, auch ohne Zugriff auf die Apps, die es nutzen." },
-        "off": { "label": "Aus", "badge": "Aus", "hint": "Nichts nutzt es und niemand kann es nutzen. Administratoren können es weiter bearbeiten. Geeignet für einen Entwurf oder um ein Projekt zu pausieren." }
+        "apps": {
+          "label": "Nur verknüpfte Apps",
+          "badge": "Nur verknüpfte Apps",
+          "hint": "Wird von den Apps, Workflows und Agenten genutzt, die es verknüpfen, und steht allen offen, die diese nutzen dürfen."
+        },
+        "everyone": {
+          "label": "Alle angemeldeten Benutzer",
+          "badge": "Alle angemeldeten Benutzer",
+          "hint": "Alle angemeldeten Benutzer können Dokumente und Anweisungen lesen und in eigene Projekte verknüpfen, auch ohne Zugriff auf die Apps, die es nutzen."
+        },
+        "off": {
+          "label": "Aus",
+          "badge": "Aus",
+          "hint": "Nichts nutzt es und niemand kann es nutzen. Administratoren können es weiter bearbeiten. Geeignet für einen Entwurf oder um ein Projekt zu pausieren."
+        }
       },
       "details": "Kategorie und Tags (optional)",
       "createHint": "Als Nächstes fügen Sie die Dokumente hinzu. Solange das Projekt mit keiner App verknüpft ist, sehen es nur Administratoren.",

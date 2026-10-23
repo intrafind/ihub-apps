@@ -3784,9 +3784,21 @@
       "settings": "Settings",
       "availability": {
         "legend": "Who can use this project?",
-        "apps": { "label": "Linked apps only", "badge": "Linked apps only", "hint": "Used by the apps, workflows and agents that link it, and open to everyone who may use them." },
-        "everyone": { "label": "Everyone signed in", "badge": "Everyone signed in", "hint": "Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it." },
-        "off": { "label": "Off", "badge": "Off", "hint": "Nothing uses it and nobody can use it. Administrators can still edit it. Use it for a draft or to pause a project." }
+        "apps": {
+          "label": "Linked apps only",
+          "badge": "Linked apps only",
+          "hint": "Used by the apps, workflows and agents that link it, and open to everyone who may use them."
+        },
+        "everyone": {
+          "label": "Everyone signed in",
+          "badge": "Everyone signed in",
+          "hint": "Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it."
+        },
+        "off": {
+          "label": "Off",
+          "badge": "Off",
+          "hint": "Nothing uses it and nobody can use it. Administrators can still edit it. Use it for a draft or to pause a project."
+        }
       },
       "details": "Category and tags (optional)",
       "createHint": "Next you add the documents. Until the project is linked to an app, only administrators see it.",
