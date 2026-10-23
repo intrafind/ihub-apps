@@ -69,6 +69,7 @@ import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { estimateProject } from '../services/projects/projectEstimate.js';
 import { RESULT_BUDGET_TOKENS } from '../sources/documentRetrieval.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
+import { linkStatesFor } from '../services/projects/projectItemLinks.js';
 import {
   addItemSchema,
   adminProjectUpdateSchema,
@@ -388,9 +389,18 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('use'),
-    (req, res) => {
+    async (req, res) => {
       try {
-        res.json(serializeFor(req.project, req.user, req.projectContext));
+        const body = serializeFor(req.project, req.user, req.projectContext);
+        // A document linked from another project says whether this viewer
+        // can read it there, so a broken link shows before a chat needs it.
+        const links = await linkStatesFor(req.project, req.user);
+        if (links.size > 0 && Array.isArray(body.items)) {
+          body.items = body.items.map(item =>
+            links.has(item.id) ? { ...item, link: links.get(item.id) } : item
+          );
+        }
+        res.json(body);
       } catch (error) {
         sendFailedOperationError(res, 'get project', error);
       }

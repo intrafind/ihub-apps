@@ -17,7 +17,8 @@
  *  - whether it is available on this installation (`enabled`);
  *  - how to fetch its content (`fetch`) and test a reference (`test`) —
  *    both optional for a kind whose content is handed in rather than
- *    fetched, such as an upload.
+ *    fetched, such as an upload;
+ *  - how to check a new item against the caller (`prepare`), optional.
  *
  * Integrations plug in through {@link registerItemKind}; the client reads the
  * enabled kinds with their picker descriptors from `GET /api/projects/_config`.
@@ -33,7 +34,7 @@ export const STORAGE_RULES = Object.freeze(['text', 'link']);
 export const CREDENTIAL_RULES = Object.freeze(['none', 'picking-user', 'reading-user']);
 
 /** Picker types the client has a component for. */
-export const PICKER_TYPES = Object.freeze(['upload', 'url', 'page', 'ifinder', 'cloud']);
+export const PICKER_TYPES = Object.freeze(['upload', 'url', 'page', 'ifinder', 'cloud', 'project']);
 
 /**
  * @typedef {Object} ItemKind
@@ -48,6 +49,10 @@ export const PICKER_TYPES = Object.freeze(['upload', 'url', 'page', 'ifinder', '
  * @property {(ref: Object, lang?: string) => {name?: string, url?: string, site?: string}} [describe]
  * @property {(item: Object, ctx: Object) => Promise<Object>} [fetch]
  * @property {(ref: Object, ctx: Object) => Promise<Object>} [test]
+ * @property {(ref: Object, ctx: {user: Object, projectId: string}) =>
+ *   Promise<{ref?: Object, name?: string, source?: Object}>} [prepare] - Checks a
+ *   new item against the caller before it is stored, and may settle its ref,
+ *   name and provenance source (a linked item resolves to its original).
  */
 
 const kinds = new Map();

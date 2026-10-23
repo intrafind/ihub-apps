@@ -11,7 +11,8 @@
  *    text items (the iHub tier keeps no originals; the client falls back to
  *    a text preview); a link item's reader is sent to its source — the web
  *    page, the iHub page, or the iFinder document through the iFinder
- *    provider with the reader's own credentials.
+ *    provider with the reader's own credentials; a document linked from
+ *    another project is served from there, for the reader's membership there.
  *
  * @module services/sources/providers/project
  */
@@ -22,6 +23,7 @@ import { projectName } from '../../projects/projectView.js';
 import { getItemText } from '../../knowledge/ItemTextService.js';
 import { KnowledgeError, docOf } from '../../knowledge/types.js';
 import { getProjectRepository } from '../../projects/ProjectRepository.js';
+import { PROJECT_ITEM_KIND } from '../../projects/projectItemLinks.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from '../../projects/projectSettings.js';
 import { getSourceProvider, hasSourceProvider, sourceProviderError } from '../providers.js';
 
@@ -104,6 +106,10 @@ async function content({ ref, user, format = 'original' }) {
  * card's URL opens the page where it lives.
  */
 async function linkContent(project, item, { user, format }) {
+  // A document linked from another project: its original, for this reader.
+  if (item.kind === PROJECT_ITEM_KIND && item.ref?.projectId && item.ref?.itemId) {
+    return content({ ref: { id: item.ref.itemId, scope: item.ref.projectId }, user, format });
+  }
   if (item.kind === 'ifinder-document' && item.ref?.documentId && hasSourceProvider('ifinder')) {
     const ifinder = await getSourceProvider('ifinder');
     return ifinder.content({

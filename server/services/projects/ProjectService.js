@@ -32,6 +32,7 @@ import { ProjectError } from './projectErrors.js';
 import './kinds/linkKinds.js';
 import './kinds/uploadKind.js';
 import './kinds/cloudKinds.js';
+import './kinds/projectItemKind.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 import { relinkProjects } from './projectRelink.js';
@@ -377,14 +378,24 @@ export class ProjectService {
    * @returns {Promise<{project: Object, item: Object}>}
    */
   async addItem(projectId, input, { user, authorize, origin, run = null, wait }) {
-    const { kind, ref } = this._checkKindRef(input.kind, input.ref);
+    const checked = this._checkKindRef(input.kind, input.ref);
+    const { kind } = checked;
+    const prepared =
+      typeof kind.prepare === 'function'
+        ? await kind.prepare(checked.ref, { user, projectId })
+        : null;
+    const ref = prepared?.ref || checked.ref;
     const isText = kind.storage.ihub === 'text';
     const file = isText && input.file && typeof input.file === 'object' ? input.file : null;
     const text = isText && typeof input.text === 'string' ? input.text : null;
     if (isText && !file && text === null && typeof kind.fetch !== 'function') {
       throw new ProjectError('INVALID_REF', `An item of kind ${kind.id} needs a file or text`);
     }
-    const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
+    const described = {
+      ...(typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {}),
+      ...(prepared?.name ? { name: prepared.name } : {}),
+      ...(prepared?.source || {})
+    };
     const now = nowIso();
     const declaredBytes = file
       ? Number(file.bytes) || 0

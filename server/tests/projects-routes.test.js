@@ -521,6 +521,113 @@ describe('user projects', () => {
   });
 });
 
+describe('documents linked from another project', () => {
+  async function addLink(user, projectId, ref) {
+    return drive(route.addItem, {
+      user,
+      params: { projectId },
+      body: { kind: 'project-item', ref }
+    });
+  }
+
+  async function linkState(user, projectId) {
+    const res = await drive(route.get, { user, params: { projectId } });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    return res.body.items.find(item => item.kind === 'project-item')?.link;
+  }
+
+  it('links the original without copying it, for callers who may use the source', async () => {
+    const source = await create(ADA, { name: 'Delivery' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/install' }, name: 'Install guide' }
+    });
+    const target = await create(ADA, { name: 'iHub' });
+
+    const linked = await addLink(ADA, target.id, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+    assert.equal(linked.body.item.name, 'Install guide');
+    assert.equal(linked.body.item.storage, 'link');
+    assert.equal(linked.body.item.status, 'ready');
+    assert.deepEqual(linked.body.item.provenance.source, {
+      site: 'Delivery',
+      url: `/projects/${source.id}`
+    });
+    assert.deepEqual(await linkState(ADA, target.id), {
+      state: 'ok',
+      projectName: 'Delivery',
+      status: 'ready'
+    });
+
+    // A link to a link is stored as a link to the original.
+    const third = await create(ADA, { name: 'Third' });
+    const chained = await addLink(ADA, third.id, {
+      projectId: target.id,
+      itemId: linked.body.item.id
+    });
+    assert.equal(chained.statusCode, 201, JSON.stringify(chained.body));
+    assert.deepEqual(chained.body.item.ref, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+
+    // Its own documents are already in the project.
+    const own = await addLink(ADA, source.id, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(own.statusCode, 400);
+    assert.equal(own.body.details.code, 'INVALID_REF');
+  });
+
+  it('refuses a source the caller only sees for compliance or not at all', async () => {
+    const source = await create(ADA, { name: 'Private notes' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/notes' } }
+    });
+    const ref = { projectId: source.id, itemId: original.body.item.id };
+    for (const user of [GRACE, ROOT]) {
+      const target = await create(user, { name: `${user.name}'s project` });
+      const res = await addLink(user, target.id, ref);
+      assert.equal(res.statusCode, 404, `${user.id}: ${JSON.stringify(res.body)}`);
+      assert.equal(res.body.details.code, 'PROJECT_NOT_FOUND');
+    }
+    const target = await create(ADA, { name: 'Target' });
+    const missing = await addLink(ADA, target.id, { projectId: source.id, itemId: 'itm_gone' });
+    assert.equal(missing.statusCode, 404);
+    assert.equal(missing.body.details.code, 'ITEM_NOT_FOUND');
+  });
+
+  it("reads the source with the reader's own access, and says when it is gone", async () => {
+    const source = await create(ADA, { name: 'Handbook' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/handbook' } }
+    });
+    const target = await create(ADA, { name: 'Team space' });
+    await addLink(ADA, target.id, { projectId: source.id, itemId: original.body.item.id });
+    await setMembers(ADA, target.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+
+    // A member of the linking project is not a member of the source.
+    assert.deepEqual(await linkState(GRACE, target.id), { state: 'forbidden' });
+    await setMembers(ADA, source.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    assert.equal((await linkState(GRACE, target.id)).state, 'ok');
+
+    await drive(route.removeItem, {
+      user: ADA,
+      params: { projectId: source.id, itemId: original.body.item.id }
+    });
+    assert.deepEqual(await linkState(ADA, target.id), { state: 'gone' });
+  });
+});
+
 describe('admin projects', () => {
   it('are created by content admins and reached by users through a linked app', async () => {
     const created = await drive(route.adminCreate, {
