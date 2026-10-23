@@ -55,7 +55,8 @@ function AdminProjectSettingsForm({
       }`}
     >
       {!isNew && (
-        <div className="flex items-center justify-between gap-3">
+        // The title above the switches: the Published hint needs the width.
+        <div className="space-y-3">
           <div className="min-w-0">
             <h2
               id="project-settings-title"
@@ -68,8 +69,8 @@ function AdminProjectSettingsForm({
               <code className="font-mono">{form.id}</code>
             </p>
           </div>
-          <div className="flex flex-col items-start gap-1 flex-none">
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 flex-none">
+          <div className="flex flex-col items-start gap-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
                 checked={form.enabled}
