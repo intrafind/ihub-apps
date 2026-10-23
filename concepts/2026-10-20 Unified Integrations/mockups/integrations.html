@@ -56,6 +56,7 @@
     <button data-s="wizard">Admin · Install wizard</button>
     <button data-s="installed">Admin · Installed</button>
     <button data-s="instance">Admin · Instance page</button>
+    <button data-s="action">Admin · Action &amp; test</button>
     <button data-s="user">User · Settings</button>
     <button data-s="chat">User · Chat</button>
   </nav>
@@ -119,12 +120,12 @@
   <div class="crumbs">Admin › Integrations</div>
   <h2>Integrations</h2>
   <p class="sub"><b>Installed (24)</b> · Catalog (1,034) · Connections · Inbound · Requests <span class="badge-count">3</span></p>
-  <div class="bar"><input type="search" placeholder="Search…" aria-label="Search installed integrations"><select aria-label="Protocol"><option>Protocol: all</option><option>MCP</option><option>OpenAPI</option><option>Native</option><option>A2A</option><option>Storage</option></select><select aria-label="Status"><option>Status: all</option></select><select aria-label="Group"><option>Group: all</option></select><span style="flex:1"></span><button class="btn" onclick="go('catalog')">Catalog</button><button class="btn primary">+ Add manually ▾</button></div>
+  <div class="bar"><input type="search" placeholder="Search…" aria-label="Search installed integrations"><select aria-label="Protocol"><option>Protocol: all</option><option>MCP</option><option>OpenAPI</option><option>Native</option><option>A2A</option><option>Storage</option></select><select aria-label="Status"><option>Status: all</option></select><select aria-label="Group"><option>Group: all</option></select><span style="flex:1"></span><button class="btn" onclick="go('catalog')">Catalog</button><button class="btn primary">+ Build custom integration ▾</button></div>
   <table>
     <thead><tr><th></th><th>Integration</th><th>Protocol · sign-in</th><th>Groups</th><th>Health</th><th>Users</th><th></th></tr></thead>
     <tbody id="instrows"></tbody>
   </table>
-  <p class="hint">Same DataTable as Tools and Apps. “MCP servers”, “A2A agents” and the hub cards are rows here, not pages. Inbound surfaces (gateway, Outlook add-in, extension, Copilot agent) live in the Inbound tab.</p>
+  <p class="hint">One page for everything a model can call. “MCP servers”, “A2A agents”, the hub cards and the old Tools page are rows here, not pages: shipped tools belong to built-in integrations, admin-made tools are custom integrations. Inbound surfaces (gateway, Outlook add-in, extension, Copilot agent) live in the Inbound tab.</p>
 </section>
 
 <!-- ============ INSTANCE ============ -->
@@ -140,13 +141,14 @@
     </div>
   </div>
   <div class="ipane" id="ac" style="display:none">
-    <table><thead><tr><th>On</th><th>Action</th><th>Effect</th><th>Policy</th><th>Calls</th></tr></thead><tbody>
-      <tr><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable search_issues" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>search_issues<br><span class="hint">Search Jira issues with JQL</span></td><td><span class="chip read">read</span></td><td>run</td><td>812</td></tr>
-      <tr><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable get_issue" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>get_issue</td><td><span class="chip read">read</span></td><td>run</td><td>389</td></tr>
-      <tr><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable add_comment" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>add_comment</td><td><span class="chip write">write</span></td><td><select aria-label="Policy for add_comment"><option>ask (inherited)</option><option>allow</option><option>block</option></select></td><td>61</td></tr>
-      <tr><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable transition_issue" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>transition_issue</td><td><span class="chip write">write</span></td><td><select aria-label="Policy for transition_issue"><option>ask (inherited)</option></select></td><td>22</td></tr>
-      <tr><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable create_page" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>create_page <span class="chip new">new since 2.2.0</span></td><td><span class="chip write">write</span></td><td><select aria-label="Policy for create_page"><option>ask (new-action policy)</option></select></td><td>0</td></tr>
-      <tr><td><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Enable delete_issue" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>delete_issue</td><td><span class="chip destr">destructive</span></td><td>blocked by platform rule <code>*:delete_*</code></td><td>–</td></tr>
+    <p class="hint">Every tool of this integration. Click a row for what it does, how to use it, and a test.</p>
+    <table><thead><tr><th>On</th><th>Action</th><th>Side effect</th><th>Data flow</th><th>Approval</th><th>Calls</th><th></th></tr></thead><tbody>
+      <tr class="row" onclick="go('action')"><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable search_issues" onclick="event.stopPropagation();this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>search_issues<br><span class="hint">Search Jira issues with JQL</span></td><td><span class="chip read">read</span></td><td><span class="chip">external</span></td><td>always (external read)</td><td>812</td><td><button type="button" class="btn sm">Details &amp; test</button></td></tr>
+      <tr class="row" onclick="go('action')"><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable get_issue" onclick="event.stopPropagation();this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>get_issue<br><span class="hint">Get one issue</span></td><td><span class="chip read">read</span></td><td><span class="chip">external</span></td><td>always (external read)</td><td>389</td><td><button type="button" class="btn sm">Details &amp; test</button></td></tr>
+      <tr class="row" onclick="go('action')"><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable add_comment" onclick="event.stopPropagation();this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>add_comment<br><span class="hint">Add a comment</span></td><td><span class="chip write">write</span></td><td><span class="chip">external</span></td><td>writes (inherited)</td><td>61</td><td><button type="button" class="btn sm">Details &amp; test</button></td></tr>
+      <tr class="row" onclick="go('action')"><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable transition_issue" onclick="event.stopPropagation();this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>transition_issue<br><span class="hint">Move an issue to another status</span></td><td><span class="chip write">write</span></td><td><span class="chip">external</span></td><td>writes (inherited)</td><td>22</td><td><button type="button" class="btn sm">Details &amp; test</button></td></tr>
+      <tr class="row" onclick="go('action')"><td><button type="button" class="toggle on" role="switch" aria-checked="true" aria-label="Enable create_page" onclick="event.stopPropagation();this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"><i></i></button></td><td>create_page <span class="chip new">new since 2.2.0</span><br><span class="hint">Create a Confluence page</span></td><td><span class="chip write">write</span></td><td><span class="chip">external</span></td><td>always (new or changed)</td><td>0</td><td><button type="button" class="btn sm">Details &amp; test</button></td></tr>
+      <tr><td><button type="button" class="toggle" role="switch" aria-checked="false" aria-label="Enable delete_issue"><i></i></button></td><td>delete_issue<br><span class="hint">Disabled: the model never sees it</span></td><td><span class="chip destr">destructive</span></td><td><span class="chip">external</span></td><td>–</td><td>–</td><td></td></tr>
     </tbody></table>
   </div>
   <div class="ipane" id="co" style="display:none">
@@ -160,6 +162,42 @@
   <div class="ipane" id="bi" style="display:none"><div class="panel"><h4>Used by</h4><div class="kv"><b>Apps</b><span>Engineering Assistant (all actions, user's own connection) · Support Desk (search, get, add_comment · shared: support) · Release Notes (read only)</span><b>Workflows</b><span>Weekly sprint digest</span><b>Scheduled tasks</b><span>3 (owners' connections)</span></div></div></div>
   <div class="ipane" id="au" style="display:none"><table><thead><tr><th>When</th><th>Who</th><th>Event</th></tr></thead><tbody><tr><td>today 10:12</td><td>daniel.manzke</td><td>action.execute add_comment ACME-12 (approved)</td></tr><tr><td>yesterday</td><td>admin</td><td>action.policyChange add_comment: ask → allow (Support Desk)</td></tr><tr><td>2026-10-14</td><td>anna.k</td><td>connection.create (oauth-user)</td></tr><tr><td>2026-10-01</td><td>admin</td><td>integration.install from iHub Official v2.1.0</td></tr></tbody></table></div>
   <div class="ipane" id="se" style="display:none"><div class="panel"><div class="bar"><button class="btn" onclick="go('wizard')">Re-run install wizard</button><button class="btn">Update to 2.2.0 (shows diff)</button><button class="btn">Detach from registry</button><span style="flex:1"></span><button class="btn danger">Uninstall</button></div><div class="hint">Uninstall is refused while 37 connections exist; revoke all first (n8n-style warning with the count).</div></div></div>
+</section>
+
+<!-- ============ ACTION DETAIL ============ -->
+<section class="screen" id="action">
+  <div class="crumbs">Admin › Integrations › Jira (EU) › Actions › add_comment</div>
+  <h2>add_comment <span class="chip write">write</span> <span class="chip">external</span> <span class="chip">approval: writes (inherited)</span></h2>
+  <p class="sub">Every tool lives on its integration. Read it as the model reads it, document how to use it, and test it without a model.</p>
+  <div class="two">
+    <div>
+      <div class="panel"><h4>What it does</h4>
+        <div class="kv"><b>Description</b><span>Adds a comment to a Jira issue. <a href="#">Edit model description</a></span>
+        <b>Parameters</b><span><code>issueKey</code> string, required · <code>body</code> string, required, markdown</span>
+        <b>Side effect</b><span>write · from the vendor annotation (<a href="#">override</a>)</span>
+        <b>Data flow</b><span>external · Atlassian cloud</span></div></div>
+      <div class="panel"><h4>Approval (#2945)</h4>
+        <div class="opts">
+          <label><input type="radio" name="apm" checked> Inherit from integration: ask on writes</label>
+          <label><input type="radio" name="apm"> Always ask</label>
+          <label><input type="radio" name="apm"> Never ask</label>
+          <div class="hint">Platform floor: external → writes. Apps can tighten this, never loosen it.</div></div></div>
+      <div class="panel"><h4>How to use</h4>
+        <div class="field"><label class="fl" for="guid">Model guidance</label><div><input type="text" id="guid" value="Use after the user asked to comment; quote the issue key."></div></div>
+        <div class="field"><label class="fl" for="ex">Example prompts</label><div><input type="text" id="ex" value="Add a comment to ACME-12 that staging passed."></div></div>
+        <div class="kv" style="margin-top:8px"><b>Used by</b><span>Engineering Assistant · Support Desk · Weekly sprint digest (scheduled)</span></div></div>
+    </div>
+    <div>
+      <div class="panel"><h4>Test</h4>
+        <div class="opts" style="margin-bottom:8px"><label><input type="radio" name="runas" checked> Run as my connection (daniel@…)</label><label><input type="radio" name="runas"> Run as shared connection: support</label></div>
+        <div class="field"><label class="fl" for="t1">issueKey</label><div><input type="text" id="t1" value="ACME-12"></div></div>
+        <div class="field"><label class="fl" for="t2">body</label><div><input type="text" id="t2" value="Test from iHub admin"></div></div>
+        <label style="font-size:13px"><input type="checkbox" id="wconf"> I understand this writes to Jira (EU)</label>
+        <div class="bar"><button type="button" class="btn primary" onclick="runAction()">Run test</button><span class="hint">No model involved. Audited as action.test.</span></div>
+        <div id="aout" class="hint">Not run yet.</div></div>
+      <div class="panel"><h4>Usage · 7 days</h4><div class="kv"><b>Calls</b><span>61</span><b>Approved</b><span>58</span><b>Rejected</b><span>3</span><b>Errors</b><span>0</span></div></div>
+    </div>
+  </div>
 </section>
 
 <!-- ============ USER SETTINGS ============ -->
@@ -186,10 +224,10 @@
       <div class="activity"><span class="logo" style="background:#2563eb;width:18px;height:18px;font-size:9px;border-radius:5px">J</span> Jira · search_issues · read · 3 results</div>
       <div class="msg">You have three open tickets: <b>ACME-12</b> (in review), <b>ACME-19</b>, <b>ACME-23</b>.</div>
       <div class="ccard" id="approval">
-        <h5>✎ Jira · Add comment to ACME-12 <span class="chip write">write</span></h5>
-        <textarea rows="2" aria-label="Comment text">Tested on staging, works. Moving to review.</textarea>
-        <p>Runs as daniel.manzke@… · in Jira (EU) · nothing is sent until you choose.</p>
-        <div class="bar"><button class="btn primary" onclick="approved()">Run</button><button class="btn">Edit</button><button class="btn">Skip</button><label style="font-size:12px;color:var(--muted)"><input type="checkbox"> don't ask again in this chat</label></div>
+        <h5>✎ Jira (EU) · Add comment <span class="chip write">write</span> <span class="chip">external</span></h5>
+        <div class="kv"><b>issueKey</b><span>ACME-12</span><b>body</b><span>Tested on staging, works. Moving to review.</span></div>
+        <p>Runs as daniel.manzke@… · nothing is sent until you choose. On approve, iHub sends exactly these arguments.</p>
+        <div class="bar"><button class="btn primary" onclick="approved()">Approve</button><button class="btn" onclick="approved()">Approve &amp; allow for this chat</button><button class="btn">Reject</button></div>
       </div>
       <div id="done" style="display:none"><div class="activity"><span class="logo" style="background:#2563eb;width:18px;height:18px;font-size:9px;border-radius:5px">J</span> Jira · add_comment · write · ACME-12 · approved by you</div><div class="msg">Done. I added the comment to <a href="#">ACME-12</a>.</div></div>
     </div>
@@ -241,17 +279,24 @@ function renderCards(q=''){cards.innerHTML='';cat.filter(x=>(x.n+x.d+x.p).toLowe
 renderCards();document.getElementById('q').oninput=e=>renderCards(e.target.value);
 
 const inst=[
+ ['group','Built-in · ship with iHub, can be disabled, never uninstalled'],
+ ['ok','iFinder · search, discover fields, content, metadata','Built-in · SSO (JWT)','everyone','ok · 1 min','–'],
+ ['ok','iAssistant · ask (also a model)','Built-in · SSO (JWT)','everyone','ok · 1 min','–'],
+ ['ok','Web · search, read page','Built-in · shared key','everyone','ok','–'],
+ ['ok','iHub · ask the user, evidence, tasks, memory','Built-in · none','everyone','ok','–'],
+ ['group','From the catalog'],
  ['ok','Atlassian Jira & Confluence (EU)','MCP · per-user','engineering, support','ok · 2 min','37'],
  ['ok','SharePoint Online','Native · per-user','everyone','ok · 5 min','412'],
  ['warn','Microsoft 365','Native · per-user','everyone','ok · scope added (mail)','198'],
- ['ok','iFinder','Native · SSO (JWT)','everyone','ok · 1 min','–'],
  ['warn','enaio DMS','OpenAPI · service account','legal','degraded · slow','–'],
  ['off','HubSpot','MCP · per-user','–','disabled','0'],
  ['err','DeepL','OpenAPI · shared key','everyone','key expired','–'],
- ['ok','Brave web search','Web search · shared key','everyone','ok','–'],
  ['ok','draw.io (views)','MCP · none','everyone','ok · 3 min','–'],
+ ['group','Custom · built here (OpenAPI, MCP, A2A, HTTP, script)'],
+ ['ok','Ticket stats (was a script tool)','Script · service account','support','ok','–'],
+ ['ok','Order lookup','HTTP · service account','sales','ok · 12 min','–'],
 ];
-document.getElementById('instrows').innerHTML=inst.map(r=>`<tr class="row" onclick="go('instance')"><td><span class="dot ${r[0]}"></span></td><td><b>${r[1]}</b></td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td><button class="btn sm">⋯</button></td></tr>`).join('');
+document.getElementById('instrows').innerHTML=inst.map(r=>r[0]==='group'?`<tr><td colspan="7" style="background:var(--bg);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">${r[1]}</td></tr>`:`<tr class="row" onclick="go('instance')"><td><span class="dot ${r[0]}"></span></td><td><b>${r[1]}</b></td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td><button type="button" class="btn sm" aria-label="More actions">⋯</button></td></tr>`).join('');
 
 const urows=[
  ['ok','Atlassian Jira & Confluence (EU)','Connected as daniel.manzke@… · expires in 29 days','search, read, comment, transition','<button class="btn sm">Disconnect</button>'],
@@ -266,6 +311,7 @@ document.getElementById('userrows').innerHTML=urows.map(r=>`<tr><td><span class=
 
 function runTest(me){const o=document.getElementById('testout');o.innerHTML='Discovering… RFC 9728 ✓ · authorization server ✓ · CIMD accepted ✓ · tools/list ✓ 21 actions (14 read · 6 write · 1 destructive)'+(me?' · signed in as daniel.manzke@… ✓':' · per-user sign-in not tested (use “Connect my account”)')}
 function connected(){document.getElementById('connectcard').style.display='none';document.getElementById('afterconnect').style.display='';document.getElementById('jirachip').innerHTML='<span class="dot ok"></span>Jira (EU)';document.getElementById('jiracb').checked=true;document.getElementById('jiralink').outerHTML='<span class="eff">read · write</span>';document.getElementById('menu').classList.remove('open')}
+function runAction(){const o=document.getElementById('aout');if(!document.getElementById('wconf').checked){o.textContent='Refused: confirm that this test writes to Jira (EU).';return}o.innerHTML='<b>201 Created</b> · 412 ms · 1 source: ACME-12 · request ▸ (Authorization: ***) · response ▸'}
 function approved(){document.getElementById('approval').style.display='none';document.getElementById('done').style.display=''}
 </script>
 </body>

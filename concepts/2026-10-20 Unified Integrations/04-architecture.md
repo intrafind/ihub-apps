@@ -59,11 +59,17 @@ Connection              (principal credential)              storage namespace `i
 
   "capabilities": ["tools", "views"],
   "actions": [                                     // optional static list; MCP/OpenAPI adapters refresh it live
-    { "name": "search", "title": {"en":"Search issues"}, "effect": "read" },
-    { "name": "add_comment", "title": {"en":"Add comment"}, "effect": "write" },
-    { "name": "delete_issue", "effect": "destructive" }
+    { "name": "search", "title": {"en":"Search issues"}, "sideEffect": "read",  "dataFlow": "external",
+      "guidance": {"en":"Use JQL. Cite each issue as a link."},
+      "examples": [{"en":"What are my open tickets?"}] },
+    { "name": "add_comment", "title": {"en":"Add comment"}, "sideEffect": "write", "dataFlow": "external" },
+    { "name": "delete_issue", "sideEffect": "destructive" },
+    { "name": "people_search", "connection": "service" }   // needs the app identity, not the user's
   ],
+  "instructions": {"en":"…"},                        // integration-level model guidance (MCP instructions or the connector's)
+  "contributes": { "models": ["iassistant-default"] }, // optional: a built-in that also registers models (iAssistant)
   "trusted": false,                                // honour the server's own tool annotations?
+  "builtIn": false,                                // shipped with iHub: can be disabled, never uninstalled
   "runs": "cloud",                                 // cloud | on-prem | local
   "dataResidency": ["eu"],
   "_meta": { "io.modelcontextprotocol.registry/official": { … } }   // passthrough from server.json
@@ -74,13 +80,15 @@ Connection              (principal credential)              storage namespace `i
 
 | `protocol.type` | Backed by today | Actions come from | Connection means |
 | --- | --- | --- | --- |
-| `mcp-remote` | `McpServerConnection`, `McpClientManager` | live `tools/list` (cached with `ttlMs`, refreshed on `list_changed`) with annotations → effect | per-user OAuth 2.1 (`oauthUser` stack) or shared secret |
+| `mcp-remote` | `McpServerConnection`, `McpClientManager` | live `tools/list` (cached with `ttlMs`, refreshed on `list_changed`) with annotations → side effect | per-user OAuth 2.1 (`oauthUser` stack) or shared secret |
 | `mcp-stdio` | same | same | env vars from install fields marked `sensitive` → credential store |
-| `openapi` | `OpenApiToolRunner` | operations; effect from HTTP method (GET/HEAD → read, POST/PUT/PATCH → write, DELETE → destructive) with per-operation override | per-user OAuth (generic authorization-code client, new), per-user API key, shared `credentialRef` |
+| `openapi` | `OpenApiToolRunner` | operations; side effect from HTTP method (GET/HEAD → read, POST/PUT/PATCH → write, DELETE → destructive) with per-operation override | per-user OAuth (generic authorization-code client, new), per-user API key, shared `credentialRef` |
 | `native` | `server/services/integrations/connectors/<id>/` (Jira, Microsoft 365, iFinder, Entra, SAP, DMS…) | the module's declared actions | whatever the module declares (OAuth user, JWT SSO, service account) |
-| `a2a` | `A2aAgentConnection` | agent card skills → actions, effect `write` by default (an agent may act) | shared secret; per-user later |
+| `a2a` | `A2aAgentConnection` | agent card skills → actions, side effect `unknown` by default (an agent may act) | shared secret; per-user later |
+| `http` | new: a request template (method, URL with `{param}` placeholders, headers, body template, JSONPath response mapping) | one action per template; side effect from the method | shared `credentialRef`, per-user OAuth or API key |
+| `script` | today's script tools: a JavaScript module in `contents/integration-definitions/<id>/actions/` (custom) or `server/tools/` (built-in) | the module's declared functions | whatever the definition declares |
 | `storage` | `OAuthIntegrationBase` providers | capability `files` (browse, pick); optional actions `search`, `read`, `save` from `08-cloud-files.md` | per-user OAuth |
-| `websearch` | Brave, Staan, Qwant scripts | one action `search`, effect `read` | shared API key |
+| `websearch` | Brave, Staan, Qwant scripts | one action `search`, side effect `read`, data flow `external` | shared API key |
 
 A definition can be imported from **`server.json`** (MCP registry) and from an **MCPB manifest**; the importer maps `packages[]`/`remotes[]`, input objects and `user_config` into `protocol`, `install` and `auth`. Our fields beyond the standards live under `_meta["com.intrafind/ihub"]` when exported.
 
@@ -112,8 +120,11 @@ Used by the install wizard (admin fields), the user Connect dialog (user fields:
       // "auth": { "mode": "service-account", "credentialRef": "jira-svc" }
       // "auth": { "mode": "enterprise-managed", "idpIssuer": "https://login.example.com" }
       "actions": { "enabled": ["*"], "disabled": ["delete_issue"],
-                   "policy": { "write": "ask", "destructive": "ask", "overrides": { "add_comment": "allow" } },
-                   "newActions": "ask" },           // what happens when the server adds a write tool
+                   "overrides": { "search": { "sideEffect": "read", "description": {"en":"…"} } },
+                   "fingerprints": { "search": "sha256:…" } },   // name + side effect + input schema, written by the adapter
+      "approval": { "default": "writes",            // never | writes | always  (#2945)
+                    "actions": { "search": "always" },
+                    "newOrChanged": "always" },      // a new action, or one whose fingerprint changed, until reviewed
       "rollout": { "stage": "all" },                // or { "stage": "pilot", "groups": ["it-pilot"] }
       "toolPrefix": "jira__",                       // MCP only; default <id>__
       "views": true,                                // render MCP Apps
@@ -121,9 +132,8 @@ Used by the install wizard (admin fields), the user Connect dialog (user fields:
       "health": { "status": "ok", "checkedAt": "…", "actionCount": 21, "message": null }   // written by the health loop, not by admins
     }
   ],
-  "policy": {                                       // platform-wide ceiling (LibreChat-style globs)
-    "rules": [ { "match": "*:delete_*", "policy": "block" }, { "match": "*", "effect": "destructive", "policy": "ask" } ],
-    "allowAlways": false                            // may users choose "always allow" in the confirmation card?
+  "toolApproval": {                                // platform floor (#2945); absent = never, so upgrades change nothing
+    "defaults": { "external": "writes", "internal": "never" }
   },
   "security": { "blockPrivateIps": true, "allowedHosts": [] }
 }
@@ -159,11 +169,13 @@ server/services/integrations/
     OAuthUserClient.js          generic authorization-code + PKCE client (generalized from mcpOAuthService: discovery, CIMD, DCR, own client, step-up scopes)
     EnterpriseManagedAuth.js    ID-JAG token exchange with the IdP, jwt-bearer at the resource AS (phase 3)
     ServiceAccountAuth.js       credentialRef resolution (bearer, basic, header, client credentials)
+  tester/ActionTester.js        runs one action with given args and connection, returns request, response, sources, timing
+  builder/                      custom integrations: OpenAPI import, MCP, A2A, HTTP template, script actions; export as definition
   adapters/
     McpAdapter.js  OpenApiAdapter.js  NativeAdapter.js  A2aAdapter.js  StorageAdapter.js  WebsearchAdapter.js
     index.js                    adapter contract: discoverActions(instance, connection), run(action, params, ctx), test(instance), files?(…)
   connectors/                   native modules: jira/, microsoft365/, ifinder/, entra/, … each exporting a definition + adapter impl
-  policy/ApprovalGate.js        effect × policy × platform rules → run | ask | block; wired into AgentLoop preTool
+  policy/resolveToolApproval.js the #2945 resolver, extended to read integration instances; one approvalSeam in services/loop/seams/
   importers/serverJson.js  mcpb.js
 ```
 
@@ -171,16 +183,18 @@ server/services/integrations/
 
 The MCP `oauthUser` code moves, it is not rewritten: `mcpOAuthService.js` becomes `auth/OAuthUserClient.js` with the MCP-specific discovery kept as a strategy; the OpenAPI and native adapters reuse it with fixed endpoints. `JiraService`, `Office365Service`, `GoogleDriveService`, `NextcloudService` drop their own token code and call `ConnectionService`.
 
-## 3. Approval gate
+## 3. Approval
 
-`ApprovalGate.decide({ instance, action, user, chatPolicy })`:
+The approval mechanism is the one planned and decided in [intrafind/ihub-apps#2945](https://github.com/intrafind/ihub-apps/issues/2945). It is built against today's tool files and `mcpServers.json`; this epic moves its configuration onto installed integrations and actions, without changing its runtime.
 
-1. Platform rules (`policy.rules`, first match wins, deny → ask → allow).
-2. Instance override for the action, else instance policy for the action's effect.
-3. For `read`: run. For `ask`: look up the chat-scoped memory (`once`, `chat`, `always` if `allowAlways`); if none, emit an `approval` interaction through `InteractionService` with the rendered payload; `AgentLoop` pauses the tool call until answered (`approve`, with edited params; `reject`). Headless runs persist the interaction to the owner's inbox.
-4. For `block`: the action is not offered to the model at all (removed in `getToolsForApp`).
-
-Effect for MCP actions: `readOnlyHint: true` → read; `destructiveHint: true` (its default) → destructive; else write. If the instance is not `trusted`, missing annotations are treated as *write*, never as read. An action that appears after install (`list_changed`) gets the `newActions` policy (default *ask*) and is flagged "new" in the admin Actions tab, as Microsoft and ChatGPT do.
+- **Resolver.** `resolveToolApproval(toolDef, app, platform)` stamps every tool in `getToolsForApp` with `approval` (`never | writes | always`), `sideEffect` (`read | write | destructive | unknown`), `dataFlow` (`internal | external`) and `approvalSource`. Order, strictest wins: `platform.toolApproval.defaults` by data flow → the instance's `approval.default` → `approval.actions[action]` → the app binding, which may only tighten.
+- **Side effect.** Admin override first; then the connector's declaration, the OpenAPI method, or MCP annotations (`readOnlyHint: true` → read; `destructiveHint` → destructive; else write). Annotations of an instance that is not `trusted` are display-only: they never relax a gate, and a missing annotation counts as `unknown`, which `writes` mode treats as a write.
+- **New or changed actions.** The adapter fingerprints name, side effect and input schema. A new action, or one whose fingerprint changed, gets `approval.newOrChanged` (default `always`) and a badge in the Actions tab until an admin reviews it.
+- **Seam.** One `approvalSeam` in `services/loop/seams/`, ordered before the `chat-tools` seam emits `tool/started` and before passthrough, shared by chat, workflow and agent nodes and scheduled runs. Gated calls get their own batch in `segmentPlanner`.
+- **Chat.** The seam raises an `approval` interaction with the exact arguments, names, side effect and data flow, and pauses the turn. The answer arrives as `approvalResponse { interactionId, decision, grant? }` next to `clarificationResponse`. On approve, the server executes the **stored** call and replaces the `awaiting_approval` tool message with the result; the model never re-issues it. Reject or expiry returns `USER_REJECTED` / `APPROVAL_EXPIRED`. The interaction is consumed atomically, so a double answer cannot run a write twice.
+- **Grants.** Per call and per chat. No persistent "always allow" in v1.
+- **Headless.** No human attached: `APPROVAL_REQUIRED_NO_USER`, unless a workflow node names approver groups; then the approval is parked for them. Scheduled tasks keep their flow and use the same resolver.
+- **Disabled actions** are not offered to the model at all (removed in `getToolsForApp`); that is how an admin makes an integration read-only.
 
 ## 4. API surface
 
@@ -191,7 +205,10 @@ Effect for MCP actions: `readOnlyHint: true` → read; `destructiveHint: true` (
 | `POST /api/admin/integrations/catalog/:definitionId/_test` | test an unsaved instance |
 | `GET/POST /api/admin/integrations` · `GET/PUT/DELETE /api/admin/integrations/:id` | installed instances |
 | `POST /api/admin/integrations/:id/_test` · `_enable` · `_disable` · `_update` (from registry) · `_detach` | lifecycle |
-| `GET /api/admin/integrations/:id/actions` · `PUT …/actions` | live action list, enable, policy |
+| `GET /api/admin/integrations/:id/actions` · `PUT …/actions` | live action list with fingerprints, enable, overrides, approval modes |
+| `GET /api/admin/integrations/:id/actions/:action` | action detail: schema as the model sees it, side effect, data flow, approval and its source, guidance, examples, bindings, usage |
+| `POST /api/admin/integrations/:id/actions/:action/_test` `{ args, connection: "me" \| "shared:<id>", confirmWrite }` | runs the action through its adapter, without a model; returns status, duration, the request as sent (secrets redacted), the raw response and the Answer Sources produced; refuses a write or destructive action without `confirmWrite`; audit `action.test` |
+| `POST /api/admin/integrations/builder/_import` `{ kind: openapi \| mcp \| a2a, source }` · `POST /api/admin/integrations/builder/_export/:id` | custom integrations: import actions from a source; export a custom integration as a definition for a registry |
 | `GET /api/admin/integrations/:id/connections` · `DELETE …/connections/:connId` | connected principals, revoke |
 | `GET/POST /api/admin/integrations/connections/shared` | shared connections |
 | `GET /api/admin/integrations/requests` · `POST …/:id/_approve` · `POST …/:id/_decline` | member requests (phase 2) |
@@ -201,7 +218,7 @@ Effect for MCP actions: `readOnlyHint: true` → read; `destructiveHint: true` (
 | `POST /api/integrations/requests` | member asks for a catalog integration (phase 2) |
 | `GET /api/integrations/:id/files?path` (storage adapters) | file browser, replaces the three provider-specific browser routes |
 
-Route ids are validated against the registry (no path building from input), outbound calls go through `safeFetch` and the SSRF guard, response sizes are capped as in `OpenApiToolRunner`. All admin routes write audit entries (`integration.install|update|enable|disable|uninstall`, `connection.create|revoke`, `action.policyChange`, and `action.execute` for write and destructive effects, without payloads).
+Route ids are validated against the registry (no path building from input), outbound calls go through `safeFetch` and the SSRF guard, response sizes are capped as in `OpenApiToolRunner`. All admin routes write audit entries (`integration.install|update|enable|disable|uninstall`, `connection.create|revoke`, `action.policyChange`, `action.test`, and `action.execute` for every call that went through an approval or has a write or destructive side effect, without payloads).
 
 ## 5. Client
 
@@ -211,9 +228,11 @@ Route ids are validated against the registry (no path building from input), outb
 | Catalog | `IntegrationCatalog` (cards, filters, slide-over detail reusing `MarketplaceItemDetail`) | `McpServerCatalogDialog`, marketplace type tabs gain `integration` |
 | Install wizard | `IntegrationInstallWizard` (steps from `ConfigField[]`, `CredentialRefSelect`, `GroupMultiSelect`, `IntegrationTestResults`) | per-integration forms (`JiraConfig`, `CloudStorageConfig`, MCP modal) |
 | Instance page | `AdminIntegrationDetailPage` with `AdminTabs`: Overview, Actions, Connections, Bindings, Audit, Settings | — |
+| Action detail | `IntegrationActionDrawer`: description and schema as the model sees them, badges, approval, guidance and examples, bindings, `ActionTestPanel` (form from the JSON schema, run as me or a shared connection, request and response viewer, sources preview) | the tool edit page's preview; the MCP test dialog's tool list |
+| Custom integrations | `IntegrationBuilder`: OpenAPI import (`OpenApiToolEditor` reused), MCP and A2A sources, HTTP template editor, script action editor (the existing script editor) | `AdminToolsPage`, `AdminToolEditPage`, `ToolFormEditor` |
 | App editor | `IntegrationsConfigSection` with one picker (integration → actions → connection mode) | `ToolsConfigSection`, `McpToolsConfigSection`, `A2aAgentsSelector`, `UploadConfigSection.cloudStorageUpload`, `WebSearchSection` (web search becomes an integration row) |
 | User settings | `IntegrationsPage` → "Available to you" list with one `IntegrationRow` | the two `IntegrationCard`s |
-| Chat | `ChatInputActionsMenu` → `IntegrationPicker`; `IntegrationChips` under the composer; `ConnectCard`; `ApprovalCard`; `ToolActivity` rows with logo + effect | `IntegrationConnectionCard`, `McpConnectCard`, `useIntegrationAuth`, Jira-only prompts |
+| Chat | `ChatInputActionsMenu` → `IntegrationPicker`; `IntegrationChips` under the composer; `ConnectCard`; `ApprovalCard` (from #2945); `ToolActivity` rows with logo + side effect | `IntegrationConnectionCard`, `McpConnectCard`, `useIntegrationAuth`, Jira-only prompts |
 | Shared | `Switch`, `Badge`, `StatusDot`, `Drawer` in `shared/components` | the seven hand-rolled switches, the two drawers |
 
 Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` lists, shared `Modal`/`ConfirmDialog`, dark mode on every new component, `t('integrations.*')` and `t('admin.integrations.*')` keys in `shared/i18n/{en,de}.json`.
@@ -232,8 +251,9 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | `V1xx__integrations_from_mcp_servers` | each `mcpServers.json` server → an ad-hoc definition `local/<id>` (protocol `mcp-remote` or `mcp-stdio`) + an instance with the same id, `auth` mapped (`oauthUser` → `oauth-user`, others → `service-account` with the same refs), `allowedTools` → `actions.enabled`, `apps.enabled` → `views` |
 | `V1xx__integrations_from_a2a` | same for `a2aAgents.json` |
 | `V1xx__integrations_from_platform` | `platform.jira` → instance `jira` of the shipped `com.intrafind/jira` definition; `platform.cloudStorage.providers[]` → instances of the storage definitions; `platform.iFinder` → instance `ifinder`; web search providers → instances of `websearch/*` with the API key moved into the credential store; Entra from env → instance `entra` (env still read as fallback, like providers) |
+| `V1xx__integrations_from_tools` | shipped tools in `contents/tools/` map onto the built-in definitions (`iFinder_*` → iFinder, `braveSearch`/`staanSearch`/`qwantSearch`/`read_url` → Web, `entraPeopleSearch_*` → Microsoft 365, `jira_*` → Jira, `ask_user`, `evidence`, scheduler and agent tools → iHub); every other file (admin-created script tools, OpenAPI tools) becomes a custom integration `custom/<id>` with its functions as actions, its script and `credentialRef` carried over; `enabled` and `requiresApproval` / #2945 `approval` / `sideEffect` fields move to the instance; `groups.permissions.tools` entries map to `permissions.integrations` (and stay the source for MCP/A2A gateway exposure, which keeps addressing actions by tool id) |
 | `V1xx__groups_integrations_permission` | `permissions.integrations` on every group: `["*"]` for groups that could use everything before (there was no gating), the browser extension's `allowedGroups` untouched |
-| `V1xx__apps_integrations_binding` | `app.tools` (script ids, base ids, MCP server ids, `a2a__` refs), `app.upload.cloudStorageUpload`, `app.websearch` → `app.integrations[]`; pure script tools that are not integrations (`ask_user`, `evidence`, scheduler, agent tools) stay in `app.tools` |
+| `V1xx__apps_integrations_binding` | `app.tools` (script ids, base ids, MCP server ids, `a2a__` refs, including `ask_user`, `evidence`, scheduler and agent tools, which now belong to the built-in iHub integration), `app.upload.cloudStorageUpload`, `app.websearch` → `app.integrations[]`; `app.tools` is removed; app overrides of #2945's `toolApproval` move onto the binding |
 | re-index | on first start after the migration, `ConnectionService` scans the token tree `contents/integrations/<service>/` and builds the connection index; no token is moved or re-encrypted, and `secretRef` is the existing storage key, so nobody reconnects. The mapping is fixed per service: |
 
 | Token file today | `integration` | `principal` | `issuer` | Notes |
@@ -243,11 +263,11 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | `mcp/<storageId>__<serverId>.json` | the instance migrated from server `<serverId>` | the user behind `<storageId>` (resolved as `mcpUserTokens.js` does today) | the authorization server stored with the token (tokens are already keyed by issuer) | the config fingerprint stored with the token keeps working: a changed endpoint still invalidates it |
 | `mcp-oauth-clients` namespace | n/a | n/a | per issuer | client registrations move unchanged under `OAuthUserClient` |
 
-Breaking changes to decide explicitly (CLAUDE.md rule): the admin routes `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, `/api/admin/configs/platform` writes for `jira`/`cloudStorage`, and the three cloud file-browser routes. Recommendation: clean break for admin routes (they are UI-internal) and aliases only for the OAuth callback URLs that customers registered in vendor consoles.
+Breaking changes (CLAUDE.md rule): decided 2026-10-20 as a clean break for `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, the `/api/admin/configs/platform` writes for `jira`/`cloudStorage` and the three cloud file-browser routes, with aliases only for the OAuth callback URLs registered in vendor consoles. **Still open:** the same call for `/api/admin/tools` (the Tools pages); recommendation is a clean break, since `V1xx__integrations_from_tools` turns every tool file into a custom integration.
 
 ## 8. Non-functional
 
 - **Multi-server**: instances and definitions are files (synced like all `contents/`); connections and health in pluggable storage; the health loop runs on one worker.
 - **Performance**: action lists cached per instance with `ttlMs`; per-user MCP tool lists cached per connection; the chat picker reads one `GET /api/integrations` per app open.
 - **Security**: secrets only by ref; `trusted` gates annotations and app-only tools; SSRF guard on every URL field; `blockPrivateIps` default on; stdio only from shipped or admin-written definitions, never from registries; community registries show the pre-install warning; audit on all lifecycle and write events; connections revoke upstream when the server supports it.
-- **Tests**: unit tests for adapters' effect derivation, `ApprovalGate`, `ConnectionService.resolve`, migrations (fixtures from today's files); e2e: install from catalog → test → enable for group → user connects → tool call → approval → audit; the `known-routes-sync` test for the new routes.
+- **Tests**: unit tests for adapters' side-effect derivation, the approval resolver with instances, `ActionTester` (write refused without confirmation, secrets redacted), `ConnectionService.resolve`, migrations (fixtures from today's files); e2e: install from catalog → test → enable for group → user connects → tool call → approval → audit; the `known-routes-sync` test for the new routes.

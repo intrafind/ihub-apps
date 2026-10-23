@@ -14,28 +14,30 @@ Ship the shared layer under the existing integrations without changing what user
 
 ## Phase 1 · Foundation, almost invisible (5 to 6 weeks)
 
-Goal: one definition format, one instance store, one connection service, one OAuth client, one approval gate. The admin and settings UI still look the same. One change is visible to users on purpose: write and destructive actions now pause for the confirmation card. It ships in this phase because it is a safety fix for integrations that already write today (Jira comments and transitions), and it is announced in the changelog as such.
+Goal: one definition format, one instance store, one connection service, one OAuth client, and every shipped tool owned by a built-in integration. The admin and settings UI still look the same. Approval comes from [#2945](https://github.com/intrafind/ihub-apps/issues/2945), which is opt-in at upgrade and can be built now, before anything else in this epic; #2916 later moves its configuration onto integrations.
 
 1. `IntegrationDefinition`, `ConfigField`, `InstalledIntegration`, `Connection` schemas (Zod) and files.
-2. Adapters for `mcp-remote`, `mcp-stdio`, `openapi`, `a2a`, `storage`, `websearch`; `native` with Jira, Microsoft 365, iFinder, Entra on the adapter contract.
-3. `OAuthUserClient` generalized from `mcpOAuthService`; `ConnectionService` with re-index of existing tokens; Jira and the three storage providers switched to it.
-4. Migrations V1xx (MCP, A2A, platform, groups, apps) with fixtures from real customer configs.
-5. `ApprovalGate` in `AgentLoop.preTool` with `InteractionService`; the `ApprovalCard` in chat. Default *ask* for write and destructive.
-6. `GET /api/integrations`, connect/disconnect/reconnect routes with callback aliases, one `ConnectCard`.
-7. Docs: `docs/integrations.md` (new, in `SUMMARY.md`), update `mcp-integration.md`, `integration-development.md`; changelog entry.
+2. Adapters for `mcp-remote`, `mcp-stdio`, `openapi`, `a2a`, `http`, `script`, `storage`, `websearch`; `native` with Jira, Microsoft 365, iFinder, Entra on the adapter contract.
+3. Built-in integrations own today's shipped tools: iFinder, iAssistant, Web, Microsoft 365, Jira, iHub ([#2973](https://github.com/intrafind/ihub-apps/issues/2973)).
+4. `OAuthUserClient` generalized from `mcpOAuthService`; `ConnectionService` with re-index of existing tokens; Jira and the three storage providers switched to it.
+5. Migrations V1xx (MCP, A2A, platform, tool files, groups, apps) with fixtures from real customer configs.
+6. Approval: #2945 (resolver, seam, approval card, server runs the stored call), then #2916 moves its configuration onto instances and actions.
+7. `GET /api/integrations`, connect/disconnect/reconnect routes with callback aliases, one `ConnectCard`.
+8. Docs: `docs/integrations.md` (new, in `SUMMARY.md`), update `mcp-integration.md`, `integration-development.md`; changelog entry.
 
 Exit: every existing integration runs through the new layer; e2e suite green; no user re-connects.
 
 ## Phase 2 · The visible product (5 to 6 weeks)
 
-1. Admin: Integrations list (`DataTable`), Catalog tab with the built-in catalog converted, install wizard, instance page (Overview, Actions, Connections, Bindings, Audit, Settings), group permissions, platform policy rules, "Inbound" tab. Remove MCP servers, A2A agents and hub pages.
-2. App editor: one `IntegrationsConfigSection`.
-3. User: Settings → Integrations "Available to you"; chat `IntegrationPicker`, chips, lazy connect that returns to the same chat and retries; server-side preferences.
-4. Marketplace type `integration`; shipped definitions moved to `server/defaults/integrations/`; IntraFind registry gets its first integrations (Jira and Confluence Data Center, SharePoint on-prem, Nextcloud, DeepL).
-5. Shared `Switch`, `Badge`, `StatusDot`, `Drawer`; i18n en/de complete; dark mode.
-6. Member requests ("Request → Requested" and the admin queue).
+1. Admin: Integrations list (`DataTable`, grouped Built-in, From the catalog, Custom), Catalog tab with the built-in catalog converted, install wizard, instance page (Overview, Actions, Connections, Bindings, Audit, Settings), group permissions, "Inbound" tab. Remove MCP servers, A2A agents, hub and Tools pages.
+2. Action detail with usage guidance and a test runner ([#2974](https://github.com/intrafind/ihub-apps/issues/2974)); custom integration builder for OpenAPI, MCP, A2A, HTTP and script actions ([#2975](https://github.com/intrafind/ihub-apps/issues/2975)).
+3. App editor: one `IntegrationsConfigSection`.
+4. User: Settings → Integrations "Available to you"; chat `IntegrationPicker`, chips, lazy connect that returns to the same chat and retries; server-side preferences.
+5. Marketplace type `integration`; shipped definitions moved to `server/defaults/integrations/`; IntraFind registry gets its first integrations (Jira and Confluence Data Center, SharePoint on-prem, Nextcloud, DeepL).
+6. Shared `Switch`, `Badge`, `StatusDot`, `Drawer`; i18n en/de complete; dark mode.
+7. Member requests ("Request → Requested" and the admin queue).
 
-Exit: an admin installs Confluence Data Center from the catalog, scopes it to a group, a user connects from the chat and writes a page after confirming.
+Exit: an admin installs Confluence Data Center from the catalog, scopes it to a group, reads and tests its actions, sets *ask on writes*; a user connects from the chat and writes a page after approving.
 
 ## Phase 3 · What the directories lack (ongoing, 2 to 3 weeks each)
 
@@ -45,6 +47,7 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 - **Native connectors from the epic**: Outlook Mail and Calendar, cloud file tools, Teams, SAP OData, DMS (d.velop, enaio, nscale, ELO, M-Files), ServiceNow, Personio, DATEV; each as a definition plus adapter module, published through the IntraFind registry.
 - **Triggers** (`02-triggers.md`) as a capability once scheduled tasks can receive events.
 - **Per-user API keys for OpenAPI integrations** (`ConfigField.scope: user`), several connections per integration with a default.
+- **Taint-based approval**: ask only when the chat already holds internal data (follow-up of #2945).
 - **Auto vs on-demand tool mode** for apps with many integrations: deferred action definitions with `search_tools` / `call_tool` ([intrafind/ihub-apps#2889](https://github.com/intrafind/ihub-apps/issues/2889)), surfaced per integration in the picker.
 
 ## Risks
@@ -54,7 +57,7 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 | Migration breaks customer configs | Fixtures from real `mcpServers.json`, `platform.json`, `groups.json`; migration dry-run command; keep callbacks stable |
 | Users must reconnect | Re-index tokens in place; never change `TokenStorageService` keys in phase 1 |
 | Per-user MCP tool lists differ per user | Keep the shared catalog for admin configuration; show "actions may vary by account" on the instance page (the spec allows credential-scoped lists) |
-| Approval fatigue | Read actions never ask; "allow for this chat" memory; admin can set *allow* per action; new write tools default to *ask* but are flagged, not silently blocked |
+| Approval fatigue | Opt-in per #2945; internal reads never ask; "allow for this chat"; the card shows the arguments, not just the tool name; new or changed actions are flagged, not silently blocked |
 | Untrusted annotations | `trusted` flag per instance; untrusted + no annotation = write |
 | Scope creep into a connector marketplace business | Phase 1 and 2 are the platform; connectors are a separate, demand-driven backlog |
 | Two concepts drift apart | This folder supersedes the enablement, connection and UI parts of `third-party-integrations/01-framework.md`; the per-connector drafts there stay valid |
@@ -64,6 +67,7 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 1. ~~**Name on the sidebar**: "Integrations" (this concept) or "Connectors" (Claude, Microsoft, Glean)?~~ Decided 2026-10-20: "Integration" and "Connection" everywhere; "MCP server" and "tool" leave the end-user UI.
 2. **Shared OAuth connections**: forbid entirely (Langdock: only via an app's pre-selected connection) or allow an admin to share their own OAuth connection with a group for service-like use?
 3. **Web search as an integration row** in the picker, or keep the dedicated switch? Concept says row, with the same look as today.
-4. **Sources**: fold `ifinder`, `url` and future "search" capabilities into integrations in phase 3, or keep knowledge sources a separate feature for good?
+4. ~~**Sources**~~: resolved by projects (2026-10-22): knowledge lives in projects, which consume integrations through their `files` and `search` capabilities.
 5. ~~**Clean break of admin routes** vs aliases, per CLAUDE.md.~~ Decided 2026-10-20: clean break for `/api/admin/mcp/servers` and `/api/admin/a2a/agents`; stable OAuth callbacks. The release notes for the phase that ships it carry a breaking-change entry in `docs/releases/next/breaking-changes.md`.
 6. **Community registry**: do we ever show the public MCP registry to customers, or only our curated catalog plus their own registries?
+7. **Tools admin routes**: clean break for `/api/admin/tools` versus an alias to custom integrations (decision 8 in the product concept). Recommendation: clean break.

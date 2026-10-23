@@ -8,13 +8,13 @@ Paste the prompt below into a new Claude Code session (cloud or local) on `intra
 
 | Work | Model | Why |
 | --- | --- | --- |
-| #2912 schemas and files, #2913 adapters, #2914 ConnectionService and OAuth client, #2915 migrations, #2916 approval gate | **Claude Fable 5.1** (`claude-fable-5-1`), default effort | Cross-cutting design, security-sensitive token handling, migration correctness against real configs. The cost of a wrong abstraction here is the whole epic. |
-| #2917 connect flow, #2919 admin section, #2920 catalog and wizard, #2923 chat picker, #2924 marketplace type, #2927 enterprise-managed auth, #2928 MCP registry adapter | **Claude Opus 5.5** (`claude-opus-5-5`) | Large but well-specified feature work with existing patterns to follow. Use fast mode (`/fast`) for the UI iterations. |
+| #2945 approval foundation, #2912 schemas and files, #2913 adapters, #2973 built-in integrations, #2914 ConnectionService and OAuth client, #2915 migrations, #2916 approval on integrations | **Claude Fable 5.1** (`claude-fable-5-1`), default effort | Cross-cutting design, security-sensitive token handling, migration correctness against real configs. The cost of a wrong abstraction here is the whole epic. |
+| #2917 connect flow, #2919 admin section, #2974 action detail and test runner, #2975 custom integration builder, #2920 catalog and wizard, #2923 chat picker, #2924 marketplace type, #2927 enterprise-managed auth, #2928 MCP registry adapter | **Claude Opus 5.5** (`claude-opus-5-5`) | Large but well-specified feature work with existing patterns to follow. Use fast mode (`/fast`) for the UI iterations. |
 | #2918 docs and changelog, #2921 app editor section, #2922 user settings page, #2925 shared components and i18n, #2926 member requests, #2929 per-user API keys | **Claude Sonnet 5.5** (`claude-sonnet-5-5`) | Pattern-following implementation and documentation; the concept and the earlier issues fix the design. |
 | Subagents inside any session: `Explore`, `i18n-checker`, lint and format fixes, test scaffolding | **Claude Haiku 5.5** (`claude-haiku-5-5`) or Sonnet 5.5 | Cheap fan-out; the parent session verifies. |
-| Final review of each PR (`/code-review`, `security` agent on #2914, #2916, #2917, #2927) | **Claude Fable 5.1** | A reviewer that is not anchored on the implementation. |
+| Final review of each PR (`/code-review`, `security` agent on #2945, #2914, #2916, #2917, #2974, #2975, #2927) | **Claude Fable 5.1** | A reviewer that is not anchored on the implementation. |
 
-Run issues in this order; each one is one PR: #2912 → #2913 → #2914 and #2915 (parallel, separate branches) → #2916 and #2917 (parallel) → #2918. Phase 2 starts when #2918 is merged.
+Run issues in this order; each one is one PR. #2945 has its own agreed plan and can start right away, in parallel to everything else. Then #2912 → #2913 → #2973 → #2914 and #2915 (parallel, separate branches) → #2916 (after #2945) and #2917 (parallel) → #2918. Phase 2 starts when #2918 is merged, with #2919, #2974 and #2975 first.
 
 ## The prompt
 
@@ -36,14 +36,21 @@ GitHub issue per session. The issue number for this session is: #____ (fill in).
 ## Decisions already taken (do not reopen them)
 - Vocabulary: Integration, Connection, Action. "MCP server" and "tool" do not appear in
   end-user UI.
-- Write policy: every write or destructive action asks by default, MCP included; read never
-  asks; unknown or untrusted effect counts as write.
+- An integration owns its tools. Every tool a model can call belongs to exactly one integration
+  (built-in, from the catalog, or custom), except skill, app__, workflow_ and knowledge_ tools,
+  which stay with their features. There is no separate Tools page.
+- Approval follows issue #2945 and its decisions of 2026-10-22: opt-in at upgrade; modes
+  never | writes | always per action; sideEffect read | write | destructive | unknown and
+  dataFlow internal | external; admin config is the floor, an app can only tighten; grants per
+  call and per chat, no persistent always-allow; on approve the server runs the stored call;
+  no human attached means deny unless approver groups are named. Never build a second gate.
 - Per-chat enabled state lives on the server: per-user default per app, per-chat override,
   snapshot per scheduled task. No localStorage.
 - Marketplace type `integration`; the built-in MCP catalog becomes shipped definitions.
 - Clean break for /api/admin/mcp/servers, /api/admin/a2a/agents and the platform.jira /
   platform.cloudStorage writes. No aliases, no compat wrappers. The only aliases that stay are
-  the OAuth callback URLs registered in vendor consoles.
+  the OAuth callback URLs registered in vendor consoles. /api/admin/tools is still an open
+  breaking-change decision: ask before removing or aliasing it.
 
 ## Non-negotiables
 - Definitions live in contents/integration-definitions/<id>/, tokens stay in
@@ -82,7 +89,7 @@ GitHub issue per session. The issue number for this session is: #____ (fill in).
 6. Open a draft PR with: summary, what changed per file group, how to verify manually, the
    migration or breaking-change notes, and "Closes #<issue>". Run /document-feature for the
    changelog entry when the change is visible to admins or users.
-7. Then run /code-review on the diff and, for #2914, #2916, #2917 and #2927, the `security`
+7. Then run /code-review on the diff and, for #2945, #2914, #2916, #2917, #2974, #2975 and #2927, the `security`
    agent. Fix what they find before asking for human review. Mark the PR ready for review.
 8. Report back in one message: what is done, what is verified and how, what you left out and
    why, and the open questions that need a human decision.
@@ -104,10 +111,12 @@ Append one of these lines after "The issue number for this session is" to point 
 
 | Issue | Start here |
 | --- | --- |
+| #2945 | The plan and the decisions in the issue's comments; `server/services/scheduler/tasks/runSeams.js` (today's approval seam), `server/services/loop/` seams and `segmentPlanner`, `InteractionService`, `settleChatClarifications`, `McpServerConnection.buildToolSets`, `expandToolFunctions`; start with the spike on chat-history handling. |
 | #2912 | `server/validators/mcpServerConfigSchema.js`, `a2aAgentConfigSchema.js`, `cloudStorageSchema.js`, `credentialSchema.js`, `server/utils/authorization.js`; model the new schemas on them, then add `IntegrationRegistry`. |
 | #2913 | `server/toolLoader.js` (`loadTools`, `getToolsForApp`, `runTool`), `server/services/mcp/McpClientManager.js`, `server/services/tools/OpenApiToolRunner.js`, `server/services/a2a/A2aClientManager.js`, `server/tools/jira.js`, `server/services/integrations/*Service.js`. |
+| #2973 | `server/defaults/tools/*.json`, `server/tools/*.js`, `server/toolLoader.js` (`expandToolFunctions`, websearch resolution), `server/adapters/iassistant-conversation.js`, `server/services/sources/producers/ifinder.js`. |
 | #2914 | `server/services/mcp/mcpOAuthService.js`, `McpUserOAuthProvider.js`, `mcpUserTokens.js`, `server/services/TokenStorageService.js`, `server/services/integrations/OAuthIntegrationBase.js`, `JiraService.js`, `server/routes/integrations/oauthIntegrationFactory.js`, `concepts/2026-05-11 Cloud Storage Provider Security Parity.md`. |
 | #2915 | `server/migrations/README.md`, the latest `V1xx` migrations, `server/defaults/config/*.json`, `server/utils/toolSelection.js`; build fixtures before writing the migration. |
-| #2916 | `server/services/loop/contracts/loop.js` (`requireApprovalFor`), `AgentLoop` `preTool`, `InteractionService`, `client/src/features/chat/components/ChatMessage.jsx` (`ClarificationCard` as the pattern for the card). |
+| #2916 | What #2945 shipped (resolver, `approvalSeam`, per-tool and per-server config), `contents/config/integrations.json` from #2912, the migrations from #2915. |
 | #2917 | `client/src/features/chat/hooks/useIntegrationAuth.js`, `client/src/features/chat/mcpApps/McpConnectCard.jsx`, `server/routes/mcpOAuth.js`, `server/routes/integrations/*.js`, `client/src/features/settings/pages/IntegrationsPage.jsx`. |
 | #2918 | `docs/SUMMARY.md`, `docs/mcp-integration.md`, `docs/integration-development.md`, `docs/marketplace.md`, `docs/releases/next/`. |

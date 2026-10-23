@@ -14,7 +14,9 @@ Every way iHub reaches another system becomes an **integration**: a catalog entr
 | **Installed integration** (instance) | An integration set up on this iHub: endpoint and install fields filled, OAuth client chosen, groups allowed, policies set, enabled or not. An integration can be installed more than once (two Jira sites, EU and US tenants). | an entry in `mcpServers.json`, `platform.jira`, a provider in `platform.cloudStorage` |
 | **Connection** | One principal's credential for one installed integration. **Personal** (a user's OAuth grant, PAT or API key) or **shared** (an admin-owned secret, offered to groups). | `TokenStorageService` files, `credentials.json` profiles |
 | **Capability** | What an integration offers: `tools` (model-callable actions), `files` (browse and pick files), `search` (knowledge source), `views` (MCP Apps UI), `triggers` (events), `agent` (A2A). An integration declares one or more. Inbound surfaces are not capabilities; see section 9. | tools vs sources vs cloud storage picker vs MCP Apps |
-| **Action** | One model-callable tool of an integration, with an **effect**: `read`, `write`, `destructive`. From MCP annotations, OpenAPI method, or the connector's declaration. | tool function, MCP tool |
+| **Action** | One model-callable tool of an integration. It carries a **side effect** (`read`, `write`, `destructive`, `unknown`) and a **data flow** (`internal`: stays in systems the customer controls; `external`: leaves for a third party). Taken from MCP annotations, the OpenAPI method or the connector's declaration; the admin can override both. Every tool iHub offers to a model belongs to exactly one integration. | tool, tool function, MCP tool |
+| **Built-in integration** | An integration that ships with iHub and cannot be uninstalled, only enabled, disabled and configured: iFinder, iAssistant, Web, iHub (ask the user, tasks, memory, evidence). | `server/defaults/tools/*.json` |
+| **Custom integration** | An integration an admin builds on this iHub from an OpenAPI document, an MCP endpoint, an A2A card, an HTTP request or a script. | admin-created tools in `contents/tools/`, `mcpServers.json` entries added by hand |
 | **Binding** | How an app (or workflow, agent, scheduled task) uses an integration: which actions, and *whose connection* (each user's own, or a pre-selected shared one). | `app.tools`, `app.sources`, `app.upload.cloudStorageUpload`, `app.websearch` |
 | **Registry** | A `catalog.json` source the marketplace reads. Gains the item type `integration`. | marketplace registries |
 
@@ -32,14 +34,15 @@ Two words we stop using in the UI: "MCP server" as a top-level thing a user has 
 
 ## 4. Principles
 
-1. **One model, many protocols.** MCP, OpenAPI, native code, A2A and storage pickers are *wiring*. Catalog, install, enable, connect, pick, confirm and audit are shared.
-2. **Delegated by default.** Actions run as the signed-in user wherever the system supports it. Shared credentials are explicit, admin-owned, and visible to the user as "runs as service account X".
-3. **Admin enables, user connects, user picks.** Three separate decisions with three separate owners. An admin can never consent on a user's behalf; a user can never widen what the admin allowed.
-4. **Writes need a human** unless the admin relaxes it per integration. The effect of every action is known before it runs.
-5. **Progressive disclosure.** The catalog shows a name, a logo, a one-liner and three facts (sign-in type, read/write, where it runs). Everything else is one click deeper.
-6. **Status is observed, not assumed.** Every installed integration has a last health check; every connection has an expiry.
-7. **Distributable.** An integration is a file. It can be published in a registry, installed, updated, detached, like an app or a skill today.
-8. **Standards first.** MCP authorization (RFC 9728, 8414, 8707, CIMD), MCP registry `server.json`, MCPB `user_config`, MCP Apps. Our own fields only where no standard exists (groups, policy, residency).
+1. **An integration owns its tools.** There is no separate list of tools. iFinder brings search, field discovery, document content and metadata; iAssistant brings chat; Jira brings search, read, comment and transition. The admin finds, configures, tests and documents every tool on its integration's page.
+2. **One model, many protocols.** MCP, OpenAPI, native code, A2A and storage pickers are *wiring*. Catalog, install, enable, connect, pick, confirm and audit are shared.
+3. **Delegated by default.** Actions run as the signed-in user wherever the system supports it. Shared credentials are explicit, admin-owned, and visible to the user as "runs as service account X".
+4. **Admin enables, user connects, user picks.** Three separate decisions with three separate owners. An admin can never consent on a user's behalf; a user can never widen what the admin allowed.
+5. **Writes need a human** unless the admin relaxes it per integration. The effect of every action is known before it runs.
+6. **Progressive disclosure.** The catalog shows a name, a logo, a one-liner and three facts (sign-in type, read/write, where it runs). Everything else is one click deeper.
+7. **Status is observed, not assumed.** Every installed integration has a last health check; every connection has an expiry.
+8. **Distributable.** An integration is a file. It can be published in a registry, installed, updated, detached, like an app or a skill today.
+9. **Standards first.** MCP authorization (RFC 9728, 8414, 8707, CIMD), MCP registry `server.json`, MCPB `user_config`, MCP Apps. Our own fields only where no standard exists (groups, policy, residency).
 
 ## 5. The three-layer model
 
@@ -89,7 +92,7 @@ The sidebar section **Integrations** becomes the single home. Its items:
 | **Credentials** | `/admin/credentials` | unchanged (shared secrets), linked from shared connections |
 | **Inbound** | `/admin/integrations/inbound` | MCP gateway, A2A card, Outlook add-in, browser extension, Copilot agent, Nextcloud embed, Teams: what connects *to* iHub |
 
-"MCP servers", "A2A agents" and the eight hub cards disappear as separate pages; they are installed integrations with different protocols. The OAuth section under Access & Identity keeps clients and CIMD governance (that is identity, not integrations); its "Connections" tab (grants *to* iHub) moves under Inbound as "Connected apps".
+"MCP servers", "A2A agents", the eight hub cards **and the Tools page under AI Workspace** disappear as separate pages. MCP servers and A2A agents are installed integrations with different protocols; every shipped tool belongs to a built-in integration; every tool an admin created becomes a custom integration (section 6.8). The Installed list groups rows into **Built-in**, **From the catalog** and **Custom**. The OAuth section under Access & Identity keeps clients and CIMD governance (that is identity, not integrations); its "Connections" tab (grants *to* iHub) moves under Inbound as "Connected apps".
 
 ### 6.2 Installed integrations (list)
 
@@ -159,6 +162,35 @@ Test connection runs before save (MCP: discovery + `tools/list`; OpenAPI: a read
 
 Tabs: **Overview** (status, health history, endpoint, OAuth client, groups, label), **Actions** (toggle per action, effect, confirmation override, usage count), **Connections** (users connected, last used, revoke; shared connections for this integration), **Bindings** (which apps, workflows, scheduled tasks use it; the same `ContentAccessSection` style), **Audit** (filtered audit log), **Settings** (install fields, re-run wizard, update from registry, detach, uninstall).
 
+### 6.5a Action detail: what it does, how to use it, test it
+
+Every action on the **Actions** tab opens a detail drawer. It is the one place where an admin understands a tool before switching it on, and the place to prove it works.
+
+```
+Jira (EU) › Actions › add_comment                                   write · external · ask
+──────────────────────────────────────────────────────────────────────────────────────
+What it does    Adds a comment to a Jira issue.                        [Edit model description]
+Parameters      issueKey  string  required   ACME-12
+                body      string  required   markdown
+Approval        ● Inherit (ask on writes)  ○ Always ask  ○ Never ask      floor: platform default
+How to use      Model guidance  "Use after the user asked to comment; quote the issue key."
+                Example prompts "Add a comment to ACME-12 that staging passed."
+                Used by         Engineering Assistant · Support Desk · Weekly sprint digest
+Test            Run as  ● my connection (daniel@…)  ○ shared: support
+                issueKey [ACME-12      ]  body [Test from iHub admin ]
+                ☑ I understand this writes to Jira (EU)                  [Run test]
+                ─ Result ─ 201 Created · 412 ms · 1 source: ACME-12 · request ▸ · response ▸
+Usage           61 calls in 7 days · 3 rejected by users · last error: none
+```
+
+- **What it does**: the description and parameter schema exactly as the model sees them, with an admin override for the description (vendor descriptions are often written for developers, not models).
+- **Side effect, data flow, approval**: badges and the per-action approval mode (section 7.4). An override is shown next to its source (vendor annotation, OpenAPI method, admin).
+- **How to use**: model guidance that is added to the system prompt when the integration is active, example prompts that users see in their settings and in the chat picker, and the apps, workflows and scheduled tasks that bind this action.
+- **Test**: a form generated from the parameter schema. Runs with the admin's own connection or a chosen shared connection, shows status, duration, the request as sent (secrets redacted), the raw response and the Answer Sources the result produced. A write or destructive test needs an explicit confirmation; every test run is written to the audit log as `action.test`. A test never runs the model; it calls the action directly.
+- **Usage**: calls, approvals and rejections, errors, in the last 7 days.
+
+The integration itself has the same three things one level up: **Instructions** (the MCP `instructions` or the connector's guidance, editable), **Test connection** (section 6.4), and a **Try in chat** button that opens a scratch chat with only this integration enabled.
+
 ### 6.6 Requests from users
 
 Users can see the catalog entries their admin has not installed and press **Request**. The admin sidebar shows a count; the queue offers *approve* (opens the wizard), *decline*, *decline and hide*. This is what Claude and Microsoft do and it turns the catalog into a demand signal for which integrations to curate next.
@@ -166,6 +198,37 @@ Users can see the catalog entries their admin has not installed and press **Requ
 ### 6.7 Group permissions
 
 `groups.json` gets `permissions.integrations: ["jira-eu", "sharepoint", "*"]`, resolved with inheritance like `apps` and `skills`. The installed-integration wizard writes it; `ContentAccessSection` edits it. An app that binds an integration the user may not use simply does not show it (same as skills today).
+
+### 6.8 Custom integrations replace the Tools page
+
+**Add manually** opens the integration builder. Its actions come from one of these:
+
+| Source | Becomes | Replaces today |
+| --- | --- | --- |
+| OpenAPI document (URL, file or paste) | one action per selected operation; side effect from the HTTP method | OpenAPI tools (`type: "openapi"`) |
+| MCP endpoint (remote) or command (stdio) | one action per tool from `tools/list` | MCP servers added by hand |
+| A2A agent card | one action per skill | A2A agents |
+| HTTP request | one action: method, URL template, headers, body template, response mapping | nothing today; the simplest way to wrap an internal REST endpoint |
+| Script | one or more actions backed by a JavaScript module, edited in the existing script editor | script tools in `contents/tools/` + `server/tools/` |
+
+The builder is Langdock's integration builder in iHub's terms: name, icon, auth, then actions, each with description, parameters, side effect, data flow and a test. A custom integration can be exported as a definition and published to a registry, which turns a one-off internal tool into something another iHub installation can install.
+
+### 6.9 Built-in integrations
+
+Today's shipped tools regroup into a handful of built-in integrations. They are always listed, never uninstalled, and configured like any other integration.
+
+| Built-in integration | Actions (today's tools) | Other capabilities | Data flow |
+| --- | --- | --- | --- |
+| **iFinder** | search, discover, get content, get metadata, get fields, get facet values, list profiles (`iFinder_*`) | `search` and `files` for projects (`ifinder-document`, `ifinder-query` items), source provider for preview and download | internal |
+| **iAssistant** | ask (a conversation turn as a tool) | `model`: iAssistant appears in the model selector as today | internal |
+| **Web** | search (Brave, Staan, Qwant or the model's native search, chosen per installation), read page (`read_url`) | — | external |
+| **Microsoft 365** | people search (`entraPeopleSearch_*`); later mail, calendar, files as actions | `files` picker for chat and projects (OneDrive, SharePoint, Teams files) | external (Microsoft cloud) |
+| **Jira** | search, get issue, comment, transition, attachment (`jira_*`) | — | external or internal (Data Center) |
+| **iHub** | ask the user, evidence, scheduled tasks, agent workspace (tasks, memory, inbox, artifacts) | — | internal |
+
+Google Drive and Nextcloud become built-in integrations with the `files` capability on the same pattern. Tools that belong to another feature stay with it: skill tools with skills, `app__` tools with the app, `workflow_` tools with the workflow, `knowledge_*` tools with projects. The model still sees them; they are not configured on the Integrations page.
+
+An action can need a different identity than its siblings, for example Microsoft 365 people search as the app (application permission) while files run as the user. The action declares the connection it needs; section 1.1 of [04 · Architecture](04-architecture.md) has the field.
 
 ## 7. User experience
 
@@ -188,7 +251,7 @@ Access to iHub                                                            (uncha
  Personal API keys · Connected apps · Outlook add-in
 ```
 
-Every integration the user's groups allow is listed, whether or not it needs a sign-in. The status column tells the truth about identity: *connected as you*, *signed in via SSO*, *runs as service account*, *shared key*, *not connected*, *reconnect needed*. Each row opens a detail: what it can do (actions with effect badges), which apps use it, when it was last used, granted permissions in plain words.
+Every integration the user's groups allow is listed, whether or not it needs a sign-in. The status column tells the truth about identity: *connected as you*, *signed in via SSO*, *runs as service account*, *shared key*, *not connected*, *reconnect needed*. Each row opens a detail: what it can do (actions in plain words with read/write badges and the admin's example prompts, "Ask: *what are my open Jira tickets?*"), which apps use it, when it was last used, granted permissions in plain words.
 
 ### 7.2 In chat: the "+" menu becomes the integrations picker
 
@@ -236,23 +299,27 @@ One component, one look, for every protocol. It replaces `IntegrationConnectionC
 
 After connecting, the call is retried automatically only when it failed *before* execution with `INTEGRATION_AUTH_REQUIRED` (no connection, expired, insufficient scope). A call that failed inside the adapter or on the transport is never retried on its own, because a write may already have happened; the model is told what failed and a write is re-run only through a fresh confirmation. For `reconnect needed` (expired, revoked, or a new scope), the card says why and what changes.
 
-### 7.4 Confirmation card for writes
+### 7.4 Approval card
+
+The rules come from [intrafind/ihub-apps#2945](https://github.com/intrafind/ihub-apps/issues/2945), whose plan and decisions (2026-10-22) this concept adopts. The risk is not only writes: a *read* on an external integration can carry internal information out (search your own documents, then ask an external MCP server with what you found). So approval depends on the side effect **and** the data flow.
 
 ```
  ┌─────────────────────────────────────────────────────────────┐
- │ ✎ Jira · Add comment to ACME-12                   write      │
- │ ┌─────────────────────────────────────────────────────────┐ │
- │ │ Tested on staging, works. Moving to review.            │ │  ← editable
- │ └─────────────────────────────────────────────────────────┘ │
- │ Runs as daniel@… · in Jira (EU)                              │
- │              [Run]   [Edit]   [Skip]   ☐ Don't ask again for this chat │
+ │ ✎ Jira (EU) · Add comment                  write · external │
+ │   issueKey  ACME-12                                         │
+ │   body      Tested on staging, works. Moving to review.     │
+ │ Runs as daniel@… · Nothing is sent until you choose.        │
+ │      [Approve]  [Approve & allow for this chat]  [Reject]   │
  └─────────────────────────────────────────────────────────────┘
 ```
 
-- Appears for `write` and `destructive` actions when the installed integration's policy says *ask* (the default). Memory is scoped: *once*, *for this chat*, and *always* only if the platform allows it (`allowAlways`, off by default). `destructive` never offers "don't ask again". Read actions never ask, which is what keeps approval fatigue away.
-- The payload is shown as the user would understand it (rendered fields, not raw JSON), editable before running. Langdock's Preview/Source tabs for rich text.
-- Admin policy per integration: *ask*, *allow*, *block writes*. Plus platform-wide glob rules like LibreChat's `deny: ["*:delete_*"]` for security officers.
-- Headless runs (scheduled tasks, workflows) turn the card into a durable approval the owner answers in the task inbox, which `InteractionService` already supports.
+- **Modes** per action: `never`, `writes` (ask when the side effect is not `read`), `always` (ask for every call, used for external reads that may leak). Resolution: platform default by data flow, then the integration's default, then the action's setting, then the app's binding. **Admin config is the floor; an app can only tighten it.**
+- **Upgrade is opt-in.** Nothing changes for existing installations until an admin sets a platform default or a per-integration or per-action mode. The install wizard preselects *ask on writes* for new integrations and *always* for external ones whose actions carry no trusted annotations; the admin confirms or changes it.
+- **Grants**: per call, and "allow for this chat". No persistent "always allow" in v1.
+- **The card shows the exact arguments** as escaped text, tool and integration name, side effect and data flow. Any justification written by the model is labelled as such. Editing arguments before approving comes later, with schema re-validation.
+- **On approve, the server runs the stored call itself.** The model does not re-issue it, so the user approves exactly what is sent. On reject or expiry the model gets `USER_REJECTED` or `APPROVAL_EXPIRED` as the tool result and carries on.
+- **No human attached** (inference API, embeds that cannot render the card, workflow and agent nodes): the call is denied with `APPROVAL_REQUIRED_NO_USER`, unless a workflow node names approver groups; then the approval is parked for them. Scheduled tasks keep their existing approval flow.
+- Later: taint-based gating that asks only when the chat already holds internal source data, which is the exact scenario #2945 describes.
 
 ### 7.5 Results
 
@@ -269,15 +336,17 @@ Unchanged: Answer Sources, citations, preview and download already come from one
 ## 9. What stays special, on purpose
 
 - **Inbound surfaces** (Outlook add-in, browser extension, Copilot agent, Nextcloud embed, Teams, MCP gateway, A2A card) are not integrations in this sense: nothing is installed or connected outbound. They get their own tab, "Inbound", with the same card layout, so admins still find them in one place.
-- **Models and providers** stay under AI Workspace. iAssistant is a model adapter and stays a model.
+- **Models and providers** stay under AI Workspace. iAssistant becomes a built-in integration that contributes a model (it still appears in the model selector) and an *ask* action.
 - **Local stdio MCP servers** remain admin-only and are shown with a "runs on the iHub server" badge; they are never offered in the user catalog.
-- **Sources** (filesystem, url, page) remain a knowledge feature. The `ifinder` source type and future "search" capabilities of integrations converge later (see [05 · Roadmap](05-roadmap.md)).
+- **Knowledge** lives in projects, which replaced sources on 2026-10-22 (`docs/projects.md`). Integrations feed projects through their `files` and `search` capabilities (iFinder documents and queries, OneDrive, Google Drive and Nextcloud files); projects keep their own `knowledge_*` tools.
 
 ## 10. Decisions this concept asks for
 
 1. **Vocabulary.** "Integration" for all of it, "Connection" for the user's credential, "Action" for a tool. Drop "MCP server" and "tool" from end-user UI. **Decided 2026-10-20 (Daniel Manzke): yes.**
-2. **Default write policy.** *Ask* for everything with a write or destructive effect, for MCP and native alike. No exception for MCP (Langdock's inconsistency). **Decided 2026-10-20 (Daniel Manzke): yes.** Read actions never ask; admins relax per integration or per action; unknown or untrusted effects count as write.
+2. **Approval policy.** ~~*Ask* for every write by default.~~ **Superseded 2026-10-22 by the decisions on [#2945](https://github.com/intrafind/ihub-apps/issues/2945):** opt-in at upgrade, modes `never | writes | always` per action with side effect and data flow, admin floor that apps can only tighten, grants per call and per chat, deny when no human is attached unless approver groups are named. The install wizard preselects *ask on writes* for newly installed integrations (section 7.4).
 3. **Per-chat enabled state on the server**, not in `localStorage`. **Decided 2026-10-20 (Daniel Manzke): yes.** A per-user default per app, a per-chat override stored with the chat, and a snapshot per scheduled task or workflow (section 7.2).
 4. **One nav section** named Integrations with Installed, Catalog, Connections, Inbound. MCP servers, A2A agents and the hub cards fold in.
 5. **Marketplace type `integration`**, with the built-in catalog converted and the public MCP registry as an optional community source. **Decided 2026-10-20 (Daniel Manzke): yes.** Whether the public MCP registry is ever shown to customers stays open (roadmap question 6).
 6. **Clean break for admin routes** (`/api/admin/mcp/servers`, `/api/admin/a2a/agents`) behind a migration, versus aliases. **Decided 2026-10-20 (Daniel Manzke): clean break, no aliases for the admin routes.** This is the explicit breaking-change call CLAUDE.md asks for; it covers the admin MCP and A2A routes and the `platform.jira` / `platform.cloudStorage` writes through `/api/admin/configs/platform`. User-facing OAuth callback routes stay stable so stored tokens and vendor-registered redirect URIs keep working.
+7. **Integrations own their tools; the Tools page folds into Integrations.** Shipped tools regroup into built-in integrations, admin-created tools become custom integrations, every action has a detail with usage guidance and a test (sections 6.5a, 6.8, 6.9). **Direction set 2026-10-23 (Daniel Manzke).**
+8. **Clean break for `/api/admin/tools`** (the Tools admin routes and pages) in the same way as decision 6, versus keeping them as an alias of custom integrations. **Open**: CLAUDE.md asks for an explicit call; recommendation is a clean break, since the migration turns every tool file into a custom integration.
