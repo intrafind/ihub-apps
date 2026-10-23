@@ -4,9 +4,10 @@
 name: Docker CI/CD
 
 on:
-  # Build on releases and prereleases
+  # Build on releases and prereleases: `published` fires for both, so `prereleased` would
+  # only start a second, duplicate build for a pre-release.
   release:
-    types: [published, prereleased]
+    types: [published]
   
   # Manual trigger with comment "@build docker images"
   issue_comment:
