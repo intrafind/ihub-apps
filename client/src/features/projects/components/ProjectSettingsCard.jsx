@@ -114,6 +114,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
           form={form}
           errors={errors}
           idPrefix="project-settings"
+          showDefaultApp
           // Read-only while the save is out: the answer resets the draft to
           // what was saved, which would silently drop an edit made meanwhile.
           disabled={saving}

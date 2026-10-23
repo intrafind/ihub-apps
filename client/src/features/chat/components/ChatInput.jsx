@@ -15,6 +15,8 @@ import {
   typeSlashAt
 } from '../utils/slashCommand';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
+import ChatProjectChips from '../../projects/components/ChatProjectChips';
+import { useOfferedProjects } from '../../projects/components/ChatProjectsMenuSection';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
@@ -119,6 +121,12 @@ function ChatInput({
   // main web app — no toggles render and the props are inert.
   hostContextFlags = null,
   onHostContextFlagChange = null,
+  // The projects of the chat (`{ containerProjectId, value, disabled,
+  // attached, attachDisabled }`): chips beside the input for the project it
+  // runs in and the ones it draws on, and the choice of the latter in the `+`
+  // menu. Omitted where the chat takes no projects (embedded, start page,
+  // canvas, office).
+  projectContext = null,
   // Model selection props
   models = [],
   selectedModel = null,
@@ -426,7 +434,9 @@ function ChatInput({
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
-  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const offeredProjects = useOfferedProjects(projectContext);
+  const hasProjectMenu = offeredProjects.length > 0;
+  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (hasProjectMenu ? 1 : 0);
   const isSingleActionOptimization =
     totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
@@ -821,7 +831,12 @@ function ChatInput({
               onWebsearchEnabledChange={onWebsearchEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
+              projectContext={projectContext}
+              offeredProjects={offeredProjects}
             />
+
+            {/* The projects of the chat. The choice itself lives in the "+" menu. */}
+            {projectContext && <ChatProjectChips projectContext={projectContext} />}
 
             {/* Web search is on: say so in the bar, and turn it off in one
                 click. The switch itself lives in the "+" menu. */}

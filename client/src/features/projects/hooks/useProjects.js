@@ -95,14 +95,16 @@ export function useProjectsConfig() {
 /**
  * The projects the viewer may use (owned, shared with them, and admin
  * projects of their apps). Shared between the project list, the chat
- * history badges and the "Move to project" dialog.
+ * history badges.
  *
+ * @param {{enabled?: boolean}} [options] - `enabled: false` loads nothing (a caller
+ *   that only sometimes needs the list).
  * @returns {{projects: Array<Object>, loading: boolean, error: Error|null, reload: () => Promise<Array>}}
  */
-export function useMyProjects() {
+export function useMyProjects({ enabled = true } = {}) {
   const { userProjectsEnabled } = useProjectsAvailability();
   const { key } = useViewer();
-  const { data, loading, error, reload } = listStore.use(key, userProjectsEnabled);
+  const { data, loading, error, reload } = listStore.use(key, userProjectsEnabled && enabled);
   return { projects: Array.isArray(data) ? data : [], loading, error, reload };
 }
 

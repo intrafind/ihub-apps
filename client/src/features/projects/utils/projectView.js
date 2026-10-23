@@ -10,8 +10,9 @@
  *  - quotas: usage against the limits, and whether a new project or item fits;
  *  - members: the member list as the share dialog's shares and back, and the
  *    caller's own entry (leave);
- *  - chats: where a chat opens, where a chat inside a project starts, which
- *    apps may start one, and which projects a chat may move to.
+ *  - chats: where a chat opens, where a chat inside a project starts, and
+ *    which apps may start one (a chat belongs to a project from its first
+ *    message on; a started chat is never moved).
  *
  * Every function is pure.
  *
@@ -121,16 +122,18 @@ export function countProjectGroups(projects) {
 // --- create and edit -----------------------------------------------------------
 
 /**
- * The editable fields of a project, as strings.
+ * The editable fields of a project, as strings. `defaultAppId` is the app
+ * a chat of the project starts in; an empty string means none is set.
  *
  * @param {Object|null} project
- * @returns {{name: string, description: string, instructions: string}}
+ * @returns {{name: string, description: string, instructions: string, defaultAppId: string}}
  */
 export function projectFormFrom(project) {
   return {
     name: typeof project?.name === 'string' ? project.name : '',
     description: typeof project?.description === 'string' ? project.description : '',
-    instructions: typeof project?.instructions === 'string' ? project.instructions : ''
+    instructions: typeof project?.instructions === 'string' ? project.instructions : '',
+    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : ''
   };
 }
 
@@ -157,8 +160,8 @@ export function validateProjectForm(form) {
 /**
  * The body of `POST /api/projects`: the name, and the other fields when set.
  *
- * @param {{name: string, description?: string, instructions?: string}} form
- * @returns {{name: string, description?: string, instructions?: string}}
+ * @param {{name: string, description?: string, instructions?: string, defaultAppId?: string}} form
+ * @returns {{name: string, description?: string, instructions?: string, defaultAppId?: string}}
  */
 export function buildCreateProjectBody(form) {
   const description = (form.description || '').trim();
@@ -166,17 +169,19 @@ export function buildCreateProjectBody(form) {
   return {
     name: (form.name || '').trim(),
     ...(description ? { description } : {}),
-    ...(instructions.trim() ? { instructions } : {})
+    ...(instructions.trim() ? { instructions } : {}),
+    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {})
   };
 }
 
 /**
  * The body of `PATCH /api/projects/:id`: only what changed.
  *
- * @param {{name: string, description: string, instructions: string}} form
+ * @param {{name: string, description: string, instructions: string, defaultAppId?: string}} form
  * @param {Object} project - What the form started from: the project as
  *   loaded, or a form baseline (see {@link reconcileProjectForm}).
- * @returns {Object|null} `null` when nothing changed.
+ * @returns {Object|null} `null` when nothing changed. Clearing the default
+ *   app sends `defaultAppId: null`.
  */
 export function buildProjectChanges(form, project) {
   const before = projectFormFrom(project);
@@ -186,6 +191,9 @@ export function buildProjectChanges(form, project) {
   const description = (form.description || '').trim();
   if (description !== before.description.trim()) changes.description = description;
   if ((form.instructions || '') !== before.instructions) changes.instructions = form.instructions;
+  if ((form.defaultAppId || '') !== before.defaultAppId) {
+    changes.defaultAppId = form.defaultAppId || null;
+  }
   return Object.keys(changes).length > 0 ? changes : null;
 }
 
@@ -198,8 +206,8 @@ export function buildProjectChanges(form, project) {
  * this baseline (not with the latest project) keeps an untouched field out of
  * the next PATCH, which would otherwise undo the other editor's update.
  *
- * @param {{name: string, description: string, instructions: string}} form - The draft.
- * @param {{name: string, description: string, instructions: string}} base - What the draft started from.
+ * @param {Object} form - The draft, as {@link projectFormFrom} builds it.
+ * @param {Object} base - What the draft started from.
  * @param {Object} project - The newer copy of the project.
  * @returns {{form: Object, base: Object}}
  *
@@ -378,18 +386,25 @@ export function chatPath(chat) {
 /**
  * Where a chat inside a project starts: the app, with the project as a
  * query parameter the chat sends as `projectId` on its first turn (spec 1
- * §5.2, §6.3).
+ * §5.2, §6.3). With a `message` the chat sends it at once (the chat page's
+ * `prefill` + `send` parameters).
  *
  * @param {string} appId
  * @param {string} projectId
- * @param {{attach?: boolean}} [options] - `attach: true` starts a chat outside the
- *   project with the project attached (its documents, not its chat list).
+ * @param {{attach?: boolean, message?: string}} [options] - `attach: true` starts a chat
+ *   outside the project with the project attached (its documents, not its chat list);
+ *   `message` is the first message, an empty one starts an empty chat.
  * @returns {string}
  */
-export function projectChatStartPath(appId, projectId, { attach = false } = {}) {
+export function projectChatStartPath(appId, projectId, { attach = false, message = '' } = {}) {
   const query = new URLSearchParams({
     [attach ? ATTACH_PROJECT_QUERY_PARAM : PROJECT_QUERY_PARAM]: projectId
   });
+  const text = (message || '').trim();
+  if (text) {
+    query.set('prefill', text);
+    query.set('send', 'true');
+  }
   return `/apps/${encodeURIComponent(appId)}?${query}`;
 }
 
@@ -409,21 +424,17 @@ export function appsForProjectChats(apps) {
 }
 
 /**
- * The projects a chat may move into: user projects the caller may use and
- * may hold chats in (not ones taken from the catalog), except the one the
- * chat is in (admin projects are not containers, the server refuses them).
+ * The app a chat of the project starts in unless the user picks another: the
+ * project's default app while the viewer can still use it, else the first
+ * of the list. A default the viewer has no access to (or an app that was
+ * removed) falls back silently; the project keeps it for those who can use it.
  *
- * @param {Array<Object>} projects
- * @param {string|null} currentProjectId
- * @returns {Array<Object>}
+ * @param {Array<{id: string}>} choices - Apps from {@link appsForProjectChats}, in display order.
+ * @param {string|null|undefined} defaultAppId
+ * @returns {string|null} The app id, or null when no app can chat in projects.
  */
-export function chatMoveTargets(projects, currentProjectId) {
-  return (projects || []).filter(
-    project =>
-      project?.ownership === 'user' &&
-      project.permissions?.canUse !== false &&
-      // Taken from the catalog: attached to chats, never holding one.
-      project.permissions?.canHoldChats !== false &&
-      project.id !== currentProjectId
-  );
+export function resolveProjectChatApp(choices, defaultAppId) {
+  const list = choices || [];
+  if (defaultAppId && list.some(app => app.id === defaultAppId)) return defaultAppId;
+  return list[0]?.id ?? null;
 }

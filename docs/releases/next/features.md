@@ -12,6 +12,12 @@ such as LLM endpoints, MCP servers and `wss://` voice transcription, in addition
 Nothing needs to be configured, and the Docker image, binaries and `npm start` all behave the same. Set `NODE_USE_SYSTEM_CA=0` to turn it off. 
 This needs Node 24.5 or later; on older runtimes set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` instead.
 
+**Projects are easier to use: start a chat from the project, and pick the projects of a chat in the "+" menu.**
+The project page now has a chat field at the top: type a message and press Enter to start a chat in the project, with that message already sent.
+Next to it you can choose another app for this chat; without a message the button opens an empty chat.
+Each project has a **default app** (project page → **Settings**), which is where its new chats start.
+The projects a chat draws on, and the project it runs in, now sit beside the message box instead of in a bar under the header: tick projects under **Projects for this chat** in the **+** menu.
+
 ## Projects: link documents from other projects
 
 A project can now use documents of another project without copying them. **Add documents → From

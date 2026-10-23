@@ -254,23 +254,26 @@ describe('ProjectPage – owner', () => {
     expect(screen.queryByTestId('project-read-only')).not.toBeInTheDocument();
   });
 
-  test('starts a chat from the header and lists the chats above the documents', async () => {
+  test('offers a chat field above the chats, and lists the chats above the documents', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     renderPage();
     await screen.findByText('Lease.pdf');
 
-    const newChat = screen.getByRole('button', { name: 'New chat' });
-    // In the header, beside the title, not in the chats card.
-    expect(newChat.closest('section')).toBeNull();
+    const composer = screen.getByTestId('project-chat-composer');
+    expect(within(composer).getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      'New chat in Case 2026-114'
+    );
+    // Starting a chat is not in the header any more.
+    expect(screen.getAllByRole('button', { name: 'New chat' })).toHaveLength(1);
+    expect(composer).toContainElement(screen.getByRole('button', { name: 'New chat' }));
     // Chats come first, so many documents cannot push them down.
     const chats = screen.getByRole('heading', { name: 'Chats' });
     const documents = screen.getByRole('heading', { name: 'Documents' });
+    expect(composer.compareDocumentPosition(chats) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
       chats.compareDocumentPosition(documents) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
-
-    fireEvent.click(newChat);
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   test('pages a long chat list instead of growing the page', async () => {
@@ -353,6 +356,22 @@ describe('ProjectPage – owner', () => {
       })
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  test('sets and clears the default app of the project', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject({ defaultAppId: 'chat' }));
+    mockApi.updateProject.mockResolvedValue(makeProject());
+    renderPage();
+
+    const select = await screen.findByLabelText('Default app');
+    expect(select).toHaveValue('chat');
+    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // "No default" is how the server is told to clear it.
+    await waitFor(() =>
+      expect(mockApi.updateProject).toHaveBeenCalledWith('prj_a', { defaultAppId: null })
+    );
   });
 
   test('a save still out for the previous project never replaces the one on screen', async () => {
@@ -827,7 +846,7 @@ describe('ProjectPage – members and read-only', () => {
     renderPage();
     expect(await screen.findByTestId('project-read-only')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add documents' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'New chat' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-chat-composer')).not.toBeInTheDocument();
   });
 
   test('says so when the project is gone or not shared with the viewer', async () => {

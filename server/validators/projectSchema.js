@@ -273,16 +273,18 @@ export const userProjectCreateSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required').max(MAX_NAME_LENGTH, 'Name is too long'),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
-    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional()
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
+    defaultAppId: zSafeId.min(1).max(100).optional()
   })
   .strict();
 
-/** What `PATCH /api/projects/:id` accepts. */
+/** What `PATCH /api/projects/:id` accepts. `defaultAppId: null` clears the default app. */
 export const userProjectUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
-    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional()
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -361,11 +363,6 @@ export const toggleSchema = z
     ids: z.array(zSafeId.min(1).max(50)).min(1).max(500),
     enabled: z.boolean()
   })
-  .strict();
-
-/** The `projectId` field `PATCH /api/chats/:chatId` accepts. */
-export const chatProjectSchema = z
-  .object({ projectId: zSafeId.min(1).max(100).nullable() })
   .strict();
 
 /** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */

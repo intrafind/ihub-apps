@@ -1353,9 +1353,17 @@ export class ChatRepository {
    * delete cascade, retention sweep or rollback that reaches a chat after the
    * owner moved it elsewhere leaves the newer move alone.
    *
+   * Lock order: the chat first, then the project. `settle` runs the
+   * project-side bookkeeping (a marker, for instance) while the chat is still
+   * locked, so a project's own lock is only ever taken inside a chat's, never
+   * the other way round; a callback that needs the project (as the cleanup
+   * after a project delete does) is called outside the project's lock.
+   *
    * @param {string} chatId - Chat id.
    * @param {string|null} expectedProjectId - The project the chat must still be in.
    * @param {string|null} nextProjectId - The project to put it in, or null.
+   * @param {{settle?: (chat: Object) => Promise<unknown>}} [options] - Run under
+   *   the chat's lock after the write; a failure puts the chat back.
    * @returns {Promise<{chat: Object|null, moved: boolean}>} The chat as it
    *   stands and whether the association changed.
    */

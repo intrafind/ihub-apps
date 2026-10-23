@@ -201,8 +201,8 @@ export class ProjectService {
   }
 
   /**
-   * Change name, description, instructions (and, on admin projects, enabled,
-   * category and tags).
+   * Change name, description, instructions (and, on user projects, the default
+   * app — `null` clears it; on admin projects, enabled, category and tags).
    *
    * @param {string} projectId
    * @param {Object} patch
@@ -212,17 +212,21 @@ export class ProjectService {
   async updateProject(projectId, patch, { actor, authorize }) {
     const allowed = isAdminProjectId(projectId)
       ? ['name', 'description', 'instructions', 'enabled', 'category', 'tags']
-      : ['name', 'description', 'instructions'];
+      : ['name', 'description', 'instructions', 'defaultAppId'];
     try {
       return await this.repository.mutate(
         projectId,
         project => {
           let changed = false;
           for (const key of allowed) {
-            if (
-              patch[key] !== undefined &&
-              JSON.stringify(patch[key]) !== JSON.stringify(project[key])
-            ) {
+            if (patch[key] === undefined) continue;
+            // A cleared optional field is absent from the stored document.
+            if (patch[key] === null) {
+              if (project[key] !== undefined) {
+                delete project[key];
+                changed = true;
+              }
+            } else if (JSON.stringify(patch[key]) !== JSON.stringify(project[key])) {
               project[key] = patch[key];
               changed = true;
             }
@@ -263,7 +267,7 @@ export class ProjectService {
     // there and the project is marked `deleting`, so from here on no chat can
     // join it and no edit or transfer can land. The chats are detached while
     // the project still exists (outside its lock: the lock order is chat,
-    // then project, see `moveChatToProject`); a detach that fails keeps the
+    // then project, see `ChatRepository.moveProjectIf`); a detach that fails keeps the
     // marked project, its marker and the chat's association, and the same
     // delete can be retried. The document goes only once every chat is gone.
     let project = null;

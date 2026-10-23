@@ -7,13 +7,13 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { deleteProject } from '../../../api';
+import ProjectChatComposer from '../components/ProjectChatComposer';
 import ProjectChatsSection from '../components/ProjectChatsSection';
 import ProjectItemsSection from '../components/ProjectItemsSection';
 import ProjectMembersSection from '../components/ProjectMembersSection';
 import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
 import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
-import StartProjectChatDialog from '../components/StartProjectChatDialog';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -52,8 +52,8 @@ function ReadOnlyBanner() {
 
 /**
  * `/projects/:projectId` — one project (#1036): its name, description and
- * instructions, its documents with their status and the quotas, its chats,
- * and its members. What can be changed follows the `permissions` the server
+ * instructions, a field to start a chat in it, its documents with their
+ * status and the quotas, its chats, and its members. What can be changed follows the `permissions` the server
  * sent; admin projects (reached through an app) are shown read-only here and
  * managed in the admin pages.
  *
@@ -86,7 +86,6 @@ function ProjectPageContent({ projectId }) {
   const { config } = useProjectsConfig();
   const { project, setProject, loading, error, reload } = useProject(projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [startingChat, setStartingChat] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
   const backToList = notice => {
@@ -177,17 +176,6 @@ function ProjectPageContent({ projectId }) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* The main thing to do with a project: chat with its documents. */}
-            {isUserProject && !readOnlyOwnerGone && (
-              <button
-                type="button"
-                onClick={() => setStartingChat(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                <Icon name="chat" size="sm" />
-                {t('projects.chats.newChat', 'New chat')}
-              </button>
-            )}
             {isUserProject && permissions.canDelete && (
               <button
                 type="button"
@@ -221,7 +209,16 @@ function ProjectPageContent({ projectId }) {
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
-            {/* Chats first: a long document list must not push them out of sight.
+            {/* The main thing to do with a project: chat with its documents. Someone
+                who took it from the catalog starts a chat outside it, with it attached. */}
+            {isUserProject && !readOnlyOwnerGone && (
+              <ProjectChatComposer
+                project={project}
+                projectName={projectDisplayName(project, language)}
+                attach={permissions.canHoldChats === false}
+              />
+            )}
+            {/* Chats before the documents: a long document list must not push them out of sight.
                 Someone from the catalog holds no chats here: theirs attach the project. */}
             {permissions.canHoldChats !== false && <ProjectChatsSection project={project} />}
             <ProjectItemsSection
@@ -269,13 +266,6 @@ function ProjectPageContent({ projectId }) {
         </div>
       </div>
 
-      {startingChat && (
-        <StartProjectChatDialog
-          projectId={project.id}
-          attach={permissions.canHoldChats === false}
-          onClose={() => setStartingChat(false)}
-        />
-      )}
       <ConfirmDialog
         isOpen={confirmDelete}
         title={t('projects.page.deleteTitle', 'Delete project')}

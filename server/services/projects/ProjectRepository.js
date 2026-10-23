@@ -386,6 +386,7 @@ export class ProjectRepository {
       name: String(content?.name || ''),
       description: String(content?.description || ''),
       instructions: String(content?.instructions || ''),
+      ...(content?.defaultAppId ? { defaultAppId: String(content.defaultAppId) } : {}),
       owner: actor,
       members: [],
       items: [],

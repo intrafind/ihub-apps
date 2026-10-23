@@ -20,6 +20,10 @@ const mockApi = {
   addCatalogProject: jest.fn(),
   removeCatalogProject: jest.fn()
 };
+jest.mock('../../../client/src/shared/hooks/useApps', () => ({
+  __esModule: true,
+  default: () => ({ apps: [], loading: false, error: null })
+}));
 jest.mock('../../../client/src/api', () => ({
   fetchProjects: (...args) => mockApi.fetchProjects(...args),
   fetchProjectsConfig: (...args) => mockApi.fetchProjectsConfig(...args),

@@ -5377,9 +5377,7 @@
     "sharedNew": "New",
     "sharedNewHint": "You have not opened this yet",
     "scheduled": "Scheduled",
-    "inProject": "In project {{name}}",
-    "moveToProject": "Move to project",
-    "moved": "Chat moved"
+    "inProject": "In project {{name}}"
   },
   "transcription": {
     "record": "Record audio for the selected model",
@@ -6353,9 +6351,7 @@
       "linkSubmitNone": "Link documents"
     },
     "chatBar": {
-      "change": "Change project",
       "inProject": "In project: {{name}}",
-      "move": "Move to project",
       "open": "Open the project",
       "unnamed": "Project"
     },
@@ -6370,10 +6366,7 @@
       },
       "newChat": "New chat",
       "noApps": "No app can chat inside projects.",
-      "searchApps": "Search apps",
       "someone": "another member",
-      "startHint": "Choose the app to chat with. It gets the project’s instructions and documents.",
-      "startTitle": "Start a chat in this project",
       "title": "Chats",
       "pager": {
         "showing": "Chats {{start}}–{{end}} of {{total}}",
@@ -6417,7 +6410,10 @@
       "instructionsHint": "Added to the system prompt of every chat in this project, after the app’s own prompt.",
       "name": "Name",
       "nameRequired": "A name is required.",
-      "tooLong": "At most {{max}} characters."
+      "tooLong": "At most {{max}} characters.",
+      "defaultApp": "Default app",
+      "defaultAppNone": "No default (first available app)",
+      "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {
       "actions": {
@@ -6513,14 +6509,6 @@
       "unknownOwner": "Unknown",
       "count_one": "{{count}} member",
       "count_other": "{{count}} members"
-    },
-    "moveChat": {
-      "hint": "The chat then uses the project’s instructions and documents, and its members can read it.",
-      "list": "Projects",
-      "none": "You have no other project to move this chat to.",
-      "remove": "Remove from project",
-      "submit": "Move",
-      "title": "Move chat to a project"
     },
     "page": {
       "adminProject": "This project comes with one of your apps. Administrators manage it.",
@@ -6628,11 +6616,21 @@
       "unmeasured_other": "{{count}} documents could not be read and are not counted."
     },
     "attach": {
-      "add": "Add project",
       "title": "Projects for this chat",
       "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
       "remove": "Remove {{name}} from this chat",
       "full": "A chat can use at most {{max}} projects."
+    },
+    "composer": {
+      "title": "Start a chat in this project",
+      "placeholder": "New chat in {{name}}",
+      "hint": "The app gets the project’s instructions and documents.",
+      "app": "App",
+      "send": "Send",
+      "tooLong": "This message is too long to send from here."
+    },
+    "appSelect": {
+      "unavailable": "{{id}} (not available)"
     },
     "audience": {
       "global": "Global",

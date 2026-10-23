@@ -5342,9 +5342,7 @@
     "sharedNew": "Neu",
     "sharedNewHint": "Sie haben dies noch nicht geöffnet",
     "scheduled": "Geplant",
-    "inProject": "Im Projekt {{name}}",
-    "moveToProject": "In Projekt verschieben",
-    "moved": "Chat verschoben"
+    "inProject": "Im Projekt {{name}}"
   },
   "transcription": {
     "record": "Audio für das ausgewählte Modell aufnehmen",
@@ -6318,9 +6316,7 @@
       "linkSubmitNone": "Dokumente verknüpfen"
     },
     "chatBar": {
-      "change": "Projekt wechseln",
       "inProject": "Im Projekt: {{name}}",
-      "move": "In Projekt verschieben",
       "open": "Projekt öffnen",
       "unnamed": "Projekt"
     },
@@ -6335,10 +6331,7 @@
       },
       "newChat": "Neuer Chat",
       "noApps": "Keine App kann in Projekten chatten.",
-      "searchApps": "Apps suchen",
       "someone": "einem anderen Mitglied",
-      "startHint": "Wählen Sie die App für den Chat. Sie erhält die Anweisungen und Dokumente des Projekts.",
-      "startTitle": "Chat in diesem Projekt beginnen",
       "title": "Chats",
       "pager": {
         "showing": "Chats {{start}}–{{end}} von {{total}}",
@@ -6382,7 +6375,10 @@
       "instructionsHint": "Wird dem Systemprompt jedes Chats in diesem Projekt angefügt, nach dem eigenen Prompt der App.",
       "name": "Name",
       "nameRequired": "Ein Name ist erforderlich.",
-      "tooLong": "Höchstens {{max}} Zeichen."
+      "tooLong": "Höchstens {{max}} Zeichen.",
+      "defaultApp": "Standard-App",
+      "defaultAppNone": "Keine Vorgabe (erste verfügbare App)",
+      "defaultAppHint": "Neue Chats dieses Projekts starten in dieser App. Beim Start eines Chats kann jeder eine andere App wählen."
     },
     "items": {
       "actions": {
@@ -6478,14 +6474,6 @@
       "unknownOwner": "Unbekannt",
       "count_one": "{{count}} Mitglied",
       "count_other": "{{count}} Mitglieder"
-    },
-    "moveChat": {
-      "hint": "Der Chat verwendet dann die Anweisungen und Dokumente des Projekts, und seine Mitglieder können ihn lesen.",
-      "list": "Projekte",
-      "none": "Sie haben kein anderes Projekt, in das Sie diesen Chat verschieben können.",
-      "remove": "Aus dem Projekt entfernen",
-      "submit": "Verschieben",
-      "title": "Chat in ein Projekt verschieben"
     },
     "page": {
       "adminProject": "Dieses Projekt gehört zu einer Ihrer Apps. Administratoren verwalten es.",
@@ -6593,11 +6581,21 @@
       "unmeasured_other": "{{count}} Dokumente konnten nicht gelesen werden und sind nicht mitgezählt."
     },
     "attach": {
-      "add": "Projekt hinzufügen",
       "title": "Projekte für diesen Chat",
       "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
       "remove": "{{name}} aus diesem Chat entfernen",
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
+    },
+    "composer": {
+      "title": "Chat in diesem Projekt beginnen",
+      "placeholder": "Neuer Chat in {{name}}",
+      "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
+      "app": "App",
+      "send": "Senden",
+      "tooLong": "Diese Nachricht ist zu lang, um sie von hier zu senden."
+    },
+    "appSelect": {
+      "unavailable": "{{id}} (nicht verfügbar)"
     },
     "audience": {
       "global": "Global",
