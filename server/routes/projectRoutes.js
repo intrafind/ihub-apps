@@ -844,15 +844,16 @@ export default function registerProjectRoutes(app) {
    *     summary: Publish a project to the catalog, or take it out
    *     description: |
    *       Owners and editors who may share. Publishing needs the catalog to be
-   *       on (`platform.projects.sharing.allowCatalog`); taking a project out
-   *       always works.
+   *       on (`platform.projects.sharing.allowCatalog`) and the `projectSharing`
+   *       permission; taking a project out does not, and full admins may take
+   *       out any project.
    *     tags: [Projects]
    */
   app.put(
     route('/:projectId/catalog'),
     ...gate,
     authenticatedOnly,
-    projectAccessRequired('share'),
+    projectAccessRequired('use'),
     async (req, res) => {
       try {
         const deps = requireUserProjects(req, res, { manage: true });
@@ -864,14 +865,28 @@ export default function registerProjectRoutes(app) {
           return sendBadRequest(res, '"published" must be true or false');
         }
         const { published } = req.body;
+        // Publishing takes owners and editors who may share, with the catalog
+        // on. Taking a project out takes them too, or a full admin: a project
+        // whose owner left would otherwise stay published.
+        const allowed = loaded => {
+          const permissions = permissionsFor(loaded, req.user, req.projectContext);
+          return published
+            ? permissions.canShare
+            : permissions.canShare || req.projectContext.isAdmin;
+        };
+        if (!allowed(req.project)) {
+          return sendErrorResponse(res, 403, 'You may not change this project in the catalog', {
+            details: { code: 'PERMISSION_DENIED', required: 'share' }
+          });
+        }
         if (published && !(deps.settings.sharing.allowCatalog && mayShareProjects(req.user))) {
-          return sendErrorResponse(res, 403, 'Publishing projects is not allowed', {
-            details: { code: 'SHARE_TARGET_INVALID' }
+          return sendErrorResponse(res, 403, 'Publishing projects to the catalog is not allowed', {
+            details: { code: 'PERMISSION_DENIED', required: 'publish' }
           });
         }
         const project = await deps.repo.setPublished(req.project.id, published, {
           actor: req.user,
-          authorize: req.projectContext.authorize('share')
+          authorize: allowed
         });
         if (!project) return sendNotFound(res, 'Project');
         logAudit({

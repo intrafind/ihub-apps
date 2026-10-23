@@ -534,17 +534,20 @@ function originalKey(projectId, item) {
 }
 
 /**
- * The documents of `source` with whether `target` has each already: it links
- * the same original, or the original is one of its own documents.
+ * The documents of `source` with whether `target` has each already (it links
+ * the same original, or the original is one of its own documents) and
+ * whether it can be linked at all: a link of `source` whose original the
+ * viewer cannot read (`link.state` forbidden or gone) cannot.
  *
  * @param {Object} source - A project with its items.
  * @param {Object|null} target - The project the links go into.
- * @returns {Array<{item: Object, linked: boolean}>}
+ * @returns {Array<{item: Object, linked: boolean, unavailable: boolean}>}
  */
 export function linkableItems(source, target) {
   const present = new Set((target?.items || []).map(item => originalKey(target.id, item)));
   return (source?.items || []).map(item => ({
     item,
-    linked: present.has(originalKey(source.id, item))
+    linked: present.has(originalKey(source.id, item)),
+    unavailable: Boolean(item.link) && item.link.state !== 'ok'
   }));
 }

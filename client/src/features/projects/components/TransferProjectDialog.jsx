@@ -45,17 +45,23 @@ function TransferProjectDialog({ project, onClose, onTransferred }) {
   const searchRef = useRef(null);
   const backRef = useRef(null);
   // Shares that may still reach the caller after the hand-over. Only the
-  // ownership moves, so these stay in force.
-  const wideShares = (Array.isArray(project.members) ? project.members : [])
-    .filter(member => member.type === 'group' || member.type === 'everyone')
-    .map(member =>
-      member.type === 'everyone'
-        ? t('projects.transfer.everyone', 'everyone signed in')
-        : member.name || member.id
-    );
+  // ownership moves, so these stay in force, the catalog included.
+  const wideShares = [
+    ...(Array.isArray(project.members) ? project.members : [])
+      .filter(member => member.type === 'group' || member.type === 'everyone')
+      .map(member =>
+        member.type === 'everyone'
+          ? t('projects.transfer.everyone', 'everyone signed in')
+          : member.name || member.id
+      ),
+    ...(project.audience?.catalog ? [t('projects.transfer.catalog', 'the project catalog')] : [])
+  ];
 
+  // Each step's first control takes the focus; otherwise Back would leave it
+  // on the page behind the dialog.
   useEffect(() => {
     if (confirming) backRef.current?.focus();
+    else searchRef.current?.focus();
   }, [confirming]);
 
   useEffect(() => {

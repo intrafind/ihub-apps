@@ -186,18 +186,22 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
               {t('projects.addItem.linkDocuments', 'Documents')}
             </legend>
             <ul className="max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-100 dark:divide-gray-700">
-              {items.map(({ item, linked }) => (
+              {items.map(({ item, linked, unavailable }) => (
                 <li key={item.id}>
                   <label
                     className={`flex items-center gap-3 px-3 py-2 text-sm ${
-                      linked ? 'opacity-60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      linked || unavailable
+                        ? 'opacity-60'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={linked || picked.has(item.id)}
                       onChange={() => toggle(item.id)}
-                      disabled={linked || busy}
+                      // A link whose original this viewer cannot read is
+                      // refused by the server: no use offering it.
+                      disabled={linked || unavailable || busy}
                       className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
                     />
                     <span className="flex-1 min-w-0 truncate text-gray-900 dark:text-gray-100">

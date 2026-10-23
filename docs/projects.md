@@ -420,6 +420,8 @@ own, shared ones, and the admin projects of your apps), tick its documents and l
 - A link to a linked document points to the original, and a project cannot link its own documents.
 - When the original or its project is removed, the link shows **Source removed**; remove it or
   link another document. Linked documents are not refreshed: they always read the source.
+- Moving an admin project's document to another project, or merging admin projects, does not
+  re-point the links to it: they show **Source removed** and are linked again from the new place.
 
 ### Roles and sharing
 
@@ -452,14 +454,17 @@ everyone else uses it:
   and members read each other's chats in the project.
 - **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
   by itself. Users find it under **Projects → Browse catalog**, open it and **Add** it to their
-  projects (and **Remove** it again). It shows **From the catalog** for them and works like the
-  role _user_ — chat with it, read its documents and instructions, attach it to chats, link its
-  documents — with one difference: they see only their own chats in it, never the members' chats.
+  projects (and **Remove** it again). It shows **From the catalog** for them. They read its documents
+  and instructions, link its documents and attach it to their chats, but never hold a chat inside
+  it: **New chat** on its page starts a chat with the project attached, and a chat cannot be moved
+  into it. So the members do not see their chats, and they do not see the members' chats.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
 confirmation, and take it out the same way. Publishing needs the `projectSharing` permission;
-taking it out does not. Taking a project out, or turning `sharing.allowCatalog` off, removes it
-from the lists of everyone who added it from the catalog; members keep their access.
+taking it out does not, and a full administrator can take any project out (for example one whose
+owner has left). Taking a project out, or turning `sharing.allowCatalog` off, removes it
+from the lists of everyone who added it from the catalog; members keep their access. Published
+again, it is back in those lists: what each user added is remembered.
 
 ### Transfer, delete and an owner who leaves
 

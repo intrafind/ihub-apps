@@ -165,6 +165,7 @@ export function serializeProject(
       canDelete: permissions.canDelete,
       canTransfer: permissions.canTransfer,
       readsAllChats: permissions.readsAllChats !== false,
+      canHoldChats: permissions.canHoldChats !== false,
       isOwner: permissions.isOwner,
       readOnly: permissions.readOnly
     }

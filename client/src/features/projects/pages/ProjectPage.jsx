@@ -221,8 +221,9 @@ function ProjectPageContent({ projectId }) {
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
-            {/* Chats first: a long document list must not push them out of sight. */}
-            <ProjectChatsSection project={project} />
+            {/* Chats first: a long document list must not push them out of sight.
+                Someone from the catalog holds no chats here: theirs attach the project. */}
+            {permissions.canHoldChats !== false && <ProjectChatsSection project={project} />}
             <ProjectItemsSection
               project={project}
               config={config}
@@ -269,7 +270,11 @@ function ProjectPageContent({ projectId }) {
       </div>
 
       {startingChat && (
-        <StartProjectChatDialog projectId={project.id} onClose={() => setStartingChat(false)} />
+        <StartProjectChatDialog
+          projectId={project.id}
+          attach={permissions.canHoldChats === false}
+          onClose={() => setStartingChat(false)}
+        />
       )}
       <ConfirmDialog
         isOpen={confirmDelete}

@@ -19,8 +19,9 @@
  *    are linked for the caller); content admins may change and delete it.
  *  - A user project its owner or an editor **published to the catalog**
  *    (`project.catalog`, while `sharing.allowCatalog` is on) may be used by
- *    everyone signed in, as role `catalog`: use only, and only their own
- *    chats in it — not the members' chats a member role opens.
+ *    everyone signed in, as role `catalog`: use only. They attach it to their
+ *    own chats but never hold a chat inside it, so neither side reads the
+ *    other's chats — a chat inside a project is open to its members.
  *  - When the owner's account is deleted or deactivated, the project stays
  *    readable for its members but only an admin can change it.
  *  - **Anonymous** callers, OAuth clients, agents and third-party apps
@@ -58,6 +59,7 @@ export const NO_ACCESS = Object.freeze({
   canDelete: false,
   canTransfer: false,
   readsAllChats: false,
+  canHoldChats: false,
   isOwner: false,
   role: null,
   readOnly: false
@@ -235,9 +237,11 @@ export function memberRoleFor(project, user, groups = []) {
  * @param {boolean} [context.catalog=false] - The catalog is on
  *   (`sharing.allowCatalog`): a published project reaches everyone signed in.
  * @returns {{canView: boolean, canUse: boolean, canEdit: boolean, canShare: boolean,
- *   canDelete: boolean, canTransfer: boolean, readsAllChats: boolean, isOwner: boolean,
- *   role: 'owner'|'editor'|'user'|'catalog'|'admin'|'linked'|null, readOnly: boolean}}
- *   `readsAllChats`: the caller may open the other members' chats in the project.
+ *   canDelete: boolean, canTransfer: boolean, readsAllChats: boolean, canHoldChats: boolean,
+ *   isOwner: boolean, role: 'owner'|'editor'|'user'|'catalog'|'admin'|'linked'|null,
+ *   readOnly: boolean}}
+ *   `readsAllChats`: the caller may open the other members' chats in the project;
+ *   `canHoldChats`: a chat of theirs may run inside it (which opens it to the members).
  */
 export function projectPermissions(
   project,
@@ -268,6 +272,7 @@ export function projectPermissions(
       canDelete: admin,
       canTransfer: false,
       readsAllChats: false,
+      canHoldChats: false,
       isOwner: false,
       role: admin ? 'admin' : 'linked',
       readOnly: !admin
@@ -279,7 +284,9 @@ export function projectPermissions(
   // A membership outranks the catalog: a member keeps what the role gives.
   const role = isOwner
     ? null
-    : memberRoleFor(project, user, groups) || (catalog && isPublished(project) ? 'catalog' : null);
+    : memberRoleFor(project, user, groups) ||
+      // A full admin keeps the compliance view, not a catalog role.
+      (!isAdmin && catalog && isPublished(project) ? 'catalog' : null);
   if (!isOwner && !role && !isAdmin) return NO_ACCESS;
 
   // Nobody but an admin changes a project whose owner is gone: what the
@@ -298,6 +305,9 @@ export function projectPermissions(
     // Someone who only took the project from the catalog is no member: the
     // members' chats stay among the members.
     readsAllChats: role !== 'catalog',
+    // A chat inside a project is open to its members; someone who only took
+    // the project from the catalog attaches it to their chats instead.
+    canHoldChats: role !== 'catalog',
     isOwner,
     role: isOwner ? 'owner' : role || 'admin',
     readOnly: readOnly && !isAdmin

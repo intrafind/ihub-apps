@@ -6581,7 +6581,8 @@
       "done": "“{{project}}” now belongs to {{name}}.",
       "confirmKeepsShares": "It stays shared with {{audiences}}. If you belong to one of them, you keep that access.",
       "everyone": "everyone signed in",
-      "doneStillShared": "You still see it under “Shared with me”, because a share reaches you."
+      "doneStillShared": "You still see it under “Shared with me”, because a share reaches you.",
+      "catalog": "the project catalog"
     },
     "usage": {
       "bytesOf": "{{used}} of {{limit}}",
@@ -6641,7 +6642,7 @@
     },
     "catalog": {
       "title": "Catalog",
-      "addedHint": "You added this project from the catalog. Its owner and editors keep it up to date; you see only your own chats in it.",
+      "addedHint": "You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.",
       "notAddedHint": "This project is in the catalog. Add it to your projects to find it in your list and in chats.",
       "publishedHint": "Published on {{date}}. Everyone signed in can find it in the catalog and use it.",
       "unpublishedHint": "Publish the project so that everyone signed in can find it in the catalog and add it.",
@@ -6662,7 +6663,8 @@
       "addNamed": "Add {{name}} to my projects",
       "added": "Added",
       "addShort": "Add",
-      "browse": "Browse catalog"
+      "browse": "Browse catalog",
+      "publishedOffHint": "Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again."
     }
   }
 }

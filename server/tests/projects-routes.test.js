@@ -38,6 +38,8 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import { cleanUpProjectsOfUser } from '../services/projects/projectUserCleanup.js';
+import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
+import { content as projectSourceContent } from '../services/sources/providers/project.js';
 import { listSnapshots } from '../services/ChangeHistoryService.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
@@ -46,6 +48,7 @@ const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
 const EDITOR = { id: 'user-editor', name: 'Content Editor', groups: ['editors'] };
 const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
 const NOBODY = { id: 'user-nobody', name: 'No Projects', groups: ['readers'] };
+const SOLO = { id: 'user-solo', name: 'Keeps To Herself', groups: ['solo'] };
 const RUNNER = { id: 'user-runner', name: 'Workflow Runner', groups: ['runners'] };
 const THIRD_PARTY = { ...GRACE, authMode: 'oauth_authorization_code' };
 
@@ -194,7 +197,7 @@ function setFeatures(overrides = {}) {
 
 async function writeUsers() {
   const users = {};
-  for (const user of [ADA, GRACE, CAROL, EDITOR, ROOT, NOBODY]) {
+  for (const user of [ADA, GRACE, CAROL, EDITOR, ROOT, NOBODY, SOLO]) {
     users[user.id] = { ...user, username: user.id.replace('user-', ''), active: true };
   }
   const usersFile = path.join(scratch, 'users.json');
@@ -245,6 +248,11 @@ before(async () => {
           id: 'readers',
           name: 'Readers',
           permissions: { apps: ['support'] }
+        },
+        solo: {
+          id: 'solo',
+          name: 'Projects without sharing',
+          permissions: { apps: ['chat'], projects: true, projectSharing: false }
         },
         runners: {
           id: 'runners',
@@ -526,6 +534,43 @@ describe('user projects', () => {
 });
 
 describe('documents linked from another project', () => {
+  it('never follows a stored link to itself, and checks links in a new admin project', async () => {
+    const project = await create(ADA, { name: 'Loop' });
+    await getProjectRepository().mutate(project.id, current => ({
+      ...current,
+      items: [
+        {
+          id: 'itm_loop',
+          kind: 'project-item',
+          name: 'Loop',
+          ref: { projectId: project.id, itemId: 'itm_loop' },
+          storage: 'link',
+          status: 'ready',
+          pinned: false
+        }
+      ]
+    }));
+    await assert.rejects(
+      projectSourceContent({
+        ref: { id: 'itm_loop', scope: project.id },
+        user: ADA,
+        format: 'original'
+      }),
+      error => error.status === 404
+    );
+
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: {
+        id: 'loop-admin',
+        name: { en: 'Loop' },
+        items: [{ kind: 'project-item', ref: { projectId: 'loop-admin', itemId: 'itm_1' } }]
+      }
+    });
+    assert.equal(created.statusCode, 400, JSON.stringify(created.body));
+    assert.equal(created.body.details.code, 'INVALID_REF');
+  });
+
   async function addLink(user, projectId, ref) {
     return drive(route.addItem, {
       user,
@@ -727,6 +772,74 @@ describe('the project catalog', () => {
     });
     assert.equal(removed.statusCode, 204);
     assert.equal((await listIds(CAROL)).includes(project.id), false);
+  });
+
+  it('keeps the chats of someone from the catalog out of the project, so members never read them', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Salary bands' });
+    await publish(ADA, project.id);
+
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-catalog-own',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'My negotiation'
+    });
+    const moved = await drive(route.chatPatch, {
+      user: CAROL,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(moved.statusCode, 404, JSON.stringify(moved.body));
+
+    const req = { user: { ...CAROL }, headers: {} };
+    const inside = await resolveChatProjects({
+      req,
+      chat: null,
+      app: { id: 'chat' },
+      projectId: project.id,
+      projects: undefined
+    });
+    assert.equal(inside.ok, false, 'no chat starts inside it');
+    const attached = await resolveChatProjects({
+      req: { user: { ...CAROL }, headers: {} },
+      chat: null,
+      app: { id: 'chat' },
+      projectId: undefined,
+      projects: [project.id]
+    });
+    assert.equal(attached.ok, true, JSON.stringify(attached));
+    assert.deepEqual(attached.attachedIds, [project.id], 'attached to a chat of her own');
+
+    const opened = await drive(route.get, { user: CAROL, params: { projectId: project.id } });
+    assert.equal(opened.body.permissions.canHoldChats, false);
+  });
+
+  it('lets a full admin keep the compliance view and take any project out', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Left behind' });
+    await publish(ADA, project.id);
+    const asAdmin = await drive(route.get, { user: ROOT, params: { projectId: project.id } });
+    assert.equal(asAdmin.body.role, 'admin');
+    assert.equal(asAdmin.body.permissions.readsAllChats, true);
+
+    const republish = await publish(ROOT, project.id, true);
+    assert.equal(republish.statusCode, 403);
+    assert.equal(republish.body.details.code, 'PERMISSION_DENIED');
+    const out = await publish(ROOT, project.id, false);
+    assert.equal(out.statusCode, 200, JSON.stringify(out.body));
+    assert.equal(out.body.audience.catalog, false);
+  });
+
+  it('takes the projectSharing permission to publish, not to take a project out', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(SOLO, { name: 'Mine alone' });
+    const refused = await publish(SOLO, project.id);
+    assert.equal(refused.statusCode, 403);
+    assert.equal(refused.body.details.code, 'PERMISSION_DENIED');
+    await getProjectRepository().setPublished(project.id, true, { actor: ADA });
+    assert.equal((await publish(SOLO, project.id, false)).statusCode, 200);
   });
 
   it('disappears for those who added it once it is taken out or the catalog is off', async () => {

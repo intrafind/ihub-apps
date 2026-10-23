@@ -129,7 +129,10 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
     // project is one (the same rule as a move, `routes/chats.js`). An admin
     // project is knowledge, attached or linked, never a container.
     if (container && project.ownership !== 'user') return false;
-    return permissionsFor(project, req.user, context).canUse;
+    const permissions = permissionsFor(project, req.user, context);
+    // Someone who took the project from the catalog attaches it; a chat of
+    // theirs inside it would be open to its members.
+    return permissions.canUse && (!container || permissions.canHoldChats);
   };
 
   let containerId = storedContainer;

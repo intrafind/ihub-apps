@@ -21,10 +21,12 @@ import { INPUT_CLASS } from './item-dialog/dialogStyles';
  *
  * @param {Object} props
  * @param {string} props.projectId
+ * @param {boolean} [props.attach=false] - Start the chat outside the project with
+ *   the project attached (someone who took it from the catalog).
  * @param {() => void} props.onClose
  * @returns {JSX.Element}
  */
-function StartProjectChatDialog({ projectId, onClose }) {
+function StartProjectChatDialog({ projectId, attach = false, onClose }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { apps, loading } = useApps();
@@ -51,7 +53,7 @@ function StartProjectChatDialog({ projectId, onClose }) {
     // An iAssistant app resumes the conversation id it keeps in localStorage
     // into an empty chat; drop it too, as the chat page's own "new chat" does.
     clearConversationId(appId);
-    navigate(projectChatStartPath(appId, projectId));
+    navigate(projectChatStartPath(appId, projectId, { attach }));
   };
 
   return (

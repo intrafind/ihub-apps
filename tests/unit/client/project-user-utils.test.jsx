@@ -232,6 +232,14 @@ describe('project items — documents linked from other projects', () => {
       ['itm_b', false],
       ['itm_c', true]
     ]);
+
+    // A link of the source whose original the viewer cannot read is not offered.
+    const withBroken = {
+      ...source,
+      items: [{ id: 'itm_d', kind: 'project-item', ref: {}, link: { state: 'forbidden' } }]
+    };
+    expect(linkableItems(withBroken, target)[0]).toMatchObject({ unavailable: true });
+    expect(linkableItems(source, target)[0]).toMatchObject({ unavailable: false });
   });
 });
 
@@ -343,6 +351,10 @@ describe('project page rules', () => {
     expect(chatPath({ id: 'c1', appId: 'chat' })).toBe('/apps/chat/c/c1');
     expect(chatPath({ id: 'c1' })).toBe('/chats');
     expect(projectChatStartPath('chat', 'prj_a')).toBe('/apps/chat?project=prj_a');
+    // Someone from the catalog starts a chat with the project attached.
+    expect(projectChatStartPath('chat', 'prj_a', { attach: true })).toBe(
+      '/apps/chat?attachProject=prj_a'
+    );
     expect(
       appsForProjectChats([{ id: 'a' }, { id: 'b', features: { userProjects: false } }])
     ).toEqual([{ id: 'a' }]);
@@ -356,6 +368,13 @@ describe('project page rules', () => {
       ]).map(app => app.id)
     ).toEqual(['a', 'c']);
     expect(chatMoveTargets([mine, shared, admin], 'prj_a')).toEqual([shared]);
+    // A project taken from the catalog holds no chats.
+    const fromCatalog = {
+      ...shared,
+      id: 'prj_c',
+      permissions: { ...shared.permissions, canHoldChats: false }
+    };
+    expect(chatMoveTargets([shared, fromCatalog], 'prj_a')).toEqual([shared]);
   });
 });
 

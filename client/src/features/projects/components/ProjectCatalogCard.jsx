@@ -32,7 +32,11 @@ function ProjectCatalogCard({ project, config, onChanged }) {
   const permissions = project.permissions || {};
   const catalogOn = config?.sharing?.allowCatalog === true;
   const published = Boolean(project.catalog?.publishedAt);
-  const curator = permissions.canShare === true && (catalogOn || published);
+  // Publishing also takes the `projectSharing` permission; taking a project
+  // out does not, and a full admin may take out anyone's (an owner who left).
+  const mayPublish = permissions.canShare === true && config?.userProjects?.canShare === true;
+  const mayUnpublish = permissions.canShare === true || project.role === 'admin';
+  const curator = published ? mayUnpublish : mayPublish && catalogOn;
   const fromCatalog = project.role === 'catalog';
   if (!curator && !fromCatalog) return null;
 
@@ -71,7 +75,7 @@ function ProjectCatalogCard({ project, config, onChanged }) {
           {project.subscribed
             ? t(
                 'projects.catalog.addedHint',
-                'You added this project from the catalog. Its owner and editors keep it up to date; you see only your own chats in it.'
+                'You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.'
               )
             : t(
                 'projects.catalog.notAddedHint',
@@ -80,16 +84,21 @@ function ProjectCatalogCard({ project, config, onChanged }) {
         </p>
       ) : (
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          {published
+          {published && !catalogOn
             ? t(
-                'projects.catalog.publishedHint',
-                'Published on {{date}}. Everyone signed in can find it in the catalog and use it.',
-                { date: formatSnapshotDate(project.catalog.publishedAt, i18n?.language) || '' }
+                'projects.catalog.publishedOffHint',
+                'Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again.'
               )
-            : t(
-                'projects.catalog.unpublishedHint',
-                'Publish the project so that everyone signed in can find it in the catalog and add it.'
-              )}
+            : published
+              ? t(
+                  'projects.catalog.publishedHint',
+                  'Published on {{date}}. Everyone signed in can find it in the catalog and use it.',
+                  { date: formatSnapshotDate(project.catalog.publishedAt, i18n?.language) || '' }
+                )
+              : t(
+                  'projects.catalog.unpublishedHint',
+                  'Publish the project so that everyone signed in can find it in the catalog and add it.'
+                )}
         </p>
       )}
       {error && (

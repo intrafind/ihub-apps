@@ -581,6 +581,33 @@ describe('ProjectPage – the catalog', () => {
     await waitFor(() => expect(mockApi.publishProject).toHaveBeenCalledWith('prj_a', true));
   });
 
+  test('offers publishing only with the sharing permission', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({
+      ...CONFIG,
+      userProjects: { ...CONFIG.userProjects, canShare: false },
+      sharing: { allowCatalog: true }
+    });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+  });
+
+  test('says a published project is hidden while the catalog is off, and an admin takes it out', async () => {
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({
+        role: 'admin',
+        catalog: { publishedAt: '2026-10-20T10:00:00Z' },
+        permissions: { ...OWNER_PERMISSIONS, canEdit: false, canShare: false, isOwner: false }
+      })
+    );
+    mockApi.publishProject.mockResolvedValue(makeProject());
+    renderPage();
+    expect(await screen.findByText(/the catalog is switched off/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Take out of the catalog' }));
+    await waitFor(() => expect(mockApi.publishProject).toHaveBeenCalledWith('prj_a', false));
+  });
+
   test('offers no catalog while it is off', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     renderPage();
@@ -605,6 +632,7 @@ describe('ProjectPage – the catalog', () => {
           canDelete: false,
           canTransfer: false,
           readsAllChats: false,
+          canHoldChats: false,
           isOwner: false,
           readOnly: false
         }
@@ -615,7 +643,8 @@ describe('ProjectPage – the catalog', () => {
 
     expect(await screen.findByText('From the catalog')).toBeInTheDocument();
     expect(screen.getByText('Published')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'All chats' })).toBeNull();
+    // No chat runs inside it for them: theirs attach the project.
+    expect(screen.queryByRole('heading', { name: 'Chats' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add to my projects' }));
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_a'));
@@ -675,6 +704,22 @@ describe('ProjectPage – transfer ownership', () => {
     expect(screen.getByTestId('location-notice')).toHaveTextContent(
       /^“Case 2026-114” now belongs to Ben Baker\.$/
     );
+  });
+
+  test('names the catalog among what still reaches the former owner', async () => {
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({ audience: { everyone: false, catalog: true } })
+    );
+    renderPage();
+    const dialog = await pickNewOwner();
+    expect(
+      within(dialog).getByText(
+        'It stays shared with the project catalog. If you belong to one of them, you keep that access.'
+      )
+    ).toBeInTheDocument();
+    // Back returns the focus to the search, inside the dialog.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
+    expect(within(dialog).getByRole('searchbox')).toHaveFocus();
   });
 
   test('warns about group shares and says why the project is still listed', async () => {

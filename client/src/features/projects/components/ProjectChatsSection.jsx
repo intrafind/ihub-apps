@@ -91,33 +91,30 @@ function ProjectChatsSection({ project }) {
         >
           {t('projects.chats.title', 'Chats')}
         </h2>
-        {/* Someone from the catalog sees only their own chats: nothing to filter. */}
-        {project.permissions?.readsAllChats !== false && (
-          <div
-            className="flex gap-1"
-            role="group"
-            aria-label={t('projects.chats.filterLabel', 'Show')}
-          >
-            {PROJECT_CHAT_FILTERS.map(id => (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={filter === id}
-                onClick={() => {
-                  setFilter(id);
-                  setPage(1);
-                }}
-                className={`px-2.5 py-1 text-xs rounded-md ${
-                  filter === id
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {filterLabels[id]}
-              </button>
-            ))}
-          </div>
-        )}
+        <div
+          className="flex gap-1"
+          role="group"
+          aria-label={t('projects.chats.filterLabel', 'Show')}
+        >
+          {PROJECT_CHAT_FILTERS.map(id => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={filter === id}
+              onClick={() => {
+                setFilter(id);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 text-xs rounded-md ${
+                filter === id
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              {filterLabels[id]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {state.error && (

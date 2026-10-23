@@ -310,12 +310,22 @@ async function moveChatToProject(req, res, repository, chat) {
     const permissions = access.permissionsFor(project, req.user, context);
     // Admin projects are configuration linked to apps, not containers for
     // user data: a chat can only move into a user project.
-    if (!project || !permissions.canUse || project.ownership !== 'user') {
+    // Someone who took the project from the catalog may not move a chat in:
+    // a chat inside a project is open to its members.
+    if (
+      !project ||
+      !permissions.canUse ||
+      !permissions.canHoldChats ||
+      project.ownership !== 'user'
+    ) {
       sendNotFound(res, 'Project');
       return null;
     }
     // Judged again under the target's lock when the marker is written.
-    mayUse = current => access.permissionsFor(current, req.user, context).canUse;
+    mayUse = current => {
+      const now = access.permissionsFor(current, req.user, context);
+      return now.canUse && now.canHoldChats;
+    };
   }
   if ((chat.projectId || null) === targetId) return chat;
   const service = getProjectService();

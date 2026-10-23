@@ -170,7 +170,8 @@ export class ProjectService {
     // name and whether it is pinned; storage, status and provenance are the
     // kind's. Content that has to be fetched and extracted (uploads, picked
     // documents) goes through the item endpoints, which run the ingestion.
-    const items = (project.items || []).map(input => {
+    const items = [];
+    for (const input of project.items || []) {
       const { kind, ref } = this._checkKindRef(input.kind, input.ref);
       if (kind.storage.ihub !== 'link') {
         throw new ProjectError(
@@ -178,8 +179,20 @@ export class ProjectService {
           `Items of kind "${kind.id}" are added through the item endpoints after the project exists`
         );
       }
-      return buildItem(kind, ref, input, { user: actor, origin: 'linked' });
-    });
+      // The same check as an item endpoint: a document linked from another
+      // project is resolved to its original, with the creator's access.
+      const prepared =
+        typeof kind.prepare === 'function'
+          ? await kind.prepare(ref, { user: actor, projectId: project.id })
+          : null;
+      items.push(
+        buildItem(kind, prepared?.ref || ref, input, {
+          user: actor,
+          origin: 'linked',
+          prepared
+        })
+      );
+    }
     try {
       return await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
     } catch (error) {
@@ -1267,11 +1280,16 @@ export function isItemTextEditable(item) {
  * @param {Object} kind
  * @param {Object} ref
  * @param {{id?: string, name?: string, pinned?: boolean, cache?: Object}} input
- * @param {{user: Object, origin?: string, run?: string|null}} context
+ * @param {{user: Object, origin?: string, run?: string|null, prepared?: Object|null}} context
+ *   `prepared`: what the kind's `prepare` settled (name, provenance source).
  * @returns {Object}
  */
-function buildItem(kind, ref, input, { user, origin, run = null }) {
-  const described = typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {};
+function buildItem(kind, ref, input, { user, origin, run = null, prepared = null }) {
+  const described = {
+    ...(typeof kind.describe === 'function' ? kind.describe(ref, user?.language) : {}),
+    ...(prepared?.name ? { name: prepared.name } : {}),
+    ...(prepared?.source || {})
+  };
   const now = nowIso();
   const link = kind.storage.ihub === 'link';
   const source =

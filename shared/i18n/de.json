@@ -6546,7 +6546,8 @@
       "done": "„{{project}}“ gehört jetzt {{name}}.",
       "confirmKeepsShares": "Es bleibt geteilt mit {{audiences}}. Gehören Sie dazu, behalten Sie diesen Zugriff.",
       "everyone": "allen angemeldeten Personen",
-      "doneStillShared": "Sie sehen es weiter unter „Mit mir geteilt“, weil eine Freigabe Sie erreicht."
+      "doneStillShared": "Sie sehen es weiter unter „Mit mir geteilt“, weil eine Freigabe Sie erreicht.",
+      "catalog": "dem Projektkatalog"
     },
     "usage": {
       "bytesOf": "{{used}} von {{limit}}",
@@ -6606,7 +6607,7 @@
     },
     "catalog": {
       "title": "Katalog",
-      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt. Besitzer und Bearbeiter halten es aktuell; Sie sehen darin nur Ihre eigenen Chats.",
+      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt; Besitzer und Bearbeiter halten es aktuell. Neuer Chat startet einen Chat mit dem Projekt als Anhang. Ihre Chats bleiben Ihre: Die Mitglieder sehen sie nicht.",
       "notAddedHint": "Dieses Projekt ist im Katalog. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in Chats zu finden.",
       "publishedHint": "Veröffentlicht am {{date}}. Alle angemeldeten Personen finden es im Katalog und können es nutzen.",
       "unpublishedHint": "Veröffentlichen Sie das Projekt, damit alle angemeldeten Personen es im Katalog finden und hinzufügen können.",
@@ -6627,7 +6628,8 @@
       "addNamed": "{{name}} zu meinen Projekten hinzufügen",
       "added": "Hinzugefügt",
       "addShort": "Hinzufügen",
-      "browse": "Katalog durchsuchen"
+      "browse": "Katalog durchsuchen",
+      "publishedOffHint": "Veröffentlicht, aber der Katalog ist ausgeschaltet: Niemand findet oder nutzt es über den Katalog, bis ein Administrator ihn wieder einschaltet."
     }
   }
 }

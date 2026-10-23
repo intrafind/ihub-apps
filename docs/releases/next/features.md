@@ -32,8 +32,8 @@ users, groups, everyone signed in, the catalog); until now the "everyone" option
 in `platform.json`.
 
 - **Publish to the catalog** on a project page puts it in the catalog. Users find it under
-  **Projects → Browse catalog** and add it to their projects; they can use it but see only their own
-  chats in it, never the members' chats.
+  **Projects → Browse catalog** and add it to their projects. They use its documents by attaching it
+  to their own chats; their chats and the members' chats stay apart.
 - Projects shared with everyone show **Global**, published ones **Published**, and projects taken
   from the catalog **From the catalog**.
 - The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or

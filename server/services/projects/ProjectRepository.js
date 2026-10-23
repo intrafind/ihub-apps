@@ -172,13 +172,6 @@ function digest(value) {
   return createHash('sha256').update(String(value)).digest('hex').slice(0, 24);
 }
 
-/**
- * Key of one member marker: the project id plus a digest of the target key.
- *
- * @param {string} projectId
- * @param {string} targetKey - `user:<id>`, `group:<name>` or `everyone`.
- * @returns {string}
- */
 /** The marker target that lists a project in the catalog. */
 export const CATALOG_TARGET_KEY = 'catalog';
 
@@ -193,6 +186,14 @@ export function subscriptionTargetKey(userId) {
   return `catalog-user:${String(userId)}`;
 }
 
+/**
+ * Key of one member marker: the project id plus a digest of the target key.
+ *
+ * @param {string} projectId
+ * @param {string} targetKey - `user:<id>`, `group:<name>`, `everyone`, or a
+ *   catalog target ({@link CATALOG_TARGET_KEY}, {@link subscriptionTargetKey}).
+ * @returns {string}
+ */
 export function memberMarkerKey(projectId, targetKey) {
   return `${projectId}.${digest(targetKey)}`;
 }
