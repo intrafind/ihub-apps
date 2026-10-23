@@ -765,9 +765,11 @@ export const previewProjectPickerUrl = async url => {
  * @returns {Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean, error?: string}>}
  */
 export const crawlProjectPickerUrl = async (url, options = {}) => {
+  // A crawl may take 45 s on the server, plus the fetch it was in.
   const response = await makeAdminApiCall('/projects/pickers/url/crawl', {
     method: 'POST',
-    body: { url, ...options }
+    body: { url, ...options },
+    timeout: 90_000
   });
   return response.data || { ok: false };
 };

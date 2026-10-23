@@ -181,6 +181,21 @@ describe('crawlSite', () => {
     );
   });
 
+  it('follows a start page that redirects to https', async () => {
+    const { fetchPage } = fakeSite({
+      'http://x.com/docs/': { redirect: 'https://x.com/docs/' },
+      'https://x.com/docs/': page('Docs', ['a', '/blog/']),
+      'https://x.com/docs/a': page('A', [])
+    });
+    const result = await crawlSite({ url: 'http://x.com/docs/' }, { fetchPage });
+    assert.deepEqual(
+      result.pages.map(entry => entry.url),
+      ['http://x.com/docs/', 'https://x.com/docs/a']
+    );
+    // The folder entered still bounds the crawl.
+    assert.deepEqual(result.scope, { origin: 'https://x.com', path: '/docs/' });
+  });
+
   it('lists only the start page at depth 0', async () => {
     const { fetchPage, fetched } = fakeSite({ 'https://x.com/': page('Home', ['a']) });
     const result = await crawlSite({ url: 'https://x.com/', maxDepth: 0 }, { fetchPage });

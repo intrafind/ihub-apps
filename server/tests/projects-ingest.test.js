@@ -2588,6 +2588,14 @@ describe('routes', () => {
       assert.equal(insidePick.body.ok, false);
       assert.match(insidePick.body.error, /private/);
     }
+    // One crawl per user at a time: a second one while the first runs is refused.
+    const [firstCrawl, secondCrawl] = await Promise.all([
+      drive(route.urlCrawl, { user: ADA, body: { url: 'http://127.0.0.1:9/' } }),
+      drive(route.urlCrawl, { user: ADA, body: { url: 'http://127.0.0.1:9/' } })
+    ]);
+    assert.equal(firstCrawl.statusCode, 200);
+    assert.equal(secondCrawl.statusCode, 429);
+    assert.equal(secondCrawl.body.details.code, 'CRAWL_RUNNING');
     const tooDeep = await drive(route.urlCrawl, {
       user: ADA,
       body: { url: 'https://example.com/', maxDepth: 9 }

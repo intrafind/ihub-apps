@@ -509,16 +509,26 @@ export function registerProjectPickerRoutes(app) {
     }
   });
 
-  // The pages of a site below a start URL, for picking several at once.
+  // The pages of a site below a start URL, for picking several at once. A
+  // crawl fetches up to 200 pages, so each user runs one at a time.
+  const activeCrawls = new Set();
   app.post(route('/url/crawl'), ...gate, async (req, res) => {
     const parsed = urlCrawlSchema.safeParse(req.body || {});
     if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    if (activeCrawls.has(req.user.id)) {
+      return sendErrorResponse(res, 429, 'A search for pages is already running', {
+        details: { code: 'CRAWL_RUNNING' }
+      });
+    }
+    activeCrawls.add(req.user.id);
     try {
       const { crawlSite } = await import('../services/projects/siteCrawler.js');
       const result = await crawlSite(parsed.data);
       res.json({ ok: true, ...result });
     } catch (error) {
       res.status(200).json({ ok: false, error: error.message });
+    } finally {
+      activeCrawls.delete(req.user.id);
     }
   });
 

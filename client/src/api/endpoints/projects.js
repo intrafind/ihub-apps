@@ -354,6 +354,9 @@ export const previewPickerUrl = async url => {
   return data || { ok: false };
 };
 
+/** A crawl may take 45 s on the server, plus the fetch it was in: the default 30 s is too short. */
+const CRAWL_REQUEST_TIMEOUT_MS = 90_000;
+
 /**
  * The pages of a website below a start URL, found by following its links.
  *
@@ -364,7 +367,11 @@ export const previewPickerUrl = async url => {
  */
 export const crawlPickerUrl = async (url, options = {}) => {
   const data = await call(() =>
-    apiClient.post(`${PROJECTS_PATH}/pickers/url/crawl`, { url, ...options })
+    apiClient.post(
+      `${PROJECTS_PATH}/pickers/url/crawl`,
+      { url, ...options },
+      { timeout: CRAWL_REQUEST_TIMEOUT_MS }
+    )
   );
   return data || { ok: false };
 };

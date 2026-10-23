@@ -326,7 +326,7 @@ export async function crawlSite(
   if (!start) throw new Error('A http(s) URL is required');
   const pageLimit = Math.max(1, Math.min(CRAWL_MAX_PAGES, Math.floor(maxPages) || 1));
   const depthLimit = Math.max(0, Math.min(CRAWL_MAX_DEPTH, Math.floor(maxDepth) || 0));
-  const scope = crawlScope(start, { samePath });
+  let scope = crawlScope(start, { samePath });
   const deadline = now() + deadlineMs;
 
   // Every URL queued or listed, so none is visited twice.
@@ -343,6 +343,10 @@ export async function crawlSite(
   // The start page answers for the crawl: if it cannot be read, nothing can.
   const first = await fetchPage(start, { language });
   const firstUrl = normalizeCrawlUrl(first.finalUrl) || start;
+  // A start page that redirects to another origin of its site (http to https,
+  // a bare domain to www) takes the scope with it; the folder stays the one
+  // entered, so a redirect to `/` does not widen the crawl.
+  scope = { ...scope, origin: new URL(firstUrl).origin };
   seen.add(firstUrl);
   listedTargets.add(firstUrl);
   if (first.html === null) {
