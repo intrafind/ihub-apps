@@ -4066,6 +4066,11 @@
     },
     "projects": {
       "settings": "Einstellungen",
+      "publish": {
+        "confirmTitle": "Dieses Projekt veröffentlichen?",
+        "confirmMessage": "Alle angemeldeten Benutzer können dann seine Dokumente und Anweisungen lesen und mit eigenen Projekten verknüpfen, auch wer die Apps, Workflows oder Agenten, die es verknüpfen, nicht nutzen darf. Nur Administratoren können es ändern.",
+        "confirm": "Veröffentlichen"
+      },
       "itemCount": "{{count}} Elemente",
       "deleteTitle": "Projekt löschen",
       "deleteConfirm": "„{{name}}“ mit allen Elementen löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -4132,7 +4137,7 @@
         "idFixed": "Die ID kann nach dem Anlegen nicht geändert werden.",
         "enabled": "Aktiviert",
         "published": "Veröffentlicht",
-        "publishedHint": "Alle angemeldeten Benutzer können es nutzen und seine Dokumente in eigene Projekte verknüpfen.",
+        "publishedHint": "Alle angemeldeten Benutzer können es nutzen und seine Dokumente mit eigenen Projekten verknüpfen, auch ohne Zugriff auf die Apps, die es verknüpfen.",
         "name": "Name",
         "namePlaceholder": "Projektname",
         "description": "Beschreibung",
@@ -4244,7 +4249,7 @@
         "visibility": "Sichtbarkeit",
         "editDescription": "Beschreibung bearbeiten",
         "changeVisibility": "Sichtbarkeit ändern",
-        "notPublished": "Nur die Apps, Workflows und Agenten, die es verknüpfen, nutzen es.",
+        "notPublished": "Nur die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, nutzen es.",
         "noInstructions": "Keine Anweisungen.",
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",
@@ -6534,6 +6539,8 @@
     },
     "settings": {
       "addInstructions": "Anweisungen hinzufügen",
+      "details": "Name und Beschreibung",
+      "editDetails": "Name und Beschreibung bearbeiten",
       "editInstructions": "Anweisungen bearbeiten",
       "viewInstructions": "Anweisungen anzeigen",
       "changeDefaultApp": "Standard-App ändern",

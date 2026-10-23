@@ -374,3 +374,34 @@ describe('AdminProjectEditPage – items', () => {
     );
   });
 });
+
+describe('AdminProjectEditPage – publishing', () => {
+  test('asks before publishing, says what it opens, and saves the switch', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    mockApi.updateAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
+    renderAt('/admin/projects/handbook/edit');
+
+    const published = await screen.findByRole('checkbox', { name: 'Published' });
+    // The consequence is on screen and names the switch, not hidden in a tooltip.
+    expect(published).toHaveAccessibleDescription(/even without access to the apps/);
+
+    fireEvent.click(published);
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(published).not.toBeChecked();
+
+    fireEvent.click(published);
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Publish' })
+    );
+    expect(published).toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
+        'handbook',
+        expect.objectContaining({ published: true })
+      )
+    );
+  });
+});

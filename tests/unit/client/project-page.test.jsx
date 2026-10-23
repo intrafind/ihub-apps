@@ -387,6 +387,8 @@ describe('ProjectPage – owner', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Change default app' }));
     const select = field('Default app');
+    // The dialog opens on the field the row is about.
+    expect(select).toHaveFocus();
     expect(select).toHaveValue('chat');
     fireEvent.change(select, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -439,7 +441,9 @@ describe('ProjectPage – owner', () => {
       expect(screen.getByTestId('list-probe')).toHaveTextContent('Case 2026-114')
     );
 
-    await openSettings();
+    // Renaming has a row of its own, and its dialog opens on the name.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit name and description' }));
+    expect(field('Name')).toHaveFocus();
     fireEvent.change(field('Name'), {
       target: { value: 'Case 2026-115' }
     });

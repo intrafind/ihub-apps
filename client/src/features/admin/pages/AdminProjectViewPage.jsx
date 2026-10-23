@@ -181,7 +181,7 @@ function AdminProjectViewPageContent({ id }) {
                   className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
                   title={t(
                     'admin.projects.fields.publishedHint',
-                    'Everyone signed in can use it and link its documents into their own projects.'
+                    'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
                   )}
                 >
                   {t('admin.projects.fields.published', 'Published')}
@@ -321,7 +321,7 @@ function AdminProjectViewPageContent({ id }) {
                   {description}
                 </p>
               ) : (
-                <p className="text-gray-400 dark:text-gray-500">
+                <p className="text-gray-500 dark:text-gray-400">
                   {t('admin.projects.view.noDescription', 'No description.')}
                 </p>
               )}
@@ -366,7 +366,7 @@ function AdminProjectViewPageContent({ id }) {
                   {project.instructions}
                 </pre>
               ) : (
-                <p className="text-gray-400 dark:text-gray-500">
+                <p className="text-gray-500 dark:text-gray-400">
                   {t('admin.projects.view.noInstructions', 'No instructions.')}
                 </p>
               )}
@@ -395,11 +395,11 @@ function AdminProjectViewPageContent({ id }) {
                 {project.published === true
                   ? t(
                       'admin.projects.fields.publishedHint',
-                      'Everyone signed in can use it and link its documents into their own projects.'
+                      'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
                     )
                   : t(
                       'admin.projects.view.notPublished',
-                      'Only the apps, workflows and agents that link it use it.'
+                      'Only the apps, workflows and agents that link this project use it.'
                     )}
               </p>
             </ProjectPanelRow>

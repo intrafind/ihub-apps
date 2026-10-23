@@ -31,6 +31,7 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
+import ProjectPublishedSwitch from '../components/ProjectPublishedSwitch';
 import ProjectTestResults from '../components/ProjectTestResults';
 import EstimateTokensButton from '../../projects/components/EstimateTokensButton';
 import ProjectEstimatePanel from '../../projects/components/ProjectEstimatePanel';
@@ -365,21 +366,10 @@ function AdminProjectEditPage() {
               />
               {t('admin.projects.fields.enabled', 'Enabled')}
             </label>
-            <label
-              title={t(
-                'admin.projects.fields.publishedHint',
-                'Everyone signed in can use it and link its documents into their own projects.'
-              )}
-              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 flex-none"
-            >
-              <input
-                type="checkbox"
-                checked={form.published}
-                onChange={e => handleChange('published', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-              />
-              {t('admin.projects.fields.published', 'Published')}
-            </label>
+            <ProjectPublishedSwitch
+              checked={form.published}
+              onChange={published => handleChange('published', published)}
+            />
           </div>
         </div>
       )}
@@ -419,21 +409,11 @@ function AdminProjectEditPage() {
               />
               {t('admin.projects.fields.enabled', 'Enabled')}
             </label>
-            <label
-              title={t(
-                'admin.projects.fields.publishedHint',
-                'Everyone signed in can use it and link its documents into their own projects.'
-              )}
-              className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300"
-            >
-              <input
-                type="checkbox"
-                checked={form.published}
-                onChange={e => handleChange('published', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-              />
-              {t('admin.projects.fields.published', 'Published')}
-            </label>
+            <ProjectPublishedSwitch
+              checked={form.published}
+              onChange={published => handleChange('published', published)}
+              className="pb-2"
+            />
           </div>
         </div>
       )}

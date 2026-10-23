@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { updateProject } from '../../../api';
 import Modal from '../../../shared/components/Modal';
@@ -19,7 +19,7 @@ import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
 const PREVIEW = 'text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words line-clamp-3';
-const EMPTY = 'text-gray-400 dark:text-gray-500';
+const EMPTY = 'text-gray-500 dark:text-gray-400';
 
 /**
  * The instructions and the default app of a project, as rows of the project
@@ -60,6 +60,18 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
     }
   }
   const [editing, setEditing] = useState(false);
+  // The field the dialog opens on: the one the row's action is about.
+  const [focusField, setFocusField] = useState('name');
+  // The dialog focuses this element on open. The field is rendered by
+  // ProjectFormFields, so it is found by its id when the dialog asks.
+  const initialFocusRef = useMemo(
+    () => ({
+      get current() {
+        return document.getElementById(`project-settings-${focusField}`);
+      }
+    }),
+    [focusField]
+  );
   const [viewing, setViewing] = useState(false);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -78,7 +90,8 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
     ? choices.find(({ app }) => app.id === project.defaultAppId)
     : null;
 
-  const openEditor = () => {
+  const openEditor = field => {
+    setFocusField(field);
     setMessage(null);
     setEditing(true);
   };
@@ -112,7 +125,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
         editable ? (
           <button
             type="button"
-            onClick={openEditor}
+            onClick={() => openEditor('instructions')}
             className={ROW_ACTION}
             aria-label={
               instructions
@@ -144,6 +157,23 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
 
   return (
     <>
+      {editable && (
+        <ProjectPanelRow
+          icon="pencil"
+          title={t('projects.settings.details', 'Name and description')}
+          titleId="project-details-title"
+          action={
+            <button
+              type="button"
+              onClick={() => openEditor('name')}
+              className={ROW_ACTION}
+              aria-label={t('projects.settings.editDetails', 'Edit name and description')}
+            >
+              {t('common.edit', 'Edit')}
+            </button>
+          }
+        />
+      )}
       {instructionsRow}
       <ProjectPanelRow
         icon="chat-bubble-left-right"
@@ -153,7 +183,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
           editable ? (
             <button
               type="button"
-              onClick={openEditor}
+              onClick={() => openEditor('defaultAppId')}
               className={ROW_ACTION}
               aria-label={t('projects.settings.changeDefaultApp', 'Change default app')}
             >
@@ -194,6 +224,7 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
           onClose={() => setEditing(false)}
           labelledBy="project-settings-title"
           maxWidthClassName="max-w-2xl"
+          initialFocusRef={initialFocusRef}
         >
           <form onSubmit={handleSave} className="flex flex-col min-h-0">
             <div className="px-6 pt-5 pb-4 overflow-y-auto">
