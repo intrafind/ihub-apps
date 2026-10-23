@@ -54,15 +54,10 @@ function ChatProjectsMenuSection({ projectContext, offered, navTabIndex, divider
 
   return (
     <div
-      role="group"
-      aria-labelledby="chat-menu-projects-title"
       className={`p-3 ${divider ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
       data-testid="chat-projects-menu"
     >
-      <h3
-        id="chat-menu-projects-title"
-        className="text-sm font-semibold text-gray-900 dark:text-gray-100"
-      >
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
         {t('projects.attach.title', 'Projects for this chat')}
       </h3>
       <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
