@@ -437,7 +437,29 @@ A member is a user, a group (inherited groups count) or everyone signed in; the 
 that reaches you wins. The `anonymous` group cannot be a member. A project holds at most 100
 members. Who you may add depends on the `projectSharing` permission and on
 `platform.projects.sharing`: users and groups by default, everyone signed in only when an admin
-allows it.
+allows it. Full administrators change these audiences under **Admin → Projects → Sharing of user
+projects** (`GET`/`PUT /api/admin/projects/_settings`).
+
+A project shared with everyone signed in shows **Global**; one in the catalog shows **Published**.
+
+### Global projects and the catalog
+
+There are two ways to make a project available to everyone, so that a few people curate it and
+everyone else uses it:
+
+- **Share with everyone signed in** (`sharing.allowEveryone`): the project appears in every user's
+  list under **Shared with me**, marked **Global**, in the role you chose. Everyone becomes a member,
+  and members read each other's chats in the project.
+- **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
+  by itself. Users find it under **Projects → Browse catalog**, open it and **Add** it to their
+  projects (and **Remove** it again). It shows **From the catalog** for them and works like the
+  role _user_ — chat with it, read its documents and instructions, attach it to chats, link its
+  documents — with one difference: they see only their own chats in it, never the members' chats.
+
+Owners and editors publish a project with **Publish to the catalog** on the project page, after a
+confirmation, and take it out the same way. Publishing needs the `projectSharing` permission;
+taking it out does not. Taking a project out, or turning `sharing.allowCatalog` off, removes it
+from the lists of everyone who added it from the catalog; members keep their access.
 
 ### Transfer, delete and an owner who leaves
 
@@ -524,7 +546,12 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
       "maxProjectBytes": 209715200,
       "maxProjectsPerUser": 20
     },
-    "sharing": { "allowUsers": true, "allowGroups": true, "allowEveryone": false },
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": false,
+      "allowCatalog": false
+    },
     "retentionDays": 0,
     "loadAllMaxTokens": 50000,
     "kinds": {},
@@ -544,6 +571,7 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 | `sharing.allowUsers`        | `true`              | Users may share with individual users.                                                                   |
 | `sharing.allowGroups`       | `true`              | Users may share with groups.                                                                             |
 | `sharing.allowEveryone`     | `false`             | Users may share with everyone signed in.                                                                 |
+| `sharing.allowCatalog`      | `false`             | Owners and editors may publish projects to the catalog. Off hides published projects again.              |
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
