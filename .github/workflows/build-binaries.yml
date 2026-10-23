@@ -499,6 +499,7 @@ jobs:
           tag_name: ${{ env.VERSION }}
           # Don't create a new release, just upload files to existing one
           draft: false
-          prerelease: false
+          # No `prerelease` input: the action then keeps whatever the release was created with,
+          # so a release candidate published as a pre-release stays one.
           # This will update the existing release instead of creating a new one
           overwrite_files: true
