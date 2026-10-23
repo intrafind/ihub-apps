@@ -141,6 +141,31 @@ async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage 
 }
 
 /**
+ * Fetch one URL the way the page reader does — SSRF guard on every redirect
+ * hop, DNS pinned, the SSL settings and domain whitelist applied — and hand
+ * back the response unread. For callers that need the raw page (the project
+ * site crawler) rather than its extracted text; the caller reads or drops
+ * the body.
+ *
+ * @param {string} url - Absolute http(s) URL
+ * @param {Object} [options]
+ * @param {string} [options.language] - The reader's language (Accept-Language)
+ * @returns {Promise<{response: Object, finalUrl: URL}>}
+ */
+export async function fetchWebPage(url, { language } = {}) {
+  const validUrl = new URL(url);
+  if (!['http:', 'https:'].includes(validUrl.protocol)) {
+    throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
+  }
+  const platformConfig = configCache.getPlatform() || {};
+  return fetchPage(validUrl, {
+    sslConfig: getSSLConfig(),
+    shouldIgnoreSSL: platformConfig.ssl?.ignoreInvalidCertificates || false,
+    acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language))
+  });
+}
+
+/**
  * Fetch and extract a whole document: Markdown for HTML, text for PDFs, with
  * its metadata. What the page cache stores; a window of `text` is what one
  * call returns.

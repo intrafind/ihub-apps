@@ -425,6 +425,23 @@ export const urlCheckSchema = z
   })
   .strict();
 
+/** Body of `POST /api/projects/pickers/url/preview`. */
+export const urlPreviewSchema = urlCheckSchema;
+
+/**
+ * Body of `POST /api/projects/pickers/url/crawl`. The bounds are the crawler's
+ * (`CRAWL_MAX_PAGES`, `CRAWL_MAX_DEPTH` in `services/projects/siteCrawler.js`),
+ * which clamps again.
+ */
+export const urlCrawlSchema = z
+  .object({
+    url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed'),
+    maxPages: z.number().int().min(1).max(200).optional(),
+    maxDepth: z.number().int().min(0).max(3).optional(),
+    samePath: z.boolean().optional()
+  })
+  .strict();
+
 /** What `PUT /api/admin/projects/_settings` accepts: the sharing audiences. */
 export const projectSharingSettingsSchema = z
   .object({

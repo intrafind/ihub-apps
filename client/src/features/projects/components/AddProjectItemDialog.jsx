@@ -11,6 +11,7 @@ import {
   buildItemDialogTabs,
   kindIcon,
   localizedText,
+  projectUrls,
   visibleItemDialogTabs
 } from '../utils/projectItems';
 import ItemFormBody from './item-dialog/ItemFormBody';
@@ -29,6 +30,10 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @property {() => Promise<Array<Object>>} fetchPages - iHub pages.
  * @property {(query: string) => Promise<Array<Object>>} searchIFinder
  * @property {(url: string) => Promise<{ok: boolean, error?: string}>} checkUrl
+ * @property {(url: string) => Promise<Object>} [previewUrl] - The text a URL would
+ *   give the model (`POST …/pickers/url/preview`).
+ * @property {(url: string, options: Object) => Promise<Object>} [crawlUrl] - The
+ *   pages of a website below a URL (`POST …/pickers/url/crawl`).
  * @property {() => Promise<Array<Object>>} [fetchCloudProviders] - Cloud connections.
  * @property {() => Promise<Array<Object>>} [fetchLinkSources] - Projects whose
  *   documents can be linked (`projectLinks`).
@@ -39,7 +44,8 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
 
 /**
  * Dialog that adds items to a project, with one tab per item kind (#1036,
- * spec 1 §4.1): file upload (multipart), pasted text, web page (URL), iHub
+ * spec 1 §4.1): file upload (multipart), pasted text, web page (URL, with a
+ * preview of its text and a crawl that adds several pages of a site), iHub
  * page, iFinder document and search, and — where `cloud` is set — the cloud
  * kinds (OneDrive / SharePoint, Google Drive, Nextcloud) through the cloud
  * file browsers. The admin project editor and the user project page share
@@ -87,6 +93,7 @@ function AddProjectItemDialog({
     const shown = hideUnavailable ? visibleItemDialogTabs(all) : all;
     return shown.length > 0 ? shown : all;
   }, [kinds, config, cloud, projectLinks, hideUnavailable]);
+  const existingUrls = useMemo(() => projectUrls(project), [project]);
   const firstEnabled = tabs.find(tab => tab.enabled)?.id || tabs[0].id;
   // `null` until a tab is picked: follows the first usable one, which may
   // change while the kinds are still loading.
@@ -180,6 +187,7 @@ function AddProjectItemDialog({
           api={api}
           multipleUploads={multipleUploads}
           usage={project?.usage || null}
+          existingUrls={existingUrls}
           onAdded={onAdded}
           onClose={onClose}
         />

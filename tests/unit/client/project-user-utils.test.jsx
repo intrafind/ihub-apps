@@ -10,9 +10,12 @@
 import {
   buildCloudItemRequests,
   buildItemDialogTabs,
+  buildUrlItemRequests,
   cloudItemRef,
   cloudProvidersForKind,
   isItemReadable,
+  projectUrls,
+  validateItemCount,
   validateUploads,
   visibleItemDialogTabs,
   linkSourceProjects,
@@ -185,6 +188,45 @@ describe('project items — dialog tabs and uploads', () => {
   test('a stale item keeps its readable text', () => {
     expect(isItemReadable({ status: 'stale' })).toBe(true);
     expect(isItemReadable({ status: 'extracting' })).toBe(false);
+  });
+});
+
+describe('project items — pages picked from a site crawl', () => {
+  test('each page becomes a url item named after its title', () => {
+    expect(
+      buildUrlItemRequests(
+        [
+          { url: 'https://x.com/a', title: '  A page ' },
+          { url: 'https://x.com/b', title: '' },
+          { url: 'ftp://x.com/c', title: 'Not a web page' },
+          { url: 'https://x.com/d', title: 'x'.repeat(400) }
+        ],
+        { pinned: true }
+      )
+    ).toEqual([
+      { kind: 'url', ref: { url: 'https://x.com/a' }, name: 'A page', pinned: true },
+      { kind: 'url', ref: { url: 'https://x.com/b' }, pinned: true },
+      { kind: 'url', ref: { url: 'https://x.com/d' }, name: 'x'.repeat(300), pinned: true }
+    ]);
+  });
+
+  test('the item quota counts the pages to add', () => {
+    const config = { limits: { maxFiles: 10 } };
+    expect(validateItemCount(3, config, { items: 7 })).toBeNull();
+    expect(validateItemCount(4, config, { items: 7 })).toBe('quotaFiles');
+    expect(validateItemCount(400, {}, null)).toBeNull();
+  });
+
+  test('the URLs a project links already', () => {
+    const urls = projectUrls({
+      items: [
+        { kind: 'url', ref: { url: 'https://x.com/a' } },
+        { kind: 'upload', ref: {} },
+        { kind: 'page', ref: { pageId: 'faq' } }
+      ]
+    });
+    expect([...urls]).toEqual(['https://x.com/a']);
+    expect(projectUrls(null).size).toBe(0);
   });
 });
 

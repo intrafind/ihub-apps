@@ -66,3 +66,16 @@ The view and edit pages of an admin project now share the layout of a user's pro
 items in the wide column, the settings beside them (compact rows on the view page, a compact form
 on the edit page), so the documents are no longer pushed below a long form. The results of
 **Test** and **Estimate tokens** appear above the items.
+
+## Projects: preview web pages and add several pages of a website at once
+
+The **Web page (URL)** tab of **Add item** / **Add documents** now shows what a page gives the model
+before it is added, and can find the other pages of a website so they no longer have to be added
+one URL at a time.
+
+- **Preview** shows the extracted text of the page: the same reader and length limit the project
+  uses, so a page that needs JavaScript or blocks automated access is visible before adding it.
+- **Find pages** follows the page's links that stay on the same website (by default only below the
+  start address, up to 3 links deep and 200 pages) and lists the pages found with their titles.
+  Filter the list, tick pages or **Select all**, preview any of them, and **Add N pages** adds each
+  as its own web page item, named after its title. Pages already in the project are marked.

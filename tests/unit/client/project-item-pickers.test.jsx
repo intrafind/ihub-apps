@@ -116,6 +116,160 @@ describe('UrlPicker', () => {
   });
 });
 
+describe('UrlPicker — preview and site crawl', () => {
+  const CRAWL = {
+    ok: true,
+    truncated: false,
+    pages: [
+      { url: 'https://x.com/docs/', title: 'Docs', depth: 0, type: 'page' },
+      { url: 'https://x.com/docs/a', title: 'Page A', depth: 1, type: 'page' },
+      { url: 'https://x.com/docs/b.pdf', title: 'b.pdf', depth: 1, type: 'document' },
+      { url: 'https://x.com/docs/old', title: 'Old page', depth: 1, type: 'page' }
+    ]
+  };
+
+  test('shows the text a page gives the model before it is added', async () => {
+    const previewUrl = jest.fn().mockResolvedValue({
+      ok: true,
+      title: 'Handbook',
+      finalUrl: 'https://x.com/handbook',
+      text: '# Handbook\n\nHello',
+      chars: 18,
+      truncated: true
+    });
+    render(
+      <WithDraft
+        picker={UrlPicker}
+        initial={{ url: 'https://x.com/handbook' }}
+        checkUrl={jest.fn()}
+        previewUrl={previewUrl}
+        errorMessage={errorMessage}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    });
+    expect(previewUrl).toHaveBeenCalledWith('https://x.com/handbook');
+    const panel = screen.getByTestId('url-preview');
+    expect(panel).toHaveTextContent('Extracted content: Handbook');
+    expect(panel).toHaveTextContent('# Handbook');
+    expect(panel).toHaveTextContent('only this part is given to the model');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close the preview' }));
+    expect(screen.queryByTestId('url-preview')).toBeNull();
+  });
+
+  test('a failed preview says why', async () => {
+    render(
+      <WithDraft
+        picker={UrlPicker}
+        initial={{ url: 'https://x.com/missing' }}
+        checkUrl={jest.fn()}
+        previewUrl={() => Promise.reject(new Error('HTTP 404'))}
+        errorMessage={errorMessage}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('The page cannot be read: HTTP 404');
+  });
+
+  test('lists the pages of a site and puts the ticked ones into the draft', async () => {
+    const crawlUrl = jest.fn().mockResolvedValue(CRAWL);
+    render(
+      <WithDraft
+        picker={UrlPicker}
+        initial={{ url: 'https://x.com/docs/', selectedUrls: [] }}
+        checkUrl={jest.fn()}
+        crawlUrl={crawlUrl}
+        existingUrls={new Set(['https://x.com/docs/old'])}
+        errorMessage={errorMessage}
+        probe={draft => draft.selectedUrls}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Link depth'), { target: { value: '3' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Find pages' }));
+    });
+    expect(crawlUrl).toHaveBeenCalledWith('https://x.com/docs/', {
+      maxPages: 50,
+      maxDepth: 3,
+      samePath: true
+    });
+    expect(screen.getByText('0 of 4 pages selected')).toBeInTheDocument();
+
+    // A page the project has already cannot be picked again.
+    const old = screen.getByRole('checkbox', { name: /Old page/ });
+    expect(old).toBeDisabled();
+    expect(old).toBeChecked();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Page A/ }));
+    expect(draftOf()).toEqual([{ url: 'https://x.com/docs/a', title: 'Page A' }]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(draftOf().map(page => page.url)).toEqual([
+      'https://x.com/docs/a',
+      'https://x.com/docs/',
+      'https://x.com/docs/b.pdf'
+    ]);
+
+    // The filter narrows what "Select none" clears.
+    fireEvent.change(screen.getByLabelText('Filter pages'), { target: { value: 'pdf' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select none' }));
+    expect(draftOf().map(page => page.url)).toEqual([
+      'https://x.com/docs/a',
+      'https://x.com/docs/'
+    ]);
+
+    // Another address: the list and the picks go.
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://y.com/' } });
+    expect(draftOf()).toEqual([]);
+    expect(screen.queryByTestId('crawl-results')).toBeNull();
+  });
+
+  test('a crawl that answers after the URL was edited lists nothing', async () => {
+    const pending = deferred();
+    render(
+      <WithDraft
+        picker={UrlPicker}
+        initial={{ url: 'https://x.com/docs/', selectedUrls: [] }}
+        checkUrl={jest.fn()}
+        crawlUrl={() => pending.promise}
+        errorMessage={errorMessage}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Find pages' }));
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://y.com/' } });
+    await act(async () => {
+      pending.resolve(CRAWL);
+    });
+    expect(screen.queryByTestId('crawl-results')).toBeNull();
+  });
+
+  test('a page of the list can be previewed', async () => {
+    const previewUrl = jest.fn().mockResolvedValue({ ok: true, text: 'A text', chars: 6 });
+    render(
+      <WithDraft
+        picker={UrlPicker}
+        initial={{ url: 'https://x.com/docs/', selectedUrls: [] }}
+        checkUrl={jest.fn()}
+        previewUrl={previewUrl}
+        crawlUrl={jest.fn().mockResolvedValue(CRAWL)}
+        errorMessage={errorMessage}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Find pages' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Preview Page A' }));
+    });
+    expect(previewUrl).toHaveBeenCalledWith('https://x.com/docs/a');
+    expect(screen.getByTestId('url-preview')).toHaveTextContent('Extracted content: Page A');
+  });
+});
+
 describe('IFinderDocumentPicker', () => {
   const RESULTS = [
     { documentId: 'd1', title: 'Lease agreement' },

@@ -2375,7 +2375,9 @@ describe('routes', () => {
     editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
     refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
-    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check')
+    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check'),
+    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/preview'),
+    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/crawl')
   };
 
   async function create() {
@@ -2574,6 +2576,23 @@ describe('routes', () => {
     assert.match(inside.body.error, /private/);
     const local = await drive(route.urlCheck, { user: ADA, body: { url: 'http://localhost/' } });
     assert.equal(local.body.ok, false);
+    // The preview and the crawl read through the page reader, held to the same line.
+    for (const picker of [route.urlPreview, route.urlCrawl]) {
+      const badPick = await drive(picker, { user: ADA, body: { url: 'ftp://example.com' } });
+      assert.equal(badPick.statusCode, 400);
+      const insidePick = await drive(picker, {
+        user: ADA,
+        body: { url: 'http://127.0.0.1:9/admin' }
+      });
+      assert.equal(insidePick.statusCode, 200);
+      assert.equal(insidePick.body.ok, false);
+      assert.match(insidePick.body.error, /private/);
+    }
+    const tooDeep = await drive(route.urlCrawl, {
+      user: ADA,
+      body: { url: 'https://example.com/', maxDepth: 9 }
+    });
+    assert.equal(tooDeep.statusCode, 400);
   });
 
   it('sizes a probed body up to a bound and drops the rest', async () => {

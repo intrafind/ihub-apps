@@ -8,6 +8,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   addProjectItem,
   checkPickerUrl,
+  crawlPickerUrl,
   estimateProjectTokens,
   fetchPickerCloudProviders,
   fetchPickerPages,
@@ -15,6 +16,7 @@ import {
   fetchProjectCatalog,
   fetchProjectItemText,
   fetchProjects,
+  previewPickerUrl,
   searchPickerIFinder,
   uploadProjectItem
 } from '../../../api';
@@ -43,6 +45,8 @@ function userItemApi(errorMessage) {
     fetchPages: () => fetchPickerPages(),
     searchIFinder: query => searchPickerIFinder(query),
     checkUrl: url => checkPickerUrl(url),
+    previewUrl: url => previewPickerUrl(url),
+    crawlUrl: (url, options) => crawlPickerUrl(url, options),
     fetchCloudProviders: () => fetchPickerCloudProviders(),
     // Own projects, and published ones: the catalog lists those the viewer
     // has not added (an empty list while it is off).

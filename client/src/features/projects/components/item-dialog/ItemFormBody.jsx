@@ -5,7 +5,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
-import { buildItemRequest, validateUploads } from '../../utils/projectItems';
+import {
+  buildItemRequest,
+  buildUrlItemRequests,
+  validateItemCount,
+  validateUploads
+} from '../../utils/projectItems';
 import {
   DisabledTabNotice,
   IFinderDocumentPicker,
@@ -23,6 +28,7 @@ const EMPTY_DRAFT = Object.freeze({
   pinned: false,
   text: '',
   url: '',
+  selectedUrls: [],
   pageId: '',
   language: '',
   documentId: '',
@@ -105,6 +111,27 @@ async function uploadAll(api, projectId, files, { name, pinned }) {
 }
 
 /**
+ * Add the pages picked from a site crawl one by one; a failure does not stop
+ * the others.
+ *
+ * @returns {Promise<{added: Array<Object>, addedUrls: string[], failures: string[]}>}
+ */
+async function addAllUrls(api, projectId, pages, { pinned }) {
+  const added = [];
+  const addedUrls = [];
+  const failures = [];
+  for (const body of buildUrlItemRequests(pages, { pinned })) {
+    try {
+      added.push(await api.addItem(projectId, body));
+      addedUrls.push(body.ref.url);
+    } catch (err) {
+      failures.push(`${body.name || body.ref.url}: ${api.errorMessage(err)}`);
+    }
+  }
+  return { added, addedUrls, failures };
+}
+
+/**
  * The form of every non-cloud tab: the tab's picker, the optional name, the
  * pinned flag, and the submit. A disabled tab shows why instead.
  *
@@ -115,11 +142,22 @@ async function uploadAll(api, projectId, files, { name, pinned }) {
  * @param {Object} props.api - See `AddProjectItemDialog`.
  * @param {boolean} props.multipleUploads
  * @param {{items?: number, bytes?: number}|null} props.usage
+ * @param {Set<string>} [props.existingUrls] - URLs the project has already.
  * @param {(item: Object) => void} props.onAdded
  * @param {() => void} props.onClose
  * @returns {JSX.Element}
  */
-function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onAdded, onClose }) {
+function ItemFormBody({
+  tab,
+  projectId,
+  config,
+  api,
+  multipleUploads,
+  usage,
+  existingUrls,
+  onAdded,
+  onClose
+}) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [files, setFiles] = useState([]);
@@ -127,6 +165,8 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
   const [error, setError] = useState(null);
   const [pages, setPages] = useState(null);
   const update = changes => setDraft(prev => ({ ...prev, ...changes }));
+  // Pages picked from a site crawl: added instead of the URL in the field.
+  const pickedUrls = tab.id === 'url' ? draft.selectedUrls.length : 0;
 
   // A new tab starts without the previous tab's error (adjusted during render).
   const [errorTab, setErrorTab] = useState(tab.id);
@@ -164,6 +204,21 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
     return onClose();
   };
 
+  const submitUrls = async () => {
+    const quotaError = validateItemCount(draft.selectedUrls.length, config, usage);
+    if (quotaError) return setError(validationMessage(t, quotaError, config));
+    setSubmitting(true);
+    const { added, addedUrls, failures } = await addAllUrls(api, projectId, draft.selectedUrls, {
+      pinned: draft.pinned
+    });
+    added.forEach(item => onAdded(item));
+    // As with uploads: Add retries only the pages that failed.
+    update({ selectedUrls: draft.selectedUrls.filter(page => !addedUrls.includes(page.url)) });
+    setSubmitting(false);
+    if (failures.length > 0) return setError(failures.join('\n'));
+    return onClose();
+  };
+
   const submitJson = async () => {
     const { body, error: requestError } = buildItemRequest(tab.id, draft);
     if (requestError) return setError(validationMessage(t, requestError, config));
@@ -182,7 +237,9 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
   const handleSubmit = event => {
     event.preventDefault();
     setError(null);
-    void (tab.id === 'upload' ? submitUpload() : submitJson());
+    if (tab.id === 'upload') return void submitUpload();
+    if (tab.id === 'url' && pickedUrls > 0) return void submitUrls();
+    return void submitJson();
   };
 
   const renderPicker = () => {
@@ -205,6 +262,9 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
             draft={draft}
             update={update}
             checkUrl={api.checkUrl}
+            previewUrl={api.previewUrl}
+            crawlUrl={api.crawlUrl}
+            existingUrls={existingUrls}
             errorMessage={api.errorMessage}
           />
         );
@@ -226,7 +286,8 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
     }
   };
 
-  const showName = tab.enabled && !(tab.id === 'upload' && files.length > 1);
+  // Several files or pages are each named after themselves.
+  const showName = tab.enabled && !(tab.id === 'upload' && files.length > 1) && pickedUrls === 0;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
@@ -280,7 +341,9 @@ function ItemFormBody({ tab, projectId, config, api, multipleUploads, usage, onA
         </button>
         <button type="submit" disabled={!tab.enabled || submitting} className={PRIMARY_BUTTON}>
           {submitting && <Icon name="arrow-path" size="sm" className="animate-spin mr-2" />}
-          {t('projects.addItem.submit', 'Add')}
+          {pickedUrls > 0
+            ? t('projects.addItem.submitPages', 'Add {{count}} pages', { count: pickedUrls })
+            : t('projects.addItem.submit', 'Add')}
         </button>
       </div>
     </form>

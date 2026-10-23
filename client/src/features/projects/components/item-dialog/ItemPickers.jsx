@@ -7,6 +7,8 @@ import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
 import { localizedText, uploadAccept } from '../../utils/projectItems';
 import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS, SECONDARY_BUTTON } from './dialogStyles';
+import SiteCrawlPanel from './SiteCrawlPanel';
+import UrlPreviewPanel from './UrlPreviewPanel';
 
 /**
  * The pickers of the "Add item" dialog, one per picker type of spec 1 §4.1
@@ -121,18 +123,35 @@ export function TextPicker({ draft, update }) {
 }
 
 /**
- * A web page by URL, with a check that it can be read before it is added.
+ * A web page by URL, with a check that it can be read and a preview of the
+ * text it gives the model before it is added. With `crawlUrl`, the pages the
+ * page links to on the same site can be listed and several added at once
+ * (`draft.selectedUrls`).
  *
  * @param {Object} props
  * @param {Object} props.draft
  * @param {(changes: Object) => void} props.update
  * @param {(url: string) => Promise<{ok: boolean, error?: string}>} props.checkUrl
+ * @param {(url: string) => Promise<Object>} [props.previewUrl] - See `UrlPreviewPanel`.
+ * @param {(url: string, options: Object) => Promise<Object>} [props.crawlUrl] - See
+ *   `SiteCrawlPanel`.
+ * @param {Set<string>} [props.existingUrls] - URLs the project has already.
  * @param {(error: Error) => string} props.errorMessage
  * @returns {JSX.Element}
  */
-export function UrlPicker({ draft, update, checkUrl, errorMessage }) {
+export function UrlPicker({
+  draft,
+  update,
+  checkUrl,
+  previewUrl,
+  crawlUrl,
+  existingUrls,
+  errorMessage
+}) {
   const { t } = useTranslation();
   const [check, setCheck] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const selected = draft.selectedUrls || [];
 
   // A check answers for the URL it was started for: one that comes back
   // after the URL was edited (or checked again) is dropped, so a slow answer
@@ -149,46 +168,87 @@ export function UrlPicker({ draft, update, checkUrl, errorMessage }) {
     setCheck(current => (current?.url === url ? { ...outcome, url } : current));
   };
 
+  // The same for a preview: the panel shows the page last asked for.
+  const runPreview = async (target, title) => {
+    const url = String(target || '').trim();
+    if (!url) return;
+    setPreview({ loading: true, url, title });
+    let outcome;
+    try {
+      outcome = await previewUrl(url);
+    } catch (err) {
+      outcome = { ok: false, error: errorMessage(err) };
+    }
+    setPreview(current =>
+      current?.url === url ? { ...outcome, url, title: outcome.title || title } : current
+    );
+  };
+
   return (
-    <div>
-      <label htmlFor="project-item-url" className={LABEL_CLASS}>
-        {t('projects.addItem.url', 'URL')}
-      </label>
-      <div className="flex gap-2">
-        <input
-          id="project-item-url"
-          type="url"
-          value={draft.url}
-          placeholder="https://example.com/handbook"
-          onChange={e => {
-            update({ url: e.target.value });
-            setCheck(null);
-          }}
-          className={INPUT_CLASS}
-        />
-        <button
-          type="button"
-          onClick={runCheck}
-          disabled={!draft.url.trim() || check?.checking}
-          className={SECONDARY_BUTTON}
-        >
-          {check?.checking
-            ? t('projects.addItem.checking', 'Checking...')
-            : t('projects.addItem.check', 'Check')}
-        </button>
+    <div className="space-y-4">
+      <div>
+        <label htmlFor="project-item-url" className={LABEL_CLASS}>
+          {t('projects.addItem.url', 'URL')}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="project-item-url"
+            type="url"
+            value={draft.url}
+            placeholder="https://example.com/handbook"
+            onChange={e => {
+              // Pages found for another address are no longer offered.
+              update({ url: e.target.value, ...(selected.length > 0 ? { selectedUrls: [] } : {}) });
+              setCheck(null);
+            }}
+            className={INPUT_CLASS}
+          />
+          <button
+            type="button"
+            onClick={runCheck}
+            disabled={!draft.url.trim() || check?.checking}
+            className={SECONDARY_BUTTON}
+          >
+            {check?.checking
+              ? t('projects.addItem.checking', 'Checking...')
+              : t('projects.addItem.check', 'Check')}
+          </button>
+          {previewUrl && (
+            <button
+              type="button"
+              onClick={() => void runPreview(draft.url)}
+              disabled={!draft.url.trim() || (preview?.loading && preview.url === draft.url.trim())}
+              className={SECONDARY_BUTTON}
+            >
+              {t('projects.addItem.preview', 'Preview')}
+            </button>
+          )}
+        </div>
+        {check && !check.checking && (
+          <p
+            className={`mt-1 text-sm ${
+              check.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            {check.ok
+              ? t('projects.addItem.urlOk', 'The page can be read.')
+              : t('projects.addItem.urlFailed', 'The page cannot be read: {{error}}', {
+                  error: check.error || ''
+                })}
+          </p>
+        )}
       </div>
-      {check && !check.checking && (
-        <p
-          className={`mt-1 text-sm ${
-            check.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-          }`}
-        >
-          {check.ok
-            ? t('projects.addItem.urlOk', 'The page can be read.')
-            : t('projects.addItem.urlFailed', 'The page cannot be read: {{error}}', {
-                error: check.error || ''
-              })}
-        </p>
+      {preview && <UrlPreviewPanel preview={preview} onClose={() => setPreview(null)} />}
+      {crawlUrl && (
+        <SiteCrawlPanel
+          url={draft.url}
+          crawlUrl={crawlUrl}
+          errorMessage={errorMessage}
+          selected={selected}
+          onSelectedChange={selectedUrls => update({ selectedUrls })}
+          onPreview={previewUrl ? runPreview : undefined}
+          existingUrls={existingUrls}
+        />
       )}
     </div>
   );

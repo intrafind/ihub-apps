@@ -417,9 +417,35 @@ A project page shows:
 ### Adding documents
 
 **Add documents** offers one tab per kind the installation allows: upload (several files, drag and
-drop), text, web page (checked before it is added), iHub page, iFinder document or search, and
-OneDrive / SharePoint, Google Drive and Nextcloud through the cloud file browsers. The text of a
-picked cloud file is taken with your account; refresh the item later to take it again.
+drop), text, web page, iHub page, iFinder document or search, and OneDrive / SharePoint, Google
+Drive and Nextcloud through the cloud file browsers. The text of a picked cloud file is taken with
+your account; refresh the item later to take it again.
+
+### Adding web pages
+
+The **Web page (URL)** tab (in user projects and in the admin project editor) adds one page or
+several pages of a website:
+
+- **Check** tells whether the page can be read.
+- **Preview** shows the text the model gets from the page, before it is added: the same reader
+  and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
+  automated access shows up here as an empty or short text.
+- **Find pages** follows the links of the page that stay on the same website and lists the pages
+  it finds, with their titles. Tick the pages to add (filter the list, **Select all**, or preview a
+  page with its eye icon); **Add N pages** adds each as its own web page item, named after its
+  title. Pages the project has already are marked and cannot be ticked again.
+  - **Link depth** (1–3) is how many links away from the start page the search goes.
+  - **At most** caps the list (25–200 pages); when the cap or the 45-second time limit stops the
+    search, the list says so.
+  - **Only pages below this address** keeps the search in the start page's folder: from
+    `https://example.com/docs/intro.html` it lists `https://example.com/docs/…` only. Untick it to
+    search the whole website.
+  - Links to PDF files are listed too; images, scripts, archives and office files are not. Links
+    marked `rel="nofollow"` are not followed, and dead links are left out.
+
+The search runs on the server with the same protections as the page reader: no private or internal
+addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, and at most 2 MB
+read per page.
 
 ### Linking documents from other projects
 
@@ -774,6 +800,8 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/search`  | iFinder search with your rights; `?q=&profile=&limit=`.         |
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
 | `POST` | `/api/projects/pickers/url/check`       | Check a URL `{ url }` before adding it.                         |
+| `POST` | `/api/projects/pickers/url/preview`     | The text a URL `{ url }` gives the model, before it is added.   |
+| `POST` | `/api/projects/pickers/url/crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API

@@ -9,6 +9,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   addAdminProjectItem,
   checkProjectPickerUrl,
+  crawlProjectPickerUrl,
   createAdminProject,
   deleteAdminProjectItem,
   fetchAdminProjectConfig,
@@ -16,6 +17,7 @@ import {
   fetchAdminProjectKinds,
   fetchProjectPickerPages,
   getAdminApiErrorMessage,
+  previewProjectPickerUrl,
   refreshAdminProjectItem,
   searchProjectPickerIFinder,
   updateAdminProject,
@@ -59,6 +61,8 @@ const ADMIN_ITEM_API = {
   fetchPages: () => fetchProjectPickerPages(),
   searchIFinder: query => searchProjectPickerIFinder(query),
   checkUrl: url => checkProjectPickerUrl(url),
+  previewUrl: url => previewProjectPickerUrl(url),
+  crawlUrl: (url, options) => crawlProjectPickerUrl(url, options),
   errorMessage: err => getAdminApiErrorMessage(err)
 };
 
