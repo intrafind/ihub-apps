@@ -28,6 +28,7 @@ import {
   shutdownProjects
 } from '../services/projects/bootstrap.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
+import { getProjectService } from '../services/projects/ProjectService.js';
 import { getItemText, evictItemText } from '../services/knowledge/ItemTextService.js';
 import {
   importPendingProjects,
@@ -248,6 +249,45 @@ describe('importPendingProjects', () => {
     assert.equal(found.status, 'ready');
     assert.equal(found.error, null);
     assert.equal(found.import, undefined);
+  });
+
+  it('keeps the whole of a large managed file, its last chapter included', async () => {
+    const repository = getProjectRepository();
+    // The consolidated documentation is about 3 000 000 characters and its
+    // release notes come last. An item keeps 10 000 000 characters; a file iHub imports
+    // from the server may be larger (20 000 000), so the last chapter is not cut.
+    const filler = `${'Configuration of the platform. '.repeat(40)}\n\n`;
+    const big = `# Documentation\n\n${filler.repeat(8800)}# Release Notes\n\nVersion 5.6.0-RC2 added projects.`;
+    assert.ok(big.length > 10_000_000, 'the file is past the item cap');
+    await write(path.join(defaultsDir, 'sources/big-docs.md'), big);
+    await repository.createAdmin(
+      {
+        id: 'big-docs',
+        name: { en: 'Big docs' },
+        items: [item('itm_big', { managedFile: 'sources/big-docs.md' })]
+      },
+      { actor: SYSTEM }
+    );
+    const first = await importPendingProjects({ contentsDir: scratch, defaultsDir });
+    assert.equal(first.imported, 1);
+    let project = await repository.get('big-docs');
+    let big1 = project.items[0];
+    assert.equal(big1.status, 'ready');
+    assert.notEqual(big1.text.truncated, true);
+    const { text, truncated } = await getItemText(project, big1, { user: SYSTEM });
+    assert.equal(truncated, false);
+    assert.ok(text.endsWith('Version 5.6.0-RC2 added projects.'), 'the last chapter is there');
+
+    // A copy an older release stored cut at the cap is read again although
+    // the shipped file did not change.
+    await getProjectService().patchItem('big-docs', 'itm_big', entry => {
+      entry.text.truncated = true;
+    });
+    const again = await importPendingProjects({ contentsDir: scratch, defaultsDir });
+    assert.equal(again.imported, 1);
+    project = await repository.get('big-docs');
+    big1 = project.items[0];
+    assert.notEqual(big1.text.truncated, true);
   });
 
   it('deletes a shared plaintext file only after the last item importing it is ready', async () => {

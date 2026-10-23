@@ -274,6 +274,39 @@ describe('local provider', () => {
     assert.equal(pinnedOnly.docs.length, 1);
   });
 
+  it('answers a search from a warm index without decrypting any text', async () => {
+    const provider = providerFor(textProject);
+    const ctx = { user: ADA, chatId: 'c-warm', language: 'en' };
+    evictProjectIndex(textProject.id);
+    evictItemText();
+    const cold = await provider.search(textProject, ctx, { query: 'deposit returned' });
+    assert.equal(cold.hits[0].docId, 'itm_contract');
+
+    // The index is cached now; the texts are not (as after a restart of the cache).
+    evictItemText();
+    let reads = 0;
+    setTextReader(async (_project, item) => {
+      reads += 1;
+      return TEXTS[item.id];
+    });
+    try {
+      const warm = await provider.search(textProject, ctx, { query: 'deposit returned' });
+      assert.equal(reads, 0, 'no text was read for a warm search');
+      assert.equal(warm.hits[0].docId, 'itm_contract');
+      assert.deepEqual(
+        warm.hits.map(hit => hit.sectionId),
+        cold.hits.map(hit => hit.sectionId)
+      );
+      assert.equal(warm.retrieval.documents, 2);
+    } finally {
+      setTextReader(async (_project, item) => {
+        const text = TEXTS[item.id];
+        if (text === undefined) throw new Error('no text');
+        return text;
+      });
+    }
+  });
+
   it('reports items that are not usable instead of failing the call', async () => {
     const withFailed = {
       ...textProject,

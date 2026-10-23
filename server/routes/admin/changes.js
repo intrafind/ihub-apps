@@ -19,7 +19,8 @@ const VALID_RESOURCES = new Set([
   'platform',
   'feature',
   'source',
-  'tool'
+  'tool',
+  'project'
 ]);
 
 export default function registerAdminChangesRoutes(app) {

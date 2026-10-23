@@ -82,7 +82,7 @@ than a conversation nobody could continue.
 
 The first three limits are switched **off** by a value of zero or less — see
 [Retention](#retention). `temporaryRetentionHours` cannot be: a temporary chat
-always expires, and a value of zero or less falls back to 24. Migration V178
+always expires, and a value of zero or less falls back to 24. Migration V179
 writes it into an existing installation. What a turn *produced* is stored separately and
 configured separately, under `platform.artifacts` — see
 [Artifacts](artifacts.md).
@@ -711,7 +711,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
 | `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
-| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back; not combinable with `projectId`) |
+| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back; not combinable with `projectId` or `attachedProjectIds`) |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
 `GET /api/chats` returns the chat documents exactly as stored. App name, colour
@@ -726,10 +726,11 @@ is read before it is deleted.
 
 When the chat history is unavailable — the flag is off, an admin set
 `chats.enabled: false`, or the storage provider did not come up — the listing
-and `PATCH` answer `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"`
-rather than 404, so a client can tell "not configured" from "not found" and
-hide the history. Reading, the artifacts and `DELETE` answer as long as storage
-is up: they are what temporary chats need.
+and `PATCH { temporary: false }` answer `503` with
+`details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than 404, so a client can
+tell "not configured" from "not found" and hide the history. Reading, the
+artifacts, `DELETE` and every other `PATCH` (rename, projects) answer as long as
+storage is up: they are what temporary chats need.
 
 ## What a turn produced
 

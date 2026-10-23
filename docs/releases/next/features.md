@@ -41,6 +41,27 @@ otherwise. The chat shows which happened.
   projects. This is how the one-item projects that the sources migration made of a website or a
   department become one project again. Instructions of merged projects are not carried over. See
   `docs/projects.md`, *Moving, copying and merging*.
+- A project's name on the list opens a read-only **view** (description, instructions, items with
+  their text preview, and the apps, workflows and agents that link it); **Edit** leads to the form.
+- **Estimate tokens** loads the documents of a project, web pages and iFinder documents included,
+  counts their tokens and recommends whether the project belongs in the prompt or is better
+  searched, for the project and for each document (`POST /api/admin/projects/:id/estimate`;
+  users get the same for their own projects). The items table shows the tokens of documents whose
+  size is otherwise only known while a chat reads them.
+- The IntraFind website ships as one project, `intrafind-website`, with the six pages the
+  sources migration had split into `intrafind-website-*` projects; an upgrade merges those and
+  re-points the IntraFind Website Bot and any other app, workflow or agent that linked them. A
+  project that an admin gave instructions, a category or tags, another page or a further item is left
+  as it is; the names and descriptions of the merged ones are replaced by those of the new project.
+- A project's description reaches the model next to its name, so it can tell that the iHub
+  Documentation also holds the release notes. Files that ship with iHub or sit in the sources
+  directory are imported in full. Before, the iHub Documentation was cut at the 2,000,000-character
+  cap and lost its release notes, which come last.
+- A document may now hold up to 10,000,000 characters (about 10 MB of text), up from 2,000,000;
+  the search builds the index of such a text in about two seconds when the project is first
+  searched after a start or a change, and then answers in milliseconds from memory (about 130 MB of
+  heap per 10 MB text; the indexes of a worker are kept for 30,000,000 characters). The text editor
+  loads and saves texts of that size and refuses a longer imported one.
 - Workflows iterate and write back: the steps `project-items` (the documents of a project as a
   list for a loop), `project-read` (one document's text without a tool call) and `project-write`
   (store a text the run produced, with the run as its provenance). A write into an admin project
@@ -68,6 +89,17 @@ share projects.
 - The project page lists its chats (all, or only your own) and starts new ones in any app that
   allows projects. A stored chat moves into a project or out of it from the chat page or the chat
   history, and both show which project a chat belongs to.
+- **Add project** above the message box lets a chat use any of your own or shared projects, without
+  starting the chat in it: tick a project and its documents are available to the
+  answers (its instructions are not); a chip takes it away again (up to 10 projects per chat). The chat stays where it is.
+- On a project's page **New chat** is the button in the header, the chats come before the
+  documents, and a long document list scrolls inside its card, so many files no longer push the
+  chats out of sight. The chats of a project and the Projects page come a page at a time (10, 25
+  or 50), so no list grows with its content; `GET /api/projects/:id/chats` takes `limit` and
+  `cursor` and answers `total`. File names with accents, dashes or umlauts keep their characters when a file
+  is uploaded.
+- The Projects page lists only your own and shared projects. Projects that administrators created
+  are linked to apps and managed by administrators, so they are no longer listed there.
 - Answers name the project they drew on, and citations from a project show whether the document
   was uploaded or picked ("Picked from SharePoint · text taken 12 Oct 2026"); the preview shows the
   stored text with the cited passages highlighted, since originals are not kept.

@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "id": "intrafind-website",
+  "ownership": "admin",
+  "tier": "ihub",
+  "name": {
+    "en": "IntraFind Website",
+    "de": "IntraFind Website"
+  },
+  "description": {
+    "en": "Pages of the IntraFind website: the company, the iFinder enterprise search (features and supported connectors), the iAssistant and iHub.",
+    "de": "Seiten der IntraFind-Website: das Unternehmen, die iFinder Enterprise Search (Funktionen und unterstützte Konnektoren), der iAssistant und iHub."
+  },
+  "instructions": "",
+  "enabled": true,
+  "category": "",
+  "tags": [],
+  "items": [
+    {
+      "id": "itm_d41c5655bcec",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://www.intrafind.com",
+      "ref": {
+        "url": "https://www.intrafind.com",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "www.intrafind.com",
+          "url": "https://www.intrafind.com"
+        }
+      },
+      "snapshotAt": null
+    },
+    {
+      "id": "itm_0a1b1d7c83a8",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ifinder",
+      "ref": {
+        "url": "https://intrafind.com/en/ifinder",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ifinder"
+        }
+      },
+      "snapshotAt": null
+    },
+    {
+      "id": "itm_4356edcee58b",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ifinder/features",
+      "ref": {
+        "url": "https://intrafind.com/en/ifinder/features",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ifinder/features"
+        }
+      },
+      "snapshotAt": null
+    },
+    {
+      "id": "itm_26d866b5f627",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ifinder/connectors",
+      "ref": {
+        "url": "https://intrafind.com/en/ifinder/connectors",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ifinder/connectors"
+        }
+      },
+      "snapshotAt": null
+    },
+    {
+      "id": "itm_dc8c837847d5",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/iassistant",
+      "ref": {
+        "url": "https://intrafind.com/en/iassistant",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/iassistant"
+        }
+      },
+      "snapshotAt": null
+    },
+    {
+      "id": "itm_3d40989dffb4",
+      "pinned": false,
+      "error": null,
+      "createdAt": "2026-10-21T00:00:00.000Z",
+      "updatedAt": "2026-10-21T00:00:00.000Z",
+      "kind": "url",
+      "name": "https://intrafind.com/en/ihub",
+      "ref": {
+        "url": "https://intrafind.com/en/ihub",
+        "maxContentLength": 1048576
+      },
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
+      "provenance": {
+        "origin": "linked",
+        "by": {
+          "id": "system",
+          "name": "iHub defaults"
+        },
+        "at": "2026-10-21T00:00:00.000Z",
+        "run": null,
+        "source": {
+          "site": "intrafind.com",
+          "url": "https://intrafind.com/en/ihub"
+        }
+      },
+      "snapshotAt": null
+    }
+  ],
+  "createdAt": "2026-10-22T00:00:00.000Z",
+  "updatedAt": "2026-10-22T00:00:00.000Z",
+  "createdBy": null
+}

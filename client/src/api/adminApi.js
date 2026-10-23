@@ -548,6 +548,20 @@ export const testAdminProject = async projectId => {
 };
 
 /**
+ * Load every item of a project, count its tokens and get a recommendation
+ * (prompt or search) per item and for the project.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} See `services/projects/projectEstimate.js`.
+ */
+export const estimateAdminProject = async projectId => {
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/estimate`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
  * Add an item described as JSON (every kind but a file upload).
  *
  * @param {string} projectId
@@ -1371,6 +1385,7 @@ export const adminApi = {
   mergeAdminProjects,
   transferAdminProjectItems,
   testAdminProject,
+  estimateAdminProject,
   addAdminProjectItem,
   uploadAdminProjectItem,
   updateAdminProjectItem,

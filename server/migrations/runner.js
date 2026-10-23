@@ -361,6 +361,22 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V143__add_short_link_allowed_hosts.js',
     newVersion: '145',
     newFile: 'V145__add_short_link_allowed_hosts.js'
+  },
+  // The IntraFind website projects merge was written as V176; main took V176
+  // (setup wizard flag) and then V177 (scheduled task run retention) first. It
+  // is V178; an install that ran the branch reconciles its V176 or V177 row
+  // instead of applying it again.
+  {
+    oldVersion: '176',
+    oldFile: 'V176__merge_intrafind_website_projects.js',
+    newVersion: '178',
+    newFile: 'V178__merge_intrafind_website_projects.js'
+  },
+  {
+    oldVersion: '177',
+    oldFile: 'V177__merge_intrafind_website_projects.js',
+    newVersion: '178',
+    newFile: 'V178__merge_intrafind_website_projects.js'
   }
 ];
 

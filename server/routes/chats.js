@@ -202,6 +202,67 @@ async function loadOwnedChat(chatId, user, repository, intent = 'read') {
 }
 
 /**
+ * Set the projects attached to a chat (`attachedProjectIds`): the projects the
+ * chat's questions can draw on besides its own container. Taking one away is
+ * always possible; adding one needs the right to use it, like attaching it
+ * with a message does (`resolveChatProjects`). Sends the refusal itself and
+ * returns null when the request cannot go on.
+ */
+async function setChatAttachedProjects(req, res, repository, chat) {
+  const [
+    { attachedProjectsSchema, describeIssues },
+    { getProjectRepository },
+    access,
+    { isUserProjectsConfigured },
+    { MAX_ATTACHED }
+  ] = await Promise.all([
+    import('../validators/projectSchema.js'),
+    import('../services/projects/ProjectRepository.js'),
+    import('../middleware/projectAccess.js'),
+    import('../services/projects/projectSettings.js'),
+    import('../services/knowledge/chatProjects.js')
+  ]);
+  const parsed = attachedProjectsSchema.safeParse({
+    attachedProjectIds: req.body.attachedProjectIds
+  });
+  if (!parsed.success) {
+    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+    return null;
+  }
+  const wanted = [...new Set(parsed.data.attachedProjectIds)];
+  const stored = Array.isArray(chat.attachedProjectIds) ? chat.attachedProjectIds : [];
+  const added = wanted.filter(id => !stored.includes(id) && id !== chat.projectId);
+  if (added.length > 0) {
+    if (!isUserProjectsConfigured(configCache.getFeatures())) {
+      sendErrorResponse(res, 403, 'User projects are switched off', {
+        details: { code: 'USER_PROJECTS_DISABLED' }
+      });
+      return null;
+    }
+    access.ensurePrincipal(req);
+    const projects = getProjectRepository();
+    const context = access.callerContext(req.user);
+    for (const id of added) {
+      const project = await projects.get(id);
+      if (!project || !access.permissionsFor(project, req.user, context).canUse) {
+        sendNotFound(res, 'Project');
+        return null;
+      }
+    }
+  }
+  if (wanted.length > MAX_ATTACHED) {
+    sendBadRequest(res, `A chat may have at most ${MAX_ATTACHED} projects attached`);
+    return null;
+  }
+  const { chat: updated } = await repository.setAttachedProjects(chat.id, wanted, MAX_ATTACHED);
+  if (!updated) {
+    sendNotFound(res, 'Chat');
+    return null;
+  }
+  return updated;
+}
+
+/**
  * Move a chat into a project, or out of one with `projectId: null`. Sends the
  * refusal itself and returns null when the request cannot go on.
  */
@@ -459,8 +520,9 @@ export default function registerChatRoutes(app) {
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const title = req.body?.title;
       const hasProject = req.body && Object.hasOwn(req.body, 'projectId');
+      const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
       const keep = req.body?.temporary === false;
-      if (typeof title !== 'string' && !hasProject && !keep) {
+      if (typeof title !== 'string' && !hasProject && !hasAttached && !keep) {
         return sendBadRequest(res, 'title is required and must be a string');
       }
       if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
@@ -468,13 +530,16 @@ export default function registerChatRoutes(app) {
         // kept is deleted, and a conversation that should be is a new chat.
         return sendBadRequest(res, 'temporary can only be set to false');
       }
-      if (keep && hasProject) {
-        // Keeping writes the chat before the move is even checked, so a move
-        // refused after it would leave the request failed but the chat kept.
-        // Two requests make each step all-or-nothing.
-        return sendBadRequest(res, 'Keep the chat and move it to a project in separate requests');
+      if (keep && (hasProject || hasAttached)) {
+        // Keeping writes the chat before a project change is even checked, so
+        // a change refused after it would leave the request failed but the
+        // chat kept. Two requests make each step all-or-nothing.
+        return sendBadRequest(res, 'Keep the chat and change its projects in separate requests');
       }
-      const repository = requireRepository(res, { history: true });
+      // Only keeping needs a history to keep the chat in. A temporary chat —
+      // every chat while the history is off — can still be renamed and given
+      // projects.
+      const repository = requireRepository(res, { history: keep });
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
@@ -500,6 +565,11 @@ export default function registerChatRoutes(app) {
         const moved = await moveChatToProject(req, res, repository, chat);
         if (!moved) return;
         chat = moved;
+      }
+      if (hasAttached) {
+        const attached = await setChatAttachedProjects(req, res, repository, chat);
+        if (!attached) return;
+        chat = attached;
       }
       if (typeof title === 'string') {
         // The repository caps and marks the title as user-set so no later turn

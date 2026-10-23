@@ -28,7 +28,7 @@ const COMPONENT = 'ItemTextService';
 
 /** Decrypted texts kept per process, and the bytes they may add up to. */
 const TEXT_CACHE_ENTRIES = 64;
-const TEXT_CACHE_BYTES = 64 * 1024 * 1024;
+const TEXT_CACHE_BYTES = 96 * 1024 * 1024;
 
 const textCache = new Map();
 let textCacheBytes = 0;
@@ -44,7 +44,8 @@ function cacheGet(key) {
 
 function cacheSet(key, text) {
   const bytes = text.length * 2;
-  if (bytes > TEXT_CACHE_BYTES / 4) return;
+  // A 10 MB text (20 MB as UTF-16) must fit: it is read on every search.
+  if (bytes > TEXT_CACHE_BYTES / 2) return;
   if (textCache.has(key)) textCacheBytes -= textCache.get(key).bytes;
   textCache.set(key, { text, bytes });
   textCacheBytes += bytes;

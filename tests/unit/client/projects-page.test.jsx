@@ -128,13 +128,15 @@ beforeEach(() => {
 });
 
 describe('ProjectsPage', () => {
-  test('lists owned, shared and app projects with filters', async () => {
+  test('lists owned and shared projects with filters, and not the ones admins created', async () => {
     renderPage();
     expect(await screen.findByText('Case 2026-114')).toBeInTheDocument();
     expect(screen.getByText('Team wiki')).toBeInTheDocument();
-    expect(screen.getByText('FAQ')).toBeInTheDocument();
+    // An admin project is linked to apps and managed by admins: no chat can start in it.
+    expect(screen.queryByText('FAQ')).not.toBeInTheDocument();
+    expect(screen.queryByText('From an app')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /From apps/ })).not.toBeInTheDocument();
     expect(screen.getByText('Owner: Ann')).toBeInTheDocument();
-    expect(screen.getByText('From an app')).toBeInTheDocument();
     expect(await screen.findByText('1 of 20 own projects')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Shared with me/ }));
@@ -145,6 +147,34 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'tenancy' } });
     expect(screen.getByText('Case 2026-114')).toBeInTheDocument();
     expect(screen.queryByText('Team wiki')).not.toBeInTheDocument();
+  });
+
+  test('pages a long list of projects and starts again at the first page when searching', async () => {
+    const many = Array.from({ length: 23 }, (_, index) => ({
+      id: `prj_${index}`,
+      ownership: 'user',
+      name: `Project ${String(index).padStart(2, '0')}`,
+      usage: { items: 0, bytes: 0 },
+      members: [],
+      role: 'owner',
+      permissions: { isOwner: true, canEdit: true }
+    }));
+    mockApi.fetchProjects.mockResolvedValue(many);
+    renderPage();
+
+    expect(await screen.findByText('Project 00')).toBeInTheDocument();
+    expect(screen.getByText('Project 09')).toBeInTheDocument();
+    expect(screen.queryByText('Project 10')).not.toBeInTheDocument();
+    expect(screen.getByText('Projects 1–10 of 23')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('Project 10')).toBeInTheDocument();
+    expect(screen.queryByText('Project 00')).not.toBeInTheDocument();
+
+    // A search shortens the list and shows its first page.
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'Project 2' } });
+    expect(screen.getByText('Project 20')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
   });
 
   test('creates a project and opens its page', async () => {

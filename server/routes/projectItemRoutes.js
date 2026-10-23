@@ -130,6 +130,9 @@ export function receiveUpload(req, res, next) {
   });
   const upload = multer({
     storage,
+    // Browsers send file names as UTF-8; multer reads them as latin1 unless told
+    // (an en dash in a name arrived as the three characters "â", "€" and a quote).
+    defParamCharset: 'utf8',
     limits: { fileSize: limits.maxFileBytes, files: 1, fields: 10 },
     fileFilter: (request, file, cb) => {
       const accepted = acceptedTypeOf({ contentType: file.mimetype, name: file.originalname });

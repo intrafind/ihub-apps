@@ -632,9 +632,34 @@ describe('temporary chats and guests', () => {
       user: ADA
     });
     assert.equal(res.statusCode, 400);
+    const attach = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-and-move' },
+      body: { temporary: false, attachedProjectIds: ['prj_missing'] },
+      user: ADA
+    });
+    assert.equal(attach.statusCode, 400);
     const stored = await getChatRepository().getChat('chat-keep-and-move');
     assert.equal(stored.temporary, true);
     assert.equal(stored.projectId, undefined);
+    assert.equal(stored.attachedProjectIds, undefined);
+  });
+
+  it('a temporary chat can be renamed while the history is off', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-tmp-rename',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    await withHistoryOff(async () => {
+      const res = await drive(patchHandlers, {
+        params: { chatId: 'chat-tmp-rename' },
+        body: { title: 'Renamed' },
+        user: ADA
+      });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.chat.temporary, true);
+    });
   });
 
   it('keeping needs a history to keep it in', async () => {

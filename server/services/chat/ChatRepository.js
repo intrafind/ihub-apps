@@ -1310,6 +1310,42 @@ export class ChatRepository {
   }
 
   /**
+   * Replace the projects attached to a chat, under its lock: `ids` become the
+   * attached list (the container is never in it, the list is capped at `max`).
+   * The caller has checked the access to every id that is new.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string[]} ids - The projects the chat keeps attached, in order.
+   * @param {number} max - Most projects a chat may have attached.
+   * @returns {Promise<{chat: Object|null, attached: string[]}>} The chat as it
+   *   stands (null when it does not exist or cannot be stored).
+   */
+  setAttachedProjects(chatId, ids, max) {
+    if (!this._usable(chatId, 'setAttachedProjects')) return { chat: null, attached: [] };
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { chat: null, attached: [] };
+      const attached = [];
+      for (const id of Array.isArray(ids) ? ids : []) {
+        if (attached.length >= max) break;
+        if (typeof id !== 'string' || !id || id === existing.projectId || attached.includes(id)) {
+          continue;
+        }
+        attached.push(id);
+      }
+      const stored = Array.isArray(existing.attachedProjectIds) ? existing.attachedProjectIds : [];
+      const changed =
+        attached.length !== stored.length || attached.some((id, index) => id !== stored[index]);
+      if (!changed) return { chat: existing, attached };
+      const chat = await this._writeChat(
+        applyChatPatch(existing, { attachedProjectIds: attached }),
+        etag
+      );
+      return { chat, attached };
+    });
+  }
+
+  /**
    * Move a chat between projects only while it is still where the caller saw
    * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
    * (null for "in no project"). The compare runs inside the chat's lock, so a
@@ -1330,8 +1366,20 @@ export class ChatRepository {
       if ((existing.projectId || null) !== (expectedProjectId || null)) {
         return { chat: existing, moved: false };
       }
+      // The chat's new container is no longer an attachment: it would count
+      // twice against the cap and show as two chips.
+      const storedAttached = Array.isArray(existing.attachedProjectIds)
+        ? existing.attachedProjectIds
+        : [];
+      const attached = nextProjectId
+        ? storedAttached.filter(id => id !== nextProjectId)
+        : storedAttached;
+      const stripped = attached.length !== storedAttached.length;
       const chat = await this._writeChat(
-        applyChatPatch(existing, { projectId: nextProjectId || null }),
+        applyChatPatch(existing, {
+          projectId: nextProjectId || null,
+          ...(stripped ? { attachedProjectIds: attached } : {})
+        }),
         etag
       );
       if (typeof settle !== 'function') return { chat, moved: true };
@@ -1343,7 +1391,10 @@ export class ChatRepository {
       } catch (error) {
         const { etag: current } = await this._loadChat(chatId);
         await this._writeChat(
-          applyChatPatch(chat, { projectId: expectedProjectId || null }),
+          applyChatPatch(chat, {
+            projectId: expectedProjectId || null,
+            ...(stripped ? { attachedProjectIds: storedAttached } : {})
+          }),
           current
         );
         throw error;

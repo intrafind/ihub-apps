@@ -137,15 +137,18 @@ function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route
-          path="/admin/projects/:id"
-          element={
-            <>
-              <AdminProjectEditPage />
-              <LocationProbe />
-            </>
-          }
-        />
+        {['/admin/projects/new', '/admin/projects/:id/edit'].map(routePath => (
+          <Route
+            key={routePath}
+            path={routePath}
+            element={
+              <>
+                <AdminProjectEditPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        ))}
       </Routes>
     </MemoryRouter>
   );
@@ -202,7 +205,7 @@ describe('AdminProjectEditPage – create', () => {
       tags: ['hr', 'policy']
     });
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook')
+      expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook/edit')
     );
   });
 
@@ -249,7 +252,7 @@ describe('AdminProjectEditPage – items', () => {
         }
       ])
     );
-    renderAt('/admin/projects/handbook');
+    renderAt('/admin/projects/handbook/edit');
 
     expect(await screen.findByText('policies.pdf')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Answer briefly.')).toBeInTheDocument();
@@ -273,7 +276,7 @@ describe('AdminProjectEditPage – items', () => {
     mockApi.fetchAdminProject
       .mockResolvedValueOnce(makeProject([{ ...READY, status: 'pending', text: null }]))
       .mockResolvedValue(makeProject([READY]));
-    renderAt('/admin/projects/handbook');
+    renderAt('/admin/projects/handbook/edit');
 
     expect(await screen.findByText('Waiting')).toBeInTheDocument();
     expect(await screen.findByText('Ready', {}, { timeout: 4000 })).toBeInTheDocument();
@@ -290,7 +293,7 @@ describe('AdminProjectEditPage – items', () => {
       .mockResolvedValueOnce(makeProject([READY, pending]))
       // The poll finds the first item gone (moved or removed by someone else).
       .mockResolvedValue(makeProject([{ ...pending, status: 'ready' }]));
-    renderAt('/admin/projects/handbook');
+    renderAt('/admin/projects/handbook/edit');
 
     fireEvent.click(await screen.findByLabelText('Select policies.pdf'));
     const bar = screen.getByTestId('item-selection-bar');
@@ -310,7 +313,7 @@ describe('AdminProjectEditPage – items', () => {
   test('uploads a file through the multipart helper from the dialog', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.uploadAdminProjectItem.mockResolvedValue({ id: 'i9', status: 'pending' });
-    renderAt('/admin/projects/handbook');
+    renderAt('/admin/projects/handbook/edit');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add item' }));
     const dialog = await screen.findByRole('dialog');
@@ -343,7 +346,7 @@ describe('AdminProjectEditPage – items', () => {
   test('sends pasted text as a JSON upload item and keeps cloud kinds disabled', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.addAdminProjectItem.mockResolvedValue({ id: 'i9', status: 'pending' });
-    renderAt('/admin/projects/handbook');
+    renderAt('/admin/projects/handbook/edit');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add item' }));
     const dialog = await screen.findByRole('dialog');

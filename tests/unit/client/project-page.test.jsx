@@ -207,15 +207,19 @@ beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockApi.fetchProjectsConfig.mockResolvedValue(CONFIG);
   mockApi.fetchProjects.mockResolvedValue([]);
-  mockApi.fetchProjectChats.mockResolvedValue([
-    {
-      id: 'chat-1',
-      title: 'Notice period',
-      appId: 'chat',
-      lastMessageAt: '2026-10-20T10:00:00Z',
-      owner: { mine: true }
-    }
-  ]);
+  mockApi.fetchProjectChats.mockResolvedValue({
+    items: [
+      {
+        id: 'chat-1',
+        title: 'Notice period',
+        appId: 'chat',
+        lastMessageAt: '2026-10-20T10:00:00Z',
+        owner: { mine: true }
+      }
+    ],
+    nextCursor: null,
+    total: 1
+  });
   invalidateProjectsList();
   invalidateProjectsConfig();
 });
@@ -237,6 +241,90 @@ describe('ProjectPage – owner', () => {
     expect(await screen.findByText('2 of 25')).toBeInTheDocument();
     expect(await screen.findByText('Notice period')).toHaveAttribute('href', '/apps/chat/c/chat-1');
     expect(screen.queryByTestId('project-read-only')).not.toBeInTheDocument();
+  });
+
+  test('starts a chat from the header and lists the chats above the documents', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+
+    const newChat = screen.getByRole('button', { name: 'New chat' });
+    // In the header, beside the title, not in the chats card.
+    expect(newChat.closest('section')).toBeNull();
+    // Chats come first, so many documents cannot push them down.
+    const chats = screen.getByRole('heading', { name: 'Chats' });
+    const documents = screen.getByRole('heading', { name: 'Documents' });
+    expect(
+      chats.compareDocumentPosition(documents) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    fireEvent.click(newChat);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('pages a long chat list instead of growing the page', async () => {
+    const chat = index => ({
+      id: `chat-${index}`,
+      title: `Chat ${index}`,
+      appId: 'chat',
+      lastMessageAt: '2026-10-20T10:00:00Z',
+      owner: { mine: true }
+    });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.fetchProjectChats.mockImplementation(async (_id, { cursor }) =>
+      cursor === '10'
+        ? { items: [chat(11), chat(12)], nextCursor: null, total: 12 }
+        : { items: Array.from({ length: 10 }, (_, i) => chat(i + 1)), nextCursor: '10', total: 12 }
+    );
+    renderPage();
+
+    expect(await screen.findByText('Chat 1')).toBeInTheDocument();
+    expect(screen.queryByText('Chat 11')).not.toBeInTheDocument();
+    expect(screen.getByText('Chats 1–10 of 12')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('Chat 11')).toBeInTheDocument();
+    expect(screen.queryByText('Chat 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Chats 11–12 of 12')).toBeInTheDocument();
+    expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+      filter: 'all',
+      limit: 10,
+      cursor: '10'
+    });
+
+    // Another filter starts again at the first page.
+    fireEvent.click(screen.getByRole('button', { name: 'My chats' }));
+    await waitFor(() =>
+      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+        filter: 'mine',
+        limit: 10,
+        cursor: null
+      })
+    );
+  });
+
+  test('shows no pager while the chats fit one page', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Notice period');
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument();
+  });
+
+  test('a long document list scrolls inside its card', async () => {
+    const many = Array.from({ length: 8 }, (_, index) => ({
+      id: `itm_${index}`,
+      kind: 'upload',
+      name: `file-${index}.md`,
+      status: 'ready',
+      pinned: false,
+      text: { tokens: 10 },
+      provenance: { origin: 'uploaded' }
+    }));
+    mockApi.fetchProject.mockResolvedValue({ ...makeProject(), items: many });
+    renderPage();
+    await screen.findByText('file-0.md');
+    expect(screen.getByTestId('project-items-scroll')).toHaveClass('overflow-y-auto');
   });
 
   test('saves only the changed settings', async () => {
@@ -416,7 +504,11 @@ describe('ProjectPage – members and read-only', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'My chats' }));
     await waitFor(() =>
-      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', { filter: 'mine' })
+      expect(mockApi.fetchProjectChats).toHaveBeenLastCalledWith('prj_a', {
+        filter: 'mine',
+        limit: 10,
+        cursor: null
+      })
     );
   });
 

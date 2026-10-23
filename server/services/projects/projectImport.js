@@ -274,7 +274,10 @@ async function importManaged(
     return 'failed';
   }
   const sha = await sha256Of(filePath);
-  if (item.status === 'ready' && item.managedSha256 === sha) return 'skipped';
+  // A copy an older release cut at the upload cap is read again, in full.
+  if (item.status === 'ready' && item.managedSha256 === sha && item.text?.truncated !== true) {
+    return 'skipped';
+  }
   const name = path.basename(filePath);
   const outcome = await service.ingest.start(
     project,

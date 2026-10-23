@@ -10,6 +10,17 @@
  * @module services/projects/projectConstants
  */
 
+/**
+ * The most characters one item keeps (about 10 MB of text, 2.5 million tokens).
+ * The BM25 search indexes a text this long in about two seconds, once, and
+ * answers from the index in milliseconds. Longer text is cut, and the item is
+ * marked `truncated`.
+ */
+export const MAX_ITEM_TEXT_CHARS = 10_000_000;
+
+/** Most projects a chat may have attached besides its own container. */
+export const MAX_ATTACHED_PROJECTS = 10;
+
 /** Member target types. */
 export const MEMBER_TARGET_TYPES = Object.freeze(['user', 'group', 'everyone']);
 

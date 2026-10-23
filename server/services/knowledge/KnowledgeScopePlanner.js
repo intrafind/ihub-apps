@@ -32,10 +32,10 @@
  */
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
-import { projectName } from '../projects/projectView.js';
+import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 
-const CONTEXT_SHARE = 0.4;
+export const CONTEXT_SHARE = 0.4;
 
 /** The share of the context window no injection may exceed, pinned or not. */
 const HARD_CONTEXT_SHARE = 0.75;
@@ -141,6 +141,7 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
   for (const entry of scope) {
     const { project } = entry;
     const name = projectName(project, ctx?.language);
+    const description = projectDescription(project, ctx?.language);
     let provider;
     try {
       provider = providerFor(project);
@@ -148,6 +149,7 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       projects.push({
         id: project.id,
         name,
+        description,
         mode: 'unavailable',
         reason: error.code,
         documents: 0,
@@ -213,6 +215,7 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     projects.push({
       id: project.id,
       name,
+      description,
       ownership: project.ownership,
       origin: entry.origin,
       instructions: entry.instructions && project.instructions ? project.instructions : '',
@@ -299,6 +302,12 @@ export function renderProjectsBlock(plan) {
       `name="${escapeAttribute(project.name)}"`,
       `mode="${project.mode}"`
     ];
+    // What the project holds: without it a searched project is an id and a
+    // count, and the model cannot tell that the documentation also carries
+    // the release notes.
+    if (project.description) {
+      attrs.push(`description="${escapeAttribute(neutralizeProjectText(project.description))}"`);
+    }
     if (project.mode === 'searched') {
       attrs.push(`documents="${project.documents}"`, 'tool="knowledge_search"');
     }

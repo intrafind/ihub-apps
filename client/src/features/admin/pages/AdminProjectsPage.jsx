@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -47,9 +47,13 @@ function NameCell({ project, language }) {
   const description = localizedText(project.description, language);
   return (
     <div className="min-w-0">
-      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+      <Link
+        to={`/admin/projects/${encodeURIComponent(project.id)}`}
+        onClick={e => e.stopPropagation()}
+        className="block text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+      >
         {localizedText(project.name, language) || project.id}
-      </div>
+      </Link>
       <div className="text-sm text-gray-500 dark:text-gray-400 font-mono truncate">
         {project.id}
       </div>
@@ -365,7 +369,7 @@ function AdminProjectsPage() {
       label: t('admin.projects.actions.edit', 'Edit project'),
       icon: 'pencil',
       priority: 'primary',
-      onClick: project => navigate(`/admin/projects/${encodeURIComponent(project.id)}`)
+      onClick: project => navigate(`/admin/projects/${encodeURIComponent(project.id)}/edit`)
     },
     {
       id: 'toggle',

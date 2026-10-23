@@ -65,8 +65,9 @@ import {
   sendProjectError
 } from '../projectItemRoutes.js';
 import { getItemText } from '../../services/knowledge/ItemTextService.js';
+import { estimateProject } from '../../services/projects/projectEstimate.js';
 import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
-import { RESULT_BUDGET_CHARS } from '../../sources/documentRetrieval.js';
+import { RESULT_BUDGET_TOKENS } from '../../sources/documentRetrieval.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -293,7 +294,7 @@ export default function registerAdminProjectsRoutes(app) {
       }
       res.json({
         loadAllBudgetTokens: settings.loadAllMaxTokens,
-        toolResultBudgetTokens: Math.floor(RESULT_BUDGET_CHARS / 4),
+        toolResultBudgetTokens: RESULT_BUDGET_TOKENS,
         projects
       });
     } catch (error) {
@@ -745,6 +746,26 @@ export default function registerAdminProjectsRoutes(app) {
       });
     } catch (error) {
       sendFailedOperationError(res, 'test project', error);
+    }
+  });
+
+  // Load every item, count its tokens and say whether the text belongs in
+  // the prompt (link items are fetched, iFinder ones with the admin's rights).
+  app.post(route('/:id/estimate'), ...gate, contentAdminAuth, async (req, res) => {
+    try {
+      const project = await loadAdminProject(req, res);
+      if (!project) return;
+      const settings = projectSettings(configCache.getPlatform() || {});
+      res.json(
+        await estimateProject(project, {
+          user: req.user,
+          language: req.user?.language || 'en',
+          budgetTokens: settings.loadAllMaxTokens,
+          toolResultBudgetTokens: RESULT_BUDGET_TOKENS
+        })
+      );
+    } catch (error) {
+      sendFailedOperationError(res, 'estimate project tokens', error);
     }
   });
 

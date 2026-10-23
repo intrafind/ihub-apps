@@ -117,6 +117,30 @@ export const renameChat = async (chatId, title) => {
 };
 
 /**
+ * Set the projects attached to a stored chat: the projects its questions can
+ * draw on besides its own container. The list replaces the attached ones, so
+ * taking a project away is the same call.
+ *
+ * @param {string} chatId - Chat id.
+ * @param {string[]} projectIds - The projects that stay attached.
+ * @returns {Promise<{ chat: Object }>} the response body; `chat.attachedProjectIds` is the list now
+ */
+export const setChatAttachedProjects = async (chatId, projectIds) => {
+  if (!chatId) {
+    throw new Error('Missing required parameters');
+  }
+
+  return handleApiResponse(
+    () =>
+      apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, {
+        attachedProjectIds: Array.isArray(projectIds) ? projectIds : []
+      }),
+    null,
+    null
+  );
+};
+
+/**
  * Erase a chat, its transcript and the runs it produced. Reports success even
  * when a concurrent delete won the race — the postcondition holds either way.
  *

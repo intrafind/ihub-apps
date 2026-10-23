@@ -55,6 +55,12 @@ const PREFIX_WEIGHT = 0.5;
 const MAX_PREFIX_EXPANSIONS = 30;
 
 const INDEX_CACHE_SIZE = 4;
+/**
+ * Most characters the cached document indexes may stand for together. A
+ * 10 MB text takes about 130 MB of heap with its index, so the cache is held to
+ * a weight as well as a count.
+ */
+const INDEX_CACHE_MAX_CHARS = 30_000_000;
 const STATS_CACHE_SIZE = 64;
 
 const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
@@ -316,9 +322,18 @@ function cacheGet(cache, key) {
   return value;
 }
 
-function cacheSet(cache, key, value, maxSize) {
+function cacheSet(cache, key, value, maxSize, { maxWeight = Infinity } = {}) {
   cache.set(key, value);
   if (cache.size > maxSize) cache.delete(cache.keys().next().value);
+  // Held to a weight too: drop the oldest until the characters indexed fit,
+  // never the entry just added (one text may be over the weight on its own).
+  let weight = 0;
+  for (const entry of cache.values()) weight += entry?.characters || 0;
+  for (const oldest of [...cache.keys()]) {
+    if (weight <= maxWeight || cache.size <= 1) break;
+    weight -= cache.get(oldest)?.characters || 0;
+    cache.delete(oldest);
+  }
 }
 
 const statsCache = new Map();
@@ -429,7 +444,7 @@ export function getDocumentIndex(content) {
   const cached = cacheGet(indexCache, key);
   if (cached) return cached;
   const index = indexDocuments([{ id: null, text: content }]);
-  cacheSet(indexCache, key, index, INDEX_CACHE_SIZE);
+  cacheSet(indexCache, key, index, INDEX_CACHE_SIZE, { maxWeight: INDEX_CACHE_MAX_CHARS });
   return index;
 }
 
@@ -834,7 +849,9 @@ export function selectContent(content, options = {}) {
   const query = typeof options.query === 'string' ? options.query.trim() : '';
   const section = typeof options.section === 'string' ? options.section.trim() : '';
 
-  if (measure(text) <= budgetChars) {
+  // Both measures are at least the length of the text, so a text longer than
+  // the budget needs no measuring (serializing 10 MB takes 100 ms).
+  if (text.length <= budgetChars && measure(text) <= budgetChars) {
     return { content: text, retrieval: { mode: 'full' } };
   }
 
