@@ -422,9 +422,12 @@ allows it.
 ### Transfer, delete and an owner who leaves
 
 - **Transfer ownership** hands the project to another active user, within that user's project
-  limit. Only the ownership moves: a share that reaches the former owner (their own entry, a group
-  they are in, everyone signed in) stays in force, so review the members afterwards when the
-  handover is meant to end their access.
+  limit. After you pick the new owner, a second step says what the transfer means and asks you to
+  confirm; nothing changes before that. Only the ownership moves: a share that reaches the former
+  owner (a group they are in, everyone signed in) stays in force, and the confirmation names those
+  shares, so review the members first when the handover is meant to end your access. Afterwards
+  you are back on the Projects page, which says who owns the project now and whether you still
+  see it under **Shared with me**.
 - **Delete project** removes the project and all its documents. Its chats are kept, outside the
   project. This cannot be undone.
 - When the owner's account is **deactivated**, the project stays readable for its members, but

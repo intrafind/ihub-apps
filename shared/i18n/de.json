@@ -6500,11 +6500,24 @@
       "title": "Anweisungen"
     },
     "transfer": {
-      "hint": "Der neue Besitzer darf das Projekt ändern und löschen. Sie verlieren Ihren Zugriff, bis er es wieder mit Ihnen teilt.",
+      "hint": "Wählen Sie, wer das Projekt übernimmt. Sie bestätigen im nächsten Schritt.",
       "search": "Personen suchen",
       "submit": "Übertragen",
       "submitTo": "An {{name}} übertragen",
-      "title": "Besitz übertragen"
+      "title": "Besitz übertragen",
+      "confirmTitle": "„{{project}}“ an {{name}} übertragen?",
+      "confirmIntro": "Das bedeutet die Übertragung:",
+      "confirmNewOwner": "{{name}} wird Besitzer und darf das Projekt ändern, teilen und löschen.",
+      "confirmYou": "Sie sind nicht mehr Besitzer: Sie können das Projekt weder löschen noch weiter übertragen.",
+      "confirmAccess": "Sie verlieren den Zugriff auf das Projekt, bis {{name}} es wieder mit Ihnen teilt.",
+      "confirmContent": "Dokumente, Anweisungen, Mitglieder und Chats bleiben im Projekt.",
+      "confirmUndo": "Nur der neue Besitzer kann es zurückübertragen.",
+      "confirm": "Ja, Besitz übertragen",
+      "transferring": "Wird übertragen…",
+      "done": "„{{project}}“ gehört jetzt {{name}}.",
+      "confirmKeepsShares": "Es bleibt geteilt mit {{audiences}}. Gehören Sie dazu, behalten Sie diesen Zugriff.",
+      "everyone": "allen angemeldeten Personen",
+      "doneStillShared": "Sie sehen es weiter unter „Mit mir geteilt“, weil eine Freigabe Sie erreicht."
     },
     "usage": {
       "bytesOf": "{{used}} von {{limit}}",

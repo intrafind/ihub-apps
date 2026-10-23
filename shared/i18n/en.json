@@ -6535,11 +6535,24 @@
       "title": "Instructions"
     },
     "transfer": {
-      "hint": "The new owner may change and delete the project. You lose your access unless they share it with you again.",
+      "hint": "Choose who takes the project over. You confirm in the next step.",
       "search": "Search people",
       "submit": "Transfer",
       "submitTo": "Transfer to {{name}}",
-      "title": "Transfer ownership"
+      "title": "Transfer ownership",
+      "confirmTitle": "Transfer “{{project}}” to {{name}}?",
+      "confirmIntro": "This is what the transfer means:",
+      "confirmNewOwner": "{{name}} becomes the owner and may change, share and delete the project.",
+      "confirmYou": "You are no longer the owner: you can no longer delete the project or transfer it.",
+      "confirmAccess": "You lose access to the project unless {{name}} shares it with you again.",
+      "confirmContent": "Documents, instructions, members and chats stay with the project.",
+      "confirmUndo": "Only the new owner can transfer it back.",
+      "confirm": "Yes, transfer ownership",
+      "transferring": "Transferring…",
+      "done": "“{{project}}” now belongs to {{name}}.",
+      "confirmKeepsShares": "It stays shared with {{audiences}}. If you belong to one of them, you keep that access.",
+      "everyone": "everyone signed in",
+      "doneStillShared": "You still see it under “Shared with me”, because a share reaches you."
     },
     "usage": {
       "bytesOf": "{{used}} of {{limit}}",

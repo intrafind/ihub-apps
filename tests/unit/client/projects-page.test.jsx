@@ -100,9 +100,9 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname}</div>;
 }
 
-function renderPage() {
+function renderPage(entry = '/projects') {
   return render(
-    <MemoryRouter initialEntries={['/projects']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route
           path="*"
@@ -204,6 +204,13 @@ describe('ProjectsPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent('/projects/prj_new')
     );
+  });
+
+  test('shows the message the previous page left once, and closes it', async () => {
+    renderPage({ pathname: '/projects', state: { notice: '“Old case” now belongs to Ben.' } });
+    expect(await screen.findByRole('status')).toHaveTextContent('“Old case” now belongs to Ben.');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   test('disables "New project" at the quota and hides it without the permission', async () => {

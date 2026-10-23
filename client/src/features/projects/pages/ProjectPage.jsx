@@ -88,10 +88,10 @@ function ProjectPageContent({ projectId }) {
   const [startingChat, setStartingChat] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  const backToList = () => {
+  const backToList = notice => {
     invalidateProjectsList();
     invalidateProjectsConfig();
-    navigate('/projects', { replace: true });
+    navigate('/projects', { replace: true, ...(notice ? { state: { notice } } : {}) });
   };
 
   const handleDelete = async () => {
@@ -105,12 +105,24 @@ function ProjectPageContent({ projectId }) {
     }
   };
 
-  const handleTransferred = result => {
-    if (result?.transferred || !result?.permissions?.canView) backToList();
-    else {
-      setProject(result);
-      invalidateProjectsList();
-    }
+  // Always back to the list, saying what happened: the caller is no longer
+  // the owner. A share that still reaches them (a group, everyone) keeps the
+  // project under "Shared with me", which the message explains; a full
+  // admin's compliance view of every project does not count as keeping it.
+  const handleTransferred = (result, newOwner) => {
+    const done = t('projects.transfer.done', '“{{project}}” now belongs to {{name}}.', {
+      project: projectDisplayName(project, language),
+      name: newOwner?.name || result?.owner?.name || ''
+    });
+    const stillMember = result?.role === 'editor' || result?.role === 'user';
+    backToList(
+      stillMember
+        ? `${done} ${t(
+            'projects.transfer.doneStillShared',
+            'You still see it under “Shared with me”, because a share reaches you.'
+          )}`
+        : done
+    );
   };
 
   if (loading && !project) {

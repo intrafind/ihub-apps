@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DataTablePagination from '../../admin/components/data-table/DataTablePagination';
@@ -120,6 +120,15 @@ export default function ProjectsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+  // A message the previous page left, e.g. after handing a project over.
+  const location = useLocation();
+  const [notice, setNotice] = useState(() =>
+    typeof location.state?.notice === 'string' ? location.state.notice : null
+  );
+  useEffect(() => {
+    // Shown once: a reload or a step back in history does not repeat it.
+    if (location.state?.notice) navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
 
@@ -193,6 +202,24 @@ export default function ProjectsPage() {
           </div>
           {createButton}
         </div>
+
+        {notice && (
+          <div
+            role="status"
+            className="mt-4 flex items-start gap-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30 px-4 py-3 text-sm text-green-800 dark:text-green-200"
+          >
+            <Icon name="check-circle" size="sm" className="mt-0.5 flex-none" />
+            <span className="flex-1">{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              aria-label={t('common.close', 'Close')}
+              className="flex-none text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100"
+            >
+              <Icon name="x" size="sm" />
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div
