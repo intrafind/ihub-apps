@@ -132,10 +132,16 @@ Used by the install wizard (admin fields), the user Connect dialog (user fields:
       "health": { "status": "ok", "checkedAt": "…", "actionCount": 21, "message": null }   // written by the health loop, not by admins
     }
   ],
-  "toolApproval": {                                // platform floor (#2945); absent = never, so upgrades change nothing
-    "defaults": { "external": "writes", "internal": "never" }
-  },
   "security": { "blockPrivateIps": true, "allowedHosts": [] }
+}
+```
+
+The platform approval floor of #2945 is not part of this file. It stays in `contents/config/platform.json`, which is what the `platform` argument of `resolveToolApproval` reads (section 3), and no migration moves it:
+
+```jsonc
+// contents/config/platform.json
+"toolApproval": {
+  "defaults": { "external": "writes", "internal": "never" }   // absent = never, so upgrades change nothing (#2945)
 }
 ```
 
@@ -187,7 +193,7 @@ The MCP `oauthUser` code moves, it is not rewritten: `mcpOAuthService.js` become
 
 The approval mechanism is the one planned and decided in [intrafind/ihub-apps#2945](https://github.com/intrafind/ihub-apps/issues/2945). It is built against today's tool files and `mcpServers.json`; this epic moves its configuration onto installed integrations and actions, without changing its runtime.
 
-- **Resolver.** `resolveToolApproval(toolDef, app, platform)` stamps every tool in `getToolsForApp` with `approval` (`never | writes | always`), `sideEffect` (`read | write | destructive | unknown`), `dataFlow` (`internal | external`) and `approvalSource`. Order, strictest wins: `platform.toolApproval.defaults` by data flow → the instance's `approval.default` → `approval.actions[action]` → the app binding, which may only tighten.
+- **Resolver.** `resolveToolApproval(toolDef, app, platform)` stamps every tool in `getToolsForApp` with `approval` (`never | writes | always`), `sideEffect` (`read | write | destructive | unknown`), `dataFlow` (`internal | external`) and `approvalSource`. Order, strictest wins: `toolApproval.defaults` from `platform.json` by data flow → the instance's `approval.default` → `approval.actions[action]` → the app binding, which may only tighten.
 - **Side effect.** Admin override first; then the connector's declaration, the OpenAPI method, or MCP annotations (`readOnlyHint: true` → read; `destructiveHint` → destructive; else write). Annotations of an instance that is not `trusted` are display-only: they never relax a gate, and a missing annotation counts as `unknown`, which `writes` mode treats as a write.
 - **New or changed actions.** The adapter fingerprints name, side effect and input schema. A new action, or one whose fingerprint changed, gets `approval.newOrChanged` (default `always`) and a badge in the Actions tab until an admin reviews it.
 - **Seam.** One `approvalSeam` in `services/loop/seams/`, ordered before the `chat-tools` seam emits `tool/started` and before passthrough, shared by chat, workflow and agent nodes and scheduled runs. Gated calls get their own batch in `segmentPlanner`.
@@ -207,7 +213,7 @@ The approval mechanism is the one planned and decided in [intrafind/ihub-apps#29
 | `POST /api/admin/integrations/:id/_test` · `_enable` · `_disable` · `_update` (from registry) · `_detach` | lifecycle |
 | `GET /api/admin/integrations/:id/actions` · `PUT …/actions` | live action list with fingerprints, enable, overrides, approval modes |
 | `GET /api/admin/integrations/:id/actions/:action` | action detail: schema as the model sees it, side effect, data flow, approval and its source, guidance, examples, bindings, usage |
-| `POST /api/admin/integrations/:id/actions/:action/_test` `{ args, connection: "me" \| "shared:<id>", confirmWrite }` | runs the action through its adapter, without a model; returns status, duration, the request as sent (secrets redacted), the raw response and the Answer Sources produced; refuses a write or destructive action without `confirmWrite`; audit `action.test` |
+| `POST /api/admin/integrations/:id/actions/:action/_test` `{ args, connection: "me" \| "shared:<id>", confirmWrite }` | runs the action through its adapter, without a model; returns status, duration, the request as sent (secrets redacted), the raw response and the Answer Sources produced; refuses every action whose side effect is not `read` (write, destructive or unknown) without `confirmWrite`; audit `action.test` |
 | `POST /api/admin/integrations/builder/_import` `{ kind: openapi \| mcp \| a2a, source }` · `POST /api/admin/integrations/builder/_export/:id` | custom integrations: import actions from a source; export a custom integration as a definition for a registry |
 | `GET /api/admin/integrations/:id/connections` · `DELETE …/connections/:connId` | connected principals, revoke |
 | `GET/POST /api/admin/integrations/connections/shared` | shared connections |
@@ -218,7 +224,7 @@ The approval mechanism is the one planned and decided in [intrafind/ihub-apps#29
 | `POST /api/integrations/requests` | member asks for a catalog integration (phase 2) |
 | `GET /api/integrations/:id/files?path` (storage adapters) | file browser, replaces the three provider-specific browser routes |
 
-Route ids are validated against the registry (no path building from input), outbound calls go through `safeFetch` and the SSRF guard, response sizes are capped as in `OpenApiToolRunner`. All admin routes write audit entries (`integration.install|update|enable|disable|uninstall`, `connection.create|revoke`, `action.policyChange`, `action.test`, and `action.execute` for every call that went through an approval or has a write or destructive side effect, without payloads).
+Route ids are validated against the registry (no path building from input), outbound calls go through `safeFetch` and the SSRF guard, response sizes are capped as in `OpenApiToolRunner`. All admin routes write audit entries (`integration.install|update|enable|disable|uninstall`, `connection.create|revoke`, `action.policyChange`, `action.test`, and `action.execute` for every call that went through an approval or whose side effect is not `read` (write, destructive or unknown), without payloads).
 
 ## 5. Client
 
@@ -250,7 +256,7 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | --- | --- |
 | `V1xx__integrations_from_mcp_servers` | each `mcpServers.json` server → an ad-hoc definition `local/<id>` (protocol `mcp-remote` or `mcp-stdio`) + an instance with the same id, `auth` mapped (`oauthUser` → `oauth-user`, others → `service-account` with the same refs), `allowedTools` → `actions.enabled`, `apps.enabled` → `views` |
 | `V1xx__integrations_from_a2a` | same for `a2aAgents.json` |
-| `V1xx__integrations_from_platform` | `platform.jira` → instance `jira` of the shipped `com.intrafind/jira` definition; `platform.cloudStorage.providers[]` → instances of the storage definitions; `platform.iFinder` → instance `ifinder`; web search providers → instances of `websearch/*` with the API key moved into the credential store; Entra from env → instance `entra` (env still read as fallback, like providers) |
+| `V1xx__integrations_from_platform` | `platform.jira` → instance `jira` of the shipped `com.intrafind/jira` definition; `platform.cloudStorage.providers[]` → instances of the storage definitions; `platform.iFinder` → instance `ifinder`; web search providers → instances of `websearch/*` with the API key moved into the credential store; Entra from env → instance `entra` (env still read as fallback, like providers); `platform.toolApproval` is not moved and stays the approval floor |
 | `V1xx__integrations_from_tools` | shipped tools in `contents/tools/` map onto the built-in definitions (`iFinder_*` → iFinder, `braveSearch`/`staanSearch`/`qwantSearch`/`read_url` → Web, `entraPeopleSearch_*` → Microsoft 365, `jira_*` → Jira, `ask_user`, `evidence`, scheduler and agent tools → iHub); every other file (admin-created script tools, OpenAPI tools) becomes a custom integration `custom/<id>` with its functions as actions, its script and `credentialRef` carried over; `enabled` and `requiresApproval` / #2945 `approval` / `sideEffect` fields move to the instance; `groups.permissions.tools` entries map to `permissions.integrations` (and stay the source for MCP/A2A gateway exposure, which keeps addressing actions by tool id) |
 | `V1xx__groups_integrations_permission` | `permissions.integrations` on every group: `["*"]` for groups that could use everything before (there was no gating), the browser extension's `allowedGroups` untouched |
 | `V1xx__apps_integrations_binding` | `app.tools` (script ids, base ids, MCP server ids, `a2a__` refs, including `ask_user`, `evidence`, scheduler and agent tools, which now belong to the built-in iHub integration), `app.upload.cloudStorageUpload`, `app.websearch` → `app.integrations[]`; `app.tools` is removed; app overrides of #2945's `toolApproval` move onto the binding |

@@ -34,7 +34,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 - One catalog, one install flow, one enable/configure model, one user-side list, one chat picker, one connect card, one confirmation card. Everything else is an adapter.
 - Delegated identity by default; shared credentials explicit and visible.
 - Admin enables, user connects, user picks: three decisions, three owners.
-- Writes are confirmed by a human unless an admin relaxes it per integration; read actions never ask.
+- Approval follows [intrafind/ihub-apps#2945](https://github.com/intrafind/ihub-apps/issues/2945): `never`, `writes` or `always` per integration and action, with a platform floor by data flow (external data: ask on writes; internal: never). Admins may also require approval for external reads; apps can only tighten.
 - Integrations are files: installable from a registry, updatable, detachable, auditable.
 - Standards first: MCP authorization and registry, MCPB config fields, MCP Apps, tool annotations.
 
@@ -56,7 +56,7 @@ We propose one **integrations platform** with three layers, the shape every comp
    User ───────► Connection (connect / reconnect / disconnect)        │
                  │                                                   │
    Chat ───────► Picker (on / off per chat) ──► Model calls action ──► Approval gate ──► Adapter ──► System
-                                                                       (read: run · write: ask · destructive: ask)
+                                                                       (never · writes · always, per #2945)
 ```
 
 ## Decisions

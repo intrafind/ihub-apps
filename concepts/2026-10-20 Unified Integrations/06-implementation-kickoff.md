@@ -59,7 +59,8 @@ GitHub issue per session. The issue number for this session is: #____ (fill in).
   secrets). A sensitive value in a config file is a bug.
 - Nobody reconnects after the upgrade. The re-index mapping in 04-architecture.md §7 is the
   contract; test it with fixtures from all four legacy stacks.
-- An action with no annotation on an untrusted integration is a write.
+- An action with no annotation on an untrusted integration keeps the side effect `unknown`; `writes` mode,
+  the test runner and the audit treat `unknown` like a write, but the value is never rewritten to `write`.
 - Never retry a call automatically after an adapter or transport failure; only a pre-execution
   INTEGRATION_AUTH_REQUIRED result is retried after connecting.
 - Outbound calls go through safeFetch and the SSRF guard; route ids are validated against the
