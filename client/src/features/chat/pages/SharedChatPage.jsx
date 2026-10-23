@@ -422,7 +422,6 @@ export default function SharedChatPage() {
               readOnly
               appId={share.appId || undefined}
               chatId={share.id}
-              imagesPersisted
               app={null}
               models={[]}
             />

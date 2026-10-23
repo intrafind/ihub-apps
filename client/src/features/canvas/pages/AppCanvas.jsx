@@ -23,12 +23,29 @@ import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useCanvas from '../hooks/useCanvas';
-import { fetchAppDetails } from '../../../api';
+import { deleteChat, fetchAppDetails } from '../../../api';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
-import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
+import { getOrCreateChatId, readChatId, resetChatId } from '../../../utils/chatId';
+import useStoredChatHydration from '../../chat/hooks/useStoredChatHydration';
 
 // Import AI-assisted canvas specific styles
 import './AppCanvas.css';
+
+/**
+ * The canvas chat this tab has for an app, or a new one. Records in `freshRef`
+ * whether it was minted just now, which tells hydration there is nothing in
+ * the store to fetch.
+ *
+ * @param {string} appId - App id.
+ * @param {{current: string|null}} freshRef - Set to the id when it is new.
+ * @returns {string} The chat id.
+ */
+function openCanvasChatId(appId, freshRef) {
+  const remembered = readChatId(appId, 'canvas');
+  const id = remembered || getOrCreateChatId(appId, 'canvas');
+  freshRef.current = remembered ? null : id;
+  return id;
+}
 
 export default function AppCanvas() {
   const { t, i18n } = useTranslation();
@@ -133,16 +150,23 @@ export default function AppCanvas() {
   const [contentModalData, setContentModalData] = useState(null);
 
   const quillRef = useRef(null);
-  const chatId = useRef(getOrCreateChatId(appId, 'canvas'));
+  // The canvas chat id this tab minted rather than remembered: it cannot be in
+  // the store yet, so hydration skips the fetch that could only 404.
+  const freshChatIdRef = useRef(null);
+  const chatId = useRef(null);
+  if (chatId.current === null) chatId.current = openCanvasChatId(appId, freshChatIdRef);
   const selectionStateRef = useRef({ selectedText: '', editorContent: '' });
 
   useEffect(() => {
-    chatId.current = getOrCreateChatId(appId, 'canvas');
+    chatId.current = openCanvasChatId(appId, freshChatIdRef);
   }, [appId]);
   const chatInputRef = useRef(null);
 
   // Initialize custom hooks
-  // Chat message management
+  // Chat message management. The canvas chat is stored like any chat, as a
+  // temporary one: it belongs to the document being edited, not the history.
+  // The tab remembers which chat it is, so a reload fetches it back.
+  const canvasChat = useAppChat({ appId, chatId: chatId.current, ephemeral: true });
   const {
     messages,
     processing,
@@ -153,7 +177,22 @@ export default function AppCanvas() {
     clearMessages,
     cancelGeneration,
     addSystemMessage
-  } = useAppChat({ appId, chatId: chatId.current });
+  } = canvasChat;
+  useStoredChatHydration({
+    chat: canvasChat,
+    chatId: chatId.current,
+    isFreshChat: chatId.current === freshChatIdRef.current
+  });
+
+  /** Leave the canvas chat for a new one; the old one is listed nowhere, so it goes. */
+  const resetCanvasChat = useCallback(() => {
+    if (messages.some(message => message.role === 'user')) {
+      deleteChat(chatId.current).catch(() => {});
+    }
+    clearMessages();
+    chatId.current = resetChatId(appId, 'canvas');
+    freshChatIdRef.current = chatId.current;
+  }, [appId, clearMessages, messages]);
 
   // Handle general prompt submission - simplified to match AppChat
   const handlePromptSubmit = useCallback(
@@ -252,9 +291,8 @@ export default function AppCanvas() {
   useVoiceCommands({
     messages,
     clearChat: () => {
-      clearMessages();
       clearCanvasContent();
-      chatId.current = resetChatId(appId, 'canvas');
+      resetCanvasChat();
     },
     sendMessage: text => {
       handlePromptSubmit(text); // This will be treated as a string input
@@ -428,8 +466,7 @@ export default function AppCanvas() {
       )
     ) {
       clearCanvasContent();
-      clearMessages();
-      chatId.current = resetChatId(appId, 'canvas');
+      resetCanvasChat();
     }
   };
 

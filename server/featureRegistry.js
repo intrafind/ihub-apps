@@ -119,16 +119,16 @@ export const featureRegistry = [
   },
   // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
   // page backed by fixtures. The history UI is now driven by the durable-chat
-  // store, so `chatPersistence` is the single switch for both storing chats and
-  // showing them. A saved `chatHistoryPreview: true` is deliberately *not*
-  // promoted to it — the preview showed sample data, and this one writes real
+  // store, so `chatPersistence` is the single switch for keeping chats and
+  // showing them (every chat is stored; without it each one is temporary). A
+  // saved `chatHistoryPreview: true` is deliberately *not* promoted to it — the preview showed sample data, and this one writes real
   // conversations to disk — so V097 warns instead of deciding.
   {
     id: 'chatPersistence',
-    name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
+    name: { en: 'Chat History', de: 'Chatverlauf' },
     description: {
-      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat. API clients then post only the new message instead of the whole history (or send ephemeral: true)',
-      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat. API-Clients senden dann nur noch die neue Nachricht statt des gesamten Verlaufs (oder ephemeral: true)'
+      en: 'Keep chats in a history signed-in users can reopen on any device — a run keeps going when the browser closes and its answer is waiting in the chat. Every chat is stored on the server either way; without this, each one is temporary: never listed, and deleted after the temporary-chat retention period (24 hours by default)',
+      de: 'Chats in einem Verlauf behalten, den angemeldete Benutzer auf jedem Gerät wieder öffnen können — ein Lauf geht weiter, wenn der Browser geschlossen wird, und seine Antwort wartet im Chat. Gespeichert wird jeder Chat ohnehin auf dem Server; ohne diese Funktion ist jeder temporär: nie aufgelistet und nach der Aufbewahrungsdauer für temporäre Chats gelöscht (standardmäßig 24 Stunden)'
     },
     category: 'preview',
     default: false,
@@ -138,8 +138,8 @@ export const featureRegistry = [
     id: 'chatSharing',
     name: { en: 'Chat Sharing', de: 'Chats teilen' },
     description: {
-      en: 'Let users share a stored chat as a read-only link — with users they pick, with anyone signed in, or publicly without sign-in. Requires Durable Chats. Which of the three is offered, and the limits on a link, are set under Admin → Chat History',
-      de: 'Nutzer können einen gespeicherten Chat als schreibgeschützten Link teilen — mit ausgewählten Nutzern, mit allen Angemeldeten oder öffentlich ohne Anmeldung. Erfordert Dauerhafte Chats. Welche der drei Varianten angeboten werden und die Grenzen eines Links werden unter Admin → Chat-Verlauf festgelegt'
+      en: 'Let users share a stored chat as a read-only link — with users they pick, with anyone signed in, or publicly without sign-in. Requires Chat History. Which of the three is offered, and the limits on a link, are set under Admin → Chat History',
+      de: 'Nutzer können einen gespeicherten Chat als schreibgeschützten Link teilen — mit ausgewählten Nutzern, mit allen Angemeldeten oder öffentlich ohne Anmeldung. Erfordert den Chatverlauf. Welche der drei Varianten angeboten werden und die Grenzen eines Links werden unter Admin → Chat-Verlauf festgelegt'
     },
     category: 'content',
     default: false
@@ -148,8 +148,8 @@ export const featureRegistry = [
     id: 'scheduledTasks',
     name: { en: 'Scheduled Tasks', de: 'Geplante Aufgaben' },
     description: {
-      en: 'Let users save a prompt as a task that runs by itself — once, on an interval, daily, weekly, monthly, by cron or on demand — as the user, with the app’s tools and integrations. Every run is its own chat. Requires Durable Chats. Who may create tasks is a group permission; limits are set under Admin → Scheduled Tasks',
-      de: 'Nutzer speichern einen Prompt als Aufgabe, die von selbst läuft — einmalig, im Intervall, täglich, wöchentlich, monatlich, per Cron oder auf Abruf — als der Nutzer, mit den Tools und Integrationen der App. Jeder Lauf ist ein eigener Chat. Erfordert Dauerhafte Chats. Wer Aufgaben anlegen darf, ist eine Gruppenberechtigung; Grenzen werden unter Admin → Geplante Aufgaben festgelegt'
+      en: 'Let users save a prompt as a task that runs by itself — once, on an interval, daily, weekly, monthly, by cron or on demand — as the user, with the app’s tools and integrations. Every run is its own chat. Requires Chat History. Who may create tasks is a group permission; limits are set under Admin → Scheduled Tasks',
+      de: 'Nutzer speichern einen Prompt als Aufgabe, die von selbst läuft — einmalig, im Intervall, täglich, wöchentlich, monatlich, per Cron oder auf Abruf — als der Nutzer, mit den Tools und Integrationen der App. Jeder Lauf ist ein eigener Chat. Erfordert den Chatverlauf. Wer Aufgaben anlegen darf, ist eine Gruppenberechtigung; Grenzen werden unter Admin → Geplante Aufgaben festgelegt'
     },
     category: 'preview',
     default: false,

@@ -28,7 +28,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
-import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
+import { isChatHistoryConfigured } from '../../services/chat/chatPersistence.js';
 import {
   SCHEDULED_TASKS_FEATURE,
   scheduledTaskSettings
@@ -75,7 +75,7 @@ const statusBodySchema = z
 
 function resolveStatus(platform, features) {
   const featureEnabled = isFeatureEnabled(SCHEDULED_TASKS_FEATURE, features);
-  const chatPersistence = isChatPersistenceConfigured(features, platform);
+  const chatPersistence = isChatHistoryConfigured(features, platform);
   const settings = scheduledTaskSettings(platform);
   return {
     featureEnabled,

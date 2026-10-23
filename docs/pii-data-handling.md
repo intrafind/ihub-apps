@@ -10,7 +10,7 @@ without reverse-engineering the codebase.
 
 | Category | Captured by default? | Persistence | Disable / anonymize via |
 | --- | --- | --- | --- |
-| Chat messages (user prompts, LLM responses) | **No** (not stored to disk) | In-memory only; client `sessionStorage` until tab close | n/a — never persisted server-side |
+| Chat messages (user prompts, LLM responses) | **Yes** (every chat is stored server-side) | `contents/data/chats/`, `contents/data/chat-messages/` and the run ledger `contents/data/run-log/`. Temporary chats (the default while the Chat History feature is off, plus anonymous and incognito chats): **24 h** after their last activity, or when the user leaves them. Kept chats: **90 d** | `chats.temporaryRetentionHours` (down to 1 h); Chat History feature off keeps every chat temporary; `chats.retentionDays`, `runLog.retentionDays` |
 | User identity (id, email, name, groups) | Yes (when logged in) | `contents/config/users.json` (local accounts) | Anonymous auth mode; admin-driven account deletion |
 | JWT session cookie | Yes (when logged in) | Browser cookie + signed token; **8 h** default | `auth.sessionTimeoutMinutes` |
 | Audit log (admin actions) | Yes | `contents/data/audit-log/YYYY-MM-DD.jsonl`; **365 d** default | `audit.cleanupEnabled`, `audit.retentionDays` |
@@ -29,10 +29,13 @@ without reverse-engineering the codebase.
 | OAuth refresh tokens | Yes (hashed) | `contents/data/oauth-refresh-tokens.json`; **30 d** | `oauth.refreshTokenExpirationDays` |
 | Integration tokens | Yes (encrypted) | `contents/integrations/`; AES-256-GCM | Per-user revoke; admin disable |
 
-> **Bottom line**: out of the box, no chat content lands on disk. The only durable
-> PII is the user identity (when local accounts are used), audit entries for admin
-> actions, anonymized-or-pseudonymous usage counters, and optional feedback the
-> user explicitly submitted.
+> **Bottom line**: out of the box, chat content is stored on the server only as
+> temporary chats, deleted `chats.temporaryRetentionHours` (24 by default) after
+> their last activity, sooner when the user starts a new chat or clears one. Beyond that, the durable PII is the user identity (when
+> local accounts are used), audit entries for admin actions,
+> anonymized-or-pseudonymous usage counters, optional feedback the user
+> explicitly submitted, and — once an admin turns the Chat History feature on —
+> the chats users keep.
 
 ## What is captured, in detail
 
@@ -59,15 +62,28 @@ lifetime is 8 hours (`auth.sessionTimeoutMinutes`, see
 
 ### 2. Chat content
 
-User messages and LLM responses live only in:
+Every chat is stored server-side — the server owns the conversation and the
+browser keeps no copy (see [Chat Persistence](chat-persistence.md)):
 
-- the in-flight HTTP request body and the model provider's API call;
-- the browser's `sessionStorage` (key `ai_hub_chat_messages_<chatId>`), cleared
-  when the tab closes;
-- the OS-level container memory of the LLM provider you point iHub at.
+- the transcript in `contents/data/chat-messages/<chatId>.json` and its metadata
+  in `contents/data/chats/<chatId>.json`, owned by the user (in the
+  `runLog.identityMode` the chat was created under) or, for an anonymous
+  visitor, by a hash of its `ihubGuest` cookie;
+- each turn's run in the ledger, `contents/data/run-log/`, including the
+  model-visible message array;
+- pictures and files a turn produced in the artifact store.
 
-The server **does not write a transcript to disk** by default. The two known
-ways chat content can become durable are:
+How long depends on whether the chat is kept:
+
+- **Temporary chats** — every chat while the Chat History feature is off, every
+  anonymous visitor's chat, incognito chats, compare panels and the canvas —
+  are deleted `chats.temporaryRetentionHours` (24) after their last activity by
+  an hourly sweep, and straight away when the user starts a new chat or clears
+  it. Their ledger runs go with them.
+- **Kept chats** (Chat History on) follow `chats.retentionDays` (90) and
+  `chats.maxChatsPerUser`; users delete them from the history.
+
+Other ways chat content can become durable are:
 
 1. **Feedback submissions** — when a user clicks a rating, the first 300
    characters of the rated message (plus any free-text comment) are appended
@@ -262,14 +278,17 @@ and anonymized usage counters.
     "monthlyRetentionDays": 365,
     "feedbackRetentionDays": 90
   },
+  "chats": { "temporaryRetentionHours": 1 },
   "auth": { "sessionTimeoutMinutes": 60 }
 }
 ```
 
 With this configuration:
 
-- Chat content is never written to disk (stdout `logger.info` calls below the
-  `warn` threshold are skipped, feedback writes are disabled).
+- Chat content is kept on disk only as temporary chats for the
+  `chats.temporaryRetentionHours` window (set it as low as `1`; the Chat History
+  feature stays off), stdout `logger.info` calls below the `warn` threshold are
+  skipped and feedback writes are disabled.
 - IPs in audit entries and log lines are masked to /24 (IPv4) or /48 (IPv6).
 - Audit entries roll off after 90 days.
 - Usage events are anonymized at write time and roll off after 30 days; rollups

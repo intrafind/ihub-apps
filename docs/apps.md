@@ -537,7 +537,7 @@ Each app is defined with the following essential properties:
 | `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
 | `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
 | `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
-| `ephemeral`             | Boolean | Optional. When `true`, the chat is never stored. Messages exist only in memory while the chat is open and are discarded when the user switches apps or reloads the page. No chat history or iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`). While active, the input is highlighted and a notice explains that messages are not saved — similar to a browser's incognito mode. Default: `false` |
+| `ephemeral`             | Boolean | Optional. When `true`, the app's chats are temporary: stored on the server like any chat (a reload brings the conversation back), but never listed in the chat history or shareable, and deleted a day after their last activity — or as soon as the user starts a new chat. No iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`; the toggle only appears where the chat history is on). While active, a notice says the chat is not saved to the history — similar to a browser's incognito mode. See [Chat Persistence → Temporary chats](chat-persistence.md#temporary-chats-and-guests). Default: `false` |
 | `allowEmptyContent`     | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`              |
 | `allowedModels`         | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                       |
 | `disallowModelSelection`| Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                     |
@@ -1238,7 +1238,7 @@ is no longer accepted — see [Models](models.md#model-thinking-configuration).
 #### Other Options
 
 - `autoStart`: Automatically begin the chat on app open, sending the configured `prompt` immediately
-- `ephemeral`: Never store the chat. Messages live only in memory while the chat is open and are discarded on app switch or reload. Useful for privacy-sensitive apps such as iFinder document chats
+- `ephemeral`: Start temporary chats — never listed in the history or shared, deleted a day after their last activity or when the user leaves them. Useful for privacy-sensitive apps such as iFinder document chats
 - `allowEmptyContent`: Allow submission without content input
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model

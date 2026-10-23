@@ -106,8 +106,14 @@ async function withRepository(fn) {
  * @param {string[]} [options.runIds] - Ledger runs the chat recorded.
  * @returns {Promise<Object>} The stored chat.
  */
-async function storeChat(repository, { chatId, ownerId, ageDays, runIds = [] }) {
-  await repository.ensureChat({ chatId, ownerId, identityMode: 'default', appId: 'chat' });
+async function storeChat(repository, { chatId, ownerId, ageDays, runIds = [], temporary = false }) {
+  await repository.ensureChat({
+    chatId,
+    ownerId,
+    identityMode: 'default',
+    appId: 'chat',
+    temporary
+  });
   await repository.appendMessage(chatId, { role: 'user', content: `body of ${chatId}` });
   return repository.updateChat(chatId, {
     lastMessageAt: new Date(Date.now() - ageDays * DAY_MS).toISOString(),
@@ -489,7 +495,7 @@ describe('sweepChats: nothing to sweep', () => {
 /**
  * The two halves of the persistence predicate that are not the platform config.
  *
- * The sweep evaluates the same `isChatPersistenceConfigured` the write path
+ * The sweep evaluates the same `isChatHistoryConfigured` the write path
  * does — feature flag, `chats.enabled`, storage readiness — so a test that
  * wants a sweep to happen has to say the feature is on and storage is up.
  */
@@ -684,8 +690,8 @@ describe('startChatRetentionSweep', () => {
           intervalMs: 60_000
         });
         try {
-          await waitFor(() => reads > 0, 'the first tick to read the platform config');
-          await delay(POLL_MS * 2);
+          await delay(POLL_MS * 4);
+          assert.equal(reads, 0, 'the tick stops before it reads anything');
           assert.ok(await repository.getChat('chat-ancient'));
         } finally {
           stop();
@@ -713,7 +719,10 @@ describe('startChatRetentionSweep', () => {
           repository,
           ...SWEEP_ON,
           getPlatformConfig,
-          intervalMs: 200
+          intervalMs: 200,
+          // The history rules run at most daily; this test is about the
+          // config being re-read, so it lets them run on every tick.
+          historyIntervalMs: 0
         });
         try {
           await waitFor(() => reads > 0, 'the immediate first tick');
@@ -731,6 +740,204 @@ describe('startChatRetentionSweep', () => {
           await delay(POLL_MS * 2);
         }
       });
+    });
+  });
+});
+
+describe('temporary chats', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+
+  /** Age a stored chat's last activity by `hours`. */
+  const ageHours = (repository, chatId, hours) =>
+    repository.updateChat(chatId, {
+      lastMessageAt: new Date(Date.now() - hours * HOUR_MS).toISOString()
+    });
+
+  it('expire after temporaryRetentionHours, and the rule never touches a kept chat', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-old',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-old', 30);
+      await storeChat(repository, {
+        chatId: 'tmp-new',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-new', 2);
+      await storeChat(repository, { chatId: 'kept-old', ownerId: OWNER, ageDays: 400 });
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 0,
+        temporaryRetentionHours: 24,
+        deleteRun: async () => {},
+        removeWorkflowState: async () => {}
+      });
+
+      assert.equal(removed, 1);
+      assert.equal(await repository.getChat('tmp-old'), null);
+      assert.ok(await repository.getChat('tmp-new'), 'still inside its window');
+      assert.ok(await repository.getChat('kept-old'), 'the history rules were off');
+    });
+  });
+
+  it('leave a chat a turn is producing into, however old', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-busy',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-busy', 30);
+      // A turn that claimed the chat just now: alive by any measure.
+      await repository.updateChat('tmp-busy', {
+        status: 'running',
+        activeRunId: 'run-live',
+        runClaimedAt: new Date().toISOString()
+      });
+      // One a restart left `running` long ago, with nothing behind it.
+      await storeChat(repository, {
+        chatId: 'tmp-stranded',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-stranded', 30);
+      await repository.updateChat('tmp-stranded', { status: 'running', activeRunId: 'run-gone' });
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 0,
+        temporaryRetentionHours: 24,
+        deleteRun: async () => {},
+        removeWorkflowState: async () => {}
+      });
+
+      assert.equal(removed, 1);
+      assert.ok(await repository.getChat('tmp-busy'), 'a running turn keeps its chat');
+      assert.equal(await repository.getChat('tmp-stranded'), null, 'a dead run does not');
+    });
+  });
+
+  it('judge the rule again under the lock: a chat kept after the scan stays', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-kept-late',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-kept-late', 30);
+      // The owner presses "keep" between the scan and the delete.
+      const deleteChat = repository.deleteChat.bind(repository);
+      repository.deleteChat = async (chatId, options) => {
+        await repository.keepChat(chatId);
+        return deleteChat(chatId, options);
+      };
+      const deletedRuns = [];
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 0,
+        temporaryRetentionHours: 24,
+        deleteRun: async runId => deletedRuns.push(runId),
+        removeWorkflowState: async () => {}
+      });
+
+      assert.equal(removed, 0);
+      const chat = await repository.getChat('tmp-kept-late');
+      assert.ok(chat, 'kept since the scan');
+      assert.equal(chat.temporary, undefined);
+      assert.deepEqual(deletedRuns, [], 'nothing cascaded for a chat that stayed');
+    });
+  });
+
+  it('count against no quota', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, { chatId: 'kept-a', ownerId: OWNER, ageDays: 2 });
+      await storeChat(repository, { chatId: 'kept-b', ownerId: OWNER, ageDays: 1 });
+      for (let index = 0; index < 3; index += 1) {
+        await storeChat(repository, {
+          chatId: `tmp-${index}`,
+          ownerId: OWNER,
+          ageDays: 0,
+          temporary: true
+        });
+      }
+
+      await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 2,
+        temporaryRetentionHours: 24,
+        deleteRun: async () => {},
+        removeWorkflowState: async () => {}
+      });
+
+      assert.ok(await repository.getChat('kept-a'), 'temporary chats do not push kept ones out');
+      assert.ok(await repository.getChat('kept-b'));
+      for (let index = 0; index < 3; index += 1) {
+        assert.ok(await repository.getChat(`tmp-${index}`));
+      }
+    });
+  });
+
+  it('are swept with the chat history off, while kept chats are not', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-stale',
+        ownerId: OWNER,
+        ageDays: 3,
+        temporary: true
+      });
+      await storeChat(repository, { chatId: 'kept-ancient', ownerId: OWNER, ageDays: 4000 });
+      const stop = startChatRetentionSweep({
+        repository,
+        getFeatures: () => ({ chatPersistence: false }),
+        storageReady: () => true,
+        getPlatformConfig: () => ({ chats: { retentionDays: 1, maxChatsPerUser: 1 } }),
+        intervalMs: 60_000
+      });
+      try {
+        await waitFor(
+          async () => (await repository.getChat('tmp-stale')) === null,
+          'the temporary chat to expire'
+        );
+        assert.ok(await repository.getChat('kept-ancient'), 'history off is not a purge');
+      } finally {
+        stop();
+        await delay(POLL_MS * 2);
+      }
+    });
+  });
+
+  it('are hidden from the listing', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, { chatId: 'kept', ownerId: OWNER, ageDays: 1 });
+      await storeChat(repository, { chatId: 'tmp', ownerId: OWNER, ageDays: 0, temporary: true });
+      const { items } = await repository.listChats(OWNER);
+      assert.deepEqual(
+        items.map(chat => chat.id),
+        ['kept']
+      );
+      // Kept, it is listed like any other chat — and cannot be made temporary again.
+      const kept = await repository.keepChat('tmp');
+      assert.equal(kept.temporary, undefined);
+      assert.equal(
+        (await repository.updateChat('tmp', { temporary: true })).temporary,
+        undefined,
+        'a patch cannot set it'
+      );
+      assert.equal((await repository.listChats(OWNER)).items.length, 2);
     });
   });
 });

@@ -44,11 +44,9 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 
 const mockFetchChat = jest.fn();
 const mockFetchPlatformConfig = jest.fn();
-const mockCreateChatHandoff = jest.fn();
 jest.mock('../../../client/src/api', () => ({
   fetchApps: jest.fn(() => Promise.resolve([])),
   fetchChat: (...args) => mockFetchChat(...args),
-  createChatHandoff: (...args) => mockCreateChatHandoff(...args),
   fetchPlatformConfig: (...args) => mockFetchPlatformConfig(...args)
 }));
 
@@ -72,7 +70,7 @@ jest.mock('../../../client/src/utils/externalNavigation', () => ({
 }));
 
 const useStoredChatHydration =
-  require('../../../client/src/features/office/hooks/useStoredChatHydration').default;
+  require('../../../client/src/features/chat/hooks/useStoredChatHydration').default;
 const useOfficeChatPersistence =
   require('../../../client/src/features/office/hooks/useOfficeChatPersistence').default;
 const {
@@ -98,11 +96,6 @@ beforeEach(() => {
   mockInvalidateChatsCache.mockReset();
   mockOpenExternalUrl.mockReset();
   mockOpenExternalUrl.mockResolvedValue(true);
-  mockCreateChatHandoff.mockReset();
-  mockCreateChatHandoff.mockResolvedValue({
-    token: 'tok.secret',
-    expiresAt: '2026-10-06T10:10:00Z'
-  });
 });
 
 describe('buildWebChatUrl', () => {
@@ -178,7 +171,7 @@ describe('useOfficeChatPersistence', () => {
 describe('useStoredChatHydration', () => {
   const hydrate = props =>
     renderHook(p => useStoredChatHydration(p), {
-      initialProps: { serverBacked: true, isFreshChat: false, chatId: 'c1', ...props }
+      initialProps: { isFreshChat: false, chatId: 'c1', ...props }
     });
 
   test('a chat the pane minted and never sent is not fetched', () => {
@@ -186,13 +179,6 @@ describe('useStoredChatHydration', () => {
     hydrate({ chat, isFreshChat: true });
     expect(mockFetchChat).not.toHaveBeenCalled();
     expect(chat.finishHydration).toHaveBeenCalled();
-  });
-
-  test('without durable chats nothing happens', () => {
-    const chat = makeChat();
-    hydrate({ chat, serverBacked: false });
-    expect(mockFetchChat).not.toHaveBeenCalled();
-    expect(chat.finishHydration).not.toHaveBeenCalled();
   });
 
   test('a stored chat is loaded with its settings and variables, and the list is refreshed', async () => {
@@ -279,7 +265,7 @@ describe('useStoredChatHydration', () => {
       .mockResolvedValueOnce({ chat: { id: 'c2' }, messages: [] });
     const chat = makeChat();
     const { rerender } = hydrate({ chat });
-    rerender({ chat, serverBacked: true, isFreshChat: false, chatId: 'c2' });
+    rerender({ chat, isFreshChat: false, chatId: 'c2' });
     await flush();
 
     resolveFirst({ chat: { id: 'c1' }, messages: [{ id: 'old', role: 'user', content: 'x' }] });
@@ -290,14 +276,14 @@ describe('useStoredChatHydration', () => {
 
   test('a finished turn refreshes the chat list', () => {
     const { rerender } = hydrate({ chat: makeChat(), isFreshChat: true });
-    rerender({ chat: makeChat({ processing: true }), serverBacked: true, chatId: 'c1' });
+    rerender({ chat: makeChat({ processing: true }), chatId: 'c1' });
     expect(mockInvalidateChatsCache).not.toHaveBeenCalled();
-    rerender({ chat: makeChat({ processing: false }), serverBacked: true, chatId: 'c1' });
+    rerender({ chat: makeChat({ processing: false }), chatId: 'c1' });
     expect(mockInvalidateChatsCache).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('<OfficeChatPanel /> with durable chats', () => {
+describe('<OfficeChatPanel /> and the chat store', () => {
   // The adapter is the seam: what the panel asks it for is the contract.
   const mockAdapterCalls = [];
   const mockAdapterState = {
@@ -484,7 +470,7 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(lastAdapterCall()).toMatchObject({
       appId: 'mail',
       chatId: 'stored-1',
-      serverBacked: true,
+      ephemeral: false,
       isFreshChat: false
     });
     expect(screen.getByRole('status')).toHaveTextContent('Loading chat…');
@@ -508,7 +494,7 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     const { onOpenHistory } = renderPanel();
 
     const fresh = lastAdapterCall();
-    expect(fresh).toMatchObject({ serverBacked: true, isFreshChat: true });
+    expect(fresh).toMatchObject({ ephemeral: false, isFreshChat: true });
     expect(fresh.chatId).toMatch(/^office-/);
     expect(screen.getByText('Hello there')).toBeInTheDocument();
     expect(screen.getByLabelText('message')).not.toBeDisabled();
@@ -570,9 +556,9 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     }
   });
 
-  test('an ephemeral app stays out of the store, like in the web app', () => {
+  test("an ephemeral app's chat is a temporary one, like in the web app", () => {
     const { onOpenHistory } = renderPanel({ selectedApp: { ...app, ephemeral: true } });
-    expect(lastAdapterCall()).toMatchObject({ serverBacked: false });
+    expect(lastAdapterCall()).toMatchObject({ ephemeral: true });
 
     fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Confidential' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -635,14 +621,14 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument();
   });
 
-  test('without durable chats the panel behaves as before: no store, no history', async () => {
+  test('without a chat history every chat is temporary, and there is no history', async () => {
     renderPanel({ chatPersistence: false, onOpenHistory: undefined });
-    expect(lastAdapterCall()).toMatchObject({ serverBacked: false });
+    expect(lastAdapterCall()).toMatchObject({ ephemeral: true });
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Chat history' })).not.toBeInTheDocument()
     );
-    // Offered, greyed out until there is something to hand over.
+    // Offered, greyed out until the server has the chat's first turn.
     expect(screen.getByText('Open in web app')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open in web app' })).not.toBeInTheDocument();
   });
@@ -755,50 +741,31 @@ describe('<OfficeChatPanel /> with durable chats', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     };
 
-    test('a chat that is not stored is handed over: parked once, opened with its token', async () => {
+    test('a temporary chat opens in the web app by its id too: the store has it', async () => {
       renderPanel({ chatPersistence: false, onOpenHistory: undefined });
+      const fresh = lastAdapterCall();
       sendFirstMessage();
+      act(() => lastAdapterCall().onMessageAccepted(fresh.chatId));
       await openInWeb();
 
-      expect(mockCreateChatHandoff).toHaveBeenCalledTimes(1);
-      expect(mockCreateChatHandoff).toHaveBeenCalledWith({
-        appId: 'mail',
-        messages: [
-          { role: 'user', content: 'Draft a reply' },
-          { role: 'assistant', content: 'Answer' }
-        ],
-        variables: {}
-      });
       expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-        'https://ihub.example.com/ihub/apps/mail?handoff=tok.secret'
+        `https://ihub.example.com/ihub/apps/mail/c/${fresh.chatId}`
       );
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    test("an ephemeral app's chat is handed over too: it is not stored", async () => {
+    test("an ephemeral app's chat opens the same way", async () => {
       renderPanel({ selectedApp: { ...app, ephemeral: true } });
+      const fresh = lastAdapterCall();
       openMenu();
       expect(screen.getByRole('button', { name: 'Chat history' })).toBeInTheDocument();
       expect(webEntry()).not.toBeInTheDocument();
       openMenu();
 
       sendFirstMessage();
+      act(() => lastAdapterCall().onMessageAccepted(fresh.chatId));
       await openInWeb();
-      expect(mockCreateChatHandoff).toHaveBeenCalledTimes(1);
       expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-        'https://ihub.example.com/ihub/apps/mail?handoff=tok.secret'
-      );
-    });
-
-    test('a hand-off the server refuses says so instead of opening anything', async () => {
-      mockCreateChatHandoff.mockRejectedValue(Object.assign(new Error('too big'), { status: 413 }));
-      renderPanel({ chatPersistence: false, onOpenHistory: undefined });
-      sendFirstMessage();
-      await openInWeb();
-
-      expect(mockOpenExternalUrl).not.toHaveBeenCalled();
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'This chat is too large to open in the web app.'
+        `https://ihub.example.com/ihub/apps/mail/c/${fresh.chatId}`
       );
     });
   });

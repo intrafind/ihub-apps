@@ -20,7 +20,7 @@ import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import useOfficeChatPersistence from '../hooks/useOfficeChatPersistence';
 import { getStoredThemePreference } from '../utilities/officeTheme';
 import { buildPopoutUrl, isPopoutSupported, openChatPopout } from '../utilities/officePopout';
-import { popoutChatRouteState, seedPopoutTranscript } from '../utilities/officePopoutChat';
+import { popoutChatRouteState } from '../utilities/officePopoutChat';
 import {
   OFFICE_APPS_PAGE_PATH,
   OFFICE_CHAT_PATH,
@@ -230,8 +230,8 @@ const OfficeApp = () => {
   // Bumped to mount the chat panel afresh when a chat comes back from the
   // window: the panel reads its chat only when it mounts.
   const [chatPanelKey, setChatPanelKey] = React.useState(0);
-  // Durable chats: with them on, the pane's chats are stored like the web
-  // app's, and the history lists both.
+  // The pane's chats are stored like the web app's; with the chat history on,
+  // they are kept and the history lists both.
   const chatPersistence = useOfficeChatPersistence(!!authData);
   const historyEnabled = chatPersistence.persistence;
 
@@ -313,7 +313,6 @@ const OfficeApp = () => {
   const resumeFromPopout = React.useCallback(
     state => {
       if (!state?.app) return;
-      seedPopoutTranscript(state);
       storeSelectedApp(state.app);
       setSelectedApp(state.app);
       setChatPanelKey(key => key + 1);
@@ -521,7 +520,7 @@ const OfficeApp = () => {
       }
     />
   ) : (
-    // Durable chats are off (or were turned off): there is no history.
+    // The chat history is off (or was turned off): every chat is temporary.
     <Navigate to={homePath} replace />
   );
 

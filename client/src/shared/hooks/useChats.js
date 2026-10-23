@@ -17,15 +17,16 @@ export {
 } from './chatListStore';
 
 /**
- * Whether durable chats are available **to the current viewer**.
+ * Whether the chat history is available **to the current viewer**.
  *
- * Two things have to be true. The platform has to be storing chats at all —
- * `chats.persistence` is resolved server-side from the feature flag, the
- * platform switch and a storage provider that actually came up, and an absent
- * `chats` block means a server too old to have stored anything. And the viewer
- * has to be a real, non-anonymous user: anonymous callers are never chat
- * owners (a fresh principal is minted per request), so for them the endpoints
- * only ever 401.
+ * Every chat is stored on the server; this says whether the viewer's chats are
+ * also *kept* — listed, reopened from the history, shared — rather than each
+ * one being temporary. Two things have to be true. The platform has to keep a
+ * history at all — `chats.persistence` is resolved server-side from the
+ * feature flag, the platform switch and a storage provider that actually came
+ * up. And the viewer has to be a real, non-anonymous user: an anonymous
+ * visitor owns its chats only as temporary ones, and the listing answers it
+ * 401.
  *
  * This is the gate for every part of the history UI, not the retired
  * `chatHistoryPreview` flag.

@@ -6,17 +6,18 @@ import { fetchChat } from '../../../api';
 import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
 
 /**
- * Put a stored chat back on screen in the task pane.
+ * Put a stored chat back on screen on a surface that is not `AppChat` — the
+ * Outlook task pane and the canvas.
  *
- * A server-backed chat keeps no browser copy, so this fetch is the only thing
- * that shows its transcript — when the pane opens a chat from the history, and
- * when "Restore previous chat" brings back the one the last email set aside.
- * The same job `AppChat` does for `/apps/:appId/c/:chatId`, cut down to what the
- * pane needs:
+ * Every chat is stored and none keeps a browser copy, so this fetch is the only
+ * thing that shows its transcript — when the pane opens a chat from the
+ * history, when "Restore previous chat" brings back the one the last email set
+ * aside, and when the canvas is reloaded. The same job `AppChat` does for
+ * `/apps/:appId/c/:chatId`, cut down to what these surfaces need:
  *
- * - A chat the pane minted and has not sent yet is not in the store, so it is
- *   not asked for — that would only buy a 404 and a spinner where the greeting
- *   belongs. The caller says which chat that is with `isFreshChat`.
+ * - A chat the surface minted and has not sent yet is not in the store, so it
+ *   is not asked for — that would only buy a 404 and a spinner where the
+ *   greeting belongs. The caller says which chat that is with `isFreshChat`.
  * - A turn that is still generating — the run outlives the pane that started
  *   it, or was started in the browser — is re-attached to: the ledger is
  *   replayed and the live stream followed, then the transcript is re-read once
@@ -32,13 +33,12 @@ import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
  * @param {Object} options
  * @param {Object} options.chat - What `useAppChat` returned for this chat.
  * @param {string} options.chatId - The chat on screen.
- * @param {boolean} options.serverBacked - Whether the chat is stored server-side.
- * @param {boolean} options.isFreshChat - Whether the pane minted this chat and
- *   has not sent anything in it yet.
+ * @param {boolean} [options.isFreshChat=false] - Whether the surface minted this
+ *   chat and has not sent anything in it yet.
  * @returns {{ chatSettings: Object|null, chatVariables: Object|null }} What the
  *   stored chat was set up with; null for a new chat or one that recorded none.
  */
-export default function useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat }) {
+export default function useStoredChatHydration({ chat, chatId, isFreshChat = false }) {
   const { messages, processing, finishHydration, loadServerMessages, reattachToRun } = chat;
   const [chatSettings, setChatSettings] = useState(null);
   const [chatVariables, setChatVariables] = useState(null);
@@ -57,7 +57,7 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
   const pendingRef = useRef(false);
 
   useEffect(() => {
-    if (!serverBacked || !chatId) return;
+    if (!chatId) return;
     if (attemptRef.current === chatId) {
       // Already fetched (or deliberately not). Nothing else clears the
       // loading flag after a chat switch lands back here, so say so.
@@ -136,7 +136,7 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
     // `reattachToRun` changes with the chat id, which is already a dependency;
     // listing it would only re-run the guard above.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [serverBacked, chatId, isFreshChat, messages.length, loadServerMessages, finishHydration]);
+  }, [chatId, isFreshChat, messages.length, loadServerMessages, finishHydration]);
 
   // A finished turn changes the list: a new chat appears in it, an existing one
   // moves to the top and may have gained a title. A failed turn is stored too.
@@ -144,8 +144,8 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
   useEffect(() => {
     const wasProcessing = wasProcessingRef.current;
     wasProcessingRef.current = processing;
-    if (serverBacked && wasProcessing && !processing) invalidateChatsCache();
-  }, [processing, serverBacked]);
+    if (wasProcessing && !processing) invalidateChatsCache();
+  }, [processing]);
 
   return { chatSettings, chatVariables };
 }

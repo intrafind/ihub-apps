@@ -38,16 +38,8 @@ import {
   combineStarterPromptWithTypedText
 } from '../utilities/officeStarterPrompts';
 import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
-import {
-  buildHandoffMessages,
-  buildWebChatUrl,
-  buildWebHandoffUrl
-} from '../utilities/officeChatHistory';
-import {
-  canConfirmExternalOpen,
-  detectExternalNavigationHost,
-  openExternalUrlSettled
-} from '../../../utils/externalNavigation';
+import { buildWebChatUrl } from '../utilities/officeChatHistory';
+import { canConfirmExternalOpen, openExternalUrlSettled } from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -58,10 +50,9 @@ import {
   resolveVariableValues
 } from '../../chat/utils/startForm';
 import { officeLocale } from '../utilities/officeLocale';
-import { createChatHandoff, fetchApps } from '../../../api';
+import { fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
-import { chatMessagesStorageKey } from '../../chat/utils/chatMessagesStorage';
 import './OfficeChatPanel.css';
 
 // How long the popped-out chat waits for a quiet moment before telling the
@@ -81,13 +72,12 @@ function buildParamsFromApp(app) {
  * @param {object} props
  * @param {string} [props.homePath] - Where the back button leads: the start page
  *   or the apps list, whichever the admin made the pane's home.
- * @param {boolean} [props.chatPersistence=false] - Whether chats are stored
- *   server-side (durable chats). Fixed for the panel's lifetime: the pane only
- *   mounts it once that is known.
+ * @param {boolean} [props.chatPersistence=false] - Whether chats are kept in a
+ *   history (every chat is stored; without one each is temporary). Fixed for
+ *   the panel's lifetime: the pane only mounts it once that is known.
  * @param {string|null} [props.openChatId] - A stored chat to open instead of a
  *   new one — the history page hands it over. Also the chat the pop-out window
- *   hands back (or the pane hands to it), stored or not: a chat that is not
- *   stored brings its transcript along in session storage.
+ *   hands back (or the pane hands to it).
  * @param {{ variables?: object, inputValue?: string, pinnedEmails?: object[] }|null} [props.restoredChat] -
  *   What the chat had besides its transcript when it moved between the pane
  *   and the pop-out window.
@@ -122,8 +112,8 @@ function OfficeChatPanel({
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
   const greetingSubtitle = getLocalizedContent(selectedApp?.greeting?.subtitle, officeLocale);
 
-  // Chats this panel minted and has not sent anything in yet. With durable
-  // chats on, such a chat is not in the store, so there is nothing to fetch
+  // Chats this panel minted and has not sent anything in yet. Such a chat is
+  // not in the store, so there is nothing to fetch
   // when it comes on screen — asking would only buy a 404 and a spinner.
   const freshChatIdsRef = useRef(new Set());
   const mintChatId = useCallback(() => {
@@ -141,10 +131,10 @@ function OfficeChatPanel({
   const openedStoredChatRef = useRef(Boolean(openChatId));
   const selectedStarterPromptRef = useRef(null);
   const isFreshChat = freshChatIdsRef.current.has(chatIdRef.current);
-  // Whether this chat goes to the store. An app marked `ephemeral` never does,
-  // as in the web app — the pane has no incognito toggle, so the app's own
-  // setting is the whole answer.
-  const chatStored = chatPersistence && selectedApp?.ephemeral !== true;
+  // Every chat goes to the store; this is whether it is kept in the history.
+  // An app marked `ephemeral` never keeps one, as in the web app — the pane has
+  // no incognito toggle, so the app's own setting is the whole answer.
+  const chatTemporary = !chatPersistence || selectedApp?.ephemeral === true;
   // The email snapshot a start-page handoff brought along, kept for the start
   // form that sends it: the user edited it there (dropped attachments, body
   // off), and this panel's own snapshot knows nothing of those edits.
@@ -163,13 +153,13 @@ function OfficeChatPanel({
     appId: selectedApp?.id,
     chatId: chatIdRef.current,
     onMessageAccepted: handleMessageAccepted,
-    serverBacked: chatStored,
+    ephemeral: chatTemporary,
     isFreshChat,
     fileUploadConfig: selectedApp?.upload?.fileUpload
   });
   // A stored chat is being fetched. A fresh one has nothing to wait for, so it
   // shows its greeting straight away.
-  const loadingStoredChat = chatStored && !isFreshChat && adapter.hydrating === true;
+  const loadingStoredChat = !isFreshChat && adapter.hydrating === true;
 
   const {
     models,
@@ -379,9 +369,8 @@ function OfficeChatPanel({
   const chatItemIdRef = useRef(null);
 
   // The conversation set aside by the last automatic new chat, so the user
-  // can bring it back. Its transcript stays in session storage under its own
-  // chatId — or in the chat store, with durable chats on — and restoring the
-  // id reloads it.
+  // can bring it back. Its transcript stays in the chat store under its own
+  // chatId, and restoring the id reloads it.
   const [previousChat, setPreviousChat] = useState(null);
 
   useEffect(() => {
@@ -452,12 +441,9 @@ function OfficeChatPanel({
   } = mailActions;
 
   // Outcome of the last "Open in web app" that could not hand the chat to the
-  // browser: `{ chatId, url }`, or `{ chatId, error }` when a chat that is not
-  // stored could not be parked for the browser. It shares the notice strip
-  // with the answer actions, and whichever ran last owns it.
+  // browser: `{ chatId, url }`. It shares the notice strip with the answer
+  // actions, and whichever ran last owns it.
   const [webNotice, setWebNotice] = useState(null);
-  // A chat that is not stored is being parked for the browser.
-  const [handingOff, setHandingOff] = useState(false);
 
   const runAnswerAction = useCallback(
     (actionId, content) => {
@@ -762,28 +748,18 @@ function OfficeChatPanel({
     [selectedApp?.variables]
   );
 
-  // The chat as it moves between the pane and the pop-out window: which chat,
-  // its transcript when it is not stored (the store has it otherwise — and an
-  // answer still streaming into a stored chat is followed live on arrival),
-  // and what the user set up or typed but did not send yet.
+  // The chat as it moves between the pane and the pop-out window: which chat
+  // (the store has its transcript — and an answer still streaming into it is
+  // followed live on arrival), and what the user set up or typed but did not
+  // send yet.
   const buildPopoutChatState = () => {
     const chatId = chatIdRef.current;
-    let transcript = null;
-    if (!chatStored) {
-      try {
-        transcript = sessionStorage.getItem(chatMessagesStorageKey(chatId));
-      } catch {
-        // No session storage: the chat moves without its transcript.
-      }
-    }
     return {
       app: selectedApp,
       chatId,
       // Nothing sent yet: the other window starts a new chat of its own rather
       // than asking the store for one it has never heard of.
       fresh: freshChatIdsRef.current.has(chatId),
-      chatStored,
-      transcript,
       variables: appPromptVariables,
       inputValue
     };
@@ -898,10 +874,9 @@ function OfficeChatPanel({
     });
   };
 
-  // The chat is in the store once the server has its first turn. Before that —
-  // and never, for a chat that is not stored — there is nothing to open
-  // elsewhere or come back to.
-  const chatInStore = chatStored && !freshChatIdsRef.current.has(chatIdRef.current);
+  // The chat is in the store once the server has its first turn. Before that
+  // there is nothing to open elsewhere or come back to.
+  const chatInStore = !freshChatIdsRef.current.has(chatIdRef.current);
 
   // Continue this chat in the web app (issue #2591). It is a stored chat, so
   // the browser opens it at the web app's own chat route and carries on from
@@ -922,56 +897,6 @@ function OfficeChatPanel({
     }
   };
 
-  // A chat that is not stored — durable chats off, or an `ephemeral` app —
-  // lives only in this pane, which the browser cannot read. It is parked on
-  // the server for a few minutes instead (single-use, for this user only) and
-  // the browser opens the app with it, where it continues as a new chat. The
-  // open email goes along, as the next message here would have sent it.
-  const canHandOff =
-    !chatStored &&
-    !handingOff &&
-    !adapter.processing &&
-    adapter.messages.some(message => message.role === 'user' && !message.isGreeting);
-  const handleHandOffToWeb = async () => {
-    const chatId = chatIdRef.current;
-    const appId = selectedApp?.id;
-    const messages = buildHandoffMessages(adapter.messages, estimateHostContext);
-    if (!appId || messages.length === 0) return;
-    dismissMailNotice();
-    setWebNotice(null);
-    setHandingOff(true);
-    try {
-      const { token } = await createChatHandoff({
-        appId,
-        messages,
-        variables: appPromptVariables
-      });
-      const url = buildWebHandoffUrl(officeConfig?.baseUrl, appId, token);
-      if (!url) return;
-      // The browser opens after a round trip to the server, which a browser
-      // may no longer count as the user's click — and Outlook cannot say
-      // whether it opened. The link works once, so the address is shown
-      // unless the host confirmed the tab.
-      const opened = await openExternalUrlSettled(url);
-      if (!opened || !canConfirmExternalOpen() || detectExternalNavigationHost() === 'office') {
-        setWebNotice({ chatId, url });
-      }
-    } catch (error) {
-      setWebNotice({
-        chatId,
-        error:
-          error?.status === 413
-            ? t(
-                'office.openInWeb.tooLarge',
-                'This chat is too large to open in the web app. Start a new chat there instead.'
-              )
-            : t('office.openInWeb.failed', 'The chat could not be opened in the web app.')
-      });
-    } finally {
-      setHandingOff(false);
-    }
-  };
-
   const menuItems = [
     ...(!startForm && getValidVariableDefinitions(selectedApp?.variables).length > 0
       ? [
@@ -988,23 +913,23 @@ function OfficeChatPanel({
             key: 'history',
             label: t('office.menu.history', 'Chat history'),
             // Back from the history returns to this chat — unless it is not in
-            // the store (nothing sent yet, or an ephemeral app), in which case
-            // there is nothing to return to.
+            // the store yet (nothing sent), in which case there is nothing to
+            // return to.
             onClick: () => onOpenHistory({ returnChatId: chatInStore ? chatIdRef.current : null })
           }
         ]
       : []),
-    // A stored chat opens by its id; one that is not stored is handed over.
-    // Disabled — not hidden — until there is something to continue (a stored
-    // chat: until the server has its first turn), so the entry does not appear
-    // out of nowhere once the first answer starts.
+    // The chat opens by its id, kept or temporary — the web app reads it from
+    // the store with the same account. Disabled — not hidden — until the
+    // server has its first turn, so the entry does not appear out of nowhere
+    // once the first answer starts.
     ...(officeConfig?.baseUrl
       ? [
           {
             key: 'openInWeb',
             label: t('office.menu.openInWeb', 'Open in web app'),
-            disabled: chatStored ? !chatInStore : !canHandOff,
-            onClick: chatStored ? handleOpenInWeb : handleHandOffToWeb
+            disabled: !chatInStore,
+            onClick: handleOpenInWeb
           }
         ]
       : []),
@@ -1199,7 +1124,6 @@ function OfficeChatPanel({
                   showAvatars={false}
                   // A stored chat keeps its generated images; don't warn that
                   // they are lost on leaving.
-                  imagesPersisted={chatStored}
                 />
               </div>
             )}

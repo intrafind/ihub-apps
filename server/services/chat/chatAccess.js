@@ -29,7 +29,8 @@
  *
  * @module services/chat/chatAccess
  */
-import { resolvePrincipal, isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
+import { isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
+import { resolveChatOwner } from './chatOwner.js';
 import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
 
 /**
@@ -80,8 +81,8 @@ async function isProjectMember(projectId, user) {
  *   do. The admin bypass applies to `read` only; an admin acting on a chat
  *   they do not own is refused a `write` exactly as any other non-owner is.
  * @returns {Promise<{ok: true, chat: Object|null, viaAdmin?: boolean}|{ok: false, status: 404}>}
- *   `chat` is null when nothing is stored for this id — persistence is off,
- *   the id is not storable, or the chat is new. `viaAdmin` marks a decision
+ *   `chat` is null when nothing is stored for this id — storage is down, the
+ *   id is not storable, or the chat is new. `viaAdmin` marks a decision
  *   that rests on the bypass rather than on ownership, so a caller can skip
  *   the side effects that belong to the owner reading their own chat.
  */
@@ -97,15 +98,13 @@ export async function authorizeChat(
   const chat = await repository.getChat(chatId);
   if (!chat) return { ok: true, chat: null };
 
-  // An anonymous caller never owns a stored chat: anonymous principals get a
-  // fresh random id per resolution, so no comparison could ever match.
-  if (isAnonymousUser(user)) return { ok: false, status: 404 };
-
   // Ownership first: an admin reading their own chat is its owner reading it,
   // with the owner's side effects (the unseen badge clears). The bypass only
-  // marks a read that rests on it.
-  const me = await resolvePrincipal(user, { mode: chat.identityMode || 'default' });
-  if (me.id === chat.ownerId) return { ok: true, chat };
+  // marks a read that rests on it. An anonymous caller owns the chats of its
+  // guest identity, and nothing at all without one.
+  const me = await resolveChatOwner(user, { mode: chat.identityMode || 'default' });
+  if (me && me.id === chat.ownerId) return { ok: true, chat };
+  if (isAnonymousUser(user)) return { ok: false, status: 404 };
   // An admin who is not the owner may read, never write — a write gets the
   // same 404 as anyone else.
   if (isAdminUser(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
@@ -113,7 +112,13 @@ export async function authorizeChat(
   // spec 1 §6.4): the project page lists them, and a member opens another's
   // chat read-only. Never a write, and never the live stream: `viaProject`
   // lets the stream routes keep the member at the transcript.
-  if (intent === 'read' && chat.projectId && (await isProjectMember(chat.projectId, user))) {
+  // A temporary chat is nobody's but its owner's, inside a project or not.
+  if (
+    intent === 'read' &&
+    chat.temporary !== true &&
+    chat.projectId &&
+    (await isProjectMember(chat.projectId, user))
+  ) {
     return { ok: true, chat, viaProject: true };
   }
   return { ok: false, status: 404 };

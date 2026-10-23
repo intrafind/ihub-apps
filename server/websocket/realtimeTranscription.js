@@ -72,6 +72,7 @@
  * the "Conversation mode" section inside `bridgeConnection` for how turns are
  * kept apart.
  */
+import { guestIdFromCookieHeader, setGuestId } from '../services/chat/chatOwner.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -2225,6 +2226,9 @@ export function attachRealtimeTranscription(httpServer) {
     // per-model access can be enforced when a transcription model is selected.
     try {
       user = enhanceUserWithPermissions(user, platform.auth || {}, platform);
+      // An anonymous visitor's transcription lands in its chat like any turn:
+      // its guest cookie says which chats are its own.
+      if (user?.id === 'anonymous') setGuestId(user, guestIdFromCookieHeader(req.headers.cookie));
     } catch (err) {
       logger.warn('Realtime STT: failed to enhance user permissions', {
         component: 'RealtimeSTT',

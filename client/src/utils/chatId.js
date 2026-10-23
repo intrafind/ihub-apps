@@ -56,6 +56,38 @@ export const readChatId = (appId, prefix = 'chat') => {
   }
 };
 
+/** Who the chat ids this tab holds were minted for. */
+const CHAT_IDS_OWNER_KEY = 'ai_hub_chat_ids_owner';
+
+/** The per-app chat id keys `getOrCreateChatId` writes, whatever the prefix. */
+const CHAT_ID_KEY_PATTERN = /^ai_hub_[A-Za-z0-9-]+_id_/;
+
+/**
+ * Tie the chat ids this tab remembers to the user it remembers them for.
+ *
+ * Every chat is stored under its owner, so a remembered id is only good for
+ * the user who started the chat: when the same tab becomes somebody else (an
+ * anonymous visitor signs in, or another account does), the old ids would
+ * hydrate as empty and refuse the next message. They are forgotten instead,
+ * and the next visit to an app starts a new chat. Logging out clears the
+ * whole of `sessionStorage` already.
+ *
+ * @param {string} userKey - The current user's id, `anonymous` for a visitor.
+ */
+export const bindChatIdsToUser = userKey => {
+  try {
+    const previous = sessionStorage.getItem(CHAT_IDS_OWNER_KEY);
+    if (previous && previous !== userKey) {
+      Object.keys(sessionStorage)
+        .filter(key => CHAT_ID_KEY_PATTERN.test(key))
+        .forEach(key => sessionStorage.removeItem(key));
+    }
+    sessionStorage.setItem(CHAT_IDS_OWNER_KEY, userKey);
+  } catch {
+    // No session storage: there are no remembered ids to forget either.
+  }
+};
+
 /**
  * Get persisted conversation ID for an app from localStorage.
  * Used for iAssistant Conversation API to resume conversations across sessions.

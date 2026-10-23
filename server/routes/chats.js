@@ -9,20 +9,26 @@
  *   GET    /api/chats/:chatId/artifacts             what this chat's turns produced
  *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
+ *   PATCH  /api/chats/:chatId    { temporary: false }  keep a temporary chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
  *
  * The turns themselves are written by `services/chat/chatMaterializer.js` off
  * the chat request path; nothing here creates or appends to a chat. This
  * router only lists, reads, renames and erases what that path stored.
  *
- * Two deliberate differences from the sibling `routes/runs.js`:
+ * Every chat is stored, but not every chat is kept: a **temporary** chat
+ * (incognito, an anonymous visitor's, any chat on an installation without
+ * chat history) is never listed. So the routes split:
  *
- *  - **`authenticatedOnly`, not `authRequired`.** `authRequired` means "401
- *    only when anonymous access is switched off"; with `anonymousAuth.enabled`
- *    an unauthenticated caller reaches the handler with `req.user ===
- *    undefined`. Chats are owned resources, so the stricter guard is the
- *    correct one — and anonymous callers never own a stored chat anyway
- *    (`resolvePrincipal` mints a fresh id per call).
+ *  - **The listing and the rename need a history** — `authenticatedOnly`, and
+ *    503 `CHAT_PERSISTENCE_UNAVAILABLE` while the installation keeps none.
+ *  - **One chat's transcript, artifacts and delete need only storage**, and
+ *    take `authRequired`: an anonymous visitor reads, and deletes, the
+ *    temporary chats of its guest identity (`chatOwner.js`) — reloading the
+ *    page must not lose the conversation just because nobody signed in.
+ *
+ * And one deliberate difference from the sibling `routes/runs.js`:
+ *
  *  - **404 for both unknown and not-yours.** Chat ids are client-minted and
  *    enumerable; a 403 on someone else's chat would turn every endpoint here
  *    into an existence oracle. `chatAccess.authorizeChat` collapses the two.
@@ -32,7 +38,7 @@
  *
  * @module routes/chats
  */
-import { authenticatedOnly } from '../middleware/authRequired.js';
+import { authenticatedOnly, authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import {
@@ -48,7 +54,11 @@ import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
-import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
+import {
+  canKeepChatHistory,
+  isChatHistoryConfigured,
+  isChatStorageAvailable
+} from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
 import { userAbortCause } from '../services/chat/abortCause.js';
@@ -66,10 +76,9 @@ import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 const COMPONENT = 'ChatRoutes';
 
 /**
- * Machine-readable code for "durable chats are not answering right now" —
- * the feature is off, an admin disabled `platform.chats`, or the storage
- * provider failed to come up. The client shows the ephemeral experience
- * rather than an error when it sees this.
+ * Machine-readable code for "this installation keeps no chat history" — the
+ * feature is off, an admin disabled `platform.chats`, or the storage provider
+ * failed to come up. The client hides the history UI when it sees this.
  */
 const UNAVAILABLE_CODE = 'CHAT_PERSISTENCE_UNAVAILABLE';
 
@@ -129,14 +138,17 @@ function sendChatStorageError(res, error, operation) {
  * lock facet is configured-but-unusable.
  *
  * @param {import('express').Response} res - Express response.
+ * @param {Object} [options]
+ * @param {boolean} [options.history=false] - The route serves the history (the
+ *   listing, a rename, keeping a chat), not just one stored chat: it also
+ *   needs the installation to keep one.
  * @returns {import('../services/chat/ChatRepository.js').ChatRepository|null}
  */
-function requireRepository(res) {
+function requireRepository(res, { history = false } = {}) {
   const repository = getChatRepository();
-  const configured = isChatPersistenceConfigured(
-    configCache.getFeatures(),
-    configCache.getPlatform() || {}
-  );
+  const configured = history
+    ? isChatHistoryConfigured(configCache.getFeatures(), configCache.getPlatform() || {})
+    : isChatStorageAvailable();
   if (!configured || !repository.isAvailable()) {
     sendPersistenceUnavailable(res);
     return null;
@@ -275,6 +287,14 @@ async function moveChatToProject(req, res, repository, chat) {
     return null;
   }
   const targetId = parsed.data.projectId;
+  if (targetId && chat.temporary === true) {
+    // Its members would see a chat its owner asked not to keep. Keeping it
+    // first (`PATCH { temporary: false }`) is the way.
+    sendErrorResponse(res, 409, 'A temporary chat cannot be moved into a project; keep it first', {
+      details: { code: 'CHAT_TEMPORARY' }
+    });
+    return null;
+  }
   if (targetId) {
     // Chat containers are the user-project feature: while it is off a chat
     // joins no project (leaving one stays possible, it only undoes a share).
@@ -377,7 +397,7 @@ async function moveChatToProject(req, res, repository, chat) {
 export default function registerChatRoutes(app) {
   app.get(buildServerPath('/api/chats'), authenticatedOnly, async (req, res) => {
     try {
-      const repository = requireRepository(res);
+      const repository = requireRepository(res, { history: true });
       if (!repository) return;
       const ownerId = await resolveOwnerId(req.user);
       // The chat documents go out exactly as stored. App name, colour and icon
@@ -395,7 +415,7 @@ export default function registerChatRoutes(app) {
     }
   });
 
-  app.get(buildServerPath('/api/chats/:chatId'), authenticatedOnly, async (req, res) => {
+  app.get(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {
     try {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;
@@ -434,7 +454,7 @@ export default function registerChatRoutes(app) {
     }
   });
 
-  app.get(buildServerPath('/api/chats/:chatId/artifacts'), authenticatedOnly, async (req, res) => {
+  app.get(buildServerPath('/api/chats/:chatId/artifacts'), authRequired, async (req, res) => {
     try {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;
@@ -455,7 +475,7 @@ export default function registerChatRoutes(app) {
 
   app.get(
     buildServerPath('/api/chats/:chatId/artifacts/:artifactId'),
-    authenticatedOnly,
+    authRequired,
     async (req, res) => {
       try {
         const { chatId, artifactId } = req.params;
@@ -501,14 +521,44 @@ export default function registerChatRoutes(app) {
       const title = req.body?.title;
       const hasProject = req.body && Object.hasOwn(req.body, 'projectId');
       const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
-      if (typeof title !== 'string' && !hasProject && !hasAttached) {
+      const keep = req.body?.temporary === false;
+      if (typeof title !== 'string' && !hasProject && !hasAttached && !keep) {
         return sendBadRequest(res, 'title is required and must be a string');
       }
-      const repository = requireRepository(res);
+      if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
+        // There is no way back into temporary: a kept chat that should not be
+        // kept is deleted, and a conversation that should be is a new chat.
+        return sendBadRequest(res, 'temporary can only be set to false');
+      }
+      if (keep && (hasProject || hasAttached)) {
+        // Keeping writes the chat before a project change is even checked, so
+        // a change refused after it would leave the request failed but the
+        // chat kept. Two requests make each step all-or-nothing.
+        return sendBadRequest(res, 'Keep the chat and change its projects in separate requests');
+      }
+      // Only keeping needs a history to keep the chat in. A temporary chat —
+      // every chat while the history is off — can still be renamed and given
+      // projects.
+      const repository = requireRepository(res, { history: keep });
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
       let chat = access.chat;
+      if (keep && chat.temporary === true) {
+        // `authenticatedOnly` already keeps guests out; the policy is asked
+        // anyway so the one rule for "who has a history" stays in one place.
+        if (!canKeepChatHistory(req.user)) return sendNotFound(res, 'Chat');
+        chat = await repository.keepChat(chatId);
+        if (!chat) return sendNotFound(res, 'Chat');
+        // A temporary chat ran with its project's knowledge but was left off
+        // the project's page; kept, it belongs there like any chat.
+        if (chat.projectId) {
+          const { recordChatInProject } = await import('../services/knowledge/chatProjects.js');
+          await recordChatInProject(chat.projectId, chatId, { ownerId: chat.ownerId }).catch(() => {
+            /* the project may be gone; the chat is kept either way */
+          });
+        }
+      }
       if (hasProject) {
         // Moving a chat into (or out of) a project (#1036, spec 1 §6.4). The
         // target must be one the caller may use; the markers follow the chat.
@@ -533,7 +583,7 @@ export default function registerChatRoutes(app) {
     }
   });
 
-  app.delete(buildServerPath('/api/chats/:chatId'), authenticatedOnly, async (req, res) => {
+  app.delete(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {
     try {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;

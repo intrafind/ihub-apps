@@ -12,7 +12,7 @@
  * @module services/scheduler/tasks/taskPolicy
  */
 import { featureRegistry, isFeatureEnabled } from '../../../featureRegistry.js';
-import { isChatPersistenceConfigured } from '../../chat/chatPersistence.js';
+import { isChatHistoryConfigured } from '../../chat/chatPersistence.js';
 import { isAnonymousUser } from '../../loop/runIdentity.js';
 
 /** Feature flag that gates scheduled tasks. */
@@ -120,7 +120,7 @@ function isFeatureRegistered(featureId) {
 export function isScheduledTasksConfigured(features, platformConfig, storageReady) {
   if (!isFeatureRegistered(SCHEDULED_TASKS_FEATURE)) return false;
   if (!isFeatureEnabled(SCHEDULED_TASKS_FEATURE, features || {})) return false;
-  if (!isChatPersistenceConfigured(features, platformConfig, storageReady)) return false;
+  if (!isChatHistoryConfigured(features, platformConfig, storageReady)) return false;
   return scheduledTaskSettings(platformConfig).enabled;
 }
 

@@ -30,6 +30,7 @@ import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
+import { attachGuestIdentity, guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import ChatService from '../services/chat/ChatService.js';
 import { RunLog } from '../services/loop/RunLog.js';
@@ -335,16 +336,14 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
 
       // The code alone tells an integrator nothing about what to do instead,
       // and this is the one refusal reachable by doing exactly what the API
-      // docs said before the feature existed. Both ways forward have to be in
-      // the body, because that is the only place a third-party client looks.
-      assert.match(res.body.details.hint, /only the new message/i, 'names the persisted mode');
-      assert.match(res.body.details.hint, /\bephemeral\b/, 'and the way to keep the old shape');
+      // docs said before every chat was stored. Both ways forward have to be
+      // in the body, because that is the only place a third-party client looks.
+      assert.match(res.body.details.hint, /only the new message/i, 'names the one protocol');
+      assert.match(res.body.details.hint, /OpenAI-compatible/, 'and where a full history goes');
     });
   });
 
-  it('still accepts a full array when persistence is off', async () => {
-    // The dual mode is permanent by design: anonymous callers, ephemeral turns
-    // and installations with the feature off keep posting their whole array.
+  it('refuses a full array with the chat history off too: there is one protocol', async () => {
     await withFeatures({ chatPersistence: false }, async () => {
       await withPreparedRequests(async calls => {
         const res = await postChat({
@@ -357,18 +356,14 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
           }
         });
 
-        assert.notEqual(res.statusCode, 400);
-        assert.equal(calls.length, 1);
-        assert.deepEqual(
-          calls[0].messages.map(entry => entry.content),
-          ['first', 'second'],
-          'the client array is the conversation when nothing is stored'
-        );
+        assert.equal(res.statusCode, 400);
+        assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED');
+        assert.equal(calls.length, 0);
       });
     });
   });
 
-  it('accepts a full array from an ephemeral turn', async () => {
+  it('refuses a full array from an ephemeral turn', async () => {
     await withPreparedRequests(async calls => {
       const res = await postChat({
         chatId: 'chat-ephemeral',
@@ -381,9 +376,124 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
         }
       });
 
-      assert.notEqual(res.statusCode, 400);
-      assert.equal(calls.length, 1);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED');
+      assert.equal(calls.length, 0);
     });
+  });
+
+  it('stores an ephemeral turn as a temporary chat, and keeps it temporary', async () => {
+    await withRecordedTurns(async calls => {
+      await postChat({
+        chatId: 'chat-temporary',
+        body: { ephemeral: true, messages: [{ role: 'user', content: 'off the record' }] }
+      });
+      // A later turn's flag does not change what the chat was created as.
+      await getChatRepository().ensureChat({
+        chatId: 'chat-temporary',
+        ownerId: USER.id,
+        identityMode: 'default',
+        temporary: true
+      });
+      await postChat({
+        chatId: 'chat-temporary',
+        body: { ephemeral: false, messages: [{ role: 'user', content: 'still off the record' }] }
+      });
+
+      assert.equal(calls.length, 2);
+      assert.equal(calls[0].persistence.temporary, true);
+      assert.equal(calls[1].persistence.temporary, true, 'ephemeral: false does not keep it');
+    });
+  });
+
+  it('never turns a kept chat temporary from a later turn', async () => {
+    const chatId = 'chat-kept-then-ephemeral';
+    await seedChat(chatId);
+    await withRecordedTurns(async calls => {
+      await postChat({
+        chatId,
+        body: { ephemeral: true, messages: [{ role: 'user', content: 'and now?' }] }
+      });
+      assert.equal(calls[0].persistence.temporary, false);
+    });
+  });
+
+  it('with the chat history off, stores every chat as a temporary one', async () => {
+    await withFeatures({ chatPersistence: false }, async () => {
+      await withRecordedTurns(async calls => {
+        const res = await postChat({
+          chatId: 'chat-history-off',
+          body: { messages: [{ role: 'user', content: 'hello' }] }
+        });
+        assert.notEqual(res.statusCode, 400);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].persistence.temporary, true);
+        assert.equal(calls[0].persistence.ownerId, USER.id);
+      });
+    });
+  });
+
+  it('stores an anonymous visitor chat under its guest identity', async () => {
+    const guest = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    const guestId = 'a'.repeat(64);
+    setGuestId(guest, guestId);
+    await withRecordedTurns(async calls => {
+      await postChat({
+        chatId: 'chat-guest',
+        user: guest,
+        body: { messages: [{ role: 'user', content: 'hi' }] }
+      });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].persistence.temporary, true, 'a guest keeps no history');
+      assert.equal(calls[0].persistence.ownerId, guestOwnerId(guestId));
+      assert.ok(!calls[0].persistence.ownerId.includes(guestId), 'never the secret itself');
+    });
+  });
+
+  it('tells a guest that came back without its cookie why the chat is gone', async () => {
+    const owner = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    const ownerSecret = 'b'.repeat(64);
+    setGuestId(owner, ownerSecret);
+    await getChatRepository().ensureChat({
+      chatId: 'chat-guest-cookieless',
+      ownerId: guestOwnerId(ownerSecret),
+      temporary: true
+    });
+    // The next request carries no cookie, so it is given a new guest identity.
+    const stranger = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    attachGuestIdentity(
+      { originalUrl: '/api/apps/chat/chat/x', cookies: {}, user: stranger, get: () => undefined },
+      { cookie: () => {} }
+    );
+    await withPreparedRequests(async calls => {
+      const res = await postChat({
+        chatId: 'chat-guest-cookieless',
+        user: stranger,
+        body: { messages: [{ role: 'user', content: 'and then?' }] }
+      });
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.code, 'GUEST_COOKIE_MISSING');
+      assert.equal(calls.length, 0);
+    });
+  });
+
+  it('answers 503 rather than an unstored chat when storage is down', async () => {
+    await shutdownStorageBootstrap();
+    try {
+      await withPreparedRequests(async calls => {
+        const res = await postChat({
+          chatId: 'chat-no-storage',
+          body: { messages: [{ role: 'user', content: 'hi' }] }
+        });
+        assert.equal(res.statusCode, 503);
+        assert.equal(res.body.code, 'CHAT_STORAGE_UNAVAILABLE');
+        assert.equal(calls.length, 0);
+      });
+    } finally {
+      await bootstrapStorage({
+        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+      });
+    }
   });
 
   it('hands the model the stored transcript, not just the posted message', async () => {

@@ -23,7 +23,7 @@ import runLog from '../loop/RunLog.js';
 import { resolvePrincipal, isAnonymousUser } from '../loop/runIdentity.js';
 import { authorizeChat } from '../chat/chatAccess.js';
 import { getChatRepository, isPersistableChatId } from '../chat/ChatRepository.js';
-import { isChatPersistenceConfigured } from '../chat/chatPersistence.js';
+import { isChatHistoryConfigured } from '../chat/chatPersistence.js';
 import { hasActiveChatRequest, isChatDurable } from '../../sse.js';
 import { InferenceApiError } from './errors.js';
 
@@ -61,7 +61,7 @@ export function requireConversations(user) {
     );
   }
   const repository = getChatRepository();
-  const configured = isChatPersistenceConfigured(
+  const configured = isChatHistoryConfigured(
     configCache.getFeatures(),
     configCache.getPlatform() || {}
   );

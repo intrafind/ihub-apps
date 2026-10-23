@@ -1441,7 +1441,7 @@ describe('chat container persistence', () => {
     const begin = extra =>
       beginTranscriptionTurn({
         repository,
-        persist: true,
+        storage: { stored: true, temporary: false },
         user,
         chatId,
         appId: 'chat',

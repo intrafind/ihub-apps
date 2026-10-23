@@ -12,6 +12,7 @@ import {
   getApiBaseUrlOverride
 } from '../../utils/runtimeBasePath';
 import { getSafeReturnPath } from '../../utils/safeUrl';
+import { bindChatIdsToUser } from '../../utils/chatId';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -339,6 +340,12 @@ export function AuthProvider({ children }) {
 
   // Guard to prevent concurrent/recursive execution of the token-expired handler
   const isHandlingTokenExpired = useRef(false);
+
+  // A remembered chat belongs to the user who started it (see
+  // `bindChatIdsToUser`).
+  useEffect(() => {
+    if (!state.isLoading) bindChatIdsToUser(state.user?.id || 'anonymous');
+  }, [state.isLoading, state.user?.id]);
 
   // Load authentication status on mount and handle OIDC callback
   useEffect(() => {

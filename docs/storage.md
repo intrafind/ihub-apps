@@ -21,7 +21,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 
 | Namespace                   | Holds                                                       | Owner id                    | Documented in                            |
 | --------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------- |
-| `chats`, `chat-messages`    | stored conversations and their transcripts (off by default)  | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
+| `chats`, `chat-messages`    | every conversation and its transcript — temporary unless the Chat History feature keeps it | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
 | `artifacts`                 | what a run produced: a metadata document and a blob per artifact | –                        | [Artifacts](artifacts.md)                |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
@@ -57,8 +57,9 @@ consumer keeps the behaviour and the on-disk layout it had before the move:
 the ledger writes `contents/data/run-log/` as it always did, workflow state
 stays in its `<executionId>/latest.json` directories, interactions fall back to
 `interactions.json` plus claim markers, iAssistant conversation state stays
-in memory, and durable chats — which have no earlier layout — are simply off.
-That is a supported state, not a degraded one.
+in memory. Chat is the exception: it has no earlier layout, and every chat is
+stored, so without a provider a chat turn answers `503 CHAT_STORAGE_UNAVAILABLE`
+until storage comes up.
 
 One namespace shares a directory with the files it replaces: `workflow-state`
 documents (`contents/data/workflow-state/<executionId>.json`) sit beside the

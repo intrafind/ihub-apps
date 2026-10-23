@@ -377,8 +377,6 @@ describe('a chat travelling between the windows', () => {
     app: { id: 'mail' },
     chatId: 'office-1',
     fresh: false,
-    chatStored: false,
-    transcript: JSON.stringify([{ id: 'u1', role: 'user', content: 'Hi' }]),
     variables: { tone: 'formal' },
     inputValue: 'half-typed',
     pinnedEmails: [{ itemId: 'E1' }]
@@ -399,19 +397,5 @@ describe('a chat travelling between the windows', () => {
     const route = chatTravel.popoutChatRouteState({ ...state, fresh: true });
     expect(route).not.toHaveProperty('chatId');
     expect(route.restoredChat.inputValue).toBe('half-typed');
-  });
-
-  test('a chat that is not stored brings its transcript into session storage', () => {
-    chatTravel.seedPopoutTranscript(state);
-    expect(sessionStorage.getItem('ai_hub_chat_messages_office-1')).toBe(state.transcript);
-
-    // An emptied chat leaves no stale copy behind.
-    chatTravel.seedPopoutTranscript({ ...state, transcript: null });
-    expect(sessionStorage.getItem('ai_hub_chat_messages_office-1')).toBeNull();
-  });
-
-  test('a stored chat brings nothing: the store has it', () => {
-    chatTravel.seedPopoutTranscript({ ...state, chatStored: true });
-    expect(sessionStorage.getItem('ai_hub_chat_messages_office-1')).toBeNull();
   });
 });

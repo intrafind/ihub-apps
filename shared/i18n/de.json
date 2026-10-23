@@ -135,9 +135,10 @@
     "clearInput": "Eingabe löschen",
     "ephemeral": {
       "label": "Inkognito-Modus",
-      "enable": "Flüchtigen Chat aktivieren – Nachrichten werden nicht gespeichert",
-      "disable": "Flüchtigen Chat deaktivieren",
-      "activeNotice": "Nachrichten werden nicht gespeichert und verschwinden beim Verlassen oder Neuladen."
+      "enable": "Inkognito aktivieren – der Chat wird nicht im Verlauf gespeichert",
+      "disable": "Inkognito deaktivieren – diesen Chat im Verlauf behalten",
+      "activeNotice": "Temporärer Chat – wird nicht im Verlauf gespeichert und {{hours}} Stunden nach der letzten Aktivität gelöscht.",
+      "keepFailed": "Dieser Chat konnte nicht im Verlauf gespeichert werden: {{error}}"
     },
     "compareMode": {
       "toggle": "Vergleichsmodus",
@@ -213,9 +214,7 @@
       "openInWeb": "In der Web-App öffnen"
     },
     "openInWeb": {
-      "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:",
-      "tooLarge": "Dieser Chat ist zu groß, um ihn in der Web-App zu öffnen. Beginnen Sie dort stattdessen einen neuen Chat.",
-      "failed": "Der Chat konnte nicht in der Web-App geöffnet werden."
+      "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:"
     },
     "startPage": {
       "openApp": "App öffnen",
@@ -418,12 +417,6 @@
         "message": "Nachricht",
         "attachments": "Anhänge",
         "dropZone": "Dateien hierher ziehen oder zum Auswählen klicken"
-      },
-      "handoff": {
-        "otherUser": "Dieser Chat wurde in Outlook von einem anderen Konto geöffnet. Melden Sie sich mit diesem Konto an, um ihn fortzusetzen.",
-        "expired": "Der Chat aus Outlook konnte nicht geöffnet werden: Der Link ist abgelaufen oder wurde bereits verwendet. Wählen Sie in Outlook erneut „In der Web-App öffnen“.",
-        "signIn": "Melden Sie sich an, um den Chat fortzusetzen, den Sie aus Outlook geöffnet haben.",
-        "failed": "Der Chat aus Outlook konnte gerade nicht geöffnet werden. Laden Sie die Seite neu, um es erneut zu versuchen."
       }
     }
   },
@@ -474,6 +467,9 @@
     "runInterrupted": "Diese Antwort wurde unterbrochen: Der Server wurde angehalten, während sie erstellt wurde.",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
+    "chatStorageUnavailable": "Chats können gerade nicht gespeichert werden, daher wurde diese Nachricht nicht gesendet. Bitte versuchen Sie es später erneut oder wenden Sie sich an Ihre Administration.",
+    "clientHistoryNotAllowed": "Diese Seite ist veraltet. Laden Sie sie neu, um den Chat fortzusetzen.",
+    "guestCookieMissing": "Dieser Chat kann nicht fortgesetzt werden, weil Ihr Browser für diese Website keine Cookies speichert. Erlauben Sie Cookies für diese Website, um Chats hier fortzusetzen.",
     "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt...",
     "chunkLoadTitle": "Seite konnte nicht geladen werden",
     "chunkLoadDescription": "Eine benötigte Ressource konnte nicht geladen werden. Dies kann an einem Netzwerkproblem oder einem Anwendungsupdate liegen.",
@@ -545,9 +541,7 @@
     "openInCanvas": "In Canvas öffnen",
     "generatedImage": "Generiertes Bild",
     "downloadImage": "Bild herunterladen",
-    "saveImageWarning": "Laden Sie dieses Bild herunter, Bilder werden nicht gespeichert.",
     "imageNotPersisted": "Bild nicht verfügbar",
-    "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar.",
     "copyLink": "Link kopieren",
     "linkCopied": "Link kopiert!",
     "downloadMessage": "Nachricht herunterladen",
@@ -761,22 +755,24 @@
   "admin": {
     "chatHistory": {
       "chats": {
-        "enabled": "Chats speichern",
-        "enabledHelp": "Hauptschalter für das Speichern von Chats. Erfordert zusätzlich die Funktion „Dauerhafte Chats“. Ausschalten stoppt neue Schreibvorgänge, blendet den Verlauf für Benutzer aus und pausiert die Aufbewahrungsbereinigung; gespeicherte Chats bleiben erhalten.",
+        "enabled": "Chats im Verlauf behalten",
+        "enabledHelp": "Hauptschalter für den Chatverlauf. Erfordert zusätzlich die Funktion „Chatverlauf“. Gespeichert wird jeder Chat ohnehin; ausgeschaltet ist jeder neue Chat temporär, der Verlauf wird für Benutzer ausgeblendet und die Aufbewahrungsregeln des Verlaufs pausieren. Bereits behaltene Chats bleiben erhalten.",
         "maxChatsPerUser": "Chats pro Benutzer",
         "maxChatsPerUserHelp": "Jeder Benutzer behält so viele seiner neuesten Chats; ältere werden von der täglichen Bereinigung gelöscht. 0 hebt das Limit auf.",
         "maxMessagesPerChat": "Nachrichten pro Chat",
         "maxMessagesPerChatHelp": "Sobald ein Chat darüber hinauswächst, werden die ältesten Nachrichten entfernt. Gilt bei jedem Schreibvorgang, ohne Neustart. 0 hebt das Limit auf.",
         "retentionDays": "Aufbewahrung (Tage)",
         "retentionDaysHelp": "Chats ohne Aktivität seit so vielen Tagen werden von der täglichen Bereinigung gelöscht. 0 bewahrt Chats unbegrenzt auf.",
-        "title": "Dauerhafte Chats"
+        "temporaryRetentionHours": "Temporäre Chats (Stunden)",
+        "temporaryRetentionHoursHelp": "Temporäre Chats – Inkognito-Chats, Chats anonymer Besucher und jeder Chat bei ausgeschaltetem Verlauf – werden so viele Stunden nach ihrer letzten Aktivität gelöscht, stündlich geprüft. Mindestens 1, höchstens 720 (30 Tage).",
+        "title": "Chatverlauf"
       },
       "description": "Legen Sie fest, wie lange gespeicherte Chats und das Run-Ledger aufbewahrt werden, und prüfen Sie, was gespeichert ist.",
       "ledger": {
         "advanced": "Erweitert",
         "cleanupEnabled": "Alte Läufe täglich löschen",
         "cleanupEnabledHelp": "Wenn ausgeschaltet, bleiben Ledger-Läufe unabhängig von der Aufbewahrung unten erhalten.",
-        "description": "Ein anhängbares Ereignisprotokoll pro Lauf (Chats, Workflows, Agenten). Dauerhafte Chats werden daraus wiederhergestellt, daher zeichnet es immer auf, wenn dauerhafte Chats aktiv sind.",
+        "description": "Ein anhängbares Ereignisprotokoll pro Lauf (Chats, Workflows, Agenten). Chats werden daraus wiederhergestellt, daher zeichnet es immer auf, wenn der Chatspeicher verfügbar ist.",
         "enabled": "Run-Ledger aufzeichnen",
         "enabledHelp": "Erfordert zusätzlich die Funktion „Run-Ledger“.",
         "flushIntervalMs": "Flush-Intervall (ms)",
@@ -797,7 +793,7 @@
       "refresh": "Aktualisieren",
       "retention": {
         "chatsRemoved": "{{count}} Chat(s) entfernt",
-        "chatsSkipped": "Chats nicht bereinigt: Dauerhafte Chats sind nicht aktiv",
+        "chatsSkipped": "Chats nicht bereinigt: Der Chatspeicher ist nicht verfügbar",
         "confirm": "Jetzt löschen",
         "confirmMessage": "Alles, was über die gespeicherten Aufbewahrungsregeln hinausgeht, wird dauerhaft gelöscht – Chats samt Verläufen und Ledger-Läufe. Nicht gespeicherte Änderungen auf dieser Seite werden nicht verwendet.",
         "confirmTitle": "Aufbewahrung jetzt ausführen?",
@@ -818,6 +814,7 @@
         "byKind": "Nach Art",
         "byStatus": "Nach Status",
         "chats": "Chats",
+        "temporary": "Temporäre Chats",
         "expiring": "Nach Alter abgelaufen",
         "ledgerTitle": "Run-Ledger",
         "ledgerUsers": "Benutzer",
@@ -838,25 +835,25 @@
         "usersCount": "{{count}} Benutzer"
       },
       "status": {
-        "active": "Chats angemeldeter Benutzer werden auf dem Server gespeichert.",
-        "chatsEnabled": "Chat-Speicherung aktiviert",
-        "chatsEnabledHelp": "Die Einstellung „Chats speichern“ weiter unten.",
-        "chatsHeading": "Dauerhafte Chats",
-        "feature": "Funktion „Dauerhafte Chats“",
+        "active": "Chats werden in einem Verlauf behalten, den angemeldete Benutzer wieder öffnen können.",
+        "chatsEnabled": "Verlauf aktiviert",
+        "chatsEnabledHelp": "Die Einstellung „Chats im Verlauf behalten“ weiter unten.",
+        "chatsHeading": "Chatverlauf",
+        "feature": "Funktion „Chatverlauf“",
         "featureHelp": "Wird unter Admin → Funktionen aktiviert.",
-        "inactive": "Chats werden nicht auf dem Server gespeichert. Alle folgenden Prüfungen müssen erfüllt sein.",
+        "inactive": "Der Chatverlauf ist aus: Jeder Chat wird als temporärer Chat gespeichert und nach der Aufbewahrungsdauer für temporäre Chats gelöscht. Damit ein Verlauf behalten wird, müssen alle Prüfungen unten erfüllt sein.",
         "ledgerActive": "Ledger zeichnet auf",
         "ledgerEnabled": "Ledger aktiviert",
         "ledgerEnabledHelp": "Die Einstellung „Run-Ledger aufzeichnen“ weiter unten.",
         "ledgerFeature": "Funktion „Run-Ledger“",
-        "ledgerForced": "Aktiv, weil dauerhafte Chats es benötigen – auch wenn die Funktion oder Einstellung Run-Ledger ausgeschaltet ist.",
+        "ledgerForced": "Aktiv, weil gespeicherte Chats es benötigen – auch wenn die Funktion oder Einstellung Run-Ledger ausgeschaltet ist.",
         "ledgerHeading": "Run-Ledger",
         "openFeatures": "Funktionen öffnen",
         "storage": "Speicheranbieter bereit",
         "title": "Status",
         "sharingHeading": "Chats teilen",
         "sharingActive": "Links können erstellt werden",
-        "sharingActiveHelp": "Benötigt dauerhafte Chats, das Feature und den Schalter unten.",
+        "sharingActiveHelp": "Benötigt den Chatverlauf, das Feature und den Schalter unten.",
         "sharingFeature": "Feature „Chats teilen“",
         "sharingEnabled": "Teilen aktiviert",
         "sharingEnabledHelp": "Die Einstellung „Teilen von Chats erlauben“ unten."
@@ -3894,7 +3891,7 @@
       "enabled": "Aktiviert",
       "filter": "Nach Status filtern",
       "gates": {
-        "chats": "Dauerhafte Chats sind verfügbar",
+        "chats": "Der Chatverlauf ist verfügbar",
         "feature": "Die Funktion „Geplante Aufgaben“ ist eingeschaltet",
         "platform": "Geplante Aufgaben sind unten aktiviert"
       },

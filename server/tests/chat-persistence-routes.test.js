@@ -31,6 +31,7 @@ import runLog from '../services/loop/RunLog.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { activeRequests } from '../sse.js';
 import registerChatRoutes from '../routes/chats.js';
+import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 
 const ADA = { id: 'user-ada', name: 'Ada' };
 const GRACE = { id: 'user-grace', name: 'Grace' };
@@ -479,5 +480,203 @@ describe('DELETE /api/chats/:chatId cascades', () => {
     assert.equal(res.statusCode, 200);
     assert.ok(deleted.states.includes('run-iso-boom'), 'the failing run still lost its state');
     assert.ok(deleted.states.includes('run-iso-after'), 'the run after it was reached');
+  });
+});
+
+describe('temporary chats and guests', () => {
+  const guest = guestId => {
+    const user = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    if (guestId) setGuestId(user, guestId);
+    return user;
+  };
+  const GUEST_A = 'a'.repeat(64);
+  const GUEST_B = 'b'.repeat(64);
+
+  /** Run `fn` with the chat history switched off. */
+  async function withHistoryOff(fn) {
+    configCache.setCacheEntry('config/features.json', { chatPersistence: false });
+    try {
+      await fn();
+    } finally {
+      configCache.setCacheEntry('config/features.json', { chatPersistence: true });
+    }
+  }
+
+  it('with the history off, the listing is unavailable but one chat still opens', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-tmp-history-off',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    await withHistoryOff(async () => {
+      const list = await drive(listHandlers, { user: ADA });
+      assert.equal(list.statusCode, 503);
+      assert.equal(list.body.details.code, 'CHAT_PERSISTENCE_UNAVAILABLE');
+
+      const one = await drive(getHandlers, {
+        params: { chatId: 'chat-tmp-history-off' },
+        user: ADA
+      });
+      assert.equal(one.statusCode, 200, 'a reload reopens the temporary chat');
+      assert.equal(one.body.chat.temporary, true);
+
+      const gone = await drive(deleteHandlers, {
+        params: { chatId: 'chat-tmp-history-off' },
+        user: ADA
+      });
+      assert.equal(gone.statusCode, 200);
+      assert.equal(await getChatRepository().getChat('chat-tmp-history-off'), null);
+    });
+  });
+
+  it('a guest opens and deletes its own chat, and no other visitor can', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-guest-own',
+      ownerId: guestOwnerId(GUEST_A),
+      appId: 'chat',
+      temporary: true
+    });
+
+    const own = await drive(getHandlers, {
+      params: { chatId: 'chat-guest-own' },
+      user: guest(GUEST_A)
+    });
+    assert.equal(own.statusCode, 200);
+
+    for (const stranger of [guest(GUEST_B), guest(null), GRACE]) {
+      const res = await drive(getHandlers, {
+        params: { chatId: 'chat-guest-own' },
+        user: stranger
+      });
+      assert.equal(res.statusCode, 404);
+      const del = await drive(deleteHandlers, {
+        params: { chatId: 'chat-guest-own' },
+        user: stranger
+      });
+      assert.equal(del.statusCode, 404);
+    }
+
+    const del = await drive(deleteHandlers, {
+      params: { chatId: 'chat-guest-own' },
+      user: guest(GUEST_A)
+    });
+    assert.equal(del.statusCode, 200);
+  });
+
+  it('a temporary chat is kept by PATCH { temporary: false }, and never made temporary', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-keep-me',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    let list = await drive(listHandlers, { user: ADA });
+    assert.ok(!list.body.items.some(chat => chat.id === 'chat-keep-me'), 'not listed yet');
+
+    const refused = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-me' },
+      body: { temporary: true },
+      user: ADA
+    });
+    assert.equal(refused.statusCode, 400);
+
+    const stranger = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-me' },
+      body: { temporary: false },
+      user: GRACE
+    });
+    assert.equal(stranger.statusCode, 404);
+
+    const kept = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-me' },
+      body: { temporary: false },
+      user: ADA
+    });
+    assert.equal(kept.statusCode, 200);
+    assert.equal(kept.body.chat.temporary, undefined);
+    list = await drive(listHandlers, { user: ADA });
+    assert.ok(
+      list.body.items.some(chat => chat.id === 'chat-keep-me'),
+      'listed once kept'
+    );
+  });
+
+  it('a temporary chat cannot be moved into a project until it is kept', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-tmp-project',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    const res = await drive(patchHandlers, {
+      params: { chatId: 'chat-tmp-project' },
+      body: { projectId: 'prj_team' },
+      user: ADA
+    });
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.body.details.code, 'CHAT_TEMPORARY');
+    assert.equal((await getChatRepository().getChat('chat-tmp-project')).projectId, undefined);
+  });
+
+  it('refuses keeping and moving in one request, leaving the chat as it was', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-keep-and-move',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    const res = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-and-move' },
+      body: { temporary: false, projectId: 'prj_missing' },
+      user: ADA
+    });
+    assert.equal(res.statusCode, 400);
+    const attach = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-and-move' },
+      body: { temporary: false, attachedProjectIds: ['prj_missing'] },
+      user: ADA
+    });
+    assert.equal(attach.statusCode, 400);
+    const stored = await getChatRepository().getChat('chat-keep-and-move');
+    assert.equal(stored.temporary, true);
+    assert.equal(stored.projectId, undefined);
+    assert.equal(stored.attachedProjectIds, undefined);
+  });
+
+  it('a temporary chat can be renamed while the history is off', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-tmp-rename',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    await withHistoryOff(async () => {
+      const res = await drive(patchHandlers, {
+        params: { chatId: 'chat-tmp-rename' },
+        body: { title: 'Renamed' },
+        user: ADA
+      });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.chat.temporary, true);
+    });
+  });
+
+  it('keeping needs a history to keep it in', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-keep-no-history',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    await withHistoryOff(async () => {
+      const res = await drive(patchHandlers, {
+        params: { chatId: 'chat-keep-no-history' },
+        body: { temporary: false },
+        user: ADA
+      });
+      assert.equal(res.statusCode, 503);
+    });
+    assert.equal((await getChatRepository().getChat('chat-keep-no-history')).temporary, true);
   });
 });

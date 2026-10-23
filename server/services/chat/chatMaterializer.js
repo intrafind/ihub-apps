@@ -11,9 +11,9 @@
  * a chat that quietly stopped being persisted is a bug the operator has to see
  * before the user does.
  *
- * Nothing here decides *whether* a turn is persisted. That is
- * `chatPersistence.isChatPersistenceActive()`, evaluated once per request by
- * the route; this module is either handed a repository or is not called.
+ * Nothing here decides *how* a turn is stored — kept or temporary. That is
+ * `chatPersistence.resolveChatStorage()`, evaluated once per request by the
+ * route; this module is handed a repository and the answer.
  *
  * @module services/chat/chatMaterializer
  */
@@ -271,6 +271,8 @@ function failedError(info) {
  *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @param {string} [params.titleText] - what a chat this turn names is named after,
  *   when that is not the message itself (an `@workflow` turn: the text without the mention)
+ * @param {boolean} [params.temporary] - create the chat as a temporary one
+ *   (`chatPersistence.resolveChatStorage`); a chat that already exists keeps what it is
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeUserTurn(params) {
@@ -306,7 +308,8 @@ export async function settleUserTurn({
   projects = null,
   projectId: preparedProjectId,
   origin = null,
-  titleText = null
+  titleText = null,
+  temporary = false
 }) {
   const none = { message: null, refusal: null };
   if (!repository) return none;
@@ -324,7 +327,8 @@ export async function settleUserTurn({
       modelId,
       settings,
       title,
-      origin: origin || { createdVia: 'ui' }
+      origin: origin || { createdVia: 'ui' },
+      temporary: temporary === true
     });
     if (!chat) {
       logger.error('Chat user turn not materialized: storage unavailable', {
@@ -367,7 +371,9 @@ export async function settleUserTurn({
       // project page lists chats by) only once the chat document carries the
       // association: the listing prunes a marker its chat does not back, and
       // a marker written before this patch could be pruned for good.
-      if (projects.claimContainer && stored) {
+      // A temporary chat is never listed, the project page included: it
+      // runs with the project's knowledge, but its members never see it.
+      if (projects.claimContainer && stored && stored.temporary !== true) {
         await recordChatInProject(projects.claimContainer, chatId, { ownerId });
       }
     } else {

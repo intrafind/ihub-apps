@@ -113,10 +113,9 @@ beforeEach(() => {
 });
 
 test('opening another chat mid-stream leaves the durable run alone', async () => {
-  const { result, rerender } = renderHook(
-    ({ chatId }) => useAppChat({ appId: 'acme', chatId, serverBacked: true }),
-    { initialProps: { chatId: 'chat-aaa' } }
-  );
+  const { result, rerender } = renderHook(({ chatId }) => useAppChat({ appId: 'acme', chatId }), {
+    initialProps: { chatId: 'chat-aaa' }
+  });
 
   await startTurn(result, 'a long question');
   expect(result.current.processing).toBe(true);
@@ -131,10 +130,9 @@ test('opening another chat mid-stream leaves the durable run alone', async () =>
 });
 
 test('…and releases the composer of the chat that was just opened', async () => {
-  const { result, rerender } = renderHook(
-    ({ chatId }) => useAppChat({ appId: 'acme', chatId, serverBacked: true }),
-    { initialProps: { chatId: 'chat-aaa' } }
-  );
+  const { result, rerender } = renderHook(({ chatId }) => useAppChat({ appId: 'acme', chatId }), {
+    initialProps: { chatId: 'chat-aaa' }
+  });
 
   await startTurn(result, 'a long question');
   expect(result.current.processing).toBe(true);
@@ -151,10 +149,9 @@ test('a turn queued but never connected is not posted into the chat that replace
   // `sendMessage` queues the body and posts it when the stream reports itself
   // connected. A chat switch in between must drop the queue, or chat B's
   // stream would deliver chat A's message.
-  const { result, rerender } = renderHook(
-    ({ chatId }) => useAppChat({ appId: 'acme', chatId, serverBacked: true }),
-    { initialProps: { chatId: 'chat-aaa' } }
-  );
+  const { result, rerender } = renderHook(({ chatId }) => useAppChat({ appId: 'acme', chatId }), {
+    initialProps: { chatId: 'chat-aaa' }
+  });
 
   await startTurn(result, 'meant for A');
   sendAppChatMessage.mockClear();
@@ -173,9 +170,7 @@ test('a turn queued but never connected is not posted into the chat that replace
 test('unmounting an ephemeral chat closes the stream and leaves the stopping to the server', async () => {
   // Nothing stores this turn, so the server ends it when it sees the
   // connection close (`abortChatRequestOnDisconnect`). The client sends nothing.
-  const { result, unmount } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-ccc', serverBacked: false })
-  );
+  const { result, unmount } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-ccc' }));
 
   await startTurn(result, 'a question');
   expect(mockSignals[0].aborted).toBe(false);
@@ -190,9 +185,7 @@ test('unmounting an ephemeral chat closes the stream and leaves the stopping to 
 
 test('sending a new message does not stop the turn it follows up', async () => {
   // The server supersedes the turn in flight and records that it did.
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-eee', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-eee' }));
 
   await startTurn(result, 'first');
   await startTurn(result, 'second');
@@ -203,9 +196,7 @@ test('sending a new message does not stop the turn it follows up', async () => {
 });
 
 test('only the Stop button stops the turn, and says which control it was', async () => {
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-fff', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-fff' }));
 
   await startTurn(result, 'a question');
   expect(stopAppChatStream).not.toHaveBeenCalled();
@@ -229,9 +220,7 @@ test('the server has the stop before the stream is closed', async () => {
         releaseStop = resolve;
       })
   );
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-hhh', serverBacked: false })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-hhh' }));
 
   await startTurn(result, 'a question');
   await act(async () => {
@@ -248,9 +237,7 @@ test('the server has the stop before the stream is closed', async () => {
 });
 
 test('a control that names itself is recorded under that name', async () => {
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-ggg', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-ggg' }));
 
   await startTurn(result, 'a question');
   await act(async () => {
@@ -260,22 +247,20 @@ test('a control that names itself is recorded under that name', async () => {
   expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-ggg', { source: 'compare' });
 });
 
-test('a durability flip mid-turn does not tear the stream down', async () => {
-  // `serverBacked` comes from platform config and from auth, so it can change
-  // while a turn is running. In the teardown effect's dependency array that
-  // change *runs the teardown* — whose first act is aborting the fetch, three
-  // lines before anything reads the flag it was keyed on. The stream is gone
-  // by the time the guard is consulted, on a chat nobody left.
+test('an incognito flip mid-turn does not tear the stream down', async () => {
+  // `ephemeral` follows the incognito toggle, so it can change while a turn is
+  // running. Were it in the teardown effect's dependency array, that change
+  // would *run the teardown* — aborting the fetch of a chat nobody left.
   const { result, rerender } = renderHook(
-    ({ serverBacked }) => useAppChat({ appId: 'acme', chatId: 'chat-flip', serverBacked }),
-    { initialProps: { serverBacked: true } }
+    ({ ephemeral }) => useAppChat({ appId: 'acme', chatId: 'chat-flip', ephemeral }),
+    { initialProps: { ephemeral: false } }
   );
 
   await startTurn(result, 'a question');
   expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-flip']);
 
   await act(async () => {
-    rerender({ serverBacked: false });
+    rerender({ ephemeral: true });
   });
 
   // Still one connection, and no reconnect to paper over a teardown: the
@@ -292,9 +277,7 @@ test('unmounting a durable chat leaves the turn running', async () => {
   // stored an empty assistant message with an ABORTED error instead. (The same
   // holds for an ephemeral chat now: the server ends it when the connection
   // closes.)
-  const { result, unmount } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-ddd', serverBacked: true })
-  );
+  const { result, unmount } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-ddd' }));
 
   await startTurn(result, 'a question');
 

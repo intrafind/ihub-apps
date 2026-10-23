@@ -467,16 +467,19 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // Durable chats: server-side chat history written through the storage
-    // abstraction. The feature itself is gated by features.chatPersistence;
-    // these are its settings. Both retention rules are switched off by a value
-    // of zero or less — chats are then kept until an owner deletes them.
+    // Chats: every chat is stored through the storage abstraction. The chat
+    // history (kept, listed chats) is gated by features.chatPersistence and
+    // `enabled`; without it every chat is temporary. Both history retention
+    // rules are switched off by a value of zero or less — chats are then kept
+    // until an owner deletes them. Temporary chats always expire, after
+    // `temporaryRetentionHours` without activity.
     chats: z
       .object({
         enabled: z.boolean().prefault(true),
         retentionDays: z.number().prefault(90),
         maxChatsPerUser: z.number().prefault(200),
         maxMessagesPerChat: z.number().prefault(2000),
+        temporaryRetentionHours: z.number().prefault(24),
         // Chat sharing: read-only links onto stored chats, gated by
         // features.chatSharing. The three `allow*` switches decide which
         // audiences an owner may pick; the caps bound what a link may be

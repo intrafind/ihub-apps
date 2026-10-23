@@ -49,7 +49,7 @@ import { isAdminUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
-import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
+import { isChatHistoryConfigured } from '../services/chat/chatPersistence.js';
 import {
   getChatShareRepository,
   isShareId,
@@ -122,7 +122,7 @@ function sendStorageError(res, error, operation) {
 function sharingActive() {
   const features = configCache.getFeatures();
   const platform = configCache.getPlatform() || {};
-  if (!isChatPersistenceConfigured(features, platform)) return false;
+  if (!isChatHistoryConfigured(features, platform)) return false;
   if (!isChatSharingConfigured(features, platform)) return false;
   return getChatRepository().isAvailable() && getChatShareRepository().isAvailable();
 }
@@ -392,6 +392,14 @@ export default function registerChatShareRoutes(app) {
           intent: 'write'
         });
         if (!auth.ok || !auth.chat) return sendNotFound(res, 'Chat');
+        // A temporary chat is the one its owner asked not to keep, and it is
+        // gone within a day: a link onto it would publish what was meant to
+        // stay private and then break. Keeping the chat first is the way.
+        if (auth.chat.temporary === true) {
+          return sendErrorResponse(res, 409, 'A temporary chat cannot be shared; keep it first', {
+            details: { code: 'CHAT_TEMPORARY' }
+          });
+        }
 
         const { messages } = await deps.chats.getMessages(chatId);
         if (!messages.length) {

@@ -410,36 +410,28 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 
 ### 3g. Multi-Turn Conversation
 
-Include prior messages for context in follow-up requests:
+Follow-up requests reuse the chat id; the server holds the history:
 
-> **If the installation stores chats server-side** (the `chatPersistence`
-> feature, for an authenticated caller on a turn that is not `ephemeral`), the
-> server owns the history: post **only the new message** and it will read the
-> rest back out of the store. Sending more than one message is refused with
-> `CLIENT_HISTORY_NOT_ALLOWED`. To keep sending the whole conversation
-> yourself, add `"ephemeral": true` — that turn is then not stored. See
+> **Every chat is stored server-side**, so post **only the new message** and
+> the server reads the rest back out of the store. Sending more than one message
+> is refused with `CLIENT_HISTORY_NOT_ALLOWED`. Add `"ephemeral": true` to the
+> first turn for a temporary chat that is not kept in the history. To send the
+> whole conversation yourself, use the stateless
+> [OpenAI-compatible API](openai-compatible-api.md) instead. See
 > [Chat Persistence](chat-persistence.md).
 
 ```bash
+# First turn
 curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {
-        "role": "user",
-        "content": "What is cloud computing?"
-      },
-      {
-        "role": "assistant",
-        "content": "Cloud computing is the delivery of computing services over the internet..."
-      },
-      {
-        "role": "user",
-        "content": "What are the main providers?"
-      }
-    ]
-  }' | jq .
+  -d '{ "messages": [{ "role": "user", "content": "What is cloud computing?" }] }' | jq .
+
+# Follow-up in the same chat: only the new message
+curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "messages": [{ "role": "user", "content": "What are the main providers?" }] }' | jq .
 ```
 
 ### 3h. Stop a Stream

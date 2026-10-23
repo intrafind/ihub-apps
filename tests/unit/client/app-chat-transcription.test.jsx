@@ -46,11 +46,11 @@ jest.mock('../../../client/src/api', () => ({
   __esModule: true,
   fetchAppDetails: jest.fn(),
   fetchChat: jest.fn(),
+  deleteChat: jest.fn(),
   sendAppChatMessage: jest.fn().mockResolvedValue({})
 }));
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
-  __esModule: true,
-  getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
+  __esModule: true
 }));
 // Reached through AppChat's citation document actions. Stubbed like the rest
 // of the api layer: `api/client.js` reads `import.meta.env`, which the Jest
@@ -336,7 +336,7 @@ jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
 }));
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
-const { sendAppChatMessage } = require('../../../client/src/api');
+const { deleteChat, fetchChat, sendAppChatMessage } = require('../../../client/src/api');
 const {
   decodeAudioFileToBuffer
 } = require('../../../client/src/features/upload/utils/fileProcessing');
@@ -509,6 +509,9 @@ beforeEach(() => {
   mockComposer.props = null;
   mockPlatform.config = null;
   jest.clearAllMocks();
+  fetchChat.mockReset();
+  deleteChat.mockReset();
+  deleteChat.mockResolvedValue({ deleted: true });
   sessionStorage.clear();
   decodeAudioFileToBuffer.mockResolvedValue({ duration: 3 });
   mockRecorders.length = 0;
@@ -717,7 +720,7 @@ describe('a transcription model selected in the chat', () => {
     expect(sendAppChatMessage).not.toHaveBeenCalled();
   });
 
-  test('the transcript is history for the chat model selected next', async () => {
+  test('the chat model selected next is sent only its own message: the store has the rest', async () => {
     transcribeAudioBuffer.mockResolvedValue('We ship on Friday.');
     const view = renderApp();
     await attach(AUDIO);
@@ -737,11 +740,9 @@ describe('a transcription model selected in the chat', () => {
     await waitFor(() => expect(mockStream.opened).toBe(1));
     await answerTurn('run-1');
 
-    expect(requestMessages(0).map(m => [m.role, m.content])).toEqual([
-      ['user', 'memo.mp3'],
-      ['assistant', 'We ship on Friday.'],
-      ['user', 'Summarize it']
-    ]);
+    // The recording's turn was stored by the transcription bridge itself, so
+    // the server hands the model the transcript as history.
+    expect(requestMessages(0).map(m => [m.role, m.content])).toEqual([['user', 'Summarize it']]);
   });
 });
 
@@ -759,10 +760,15 @@ describe('a transcription turn in a project chat (#1036)', () => {
     expect(transcribeAudioBuffer.mock.calls[0][1].chat).toEqual(
       expect.objectContaining({ chatId, projectId: 'prj_case' })
     );
-    // Kept beside the transcript this tab holds for the chat.
-    expect(sessionStorage.getItem(`ai_hub_chat_project_${chatId}`)).toBe('prj_case');
-
-    // The app opened again without `?project=`: same chat, still in the project.
+    // The app opened again without `?project=`: the tab remembers the chat,
+    // and the store says which project it is in.
+    fetchChat.mockResolvedValue({
+      chat: { id: chatId, projectId: 'prj_case', temporary: true },
+      messages: [
+        { id: 'srv-1', role: 'user', content: 'memo.mp3', transcription: true },
+        { id: 'srv-2', role: 'assistant', content: 'We ship on Friday.', transcription: true }
+      ]
+    });
     view.unmount();
     selectModel('model-x');
     renderApp();
@@ -793,7 +799,8 @@ describe('a transcription turn in a project chat (#1036)', () => {
       confirm.mockRestore();
     }
     await waitFor(() => expect(mockHeader.props.chatId).not.toBe(chatId));
-    expect(sessionStorage.getItem(`ai_hub_chat_project_${chatId}`)).toBeNull();
+    // Without a history the chat was temporary: leaving it deletes it.
+    expect(deleteChat).toHaveBeenCalledWith(chatId);
 
     // The next turn of the new chat goes out without the project.
     selectModel('model-x');

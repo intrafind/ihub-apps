@@ -143,7 +143,7 @@ function TopTable({ title, rows, keyName, keyLabel, t }) {
   );
 }
 
-function NumberField({ id, label, help, value, onChange, min }) {
+function NumberField({ id, label, help, value, onChange, min, max }) {
   return (
     <div>
       <label
@@ -157,6 +157,7 @@ function NumberField({ id, label, help, value, onChange, min }) {
         type="number"
         step="1"
         min={min}
+        max={max}
         value={Number.isFinite(value) ? value : ''}
         onChange={e => {
           const parsed = Number.parseInt(e.target.value, 10);
@@ -297,7 +298,7 @@ function AdminChatHistoryPage() {
               })
             : t(
                 'admin.chatHistory.retention.chatsSkipped',
-                'Chats not swept: durable chats are not active'
+                'Chats not swept: chat storage is not available'
               )
         );
       }
@@ -478,22 +479,22 @@ function AdminChatHistoryPage() {
             {status.chatPersistenceActive
               ? t(
                   'admin.chatHistory.status.active',
-                  'Chats of signed-in users are stored on the server.'
+                  'Chats are kept in a history that signed-in users can reopen.'
                 )
               : t(
                   'admin.chatHistory.status.inactive',
-                  'Chats are not stored on the server. Every check below must pass.'
+                  'The chat history is off: every chat is stored as a temporary chat and deleted after the temporary retention period. Every check below must pass to keep a history.'
                 )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                {t('admin.chatHistory.status.chatsHeading', 'Durable chats')}
+                {t('admin.chatHistory.status.chatsHeading', 'Chat history')}
               </h3>
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">
                 <GateRow
                   ok={status.featureChatPersistence}
-                  label={t('admin.chatHistory.status.feature', 'Durable Chats feature')}
+                  label={t('admin.chatHistory.status.feature', 'Chat History feature')}
                   detail={t(
                     'admin.chatHistory.status.featureHelp',
                     'Turned on in Admin → Features.'
@@ -502,10 +503,10 @@ function AdminChatHistoryPage() {
                 />
                 <GateRow
                   ok={status.chatsEnabled}
-                  label={t('admin.chatHistory.status.chatsEnabled', 'Chat storage enabled')}
+                  label={t('admin.chatHistory.status.chatsEnabled', 'History enabled')}
                   detail={t(
                     'admin.chatHistory.status.chatsEnabledHelp',
-                    'The "Store chats" setting below.'
+                    'The "Keep chats in a history" setting below.'
                   )}
                 />
                 <GateRow
@@ -527,7 +528,7 @@ function AdminChatHistoryPage() {
                     status.ledgerForcedByChats
                       ? t(
                           'admin.chatHistory.status.ledgerForced',
-                          'On because durable chats need it, even though the Run Ledger feature or setting is off.'
+                          'On because stored chats need it, even though the Run Ledger feature or setting is off.'
                         )
                       : null
                   }
@@ -557,7 +558,7 @@ function AdminChatHistoryPage() {
                   label={t('admin.chatHistory.status.sharingActive', 'Links can be created')}
                   detail={t(
                     'admin.chatHistory.status.sharingActiveHelp',
-                    'Needs durable chats, the feature and the switch below.'
+                    'Needs the chat history, the feature and the switch below.'
                   )}
                 />
                 <GateRow
@@ -606,6 +607,10 @@ function AdminChatHistoryPage() {
                 <StatTile
                   label={t('admin.chatHistory.stats.chats', 'Chats')}
                   value={formatNumber(chatStats.totalChats)}
+                />
+                <StatTile
+                  label={t('admin.chatHistory.stats.temporary', 'Temporary chats')}
+                  value={formatNumber(chatStats.temporaryChats ?? 0)}
                 />
                 <StatTile
                   label={t('admin.chatHistory.stats.messages', 'Messages')}
@@ -833,24 +838,24 @@ function AdminChatHistoryPage() {
           </div>
         </div>
 
-        {/* Durable chat settings */}
+        {/* Chat history settings */}
         <div className={cardClass}>
           <h2 className={headingClass}>
             <Icon name="chat-bubble-left-right" className="w-5 h-5 mr-2 text-blue-500" />
-            {t('admin.chatHistory.chats.title', 'Durable chats')}
+            {t('admin.chatHistory.chats.title', 'Chat history')}
           </h2>
           <div className="space-y-4">
             <CheckboxField
               id="chats-enabled"
-              label={t('admin.chatHistory.chats.enabled', 'Store chats')}
+              label={t('admin.chatHistory.chats.enabled', 'Keep chats in a history')}
               help={t(
                 'admin.chatHistory.chats.enabledHelp',
-                'Master switch for writing chats to storage. Also requires the Durable Chats feature. Turning it off stops new writes, hides the history from users and pauses the retention sweep; stored chats stay on disk.'
+                'Master switch for the chat history. Also requires the Chat History feature. Every chat is stored either way; turning this off makes each new chat temporary, hides the history from users and pauses the history retention rules. Chats already kept stay on disk.'
               )}
               checked={settings.chats.enabled}
               onChange={value => updateSetting('chats', 'enabled', value)}
             />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <NumberField
                 id="chats-retention"
                 label={t('admin.chatHistory.chats.retentionDays', 'Retention (days)')}
@@ -860,6 +865,21 @@ function AdminChatHistoryPage() {
                 )}
                 value={settings.chats.retentionDays}
                 onChange={value => updateSetting('chats', 'retentionDays', value)}
+              />
+              <NumberField
+                id="chats-temporary-retention"
+                label={t(
+                  'admin.chatHistory.chats.temporaryRetentionHours',
+                  'Temporary chats (hours)'
+                )}
+                help={t(
+                  'admin.chatHistory.chats.temporaryRetentionHoursHelp',
+                  "Temporary chats — incognito chats, anonymous visitors' chats, and every chat while the history is off — are deleted this many hours after their last activity, checked hourly. At least 1, at most 720 (30 days)."
+                )}
+                value={settings.chats.temporaryRetentionHours}
+                min={1}
+                max={720}
+                onChange={value => updateSetting('chats', 'temporaryRetentionHours', value)}
               />
               <NumberField
                 id="chats-max-per-user"
@@ -987,7 +1007,7 @@ function AdminChatHistoryPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {t(
               'admin.chatHistory.ledger.description',
-              'An append-only event log per run (chats, workflows, agents). Durable chats are rebuilt from it, so it records whenever durable chats are active.'
+              'An append-only event log per run (chats, workflows, agents). Chats are rebuilt from it, so it records whenever chat storage is available.'
             )}
           </p>
           <div className="space-y-4">

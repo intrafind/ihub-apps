@@ -96,7 +96,8 @@ async function materializeWorkflowUserTurn({
     // The container and attached projects this turn chose: a first turn
     // that is a workflow mention opens the chat inside its project too.
     projects: persistence.projects,
-    projectId: persistence.projectId
+    projectId: persistence.projectId,
+    temporary: persistence.temporary === true
   });
   return refusal;
 }

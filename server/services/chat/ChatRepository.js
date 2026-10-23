@@ -151,6 +151,8 @@ const PROTECTED_CHAT_FIELDS = new Set([
   'ownerId',
   'identityMode',
   'createdAt',
+  // Fixed when the chat is created; `keepChat` is the one way to clear it.
+  'temporary',
   '__proto__',
   'constructor',
   'prototype'
@@ -1006,10 +1008,15 @@ export class ChatRepository {
   }
 
   /**
-   * Page an owner's chat documents out of the store, without the memo.
+   * Page an owner's kept chats out of the store, without the memo.
+   *
+   * Temporary chats are skipped as they are read, and they do not count
+   * towards {@link MAX_OWNER_CHATS}: an owner with many short-lived incognito
+   * or compare-mode chats must not have them crowd kept chats out of the
+   * listing. The listing is the only reader, and it never shows them.
    *
    * @param {string} ownerId - Owning principal id.
-   * @returns {Promise<Object[]>} The owner's chats, in key order.
+   * @returns {Promise<Object[]>} The owner's kept chats, in key order.
    * @private
    */
   async _scanOwnerChats(ownerId) {
@@ -1023,7 +1030,7 @@ export class ChatRepository {
       });
       for (const doc of page.items) {
         const chat = toChat(doc);
-        if (chat) chats.push(chat);
+        if (chat && chat.temporary !== true) chats.push(chat);
       }
       cursor = page.nextCursor;
     } while (cursor && chats.length < MAX_OWNER_CHATS);
@@ -1077,6 +1084,8 @@ export class ChatRepository {
     const pageSize = clampPageSize(limit);
     const after = cursor ? decodeCursor(cursor) : null;
 
+    // A temporary chat is stored like any other but never listed: it is the
+    // conversation its owner asked not to keep (`_scanOwnerChats` skips it).
     const sorted = (await this._loadOwnerChats(ownerId)).sort(compareChatsDesc);
     const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
     const items = remaining.slice(0, pageSize);
@@ -1086,7 +1095,8 @@ export class ChatRepository {
   }
 
   /**
-   * How many chats an owner has, bounded the same way {@link listChats} is.
+   * How many stored chat documents an owner has — temporary chats included,
+   * unlike {@link listChats} — bounded at `MAX_OWNER_CHATS`.
    *
    * @param {string} ownerId - Owning principal id.
    * @returns {Promise<number>}
@@ -1131,6 +1141,10 @@ export class ChatRepository {
    *   `{ createdVia: 'ui'|'responses-api', clientId? }`.
    * @param {Object} [options.metadata] - Caller-defined key/value pairs (the
    *   Conversations API's `metadata`).
+   * @param {boolean} [options.temporary=false] - Store the chat as temporary:
+   *   never listed or shared, and removed by the retention sweep a day (by
+   *   default) after its last activity. Only a new chat takes it — an existing
+   *   one stays what it was created as.
    * @returns {Promise<Object|null>} The chat, or null when it cannot be stored.
    */
   async ensureChat({
@@ -1142,7 +1156,8 @@ export class ChatRepository {
     settings,
     title,
     origin,
-    metadata
+    metadata,
+    temporary = false
   } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
     return this._withChatLock(chatId, async () => {
@@ -1166,6 +1181,7 @@ export class ChatRepository {
           hasUnseenActivity: false,
           status: 'active',
           runIds: [],
+          ...(temporary === true ? { temporary: true } : {}),
           ...(origin && typeof origin === 'object' ? { origin: { ...origin } } : {}),
           ...(metadata && typeof metadata === 'object' ? { metadata: { ...metadata } } : {})
         },
@@ -1472,18 +1488,47 @@ export class ChatRepository {
   }
 
   /**
+   * Keep a temporary chat: from now on it is listed, can be shared and follows
+   * the history retention rules like any chat created as a kept one.
+   *
+   * There is no way back. A kept chat that should not be kept is deleted; a
+   * conversation that is to be temporary from some point on is a new chat.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Object|null>} The stored chat, or null when it does not
+   *   exist or cannot be stored.
+   */
+  async keepChat(chatId) {
+    if (!this._usable(chatId, 'keepChat')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return null;
+      if (existing.temporary !== true) return existing;
+      const { temporary: _temporary, ...kept } = existing;
+      return this._writeChat(kept, etag);
+    });
+  }
+
+  /**
    * Remove a chat and its transcript.
    *
    * The ledger runs are returned rather than deleted: cascading into `RunLog`
    * is the route's job, because it is the layer that knows the ledger exists.
    *
    * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {(chat: Object|null) => boolean} [options.onlyIf] - Judged under
+   *   the chat's lock against the chat as it stands: when it returns false
+   *   nothing is removed. For a caller that decided to delete from an older
+   *   read — the retention sweep — and must not remove a chat that changed
+   *   since.
    * @returns {Promise<{deleted: boolean, runIds: string[]}>}
    */
-  async deleteChat(chatId) {
+  async deleteChat(chatId, { onlyIf } = {}) {
     if (!this._usable(chatId, 'deleteChat')) return { deleted: false, runIds: [] };
     return this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
+      if (onlyIf && !onlyIf(existing)) return { deleted: false, runIds: [] };
       // Both halves: the chat document's recent runs and whatever outgrew it
       // and moved to the transcript. Read before either document is removed.
       const retired = (await this._readMessages(chatId)).retiredRunIds;

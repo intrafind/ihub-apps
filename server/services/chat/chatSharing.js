@@ -7,7 +7,7 @@
  *
  * Sharing rides on durable chats: a share is a frozen copy of a stored
  * transcript, so nothing here answers "yes" unless
- * `chatPersistence.isChatPersistenceConfigured` does too. On top of that sit
+ * `chatPersistence.isChatHistoryConfigured` does too. On top of that sit
  * the `chatSharing` feature flag and the `platform.chats.sharing` block, which
  * is where an admin switches individual modes off (public links most often)
  * and caps what a link may be configured with.
@@ -15,7 +15,7 @@
  * @module services/chat/chatSharing
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { isChatPersistenceConfigured } from './chatPersistence.js';
+import { isChatHistoryConfigured } from './chatPersistence.js';
 
 /** Feature flag gating chat sharing as a whole. */
 export const CHAT_SHARING_FEATURE = 'chatSharing';
@@ -107,7 +107,7 @@ export function chatSharingSettings(platformConfig) {
  * @returns {boolean}
  */
 export function isChatSharingConfigured(featureConfig = {}, platformConfig = {}) {
-  if (!isChatPersistenceConfigured(featureConfig, platformConfig)) return false;
+  if (!isChatHistoryConfigured(featureConfig, platformConfig)) return false;
   if (!isFeatureEnabled(CHAT_SHARING_FEATURE, featureConfig)) return false;
   return chatSharingSettings(platformConfig).enabled !== false;
 }

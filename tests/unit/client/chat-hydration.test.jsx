@@ -57,10 +57,13 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 
 const useChatMessages = require('../../../client/src/features/chat/hooks/useChatMessages').default;
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
+const {
+  purgeLegacyChatCopies
+} = require('../../../client/src/features/chat/utils/chatMessagesStorage');
 
 const storageKey = chatId => `ai_hub_chat_messages_${chatId}`;
 
-/** A transcript left in this tab by the pre-persistence behaviour. */
+/** A transcript an earlier version left in this tab's sessionStorage. */
 const LOCAL_COPY = [
   { id: 'local-1', role: 'user', content: 'stale question' },
   { id: 'local-2', role: 'assistant', content: 'stale answer' }
@@ -93,10 +96,10 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-describe('useChatMessages in server-backed mode', () => {
+describe('useChatMessages: the store owns the transcript', () => {
   test('starts hydrating with nothing on screen, ignoring the browser copy', () => {
     seedLocalCopy('chat-open');
-    const { result } = renderHook(() => useChatMessages('chat-open', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-open'));
 
     expect(result.current.hydrating).toBe(true);
     expect(result.current.messages).toEqual([]);
@@ -104,7 +107,7 @@ describe('useChatMessages in server-backed mode', () => {
 
   test('the stored transcript replaces local state and its ids are adopted', () => {
     seedLocalCopy('chat-open');
-    const { result } = renderHook(() => useChatMessages('chat-open', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-open'));
 
     act(() => {
       result.current.loadServerMessages(STORED);
@@ -131,7 +134,7 @@ describe('useChatMessages in server-backed mode', () => {
   });
 
   test('a stopped turn comes back cancelled, a failed one errored', () => {
-    const { result } = renderHook(() => useChatMessages('chat-errors', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-errors'));
 
     act(() => {
       result.current.loadServerMessages([
@@ -150,7 +153,7 @@ describe('useChatMessages in server-backed mode', () => {
     // reason. Keeping only the flag left `ChatMessage` with nothing to
     // render, and a chat whose answer had crashed came back looking as though
     // the model had replied with silence.
-    const { result } = renderHook(() => useChatMessages('chat-why', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-why'));
 
     act(() => {
       result.current.loadServerMessages([
@@ -182,7 +185,7 @@ describe('useChatMessages in server-backed mode', () => {
   test('the hydrated transcript is not written back over the browser copy', () => {
     seedLocalCopy('chat-open');
     const before = sessionStorage.getItem(storageKey('chat-open'));
-    const { result } = renderHook(() => useChatMessages('chat-open', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-open'));
 
     act(() => {
       result.current.loadServerMessages(STORED);
@@ -194,7 +197,7 @@ describe('useChatMessages in server-backed mode', () => {
   });
 
   test('a chat with no stored transcript still finishes hydrating', () => {
-    const { result } = renderHook(() => useChatMessages('chat-new', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-new'));
 
     act(() => {
       result.current.loadServerMessages([]);
@@ -206,7 +209,7 @@ describe('useChatMessages in server-backed mode', () => {
 
   test('a chat the store has never heard of finishes hydrating too', () => {
     // The 404 an unsent chat id gets is the ordinary case, not a failure.
-    const { result } = renderHook(() => useChatMessages('chat-404', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-404'));
 
     act(() => {
       result.current.finishHydration();
@@ -216,10 +219,9 @@ describe('useChatMessages in server-backed mode', () => {
   });
 
   test('opening another chat clears the transcript and hydrates again', () => {
-    const { result, rerender } = renderHook(
-      ({ chatId }) => useChatMessages(chatId, { serverBacked: true }),
-      { initialProps: { chatId: 'chat-one' } }
-    );
+    const { result, rerender } = renderHook(({ chatId }) => useChatMessages(chatId), {
+      initialProps: { chatId: 'chat-one' }
+    });
     act(() => {
       result.current.loadServerMessages(STORED);
     });
@@ -231,62 +233,12 @@ describe('useChatMessages in server-backed mode', () => {
     expect(result.current.hydrating).toBe(true);
   });
 
-  test('becoming server-backed after the platform config resolves drops the browser copy', () => {
-    seedLocalCopy('chat-late');
-    const { result, rerender } = renderHook(
-      ({ serverBacked }) => useChatMessages('chat-late', { serverBacked }),
-      { initialProps: { serverBacked: false } }
-    );
-    expect(result.current.messages).toHaveLength(2);
-    expect(result.current.hydrating).toBe(false);
-
-    rerender({ serverBacked: true });
-
-    expect(result.current.messages).toEqual([]);
-    expect(result.current.hydrating).toBe(true);
-  });
-
-  test('leaving incognito keeps the conversation that is on screen', () => {
-    // `serverBacked` is `persistence && !ephemeral`, and incognito is a live
-    // toggle: turning it off is the same false→true transition as the
-    // capability resolving. But there is no stale browser copy to discard in
-    // that case — the messages on screen are the only copy — so clearing them
-    // would blank the chat the user is in, permanently (the hydration guard
-    // in AppChat has already been latched for this chat).
-    const { result, rerender } = renderHook(
-      ({ ephemeral }) =>
-        useChatMessages('chat-incognito-off', { serverBacked: !ephemeral, ephemeral }),
-      { initialProps: { ephemeral: false } }
-    );
-    act(() => {
-      result.current.loadServerMessages(STORED);
-    });
-    expect(result.current.messages).toHaveLength(2);
-
-    // Incognito on: nothing is stored, but what is on screen stays.
-    rerender({ ephemeral: true });
-    act(() => {
-      result.current.addUserMessage('something private');
-    });
-    expect(result.current.messages).toHaveLength(3);
-
-    // …and off again.
-    rerender({ ephemeral: false });
-
-    expect(result.current.messages.map(m => m.content)).toEqual([
-      'stored question',
-      'stored answer',
-      'something private'
-    ]);
-    expect(result.current.hydrating).toBe(false);
-  });
-
   test('a turn started during the hydrate is kept, with the stored history in front', () => {
     // The fetch and the composer race: an auto-send from the start page, or a
     // user typing behind the spinner, adds a turn while the round trip is out.
     // Replacing would drop that turn from the screen while the server keeps
     // appending to it, and the two transcripts diverge from there.
-    const { result } = renderHook(() => useChatMessages('chat-race', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-race'));
 
     act(() => {
       result.current.addUserMessage('sent while loading');
@@ -307,7 +259,7 @@ describe('useChatMessages in server-backed mode', () => {
   });
 
   test('without preserveLocal the stored transcript still replaces everything', () => {
-    const { result } = renderHook(() => useChatMessages('chat-replace', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-replace'));
     act(() => {
       result.current.addUserMessage('local only');
     });
@@ -319,38 +271,11 @@ describe('useChatMessages in server-backed mode', () => {
     expect(result.current.messages.map(m => m.id)).toEqual(['srv-1', 'srv-2']);
   });
 
-  test('the very frame a chat becomes server-backed already reports hydrating', () => {
-    // `hydrated` is reset in an effect, and React runs effects after the
-    // render that scheduled them has painted. Read from that state alone,
-    // `hydrating` would still be false for the one frame between "this chat
-    // is server-backed" and "so start hydrating it" — which is a settled,
-    // empty transcript on screen, i.e. the greeting flash, for a frame.
-    // `renderHook`'s `rerender` flushes effects before it returns, so only a
-    // per-render recording can see it.
-    seedLocalCopy('chat-flip-frame');
-    const frames = [];
-    const { rerender } = renderHook(
-      ({ serverBacked }) => {
-        const chat = useChatMessages('chat-flip-frame', { serverBacked });
-        frames.push({ serverBacked, hydrating: chat.hydrating });
-        return chat;
-      },
-      { initialProps: { serverBacked: false } }
-    );
-
-    frames.length = 0;
-    rerender({ serverBacked: true });
-
-    expect(frames.length).toBeGreaterThan(0);
-    expect(frames[0]).toEqual({ serverBacked: true, hydrating: true });
-    expect(frames.every(frame => frame.hydrating)).toBe(true);
-  });
-
   test('the very frame a chat switches to another chat already reports hydrating', () => {
     const frames = [];
     const { result, rerender } = renderHook(
       ({ chatId }) => {
-        const chat = useChatMessages(chatId, { serverBacked: true });
+        const chat = useChatMessages(chatId);
         frames.push({ chatId, hydrating: chat.hydrating });
         return chat;
       },
@@ -370,21 +295,27 @@ describe('useChatMessages in server-backed mode', () => {
   });
 });
 
-describe('the modes that are not server-backed', () => {
-  test('an ordinary chat still restores its transcript from the browser and never hydrates', () => {
-    seedLocalCopy('chat-plain');
-    const { result } = renderHook(() => useChatMessages('chat-plain'));
-
-    expect(result.current.hydrating).toBe(false);
-    expect(result.current.messages.map(m => m.id)).toEqual(['local-1', 'local-2']);
-  });
-
-  test('an ephemeral chat starts empty and never hydrates', () => {
-    seedLocalCopy('chat-incognito');
-    const { result } = renderHook(() => useChatMessages('chat-incognito', { ephemeral: true }));
+describe('a surface that only opens new chats', () => {
+  test('never hydrates, and ignores a leftover browser copy', () => {
+    seedLocalCopy('compare-panel');
+    const { result } = renderHook(() => useChatMessages('compare-panel', { hydrates: false }));
 
     expect(result.current.hydrating).toBe(false);
     expect(result.current.messages).toEqual([]);
+  });
+});
+
+describe('purgeLegacyChatCopies', () => {
+  test('removes the transcripts an earlier version kept, and nothing else', () => {
+    seedLocalCopy('chat-old');
+    sessionStorage.setItem('ai_hub_chat_project_chat-old', 'prj_1');
+    sessionStorage.setItem('ai_hub_chat_id_app1', 'chat-old');
+
+    purgeLegacyChatCopies();
+
+    expect(sessionStorage.getItem(storageKey('chat-old'))).toBeNull();
+    expect(sessionStorage.getItem('ai_hub_chat_project_chat-old')).toBeNull();
+    expect(sessionStorage.getItem('ai_hub_chat_id_app1')).toBe('chat-old');
   });
 });
 
@@ -396,7 +327,7 @@ test('no render between mount and hydration shows an empty, settled chat', async
   // every frame and assert none of them is one.
   const frames = [];
   const { result } = renderHook(() => {
-    const chat = useAppChat({ appId: 'app1', chatId: 'chat-flash', serverBacked: true });
+    const chat = useAppChat({ appId: 'app1', chatId: 'chat-flash' });
     frames.push({ count: chat.messages.length, hydrating: chat.hydrating });
     return chat;
   });
