@@ -39,7 +39,7 @@ jest.mock('react-i18next', () => ({
 const ProjectChatComposer =
   require('../../../client/src/features/projects/components/ProjectChatComposer').default;
 const {
-  MAX_FIRST_MESSAGE_LENGTH
+  MAX_START_PATH_LENGTH
 } = require('../../../client/src/features/projects/components/ProjectChatComposer');
 
 function Location() {
@@ -117,25 +117,39 @@ test('another app can be picked for this chat', () => {
   expect(screen.getByTestId('location')).toHaveTextContent('/apps/chat?project=prj_case');
 });
 
-test('refuses a message over the limit with an error, and sends nothing', () => {
+test('shows an error on Send when the link would be too long, and starts nothing', () => {
   renderComposer();
   const field = screen.getByRole('textbox', { name: 'New chat in Case' });
-  const limit = MAX_FIRST_MESSAGE_LENGTH;
 
-  // Nothing is cut off while typing: the text stays, with an error beside it.
-  fireEvent.change(field, { target: { value: 'x'.repeat(limit + 1) } });
-  expect(field).toHaveValue('x'.repeat(limit + 1));
+  // Nothing is cut off and nothing is flagged while typing.
+  const long = 'x'.repeat(MAX_START_PATH_LENGTH);
+  fireEvent.change(field, { target: { value: long } });
+  expect(field).toHaveValue(long);
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(screen.getByRole('alert')).toHaveTextContent(
-    `(${(limit + 1).toLocaleString('en')} of ${limit.toLocaleString('en')} characters)`
+    'This message is too long to send from here.'
   );
-  expect(field).toHaveAttribute('aria-invalid', 'true');
-  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-  fireEvent.keyDown(field, { key: 'Enter' });
   expect(screen.getByTestId('location')).toHaveTextContent('/projects/prj_case');
 
-  fireEvent.change(field, { target: { value: 'x'.repeat(limit) } });
+  // Enter fails the same way, and editing clears the error.
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(screen.getByRole('alert')).toBeInTheDocument();
+  fireEvent.change(field, { target: { value: 'x'.repeat(5000) } });
   expect(screen.queryByRole('alert')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/apps/chat?project=prj_case');
+});
+
+test('about 10,000 characters of ordinary text still go out', () => {
+  renderComposer();
+  fireEvent.change(screen.getByRole('textbox'), {
+    target: { value: 'word '.repeat(2000).trim() }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.getByTestId('location')).toHaveTextContent('/apps/chat?project=prj_case');
 });
 

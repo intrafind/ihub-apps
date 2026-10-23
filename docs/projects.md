@@ -383,9 +383,9 @@ A project page shows:
 - **A chat field** at the top, the main action: type a message and press Enter (or **Send**) to
   start a chat in the project, with that message already sent. The app next to the button is the
   project's default app (see **Settings**); pick another one to chat with it this time. Without a
-  message the button reads **New chat** and opens an empty chat. A message can have up to 10,000
-  characters here; a longer one shows an error and is not sent (open an empty chat and paste it
-  there instead).
+  message the button reads **New chat** and opens an empty chat. The message goes to the chat in
+  the link that opens it, so a very long one (roughly 10,000 characters of ordinary text) shows an
+  error when you click **Send** and no chat is started.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
   page pages its list the same way; a list on these pages never grows with its content.
@@ -448,9 +448,8 @@ never edit one.
 
 A chat started from the project page runs inside the project: it answers with the project's
 instructions and documents (mode `auto`), next to whatever the app itself links. A chat belongs to
-a project from its first message on: it is started from the project page and cannot be moved into
-or out of a project afterwards. A chip beside the message box and the chat history show which
-project a chat belongs to. Only user projects hold chats.
+a project from its first message on: it is started from the project page. A chip beside the message
+box and the chat history show which project a chat belongs to. Only user projects hold chats.
 
 Every member may open the chats in a project; chats of other members are read-only.
 
@@ -681,7 +680,7 @@ changing it takes a content admin.
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
 | `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project, newest first, a page at a time: `?filter=all`, `mine` or `others`; `limit` (default 20, at most 100) and `cursor`. Answers `{ items, nextCursor, total }`. |
-| `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). A `projectId` is refused with `400`: a chat is in a project from its first turn (`projectId` on the chat request) and is never moved. |
+| `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). |
 
 The chat request (`POST /api/apps/:appId/chat/:chatId`) accepts `projectId`, the project the chat
 runs in (first turn; a different one later answers `PROJECT_MISMATCH`), and `projects`, projects

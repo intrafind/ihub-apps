@@ -11,11 +11,14 @@ import ProjectAppSelect, { useProjectChatApps } from './ProjectAppSelect';
 import { INPUT_CLASS } from './item-dialog/dialogStyles';
 
 /**
- * Longest first message: it travels to the chat page in the URL
- * (`?prefill=`), which the chat page drops again as soon as it has sent it.
- * A longer text is refused with an error, never cut.
+ * Longest link (path and query) a chat may be started with. The first message
+ * travels to the chat page in it (`?prefill=`), and the chat page drops it
+ * again as soon as it has sent it. It stays under what a server accepts in a
+ * request line next to the cookies; a message that would not fit shows an
+ * error on Send instead of being cut. Roughly 10,000 characters of ordinary
+ * text.
  */
-export const MAX_FIRST_MESSAGE_LENGTH = 10000;
+export const MAX_START_PATH_LENGTH = 12000;
 
 /**
  * Starts a chat inside a project from the project page (spec 1 §6.3): type
@@ -30,7 +33,7 @@ export const MAX_FIRST_MESSAGE_LENGTH = 10000;
  * @returns {JSX.Element}
  */
 function ProjectChatComposer({ project, projectName }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { choices, loading } = useProjectChatApps();
   const [message, setMessage] = useState('');
@@ -42,11 +45,16 @@ function ProjectChatComposer({ project, projectName }) {
       ? picked
       : resolveProjectChatApp(apps, project.defaultAppId);
 
-  const length = message.trim().length;
-  const tooLong = length > MAX_FIRST_MESSAGE_LENGTH;
+  const [tooLong, setTooLong] = useState(false);
 
   const start = () => {
-    if (!appId || tooLong) return;
+    if (!appId) return;
+    const path = projectChatStartPath(appId, project.id, message);
+    // Checked on Send, not while typing: the link is what would be too long.
+    if (path.length > MAX_START_PATH_LENGTH) {
+      setTooLong(true);
+      return;
+    }
     // A new chat, every time: the chat page opens the chat id this tab holds
     // for the app, and without stored chats that is the previous
     // conversation, whose browser transcript would come back and be
@@ -58,7 +66,7 @@ function ProjectChatComposer({ project, projectName }) {
     // An iAssistant app resumes the conversation id it keeps in localStorage
     // into an empty chat; drop it too, as the chat page's own "new chat" does.
     clearConversationId(appId);
-    navigate(projectChatStartPath(appId, project.id, message));
+    navigate(path);
   };
 
   const handleKeyDown = event => {
@@ -89,7 +97,10 @@ function ProjectChatComposer({ project, projectName }) {
           value={message}
           aria-invalid={tooLong || undefined}
           aria-describedby={tooLong ? 'project-composer-error' : undefined}
-          onChange={event => setMessage(event.target.value)}
+          onChange={event => {
+            setMessage(event.target.value);
+            setTooLong(false);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label={placeholder}
@@ -102,14 +113,7 @@ function ProjectChatComposer({ project, projectName }) {
             role="alert"
             className="mt-1 text-sm text-red-600 dark:text-red-400"
           >
-            {t(
-              'projects.composer.tooLong',
-              'This message is too long to start a chat with ({{count}} of {{max}} characters). Shorten it, or open an empty chat and paste it there.',
-              {
-                count: length.toLocaleString(i18n.language),
-                max: MAX_FIRST_MESSAGE_LENGTH.toLocaleString(i18n.language)
-              }
-            )}
+            {t('projects.composer.tooLong', 'This message is too long to send from here.')}
           </p>
         )}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -134,7 +138,7 @@ function ProjectChatComposer({ project, projectName }) {
             />
             <button
               type="submit"
-              disabled={!appId || tooLong}
+              disabled={!appId}
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
             >
               <Icon name="chat" size="sm" />
