@@ -11,25 +11,12 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
 import { useFilterState } from '../hooks/useFilterState';
 import { FilterSelect } from '../components/data-table';
-
-/**
- * Which kind of client a record is, for the badge and the kind filter.
- *
- * `dynamic` records come from RFC 7591 registration and are the ones that
- * arrive in bulk — one per piece of MCP client software since de-duplication,
- * one per user before it — so the list hides them by default.
- */
-function clientKind(client) {
-  if (client?.metadata?.dcr === true) return 'dynamic';
-  if (client?.personal === true) return 'personal';
-  return 'admin';
-}
-
-const KIND_BADGE_CLASSES = {
-  admin: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
-  personal: 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300',
-  dynamic: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'
-};
+import {
+  clientKind,
+  KIND_BADGE_CLASSES,
+  KIND_DEFAULT_LABELS,
+  KIND_DEFAULT_HELP
+} from '../utils/oauthClientKind';
 
 function AdminOAuthClientsPage() {
   const { t } = useTranslation();
@@ -450,11 +437,12 @@ function AdminOAuthClientsPage() {
   }, [clients, kindFilter]);
 
   const kindOptions = [
-    { value: 'standard', label: t('admin.auth.oauth.kindFilter.standard', 'Admin & personal') },
+    { value: 'standard', label: t('admin.auth.oauth.kindFilter.standard', 'Without dynamic') },
     { value: 'all', label: t('admin.auth.oauth.kindFilter.all', 'All kinds') },
-    { value: 'admin', label: t('admin.auth.oauth.kind.admin', 'Admin') },
-    { value: 'personal', label: t('admin.auth.oauth.kind.personal', 'Personal') },
-    { value: 'dynamic', label: t('admin.auth.oauth.kind.dynamic', 'Dynamic') }
+    { value: 'static', label: t('admin.auth.oauth.kind.static', KIND_DEFAULT_LABELS.static) },
+    { value: 'personal', label: t('admin.auth.oauth.kind.personal', KIND_DEFAULT_LABELS.personal) },
+    { value: 'dynamic', label: t('admin.auth.oauth.kind.dynamic', KIND_DEFAULT_LABELS.dynamic) },
+    { value: 'cimd', label: t('admin.auth.oauth.kind.cimd', KIND_DEFAULT_LABELS.cimd) }
   ];
 
   if (loading) {
@@ -759,14 +747,14 @@ function AdminOAuthClientsPage() {
                           </span>
                           <span
                             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${KIND_BADGE_CLASSES[clientKind(client)]}`}
+                            title={t(
+                              `admin.auth.oauth.kindHelp.${clientKind(client)}`,
+                              KIND_DEFAULT_HELP[clientKind(client)]
+                            )}
                           >
                             {t(
                               `admin.auth.oauth.kind.${clientKind(client)}`,
-                              clientKind(client) === 'dynamic'
-                                ? 'Dynamic'
-                                : clientKind(client) === 'personal'
-                                  ? 'Personal'
-                                  : 'Admin'
+                              KIND_DEFAULT_LABELS[clientKind(client)]
                             )}
                           </span>
                           {client.clientType && (
@@ -805,6 +793,16 @@ function AdminOAuthClientsPage() {
                             </span>{' '}
                             {client.connectionCount ?? 0}
                           </div>
+                          {clientKind(client) === 'cimd' && (
+                            <div>
+                              <span className="font-medium">
+                                {t('admin.auth.oauth.cimdIdentity', 'Identified as')}:
+                              </span>{' '}
+                              {[client.metadata?.displayName, client.metadata?.host]
+                                .filter(Boolean)
+                                .join(' · ') || t('common.notAvailable', 'N/A')}
+                            </div>
+                          )}
                           {clientKind(client) === 'dynamic' && (
                             <>
                               <div>

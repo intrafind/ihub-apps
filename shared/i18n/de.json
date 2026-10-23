@@ -1731,14 +1731,21 @@
           "clientCredentialsDesc": "Zusätzlich Client-ID und Secret ausgeben, damit Benutzer kurzlebige Tokens am Token-Endpunkt anfordern können."
         },
         "kind": {
-          "admin": "Administrativ",
+          "static": "Statisch",
           "personal": "Persönlich",
           "dynamic": "Dynamisch",
           "cimd": "Client-Metadaten"
         },
+        "kindHelp": {
+          "static": "Von einer Administratorin oder einem Administrator in der Plattform konfiguriert. Beschreibt, wie der Client bereitgestellt wurde – nicht die Berechtigungen der Personen, die sich darüber verbinden.",
+          "personal": "Von einem Benutzer für den eigenen Gebrauch angelegt. Beschreibt, wie der Client bereitgestellt wurde – nicht die Berechtigungen der Personen, die sich darüber verbinden.",
+          "dynamic": "Automatisch von einem MCP-Client per dynamischer Client-Registrierung angelegt. Beschreibt, wie der Client bereitgestellt wurde – nicht die Berechtigungen der Personen, die sich darüber verbinden.",
+          "cimd": "Identifiziert über ein Client-Metadaten-Dokument, das der Client unter seiner Client-ID-URL veröffentlicht. Beschreibt, wie der Client bereitgestellt wurde – nicht die Berechtigungen der Personen, die sich darüber verbinden."
+        },
+        "cimdIdentity": "Erkannt als",
         "kindFilter": {
           "label": "Art",
-          "standard": "Administrativ & persönlich",
+          "standard": "Ohne dynamische",
           "all": "Alle Arten"
         },
         "noClientsForKind": "Keine OAuth-Clients dieser Art",

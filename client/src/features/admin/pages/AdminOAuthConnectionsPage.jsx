@@ -11,10 +11,11 @@ import OAuthTabsHeader from '../components/OAuthTabsHeader';
 import { useFilterState } from '../hooks/useFilterState';
 import { SearchInput } from '../components/data-table';
 
-const KIND_BADGE_CLASSES = {
-  stored: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
-  cimd: 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300'
-};
+import {
+  KIND_BADGE_CLASSES,
+  KIND_DEFAULT_LABELS,
+  KIND_DEFAULT_HELP
+} from '../utils/oauthClientKind';
 
 /**
  * Admin → OAuth → Connections.
@@ -301,16 +302,18 @@ function AdminOAuthConnectionsPage() {
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{connection.clientName}</span>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          KIND_BADGE_CLASSES[connection.clientKind] || KIND_BADGE_CLASSES.stored
-                        }`}
-                      >
-                        {t(
-                          `admin.auth.oauth.kind.${connection.clientKind === 'cimd' ? 'cimd' : 'admin'}`,
-                          connection.clientKind === 'cimd' ? 'Client metadata' : 'Admin'
-                        )}
-                      </span>
+                      {(() => {
+                        // The server reports 'stored' for everything that is not a metadata document.
+                        const kind = connection.clientKind === 'cimd' ? 'cimd' : 'static';
+                        return (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${KIND_BADGE_CLASSES[kind]}`}
+                            title={t(`admin.auth.oauth.kindHelp.${kind}`, KIND_DEFAULT_HELP[kind])}
+                          >
+                            {t(`admin.auth.oauth.kind.${kind}`, KIND_DEFAULT_LABELS[kind])}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="text-xs font-mono text-gray-500 dark:text-gray-400 break-all">
                       {connection.clientHost || connection.clientId}
