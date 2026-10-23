@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DataTablePagination from '../../admin/components/data-table/DataTablePagination';
 import CreateProjectDialog from '../components/CreateProjectDialog';
-import ProjectRoleBadge from '../components/ProjectRoleBadge';
+import ProjectCatalogDialog from '../components/ProjectCatalogDialog';
+import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -63,6 +64,7 @@ function ProjectCard({ project, language }) {
               {projectDisplayName(project, language)}
             </Link>
             <ProjectRoleBadge project={project} />
+            <ProjectAudienceBadges project={project} />
           </div>
           {description && (
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
@@ -120,6 +122,7 @@ export default function ProjectsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   // A message the previous page left, e.g. after handing a project over.
   const location = useLocation();
   const [notice, setNotice] = useState(() =>
@@ -200,7 +203,19 @@ export default function ProjectsPage() {
               </p>
             )}
           </div>
-          {createButton}
+          <div className="flex flex-wrap items-center gap-2">
+            {config?.sharing?.allowCatalog && (
+              <button
+                type="button"
+                onClick={() => setBrowsing(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                <Icon name="globe" size="sm" />
+                {t('projects.catalog.browse', 'Browse catalog')}
+              </button>
+            )}
+            {createButton}
+          </div>
         </div>
 
         {notice && (
@@ -325,6 +340,12 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+      {browsing && (
+        <ProjectCatalogDialog
+          onClose={() => setBrowsing(false)}
+          onChanged={() => invalidateProjectsList()}
+        />
+      )}
       {creating && (
         <CreateProjectDialog onClose={() => setCreating(false)} onCreated={handleCreated} />
       )}

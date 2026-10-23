@@ -3948,6 +3948,18 @@
         "usedBy": "Used by",
         "notLinked": "No app, workflow or agent links this project.",
         "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
+      },
+      "sharing": {
+        "title": "Sharing of user projects",
+        "legend": "Users may share their projects with",
+        "allowUsers": "Specific users",
+        "allowGroups": "Groups",
+        "allowEveryone": "Everyone signed in",
+        "allowEveryoneHelp": "The project appears for every user, marked \"Global\".",
+        "allowCatalog": "The project catalog",
+        "allowCatalogHelp": "Owners and editors publish a project; every user can browse the catalog and add it to their projects. Turning this off hides published projects again.",
+        "permissionHint": "Users also need the \"projectSharing\" permission of their group.",
+        "saved": "Saved"
       }
     }
   },
@@ -6540,7 +6552,8 @@
       "admin": "From an app",
       "editor": "Editor",
       "owner": "Owner",
-      "user": "User"
+      "user": "User",
+      "catalog": "From the catalog"
     },
     "settings": {
       "editTitle": "Settings",
@@ -6619,6 +6632,37 @@
       "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
       "remove": "Remove {{name}} from this chat",
       "full": "A chat can use at most {{max}} projects."
+    },
+    "audience": {
+      "global": "Global",
+      "globalHint": "Shared with everyone signed in",
+      "published": "Published",
+      "publishedHint": "In the project catalog"
+    },
+    "catalog": {
+      "title": "Catalog",
+      "addedHint": "You added this project from the catalog. Its owner and editors keep it up to date; you see only your own chats in it.",
+      "notAddedHint": "This project is in the catalog. Add it to your projects to find it in your list and in chats.",
+      "publishedHint": "Published on {{date}}. Everyone signed in can find it in the catalog and use it.",
+      "unpublishedHint": "Publish the project so that everyone signed in can find it in the catalog and add it.",
+      "remove": "Remove from my projects",
+      "add": "Add to my projects",
+      "unpublish": "Take out of the catalog",
+      "publish": "Publish to the catalog",
+      "confirmTitle": "Publish to the catalog?",
+      "confirmMessage": "Everyone signed in can then find this project in the catalog, read its documents and instructions, and chat with it. They do not become members: they cannot change it and do not see the members’ chats. You can take it out again at any time.",
+      "dialogTitle": "Project catalog",
+      "dialogHint": "Projects their owners published for everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.",
+      "search": "Search the catalog",
+      "noMatches": "No published project matches.",
+      "empty": "Nothing has been published yet.",
+      "byOwner": "By {{name}}",
+      "inYourList": "In your projects",
+      "removeNamed": "Remove {{name}} from my projects",
+      "addNamed": "Add {{name}} to my projects",
+      "added": "Added",
+      "addShort": "Add",
+      "browse": "Browse catalog"
     }
   }
 }

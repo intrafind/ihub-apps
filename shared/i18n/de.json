@@ -4232,6 +4232,18 @@
         "usedBy": "Verwendet von",
         "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
         "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
+      },
+      "sharing": {
+        "title": "Teilen von Benutzerprojekten",
+        "legend": "Benutzer dürfen ihre Projekte teilen mit",
+        "allowUsers": "Einzelnen Benutzern",
+        "allowGroups": "Gruppen",
+        "allowEveryone": "Allen angemeldeten Personen",
+        "allowEveryoneHelp": "Das Projekt erscheint bei allen Benutzern, markiert als „Global“.",
+        "allowCatalog": "Dem Projektkatalog",
+        "allowCatalogHelp": "Besitzer und Bearbeiter veröffentlichen ein Projekt; alle Benutzer können den Katalog durchsuchen und es zu ihren Projekten hinzufügen. Ausschalten blendet veröffentlichte Projekte wieder aus.",
+        "permissionHint": "Benutzer brauchen außerdem die Berechtigung „projectSharing“ ihrer Gruppe.",
+        "saved": "Gespeichert"
       }
     }
   },
@@ -6505,7 +6517,8 @@
       "admin": "Aus einer App",
       "editor": "Bearbeiter",
       "owner": "Besitzer",
-      "user": "Benutzer"
+      "user": "Benutzer",
+      "catalog": "Aus dem Katalog"
     },
     "settings": {
       "editTitle": "Einstellungen",
@@ -6584,6 +6597,37 @@
       "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
       "remove": "{{name}} aus diesem Chat entfernen",
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
+    },
+    "audience": {
+      "global": "Global",
+      "globalHint": "Mit allen angemeldeten Personen geteilt",
+      "published": "Veröffentlicht",
+      "publishedHint": "Im Projektkatalog"
+    },
+    "catalog": {
+      "title": "Katalog",
+      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt. Besitzer und Bearbeiter halten es aktuell; Sie sehen darin nur Ihre eigenen Chats.",
+      "notAddedHint": "Dieses Projekt ist im Katalog. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in Chats zu finden.",
+      "publishedHint": "Veröffentlicht am {{date}}. Alle angemeldeten Personen finden es im Katalog und können es nutzen.",
+      "unpublishedHint": "Veröffentlichen Sie das Projekt, damit alle angemeldeten Personen es im Katalog finden und hinzufügen können.",
+      "remove": "Aus meinen Projekten entfernen",
+      "add": "Zu meinen Projekten hinzufügen",
+      "unpublish": "Aus dem Katalog nehmen",
+      "publish": "Im Katalog veröffentlichen",
+      "confirmTitle": "Im Katalog veröffentlichen?",
+      "confirmMessage": "Alle angemeldeten Personen können das Projekt dann im Katalog finden, seine Dokumente und Anweisungen lesen und damit chatten. Sie werden keine Mitglieder: Sie können es nicht ändern und sehen die Chats der Mitglieder nicht. Sie können es jederzeit wieder herausnehmen.",
+      "dialogTitle": "Projektkatalog",
+      "dialogHint": "Projekte, die ihre Besitzer für alle veröffentlicht haben. Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen; Besitzer und Bearbeiter halten es aktuell.",
+      "search": "Katalog durchsuchen",
+      "noMatches": "Kein veröffentlichtes Projekt passt.",
+      "empty": "Noch nichts veröffentlicht.",
+      "byOwner": "Von {{name}}",
+      "inYourList": "In Ihren Projekten",
+      "removeNamed": "{{name}} aus meinen Projekten entfernen",
+      "addNamed": "{{name}} zu meinen Projekten hinzufügen",
+      "added": "Hinzugefügt",
+      "addShort": "Hinzufügen",
+      "browse": "Katalog durchsuchen"
     }
   }
 }

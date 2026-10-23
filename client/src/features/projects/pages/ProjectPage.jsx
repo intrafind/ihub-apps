@@ -10,7 +10,8 @@ import { deleteProject } from '../../../api';
 import ProjectChatsSection from '../components/ProjectChatsSection';
 import ProjectItemsSection from '../components/ProjectItemsSection';
 import ProjectMembersSection from '../components/ProjectMembersSection';
-import ProjectRoleBadge from '../components/ProjectRoleBadge';
+import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
+import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
 import StartProjectChatDialog from '../components/StartProjectChatDialog';
 import {
@@ -169,6 +170,7 @@ function ProjectPageContent({ projectId }) {
                 {projectDisplayName(project, language)}
               </h1>
               <ProjectRoleBadge project={project} />
+              <ProjectAudienceBadges project={project} />
             </div>
             {description && (
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
@@ -249,6 +251,17 @@ function ProjectPageContent({ projectId }) {
                 }}
                 onTransferred={handleTransferred}
                 onLeft={backToList}
+              />
+            )}
+            {isUserProject && (
+              <ProjectCatalogCard
+                project={project}
+                config={config}
+                onChanged={() => {
+                  // Read again: the answer carries no link states of the documents.
+                  void reload();
+                  invalidateProjectsList();
+                }}
               />
             )}
           </div>

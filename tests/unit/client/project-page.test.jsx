@@ -32,7 +32,10 @@ const mockApi = {
   fetchPickerCloudProviders: jest.fn(),
   updateProjectMembers: jest.fn(),
   fetchProjectShareTargets: jest.fn(),
-  transferProject: jest.fn()
+  transferProject: jest.fn(),
+  publishProject: jest.fn(),
+  addCatalogProject: jest.fn(),
+  removeCatalogProject: jest.fn()
 };
 jest.mock('../../../client/src/api', () =>
   Object.fromEntries(
@@ -55,7 +58,10 @@ jest.mock('../../../client/src/api', () =>
       'fetchPickerCloudProviders',
       'updateProjectMembers',
       'fetchProjectShareTargets',
-      'transferProject'
+      'transferProject',
+      'publishProject',
+      'addCatalogProject',
+      'removeCatalogProject'
     ].map(name => [name, (...args) => mockApi[name](...args)])
   )
 );
@@ -557,6 +563,62 @@ describe('ProjectPage – documents linked from other projects', () => {
         pinned: false
       })
     );
+  });
+});
+
+describe('ProjectPage – the catalog', () => {
+  test('an owner publishes after confirming, while the catalog is on', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({ ...CONFIG, sharing: { allowCatalog: true } });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.publishProject.mockResolvedValue(makeProject());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish to the catalog' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/do not see the members’ chats/)).toBeInTheDocument();
+    expect(mockApi.publishProject).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Publish to the catalog' }));
+    await waitFor(() => expect(mockApi.publishProject).toHaveBeenCalledWith('prj_a', true));
+  });
+
+  test('offers no catalog while it is off', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+  });
+
+  test('someone from the catalog adds it and sees only their own chats', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({ ...CONFIG, sharing: { allowCatalog: true } });
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({
+        role: 'catalog',
+        subscribed: false,
+        audience: { everyone: false, catalog: true },
+        catalog: { publishedAt: '2026-10-20T10:00:00Z' },
+        members: undefined,
+        memberCount: 2,
+        permissions: {
+          canUse: true,
+          canEdit: false,
+          canShare: false,
+          canDelete: false,
+          canTransfer: false,
+          readsAllChats: false,
+          isOwner: false,
+          readOnly: false
+        }
+      })
+    );
+    mockApi.addCatalogProject.mockResolvedValue({});
+    renderPage();
+
+    expect(await screen.findByText('From the catalog')).toBeInTheDocument();
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All chats' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to my projects' }));
+    await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_a'));
   });
 });
 

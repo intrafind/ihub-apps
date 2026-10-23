@@ -239,6 +239,44 @@ export const transferProject = (projectId, ownerId) =>
   call(() => apiClient.post(`${projectPath(projectId)}/transfer`, { ownerId }));
 
 /**
+ * The projects published to the catalog, for everyone signed in to browse.
+ *
+ * @param {string} [query] - Matches name, description and owner.
+ * @returns {Promise<{enabled: boolean, items: Array<Object>}>} Each item with
+ *   `subscribed` (the caller added it to their list).
+ */
+export const fetchProjectCatalog = (query = '') =>
+  call(() => apiClient.get(`${PROJECTS_PATH}/_catalog`, { params: { q: query } }));
+
+/**
+ * Publish a project to the catalog, or take it out (owners and editors).
+ *
+ * @param {string} projectId
+ * @param {boolean} published
+ * @returns {Promise<Object>} The project.
+ */
+export const publishProject = (projectId, published) =>
+  call(() => apiClient.put(`${projectPath(projectId)}/catalog`, { published }));
+
+/**
+ * Add a project from the catalog to the caller's list.
+ *
+ * @param {string} projectId
+ * @returns {Promise<Object>} The project, with `subscribed: true`.
+ */
+export const addCatalogProject = projectId =>
+  call(() => apiClient.post(`${projectPath(projectId)}/subscription`));
+
+/**
+ * Remove a project taken from the catalog from the caller's list.
+ *
+ * @param {string} projectId
+ * @returns {Promise<void>}
+ */
+export const removeCatalogProject = projectId =>
+  call(() => apiClient.delete(`${projectPath(projectId)}/subscription`));
+
+/**
  * One page of the chats inside a project, newest first.
  *
  * @param {string} projectId
