@@ -28,7 +28,7 @@ export function useChatAttachedProjects({ chatId, stored, value, onChange }) {
   // A failure belongs to the chat it happened in: another chat opened since
   // shows none.
   const [failure, setFailure] = useState(null);
-  const error = failure && failure.chatId === chatId ? failure.message : null;
+  const error = failure?.chatId === chatId ? (failure?.message ?? null) : null;
   // The chat the page shows now. A save that is still out when another chat
   // opens belongs to the old one: its answer, or its error, must not land in
   // the new chat's projects.
