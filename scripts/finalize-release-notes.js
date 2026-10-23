@@ -20,6 +20,9 @@
  *                    at the ref are published, and entries that landed afterwards stay in `next/`.
  *   --commit         `git add` and commit the result
  *
+ * Prereleases (`v5.6.0-RC3`) are for testing only: they never get a notes directory and leave
+ * `next/` untouched, so their entries are published with the final release.
+ *
  * Nothing happens when `next/` has no entries (a release that only carried refactors) or when
  * `docs/releases/<version>/` already exists (the notes for that release were published before,
  * e.g. by a re-run). Both exit 0 so a release build never fails on its notes.
@@ -134,6 +137,13 @@ function main() {
 
   if (!isReleaseVersionName(version) || version === UNRELEASED_VERSION) {
     usage(`"${tag}" is not a release version (expected e.g. v5.5.8 or 5.5.8)`);
+  }
+
+  if (version.includes('-')) {
+    console.log(
+      `ℹ️ ${tag} is a prerelease — release notes stay in ${nextRelPath} and are published with the final release`
+    );
+    return;
   }
 
   if (fromRef) assertRefExists(fromRef);
