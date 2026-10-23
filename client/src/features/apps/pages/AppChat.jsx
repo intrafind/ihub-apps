@@ -75,6 +75,8 @@ import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors
 import { startLiveTranscription } from '../../../utils/liveTranscription';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
+import ChatProjectChips from '../../projects/components/ChatProjectChips';
+import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
 import { PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 
 /**
@@ -942,6 +944,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // that another tab removed). Only a chat that is not stored yet carries its
   // picks on the message.
   const chatStoredServerSide = Boolean(routeChatId) || chatStarted;
+  // One controller for the projects attached to the chat, shared by the chips
+  // and the "+" menu: their changes cannot race, and a failure is still shown
+  // after the menu has closed.
+  const attachedProjects = useChatAttachedProjects({
+    chatId,
+    stored: chatStoredServerSide,
+    value: attachedProjectIds,
+    onChange: setAttachedProjectIds
+  });
   useEffect(() => {
     if (
       embedded ||
@@ -2685,6 +2696,23 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // keyboard listeners are on the window. `48rem` is Tailwind's `md`.
   const isDesktopLayout = useMediaQuery('(min-width: 48rem)');
 
+  // The projects of the chat, for the composer's chips and "+" menu and for the
+  // start form: the project it runs in is shown whatever the app allows, and
+  // the choice of attached projects is offered only where the app takes them.
+  // A chat is never moved into a project once it exists.
+  const projectContextOfChat = embedded
+    ? undefined
+    : {
+        chatId,
+        stored: chatStoredServerSide,
+        containerProjectId,
+        value: attachedProjectIds,
+        onChange: setAttachedProjectIds,
+        disabled: processing || hydrating,
+        attached: attachedProjects,
+        attachDisabled: app?.features?.userProjects === false
+      };
+
   const renderComposer = () => {
     const currentModel = models.find(m => m.id === selectedModel);
 
@@ -2763,17 +2791,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // The project the chat runs in (started from the project page) and the
       // ones it draws on, chosen in the "+" menu. A chat is never moved into a
       // project once it exists.
-      projectContext:
-        !embedded && app?.features?.userProjects !== false
-          ? {
-              chatId,
-              stored: chatStoredServerSide,
-              containerProjectId,
-              value: attachedProjectIds,
-              onChange: setAttachedProjectIds,
-              disabled: processing || hydrating
-            }
-          : undefined,
+      projectContext: projectContextOfChat,
       // Ephemeral chat toggle (rendered next to the send button)
       // Only where there is a history to keep a chat in: without one every
       // chat is temporary already, and the toggle would change nothing.
@@ -3068,7 +3086,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             </>
           ) : showStartForm ? (
             /* Start form, in place of the transcript and the composer */
-            <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {projectContextOfChat?.containerProjectId && (
+                <div className="w-full max-w-4xl mx-auto px-4 pt-2">
+                  <ChatProjectChips projectContext={projectContextOfChat} />
+                </div>
+              )}
+              {renderStartForm()}
+            </div>
           ) : shouldCenterInput ? (
             /* Centered layout for example prompts */
             <>

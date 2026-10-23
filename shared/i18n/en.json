@@ -6389,7 +6389,7 @@
       "nameRequired": "A name is required.",
       "tooLong": "At most {{max}} characters.",
       "defaultApp": "Default app",
-      "defaultAppNone": "No default — ask when starting a chat",
+      "defaultAppNone": "No default (first available app)",
       "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {

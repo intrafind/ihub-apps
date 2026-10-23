@@ -384,7 +384,7 @@ A project page shows:
   start a chat in the project, with that message already sent. The app next to the button is the
   project's default app (see **Settings**); pick another one to chat with it this time. Without a
   message the button reads **New chat** and opens an empty chat. The message goes to the chat in
-  the link that opens it, so a very long one (roughly 10,000 characters of ordinary text) shows an
+  the link that opens it, so a very long one (roughly 7,000 characters of ordinary text) shows an
   error when you click **Send** and no chat is started.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects

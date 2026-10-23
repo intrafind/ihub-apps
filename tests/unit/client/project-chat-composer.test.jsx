@@ -92,6 +92,17 @@ test('sends the first message in the project’s default app', () => {
   );
 });
 
+test('a stray Enter in an empty field stays on the page', () => {
+  renderComposer();
+  const field = screen.getByRole('textbox', { name: 'New chat in Case' });
+
+  fireEvent.keyDown(field, { key: 'Enter' });
+  fireEvent.change(field, { target: { value: '   ' } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+
+  expect(screen.getByTestId('location')).toHaveTextContent('/projects/prj_case');
+});
+
 test('sends with Enter, and keeps Shift+Enter for a new line', () => {
   renderComposer();
   const field = screen.getByRole('textbox', { name: 'New chat in Case' });
@@ -143,10 +154,10 @@ test('shows an error on Send when the link would be too long, and starts nothing
   expect(screen.getByTestId('location')).toHaveTextContent('/apps/chat?project=prj_case');
 });
 
-test('about 10,000 characters of ordinary text still go out', () => {
+test('about 7,000 characters of ordinary text still go out', () => {
   renderComposer();
   fireEvent.change(screen.getByRole('textbox'), {
-    target: { value: 'word '.repeat(2000).trim() }
+    target: { value: 'word '.repeat(1400).trim() }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(screen.queryByRole('alert')).toBeNull();

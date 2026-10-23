@@ -19,8 +19,12 @@ jest.mock('../../../client/src/api', () => ({
 
 let mockProjects = [];
 let mockEnabled = true;
+const mockMyProjectsCalls = [];
 jest.mock('../../../client/src/features/projects/hooks/useProjects', () => ({
-  useMyProjects: () => ({ projects: mockProjects }),
+  useMyProjects: options => {
+    mockMyProjectsCalls.push(options);
+    return { projects: mockProjects };
+  },
   useProjectsAvailability: () => ({ userProjectsEnabled: mockEnabled })
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
@@ -52,6 +56,37 @@ const HANDBOOK = { id: 'prj_handbook', ownership: 'user', name: 'Handbook' };
 const CASE = { id: 'prj_case', ownership: 'user', name: 'Case 2026-114' };
 const ADMIN = { id: 'faq', ownership: 'admin', name: { en: 'FAQ' } };
 
+const {
+  useChatAttachedProjects
+} = require('../../../client/src/features/projects/hooks/useChatAttachedProjects');
+
+/**
+ * The chat page's shape: one attached-projects controller, shared by the
+ * chips and the "+" menu section, both fed from one `projectContext`.
+ */
+function Harness({ params, showMenu = true, showChips = true }) {
+  const attached = useChatAttachedProjects({
+    chatId: params.chatId,
+    stored: params.stored,
+    value: params.value,
+    onChange: params.onChange
+  });
+  const projectContext = { ...params, attached };
+  const offered = useOfferedProjects(projectContext);
+  return (
+    <MemoryRouter>
+      {showMenu && (
+        <ChatProjectsMenuSection
+          projectContext={projectContext}
+          offered={offered}
+          navTabIndex={() => 0}
+        />
+      )}
+      {showChips && <ChatProjectChips projectContext={projectContext} />}
+    </MemoryRouter>
+  );
+}
+
 function context(overrides = {}) {
   return {
     chatId: 'chat-1',
@@ -64,32 +99,19 @@ function context(overrides = {}) {
   };
 }
 
-/** The menu section the way the "+" menu renders it. */
-function Menu({ projectContext }) {
-  const offered = useOfferedProjects(projectContext);
-  return (
-    <ChatProjectsMenuSection
-      projectContext={projectContext}
-      offered={offered}
-      navTabIndex={() => 0}
-    />
-  );
-}
-
 const renderMenu = overrides => {
-  const projectContext = context(overrides);
-  return { projectContext, ...render(<Menu projectContext={projectContext} />) };
+  const params = context(overrides);
+  return {
+    projectContext: params,
+    ...render(<Harness params={params} showChips={false} />)
+  };
 };
 
 const renderChips = overrides => {
-  const projectContext = context(overrides);
+  const params = context(overrides);
   return {
-    projectContext,
-    ...render(
-      <MemoryRouter>
-        <ChatProjectChips projectContext={projectContext} />
-      </MemoryRouter>
-    )
+    projectContext: params,
+    ...render(<Harness params={params} showMenu={false} />)
   };
 };
 
@@ -153,12 +175,47 @@ describe('projects menu section', () => {
 
   test('says so when the server refuses, and keeps the list', async () => {
     mockSetAttached.mockRejectedValue(new Error('nope'));
-    const { projectContext } = renderMenu();
+    const params = context();
+    render(<Harness params={params} />);
 
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
 
+    // The failure shows in the chips, which stay when the menu has closed.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(projectContext.onChange).not.toHaveBeenCalled();
+    expect(params.onChange).not.toHaveBeenCalled();
+  });
+
+  test('a menu that closes while a change is saving loses neither the result nor the error', async () => {
+    mockSetAttached.mockRejectedValue(new Error('nope'));
+    const params = context();
+    const { rerender } = render(<Harness params={params} />);
+
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    // The "+" menu unmounts its section (Escape); the controller lives above it.
+    rerender(<Harness params={params} showMenu={false} />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  test('one change at a time: the chips and the menu share a single saving flag', async () => {
+    let finish;
+    mockSetAttached.mockReturnValue(new Promise(resolve => (finish = resolve)));
+    const params = context({ value: [CASE.id] });
+    render(<Harness params={params} />);
+
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    expect(mockSetAttached).toHaveBeenCalledTimes(1);
+
+    // Mid-save, neither the chip's × nor another row starts a second PATCH
+    // from the stale list.
+    expect(
+      screen.getByRole('button', { name: 'Remove Case 2026-114 from this chat' })
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Case 2026-114' }));
+    expect(mockSetAttached).toHaveBeenCalledTimes(1);
+
+    finish({ chat: { attachedProjectIds: [CASE.id, HANDBOOK.id] } });
+    await waitFor(() => expect(params.onChange).toHaveBeenCalledWith([CASE.id, HANDBOOK.id]));
   });
 
   test('renders nothing while user projects are off or there is nothing to pick', () => {
@@ -168,8 +225,28 @@ describe('projects menu section', () => {
 
     mockEnabled = true;
     mockProjects = [ADMIN];
-    rerender(<Menu projectContext={projectContext} />);
+    rerender(<Harness params={projectContext} showChips={false} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('an app that opts out of projects', () => {
+  test('offers no projects to tick but still names the project the chat runs in', () => {
+    const params = context({ attachDisabled: true, containerProjectId: CASE.id });
+    render(<Harness params={params} />);
+
+    expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'In project: Case 2026-114' })).toBeInTheDocument();
+  });
+
+  test('loads no project list for a chat without a project context', () => {
+    mockMyProjectsCalls.length = 0;
+    function Probe() {
+      useOfferedProjects(null);
+      return null;
+    }
+    render(<Probe />);
+    expect(mockMyProjectsCalls).toEqual([{ enabled: false }]);
   });
 });
 
@@ -202,9 +279,7 @@ describe('project chips', () => {
 
     mockEnabled = false;
     rerender(
-      <MemoryRouter>
-        <ChatProjectChips projectContext={{ ...projectContext, containerProjectId: CASE.id }} />
-      </MemoryRouter>
+      <Harness params={{ ...projectContext, containerProjectId: CASE.id }} showMenu={false} />
     );
     expect(container).toBeEmptyDOMElement();
   });

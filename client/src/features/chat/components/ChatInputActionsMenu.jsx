@@ -15,8 +15,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 import ChatProjectsMenuSection, {
-  projectNavKey,
-  useOfferedProjects
+  projectNavKey
 } from '../../projects/components/ChatProjectsMenuSection';
 
 /**
@@ -60,12 +59,12 @@ function ChatInputActionsMenu({
   // `hostContextFlags` is the user-visible state map keyed by toggle.key.
   hostContextFlags = null,
   onHostContextFlagChange = null,
-  // Projects the chat can draw on (`{ chatId, stored, containerProjectId,
-  // value, onChange, disabled }`); omitted where the chat takes none.
-  projectContext = null
+  // Projects the chat can draw on: the chat's `projectContext`, and the
+  // projects offered for ticking (computed once, by ChatInput).
+  projectContext = null,
+  offeredProjects = []
 }) {
   const { t, i18n } = useTranslation();
-  const offeredProjects = useOfferedProjects(projectContext);
   const hasProjects = offeredProjects.length > 0;
   const { platformConfig } = usePlatformConfig();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)

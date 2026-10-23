@@ -4,7 +4,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { useChatAttachedProjects } from '../hooks/useChatAttachedProjects';
 import { useMyProjects, useProjectsAvailability } from '../hooks/useProjects';
 import { projectDisplayName } from '../utils/projectView';
 
@@ -14,11 +13,13 @@ const CHIP =
 /**
  * The projects of the open chat, as chips beside the chat input: the one it
  * runs in (a link to the project; it cannot be taken away — the chat was
- * started there), and the ones it draws on (each removable). Renders nothing
- * when the chat has no project.
+ * started there), and the ones it draws on (each removable). Also shows a
+ * failed change (it stays visible after the "+" menu has closed). Renders
+ * nothing when the chat has no project and nothing went wrong.
  *
  * @param {Object} props
- * @param {Object} props.projectContext - `{ chatId, stored, containerProjectId, value, onChange, disabled }`.
+ * @param {Object} props.projectContext - `{ containerProjectId, value, disabled, attached, … }`;
+ *   `attached` is the chat page's one {@link useChatAttachedProjects}.
  * @returns {JSX.Element|null}
  */
 function ChatProjectChips({ projectContext }) {
@@ -26,15 +27,13 @@ function ChatProjectChips({ projectContext }) {
   const { userProjectsEnabled } = useProjectsAvailability();
   const { projects } = useMyProjects();
   const {
-    chatId,
-    stored,
     containerProjectId = null,
     value = [],
-    onChange,
-    disabled = false
+    disabled = false,
+    attached
   } = projectContext || {};
-  const { toggle, saving, error } = useChatAttachedProjects({ chatId, stored, value, onChange });
-  if (!userProjectsEnabled || (!containerProjectId && value.length === 0)) return null;
+  const { toggle, saving, error } = attached || {};
+  if (!userProjectsEnabled || (!containerProjectId && value.length === 0 && !error)) return null;
 
   const nameOf = id => {
     const project = projects.find(entry => entry.id === id);

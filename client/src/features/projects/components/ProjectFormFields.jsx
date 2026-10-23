@@ -102,7 +102,7 @@ function ProjectFormFields({
             id={`${idPrefix}-defaultAppId`}
             value={form.defaultAppId || ''}
             disabled={disabled}
-            noneLabel={t('projects.form.defaultAppNone', 'No default — ask when starting a chat')}
+            noneLabel={t('projects.form.defaultAppNone', 'No default (first available app)')}
             onChange={value => onChange('defaultAppId', value)}
             className={INPUT_CLASS}
           />

@@ -253,7 +253,7 @@ export class ProjectService {
     // there and the project is marked `deleting`, so from here on no chat can
     // join it and no edit or transfer can land. The chats are detached while
     // the project still exists (outside its lock: the lock order is chat,
-    // then project, see `moveChatToProject`); a detach that fails keeps the
+    // then project, see `ChatRepository.moveProjectIf`); a detach that fails keeps the
     // marked project, its marker and the chat's association, and the same
     // delete can be retried. The document goes only once every chat is gone.
     let project = null;

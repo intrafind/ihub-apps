@@ -15,10 +15,12 @@ import { INPUT_CLASS } from './item-dialog/dialogStyles';
  * travels to the chat page in it (`?prefill=`), and the chat page drops it
  * again as soon as it has sent it. It stays under what a server accepts in a
  * request line next to the cookies; a message that would not fit shows an
- * error on Send instead of being cut. Roughly 10,000 characters of ordinary
- * text.
+ * error on Send instead of being cut. About 7,000 characters of ordinary
+ * text; it stays under the request-line limit of common reverse proxies
+ * (8 KB), which matters when the link is loaded before the chat page has
+ * dropped `prefill` again (a reload, a restored tab).
  */
-export const MAX_START_PATH_LENGTH = 12000;
+export const MAX_START_PATH_LENGTH = 7500;
 
 /**
  * Starts a chat inside a project from the project page (spec 1 §6.3): type
@@ -71,6 +73,9 @@ function ProjectChatComposer({ project, projectName }) {
 
   const handleKeyDown = event => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) return;
+    // A stray Enter in an empty field must not leave the page: an empty chat
+    // is started with the button.
+    if (!message.trim()) return;
     event.preventDefault();
     start();
   };

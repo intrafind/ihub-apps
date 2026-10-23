@@ -3,23 +3,24 @@
 
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { useChatAttachedProjects, MAX_ATTACHED_PROJECTS } from '../hooks/useChatAttachedProjects';
+import { MAX_ATTACHED_PROJECTS } from '../hooks/useChatAttachedProjects';
 import { useMyProjects, useProjectsAvailability } from '../hooks/useProjects';
 import { projectDisplayName } from '../utils/projectView';
 
 /**
  * Hook: the projects the chat input's "+" menu offers for this chat — the
  * viewer's own and shared user projects, except the one the chat runs in.
- * Empty while user projects are off or when the chat takes no projects
- * (`projectContext` is not given).
+ * Empty while user projects are off, when the chat takes no projects
+ * (`projectContext` is not given) or its app opted out (`attachDisabled`).
+ * Loads the project list only for a chat that has a `projectContext`.
  *
- * @param {{containerProjectId?: string|null}|null|undefined} projectContext
+ * @param {{containerProjectId?: string|null, attachDisabled?: boolean}|null|undefined} projectContext
  * @returns {Array<Object>}
  */
 export function useOfferedProjects(projectContext) {
   const { userProjectsEnabled } = useProjectsAvailability();
-  const { projects } = useMyProjects();
-  if (!projectContext || !userProjectsEnabled) return [];
+  const { projects } = useMyProjects({ enabled: Boolean(projectContext) });
+  if (!projectContext || projectContext.attachDisabled || !userProjectsEnabled) return [];
   const containerId = projectContext.containerProjectId ?? null;
   return projects.filter(project => project.ownership === 'user' && project.id !== containerId);
 }
@@ -35,7 +36,9 @@ export const projectNavKey = id => `project-${id}`;
  * project from its first message is started from that project's page.
  *
  * @param {Object} props
- * @param {Object} props.projectContext - `{ chatId, stored, containerProjectId, value, onChange, disabled }`.
+ * @param {Object} props.projectContext - `{ value, disabled, attached, … }`; `attached` is the
+ *   chat page's one {@link useChatAttachedProjects}, shared with the chips so the two never
+ *   race and a failure still shows after the menu has closed.
  * @param {Array<Object>} props.offered - From {@link useOfferedProjects}.
  * @param {(key: string) => 0|-1} props.navTabIndex - The menu's roving tab index.
  * @param {boolean} [props.divider=false] - A rule below, when another section follows.
@@ -43,13 +46,8 @@ export const projectNavKey = id => `project-${id}`;
  */
 function ChatProjectsMenuSection({ projectContext, offered, navTabIndex, divider = false }) {
   const { t, i18n } = useTranslation();
-  const { chatId, stored, value = [], onChange, disabled = false } = projectContext;
-  const { toggle, saving, error, full } = useChatAttachedProjects({
-    chatId,
-    stored,
-    value,
-    onChange
-  });
+  const { value = [], disabled = false, attached } = projectContext;
+  const { toggle, saving, full } = attached;
   if (offered.length === 0) return null;
 
   return (
@@ -113,11 +111,6 @@ function ChatProjectsMenuSection({ projectContext, offered, navTabIndex, divider
           {t('projects.attach.full', 'A chat can use at most {{max}} projects.', {
             max: MAX_ATTACHED_PROJECTS
           })}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="pt-1 text-xs text-red-600 dark:text-red-400">
-          {error}
         </p>
       )}
     </div>

@@ -6354,7 +6354,7 @@
       "nameRequired": "Ein Name ist erforderlich.",
       "tooLong": "Höchstens {{max}} Zeichen.",
       "defaultApp": "Standard-App",
-      "defaultAppNone": "Keine Vorgabe – beim Start eines Chats auswählen",
+      "defaultAppNone": "Keine Vorgabe (erste verfügbare App)",
       "defaultAppHint": "Neue Chats dieses Projekts starten in dieser App. Beim Start eines Chats kann jeder eine andere App wählen."
     },
     "items": {
