@@ -19,7 +19,12 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, FilterSelect, SearchInput } from '../components/data-table';
 import MergeProjectsDialog from '../components/MergeProjectsDialog';
 import ProjectDependenciesDialog from '../components/ProjectDependenciesDialog';
-import { dependenciesFromDeleteError, filterProjects } from '../utils/projectAdmin';
+import { ProjectAvailabilityBadge } from '../components/ProjectAvailability';
+import {
+  dependenciesFromDeleteError,
+  filterProjects,
+  projectAvailability
+} from '../utils/projectAdmin';
 import { kindIcon, localizedText, summarizeItemKinds } from '../../projects/utils/projectItems';
 import ProjectSharingSettingsPanel from '../components/ProjectSharingSettingsPanel';
 
@@ -307,22 +312,10 @@ function AdminProjectsPage() {
     },
     {
       key: 'enabled',
-      header: t('admin.projects.columns.enabled', 'Status'),
+      header: t('admin.projects.columns.availability', 'Available to'),
       sortable: true,
-      sortAccessor: project => (project.enabled !== false ? 1 : 0),
-      render: project => (
-        <span
-          className={`px-2 py-1 text-xs font-medium rounded-full ${
-            project.enabled !== false
-              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
-          }`}
-        >
-          {project.enabled !== false
-            ? t('common.enabled', 'Enabled')
-            : t('common.disabled', 'Disabled')}
-        </span>
-      )
+      sortAccessor: project => ['off', 'apps', 'everyone'].indexOf(projectAvailability(project)),
+      render: project => <ProjectAvailabilityBadge project={project} />
     },
     {
       key: 'category',

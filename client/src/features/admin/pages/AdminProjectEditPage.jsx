@@ -2,26 +2,21 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  addAdminProjectItem,
-  checkProjectPickerUrl,
   createAdminProject,
   deleteAdminProjectItem,
   fetchAdminProjectConfig,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
-  fetchProjectPickerPages,
   getAdminApiErrorMessage,
   refreshAdminProjectItem,
-  searchProjectPickerIFinder,
   updateAdminProject,
   updateAdminProjectItem,
-  updateAdminProjectItemText,
-  uploadAdminProjectItem
+  updateAdminProjectItemText
 } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
@@ -36,6 +31,7 @@ import {
   useAdminProjectChecks
 } from '../components/AdminProjectDetail';
 import TransferItemsDialog from '../components/TransferItemsDialog';
+import { ADMIN_ITEM_API } from '../utils/adminProjectItemApi';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useAdminProject } from '../hooks/useAdminProject';
 import {
@@ -44,23 +40,11 @@ import {
   createEmptyProjectForm,
   parseTags,
   projectFormFromProject,
+  projectIdFromName,
   uploadsAreUnscanned,
   validateProjectForm
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
-
-/**
- * What the shared "Add item" dialog calls for an admin project: the admin
- * item routes and the user picker endpoints. Admin projects get no cloud tab.
- */
-const ADMIN_ITEM_API = {
-  addItem: (...args) => addAdminProjectItem(...args),
-  uploadItem: (...args) => uploadAdminProjectItem(...args),
-  fetchPages: () => fetchProjectPickerPages(),
-  searchIFinder: query => searchProjectPickerIFinder(query),
-  checkUrl: url => checkProjectPickerUrl(url),
-  errorMessage: err => getAdminApiErrorMessage(err)
-};
 
 /** Text loader of the shared preview dialog. */
 const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
@@ -83,6 +67,7 @@ function AdminProjectEditPage() {
   const { id: routeId } = useParams();
   const id = routeId ?? 'new';
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = id === 'new';
 
   const {
@@ -101,6 +86,8 @@ function AdminProjectEditPage() {
   const [kinds, setKinds] = useState([]);
   const [config, setConfig] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
+  // Until the admin types an ID, a new project's ID follows its name.
+  const [idEdited, setIdEdited] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [busyItemId, setBusyItemId] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
@@ -136,6 +123,15 @@ function AdminProjectEditPage() {
       .catch(err => console.error('Failed to load project settings:', err));
   }, [isNew]);
 
+  // A project just created lands here with the "Add item" dialog open. The
+  // page instance is shared with the create route, so this is an effect, not
+  // an initial state; the flag is cleared so a reload does not open it again.
+  useEffect(() => {
+    if (isNew || !location.state?.openAdd) return;
+    setAddOpen(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [isNew, location.state, location.pathname, navigate]);
+
   const validationMessages = {
     id: {
       required: t('admin.projects.validation.idRequired', 'The project ID is required.'),
@@ -157,10 +153,17 @@ function AdminProjectEditPage() {
   };
 
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    if (validationErrors[field]) {
+    if (field === 'id') setIdEdited(value !== '');
+    setForm(prev => ({
+      ...prev,
+      [field]: value,
+      ...(isNew && field === 'name' && !idEdited ? { id: projectIdFromName(value) } : {})
+    }));
+    const cleared = field === 'name' && isNew && !idEdited ? ['name', 'id'] : [field];
+    if (cleared.some(key => validationErrors[key])) {
       setValidationErrors(prev => {
-        const { [field]: _removed, ...rest } = prev;
+        const rest = { ...prev };
+        cleared.forEach(key => delete rest[key]);
         return rest;
       });
     }
@@ -182,7 +185,8 @@ function AdminProjectEditPage() {
         markSaved();
         // Items can be added once the project exists.
         navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}/edit`, {
-          replace: true
+          replace: true,
+          state: { openAdd: true }
         });
         return;
       }
@@ -328,79 +332,66 @@ function AdminProjectEditPage() {
         <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
           {t('admin.projects.items.title', 'Items')}
         </h2>
-        {!isNew && (
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
-          >
-            <Icon name="plus" className="h-4 w-4 mr-2" />
-            {t('admin.projects.items.add', 'Add item')}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"
+        >
+          <Icon name="plus" className="h-4 w-4 mr-2" />
+          {t('admin.projects.items.add', 'Add item')}
+        </button>
       </div>
-      {isNew ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t(
-            'admin.projects.items.saveFirst',
-            'Create the project first; then you can add items to it.'
-          )}
-        </p>
-      ) : (
-        <>
-          {selectedItems.length > 0 && (
-            <div
-              data-testid="item-selection-bar"
-              className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
+      {selectedItems.length > 0 && (
+        <div
+          data-testid="item-selection-bar"
+          className="mb-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
+        >
+          <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+            {t('admin.projects.items.selectedCount', '{{count}} items selected', {
+              count: selectedItems.length
+            })}
+          </span>
+          <div className="flex gap-2">
+            {['move', 'copy'].map(mode => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() =>
+                  setTransfer({
+                    mode,
+                    items: selectedItems
+                  })
+                }
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
+              >
+                {mode === 'move'
+                  ? t('admin.projects.items.moveSelected', 'Move to…')
+                  : t('admin.projects.items.copySelected', 'Copy to…')}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSelectedItemIds(new Set())}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
             >
-              <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                {t('admin.projects.items.selectedCount', '{{count}} items selected', {
-                  count: selectedItems.length
-                })}
-              </span>
-              <div className="flex gap-2">
-                {['move', 'copy'].map(mode => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() =>
-                      setTransfer({
-                        mode,
-                        items: selectedItems
-                      })
-                    }
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-sm text-sm font-medium"
-                  >
-                    {mode === 'move'
-                      ? t('admin.projects.items.moveSelected', 'Move to…')
-                      : t('admin.projects.items.copySelected', 'Copy to…')}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemIds(new Set())}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
-                >
-                  {t('common.clearSelection', 'Clear')}
-                </button>
-              </div>
-            </div>
-          )}
-          <ProjectItemsTable
-            items={project?.items || []}
-            kinds={kinds}
-            busyItemId={busyItemId}
-            estimates={estimate ? estimateByItem : undefined}
-            selectedIds={new Set(selectedItems.map(item => item.id))}
-            onSelectionChange={setSelectedItemIds}
-            onTogglePinned={handleTogglePinned}
-            onPreview={setPreviewItem}
-            onRefresh={handleRefresh}
-            onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
-            onRemove={setRemoveItem}
-          />
-        </>
+              {t('common.clearSelection', 'Clear')}
+            </button>
+          </div>
+        </div>
       )}
+      <ProjectItemsTable
+        items={project?.items || []}
+        kinds={kinds}
+        busyItemId={busyItemId}
+        estimates={estimate ? estimateByItem : undefined}
+        selectedIds={new Set(selectedItems.map(item => item.id))}
+        onSelectionChange={setSelectedItemIds}
+        onTogglePinned={handleTogglePinned}
+        onPreview={setPreviewItem}
+        onRefresh={handleRefresh}
+        onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
+        onRemove={setRemoveItem}
+      />
     </section>
   );
 
@@ -460,10 +451,8 @@ function AdminProjectEditPage() {
         )}
 
         {isNew ? (
-          <div className="space-y-6">
-            {settingsForm}
-            {itemsSection}
-          </div>
+          // Items come right after the create: no empty card to look at first.
+          <div className="max-w-3xl">{settingsForm}</div>
         ) : (
           // The items are what an admin works on here: they take the wide
           // column (and come first on a narrow screen); the settings sit in a
@@ -482,7 +471,7 @@ function AdminProjectEditPage() {
 
       {!isNew && (
         <>
-          {addOpen && (
+          {addOpen && kinds.length > 0 && (
             <AddProjectItemDialog
               isOpen
               onClose={() => setAddOpen(false)}
