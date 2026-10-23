@@ -619,6 +619,24 @@ describe('temporary chats and guests', () => {
     assert.equal((await getChatRepository().getChat('chat-tmp-project')).projectId, undefined);
   });
 
+  it('refuses keeping and moving in one request, leaving the chat as it was', async () => {
+    await getChatRepository().ensureChat({
+      chatId: 'chat-keep-and-move',
+      ownerId: ADA.id,
+      appId: 'chat',
+      temporary: true
+    });
+    const res = await drive(patchHandlers, {
+      params: { chatId: 'chat-keep-and-move' },
+      body: { temporary: false, projectId: 'prj_missing' },
+      user: ADA
+    });
+    assert.equal(res.statusCode, 400);
+    const stored = await getChatRepository().getChat('chat-keep-and-move');
+    assert.equal(stored.temporary, true);
+    assert.equal(stored.projectId, undefined);
+  });
+
   it('keeping needs a history to keep it in', async () => {
     await getChatRepository().ensureChat({
       chatId: 'chat-keep-no-history',

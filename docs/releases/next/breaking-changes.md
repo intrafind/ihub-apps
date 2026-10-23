@@ -45,8 +45,8 @@ Chats no longer live in the browser. Every conversation — signed in or anonymo
 compare mode, canvas, apps marked `ephemeral`, the Outlook add-in and the browser extension — is
 held by the server, which assembles the history for the model. A chat the user does not want kept
 is a **temporary chat**: stored the same way, so a reload or a lost connection no longer loses it,
-but never listed in the history or shareable, and deleted a day after its last activity or as
-soon as the user leaves it.
+but never listed in the history or shareable, and deleted once it has been idle for the configured
+retention period (24 hours by default) or as soon as the user leaves it.
 
 - The **Durable Chats** feature is now called **Chat History**. It decides whether chats are
   *kept* in a history; with it off — the default — every chat is temporary.

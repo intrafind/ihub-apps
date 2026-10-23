@@ -228,7 +228,7 @@ async function moveChatToProject(req, res, repository, chat) {
   const targetId = parsed.data.projectId;
   if (targetId && chat.temporary === true) {
     // Its members would see a chat its owner asked not to keep. Keeping it
-    // first (`temporary: false` in the same request) is the way.
+    // first (`PATCH { temporary: false }`) is the way.
     sendErrorResponse(res, 409, 'A temporary chat cannot be moved into a project; keep it first', {
       details: { code: 'CHAT_TEMPORARY' }
     });
@@ -467,6 +467,12 @@ export default function registerChatRoutes(app) {
         // There is no way back into temporary: a kept chat that should not be
         // kept is deleted, and a conversation that should be is a new chat.
         return sendBadRequest(res, 'temporary can only be set to false');
+      }
+      if (keep && hasProject) {
+        // Keeping writes the chat before the move is even checked, so a move
+        // refused after it would leave the request failed but the chat kept.
+        // Two requests make each step all-or-nothing.
+        return sendBadRequest(res, 'Keep the chat and move it to a project in separate requests');
       }
       const repository = requireRepository(res, { history: true });
       if (!repository) return;

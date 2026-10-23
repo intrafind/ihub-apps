@@ -711,7 +711,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
 | `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
-| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back) |
+| `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back; not combinable with `projectId`) |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
 `GET /api/chats` returns the chat documents exactly as stored. App name, colour
