@@ -110,36 +110,33 @@ function ProjectAvailability({ value, onChange, compact = false }) {
         {availabilityOptions(t).map(option => {
           const checked = option.id === selected;
           return (
-            <label
+            <div
               key={option.id}
-              className={`relative flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm focus-within:ring-2 focus-within:ring-indigo-500 ${
+              className={`rounded-lg border p-3 text-sm focus-within:ring-2 focus-within:ring-indigo-500 ${
                 checked
                   ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400'
                   : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/40'
               }`}
             >
-              <input
-                type="radio"
-                name="project-availability"
-                value={option.id}
-                checked={checked}
-                aria-describedby={`project-availability-${option.id}-hint`}
-                onChange={() => choose(option.id)}
-                className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-              />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
-                  {!compact && <Icon name={option.icon} className="h-4 w-4 shrink-0" />}
-                  {option.label}
-                </span>
-                <span
-                  id={`project-availability-${option.id}-hint`}
-                  className="mt-1 block text-xs text-gray-600 dark:text-gray-400"
-                >
-                  {option.hint}
-                </span>
-              </span>
-            </label>
+              <label className="flex cursor-pointer items-center gap-2 font-medium text-gray-900 dark:text-gray-100">
+                <input
+                  type="radio"
+                  name="project-availability"
+                  value={option.id}
+                  checked={checked}
+                  aria-describedby={`project-availability-${option.id}-hint`}
+                  onChange={() => choose(option.id)}
+                  className="h-4 w-4 shrink-0 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                />
+                {option.label}
+              </label>
+              <p
+                id={`project-availability-${option.id}-hint`}
+                className="mt-1 pl-6 text-xs text-gray-600 dark:text-gray-400"
+              >
+                {option.hint}
+              </p>
+            </div>
           );
         })}
       </div>
