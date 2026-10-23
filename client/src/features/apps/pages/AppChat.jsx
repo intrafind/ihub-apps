@@ -2703,21 +2703,22 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const isDesktopLayout = useMediaQuery('(min-width: 48rem)');
 
   // The projects of the chat, for the composer's chips and "+" menu and for the
-  // start form: the project it runs in is shown whatever the app allows, and
-  // the choice of attached projects is offered only where the app takes them.
-  // A chat is never moved into a project once it exists.
-  const projectContextOfChat = embedded
-    ? undefined
-    : {
-        chatId,
-        stored: chatStoredServerSide,
-        containerProjectId,
-        value: attachedProjectIds,
-        onChange: setAttachedProjectIds,
-        disabled: processing || hydrating,
-        attached: attachedProjects,
-        attachDisabled: !appAllowsUserProjects(app)
-      };
+  // start form. Where the app takes no personal projects (switched off after
+  // the chat began), none is shown: the answers do not use them, so chips
+  // saying "in project X" would mislead. A chat is never moved into a
+  // project once it exists.
+  const projectContextOfChat =
+    embedded || !appAllowsUserProjects(app)
+      ? undefined
+      : {
+          chatId,
+          stored: chatStoredServerSide,
+          containerProjectId,
+          value: attachedProjectIds,
+          onChange: setAttachedProjectIds,
+          disabled: processing || hydrating,
+          attached: attachedProjects
+        };
 
   const renderComposer = () => {
     const currentModel = models.find(m => m.id === selectedModel);

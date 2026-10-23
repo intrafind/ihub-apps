@@ -1431,6 +1431,34 @@ describe('chats in a project', () => {
     assert.equal((await page({ limit: '1000' })).items.length, 5);
   });
 
+  it('attaches no project to a chat whose app takes none', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-attach-dark',
+      ownerId: ADA.id,
+      appId: 'dark',
+      title: 'Dark app'
+    });
+    const mine = await create(ADA, { name: 'Mine (dark)' });
+    const apps = configCache.getApps();
+    configCache.setCacheEntry('config/apps.json', [
+      ...(apps?.data || []),
+      { id: 'dark', name: { en: 'Dark' }, enabled: true, features: { userProjects: false } }
+    ]);
+    try {
+      const refused = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { attachedProjectIds: [mine.id] }
+      });
+      assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
+      assert.equal(refused.body.details.code, 'APP_PROJECTS_DISABLED');
+      assert.equal((await chats.getChat(chat.id)).attachedProjectIds, undefined);
+    } finally {
+      configCache.setCacheEntry('config/apps.json', apps?.data || []);
+    }
+  });
+
   it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {
     const chats = getChatRepository();
     const chat = await chats.ensureChat({

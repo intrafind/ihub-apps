@@ -48,6 +48,8 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
+import { appAllowsUserProjects } from '../../shared/appProjects.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
@@ -235,6 +237,17 @@ async function setChatAttachedProjects(req, res, repository, chat) {
     if (!isUserProjectsConfigured(configCache.getFeatures())) {
       sendErrorResponse(res, 403, 'User projects are switched off', {
         details: { code: 'USER_PROJECTS_DISABLED' }
+      });
+      return null;
+    }
+    // The chat's app decides too: one that takes no personal projects gets
+    // none attached here either, as with a message (`resolveChatProjects`).
+    const app = chat.appId
+      ? findByIdCaseInsensitive(configCache.getApps()?.data || [], chat.appId)
+      : null;
+    if (app && !appAllowsUserProjects(app)) {
+      sendErrorResponse(res, 403, 'This app takes no projects', {
+        details: { code: 'APP_PROJECTS_DISABLED' }
       });
       return null;
     }
