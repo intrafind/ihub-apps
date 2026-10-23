@@ -193,10 +193,15 @@ function ProjectPageContent({ projectId }) {
         {readOnlyOwnerGone && <ReadOnlyBanner />}
         {project.ownership === 'admin' && (
           <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'projects.page.adminProject',
-              'This project comes with one of your apps. Administrators manage it.'
-            )}
+            {project.role === 'catalog'
+              ? t(
+                  'projects.page.publishedAdminProject',
+                  'Administrators published this project for everyone. They manage it.'
+                )
+              : t(
+                  'projects.page.adminProject',
+                  'This project comes with one of your apps. Administrators manage it.'
+                )}
           </p>
         )}
         {(error || deleteError) && (

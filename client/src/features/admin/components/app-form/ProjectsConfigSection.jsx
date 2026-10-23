@@ -92,9 +92,15 @@ function ProjectsConfigSection({ app, onChange, t }) {
               )}
             </p>
           </div>
-          {projectsOn && (
+          {/* Kept on screen while projects are off: the links stay stored and
+              come back when the switch does. */}
+          <fieldset
+            disabled={!projectsOn}
+            aria-label={t('admin.apps.edit.projects', 'Projects')}
+            className={projectsOn ? '' : 'opacity-50'}
+          >
             <ProjectPicker value={app.projects || []} onChange={handleProjectsChange} />
-          )}
+          </fieldset>
         </div>
       </div>
     </div>

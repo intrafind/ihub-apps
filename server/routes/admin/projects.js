@@ -107,6 +107,22 @@ function adminView(project) {
   return serializeProject(project, ADMIN_PERMISSIONS, { adminView: true });
 }
 
+/**
+ * Audit a change of the published switch as a share: publishing widens who
+ * may use the project to everyone signed in, as the catalog does for a user
+ * project.
+ */
+function auditPublished(req, before, project) {
+  if ((before?.published === true) === (project?.published === true)) return;
+  logAudit({
+    req,
+    action: 'share',
+    resource: 'projectShare',
+    resourceId: project.id,
+    summary: `${project.published ? 'Published' : 'Unpublished'} admin project "${projectName(project)}"`
+  });
+}
+
 /** Whether iHub ships a default project with this id. */
 async function isShippedProject(id) {
   try {
@@ -564,6 +580,7 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: project.id,
         summary: `Updated admin project "${projectName(project)}"`
       });
+      auditPublished(req, before, project);
       await snapshot(req, project.id, before, project);
       res.json({ project: adminView(project) });
     } catch (error) {
@@ -586,6 +603,7 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: project.id,
         summary: `Updated admin project "${projectName(project)}" (${Object.keys(body).join(', ')})`
       });
+      auditPublished(req, before, project);
       await snapshot(req, project.id, before, project);
       res.json({ project: adminView(project) });
     } catch (error) {

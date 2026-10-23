@@ -339,7 +339,9 @@ function AdminProjectEditPage() {
       noValidate
       aria-labelledby={isNew ? undefined : 'project-settings-title'}
       className={`bg-white dark:bg-gray-800 rounded-lg shadow-xs ${
-        isNew ? 'p-6 space-y-6' : 'p-5 space-y-5 lg:sticky lg:top-4'
+        isNew
+          ? 'p-6 space-y-6'
+          : 'p-5 space-y-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto'
       }`}
     >
       {!isNew && (

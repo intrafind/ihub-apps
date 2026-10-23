@@ -201,10 +201,12 @@ async function listProjects(user, repo, scope) {
   }
   if (scope === 'all' || scope === 'admin') {
     for (const project of await repo.listAdmin({ includeDisabled: false })) {
-      // Published ones reach everyone signed in, to link their documents.
-      if (!context.linked.has(project.id) && !context.isContentAdmin && !isPublished(project)) {
-        continue;
-      }
+      // Published ones reach everyone signed in who may hold projects.
+      const reaches =
+        context.linked.has(project.id) ||
+        context.isContentAdmin ||
+        (isPublished(project) && canHoldProjects(user));
+      if (!reaches) continue;
       items.push(serializeFor(project, user, context, { includeItems: false }));
     }
   }
@@ -928,7 +930,9 @@ export default function registerProjectRoutes(app) {
       try {
         const deps = requireUserProjects(req, res);
         if (!deps) return;
-        if (req.projectPermissions.role !== 'catalog') {
+        // A published admin project reaches everyone already; there is no
+        // list to add it to.
+        if (req.projectPermissions.role !== 'catalog' || !isUserProjectId(req.project.id)) {
           return sendBadRequest(res, 'Only projects reached through the catalog are added');
         }
         await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);

@@ -77,7 +77,8 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
   const ref = useRef(null);
   // A result that lands below the fold would look as if the button did nothing.
   useEffect(() => {
-    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [estimate]);
   const tone = TONE[estimate.recommendation] || TONE.unknown;
   const percent = Math.round((estimate.share || 0) * 100);

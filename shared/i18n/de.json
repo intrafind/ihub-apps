@@ -6331,6 +6331,7 @@
       "linkNoProjects": "Es gibt kein anderes Projekt, das Sie nutzen können.",
       "linkProject": "Projekt",
       "linkChooseProject": "Projekt wählen…",
+      "linkPublished": "{{name}} (veröffentlicht)",
       "linkFromApps": "{{name}} (aus Apps)",
       "linkNoItems": "Dieses Projekt hat keine Dokumente.",
       "linkDocuments": "Dokumente",
@@ -6500,6 +6501,7 @@
       "count_other": "{{count}} Mitglieder"
     },
     "page": {
+      "publishedAdminProject": "Administratoren haben dieses Projekt für alle veröffentlicht. Sie verwalten es.",
       "adminProject": "Dieses Projekt gehört zu einer Ihrer Apps. Administratoren verwalten es.",
       "backToList": "Alle Projekte",
       "breadcrumb": "Brotkrumennavigation",

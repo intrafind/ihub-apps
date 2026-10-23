@@ -6366,6 +6366,7 @@
       "linkNoProjects": "There is no other project you can use.",
       "linkProject": "Project",
       "linkChooseProject": "Choose a project…",
+      "linkPublished": "{{name}} (published)",
       "linkFromApps": "{{name}} (from apps)",
       "linkNoItems": "This project has no documents.",
       "linkDocuments": "Documents",
@@ -6535,6 +6536,7 @@
       "count_other": "{{count}} members"
     },
     "page": {
+      "publishedAdminProject": "Administrators published this project for everyone. They manage it.",
       "adminProject": "This project comes with one of your apps. Administrators manage it.",
       "backToList": "All projects",
       "breadcrumb": "Breadcrumb",

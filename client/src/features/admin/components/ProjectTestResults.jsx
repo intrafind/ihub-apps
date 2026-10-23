@@ -22,7 +22,8 @@ function ProjectTestResults({ result, onDismiss }) {
   const ref = useRef(null);
   // A result that lands below the fold would look as if the button did nothing.
   useEffect(() => {
-    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [result]);
 
   return (

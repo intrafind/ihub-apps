@@ -103,12 +103,10 @@ export async function resolveProjectItemLink(ref, { user, projectId }) {
     ) {
       throw new ProjectError('PROJECT_NOT_FOUND', 'The source project was not found');
     }
-    // The project picked; the original a link of it stands for only needs
-    // to be readable (checked again on every read).
-    if (
-      hop === 0 &&
-      !mayLinkFrom(project, permissions, { catalogOn: context.catalog, targetId: projectId })
-    ) {
+    // The project picked, and the one of the original a link of it stands
+    // for: linking through a link reaches no project the caller could not
+    // link from directly.
+    if (!mayLinkFrom(project, permissions, { catalogOn: context.catalog, targetId: projectId })) {
       throw new ProjectError(
         'PERMISSION_DENIED',
         'Documents can be linked only from your own projects and published ones'

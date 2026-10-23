@@ -13,8 +13,9 @@ const STYLES = {
 
 /**
  * The caller's role on a project (spec 1 §2): owner, editor or user; a
- * project taken from the catalog shows "From the catalog", admin projects
- * reached through an app "From an app".
+ * project taken from the catalog, or a published admin project reached
+ * without an app, shows "From the catalog", admin projects reached through an
+ * app "From an app".
  *
  * @param {{project: {ownership?: string, role?: string, permissions?: {isOwner?: boolean}}}} props
  * @returns {JSX.Element}
@@ -22,7 +23,9 @@ const STYLES = {
 function ProjectRoleBadge({ project }) {
   const { t } = useTranslation();
   let role = 'user';
-  if (project?.ownership === 'admin') role = 'admin';
+  // A published admin project reached without an app is a catalog project
+  // to its viewer.
+  if (project?.ownership === 'admin') role = project?.role === 'catalog' ? 'catalog' : 'admin';
   else if (project?.permissions?.isOwner || project?.role === 'owner') role = 'owner';
   else if (project?.role === 'editor') role = 'editor';
   else if (project?.role === 'catalog') role = 'catalog';
