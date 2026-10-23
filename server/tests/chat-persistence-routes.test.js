@@ -602,7 +602,7 @@ describe('temporary chats and guests', () => {
     );
   });
 
-  it('a temporary chat cannot be moved into a project until it is kept', async () => {
+  it('refuses to move a chat into a project: it is in one from its first turn', async () => {
     await getChatRepository().ensureChat({
       chatId: 'chat-tmp-project',
       ownerId: ADA.id,
@@ -614,24 +614,24 @@ describe('temporary chats and guests', () => {
       body: { projectId: 'prj_team' },
       user: ADA
     });
-    assert.equal(res.statusCode, 409);
-    assert.equal(res.body.details.code, 'CHAT_TEMPORARY');
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /cannot be moved/);
     assert.equal((await getChatRepository().getChat('chat-tmp-project')).projectId, undefined);
+    const clearing = await drive(patchHandlers, {
+      params: { chatId: 'chat-tmp-project' },
+      body: { title: 'Renamed', projectId: null },
+      user: ADA
+    });
+    assert.equal(clearing.statusCode, 400, 'nor out of one, nor together with a rename');
   });
 
-  it('refuses keeping and moving in one request, leaving the chat as it was', async () => {
+  it('refuses keeping and attaching in one request, leaving the chat as it was', async () => {
     await getChatRepository().ensureChat({
       chatId: 'chat-keep-and-move',
       ownerId: ADA.id,
       appId: 'chat',
       temporary: true
     });
-    const res = await drive(patchHandlers, {
-      params: { chatId: 'chat-keep-and-move' },
-      body: { temporary: false, projectId: 'prj_missing' },
-      user: ADA
-    });
-    assert.equal(res.statusCode, 400);
     const attach = await drive(patchHandlers, {
       params: { chatId: 'chat-keep-and-move' },
       body: { temporary: false, attachedProjectIds: ['prj_missing'] },

@@ -6583,7 +6583,8 @@
       "placeholder": "New chat in {{name}}",
       "hint": "The app gets the project’s instructions and documents.",
       "app": "App",
-      "send": "Send"
+      "send": "Send",
+      "tooLong": "This message is too long to start a chat with ({{count}} of {{max}} characters). Shorten it, or open an empty chat and paste it there."
     },
     "appSelect": {
       "unavailable": "{{id}} (not available)"

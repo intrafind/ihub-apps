@@ -263,129 +263,6 @@ async function setChatAttachedProjects(req, res, repository, chat) {
 }
 
 /**
- * Move a chat into a project, or out of one with `projectId: null`. Sends the
- * refusal itself and returns null when the request cannot go on.
- */
-async function moveChatToProject(req, res, repository, chat) {
-  const [
-    { chatProjectSchema, describeIssues },
-    { getProjectRepository },
-    access,
-    { getProjectService },
-    { isUserProjectsConfigured }
-  ] = await Promise.all([
-    import('../validators/projectSchema.js'),
-    import('../services/projects/ProjectRepository.js'),
-    import('../middleware/projectAccess.js'),
-    import('../services/projects/ProjectService.js'),
-    import('../services/projects/projectSettings.js')
-  ]);
-  let mayUse = null;
-  const parsed = chatProjectSchema.safeParse({ projectId: req.body.projectId });
-  if (!parsed.success) {
-    sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
-    return null;
-  }
-  const targetId = parsed.data.projectId;
-  if (targetId && chat.temporary === true) {
-    // Its members would see a chat its owner asked not to keep. Keeping it
-    // first (`PATCH { temporary: false }`) is the way.
-    sendErrorResponse(res, 409, 'A temporary chat cannot be moved into a project; keep it first', {
-      details: { code: 'CHAT_TEMPORARY' }
-    });
-    return null;
-  }
-  if (targetId) {
-    // Chat containers are the user-project feature: while it is off a chat
-    // joins no project (leaving one stays possible, it only undoes a share).
-    if (!isUserProjectsConfigured(configCache.getFeatures())) {
-      sendErrorResponse(res, 403, 'User projects are switched off', {
-        details: { code: 'USER_PROJECTS_DISABLED' }
-      });
-      return null;
-    }
-    access.ensurePrincipal(req);
-    const project = await getProjectRepository().get(targetId);
-    const context = access.callerContext(req.user);
-    const permissions = access.permissionsFor(project, req.user, context);
-    // Admin projects are configuration linked to apps, not containers for
-    // user data: a chat can only move into a user project.
-    if (!project || !permissions.canUse || project.ownership !== 'user') {
-      sendNotFound(res, 'Project');
-      return null;
-    }
-    // Judged again under the target's lock when the marker is written.
-    mayUse = current => access.permissionsFor(current, req.user, context).canUse;
-  }
-  if ((chat.projectId || null) === targetId) return chat;
-  const service = getProjectService();
-  const from = chat.projectId || null;
-  // Compared under the chat's lock: a move that raced this one wins, and the
-  // caller learns the chat is no longer where they saw it. The markers change
-  // under the same lock, so two moves of one chat cannot interleave their
-  // bookkeeping, and the target is checked again under its own lock: a
-  // project deleted since the access check above refuses the marker and the
-  // chat goes back where it was, as does one the caller may no longer use.
-  let targetGone = false;
-  let accessChanged = false;
-  const { chat: updated, moved } = await repository
-    .moveProjectIf(chat.id, from, targetId, {
-      settle: async () => {
-        if (targetId) {
-          const attached = await service.attachChat(targetId, chat.id, {
-            ownerId: chat.ownerId || null,
-            authorize: mayUse
-          });
-          if (!attached) {
-            targetGone = true;
-            throw new Error('Project is gone');
-          }
-        }
-        if (from) {
-          await service.detachChat(from, chat.id).catch(() => {
-            /* the source project may already be gone */
-          });
-        }
-      }
-    })
-    .catch(error => {
-      if (error?.code === 'PROJECT_ACCESS_CHANGED') accessChanged = true;
-      if (!targetGone && !accessChanged) throw error;
-      return { chat: null, moved: false };
-    });
-  if (targetGone) {
-    sendNotFound(res, 'Project');
-    return null;
-  }
-  if (accessChanged) {
-    sendErrorResponse(res, 403, 'Your access to this project changed', {
-      details: { code: 'PROJECT_ACCESS_CHANGED' }
-    });
-    return null;
-  }
-  if (!updated) {
-    sendNotFound(res, 'Chat');
-    return null;
-  }
-  if (!moved) {
-    sendErrorResponse(res, 409, 'The chat was moved by someone else; reload and try again', {
-      details: { code: 'CHAT_MOVED' }
-    });
-    return null;
-  }
-  logAudit({
-    req,
-    action: 'update',
-    resource: 'project',
-    resourceId: targetId || chat.projectId,
-    summary: targetId
-      ? `Moved chat ${chat.id} into project ${targetId}`
-      : `Removed chat ${chat.id} from project ${chat.projectId}`
-  });
-  return updated;
-}
-
-/**
  * Register the `/api/chats` endpoints.
  *
  * Call it next to `registerRunRoutes(app)` in `server/server.js`; the paths
@@ -519,10 +396,14 @@ export default function registerChatRoutes(app) {
       const { chatId } = req.params;
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const title = req.body?.title;
-      const hasProject = req.body && Object.hasOwn(req.body, 'projectId');
+      if (req.body && Object.hasOwn(req.body, 'projectId')) {
+        // A chat belongs to a project from its first turn on (`projectId` of
+        // the chat request); it is never moved into or out of one afterwards.
+        return sendBadRequest(res, 'A chat cannot be moved into or out of a project');
+      }
       const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
       const keep = req.body?.temporary === false;
-      if (typeof title !== 'string' && !hasProject && !hasAttached && !keep) {
+      if (typeof title !== 'string' && !hasAttached && !keep) {
         return sendBadRequest(res, 'title is required and must be a string');
       }
       if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
@@ -530,15 +411,15 @@ export default function registerChatRoutes(app) {
         // kept is deleted, and a conversation that should be is a new chat.
         return sendBadRequest(res, 'temporary can only be set to false');
       }
-      if (keep && (hasProject || hasAttached)) {
-        // Keeping writes the chat before a project change is even checked, so
-        // a change refused after it would leave the request failed but the
-        // chat kept. Two requests make each step all-or-nothing.
+      if (keep && hasAttached) {
+        // Keeping writes the chat before the attached projects are even
+        // checked, so a change refused after it would leave the request failed
+        // but the chat kept. Two requests make each step all-or-nothing.
         return sendBadRequest(res, 'Keep the chat and change its projects in separate requests');
       }
       // Only keeping needs a history to keep the chat in. A temporary chat —
       // every chat while the history is off — can still be renamed and given
-      // projects.
+      // attached projects.
       const repository = requireRepository(res, { history: keep });
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
@@ -558,13 +439,6 @@ export default function registerChatRoutes(app) {
             /* the project may be gone; the chat is kept either way */
           });
         }
-      }
-      if (hasProject) {
-        // Moving a chat into (or out of) a project (#1036, spec 1 §6.4). The
-        // target must be one the caller may use; the markers follow the chat.
-        const moved = await moveChatToProject(req, res, repository, chat);
-        if (!moved) return;
-        chat = moved;
       }
       if (hasAttached) {
         const attached = await setChatAttachedProjects(req, res, repository, chat);

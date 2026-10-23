@@ -6548,7 +6548,8 @@
       "placeholder": "Neuer Chat in {{name}}",
       "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
       "app": "App",
-      "send": "Senden"
+      "send": "Senden",
+      "tooLong": "Diese Nachricht ist zu lang, um einen Chat damit zu starten ({{count}} von {{max}} Zeichen). Kürzen Sie sie oder öffnen Sie einen leeren Chat und fügen Sie sie dort ein."
     },
     "appSelect": {
       "unavailable": "{{id}} (nicht verfügbar)"

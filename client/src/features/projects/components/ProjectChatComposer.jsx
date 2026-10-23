@@ -12,9 +12,10 @@ import { INPUT_CLASS } from './item-dialog/dialogStyles';
 
 /**
  * Longest first message: it travels to the chat page in the URL
- * (`?prefill=`), so it stays well inside what a server accepts for one.
+ * (`?prefill=`), which the chat page drops again as soon as it has sent it.
+ * A longer text is refused with an error, never cut.
  */
-export const MAX_FIRST_MESSAGE_LENGTH = 2000;
+export const MAX_FIRST_MESSAGE_LENGTH = 10000;
 
 /**
  * Starts a chat inside a project from the project page (spec 1 §6.3): type
@@ -29,7 +30,7 @@ export const MAX_FIRST_MESSAGE_LENGTH = 2000;
  * @returns {JSX.Element}
  */
 function ProjectChatComposer({ project, projectName }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { choices, loading } = useProjectChatApps();
   const [message, setMessage] = useState('');
@@ -41,8 +42,11 @@ function ProjectChatComposer({ project, projectName }) {
       ? picked
       : resolveProjectChatApp(apps, project.defaultAppId);
 
+  const length = message.trim().length;
+  const tooLong = length > MAX_FIRST_MESSAGE_LENGTH;
+
   const start = () => {
-    if (!appId) return;
+    if (!appId || tooLong) return;
     // A new chat, every time: the chat page opens the chat id this tab holds
     // for the app, and without stored chats that is the previous
     // conversation, whose browser transcript would come back and be
@@ -83,7 +87,8 @@ function ProjectChatComposer({ project, projectName }) {
         <textarea
           rows={3}
           value={message}
-          maxLength={MAX_FIRST_MESSAGE_LENGTH}
+          aria-invalid={tooLong || undefined}
+          aria-describedby={tooLong ? 'project-composer-error' : undefined}
           onChange={event => setMessage(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -91,6 +96,22 @@ function ProjectChatComposer({ project, projectName }) {
           disabled={noApps}
           className={`${INPUT_CLASS} resize-none`}
         />
+        {tooLong && (
+          <p
+            id="project-composer-error"
+            role="alert"
+            className="mt-1 text-sm text-red-600 dark:text-red-400"
+          >
+            {t(
+              'projects.composer.tooLong',
+              'This message is too long to start a chat with ({{count}} of {{max}} characters). Shorten it, or open an empty chat and paste it there.',
+              {
+                count: length.toLocaleString(i18n.language),
+                max: MAX_FIRST_MESSAGE_LENGTH.toLocaleString(i18n.language)
+              }
+            )}
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {noApps
@@ -113,7 +134,7 @@ function ProjectChatComposer({ project, projectName }) {
             />
             <button
               type="submit"
-              disabled={!appId}
+              disabled={!appId || tooLong}
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
             >
               <Icon name="chat" size="sm" />

@@ -363,11 +363,6 @@ export const toggleSchema = z
   })
   .strict();
 
-/** The `projectId` field `PATCH /api/chats/:chatId` accepts. */
-export const chatProjectSchema = z
-  .object({ projectId: zSafeId.min(1).max(100).nullable() })
-  .strict();
-
 /** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */
 export const attachedProjectsSchema = z
   .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(MAX_ATTACHED_PROJECTS) })
