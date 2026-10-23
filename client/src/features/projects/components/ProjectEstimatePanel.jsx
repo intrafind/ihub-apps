@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatTokenCount } from '../../admin/utils/tokenStats';
@@ -73,6 +74,11 @@ const TONE = {
 function ProjectEstimatePanel({ estimate, onDismiss }) {
   const { t } = useTranslation();
   const verdictText = useVerdictText();
+  const ref = useRef(null);
+  // A result that lands below the fold would look as if the button did nothing.
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [estimate]);
   const tone = TONE[estimate.recommendation] || TONE.unknown;
   const percent = Math.round((estimate.share || 0) * 100);
   const label =
@@ -84,6 +90,7 @@ function ProjectEstimatePanel({ estimate, onDismiss }) {
 
   return (
     <section
+      ref={ref}
       data-testid="project-estimate"
       role="status"
       aria-label={t('projects.estimate.title', 'Token estimate')}
