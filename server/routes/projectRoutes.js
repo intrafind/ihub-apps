@@ -35,6 +35,7 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { auditPublished } from '../services/projects/projectAudit.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { resolveShares } from './promptRoutes.js';
@@ -506,6 +507,7 @@ export default function registerProjectRoutes(app) {
           resourceId: project.id,
           summary: `Updated project "${projectName(project)}" (${Object.keys(body).join(', ')})`
         });
+        auditPublished(req, req.project, project);
         res.json(serializeFor(project, req.user, req.projectContext));
       } catch (error) {
         sendProjectError(res, error, 'update project');
