@@ -51,6 +51,7 @@ import { chatRetentionSettings, isChatHistoryConfigured } from './chatPersistenc
 import { isStorageReady } from '../../storage/bootstrap.js';
 import { getWorkflowStateRepository } from '../workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from './chatDeletion.js';
+import { isChatRunAlive } from './chatRecovery.js';
 import { SCHEDULED_TASK_ORIGIN } from '../scheduler/tasks/taskPolicy.js';
 
 const COMPONENT = 'ChatRetention';
@@ -119,6 +120,21 @@ function activityTime(doc) {
 }
 
 /**
+ * Whether a turn is still producing into the chat, here or on another worker.
+ * Such a chat is never removed by a rule: `lastMessageAt` only moves when a
+ * message lands, so a long turn can outlast a short retention window, and
+ * deleting under it would have its next ledger append re-create the stream the
+ * delete just removed. A chat a restart left `running` with nothing behind it
+ * is not busy — {@link isChatRunAlive} says so — and expires like any other.
+ *
+ * @param {Object|null|undefined} chat - Chat document data.
+ * @returns {boolean}
+ */
+function isChatBusy(chat) {
+  return Boolean(chat?.activeRunId) && isChatRunAlive(chat);
+}
+
+/**
  * Walk the whole `chats` namespace, applying the age rule as it goes.
  *
  * Nothing global is held. The walk keeps the ids the age rule condemned and
@@ -158,6 +174,12 @@ async function scanChats(documents, cutoff, temporaryCutoff, pageSize) {
     for (const doc of page.items) {
       scanned += 1;
       const activeAt = activityTime(doc);
+      if (isChatBusy(doc.data)) {
+        // Not a candidate this time, but still its owner's chat.
+        const busyOwner = doc.data?.ownerId ?? doc.ownerId ?? null;
+        if (busyOwner && doc.data?.temporary !== true) owners.add(busyOwner);
+        continue;
+      }
       if (doc.data?.temporary === true) {
         if (temporaryCutoff !== null && Number.isFinite(activeAt) && activeAt < temporaryCutoff) {
           expired.push(doc.key);
@@ -317,12 +339,13 @@ export async function sweepChats({
    * @param {string} chatId - Chat to remove.
    * @returns {Promise<void>}
    */
-  const remove = async chatId => {
+  const remove = async (chatId, onlyIf) => {
     try {
       const { deleted } = await deleteChatWithCascade(repository, chatId, {
         deleteRun,
         removeWorkflowState,
-        component: COMPONENT
+        component: COMPONENT,
+        onlyIf
       });
       if (deleted) removed += 1;
     } catch (error) {
@@ -334,7 +357,17 @@ export async function sweepChats({
     }
   };
 
-  for (const chatId of expired) await remove(chatId);
+  // The scan is older than the delete — by the rest of the walk and every
+  // delete before this one — so the rule is judged again under the chat's
+  // lock: a chat kept, written to or busy since is left alone.
+  const stillExpired = chat => {
+    if (!chat || isChatBusy(chat)) return false;
+    const activeAt = activityTime({ data: chat });
+    if (!Number.isFinite(activeAt)) return false;
+    if (chat.temporary === true) return temporaryCutoff !== null && activeAt < temporaryCutoff;
+    return cutoff !== null && activeAt < cutoff;
+  };
+  for (const chatId of expired) await remove(chatId, stillExpired);
 
   // The count rule, per owner and off the index. Deliberately after the age
   // rule and told what it already took: an owner whose overflow was expired
@@ -353,7 +386,8 @@ export async function sweepChats({
     }
     for (const chatId of overflow) {
       byCount += 1;
-      await remove(chatId);
+      // Kept chats only, and never one a turn is producing into.
+      await remove(chatId, chat => Boolean(chat) && chat.temporary !== true && !isChatBusy(chat));
     }
   }
 

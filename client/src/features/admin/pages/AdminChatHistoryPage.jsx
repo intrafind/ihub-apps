@@ -143,7 +143,7 @@ function TopTable({ title, rows, keyName, keyLabel, t }) {
   );
 }
 
-function NumberField({ id, label, help, value, onChange, min }) {
+function NumberField({ id, label, help, value, onChange, min, max }) {
   return (
     <div>
       <label
@@ -157,6 +157,7 @@ function NumberField({ id, label, help, value, onChange, min }) {
         type="number"
         step="1"
         min={min}
+        max={max}
         value={Number.isFinite(value) ? value : ''}
         onChange={e => {
           const parsed = Number.parseInt(e.target.value, 10);
@@ -873,10 +874,11 @@ function AdminChatHistoryPage() {
                 )}
                 help={t(
                   'admin.chatHistory.chats.temporaryRetentionHoursHelp',
-                  "Temporary chats — incognito chats, anonymous visitors' chats, and every chat while the history is off — are deleted this many hours after their last activity, checked hourly. At least 1."
+                  "Temporary chats — incognito chats, anonymous visitors' chats, and every chat while the history is off — are deleted this many hours after their last activity, checked hourly. At least 1, at most 720 (30 days)."
                 )}
                 value={settings.chats.temporaryRetentionHours}
                 min={1}
+                max={720}
                 onChange={value => updateSetting('chats', 'temporaryRetentionHours', value)}
               />
               <NumberField

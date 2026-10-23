@@ -30,7 +30,7 @@ import assert from 'node:assert/strict';
 
 import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
-import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
+import { attachGuestIdentity, guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import ChatService from '../services/chat/ChatService.js';
 import { RunLog } from '../services/loop/RunLog.js';
@@ -447,6 +447,33 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       assert.equal(calls[0].persistence.temporary, true, 'a guest keeps no history');
       assert.equal(calls[0].persistence.ownerId, guestOwnerId(guestId));
       assert.ok(!calls[0].persistence.ownerId.includes(guestId), 'never the secret itself');
+    });
+  });
+
+  it('tells a guest that came back without its cookie why the chat is gone', async () => {
+    const owner = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    const ownerSecret = 'b'.repeat(64);
+    setGuestId(owner, ownerSecret);
+    await getChatRepository().ensureChat({
+      chatId: 'chat-guest-cookieless',
+      ownerId: guestOwnerId(ownerSecret),
+      temporary: true
+    });
+    // The next request carries no cookie, so it is given a new guest identity.
+    const stranger = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    attachGuestIdentity(
+      { originalUrl: '/api/apps/chat/chat/x', cookies: {}, user: stranger, get: () => undefined },
+      { cookie: () => {} }
+    );
+    await withPreparedRequests(async calls => {
+      const res = await postChat({
+        chatId: 'chat-guest-cookieless',
+        user: stranger,
+        body: { messages: [{ role: 'user', content: 'and then?' }] }
+      });
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.code, 'GUEST_COOKIE_MISSING');
+      assert.equal(calls.length, 0);
     });
   });
 

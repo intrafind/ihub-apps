@@ -137,7 +137,7 @@
       "label": "Inkognito-Modus",
       "enable": "Inkognito aktivieren – der Chat wird nicht im Verlauf gespeichert",
       "disable": "Inkognito deaktivieren – diesen Chat im Verlauf behalten",
-      "activeNotice": "Temporärer Chat – wird nicht im Verlauf gespeichert und innerhalb eines Tages gelöscht.",
+      "activeNotice": "Temporärer Chat – wird nicht im Verlauf gespeichert und {{hours}} Stunden nach der letzten Aktivität gelöscht.",
       "keepFailed": "Dieser Chat konnte nicht im Verlauf gespeichert werden: {{error}}"
     },
     "compareMode": {
@@ -467,6 +467,9 @@
     "runInterrupted": "Diese Antwort wurde unterbrochen: Der Server wurde angehalten, während sie erstellt wurde.",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
+    "chatStorageUnavailable": "Chats können gerade nicht gespeichert werden, daher wurde diese Nachricht nicht gesendet. Bitte versuchen Sie es später erneut oder wenden Sie sich an Ihre Administration.",
+    "clientHistoryNotAllowed": "Diese Seite ist veraltet. Laden Sie sie neu, um den Chat fortzusetzen.",
+    "guestCookieMissing": "Dieser Chat kann nicht fortgesetzt werden, weil Ihr Browser für diese Website keine Cookies speichert. Erlauben Sie Cookies für diese Website, um Chats hier fortzusetzen.",
     "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt...",
     "chunkLoadTitle": "Seite konnte nicht geladen werden",
     "chunkLoadDescription": "Eine benötigte Ressource konnte nicht geladen werden. Dies kann an einem Netzwerkproblem oder einem Anwendungsupdate liegen.",
@@ -761,7 +764,7 @@
         "retentionDays": "Aufbewahrung (Tage)",
         "retentionDaysHelp": "Chats ohne Aktivität seit so vielen Tagen werden von der täglichen Bereinigung gelöscht. 0 bewahrt Chats unbegrenzt auf.",
         "temporaryRetentionHours": "Temporäre Chats (Stunden)",
-        "temporaryRetentionHoursHelp": "Temporäre Chats – Inkognito-Chats, Chats anonymer Besucher und jeder Chat bei ausgeschaltetem Verlauf – werden so viele Stunden nach ihrer letzten Aktivität gelöscht, stündlich geprüft. Mindestens 1.",
+        "temporaryRetentionHoursHelp": "Temporäre Chats – Inkognito-Chats, Chats anonymer Besucher und jeder Chat bei ausgeschaltetem Verlauf – werden so viele Stunden nach ihrer letzten Aktivität gelöscht, stündlich geprüft. Mindestens 1, höchstens 720 (30 Tage).",
         "title": "Chatverlauf"
       },
       "description": "Legen Sie fest, wie lange gespeicherte Chats und das Run-Ledger aufbewahrt werden, und prüfen Sie, was gespeichert ist.",

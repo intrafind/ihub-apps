@@ -70,6 +70,9 @@ describe('guest identity', () => {
     const page = makeRes();
     assert.equal(attachGuestIdentity(makeReq({ url: '/apps/chat' }), page), null);
     assert.equal(page.cookies.length, 0);
+    // Only the path counts, not a query string that happens to name the API.
+    assert.equal(attachGuestIdentity(makeReq({ url: '/apps/chat?next=/api/x' }), page), null);
+    assert.equal(page.cookies.length, 0);
 
     const signedIn = makeRes();
     assert.equal(attachGuestIdentity(makeReq({ user: { id: 'user-1' } }), signedIn), null);

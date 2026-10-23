@@ -103,8 +103,8 @@ function ChatInput({
   onWebsearchEnabledChange = null,
   // Ephemeral (incognito-style) chat. When on, the chat is a temporary one: it
   // is stored like any chat but never listed in the history, and it is deleted
-  // within a day. The toggle renders below the input, aligned with the send
-  // button.
+  // `chats.temporaryRetentionHours` after its last activity. The toggle renders
+  // below the input, aligned with the send button.
   ephemeral = false,
   onEphemeralChange = null,
   // Optional node (e.g. the AI disclaimer) rendered centered on the same
@@ -689,7 +689,8 @@ function ChatInput({
             {ephemeral &&
               t(
                 'chat.ephemeral.activeNotice',
-                'Temporary chat — not saved to your history and deleted within a day.'
+                'Temporary chat — not saved to your history and deleted {{hours}} hours after its last activity.',
+                { hours: platformConfig?.chats?.temporaryRetentionHours ?? 24 }
               )}
           </span>
           <span className={`shrink-0 whitespace-nowrap justify-self-end ${contextUsageTone}`}>

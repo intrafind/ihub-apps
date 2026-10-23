@@ -820,6 +820,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // history (running) now, not when its answer lands — which for a long
     // workflow is minutes away, and never happens here if the user leaves.
     onRunStarted: () => {
+      // The chat is now created the way the toggles said: pin that, so a
+      // later flip of the inputs (a session that expires and takes the
+      // history with it) cannot make a kept chat read as temporary — and get
+      // it deleted by New chat.
+      if (storedTemporary === null) setStoredTemporary(chatTemporary);
       if (chatPersistence && !chatTemporary) invalidateChatsCache();
     },
     // Embedded, the app page's iAssistant conversation stays untouched.

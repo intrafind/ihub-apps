@@ -46,7 +46,7 @@ import {
   normalizeChatVariables
 } from '../../services/chat/ChatRepository.js';
 import { resolveChatStorage } from '../../services/chat/chatPersistence.js';
-import { resolveChatOwner } from '../../services/chat/chatOwner.js';
+import { isNewGuest, resolveChatOwner } from '../../services/chat/chatOwner.js';
 import { isVoiceTurn, VOICE_INPUT_MODE } from '../../services/chat/voiceMode.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
@@ -851,7 +851,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // are stored, anyone who guesses one could otherwise append a turn to
         // — and, through the stream, read back — another user's chat.
         const access = await authorizeChat(chatId, req.user, { intent: 'write' });
-        if (!access.ok) return sendNotFound(res, 'Chat session');
+        if (!access.ok) {
+          if (isNewGuest(req.user)) {
+            // The chat exists but this request came without the guest cookie
+            // that owns it, so its browser does not keep cookies for this site.
+            return res.status(404).json({
+              error:
+                'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
+              code: 'GUEST_COOKIE_MISSING'
+            });
+          }
+          return sendNotFound(res, 'Chat session');
+        }
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
         // on the request to the prompt builder, persisted with the chat.

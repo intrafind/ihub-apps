@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe('hydrating a stored chat', () => {
   it('renders the stored image artifacts as the images of the message', () => {
-    const { result } = renderHook(() => useChatMessages('chat-1', { serverBacked: true }));
+    const { result } = renderHook(() => useChatMessages('chat-1'));
 
     act(() => {
       result.current.loadServerMessages([

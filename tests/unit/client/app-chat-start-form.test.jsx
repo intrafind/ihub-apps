@@ -48,8 +48,7 @@ jest.mock('../../../client/src/api', () => ({
   sendAppChatMessage: jest.fn().mockResolvedValue({})
 }));
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
-  __esModule: true,
-  getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
+  __esModule: true
 }));
 jest.mock('../../../client/src/api/endpoints/sources', () => ({
   __esModule: true,

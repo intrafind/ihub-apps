@@ -118,9 +118,7 @@ test('replays what the ledger already holds, then follows the stream', async () 
     ])
   );
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   let attached;
   await act(async () => {
@@ -146,9 +144,7 @@ test('does not attach to a run that already ended, and settles instead', async (
     ])
   );
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   const onSettled = jest.fn();
   let attached;
@@ -176,9 +172,7 @@ test('a live run/ended on the attached run settles it', async () => {
     ])
   );
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   const onSettled = jest.fn();
   await act(async () => {
@@ -206,9 +200,7 @@ test('another run ending in the same chat does not settle the attached one', asy
     ])
   );
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   const onSettled = jest.fn();
   await act(async () => {
@@ -244,9 +236,7 @@ test('a stream that drops settles the attached run rather than latching it forev
     ])
   );
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   const onSettled = jest.fn();
   await act(async () => {
@@ -291,7 +281,6 @@ test('a replayed run/ended does not report the previous chat s prompt', async ()
       useAppChat({
         appId: 'acme',
         chatId,
-        serverBacked: true,
         onMessageComplete: (content, prompt) => completed.push({ content, prompt })
       }),
     { initialProps: { chatId: 'chat-a' } }
@@ -322,9 +311,7 @@ test('a replayed run/ended does not report the previous chat s prompt', async ()
 test('a ledger that cannot be read still connects rather than giving up', async () => {
   fetchWithAuthRetry.mockImplementationOnce(async () => ({ ok: false, status: 503 }));
 
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   let attached;
   await act(async () => {
@@ -355,10 +342,9 @@ test('a chat left mid-replay gets neither the rest of the replay nor the stream'
       })
   );
 
-  const { result, rerender } = renderHook(
-    ({ chatId }) => useAppChat({ appId: 'acme', chatId, serverBacked: true }),
-    { initialProps: { chatId: 'chat-left' } }
-  );
+  const { result, rerender } = renderHook(({ chatId }) => useAppChat({ appId: 'acme', chatId }), {
+    initialProps: { chatId: 'chat-left' }
+  });
 
   let attaching;
   act(() => {
@@ -385,7 +371,7 @@ test('reports the chat once the server has accepted the turn', async () => {
   sendAppChatMessage.mockImplementationOnce(() => new Promise(resolve => (accept = resolve)));
   const onMessageAccepted = jest.fn();
   const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true, onMessageAccepted })
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', onMessageAccepted })
   );
 
   await act(async () => {
@@ -409,9 +395,7 @@ test('reports the chat once the server has accepted the turn', async () => {
 });
 
 test('reattaching to nothing is a no-op', async () => {
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   let attached;
   await act(async () => {
@@ -428,9 +412,7 @@ test('re-attaching over an open stream does not stop the turn it follows (#2830)
   // surface that only replaces its own connection must never send it.
   ledgerPages.push(page([envelope(1, 'run/started', { kind: 'chat', refs: {} })]));
   ledgerPages.push(page([envelope(1, 'run/started', { kind: 'chat', refs: {} })]));
-  const { result } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-  );
+  const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
 
   await act(async () => {
     await result.current.reattachToRun(RUN_ID);
@@ -459,9 +441,7 @@ describe('the heartbeat backstop for a turn nobody is running', () => {
         envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'half an answer' })
       ])
     );
-    const rendered = renderHook(() =>
-      useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
-    );
+    const rendered = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-abc' }));
     await act(async () => {
       await rendered.result.current.reattachToRun(RUN_ID);
     });
@@ -539,9 +519,7 @@ describe('the heartbeat backstop for a turn nobody is running', () => {
     // message the user just sent. Only a surface following a turn it did not
     // start can read "the server is running nothing" as the whole answer.
     checkAppChatStatus.mockResolvedValue({ active: true, processing: false });
-    const { result } = renderHook(() =>
-      useAppChat({ appId: 'acme', chatId: 'chat-own-turn', serverBacked: true })
-    );
+    const { result } = renderHook(() => useAppChat({ appId: 'acme', chatId: 'chat-own-turn' }));
 
     await act(async () => {
       result.current.sendMessage({

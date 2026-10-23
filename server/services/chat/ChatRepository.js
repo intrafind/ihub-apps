@@ -1515,12 +1515,19 @@ export class ChatRepository {
    * is the route's job, because it is the layer that knows the ledger exists.
    *
    * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {(chat: Object|null) => boolean} [options.onlyIf] - Judged under
+   *   the chat's lock against the chat as it stands: when it returns false
+   *   nothing is removed. For a caller that decided to delete from an older
+   *   read — the retention sweep — and must not remove a chat that changed
+   *   since.
    * @returns {Promise<{deleted: boolean, runIds: string[]}>}
    */
-  async deleteChat(chatId) {
+  async deleteChat(chatId, { onlyIf } = {}) {
     if (!this._usable(chatId, 'deleteChat')) return { deleted: false, runIds: [] };
     return this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
+      if (onlyIf && !onlyIf(existing)) return { deleted: false, runIds: [] };
       // Both halves: the chat document's recent runs and whatever outgrew it
       // and moved to the transcript. Read before either document is removed.
       const retired = (await this._readMessages(chatId)).retiredRunIds;

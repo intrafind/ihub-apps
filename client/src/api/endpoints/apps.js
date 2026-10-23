@@ -62,33 +62,6 @@ export const stopAppChatStream = async (appId, chatId, { source } = {}) => {
 };
 
 /**
- * Get conversation messages from iAssistant Conversation API
- * @param {string} appId - App ID
- * @param {string} conversationId - Conversation ID
- * @param {Object} [options] - Pagination options
- * @param {number} [options.size] - Page size
- * @param {string} [options.nextCursor] - Cursor for pagination
- * @param {string} [options.chatId] - The chat being resumed, so the documents'
- *   access links use the search profile the conversation was created with
- */
-export const getConversationMessages = async (appId, conversationId, options = {}) => {
-  const params = {};
-  if (options.size) params.size = options.size;
-  if (options.nextCursor) params.next_cursor = options.nextCursor;
-  if (options.chatId) params.chat_id = options.chatId;
-
-  return handleApiResponse(
-    () =>
-      apiClient.get(`/apps/${appId}/conversations/${conversationId}/messages`, {
-        params
-      }),
-    null,
-    null,
-    false
-  );
-};
-
-/**
  * Delete a conversation
  */
 export const deleteConversation = async (appId, conversationId) => {

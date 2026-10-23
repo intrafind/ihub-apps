@@ -787,6 +787,80 @@ describe('temporary chats', () => {
     });
   });
 
+  it('leave a chat a turn is producing into, however old', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-busy',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-busy', 30);
+      // A turn that claimed the chat just now: alive by any measure.
+      await repository.updateChat('tmp-busy', {
+        status: 'running',
+        activeRunId: 'run-live',
+        runClaimedAt: new Date().toISOString()
+      });
+      // One a restart left `running` long ago, with nothing behind it.
+      await storeChat(repository, {
+        chatId: 'tmp-stranded',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-stranded', 30);
+      await repository.updateChat('tmp-stranded', { status: 'running', activeRunId: 'run-gone' });
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 0,
+        temporaryRetentionHours: 24,
+        deleteRun: async () => {},
+        removeWorkflowState: async () => {}
+      });
+
+      assert.equal(removed, 1);
+      assert.ok(await repository.getChat('tmp-busy'), 'a running turn keeps its chat');
+      assert.equal(await repository.getChat('tmp-stranded'), null, 'a dead run does not');
+    });
+  });
+
+  it('judge the rule again under the lock: a chat kept after the scan stays', async () => {
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, {
+        chatId: 'tmp-kept-late',
+        ownerId: OWNER,
+        ageDays: 0,
+        temporary: true
+      });
+      await ageHours(repository, 'tmp-kept-late', 30);
+      // The owner presses "keep" between the scan and the delete.
+      const deleteChat = repository.deleteChat.bind(repository);
+      repository.deleteChat = async (chatId, options) => {
+        await repository.keepChat(chatId);
+        return deleteChat(chatId, options);
+      };
+      const deletedRuns = [];
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 0,
+        maxChatsPerUser: 0,
+        temporaryRetentionHours: 24,
+        deleteRun: async runId => deletedRuns.push(runId),
+        removeWorkflowState: async () => {}
+      });
+
+      assert.equal(removed, 0);
+      const chat = await repository.getChat('tmp-kept-late');
+      assert.ok(chat, 'kept since the scan');
+      assert.equal(chat.temporary, undefined);
+      assert.deepEqual(deletedRuns, [], 'nothing cascaded for a chat that stayed');
+    });
+  });
+
   it('count against no quota', async () => {
     await withRepository(async ({ repository }) => {
       await storeChat(repository, { chatId: 'kept-a', ownerId: OWNER, ageDays: 2 });

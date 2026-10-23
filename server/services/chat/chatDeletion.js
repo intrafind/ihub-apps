@@ -65,6 +65,9 @@ async function attempt(step, what, where) {
  *   snapshots. A share outliving its chat would keep serving a transcript the
  *   owner was told is gone. Injectable for tests.
  * @param {string} deps.component - Log component of the caller.
+ * @param {(chat: Object|null) => boolean} [deps.onlyIf] - Passed to
+ *   `deleteChat`: judged under the chat's lock, and when it refuses nothing is
+ *   removed or cascaded.
  * @returns {Promise<{deleted: boolean, runIds: string[]}>}
  */
 export async function deleteChatWithCascade(
@@ -74,13 +77,17 @@ export async function deleteChatWithCascade(
     deleteRun,
     removeWorkflowState,
     deleteShares = id => getChatShareRepository().deleteSharesForChat(id),
-    component
+    component,
+    onlyIf
   }
 ) {
   // The chat document is the only place a chat's runs are recorded, so it has
   // to be read before it is removed — `deleteChat` returns them for exactly
   // this reason.
-  const { deleted, runIds } = await repository.deleteChat(chatId);
+  const { deleted, runIds } = await repository.deleteChat(chatId, onlyIf ? { onlyIf } : {});
+  // A guarded delete that found the chat changed removed nothing, so there is
+  // nothing to cascade into either.
+  if (!deleted && onlyIf) return { deleted, runIds };
   for (const runId of runIds) {
     const where = { component, chatId, runId };
     await attempt(() => deleteRun(runId), 'one of its runs', where);

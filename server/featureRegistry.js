@@ -127,8 +127,8 @@ export const featureRegistry = [
     id: 'chatPersistence',
     name: { en: 'Chat History', de: 'Chatverlauf' },
     description: {
-      en: 'Keep chats in a history signed-in users can reopen on any device — a run keeps going when the browser closes and its answer is waiting in the chat. Every chat is stored on the server either way; without this, each one is temporary: never listed, and deleted a day after its last activity',
-      de: 'Chats in einem Verlauf behalten, den angemeldete Benutzer auf jedem Gerät wieder öffnen können — ein Lauf geht weiter, wenn der Browser geschlossen wird, und seine Antwort wartet im Chat. Gespeichert wird jeder Chat ohnehin auf dem Server; ohne diese Funktion ist jeder temporär: nie aufgelistet und einen Tag nach der letzten Aktivität gelöscht'
+      en: 'Keep chats in a history signed-in users can reopen on any device — a run keeps going when the browser closes and its answer is waiting in the chat. Every chat is stored on the server either way; without this, each one is temporary: never listed, and deleted after the temporary-chat retention period (24 hours by default)',
+      de: 'Chats in einem Verlauf behalten, den angemeldete Benutzer auf jedem Gerät wieder öffnen können — ein Lauf geht weiter, wenn der Browser geschlossen wird, und seine Antwort wartet im Chat. Gespeichert wird jeder Chat ohnehin auf dem Server; ohne diese Funktion ist jeder temporär: nie aufgelistet und nach der Aufbewahrungsdauer für temporäre Chats gelöscht (standardmäßig 24 Stunden)'
     },
     category: 'preview',
     default: false,

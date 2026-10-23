@@ -135,36 +135,6 @@ export function transformStoredMessage(msg) {
 }
 
 /**
- * One message of an iAssistant conversation, as the chat UI renders it.
- * Shape on the wire: `{ id?, type: 'USER'|'ERROR'|…, content, references?,
- * result_items? }`.
- *
- * @param {Object} msg - Conversation message.
- * @returns {Object} Chat message.
- */
-function transformConversationMessage(msg) {
-  const message = {
-    id: msg.id || `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    role: msg.type === 'USER' ? 'user' : msg.type === 'ERROR' ? 'system' : 'assistant',
-    content: msg.content || '',
-    loading: false,
-    fromServer: true
-  };
-
-  // The answer's documents, as sources (the server converts them, see
-  // `services/sources/producers/ifinder.withConversationSources`).
-  const sources = storedSourceSet(msg.sources);
-  if (sources) message.sources = sources;
-
-  if (msg.type === 'ERROR') {
-    message.error = true;
-    message.isErrorMessage = true;
-  }
-
-  return message;
-}
-
-/**
  * Custom hook for managing chat messages.
  *
  * The server owns every transcript: a chat is stored whether it is kept in the
@@ -494,12 +464,7 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
    * Replace the whole transcript with one loaded from the server, and end
    * hydration.
    *
-   * Two shapes arrive here and both are server truth: a stored chat
-   * transcript (`GET /api/chats/:chatId`) and an iAssistant conversation
-   * (`GET /api/apps/:appId/conversations/:id/messages`). `role` is the
-   * discriminator — the conversation shape has only ever carried `type`.
-   *
-   * @param {Array} serverMessages - Messages from either endpoint
+   * @param {Array} serverMessages - The stored transcript (`GET /api/chats/:chatId`)
    * @param {Object} [options] - Load options.
    * @param {boolean} [options.preserveLocal] - Keep messages added while the fetch was in
    *   flight and put the loaded transcript in front of them, instead of replacing. A
@@ -514,10 +479,7 @@ function useChatMessages(chatId = 'default', { hydrates = true } = {}) {
 
     let lastAssistantId = null;
     const transformed = serverMessages.map(msg => {
-      const message =
-        typeof msg?.role === 'string'
-          ? transformStoredMessage(msg)
-          : transformConversationMessage(msg);
+      const message = transformStoredMessage(msg);
 
       if (message.role === 'assistant') {
         lastAssistantId = message.id;

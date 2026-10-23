@@ -23,6 +23,25 @@ import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 
 /**
+ * Refusals of the chat request the user can do something about, by the code
+ * the server answers with: translation key and English fallback.
+ */
+const CHAT_REFUSAL_MESSAGES = {
+  CHAT_STORAGE_UNAVAILABLE: [
+    'error.chatStorageUnavailable',
+    'Chats cannot be stored right now, so this message was not sent. Please try again later or contact your administrator.'
+  ],
+  CLIENT_HISTORY_NOT_ALLOWED: [
+    'error.clientHistoryNotAllowed',
+    'This page is out of date. Reload it to continue the chat.'
+  ],
+  GUEST_COOKIE_MISSING: [
+    'error.guestCookieMissing',
+    'This chat cannot be continued because your browser does not keep cookies for this site. Allow cookies for this site to continue chats here.'
+  ]
+};
+
+/**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
  *
@@ -46,8 +65,9 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
  *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
  * @param {boolean} options.ephemeral - When true, a chat this surface starts is a temporary
- *   one (never listed in the history, deleted a day after its last activity) and no
- *   conversationId is stored. The chat is stored on the server either way: the request
+ *   one (never listed in the history, deleted `chats.temporaryRetentionHours` after its
+ *   last activity) and no conversationId is stored. The chat is stored on the server
+ *   either way: the request
  *   carries only the new message, an edit or a regenerate travels as
  *   `replaceFromMessageId`, and the server assembles the history.
  * @param {boolean} [options.hydrates=true] - Whether the transcript has to be fetched
@@ -279,6 +299,11 @@ function useAppChat({
           debugLog('🔐 Session expired during chat message send');
           // The authTokenExpired event should already be dispatched by the API client
           // which will trigger the auto-redirect flow in AuthContext
+        } else if (CHAT_REFUSAL_MESSAGES[error.code]) {
+          // A refusal of the chat itself, not of this message: the server's
+          // English reason would tell the user nothing they can act on.
+          const [key, fallback] = CHAT_REFUSAL_MESSAGES[error.code];
+          errorMessage = t(key, fallback);
         } else {
           // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
           errorMessage =

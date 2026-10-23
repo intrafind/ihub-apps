@@ -16,8 +16,9 @@ What varies is whether a chat is **kept** or **temporary**:
 - A **temporary** chat is stored the same way — a reload, a re-attach, an edit
   and a regenerate all work — but it is never listed or shared, and it is
   deleted `chats.temporaryRetentionHours` (24 by default) after its last
-  activity, or as soon as the user leaves it. Its turn stops when nobody is left
-  to read it, like the ephemeral turn it replaces.
+  activity, or at once when the user starts a new chat, clears it or switches
+  incognito. Its turn stops when nobody is left to read it, like the ephemeral
+  turn it replaces.
 
 The **Chat History** feature (`chatPersistence`) decides whether chats can be
 kept at all. It ships **off**: without it every chat is temporary.
@@ -496,8 +497,11 @@ upgrade request.
 
 One limitation: an anonymous chat inside a cross-site iframe whose browser
 blocks third-party cookies gets no guest cookie back, so its second turn is
-somebody else's chat (404). Signed-in embeds (Outlook, Nextcloud, Teams, the
-browser extension) authenticate with tokens and are unaffected.
+somebody else's chat. The turn answers `404` with
+`code: "GUEST_COOKIE_MISSING"` — the request came without a guest
+cookie and the chat exists — and the chat UI says why. Signed-in embeds
+(Outlook, Nextcloud, Teams, the browser extension) authenticate with tokens and
+are unaffected.
 
 ## The server owns the history
 
@@ -837,8 +841,8 @@ A sweep applies three rules, all read fresh from `platform.chats` on every tick
 so an admin's change takes effect without a restart:
 
 - **Temporary** — a temporary chat whose last activity is older than
-  `temporaryRetentionHours` (24) is deleted. Checked every hour, whether or not
-  the history is on, and it never touches a kept chat.
+  `temporaryRetentionHours` (24, at most 720) is deleted. Checked every hour,
+  whether or not the history is on, and it never touches a kept chat.
 - **Age** — a kept chat whose last message is older than `retentionDays` (90)
   is deleted.
 - **Count** — an owner keeps their `maxChatsPerUser` (200) most recently active
@@ -859,7 +863,10 @@ its newest `scheduledTasks.maxRunChatsPerTask` (20) run chats. The age rule
 applies to them like to any other chat.
 
 Every removal is the same cascade `DELETE /api/chats/:id` performs, ledger runs
-included. The sweep runs once at startup — so a misconfigured retention shows up
+included. No rule removes a chat a turn is still producing into, here or on
+another worker; one a restart left `running` with nothing behind it expires as
+usual. The rule is judged again under the chat's lock right before the delete,
+so a chat kept, written to or started since the scan stays. The sweep runs once at startup — so a misconfigured retention shows up
 in the log at boot rather than later — then every hour, on the cluster
 singleton worker that already owns the run-ledger cleanup, and never in parallel
 with itself.

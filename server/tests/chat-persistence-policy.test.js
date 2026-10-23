@@ -385,6 +385,13 @@ describe('chat retention settings', () => {
     );
   });
 
+  it('caps the temporary window at 30 days, so a huge value cannot switch it off', () => {
+    assert.equal(
+      chatRetentionSettings({ chats: { temporaryRetentionHours: 1e9 } }).temporaryRetentionHours,
+      720
+    );
+  });
+
   it('never switches the temporary rule off: zero or less is the default', () => {
     // A temporary chat nobody deletes is the history its owner asked not to have.
     for (const temporaryRetentionHours of [0, -3]) {

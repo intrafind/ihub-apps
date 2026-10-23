@@ -62,6 +62,12 @@ export const DEFAULT_MAX_MESSAGES_PER_CHAT = 2000;
 export const DEFAULT_TEMPORARY_RETENTION_HOURS = 24;
 
 /**
+ * The longest a temporary chat may be kept: 30 days. Past that it is a history
+ * by another name, and a large enough value would switch expiry off.
+ */
+export const MAX_TEMPORARY_RETENTION_HOURS = 720;
+
+/**
  * Read a numeric setting, keeping zero and negative values — both are
  * meaningful ("disable this rule") and must survive as written.
  *
@@ -203,7 +209,8 @@ export function chatMessageCap() {
  * @param {Object} [platformConfig] - Platform configuration.
  * `temporaryRetentionHours` is the age at which a temporary chat goes. Unlike
  * the others it cannot be switched off — a value of zero or less falls back to
- * the default — because a temporary chat nobody ever deletes is exactly the
+ * the default, and anything past {@link MAX_TEMPORARY_RETENTION_HOURS} is
+ * capped there — because a temporary chat nobody ever deletes is exactly the
  * history its owner asked not to have.
  *
  * @returns {{retentionDays: number, maxChatsPerUser: number, maxMessagesPerChat: number, temporaryRetentionHours: number}}
@@ -216,7 +223,9 @@ export function chatRetentionSettings(platformConfig) {
   );
   return {
     temporaryRetentionHours:
-      temporaryRetentionHours > 0 ? temporaryRetentionHours : DEFAULT_TEMPORARY_RETENTION_HOURS,
+      temporaryRetentionHours > 0
+        ? Math.min(temporaryRetentionHours, MAX_TEMPORARY_RETENTION_HOURS)
+        : DEFAULT_TEMPORARY_RETENTION_HOURS,
     retentionDays: readNumber(chats.retentionDays, DEFAULT_CHAT_RETENTION_DAYS),
     maxChatsPerUser: readNumber(chats.maxChatsPerUser, DEFAULT_MAX_CHATS_PER_USER),
     maxMessagesPerChat: readNumber(chats.maxMessagesPerChat, DEFAULT_MAX_MESSAGES_PER_CHAT)

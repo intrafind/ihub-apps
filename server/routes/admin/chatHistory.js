@@ -31,7 +31,8 @@ import {
   CHAT_PERSISTENCE_FEATURE,
   chatRetentionSettings,
   isChatHistoryConfigured,
-  isChatStorageAvailable
+  isChatStorageAvailable,
+  MAX_TEMPORARY_RETENTION_HOURS
 } from '../../services/chat/chatPersistence.js';
 import {
   CHAT_SHARING_FEATURE,
@@ -59,7 +60,7 @@ const chatsSettingsSchema = z
     maxMessagesPerChat: z.number().int(),
     // Unlike the others it cannot switch its rule off: a temporary chat must
     // expire, so the value has to be a positive number of hours.
-    temporaryRetentionHours: z.number().int().positive()
+    temporaryRetentionHours: z.number().int().positive().max(MAX_TEMPORARY_RETENTION_HOURS)
   })
   .partial()
   .strict();

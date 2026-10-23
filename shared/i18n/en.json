@@ -451,7 +451,7 @@
       "label": "Incognito mode",
       "enable": "Turn on incognito — the chat is not saved to your history",
       "disable": "Turn off incognito — keep this chat in your history",
-      "activeNotice": "Temporary chat — not saved to your history and deleted within a day.",
+      "activeNotice": "Temporary chat — not saved to your history and deleted {{hours}} hours after its last activity.",
       "keepFailed": "This chat could not be saved to your history: {{error}}"
     }
   },
@@ -506,7 +506,7 @@
         "retentionDays": "Retention (days)",
         "retentionDaysHelp": "Chats with no activity for this many days are deleted by the daily sweep. 0 keeps chats forever.",
         "temporaryRetentionHours": "Temporary chats (hours)",
-        "temporaryRetentionHoursHelp": "Temporary chats — incognito chats, anonymous visitors' chats, and every chat while the history is off — are deleted this many hours after their last activity, checked hourly. At least 1.",
+        "temporaryRetentionHoursHelp": "Temporary chats — incognito chats, anonymous visitors' chats, and every chat while the history is off — are deleted this many hours after their last activity, checked hourly. At least 1, at most 720 (30 days).",
         "title": "Chat history"
       },
       "description": "Configure how long stored chats and the run ledger are kept, and review what is stored.",
@@ -4132,6 +4132,9 @@
     "runInterrupted": "This answer was interrupted: the server stopped while it was being produced.",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",
+    "chatStorageUnavailable": "Chats cannot be stored right now, so this message was not sent. Please try again later or contact your administrator.",
+    "clientHistoryNotAllowed": "This page is out of date. Reload it to continue the chat.",
+    "guestCookieMissing": "This chat cannot be continued because your browser does not keep cookies for this site. Allow cookies for this site to continue chats here.",
     "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider...",
     "chunkLoadTitle": "Page failed to load",
     "chunkLoadDescription": "A required resource could not be loaded. This may be due to a network issue or an application update.",

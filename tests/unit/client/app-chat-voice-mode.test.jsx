@@ -61,8 +61,7 @@ jest.mock('../../../client/src/api', () => ({
   sendAppChatMessage: jest.fn().mockResolvedValue({})
 }));
 jest.mock('../../../client/src/api/endpoints/apps', () => ({
-  __esModule: true,
-  getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
+  __esModule: true
 }));
 // Reached through AppChat's citation document actions. Stubbed like the rest
 // of the api layer: `api/client.js` reads `import.meta.env`, which the Jest

@@ -41,6 +41,9 @@ const GUEST_ID_PATTERN = /^[0-9a-f]{64}$/;
 /** Guest secret per request principal. Never enumerable, never serialized. */
 const guestIds = new WeakMap();
 
+/** Principals whose guest identity was minted by this very request. */
+const mintedGuests = new WeakSet();
+
 /**
  * The guest secret a cookie value carries, or null for anything else.
  *
@@ -123,7 +126,8 @@ export function attachGuestIdentity(req, res) {
     setGuestId(req.user, existing);
     return existing;
   }
-  if (!/\/api\//.test(req.originalUrl || req.url || '') || typeof res?.cookie !== 'function') {
+  const path = String(req.originalUrl || req.url || '').split('?')[0];
+  if (!/\/api\//.test(path) || typeof res?.cookie !== 'function') {
     return null;
   }
   const minted = mintGuestId();
@@ -135,7 +139,22 @@ export function attachGuestIdentity(req, res) {
     path: '/'
   });
   setGuestId(req.user, minted);
+  mintedGuests.add(req.user);
   return minted;
+}
+
+/**
+ * Whether the caller's guest identity is brand new: the request carried no
+ * guest cookie, so it was given one. Such a caller owns no stored chat yet —
+ * a chat id it sends that exists is one its browser started under an identity
+ * it did not keep (third-party cookies blocked in an embed, a client without a
+ * cookie jar), and it can be told so rather than a bare "not found".
+ *
+ * @param {Object} [user] - `req.user`.
+ * @returns {boolean}
+ */
+export function isNewGuest(user) {
+  return Boolean(user && typeof user === 'object' && mintedGuests.has(user));
 }
 
 /**

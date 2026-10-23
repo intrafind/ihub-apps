@@ -30,8 +30,8 @@ without reverse-engineering the codebase.
 | Integration tokens | Yes (encrypted) | `contents/integrations/`; AES-256-GCM | Per-user revoke; admin disable |
 
 > **Bottom line**: out of the box, chat content is stored on the server only as
-> temporary chats, deleted within a day of their last activity (sooner when the
-> user leaves them). Beyond that, the durable PII is the user identity (when
+> temporary chats, deleted `chats.temporaryRetentionHours` (24 by default) after
+> their last activity, sooner when the user starts a new chat or clears one. Beyond that, the durable PII is the user identity (when
 > local accounts are used), audit entries for admin actions,
 > anonymized-or-pseudonymous usage counters, optional feedback the user
 > explicitly submitted, and — once an admin turns the Chat History feature on —
