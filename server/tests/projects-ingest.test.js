@@ -2420,6 +2420,31 @@ describe('routes', () => {
     assert.equal(stranger.statusCode, 404);
   });
 
+  it('refuses to edit a text longer than an edit may be', async () => {
+    const project = await create();
+    const added = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'upload', ref: {}, name: 'Big.md', text: 'Old notes.' }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    // An imported text can be longer than an upload may be.
+    await getProjectService().patchItem(project.id, added.body.item.id, item => {
+      item.text.chars = 20_000_000;
+    });
+    const refused = await drive(route.editText, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id },
+      body: { text: 'Cut.' }
+    });
+    assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+    const read = await drive(route.text, {
+      user: ADA,
+      params: { projectId: project.id, itemId: added.body.item.id }
+    });
+    assert.equal(read.body, 'Old notes.', 'nothing was replaced');
+  });
+
   it('accepts a multipart upload, answers 202 and serves the text once ready', async () => {
     const project = await create();
     const req = multipartRequest({
@@ -2452,6 +2477,21 @@ describe('routes', () => {
     });
     assert.equal(refresh.statusCode, 400, 'an upload cannot be refreshed');
     assert.equal(refresh.body.details.code, 'INVALID_REF');
+  });
+
+  it('keeps the characters of a UTF-8 file name', async () => {
+    const project = await create();
+    const name = 'Scope – Übersicht für Köln.md';
+    const req = multipartRequest({
+      name,
+      contentType: 'text/markdown',
+      bytes: Buffer.from('# Scope\n\nText.')
+    });
+    req.params = { projectId: project.id };
+    const res = await drive(route.addItem, { user: ADA, req });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    // multer reads part headers as latin1 unless told otherwise: "–" came out as "â€\"".
+    assert.equal(res.body.item.name, name);
   });
 
   it('refuses an unsupported type before accepting bytes and a file over the limit', async () => {

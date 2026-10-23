@@ -66,6 +66,8 @@ import {
 } from '../services/projects/projectSettings.js';
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
+import { estimateProject } from '../services/projects/projectEstimate.js';
+import { RESULT_BUDGET_TOKENS } from '../sources/documentRetrieval.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
 import {
   addItemSchema,
@@ -192,6 +194,10 @@ async function listProjects(user, repo, scope) {
     String(b.lastActivityAt || '').localeCompare(String(a.lastActivityAt || ''))
   );
 }
+
+/** Chats of a project per page: the default and the most one request may ask for. */
+const CHATS_PAGE_DEFAULT = 20;
+const CHATS_PAGE_MAX = 100;
 
 /**
  * Register the `/api/projects` endpoints.
@@ -552,6 +558,31 @@ export default function registerProjectRoutes(app) {
     (req, res) => sendItemText(req, res, { project: req.project })
   );
 
+  // Load every document, count its tokens and say whether the text belongs
+  // in the prompt; the same estimate as the admin page, for a project the
+  // caller may use.
+  app.post(
+    route('/:projectId/estimate'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    async (req, res) => {
+      try {
+        const settings = projectSettings(configCache.getPlatform() || {});
+        res.json(
+          await estimateProject(req.project, {
+            user: req.user,
+            language: req.user?.language || 'en',
+            budgetTokens: settings.loadAllMaxTokens,
+            toolResultBudgetTokens: RESULT_BUDGET_TOKENS
+          })
+        );
+      } catch (error) {
+        sendFailedOperationError(res, 'estimate project tokens', error);
+      }
+    }
+  );
+
   app.put(
     route('/:projectId/items/:itemId/text'),
     ...gate,
@@ -739,6 +770,17 @@ export default function registerProjectRoutes(app) {
    *       - in: query
    *         name: filter
    *         schema: { type: string, enum: [all, mine, others] }
+   *       - in: query
+   *         name: limit
+   *         description: Chats per page, newest first (default 20, at most 100).
+   *         schema: { type: integer, minimum: 1, maximum: 100 }
+   *       - in: query
+   *         name: cursor
+   *         description: The `nextCursor` of the previous page.
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: "`{ items, nextCursor, total }` — `nextCursor` is null on the last page."
    */
   app.get(
     route('/:projectId/chats'),
@@ -748,7 +790,7 @@ export default function registerProjectRoutes(app) {
     async (req, res) => {
       try {
         const chats = getChatRepository();
-        if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null });
+        if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
         const filter = ['all', 'mine', 'others'].includes(req.query.filter)
           ? req.query.filter
           : 'all';
@@ -797,7 +839,18 @@ export default function registerProjectRoutes(app) {
         items.sort((a, b) =>
           String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || ''))
         );
-        res.json({ items, nextCursor: null });
+        // A page of the newest first: `cursor` is the offset the page starts at.
+        const limit = Math.min(
+          CHATS_PAGE_MAX,
+          Math.max(1, Number.parseInt(req.query.limit, 10) || CHATS_PAGE_DEFAULT)
+        );
+        const start = Math.max(0, Number.parseInt(req.query.cursor, 10) || 0);
+        const page = items.slice(start, start + limit);
+        res.json({
+          items: page,
+          nextCursor: start + limit < items.length ? String(start + limit) : null,
+          total: items.length
+        });
       } catch (error) {
         sendFailedOperationError(res, 'list project chats', error);
       }

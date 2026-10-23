@@ -117,7 +117,9 @@
     "mainNavigation": "Main navigation",
     "mobileNavigation": "Mobile navigation",
     "selectLanguage": "Select language",
-    "export": "Export"
+    "export": "Export",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2359,7 +2361,8 @@
       "feedback": "Feedback",
       "localization": "Localization",
       "scheduledTasks": "Scheduled Tasks",
-      "projects": "Projects"
+      "projects": "Projects",
+      "overview": "Overview"
     },
     "mcp": {
       "common": {
@@ -3841,7 +3844,7 @@
         "description": "Description",
         "descriptionPlaceholder": "What this project contains",
         "instructions": "Instructions",
-        "instructionsHint": "Instructions apply when the project is in context.",
+        "instructionsHint": "Added to the system prompt of every app, workflow step or agent that links this project, in every link mode. Say how the knowledge is to be used; put facts into documents.",
         "category": "Category",
         "categoryPlaceholder": "Optional category",
         "tags": "Tags",
@@ -3940,6 +3943,15 @@
         "kept": "Kept with its links, because not every item could move:",
         "shipped": "This project ships with iHub and comes back at the next server start. Disable it then to keep it out of the way.",
         "dependentsUnknown": "Which apps, workflows or agents link these projects could not be checked; the merge still updates their links."
+      },
+      "view": {
+        "edit": "Edit",
+        "noDescription": "No description.",
+        "noInstructions": "No instructions.",
+        "instructionsHint": "The instructions are added to the system prompt of every app, workflow step or agent that links this project.",
+        "usedBy": "Used by",
+        "notLinked": "No app, workflow or agent links this project.",
+        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
       }
     }
   },
@@ -6342,7 +6354,16 @@
       "someone": "another member",
       "startHint": "Choose the app to chat with. It gets the project’s instructions and documents.",
       "startTitle": "Start a chat in this project",
-      "title": "Chats"
+      "title": "Chats",
+      "pager": {
+        "showing": "Chats {{start}}–{{end}} of {{total}}",
+        "perPage": "Per page",
+        "first": "First page",
+        "previous": "Previous page",
+        "next": "Next page",
+        "last": "Last page",
+        "page": "Page {{number}}"
+      }
     },
     "create": {
       "creating": "Creating…",
@@ -6392,7 +6413,8 @@
         "kind": "Kind",
         "name": "Name",
         "pinned": "Pinned",
-        "status": "Status"
+        "status": "Status",
+        "estimate": "Estimate"
       },
       "empty": "No items yet",
       "emptyHint": "Add files, text, web pages, iHub pages, cloud or iFinder documents.",
@@ -6446,7 +6468,11 @@
       "itemCount_one": "{{count}} item",
       "itemCount_other": "{{count}} items",
       "memberCount_one": "{{count}} member",
-      "memberCount_other": "{{count}} members"
+      "memberCount_other": "{{count}} members",
+      "pager": {
+        "showing": "Projects {{start}}–{{end}} of {{total}}",
+        "perPage": "Per page"
+      }
     },
     "members": {
       "everyone": "Everyone signed in",
@@ -6523,6 +6549,50 @@
       "items": "Items",
       "itemsOf": "{{used}} of {{limit}}",
       "storage": "Storage"
+    },
+    "estimate": {
+      "button": "Estimate tokens",
+      "running": "Estimating…",
+      "title": "Token estimate",
+      "hint": "Loads every document, counts its tokens and recommends what goes into the prompt.",
+      "failed": "The estimate could not be made.",
+      "total": "~{{tokens}} tokens in total",
+      "budget": "{{percent}} % of the {{budget}} tokens a prompt may load in full",
+      "minContext": "A model needs a context window of about {{tokens}} tokens to load it in full (the prompt takes at most 40 % of it).",
+      "approximate": "An estimate: the model counts its own tokens, within about 10–20 %.",
+      "recommendation": {
+        "prompt": "Recommendation: in the prompt",
+        "search": "Recommendation: search with tools",
+        "unknown": "No recommendation yet"
+      },
+      "verdict": {
+        "comfortable": "Put it into the prompt. It fits the budget with room to spare: link it in \"always in the prompt\" mode (or \"auto\", which loads it).",
+        "tight": "It fits, but takes most of the budget that every linked project shares. Put it into the prompt only when it is the main knowledge of the app; otherwise let the tools search it.",
+        "exceeds": "Do not put it into the prompt. It is larger than the budget, so \"auto\" searches it. Link it in \"search with tools\" mode and pin only the few documents that must always be present.",
+        "partial": "At least one source delivered only part of its text, so the project is searched, not loaded in full.",
+        "incomplete": "Some documents could not be read, so the size is not complete. Fix them and estimate again.",
+        "empty": "There is no text to measure yet.",
+        "dynamic": "Part of this project is a search that runs with the model's terms and is never loaded in full, so the project is searched, not loaded in full."
+      },
+      "item": {
+        "prompt": "Prompt",
+        "search": "Search",
+        "unknown": "Unknown",
+        "small": "Small enough to pin into the prompt",
+        "large": "Large: leave it to the search",
+        "dynamic": "The search terms decide what is read; it is never loaded in full",
+        "partial": "Only part of the text could be read",
+        "unmeasured": "Could not be read"
+      },
+      "unmeasured_one": "{{count}} document could not be read and is not counted.",
+      "unmeasured_other": "{{count}} documents could not be read and are not counted."
+    },
+    "attach": {
+      "add": "Add project",
+      "title": "Projects for this chat",
+      "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
+      "remove": "Remove {{name}} from this chat",
+      "full": "A chat can use at most {{max}} projects."
     }
   }
 }

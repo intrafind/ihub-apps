@@ -58,6 +58,40 @@ export function projectName(project, language = 'en') {
   return getLocalizedContent(project?.name, language) || project?.id || '';
 }
 
+/** Longest description a prompt or a tool description carries. */
+const PROMPT_DESCRIPTION_LENGTH = 600;
+
+/**
+ * What a project holds, in one language, on one line and short enough for a
+ * prompt: the model reads it to decide whether a project can answer a
+ * question (the iHub Documentation says it also holds every release's notes).
+ *
+ * @param {Object} project
+ * @param {string} [language]
+ * @param {number} [maxLength]
+ * @returns {string} Empty when the project has no description.
+ */
+export function projectDescription(
+  project,
+  language = 'en',
+  maxLength = PROMPT_DESCRIPTION_LENGTH
+) {
+  const raw =
+    typeof project?.description === 'string'
+      ? project.description
+      : getLocalizedContent(project?.description, language) || '';
+  const text = String(raw).replace(/\s+/g, ' ').trim();
+  // Cut by code point: a UTF-16 cut inside an emoji leaves a lone surrogate
+  // that a provider may refuse, and with it every chat that has the project.
+  const points = Array.from(text);
+  return points.length > maxLength
+    ? `${points
+        .slice(0, maxLength - 1)
+        .join('')
+        .trimEnd()}…`
+    : text;
+}
+
 /**
  * One project as the client sees it.
  *

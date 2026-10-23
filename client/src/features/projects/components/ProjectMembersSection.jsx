@@ -123,7 +123,7 @@ function ProjectMembersSection({ project, userId, onChanged, onTransferred, onLe
             {t('projects.members.private', 'Only the owner — this project is private.')}
           </p>
         ) : (
-          <ul className="mt-1 divide-y divide-gray-100 dark:divide-gray-700">
+          <ul className="mt-1 max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
             {members.map(member => (
               <MemberRow key={`${member.type}:${member.id ?? ''}`} member={member} />
             ))}

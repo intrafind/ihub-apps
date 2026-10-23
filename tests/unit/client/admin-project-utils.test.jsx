@@ -64,6 +64,10 @@ describe('project form', () => {
     expect(validateProjectId('')).toBe('required');
     expect(validateProjectId('has space')).toBe('invalid');
     expect(validateProjectId('prj_mine')).toBe('reserved');
+    // The route of the create form.
+    expect(validateProjectId('new')).toBe('reserved');
+    expect(validateProjectId('New')).toBe('reserved');
+    expect(validateProjectId('new-hires')).toBeNull();
     expect(validateProjectId('x'.repeat(51))).toBe('tooLong');
     expect(validateProjectId('employee-handbook.v2')).toBeNull();
 

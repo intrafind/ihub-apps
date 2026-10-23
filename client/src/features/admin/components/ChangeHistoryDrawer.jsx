@@ -258,8 +258,10 @@ function LoadingSpinner() {
 /**
  * ChangeHistoryDrawer - A fixed right-side drawer that displays the change history
  * for a given admin resource, allowing snapshot inspection and rollback.
+ * `readOnly` hides the rollback for a resource the server cannot roll back
+ * (projects).
  */
-function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
+function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId, readOnly = false }) {
   const { t } = useTranslation();
 
   // State
@@ -556,14 +558,16 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
               )}
 
               {/* Rollback button */}
-              <button
-                type="button"
-                onClick={() => setRollbackModalOpen(true)}
-                className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
-              >
-                <ArrowUturnLeftIcon className="h-4 w-4 mr-1.5" />
-                {t('admin.changeHistory.rollbackToThis', 'Rollback to this version')}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setRollbackModalOpen(true)}
+                  className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
+                >
+                  <ArrowUturnLeftIcon className="h-4 w-4 mr-1.5" />
+                  {t('admin.changeHistory.rollbackToThis', 'Rollback to this version')}
+                </button>
+              )}
 
               {/* Detail loading */}
               {detailLoading && <LoadingSpinner />}
@@ -589,7 +593,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
 
       {/* Rollback confirmation modal */}
       <ConfirmRollbackModal
-        isOpen={rollbackModalOpen}
+        isOpen={rollbackModalOpen && !readOnly}
         onConfirm={handleRollback}
         onCancel={() => setRollbackModalOpen(false)}
         loading={rollbackLoading}

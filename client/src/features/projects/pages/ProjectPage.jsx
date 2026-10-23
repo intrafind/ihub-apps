@@ -12,6 +12,7 @@ import ProjectItemsSection from '../components/ProjectItemsSection';
 import ProjectMembersSection from '../components/ProjectMembersSection';
 import ProjectRoleBadge from '../components/ProjectRoleBadge';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
+import StartProjectChatDialog from '../components/StartProjectChatDialog';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -84,6 +85,7 @@ function ProjectPageContent({ projectId }) {
   const { config } = useProjectsConfig();
   const { project, setProject, loading, error, reload } = useProject(projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [startingChat, setStartingChat] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
   const backToList = () => {
@@ -160,16 +162,29 @@ function ProjectPageContent({ projectId }) {
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
             )}
           </div>
-          {isUserProject && permissions.canDelete && (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
-            >
-              <Icon name="trash" size="sm" />
-              {t('projects.page.delete', 'Delete project')}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* The main thing to do with a project: chat with its documents. */}
+            {isUserProject && !readOnlyOwnerGone && (
+              <button
+                type="button"
+                onClick={() => setStartingChat(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Icon name="chat" size="sm" />
+                {t('projects.chats.newChat', 'New chat')}
+              </button>
+            )}
+            {isUserProject && permissions.canDelete && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
+              >
+                <Icon name="trash" size="sm" />
+                {t('projects.page.delete', 'Delete project')}
+              </button>
+            )}
+          </div>
         </div>
 
         {readOnlyOwnerGone && <ReadOnlyBanner />}
@@ -192,16 +207,14 @@ function ProjectPageContent({ projectId }) {
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
+            {/* Chats first: a long document list must not push them out of sight. */}
+            <ProjectChatsSection project={project} />
             <ProjectItemsSection
               project={project}
               config={config}
               editable={editable}
               setProject={setProject}
               reload={reload}
-            />
-            <ProjectChatsSection
-              project={project}
-              canStartChat={isUserProject && !readOnlyOwnerGone}
             />
           </div>
           <div className="space-y-6 min-w-0">
@@ -230,6 +243,9 @@ function ProjectPageContent({ projectId }) {
         </div>
       </div>
 
+      {startingChat && (
+        <StartProjectChatDialog projectId={project.id} onClose={() => setStartingChat(false)} />
+      )}
       <ConfirmDialog
         isOpen={confirmDelete}
         title={t('projects.page.deleteTitle', 'Delete project')}

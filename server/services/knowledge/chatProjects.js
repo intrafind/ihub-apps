@@ -18,9 +18,10 @@ import { getProjectRepository, isProjectId } from '../projects/ProjectRepository
 import { getProjectService } from '../projects/ProjectService.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
 import { canHoldProjects } from '../projects/projectAccess.js';
+import { MAX_ATTACHED_PROJECTS } from '../projects/projectConstants.js';
 
 /** Most projects a chat may have attached, stored ones included. */
-export const MAX_ATTACHED = 10;
+export const MAX_ATTACHED = MAX_ATTACHED_PROJECTS;
 
 /**
  * What a turn writes about projects, under the chat lock.

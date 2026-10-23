@@ -106,7 +106,7 @@ function DataTablePagination({
                 key={p}
                 active={p === safePage}
                 onClick={() => onPageChange(p)}
-                label={`Page ${p}`}
+                label={typeof labels.page === 'function' ? labels.page(p) : `Page ${p}`}
               >
                 {p}
               </PageButton>

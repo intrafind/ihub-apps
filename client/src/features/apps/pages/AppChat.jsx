@@ -78,6 +78,7 @@ import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors
 import { startLiveTranscription } from '../../../utils/liveTranscription';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
+import ChatAttachedProjects from '../../projects/components/ChatAttachedProjects';
 import ChatProjectBar from '../../projects/components/ChatProjectBar';
 import { PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 
@@ -387,6 +388,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // The project the open chat runs in (`projectId` on the stored chat), or
   // the one this visit started it in; null for a chat outside any project.
   const [chatProjectId, setChatProjectId] = useState(null);
+  // The projects attached to the chat besides its container (`attachedProjectIds`
+  // on the stored chat): picked in the project bar, sent as `projects`.
+  const [attachedProjectIds, setAttachedProjectIds] = useState([]);
   const containerProjectId = chatProjectId || (embedded ? null : projectParam) || null;
 
   // Shared app settings hook
@@ -954,6 +958,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
+  // The chat exists server-side, with its attached projects: they are changed
+  // with `PATCH`, never by a message (a stale tab would put back a project
+  // that another tab removed). Only a chat that is not stored yet carries its
+  // picks on the message.
+  const chatStoredServerSide = serverBackedChat && (Boolean(routeChatId) || chatStarted);
   useEffect(() => {
     if (
       embedded ||
@@ -982,6 +991,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setChatSettings(null);
     setChatOrigin(null);
     setChatProjectId(null);
+    setAttachedProjectIds([]);
   }, [chatId]);
 
   // A chat that is not stored server-side keeps its container project in the
@@ -1075,6 +1085,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         if (result?.chat?.variables) setVariables(v => ({ ...v, ...result.chat.variables }));
         setChatOrigin(result?.chat?.origin || null);
         setChatProjectId(result?.chat?.projectId || null);
+        setAttachedProjectIds(
+          Array.isArray(result?.chat?.attachedProjectIds) ? result.chat.attachedProjectIds : []
+        );
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
@@ -1845,9 +1858,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      ...(!chatStoredServerSide && attachedProjectIds.length > 0
+        ? { projects: attachedProjectIds }
+        : {}),
       ...extra
     }),
-    [selectedModel, selectedStyle, selectedOutputFormat, currentLanguage, containerProjectId]
+    [
+      selectedModel,
+      selectedStyle,
+      selectedOutputFormat,
+      currentLanguage,
+      containerProjectId,
+      attachedProjectIds,
+      chatStoredServerSide
+    ]
   );
 
   /**
@@ -2503,7 +2527,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       // The container project: accepted on the first turn and fixed for the
       // chat afterwards; the same id on later turns is accepted too, which
       // keeps a chat that is not stored server-side inside its project.
-      ...(containerProjectId ? { projectId: containerProjectId } : {})
+      ...(containerProjectId ? { projectId: containerProjectId } : {}),
+      // The projects picked for this chat; the server adds them to the chat's own.
+      ...(!chatStoredServerSide && attachedProjectIds.length > 0
+        ? { projects: attachedProjectIds }
+        : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -3029,8 +3057,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         <ChatProjectBar
           chatId={chatId}
           projectId={containerProjectId}
-          canMove={serverBackedChat && (Boolean(routeChatId) || chatStarted)}
+          canMove={chatStoredServerSide}
           onMoved={setChatProjectId}
+        />
+      )}
+
+      {!embedded && app?.features?.userProjects !== false && (
+        <ChatAttachedProjects
+          chatId={chatId}
+          stored={chatStoredServerSide}
+          containerProjectId={containerProjectId}
+          value={attachedProjectIds}
+          onChange={setAttachedProjectIds}
+          disabled={processing || hydrating}
         />
       )}
 

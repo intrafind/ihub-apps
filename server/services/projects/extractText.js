@@ -39,9 +39,19 @@ import {
 } from '../documentExtraction.js';
 import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
+import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
 
-/** The most characters one item keeps (about 500 000 tokens). */
-export const MAX_TEXT_CHARS = 2_000_000;
+/** The most characters one item keeps (about 10 MB of text). */
+export const MAX_TEXT_CHARS = MAX_ITEM_TEXT_CHARS;
+
+/**
+ * The most characters an item imported from a file on the server keeps. The
+ * files are the administrator's own or ship with iHub (the consolidated
+ * documentation is about 3 000 000 characters, its release notes at the very
+ * end), so the cap that protects against an upload does not apply: text cut
+ * here silently drops whatever comes last.
+ */
+export const MAX_IMPORT_TEXT_CHARS = 20_000_000;
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const PDF_MIME = 'application/pdf';

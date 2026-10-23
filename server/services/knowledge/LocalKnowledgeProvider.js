@@ -29,8 +29,9 @@ import { KnowledgeProvider } from './KnowledgeProvider.js';
 import { getItemText } from './ItemTextService.js';
 import { KnowledgeError, docOf, isUsable } from './types.js';
 
-/** Corpus indexes kept per process. */
+/** Corpus indexes kept per process, and the characters they may stand for together. */
 const INDEX_CACHE_SIZE = 32;
+const INDEX_CACHE_MAX_CHARS = 30_000_000;
 const indexCache = new Map();
 
 function cacheGet(key) {
@@ -44,6 +45,15 @@ function cacheGet(key) {
 function cacheSet(key, value) {
   indexCache.set(key, value);
   while (indexCache.size > INDEX_CACHE_SIZE) indexCache.delete(indexCache.keys().next().value);
+  // A 10 MB text takes about 55 MB of heap as an index: hold the cache to a
+  // weight too, dropping the oldest, never the entry just added.
+  let weight = 0;
+  for (const entry of indexCache.values()) weight += entry?.characters || 0;
+  for (const oldest of [...indexCache.keys()]) {
+    if (weight <= INDEX_CACHE_MAX_CHARS || indexCache.size <= 1) break;
+    weight -= indexCache.get(oldest)?.characters || 0;
+    indexCache.delete(oldest);
+  }
 }
 
 /** Test and cascade hook: forget every cached index of a project (or all). */
@@ -120,16 +130,49 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return { texts, unavailable };
   }
 
-  _index(project, ctx, texts) {
+  /** The cache key of a corpus: its items, by their stored hash where there is one. */
+  _indexKey(project, ctx, entries) {
     const fingerprint = hash(
-      texts
+      entries
         .map(
           ({ item, text }) =>
             `${item.id}:${item.text?.sha256 || hash(text)}:${item.storage === 'link' && item.kind.startsWith('ifinder') ? ctx.user?.id || '' : ''}`
         )
         .join('|')
     );
-    const key = `${project.id}:${fingerprint}`;
+    return `${project.id}:${fingerprint}`;
+  }
+
+  /**
+   * The index of a project whose usable items are all stored texts with a
+   * recorded hash, taken from the cache without decrypting a single text. Null
+   * when a link item has to be fetched, a hash is missing or the index is not
+   * cached (then the texts are loaded and the index built, as before).
+   */
+  _warmIndex(project, ctx, itemIds) {
+    const wanted = itemIds ? new Set(itemIds) : null;
+    const usable = [];
+    const unavailable = [];
+    for (const item of project.items || []) {
+      if (wanted && !wanted.has(item.id)) continue;
+      if (!isUsable(item)) {
+        unavailable.push({
+          document: item.id,
+          name: item.name,
+          reason: item.status,
+          ...(item.error?.code ? { code: item.error.code } : {})
+        });
+        continue;
+      }
+      if (item.storage !== 'text' || !item.text?.sha256) return null;
+      usable.push({ item, text: null, truncated: item.text.truncated === true, failed: [] });
+    }
+    const index = cacheGet(this._indexKey(project, ctx, usable));
+    return index ? { index, texts: usable, unavailable } : null;
+  }
+
+  _index(project, ctx, texts) {
+    const key = this._indexKey(project, ctx, texts);
     const cached = cacheGet(key);
     if (cached) return cached;
     const index = buildCorpusIndex(
@@ -160,8 +203,12 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
   ) {
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new KnowledgeError('INVALID_REF', 'A query is needed', { projectId: project.id });
-    const { texts, unavailable } = await this.texts(project, { ...ctx, query: q }, { itemIds });
-    const index = this._index(project, ctx, texts);
+    // A warm index needs no text: searching a large, unchanged project does
+    // not decrypt it again.
+    const warm = this._warmIndex(project, ctx, itemIds);
+    const { texts, unavailable } =
+      warm || (await this.texts(project, { ...ctx, query: q }, { itemIds }));
+    const index = warm ? warm.index : this._index(project, ctx, texts);
     const byId = new Map(texts.map(({ item }) => [item.id, item]));
     const hits = collectHits(index, q, { limit, budgetChars }).map(hit => ({
       docId: hit.docId,

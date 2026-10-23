@@ -137,6 +137,8 @@ const route = {
   members: handlersFor(projectRoutes, 'put', '/api/projects/:projectId/members'),
   transfer: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/transfer'),
   chats: handlersFor(projectRoutes, 'get', '/api/projects/:projectId/chats'),
+  estimate: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/estimate'),
+  adminEstimate: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/estimate'),
   adminList: handlersFor(adminRoutes, 'get', '/api/admin/projects'),
   adminCreate: handlersFor(adminRoutes, 'post', '/api/admin/projects'),
   adminGet: handlersFor(adminRoutes, 'get', '/api/admin/projects/:id'),
@@ -849,6 +851,76 @@ describe('admin projects', () => {
   });
 });
 
+describe('token estimate routes', () => {
+  it('estimates a project the caller may use, and refuses everyone else', async () => {
+    const project = await create(ADA, { name: 'Estimated' });
+    await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: {
+        kind: 'upload',
+        ref: {},
+        name: 'note.md',
+        text: '# Note\n\nTen words about the rent being due.'
+      }
+    });
+
+    const own = await drive(route.estimate, { user: ADA, params: { projectId: project.id } });
+    assert.equal(own.statusCode, 200, JSON.stringify(own.body));
+    assert.equal(own.body.projectId, project.id);
+    assert.ok(Array.isArray(own.body.items));
+    assert.ok(['prompt', 'search', 'unknown'].includes(own.body.recommendation));
+    assert.ok(own.body.budgetTokens > 0);
+
+    // A stranger gets what a missing project gets; nobody anonymous gets in.
+    assert.equal(
+      (await drive(route.estimate, { user: GRACE, params: { projectId: project.id } })).statusCode,
+      404
+    );
+    assert.equal(
+      (await drive(route.estimate, { params: { projectId: project.id } })).statusCode,
+      401
+    );
+    assert.equal(
+      (await drive(route.estimate, { user: ADA, params: { projectId: 'prj_doesnotexist' } }))
+        .statusCode,
+      404
+    );
+  });
+
+  it('estimates an admin project for content admins only', async () => {
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'estimate-me', name: { en: 'Estimate me' } }
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+
+    const ok = await drive(route.adminEstimate, { user: EDITOR, params: { id: 'estimate-me' } });
+    assert.equal(ok.statusCode, 200, JSON.stringify(ok.body));
+    assert.equal(ok.body.projectId, 'estimate-me');
+    assert.equal(ok.body.items.length, 0);
+    assert.equal(
+      (await drive(route.adminEstimate, { user: ADA, params: { id: 'estimate-me' } })).statusCode,
+      403
+    );
+    assert.equal(
+      (await drive(route.adminEstimate, { user: EDITOR, params: { id: 'no-such-project' } }))
+        .statusCode,
+      404
+    );
+  });
+
+  it('refuses the id "new" for an admin project: it is the route of the create form', async () => {
+    for (const id of ['new', 'NEW']) {
+      const refused = await drive(route.adminCreate, {
+        user: EDITOR,
+        body: { id, name: { en: 'New' } }
+      });
+      assert.equal(refused.statusCode, 400, `${id}: ${JSON.stringify(refused.body)}`);
+    }
+  });
+});
+
 describe('chats in a project', () => {
   it('moves a chat into a project and lists it there', async () => {
     const chats = getChatRepository();
@@ -930,6 +1002,158 @@ describe('chats in a project', () => {
     assert.equal(out.statusCode, 200);
     assert.equal(out.body.chat.projectId, null);
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
+  });
+
+  it('lists the chats of a project a page at a time, newest first', async () => {
+    const chats = getChatRepository();
+    const project = await create(ADA, { name: 'Paged' });
+    const ids = [];
+    for (let index = 0; index < 5; index += 1) {
+      const chat = await chats.ensureChat({
+        chatId: `chat-page-${index}`,
+        ownerId: ADA.id,
+        appId: 'chat',
+        title: `Chat ${index}`
+      });
+      const moved = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { projectId: project.id }
+      });
+      assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+      ids.push(chat.id);
+    }
+    const page = async query =>
+      (await drive(route.chats, { user: ADA, params: { projectId: project.id }, query })).body;
+
+    const first = await page({ limit: '2' });
+    assert.equal(first.items.length, 2);
+    assert.equal(first.total, 5);
+    assert.equal(first.nextCursor, '2');
+
+    const second = await page({ limit: '2', cursor: first.nextCursor });
+    const last = await page({ limit: '2', cursor: second.nextCursor });
+    assert.equal(second.items.length, 2);
+    assert.equal(last.items.length, 1);
+    assert.equal(last.nextCursor, null);
+    const seen = [...first.items, ...second.items, ...last.items].map(item => item.id);
+    assert.deepEqual([...seen].sort(), [...ids].sort(), 'every chat once, none twice');
+
+    // The default page is bounded too, and a bad limit or cursor falls back.
+    const bad = await page({ limit: 'many', cursor: '-4' });
+    assert.equal(bad.items.length, 5);
+    assert.equal(bad.total, 5);
+    assert.equal((await page({ limit: '1000' })).items.length, 5);
+  });
+
+  it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-attach-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Attach'
+    });
+    assert.ok(chat);
+    const mine = await create(ADA, { name: 'Mine' });
+    const other = await create(ADA, { name: 'Other' });
+    const strangers = await create(GRACE, { name: 'Strangers' });
+
+    const attached = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [mine.id, other.id, mine.id] }
+    });
+    assert.equal(attached.statusCode, 200, JSON.stringify(attached.body));
+    assert.deepEqual(attached.body.chat.attachedProjectIds, [mine.id, other.id]);
+    assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [mine.id, other.id]);
+
+    // The list replaces the attached ones: taking a project away is the same call.
+    const removed = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [other.id] }
+    });
+    assert.equal(removed.statusCode, 200);
+    assert.deepEqual(removed.body.chat.attachedProjectIds, [other.id]);
+
+    // A project the caller may not use is a 404 and nothing changes.
+    const refused = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [other.id, strangers.id] }
+    });
+    assert.equal(refused.statusCode, 404);
+    assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [other.id]);
+
+    // Taking one away needs no access: a project the caller lost stays removable.
+    const clearing = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [] }
+    });
+    assert.equal(clearing.statusCode, 200);
+    assert.deepEqual(clearing.body.chat.attachedProjectIds, []);
+
+    const bad = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: 'prj_x' }
+    });
+    assert.equal(bad.statusCode, 400);
+
+    // Not the caller's chat.
+    const notMine = await drive(route.chatPatch, {
+      user: GRACE,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [strangers.id] }
+    });
+    assert.equal(notMine.statusCode, 404);
+
+    // More than a chat may have attached is refused before anything is looked up.
+    const tooMany = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: Array.from({ length: 11 }, (_, i) => `prj_${i}`) }
+    });
+    assert.equal(tooMany.statusCode, 400);
+
+    // While the feature is off a project cannot be added.
+    setFeatures({ userProjects: false });
+    const off = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [mine.id] }
+    });
+    setFeatures();
+    assert.equal(off.statusCode, 403);
+  });
+
+  it('drops a project from the attached list when the chat moves into it', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-attach-move',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Attach then move'
+    });
+    const first = await create(ADA, { name: 'First' });
+    const second = await create(ADA, { name: 'Second' });
+    const attached = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { attachedProjectIds: [first.id, second.id] }
+    });
+    assert.equal(attached.statusCode, 200, JSON.stringify(attached.body));
+
+    const moved = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: first.id }
+    });
+    assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+    assert.equal(moved.body.chat.projectId, first.id);
+    assert.deepEqual(moved.body.chat.attachedProjectIds, [second.id], 'no chip twice');
   });
 
   it('puts a chat back when its target project is gone', async () => {

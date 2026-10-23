@@ -119,7 +119,9 @@
     "mainNavigation": "Hauptnavigation",
     "mobileNavigation": "Mobile Navigation",
     "selectLanguage": "Sprache auswählen",
-    "export": "Exportieren"
+    "export": "Exportieren",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -2642,7 +2644,8 @@
       "feedback": "Feedback",
       "localization": "Lokalisierung",
       "scheduledTasks": "Geplante Aufgaben",
-      "projects": "Projekte"
+      "projects": "Projekte",
+      "overview": "Übersicht"
     },
     "mcp": {
       "common": {
@@ -4124,7 +4127,7 @@
         "description": "Beschreibung",
         "descriptionPlaceholder": "Was dieses Projekt enthält",
         "instructions": "Anweisungen",
-        "instructionsHint": "Die Anweisungen gelten, wenn das Projekt im Kontext ist.",
+        "instructionsHint": "Wird dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen, in jedem Verknüpfungsmodus. Beschreiben Sie, wie das Wissen zu verwenden ist; Fakten gehören in Dokumente.",
         "category": "Kategorie",
         "categoryPlaceholder": "Optionale Kategorie",
         "tags": "Tags",
@@ -4223,6 +4226,15 @@
         "kept": "Mit seinen Verknüpfungen behalten, weil nicht alle Elemente verschoben werden konnten:",
         "shipped": "Dieses Projekt wird mit iHub ausgeliefert und kommt beim nächsten Serverstart zurück. Deaktivieren Sie es dann, damit es nicht stört.",
         "dependentsUnknown": "Welche Apps, Workflows oder Agenten diese Projekte verknüpfen, konnte nicht geprüft werden; die Zusammenführung aktualisiert ihre Verknüpfungen trotzdem."
+      },
+      "view": {
+        "edit": "Bearbeiten",
+        "noDescription": "Keine Beschreibung.",
+        "noInstructions": "Keine Anweisungen.",
+        "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
+        "usedBy": "Verwendet von",
+        "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
+        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
       }
     }
   },
@@ -6307,7 +6319,16 @@
       "someone": "einem anderen Mitglied",
       "startHint": "Wählen Sie die App für den Chat. Sie erhält die Anweisungen und Dokumente des Projekts.",
       "startTitle": "Chat in diesem Projekt beginnen",
-      "title": "Chats"
+      "title": "Chats",
+      "pager": {
+        "showing": "Chats {{start}}–{{end}} von {{total}}",
+        "perPage": "Pro Seite",
+        "first": "Erste Seite",
+        "previous": "Vorherige Seite",
+        "next": "Nächste Seite",
+        "last": "Letzte Seite",
+        "page": "Seite {{number}}"
+      }
     },
     "create": {
       "creating": "Wird angelegt…",
@@ -6357,7 +6378,8 @@
         "kind": "Art",
         "name": "Name",
         "pinned": "Angeheftet",
-        "status": "Status"
+        "status": "Status",
+        "estimate": "Schätzung"
       },
       "empty": "Noch keine Elemente",
       "emptyHint": "Fügen Sie Dateien, Text, Webseiten, iHub-Seiten, Cloud- oder iFinder-Dokumente hinzu.",
@@ -6411,7 +6433,11 @@
       "itemCount_one": "{{count}} Dokument",
       "itemCount_other": "{{count}} Dokumente",
       "memberCount_one": "{{count}} Mitglied",
-      "memberCount_other": "{{count}} Mitglieder"
+      "memberCount_other": "{{count}} Mitglieder",
+      "pager": {
+        "showing": "Projekte {{start}}–{{end}} von {{total}}",
+        "perPage": "Pro Seite"
+      }
     },
     "members": {
       "everyone": "Alle angemeldeten Benutzer",
@@ -6488,6 +6514,50 @@
       "items": "Elemente",
       "itemsOf": "{{used}} von {{limit}}",
       "storage": "Speicher"
+    },
+    "estimate": {
+      "button": "Tokens schätzen",
+      "running": "Schätze…",
+      "title": "Token-Schätzung",
+      "hint": "Lädt jedes Dokument, zählt seine Tokens und empfiehlt, was in den Prompt gehört.",
+      "failed": "Die Schätzung konnte nicht erstellt werden.",
+      "total": "~{{tokens}} Tokens insgesamt",
+      "budget": "{{percent}} % der {{budget}} Tokens, die ein Prompt vollständig laden darf",
+      "minContext": "Ein Modell braucht ein Kontextfenster von etwa {{tokens}} Tokens, um es vollständig zu laden (der Prompt nutzt höchstens 40 % davon).",
+      "approximate": "Eine Schätzung: Das Modell zählt seine Tokens selbst, die Abweichung liegt bei etwa 10–20 %.",
+      "recommendation": {
+        "prompt": "Empfehlung: in den Prompt",
+        "search": "Empfehlung: mit Tools durchsuchen",
+        "unknown": "Noch keine Empfehlung"
+      },
+      "verdict": {
+        "comfortable": "In den Prompt aufnehmen. Es passt mit viel Luft ins Budget: Verknüpfen Sie es im Modus \"immer im Prompt\" (oder \"automatisch\", das es lädt).",
+        "tight": "Es passt, belegt aber den größten Teil des Budgets, das alle verknüpften Projekte teilen. Nur in den Prompt aufnehmen, wenn es das Hauptwissen der App ist; sonst von den Tools durchsuchen lassen.",
+        "exceeds": "Nicht in den Prompt aufnehmen. Es ist größer als das Budget, daher durchsucht \"automatisch\" es. Verknüpfen Sie es im Modus \"mit Tools durchsuchen\" und pinnen Sie nur die wenigen Dokumente, die immer vorhanden sein müssen.",
+        "partial": "Mindestens eine Quelle hat nur einen Teil ihres Textes geliefert, daher wird das Projekt durchsucht und nicht vollständig geladen.",
+        "incomplete": "Einige Dokumente konnten nicht gelesen werden, die Größe ist daher unvollständig. Beheben Sie das und schätzen Sie erneut.",
+        "empty": "Es gibt noch keinen Text zu messen.",
+        "dynamic": "Ein Teil dieses Projekts ist eine Suche, die mit den Begriffen des Modells läuft und nie vollständig geladen wird, daher wird das Projekt durchsucht und nicht vollständig geladen."
+      },
+      "item": {
+        "prompt": "Prompt",
+        "search": "Suche",
+        "unknown": "Unbekannt",
+        "small": "Klein genug, um in den Prompt gepinnt zu werden",
+        "large": "Groß: der Suche überlassen",
+        "dynamic": "Die Suchbegriffe bestimmen, was gelesen wird; es wird nie vollständig geladen",
+        "partial": "Nur ein Teil des Textes konnte gelesen werden",
+        "unmeasured": "Konnte nicht gelesen werden"
+      },
+      "unmeasured_one": "{{count}} Dokument konnte nicht gelesen werden und ist nicht mitgezählt.",
+      "unmeasured_other": "{{count}} Dokumente konnten nicht gelesen werden und sind nicht mitgezählt."
+    },
+    "attach": {
+      "add": "Projekt hinzufügen",
+      "title": "Projekte für diesen Chat",
+      "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
+      "remove": "{{name}} aus diesem Chat entfernen",
+      "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
     }
   }
 }
