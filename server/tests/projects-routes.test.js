@@ -961,6 +961,39 @@ describe('the project catalog', () => {
       204
     );
   });
+
+  it('lists the admin projects available to everyone, which are in every list already', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const repo = getProjectRepository();
+    await repo.createAdmin({
+      id: 'catalog-faq',
+      name: { en: 'Company FAQ', de: 'Firmen-FAQ' },
+      description: { en: 'Answers to common questions' },
+      items: []
+    });
+    const find = async (q = '') =>
+      (await drive(route.catalog, { user: CAROL, query: q ? { q } : {} })).body.items.find(
+        item => item.id === 'catalog-faq'
+      );
+    const patch = body =>
+      drive(route.adminPatch, { user: EDITOR, params: { id: 'catalog-faq' }, body });
+    try {
+      assert.equal(await find(), undefined, 'linked apps only: not in the catalog');
+
+      assert.equal((await patch({ published: true })).statusCode, 200);
+      const entry = await find('firmen');
+      assert.ok(entry, 'found by its name in any language');
+      assert.equal(entry.ownership, 'admin');
+      assert.equal(entry.role, 'catalog');
+      assert.ok(await find('common questions'), 'found by its description');
+      assert.equal((await listIds(CAROL)).includes('catalog-faq'), true);
+
+      assert.equal((await patch({ enabled: false })).statusCode, 200);
+      assert.equal(await find(), undefined, 'off: not in the catalog');
+    } finally {
+      await repo.delete('catalog-faq');
+    }
+  });
 });
 
 describe('admin projects', () => {

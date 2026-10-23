@@ -17,7 +17,7 @@ const ROW_BUTTON =
 
 /**
  * The project catalog: projects their owners published for everyone signed
- * in. Search it, open a project, and add one to your projects (or remove it
+ * in, and admin projects available to everyone signed in. Search it, open a project, and add one to your projects (or remove it
  * again). A project you own or are a member of is in your list already.
  *
  * Mount it only while open.
@@ -90,7 +90,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
             'projects.catalog.dialogHint',
-            'Projects their owners published for everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.'
+            'Projects their owners published for everyone, and projects administrators made available to everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.'
           )}
         </p>
         <input
@@ -116,7 +116,8 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
           <ul className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
             {items.map(project => {
               const description = localizedText(project.description, language);
-              const inList = project.role !== 'catalog';
+              // An admin project available to everyone is in everyone's list already.
+              const inList = project.ownership === 'admin' || project.role !== 'catalog';
               return (
                 <li key={project.id} className="px-3 py-3 flex items-start gap-3">
                   <Icon name="folder" size="md" className="mt-0.5 text-indigo-500 flex-none" />
@@ -134,9 +135,12 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
                       </p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {t('projects.catalog.byOwner', 'By {{name}}', {
-                        name: project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
-                      })}
+                      {project.ownership === 'admin'
+                        ? t('projects.catalog.byAdmins', 'From the administrators')
+                        : t('projects.catalog.byOwner', 'By {{name}}', {
+                            name:
+                              project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
+                          })}
                       {' · '}
                       {t('projects.list.itemCount', '{{count}} items', {
                         count: project.usage?.items ?? 0

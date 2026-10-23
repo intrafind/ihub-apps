@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import useFocusTrap from '../hooks/useFocusTrap';
 import Icon from './Icon';
@@ -12,6 +13,8 @@ import Icon from './Icon';
  *   - traps focus while open
  *   - closes on backdrop click and Escape
  *   - initially focuses the deny button (safer default for destructive flows)
+ *   - renders into `document.body`, so a sticky or scrolling ancestor (a side
+ *     column, a table's sticky cells) can neither clip it nor paint over it
  *
  * @param {Object} props
  * @param {boolean} props.isOpen
@@ -61,7 +64,7 @@ function ConfirmDialog({
     ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500'
     : 'bg-indigo-600 hover:bg-indigo-700 text-white focus:ring-indigo-500';
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto" role="presentation">
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
@@ -125,7 +128,8 @@ function ConfirmDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
