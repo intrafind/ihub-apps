@@ -1095,7 +1095,8 @@ export class ChatRepository {
   }
 
   /**
-   * How many chats an owner has, bounded the same way {@link listChats} is.
+   * How many stored chat documents an owner has — temporary chats included,
+   * unlike {@link listChats} — bounded at `MAX_OWNER_CHATS`.
    *
    * @param {string} ownerId - Owning principal id.
    * @returns {Promise<number>}

@@ -707,8 +707,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     return nextChatId;
   }, [appId, navigate, routeChatId, embedded, chatId, projectParam]);
   // Whether the chat on screen is a temporary chat the store already holds —
-  // the one `startNewChat` deletes on the way out. A ref, assigned once both
-  // halves are known further down.
+  // the one `startNewChat` deletes on the way out. A ref, synced after each
+  // commit further down once both halves are known.
   const leavingTemporaryChatRef = useRef(false);
 
   /**
@@ -879,7 +879,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
-  leavingTemporaryChatRef.current = chatTemporary && chatStarted;
+  // After the commit, not during render: a render React throws away must not
+  // decide what a later New chat deletes.
+  useEffect(() => {
+    leavingTemporaryChatRef.current = chatTemporary && chatStarted;
+  }, [chatTemporary, chatStarted]);
 
   /**
    * The incognito toggle. Whether a chat is kept is fixed when it is created,
