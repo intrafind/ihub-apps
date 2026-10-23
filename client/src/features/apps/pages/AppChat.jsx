@@ -77,7 +77,7 @@ import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
-import { PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
+import { ATTACH_PROJECT_QUERY_PARAM, PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 
 /**
  * Initialize variables with default values from app configuration
@@ -279,6 +279,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
   // the project rides on the chat request as `projectId`.
   const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
+  // A chat started with a project attached (`?attachProject=<id>`), the way
+  // someone who took a project from the catalog uses it.
+  const attachProjectParam = searchParams.get(ATTACH_PROJECT_QUERY_PARAM);
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
   // Set by handleResendMessage once the resend content/variables/files have
@@ -982,7 +985,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setChatOrigin(null);
     setChatProjectId(null);
     setStoredTemporary(null);
-    setAttachedProjectIds([]);
+    // A stored chat brings its own list when it loads below.
+    setAttachedProjectIds(!embedded && attachProjectParam ? [attachProjectParam] : []);
+    // eslint-disable-next-line @eslint-react/exhaustive-deps -- once per chat, not per URL change
   }, [chatId]);
 
   /**

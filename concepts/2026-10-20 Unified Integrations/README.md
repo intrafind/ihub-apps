@@ -15,7 +15,7 @@
 
 iHub reaches external systems in fifteen different ways today (MCP servers, A2A agents, OpenAPI tools, script tools, web search providers, Jira, three cloud storage providers, Entra, iFinder, sources, and the inbound channels), configured in five places, with four per-user OAuth stacks and three ways to store a secret. Users meet them in three different connect cards and two unrelated lists.
 
-We propose one **integrations platform** with three layers, the shape every competitor has converged on: an **integration** (a versioned catalog entry, distributable through marketplace registries), an **installed integration** (the admin's instance: endpoint, auth mode, groups, action policy), and a **connection** (one user's or one group's credential). Protocols (MCP, OpenAPI, native code, A2A, storage, web search) become adapters behind one model. Admins get one sidebar section with a catalog, an install wizard generated from typed fields, group permissions and tool policy tiers. Users get one settings page that lists everything they may use with its true identity state, one picker in the chat composer, one connect card and one confirmation card for writes. The marketplace gains the item type `integration`, so IntraFind can ship the systems public directories lack (SharePoint on-prem, Jira and Confluence Data Center, DMS systems, SAP, Nextcloud, openDesk) as installable packages.
+We propose one **integrations platform** with three layers, the shape every competitor has converged on: an **integration** (a versioned catalog entry, distributable through marketplace registries), an **installed integration** (the admin's instance: endpoint, auth mode, groups, action policy), and a **connection** (one user's or one group's credential). Protocols (MCP, OpenAPI, native code, A2A, HTTP, script, storage, web search) become adapters behind one model, and every tool belongs to an integration. Admins get one sidebar section with a catalog, an install wizard generated from typed fields, group permissions and tool policy tiers. Users get one settings page that lists everything they may use with its true identity state, one picker in the chat composer, one connect card and one confirmation card for writes. The marketplace gains the item type `integration`, so IntraFind can ship the systems public directories lack (SharePoint on-prem, Jira and Confluence Data Center, DMS systems, SAP, Nextcloud, openDesk) as installable packages.
 
 ## How to read this folder
 
@@ -26,14 +26,15 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [03 · Product concept](03-product-concept.md) | Vocabulary, personas, principles, admin and user journeys, chat UX, wireframes, decisions requested |
 | [04 · Architecture](04-architecture.md) | Definition and instance formats, adapters, auth modes, approval gate, routes, client components, marketplace, migrations |
 | [05 · Roadmap](05-roadmap.md) | Phases, risks, open questions |
-| [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, instance page, user settings page and chat picker |
+| [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
+| [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals
 
 - One catalog, one install flow, one enable/configure model, one user-side list, one chat picker, one connect card, one confirmation card. Everything else is an adapter.
 - Delegated identity by default; shared credentials explicit and visible.
 - Admin enables, user connects, user picks: three decisions, three owners.
-- Writes are confirmed by a human unless an admin relaxes it per integration; read actions never ask.
+- Approval follows [intrafind/ihub-apps#2945](https://github.com/intrafind/ihub-apps/issues/2945): `never`, `writes` or `always` per integration and action, with a platform floor by data flow (external data: ask on writes; internal: never). Admins may also require approval for external reads; apps can only tighten.
 - Integrations are files: installable from a registry, updatable, detachable, auditable.
 - Standards first: MCP authorization and registry, MCPB config fields, MCP Apps, tool annotations.
 
@@ -55,9 +56,17 @@ We propose one **integrations platform** with three layers, the shape every comp
    User ───────► Connection (connect / reconnect / disconnect)        │
                  │                                                   │
    Chat ───────► Picker (on / off per chat) ──► Model calls action ──► Approval gate ──► Adapter ──► System
-                                                                       (read: run · write: ask · destructive: ask)
+                                                                       (never · writes · always, per #2945)
 ```
 
 ## Decisions
 
-The five product decisions in [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for) were taken on 2026-10-20: vocabulary (Integration, Connection, Action), ask-by-default for writes, server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes. The team-level questions in [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team) remain open.
+See [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for). Taken: vocabulary (Integration, Connection, Action), server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes (2026-10-20); approval per [#2945](https://github.com/intrafind/ihub-apps/issues/2945) (2026-10-22, replaces "ask on every write by default"); integrations own their tools and the Tools page folds in (2026-10-23). Open: clean break for the Tools admin routes, and the team-level questions in [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team).
+
+## Revision 2026-10-23
+
+- **An integration owns its tools.** One Integrations page lists built-in integrations (iFinder, iAssistant, Web, Microsoft 365, Jira, iHub), integrations from the catalog and custom ones. Each action has a detail: what it does as the model sees it, side effect, data flow, approval, usage guidance, example prompts, and a test runner ([03 §6.5a, §6.8, §6.9](03-product-concept.md)).
+- **Custom integrations replace the Tools page**: built from OpenAPI, MCP, A2A, an HTTP request template or a script, like Langdock's integration builder.
+- **Approval follows #2945**: judged by side effect *and* data flow, opt-in at upgrade, admin floor, grants per call and per chat ([03 §7.4](03-product-concept.md), [04 §3](04-architecture.md)).
+- **Projects** replaced sources on 2026-10-22; integrations feed them through `files` and `search`.
+- New tickets: [#2973](https://github.com/intrafind/ihub-apps/issues/2973), [#2974](https://github.com/intrafind/ihub-apps/issues/2974), [#2975](https://github.com/intrafind/ihub-apps/issues/2975); #2945 joined the epic; #2916 rescoped.

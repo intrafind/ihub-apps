@@ -39,6 +39,12 @@ export const PROJECT_CHAT_FILTERS = Object.freeze(['all', 'mine']);
 /** The URL query parameter a chat started from a project page carries. */
 export const PROJECT_QUERY_PARAM = 'project';
 
+/**
+ * Query parameter of a chat started with a project attached rather than
+ * inside it: someone who took the project from the catalog uses it this way.
+ */
+export const ATTACH_PROJECT_QUERY_PARAM = 'attachProject';
+
 /** Share of a quota from which the usage bar turns amber. */
 const QUOTA_WARN_RATIO = 0.8;
 
@@ -385,11 +391,15 @@ export function chatPath(chat) {
  *
  * @param {string} appId
  * @param {string} projectId
- * @param {string} [message] - The first message; empty starts an empty chat.
+ * @param {{attach?: boolean, message?: string}} [options] - `attach: true` starts a chat
+ *   outside the project with the project attached (its documents, not its chat list);
+ *   `message` is the first message, an empty one starts an empty chat.
  * @returns {string}
  */
-export function projectChatStartPath(appId, projectId, message = '') {
-  const query = new URLSearchParams({ [PROJECT_QUERY_PARAM]: projectId });
+export function projectChatStartPath(appId, projectId, { attach = false, message = '' } = {}) {
+  const query = new URLSearchParams({
+    [attach ? ATTACH_PROJECT_QUERY_PARAM : PROJECT_QUERY_PARAM]: projectId
+  });
   const text = (message || '').trim();
   if (text) {
     query.set('prefill', text);

@@ -32,9 +32,11 @@ export const MAX_START_PATH_LENGTH = 7500;
  * @param {Object} props
  * @param {{id: string, name: string, defaultAppId?: string|null}} props.project
  * @param {string} props.projectName - The name to show.
+ * @param {boolean} [props.attach=false] - Start the chat outside the project with the
+ *   project attached (someone who took it from the catalog holds no chats in it).
  * @returns {JSX.Element}
  */
-function ProjectChatComposer({ project, projectName }) {
+function ProjectChatComposer({ project, projectName, attach = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { choices, loading } = useProjectChatApps();
@@ -51,7 +53,7 @@ function ProjectChatComposer({ project, projectName }) {
 
   const start = () => {
     if (!appId) return;
-    const path = projectChatStartPath(appId, project.id, message);
+    const path = projectChatStartPath(appId, project.id, { attach, message });
     // Checked on Send, not while typing: the link is what would be too long.
     if (path.length > MAX_START_PATH_LENGTH) {
       setTooLong(true);

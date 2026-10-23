@@ -58,7 +58,10 @@ async function isProjectMember(projectId, user) {
     if (!isUserProjectsConfigured(configCache.getFeatures())) return false;
     const project = await getProjectRepository().get(projectId);
     if (!project || project.ownership !== 'user') return false;
-    return permissionsFor(project, user, callerContext(user)).canUse === true;
+    // Taking a project from the catalog opens its documents, not the
+    // members' transcripts (`readsAllChats`).
+    const permissions = permissionsFor(project, user, callerContext(user));
+    return permissions.canUse === true && permissions.readsAllChats === true;
   } catch {
     return false;
   }

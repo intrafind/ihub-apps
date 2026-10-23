@@ -523,7 +523,8 @@
     "sharing": {
       "allowUsers": true,
       "allowGroups": true,
-      "allowEveryone": false
+      "allowEveryone": false,
+      "allowCatalog": false
     },
     "retentionDays": 0,
     "loadAllMaxTokens": 50000,

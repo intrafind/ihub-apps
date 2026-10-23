@@ -364,6 +364,31 @@ export const fetchAdminProjectStats = async () => {
 };
 
 /**
+ * Who users may share their projects with (full admins only).
+ *
+ * @returns {Promise<{allowUsers: boolean, allowGroups: boolean, allowEveryone: boolean,
+ *   allowCatalog: boolean}>}
+ */
+export const fetchProjectSharingSettings = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`);
+  return response.data.sharing;
+};
+
+/**
+ * Change who users may share their projects with; only the fields sent change.
+ *
+ * @param {Object} sharing
+ * @returns {Promise<Object>} The effective sharing settings.
+ */
+export const saveProjectSharingSettings = async sharing => {
+  const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`, {
+    method: 'PUT',
+    body: { sharing }
+  });
+  return response.data.sharing;
+};
+
+/**
  * The item kinds the server knows, with whether each is enabled here.
  *
  * @returns {Promise<Array<{id: string, name: Object, icon: string|null, picker: Object,

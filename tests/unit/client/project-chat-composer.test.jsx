@@ -47,7 +47,7 @@ function Location() {
   return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
 }
 
-function renderComposer(project = {}) {
+function renderComposer(project = {}, props = {}) {
   return render(
     <MemoryRouter initialEntries={['/projects/prj_case']}>
       <Routes>
@@ -57,6 +57,7 @@ function renderComposer(project = {}) {
             <ProjectChatComposer
               project={{ id: 'prj_case', name: 'Case', ...project }}
               projectName="Case"
+              {...props}
             />
           }
         />
@@ -114,6 +115,17 @@ test('sends with Enter, and keeps Shift+Enter for a new line', () => {
   fireEvent.keyDown(field, { key: 'Enter' });
   expect(screen.getByTestId('location')).toHaveTextContent(
     '/apps/chat?project=prj_case&prefill=Hello&send=true'
+  );
+});
+
+test('someone who took the project from the catalog starts a chat outside it, with it attached', () => {
+  renderComposer({}, { attach: true });
+
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hi' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+  expect(screen.getByTestId('location')).toHaveTextContent(
+    '/apps/chat?attachProject=prj_case&prefill=Hi&send=true'
   );
 });
 

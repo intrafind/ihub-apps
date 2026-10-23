@@ -76,8 +76,10 @@ const itemIdSchema = zSafeId
  * Compared case-insensitively, as the routes match them.
  */
 export const RESERVED_ADMIN_PROJECT_IDS = Object.freeze([
+  '_catalog',
   '_config',
   '_kinds',
+  '_settings',
   '_stats',
   '_tokens',
   'share-targets'
@@ -413,5 +415,20 @@ export const ifinderPickerSchema = z
 export const urlCheckSchema = z
   .object({
     url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed')
+  })
+  .strict();
+
+/** What `PUT /api/admin/projects/_settings` accepts: the sharing audiences. */
+export const projectSharingSettingsSchema = z
+  .object({
+    sharing: z
+      .object({
+        allowUsers: z.boolean(),
+        allowGroups: z.boolean(),
+        allowEveryone: z.boolean(),
+        allowCatalog: z.boolean()
+      })
+      .partial()
+      .strict()
   })
   .strict();

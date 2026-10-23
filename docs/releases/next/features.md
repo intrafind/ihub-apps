@@ -17,3 +17,30 @@ The project page now has a chat field at the top: type a message and press Enter
 Next to it you can choose another app for this chat; without a message the button opens an empty chat.
 Each project has a **default app** (project page → **Settings**), which is where its new chats start.
 The projects a chat draws on, and the project it runs in, now sit beside the message box instead of in a bar under the header: tick projects under **Projects for this chat** in the **+** menu.
+
+## Projects: link documents from other projects
+
+A project can now use documents of another project without copying them. **Add documents → From
+another project** lists the projects you use (your own, shared ones, and the admin projects of your
+apps, such as the shipped iHub documentation); tick documents and link them.
+
+- Chats read the original as it is now, so a change there shows in every project that links it.
+  A link counts as one item and takes no storage.
+- Everyone reads a linked document with their own rights: a member who may not use the source
+  project sees **No access** for it and the chat does not get its text.
+- A removed original shows **Source removed**.
+
+## Projects: global projects and the project catalog
+
+Users can now make a project available to everyone: a few people curate it, everyone else uses it.
+Admins choose which ways are open under **Admin → Projects → Sharing of user projects** (specific
+users, groups, everyone signed in, the catalog); until now the "everyone" option could only be set
+in `platform.json`.
+
+- **Publish to the catalog** on a project page puts it in the catalog. Users find it under
+  **Projects → Browse catalog** and add it to their projects. They use its documents by attaching it
+  to their own chats; their chats and the members' chats stay apart.
+- Projects shared with everyone show **Global**, published ones **Published**, and projects taken
+  from the catalog **From the catalog**.
+- The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
+  taking a project out, removes it from the lists of those who added it.

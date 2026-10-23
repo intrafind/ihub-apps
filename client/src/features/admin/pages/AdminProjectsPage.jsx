@@ -21,6 +21,7 @@ import MergeProjectsDialog from '../components/MergeProjectsDialog';
 import ProjectDependenciesDialog from '../components/ProjectDependenciesDialog';
 import { dependenciesFromDeleteError, filterProjects } from '../utils/projectAdmin';
 import { kindIcon, localizedText, summarizeItemKinds } from '../../projects/utils/projectItems';
+import ProjectSharingSettingsPanel from '../components/ProjectSharingSettingsPanel';
 
 /**
  * One header statistic.
@@ -438,6 +439,8 @@ function AdminProjectsPage() {
             />
           </div>
         )}
+
+        <ProjectSharingSettingsPanel />
 
         {error && (
           <div

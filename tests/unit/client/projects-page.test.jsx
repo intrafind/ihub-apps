@@ -15,7 +15,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 const mockApi = {
   fetchProjects: jest.fn(),
   fetchProjectsConfig: jest.fn(),
-  createProject: jest.fn()
+  createProject: jest.fn(),
+  fetchProjectCatalog: jest.fn(),
+  addCatalogProject: jest.fn(),
+  removeCatalogProject: jest.fn()
 };
 jest.mock('../../../client/src/shared/hooks/useApps', () => ({
   __esModule: true,
@@ -24,7 +27,10 @@ jest.mock('../../../client/src/shared/hooks/useApps', () => ({
 jest.mock('../../../client/src/api', () => ({
   fetchProjects: (...args) => mockApi.fetchProjects(...args),
   fetchProjectsConfig: (...args) => mockApi.fetchProjectsConfig(...args),
-  createProject: (...args) => mockApi.createProject(...args)
+  createProject: (...args) => mockApi.createProject(...args),
+  fetchProjectCatalog: (...args) => mockApi.fetchProjectCatalog(...args),
+  addCatalogProject: (...args) => mockApi.addCatalogProject(...args),
+  removeCatalogProject: (...args) => mockApi.removeCatalogProject(...args)
 }));
 
 let mockPlatform = { projects: { enabled: true, userProjects: true } };
@@ -104,9 +110,9 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname}</div>;
 }
 
-function renderPage() {
+function renderPage(entry = '/projects') {
   return render(
-    <MemoryRouter initialEntries={['/projects']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route
           path="*"
@@ -208,6 +214,68 @@ describe('ProjectsPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent('/projects/prj_new')
     );
+  });
+
+  test('shows the message the previous page left once, and closes it', async () => {
+    renderPage({ pathname: '/projects', state: { notice: '“Old case” now belongs to Ben.' } });
+    expect(await screen.findByRole('status')).toHaveTextContent('“Old case” now belongs to Ben.');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  test('marks projects shared with everyone or published', async () => {
+    mockApi.fetchProjects.mockResolvedValue([
+      { ...PROJECTS[0], audience: { everyone: true, catalog: false } },
+      { ...PROJECTS[1], role: 'catalog', audience: { everyone: false, catalog: true } }
+    ]);
+    renderPage();
+    expect(await screen.findByText('Global')).toBeInTheDocument();
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    expect(screen.getByText('From the catalog')).toBeInTheDocument();
+  });
+
+  test('offers no catalog while it is off', async () => {
+    renderPage();
+    await screen.findByText('Case 2026-114');
+    expect(screen.queryByRole('button', { name: 'Browse catalog' })).toBeNull();
+  });
+
+  test('adds a project from the catalog', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({
+      ...CONFIG,
+      sharing: { allowCatalog: true }
+    });
+    mockApi.fetchProjectCatalog.mockResolvedValue({
+      enabled: true,
+      items: [
+        {
+          id: 'prj_docs',
+          ownership: 'user',
+          name: 'iHub knowledge',
+          description: 'Curated delivery docs',
+          owner: { name: 'Ann' },
+          usage: { items: 12 },
+          role: 'catalog',
+          subscribed: false
+        },
+        { ...PROJECTS[0], subscribed: false }
+      ]
+    });
+    mockApi.addCatalogProject.mockResolvedValue({ id: 'prj_docs', subscribed: true });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Browse catalog' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('iHub knowledge')).toBeInTheDocument();
+    // A project of your own is in your list already.
+    expect(within(dialog).getByText('In your projects')).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Add iHub knowledge to my projects' })
+    );
+    await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_docs'));
+    expect(
+      await within(dialog).findByRole('button', { name: 'Remove iHub knowledge from my projects' })
+    ).toBeInTheDocument();
   });
 
   test('disables "New project" at the quota and hides it without the permission', async () => {
