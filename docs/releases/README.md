@@ -7,7 +7,9 @@ it at runtime (`server/routes/admin/changelog.js`) and every build ships it.
   directory to write to. Use the `/document-feature` skill; it knows the rules.
 - `<version>/` — exactly what shipped in that release. The release pipeline creates it from
   `next/` when the release tag is created (`scripts/finalize-release-notes.js`), and it is frozen
-  afterwards. A release that shipped nothing worth noting gets no directory.
+  afterwards. A release that shipped nothing worth noting gets no directory. Prereleases
+  (`v5.6.0-RC3`) are for testing only: they get no directory, and their entries stay in `next/` until
+  the final release.
 
 Each directory holds up to three files — `breaking-changes.md`, `features.md`, `fixes.md` — and
 each file is one `#` title followed by `##` entries. `next/` always has all three files; a
