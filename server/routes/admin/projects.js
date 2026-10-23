@@ -550,6 +550,7 @@ export default function registerAdminProjectsRoutes(app) {
           description: body.description,
           instructions: body.instructions,
           enabled: body.enabled,
+          published: body.published,
           category: body.category,
           tags: body.tags
         },

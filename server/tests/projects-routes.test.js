@@ -682,6 +682,44 @@ describe('documents linked from another project', () => {
     assert.equal(missing.body.details.code, 'ITEM_NOT_FOUND');
   });
 
+  it('links only from the caller’s own projects and published ones', async () => {
+    // A project shared with Grace is hers to use, not to link from.
+    const shared = await create(ADA, { name: 'Shared notes' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: shared.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/shared' } }
+    });
+    await setMembers(ADA, shared.id, [{ type: 'user', id: GRACE.id, role: 'editor' }]);
+    const target = await create(GRACE, { name: 'Grace space' });
+    const fromShared = await addLink(GRACE, target.id, {
+      projectId: shared.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(fromShared.statusCode, 403, JSON.stringify(fromShared.body));
+    assert.equal(fromShared.body.details.code, 'PERMISSION_DENIED');
+
+    // An admin project is linked once it is published, by everyone signed in.
+    const repo = getProjectRepository();
+    await repo.createAdmin({
+      id: 'link-docs',
+      name: { en: 'Docs' },
+      items: [{ id: 'itm_doc', kind: 'url', name: 'Doc', status: 'ready', pinned: false }]
+    });
+    try {
+      const ref = { projectId: 'link-docs', itemId: 'itm_doc' };
+      const hidden = await addLink(GRACE, target.id, ref);
+      assert.equal(hidden.statusCode, 404, JSON.stringify(hidden.body));
+      await repo.mutate('link-docs', current => ({ ...current, published: true }));
+      const linked = await addLink(GRACE, target.id, ref);
+      assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+      const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });
+      assert.ok(listed.body.items.some(project => project.id === 'link-docs'));
+    } finally {
+      await repo.delete('link-docs');
+    }
+  });
+
   it("reads the source with the reader's own access, and says when it is gone", async () => {
     const source = await create(ADA, { name: 'Handbook' });
     const original = await drive(route.addItem, {

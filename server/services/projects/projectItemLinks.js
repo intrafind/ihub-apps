@@ -6,11 +6,14 @@
  * (kind `project-item`). Nothing is copied: the link holds the source
  * project and item id, and every read goes to the source item as it is now.
  *
- *  - **Adding** a link takes real access to the source: the caller owns it
- *    or is a member (user project), or reaches it through an app, workflow
- *    or agent, or manages it (admin project). A full admin's compliance read
- *    of someone else's project is not enough. A link to a link is stored as
- *    a link to the original, so a chain never forms.
+ *  - **Adding** a link takes a source the caller may link from: one of their
+ *    own projects, or a published one (a user project in the catalog while
+ *    the catalog is on, an admin project switched to published). Into an
+ *    admin project, an admin also links from the admin projects they manage.
+ *    Being a member of someone else's project, or reaching an admin project
+ *    through an app, is not enough, nor is a full admin's compliance read.
+ *    A link to a link is stored as a link to the original, so a chain never
+ *    forms.
  *  - **Reading** a link checks the *reading* user against the source, like
  *    an iFinder item: a member of the linking project who may not use the
  *    source gets `SOURCE_FORBIDDEN` for that item, never its text. A link is
@@ -22,6 +25,7 @@ import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { KnowledgeError } from '../knowledge/types.js';
 import { ProjectError } from './projectErrors.js';
+import { isPublished } from './projectAccess.js';
 import { getProjectRepository, isUserProjectId } from './ProjectRepository.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from './projectSettings.js';
 
@@ -50,6 +54,23 @@ function sourceFeatureOn(project) {
 }
 
 /**
+ * Whether the caller may link documents of `project` into `targetId`.
+ *
+ * @param {Object} project - The source project.
+ * @param {Object} permissions - The caller's permissions on it.
+ * @param {{catalogOn: boolean, targetId: string}} options
+ * @returns {boolean}
+ */
+export function mayLinkFrom(project, permissions, { catalogOn, targetId }) {
+  if (permissions.isOwner) return true;
+  if (project.ownership === 'admin') {
+    if (isPublished(project) && project.enabled !== false) return true;
+    return !isUserProjectId(targetId) && permissions.role === 'admin';
+  }
+  return catalogOn && isPublished(project);
+}
+
+/**
  * Check a new link and resolve it to the original item.
  *
  * @param {{projectId: string, itemId: string}} ref - As the caller sent it.
@@ -58,10 +79,12 @@ function sourceFeatureOn(project) {
  * @returns {Promise<{ref: {projectId: string, itemId: string}, name: string,
  *   source: {site: string, url?: string}}>}
  * @throws {ProjectError} `INVALID_REF` (the same project), `PROJECT_NOT_FOUND`,
- *   `ITEM_NOT_FOUND`, `PERMISSION_DENIED`.
+ *   `ITEM_NOT_FOUND`, `PERMISSION_DENIED` (a project the caller may use but
+ *   neither owns nor finds published).
  */
 export async function resolveProjectItemLink(ref, { user, projectId }) {
   const repository = getProjectRepository();
+  const context = callerContext(user);
   let sourceProjectId = ref.projectId;
   let sourceItemId = ref.itemId;
   // One hop at most: links are stored as links to the original.
@@ -70,7 +93,7 @@ export async function resolveProjectItemLink(ref, { user, projectId }) {
       throw new ProjectError('INVALID_REF', 'A project cannot link its own documents');
     }
     const project = await repository.get(sourceProjectId);
-    const permissions = project ? permissionsFor(project, user, callerContext(user)) : null;
+    const permissions = project ? permissionsFor(project, user, context) : null;
     // A compliance read is not a membership: an admin links what they use.
     if (
       !project ||
@@ -79,6 +102,17 @@ export async function resolveProjectItemLink(ref, { user, projectId }) {
       (project.ownership === 'user' && permissions.role === 'admin')
     ) {
       throw new ProjectError('PROJECT_NOT_FOUND', 'The source project was not found');
+    }
+    // The project picked; the original a link of it stands for only needs
+    // to be readable (checked again on every read).
+    if (
+      hop === 0 &&
+      !mayLinkFrom(project, permissions, { catalogOn: context.catalog, targetId: projectId })
+    ) {
+      throw new ProjectError(
+        'PERMISSION_DENIED',
+        'Documents can be linked only from your own projects and published ones'
+      );
     }
     const item = (project.items || []).find(entry => entry.id === sourceItemId);
     if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'The source document was not found');

@@ -35,13 +35,15 @@ const mockApi = {
   transferProject: jest.fn(),
   publishProject: jest.fn(),
   addCatalogProject: jest.fn(),
-  removeCatalogProject: jest.fn()
+  removeCatalogProject: jest.fn(),
+  fetchProjectCatalog: jest.fn()
 };
 jest.mock('../../../client/src/api', () =>
   Object.fromEntries(
     [
       'fetchProject',
       'fetchProjects',
+      'fetchProjectCatalog',
       'fetchProjectsConfig',
       'fetchProjectChats',
       'updateProject',
@@ -233,6 +235,7 @@ beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockApi.fetchProjectsConfig.mockResolvedValue(CONFIG);
   mockApi.fetchProjects.mockResolvedValue([]);
+  mockApi.fetchProjectCatalog.mockResolvedValue({ enabled: false, items: [] });
   mockApi.fetchProjectChats.mockResolvedValue({
     items: [
       {

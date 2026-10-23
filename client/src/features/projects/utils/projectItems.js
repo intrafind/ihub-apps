@@ -505,24 +505,39 @@ export function uploadAccept(config) {
 // --- documents linked from other projects --------------------------------------
 
 /**
- * The projects whose documents the viewer may link into `projectId`: every
- * project they use (own, shared, and the admin projects of their apps) but
- * that one. A full admin's compliance view of someone else's project does
- * not count; the server refuses those links too.
+ * Whether a project is published: a user project in the catalog (while the
+ * catalog is on), an admin project switched to published.
  *
- * @param {Array<Object>} projects - `GET /api/projects` items.
+ * @param {Object} project - A `GET /api/projects` item.
+ * @returns {boolean}
+ */
+export function isPublishedProject(project) {
+  return project?.ownership === 'admin'
+    ? project.published === true
+    : project?.audience?.catalog === true;
+}
+
+/**
+ * The projects whose documents the viewer may link into `projectId`: their
+ * own projects and published ones, but that one. A project shared with them,
+ * an admin project of one of their apps or a full admin's compliance view
+ * does not count; the server refuses those links too.
+ *
+ * @param {Array<Object>} projects - `GET /api/projects` and catalog items; a
+ *   project listed twice counts once.
  * @param {string} projectId - The project the links go into.
  * @returns {Array<Object>} User projects first, then admin projects.
  */
 export function linkSourceProjects(projects, projectId) {
+  const seen = new Set();
   return (projects || [])
-    .filter(
-      project =>
-        project &&
-        project.id !== projectId &&
-        project.permissions?.canUse !== false &&
-        !(project.ownership === 'user' && project.role === 'admin')
-    )
+    .filter(project => {
+      if (!project || project.id === projectId || seen.has(project.id)) return false;
+      if (project.permissions?.canUse === false) return false;
+      if (!project.permissions?.isOwner && !isPublishedProject(project)) return false;
+      seen.add(project.id);
+      return true;
+    })
     .sort((a, b) => (a.ownership === b.ownership ? 0 : a.ownership === 'user' ? -1 : 1));
 }
 

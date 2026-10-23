@@ -12,6 +12,7 @@ import {
   fetchPickerCloudProviders,
   fetchPickerPages,
   fetchProject,
+  fetchProjectCatalog,
   fetchProjectItemText,
   fetchProjects,
   searchPickerIFinder,
@@ -43,7 +44,15 @@ function userItemApi(errorMessage) {
     searchIFinder: query => searchPickerIFinder(query),
     checkUrl: url => checkPickerUrl(url),
     fetchCloudProviders: () => fetchPickerCloudProviders(),
-    fetchLinkSources: () => fetchProjects(),
+    // Own projects, and published ones: the catalog lists those the viewer
+    // has not added (an empty list while it is off).
+    fetchLinkSources: async () => {
+      const [projects, catalog] = await Promise.all([
+        fetchProjects(),
+        fetchProjectCatalog().catch(() => ({ items: [] }))
+      ]);
+      return [...projects, ...(catalog?.items || [])];
+    },
     fetchLinkSource: projectId => fetchProject(projectId),
     errorMessage
   };

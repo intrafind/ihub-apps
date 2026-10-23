@@ -55,6 +55,7 @@ import {
   canHoldProjects,
   mayCreateProjects,
   mayShareProjects,
+  isPublished,
   memberRoleFor,
   principalMemberKeys
 } from '../services/projects/projectAccess.js';
@@ -200,7 +201,10 @@ async function listProjects(user, repo, scope) {
   }
   if (scope === 'all' || scope === 'admin') {
     for (const project of await repo.listAdmin({ includeDisabled: false })) {
-      if (!context.linked.has(project.id) && !context.isContentAdmin) continue;
+      // Published ones reach everyone signed in, to link their documents.
+      if (!context.linked.has(project.id) && !context.isContentAdmin && !isPublished(project)) {
+        continue;
+      }
       items.push(serializeFor(project, user, context, { includeItems: false }));
     }
   }
