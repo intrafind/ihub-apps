@@ -481,8 +481,6 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 - **Search box** on the project page: there is no project search endpoint yet; search happens in
   chats through `knowledge_search`.
-- **Attaching projects from the chat input**: the chat request accepts `projects`, but there is no
-  picker in the chat input yet. A chat reaches a project by starting in it or moving into it.
 - **Leaving** as a member with the role _user_, or as a member through a group or everyone.
 - **Transfer target search** finds users only when the owner may share with users
   (`projectSharing` and `sharing.allowUsers`).
@@ -663,10 +661,10 @@ changing it takes a content admin.
 | -------- | --------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
 | `GET`    | `/api/projects/_config`                       | —         | Flags, limits, sharing audiences, enabled kinds, accepted upload types, your project count.      |
 | `GET`    | `/api/projects`                               | —         | Your projects; `?scope=all` (default), `mine`, `shared` or `admin`.                               |
-| `POST`   | `/api/projects`                               | `projects` permission | Create a project `{ name, description?, instructions? }`.                                        |
+| `POST`   | `/api/projects`                               | `projects` permission | Create a project `{ name, description?, instructions?, defaultAppId? }`.                                        |
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
 | `GET`    | `/api/projects/:projectId`                    | member    | The project with its items and your `permissions`.                                               |
-| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`.                                                    |
+| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`, `defaultAppId` (`null` clears it).                  |
 | `POST`   | `/api/projects/:projectId/estimate`           | member    | Tokens of every document and the recommendation (prompt or search).                              |
 | `DELETE` | `/api/projects/:projectId`                    | owner     | Delete the project and its documents.                                                            |
 | `GET`    | `/api/projects/:projectId/items`              | member    | The items.                                                                                       |
