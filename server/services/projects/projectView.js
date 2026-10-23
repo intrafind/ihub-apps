@@ -101,12 +101,13 @@ export function projectDescription(
  * @param {boolean} [options.includeItems=true]
  * @param {boolean} [options.adminView=false] - Members and owner id always included.
  * @param {boolean} [options.ownerActive=true]
+ * @param {boolean} [options.catalogOn=true] - The catalog is on: a published project shows as one.
  * @returns {Object}
  */
 export function serializeProject(
   project,
   permissions,
-  { includeItems = true, adminView = false, ownerActive = true } = {}
+  { includeItems = true, adminView = false, ownerActive = true, catalogOn = true } = {}
 ) {
   const members = Array.isArray(project.members) ? project.members : [];
   const showMembers = adminView || permissions.canShare;
@@ -140,6 +141,22 @@ export function serializeProject(
     updatedAt: project.updatedAt,
     updatedBy: project.updatedBy?.name || '',
     lastActivityAt: project.lastActivityAt || project.updatedAt,
+    ...(project.ownership === 'admin'
+      ? {}
+      : {
+          // Who the project reaches beyond its named members, for the
+          // "Global" and "Published" badges every viewer sees.
+          audience: {
+            everyone: members.some(member => member.type === 'everyone'),
+            catalog: catalogOn && Boolean(project.catalog?.publishedAt)
+          },
+          catalog: project.catalog?.publishedAt
+            ? {
+                publishedAt: project.catalog.publishedAt,
+                publishedBy: project.catalog.publishedBy?.name || ''
+              }
+            : null
+        }),
     role: permissions.role,
     permissions: {
       canUse: permissions.canUse,
@@ -147,6 +164,7 @@ export function serializeProject(
       canShare: permissions.canShare,
       canDelete: permissions.canDelete,
       canTransfer: permissions.canTransfer,
+      readsAllChats: permissions.readsAllChats !== false,
       isOwner: permissions.isOwner,
       readOnly: permissions.readOnly
     }

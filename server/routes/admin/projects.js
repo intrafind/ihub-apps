@@ -14,7 +14,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import configCache from '../../configCache.js';
-import { isAdminAuthRequired } from '../../middleware/adminAuth.js';
+import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -53,6 +54,7 @@ import {
   itemTransferSchema,
   itemUpdateSchema,
   projectMergeSchema,
+  projectSharingSettingsSchema,
   toggleSchema
 } from '../../validators/projectSchema.js';
 import {
@@ -267,6 +269,66 @@ export default function registerAdminProjectsRoutes(app) {
       });
     } catch (error) {
       sendFailedOperationError(res, 'load project configuration', error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/projects/_settings:
+   *   get:
+   *     summary: Who users may share their projects with
+   *     description: |
+   *       The effective `platform.projects.sharing` block: users, groups,
+   *       everyone signed in, and the catalog (projects published for everyone
+   *       to browse and add). Full admins only.
+   *     tags: [Admin Projects]
+   *   put:
+   *     summary: Change who users may share their projects with
+   *     description: Only the fields sent are written; unknown ones are refused.
+   *     tags: [Admin Projects]
+   */
+  app.get(route('/_settings'), ...gate, adminAuth, (req, res) => {
+    try {
+      res.json({ sharing: projectSettings(configCache.getPlatform() || {}).sharing });
+    } catch (error) {
+      sendFailedOperationError(res, 'read project settings', error);
+    }
+  });
+
+  app.put(route('/_settings'), ...gate, adminAuth, async (req, res) => {
+    const body = parseBody(projectSharingSettingsSchema, req, res);
+    if (!body) return;
+    try {
+      // Changed on the body as stored right now: another admin's save of a
+      // different setting is not overwritten.
+      const { data: platformConfig } = await configStore.updateJson(
+        'config/platform.json',
+        current => {
+          if (!current || typeof current !== 'object') {
+            throw new Error('Unable to read config/platform.json');
+          }
+          const stored = current.projects || {};
+          return {
+            ...current,
+            projects: { ...stored, sharing: { ...stored.sharing, ...body.sharing } }
+          };
+        }
+      );
+      await configCache.refreshCacheEntry('config/platform.json');
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'project-sharing',
+        summary: `Updated project sharing (${Object.entries(body.sharing)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ')})`
+      });
+      res.json({
+        sharing: projectSettings(configCache.getPlatform() || platformConfig).sharing
+      });
+    } catch (error) {
+      sendFailedOperationError(res, 'update project settings', error);
     }
   });
 

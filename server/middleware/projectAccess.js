@@ -36,7 +36,7 @@ import {
   satisfiesLevel
 } from '../services/projects/projectAccess.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
-import { isUserProjectsConfigured } from '../services/projects/projectSettings.js';
+import { isUserProjectsConfigured, projectSettings } from '../services/projects/projectSettings.js';
 
 /**
  * Give the request a principal with resolved permissions, as the data routes
@@ -82,7 +82,7 @@ export function isActiveUser(users, id) {
  *
  * @param {Object} user - `req.user` with resolved permissions.
  * @returns {{config: Object, groups: string[], isAdmin: boolean, isContentAdmin: boolean,
- *   linked: Set<string>, users: Object}}
+ *   linked: Set<string>, users: Object, catalog: boolean}}
  */
 export function callerContext(user) {
   const config = groupsConfig();
@@ -92,7 +92,8 @@ export function callerContext(user) {
     isAdmin: isProjectAdmin(user, config),
     isContentAdmin: isProjectContentAdmin(user, config),
     linked: linkedProjectIds(user),
-    users: usersDb()
+    users: usersDb(),
+    catalog: projectSettings(configCache.getPlatform() || {}).sharing.allowCatalog
   };
 }
 
@@ -115,7 +116,8 @@ export function permissionsFor(project, user, context) {
       project.ownership === 'user' && project.owner?.id
         ? isActiveUser(context.users, project.owner.id)
         : true,
-    linked: project.ownership === 'admin' && context.linked.has(project.id)
+    linked: project.ownership === 'admin' && context.linked.has(project.id),
+    catalog: context.catalog === true
   });
 }
 
