@@ -1447,14 +1447,21 @@
           "clientCredentialsDesc": "Also hand out a client ID and secret so users can request short-lived tokens from the token endpoint."
         },
         "kind": {
-          "admin": "Admin",
+          "static": "Static",
           "personal": "Personal",
           "dynamic": "Dynamic",
           "cimd": "Client metadata"
         },
+        "kindHelp": {
+          "static": "Configured by an administrator in the platform. Describes how the client was provisioned, not the permissions of the people who connect through it.",
+          "personal": "Created by a user for their own use. Describes how the client was provisioned, not the permissions of the people who connect through it.",
+          "dynamic": "Registered automatically by an MCP client through dynamic client registration. Describes how the client was provisioned, not the permissions of the people who connect through it.",
+          "cimd": "Identified by a client metadata document that the client publishes at its client ID URL. Describes how the client was provisioned, not the permissions of the people who connect through it."
+        },
+        "cimdIdentity": "Identified as",
         "kindFilter": {
           "label": "Kind",
-          "standard": "Admin & personal",
+          "standard": "Without dynamic",
           "all": "All kinds"
         },
         "noClientsForKind": "No OAuth clients of this kind",
