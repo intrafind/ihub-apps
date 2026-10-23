@@ -10,7 +10,8 @@ import { deleteProject } from '../../../api';
 import ProjectChatsSection from '../components/ProjectChatsSection';
 import ProjectItemsSection from '../components/ProjectItemsSection';
 import ProjectMembersSection from '../components/ProjectMembersSection';
-import ProjectRoleBadge from '../components/ProjectRoleBadge';
+import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
+import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
 import StartProjectChatDialog from '../components/StartProjectChatDialog';
 import {
@@ -88,10 +89,10 @@ function ProjectPageContent({ projectId }) {
   const [startingChat, setStartingChat] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  const backToList = () => {
+  const backToList = notice => {
     invalidateProjectsList();
     invalidateProjectsConfig();
-    navigate('/projects', { replace: true });
+    navigate('/projects', { replace: true, ...(notice ? { state: { notice } } : {}) });
   };
 
   const handleDelete = async () => {
@@ -105,12 +106,24 @@ function ProjectPageContent({ projectId }) {
     }
   };
 
-  const handleTransferred = result => {
-    if (result?.transferred || !result?.permissions?.canView) backToList();
-    else {
-      setProject(result);
-      invalidateProjectsList();
-    }
+  // Always back to the list, saying what happened: the caller is no longer
+  // the owner. A share that still reaches them (a group, everyone) keeps the
+  // project under "Shared with me", which the message explains; a full
+  // admin's compliance view of every project does not count as keeping it.
+  const handleTransferred = (result, newOwner) => {
+    const done = t('projects.transfer.done', '“{{project}}” now belongs to {{name}}.', {
+      project: projectDisplayName(project, language),
+      name: newOwner?.name || result?.owner?.name || ''
+    });
+    const stillMember = result?.role === 'editor' || result?.role === 'user';
+    backToList(
+      stillMember
+        ? `${done} ${t(
+            'projects.transfer.doneStillShared',
+            'You still see it under “Shared with me”, because a share reaches you.'
+          )}`
+        : done
+    );
   };
 
   if (loading && !project) {
@@ -157,6 +170,7 @@ function ProjectPageContent({ projectId }) {
                 {projectDisplayName(project, language)}
               </h1>
               <ProjectRoleBadge project={project} />
+              <ProjectAudienceBadges project={project} />
             </div>
             {description && (
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
@@ -207,8 +221,9 @@ function ProjectPageContent({ projectId }) {
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
-            {/* Chats first: a long document list must not push them out of sight. */}
-            <ProjectChatsSection project={project} />
+            {/* Chats first: a long document list must not push them out of sight.
+                Someone from the catalog holds no chats here: theirs attach the project. */}
+            {permissions.canHoldChats !== false && <ProjectChatsSection project={project} />}
             <ProjectItemsSection
               project={project}
               config={config}
@@ -239,12 +254,27 @@ function ProjectPageContent({ projectId }) {
                 onLeft={backToList}
               />
             )}
+            {isUserProject && (
+              <ProjectCatalogCard
+                project={project}
+                config={config}
+                onChanged={() => {
+                  // Read again: the answer carries no link states of the documents.
+                  void reload();
+                  invalidateProjectsList();
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
 
       {startingChat && (
-        <StartProjectChatDialog projectId={project.id} onClose={() => setStartingChat(false)} />
+        <StartProjectChatDialog
+          projectId={project.id}
+          attach={permissions.canHoldChats === false}
+          onClose={() => setStartingChat(false)}
+        />
       )}
       <ConfirmDialog
         isOpen={confirmDelete}

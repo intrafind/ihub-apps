@@ -14,7 +14,9 @@ import {
   cloudProvidersForKind,
   isItemReadable,
   validateUploads,
-  visibleItemDialogTabs
+  visibleItemDialogTabs,
+  linkSourceProjects,
+  linkableItems
 } from '../../../client/src/features/projects/utils/projectItems';
 import {
   appsForProjectChats,
@@ -185,6 +187,62 @@ describe('project items — dialog tabs and uploads', () => {
   });
 });
 
+describe('project items — documents linked from other projects', () => {
+  test('offers the link tab only where the dialog can pick projects', () => {
+    const kinds = [{ id: 'url' }, { id: 'project-item' }];
+    expect(buildItemDialogTabs(kinds, {}).some(tab => tab.kind === 'project-item')).toBe(false);
+    expect(
+      buildItemDialogTabs(kinds, {}, { projectLinks: true }).find(
+        tab => tab.kind === 'project-item'
+      )
+    ).toMatchObject({ enabled: true });
+  });
+
+  test('lists every project the viewer uses but this one and compliance views', () => {
+    const projects = [
+      { id: 'faq', ownership: 'admin', role: 'linked', permissions: { canUse: true } },
+      { id: 'prj_here', ownership: 'user', role: 'owner', permissions: { canUse: true } },
+      { id: 'prj_shared', ownership: 'user', role: 'user', permissions: { canUse: true } },
+      { id: 'prj_someone', ownership: 'user', role: 'admin', permissions: { canUse: true } }
+    ];
+    expect(linkSourceProjects(projects, 'prj_here').map(project => project.id)).toEqual([
+      'prj_shared',
+      'faq'
+    ]);
+  });
+
+  test('marks documents the target has already, also through a link of a link', () => {
+    const source = {
+      id: 'prj_src',
+      items: [
+        { id: 'itm_a', kind: 'upload' },
+        { id: 'itm_b', kind: 'upload' },
+        { id: 'itm_c', kind: 'project-item', ref: { projectId: 'prj_here', itemId: 'itm_own' } }
+      ]
+    };
+    const target = {
+      id: 'prj_here',
+      items: [
+        { id: 'itm_own', kind: 'upload' },
+        { id: 'itm_link', kind: 'project-item', ref: { projectId: 'prj_src', itemId: 'itm_a' } }
+      ]
+    };
+    expect(linkableItems(source, target).map(({ item, linked }) => [item.id, linked])).toEqual([
+      ['itm_a', true],
+      ['itm_b', false],
+      ['itm_c', true]
+    ]);
+
+    // A link of the source whose original the viewer cannot read is not offered.
+    const withBroken = {
+      ...source,
+      items: [{ id: 'itm_d', kind: 'project-item', ref: {}, link: { state: 'forbidden' } }]
+    };
+    expect(linkableItems(withBroken, target)[0]).toMatchObject({ unavailable: true });
+    expect(linkableItems(source, target)[0]).toMatchObject({ unavailable: false });
+  });
+});
+
 describe('project page rules', () => {
   const mine = { id: 'prj_a', ownership: 'user', name: 'Case 114', permissions: { isOwner: true } };
   const shared = {
@@ -293,6 +351,10 @@ describe('project page rules', () => {
     expect(chatPath({ id: 'c1', appId: 'chat' })).toBe('/apps/chat/c/c1');
     expect(chatPath({ id: 'c1' })).toBe('/chats');
     expect(projectChatStartPath('chat', 'prj_a')).toBe('/apps/chat?project=prj_a');
+    // Someone from the catalog starts a chat with the project attached.
+    expect(projectChatStartPath('chat', 'prj_a', { attach: true })).toBe(
+      '/apps/chat?attachProject=prj_a'
+    );
     expect(
       appsForProjectChats([{ id: 'a' }, { id: 'b', features: { userProjects: false } }])
     ).toEqual([{ id: 'a' }]);
@@ -306,6 +368,13 @@ describe('project page rules', () => {
       ]).map(app => app.id)
     ).toEqual(['a', 'c']);
     expect(chatMoveTargets([mine, shared, admin], 'prj_a')).toEqual([shared]);
+    // A project taken from the catalog holds no chats.
+    const fromCatalog = {
+      ...shared,
+      id: 'prj_c',
+      permissions: { ...shared.permissions, canHoldChats: false }
+    };
+    expect(chatMoveTargets([shared, fromCatalog], 'prj_a')).toEqual([shared]);
   });
 });
 

@@ -3948,6 +3948,18 @@
         "usedBy": "Used by",
         "notLinked": "No app, workflow or agent links this project.",
         "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
+      },
+      "sharing": {
+        "title": "Sharing of user projects",
+        "legend": "Users may share their projects with",
+        "allowUsers": "Specific users",
+        "allowGroups": "Groups",
+        "allowEveryone": "Everyone signed in",
+        "allowEveryoneHelp": "The project appears for every user, marked \"Global\".",
+        "allowCatalog": "The project catalog",
+        "allowCatalogHelp": "Owners and editors publish a project; every user can browse the catalog and add it to their projects. Turning this off hides published projects again.",
+        "permissionHint": "Users also need the \"projectSharing\" permission of their group.",
+        "saved": "Saved"
       }
     }
   },
@@ -6327,7 +6339,18 @@
       "url": "URL",
       "urlFailed": "The page cannot be read: {{error}}",
       "urlOk": "The page can be read.",
-      "userLanguage": "The user's language"
+      "userLanguage": "The user's language",
+      "linkHint": "Linked documents are not copied: chats read the original, so changes there show here too. Someone who uses this project sees a linked document only if they may use its project as well.",
+      "linkNoProjects": "There is no other project you can use.",
+      "linkProject": "Project",
+      "linkChooseProject": "Choose a project…",
+      "linkFromApps": "{{name}} (from apps)",
+      "linkNoItems": "This project has no documents.",
+      "linkDocuments": "Documents",
+      "linkAlready": "Already linked",
+      "linkSubmit_one": "Link {{count}} document",
+      "linkSubmit_other": "Link {{count}} documents",
+      "linkSubmitNone": "Link documents"
     },
     "chatBar": {
       "change": "Change project",
@@ -6436,7 +6459,11 @@
         "ready": "Ready",
         "stale": "Outdated",
         "staleHint": "The content changed at its origin; refresh to read it again.",
-        "staleNewer": "Newer version at the source"
+        "staleNewer": "Newer version at the source",
+        "linkForbidden": "No access",
+        "linkForbiddenHint": "You may not use the project this document is linked from.",
+        "linkGone": "Source removed",
+        "linkGoneHint": "The original document or its project was removed."
       },
       "title": "Documents",
       "tokens": "~{{tokens}} tokens",
@@ -6518,13 +6545,15 @@
       "picked": "Picked",
       "pickedFrom": "Picked from {{site}}",
       "snapshot": "text taken {{date}}",
-      "uploaded": "Uploaded"
+      "uploaded": "Uploaded",
+      "linkedFrom": "Linked from {{project}}"
     },
     "roles": {
       "admin": "From an app",
       "editor": "Editor",
       "owner": "Owner",
-      "user": "User"
+      "user": "User",
+      "catalog": "From the catalog"
     },
     "settings": {
       "editTitle": "Settings",
@@ -6535,11 +6564,25 @@
       "title": "Instructions"
     },
     "transfer": {
-      "hint": "The new owner may change and delete the project. You lose your access unless they share it with you again.",
+      "hint": "Choose who takes the project over. You confirm in the next step.",
       "search": "Search people",
       "submit": "Transfer",
       "submitTo": "Transfer to {{name}}",
-      "title": "Transfer ownership"
+      "title": "Transfer ownership",
+      "confirmTitle": "Transfer “{{project}}” to {{name}}?",
+      "confirmIntro": "This is what the transfer means:",
+      "confirmNewOwner": "{{name}} becomes the owner and may change, share and delete the project.",
+      "confirmYou": "You are no longer the owner: you can no longer delete the project or transfer it.",
+      "confirmAccess": "You lose access to the project unless {{name}} shares it with you again.",
+      "confirmContent": "Documents, instructions, members and chats stay with the project.",
+      "confirmUndo": "Only the new owner can transfer it back.",
+      "confirm": "Yes, transfer ownership",
+      "transferring": "Transferring…",
+      "done": "“{{project}}” now belongs to {{name}}.",
+      "confirmKeepsShares": "It stays shared with {{audiences}}. If you belong to one of them, you keep that access.",
+      "everyone": "everyone signed in",
+      "doneStillShared": "You still see it under “Shared with me”, because a share reaches you.",
+      "catalog": "the project catalog"
     },
     "usage": {
       "bytesOf": "{{used}} of {{limit}}",
@@ -6590,6 +6633,38 @@
       "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
       "remove": "Remove {{name}} from this chat",
       "full": "A chat can use at most {{max}} projects."
+    },
+    "audience": {
+      "global": "Global",
+      "globalHint": "Shared with everyone signed in",
+      "published": "Published",
+      "publishedHint": "In the project catalog"
+    },
+    "catalog": {
+      "title": "Catalog",
+      "addedHint": "You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.",
+      "notAddedHint": "This project is in the catalog. Add it to your projects to find it in your list and in chats.",
+      "publishedHint": "Published on {{date}}. Everyone signed in can find it in the catalog and use it.",
+      "unpublishedHint": "Publish the project so that everyone signed in can find it in the catalog and add it.",
+      "remove": "Remove from my projects",
+      "add": "Add to my projects",
+      "unpublish": "Take out of the catalog",
+      "publish": "Publish to the catalog",
+      "confirmTitle": "Publish to the catalog?",
+      "confirmMessage": "Everyone signed in can then find this project in the catalog, read its documents and instructions, and chat with it. They do not become members: they cannot change it and do not see the members’ chats. You can take it out again at any time.",
+      "dialogTitle": "Project catalog",
+      "dialogHint": "Projects their owners published for everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.",
+      "search": "Search the catalog",
+      "noMatches": "No published project matches.",
+      "empty": "Nothing has been published yet.",
+      "byOwner": "By {{name}}",
+      "inYourList": "In your projects",
+      "removeNamed": "Remove {{name}} from my projects",
+      "addNamed": "Add {{name}} to my projects",
+      "added": "Added",
+      "addShort": "Add",
+      "browse": "Browse catalog",
+      "publishedOffHint": "Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again."
     }
   }
 }

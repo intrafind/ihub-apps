@@ -13,6 +13,9 @@
  *    handlers (`URLHandler`, `PageHandler`, `IFinderHandler`) and their TTL
  *    caches. iFinder items are fetched with the **reading** user's rights;
  *    the handler's cache is keyed per user already.
+ *  - A `project-item` link reads the item of another project it stands for,
+ *    after checking that the **reading** user may use that project
+ *    (`projectItemLinks.js`).
  *
  * A per-process LRU of decrypted text keeps a project that is read on every
  * turn from being decrypted on every turn.
@@ -23,6 +26,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
+import { PROJECT_ITEM_KIND, loadLinkedItem } from '../projects/projectItemLinks.js';
 
 const COMPONENT = 'ItemTextService';
 
@@ -220,6 +224,10 @@ export async function getItemText(project, item, ctx = {}) {
     const text = await textReader(project, item);
     cacheSet(key, text);
     return { text, cached: false, truncated, failed: [] };
+  }
+  if (item.kind === PROJECT_ITEM_KIND) {
+    const linked = await loadLinkedItem(project, item, ctx.user);
+    return getItemText(linked.project, linked.item, ctx);
   }
   const call = handlerCallOf(item, ctx);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);

@@ -16,7 +16,9 @@ const mockApi = {
   fetchAdminProjectKinds: jest.fn(),
   fetchAdminProjectDependencies: jest.fn(),
   deleteAdminProject: jest.fn(),
-  toggleAdminProjects: jest.fn()
+  toggleAdminProjects: jest.fn(),
+  fetchProjectSharingSettings: jest.fn(),
+  saveProjectSharingSettings: jest.fn()
 };
 
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -26,6 +28,8 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminProjectDependencies: (...args) => mockApi.fetchAdminProjectDependencies(...args),
   deleteAdminProject: (...args) => mockApi.deleteAdminProject(...args),
   toggleAdminProjects: (...args) => mockApi.toggleAdminProjects(...args),
+  fetchProjectSharingSettings: (...args) => mockApi.fetchProjectSharingSettings(...args),
+  saveProjectSharingSettings: (...args) => mockApi.saveProjectSharingSettings(...args),
   getAdminApiErrorMessage: err => err?.message ?? 'error'
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
@@ -86,6 +90,12 @@ beforeEach(() => {
   ]);
   mockApi.toggleAdminProjects.mockResolvedValue({ message: 'ok' });
   mockApi.deleteAdminProject.mockResolvedValue(undefined);
+  mockApi.fetchProjectSharingSettings.mockResolvedValue({
+    allowUsers: true,
+    allowGroups: true,
+    allowEveryone: false,
+    allowCatalog: false
+  });
 });
 
 describe('AdminProjectsPage', () => {
@@ -192,5 +202,39 @@ describe('AdminProjectsPage', () => {
 
     expect(await screen.findByText('Review flow')).toBeInTheDocument();
     expect(screen.getByText('Website')).toBeInTheDocument();
+  });
+});
+
+describe('AdminProjectsPage – sharing of user projects', () => {
+  test('turns the catalog on and saves only on request', async () => {
+    mockApi.saveProjectSharingSettings.mockImplementation(async sharing => sharing);
+    renderPage();
+    const catalog = await screen.findByRole('checkbox', { name: /The project catalog/ });
+    expect(catalog).not.toBeChecked();
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(catalog);
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(mockApi.saveProjectSharingSettings).toHaveBeenCalledWith({
+        allowUsers: true,
+        allowGroups: true,
+        allowEveryone: false,
+        allowCatalog: true
+      })
+    );
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
+  test('is not shown to a content admin', async () => {
+    mockApi.fetchProjectSharingSettings.mockRejectedValue(
+      Object.assign(new Error('forbidden'), { response: { status: 403 } })
+    );
+    renderPage();
+    await screen.findByTestId('project-stats');
+    await waitFor(() =>
+      expect(screen.queryByRole('checkbox', { name: /The project catalog/ })).toBeNull()
+    );
   });
 });

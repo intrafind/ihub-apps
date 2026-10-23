@@ -4232,6 +4232,18 @@
         "usedBy": "Verwendet von",
         "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
         "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
+      },
+      "sharing": {
+        "title": "Teilen von Benutzerprojekten",
+        "legend": "Benutzer dürfen ihre Projekte teilen mit",
+        "allowUsers": "Einzelnen Benutzern",
+        "allowGroups": "Gruppen",
+        "allowEveryone": "Allen angemeldeten Personen",
+        "allowEveryoneHelp": "Das Projekt erscheint bei allen Benutzern, markiert als „Global“.",
+        "allowCatalog": "Dem Projektkatalog",
+        "allowCatalogHelp": "Besitzer und Bearbeiter veröffentlichen ein Projekt; alle Benutzer können den Katalog durchsuchen und es zu ihren Projekten hinzufügen. Ausschalten blendet veröffentlichte Projekte wieder aus.",
+        "permissionHint": "Benutzer brauchen außerdem die Berechtigung „projectSharing“ ihrer Gruppe.",
+        "saved": "Gespeichert"
       }
     }
   },
@@ -6292,7 +6304,18 @@
       "url": "URL",
       "urlFailed": "Die Seite kann nicht gelesen werden: {{error}}",
       "urlOk": "Die Seite kann gelesen werden.",
-      "userLanguage": "Sprache des Benutzers"
+      "userLanguage": "Sprache des Benutzers",
+      "linkHint": "Verknüpfte Dokumente werden nicht kopiert: Chats lesen das Original, Änderungen dort wirken also auch hier. Wer dieses Projekt nutzt, sieht ein verknüpftes Dokument nur, wenn er auch dessen Projekt nutzen darf.",
+      "linkNoProjects": "Es gibt kein anderes Projekt, das Sie nutzen können.",
+      "linkProject": "Projekt",
+      "linkChooseProject": "Projekt wählen…",
+      "linkFromApps": "{{name}} (aus Apps)",
+      "linkNoItems": "Dieses Projekt hat keine Dokumente.",
+      "linkDocuments": "Dokumente",
+      "linkAlready": "Schon verknüpft",
+      "linkSubmit_one": "{{count}} Dokument verknüpfen",
+      "linkSubmit_other": "{{count}} Dokumente verknüpfen",
+      "linkSubmitNone": "Dokumente verknüpfen"
     },
     "chatBar": {
       "change": "Projekt wechseln",
@@ -6401,7 +6424,11 @@
         "ready": "Bereit",
         "stale": "Veraltet",
         "staleHint": "Der Inhalt hat sich an der Quelle geändert; aktualisieren Sie, um ihn neu zu lesen.",
-        "staleNewer": "Neuere Version an der Quelle"
+        "staleNewer": "Neuere Version an der Quelle",
+        "linkForbidden": "Kein Zugriff",
+        "linkForbiddenHint": "Sie dürfen das Projekt nicht nutzen, aus dem dieses Dokument verknüpft ist.",
+        "linkGone": "Quelle entfernt",
+        "linkGoneHint": "Das Originaldokument oder sein Projekt wurde entfernt."
       },
       "title": "Dokumente",
       "tokens": "~{{tokens}} Tokens",
@@ -6483,13 +6510,15 @@
       "picked": "Ausgewählt",
       "pickedFrom": "Ausgewählt aus {{site}}",
       "snapshot": "Text vom {{date}}",
-      "uploaded": "Hochgeladen"
+      "uploaded": "Hochgeladen",
+      "linkedFrom": "Verknüpft aus {{project}}"
     },
     "roles": {
       "admin": "Aus einer App",
       "editor": "Bearbeiter",
       "owner": "Besitzer",
-      "user": "Benutzer"
+      "user": "Benutzer",
+      "catalog": "Aus dem Katalog"
     },
     "settings": {
       "editTitle": "Einstellungen",
@@ -6500,11 +6529,25 @@
       "title": "Anweisungen"
     },
     "transfer": {
-      "hint": "Der neue Besitzer darf das Projekt ändern und löschen. Sie verlieren Ihren Zugriff, bis er es wieder mit Ihnen teilt.",
+      "hint": "Wählen Sie, wer das Projekt übernimmt. Sie bestätigen im nächsten Schritt.",
       "search": "Personen suchen",
       "submit": "Übertragen",
       "submitTo": "An {{name}} übertragen",
-      "title": "Besitz übertragen"
+      "title": "Besitz übertragen",
+      "confirmTitle": "„{{project}}“ an {{name}} übertragen?",
+      "confirmIntro": "Das bedeutet die Übertragung:",
+      "confirmNewOwner": "{{name}} wird Besitzer und darf das Projekt ändern, teilen und löschen.",
+      "confirmYou": "Sie sind nicht mehr Besitzer: Sie können das Projekt weder löschen noch weiter übertragen.",
+      "confirmAccess": "Sie verlieren den Zugriff auf das Projekt, bis {{name}} es wieder mit Ihnen teilt.",
+      "confirmContent": "Dokumente, Anweisungen, Mitglieder und Chats bleiben im Projekt.",
+      "confirmUndo": "Nur der neue Besitzer kann es zurückübertragen.",
+      "confirm": "Ja, Besitz übertragen",
+      "transferring": "Wird übertragen…",
+      "done": "„{{project}}“ gehört jetzt {{name}}.",
+      "confirmKeepsShares": "Es bleibt geteilt mit {{audiences}}. Gehören Sie dazu, behalten Sie diesen Zugriff.",
+      "everyone": "allen angemeldeten Personen",
+      "doneStillShared": "Sie sehen es weiter unter „Mit mir geteilt“, weil eine Freigabe Sie erreicht.",
+      "catalog": "dem Projektkatalog"
     },
     "usage": {
       "bytesOf": "{{used}} von {{limit}}",
@@ -6555,6 +6598,38 @@
       "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
       "remove": "{{name}} aus diesem Chat entfernen",
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
+    },
+    "audience": {
+      "global": "Global",
+      "globalHint": "Mit allen angemeldeten Personen geteilt",
+      "published": "Veröffentlicht",
+      "publishedHint": "Im Projektkatalog"
+    },
+    "catalog": {
+      "title": "Katalog",
+      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt; Besitzer und Bearbeiter halten es aktuell. Neuer Chat startet einen Chat mit dem Projekt als Anhang. Ihre Chats bleiben Ihre: Die Mitglieder sehen sie nicht.",
+      "notAddedHint": "Dieses Projekt ist im Katalog. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in Chats zu finden.",
+      "publishedHint": "Veröffentlicht am {{date}}. Alle angemeldeten Personen finden es im Katalog und können es nutzen.",
+      "unpublishedHint": "Veröffentlichen Sie das Projekt, damit alle angemeldeten Personen es im Katalog finden und hinzufügen können.",
+      "remove": "Aus meinen Projekten entfernen",
+      "add": "Zu meinen Projekten hinzufügen",
+      "unpublish": "Aus dem Katalog nehmen",
+      "publish": "Im Katalog veröffentlichen",
+      "confirmTitle": "Im Katalog veröffentlichen?",
+      "confirmMessage": "Alle angemeldeten Personen können das Projekt dann im Katalog finden, seine Dokumente und Anweisungen lesen und damit chatten. Sie werden keine Mitglieder: Sie können es nicht ändern und sehen die Chats der Mitglieder nicht. Sie können es jederzeit wieder herausnehmen.",
+      "dialogTitle": "Projektkatalog",
+      "dialogHint": "Projekte, die ihre Besitzer für alle veröffentlicht haben. Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen; Besitzer und Bearbeiter halten es aktuell.",
+      "search": "Katalog durchsuchen",
+      "noMatches": "Kein veröffentlichtes Projekt passt.",
+      "empty": "Noch nichts veröffentlicht.",
+      "byOwner": "Von {{name}}",
+      "inYourList": "In Ihren Projekten",
+      "removeNamed": "{{name}} aus meinen Projekten entfernen",
+      "addNamed": "{{name}} zu meinen Projekten hinzufügen",
+      "added": "Hinzugefügt",
+      "addShort": "Hinzufügen",
+      "browse": "Katalog durchsuchen",
+      "publishedOffHint": "Veröffentlicht, aber der Katalog ist ausgeschaltet: Niemand findet oder nutzt es über den Katalog, bis ein Administrator ihn wieder einschaltet."
     }
   }
 }

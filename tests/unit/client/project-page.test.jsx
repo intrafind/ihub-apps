@@ -32,7 +32,10 @@ const mockApi = {
   fetchPickerCloudProviders: jest.fn(),
   updateProjectMembers: jest.fn(),
   fetchProjectShareTargets: jest.fn(),
-  transferProject: jest.fn()
+  transferProject: jest.fn(),
+  publishProject: jest.fn(),
+  addCatalogProject: jest.fn(),
+  removeCatalogProject: jest.fn()
 };
 jest.mock('../../../client/src/api', () =>
   Object.fromEntries(
@@ -55,7 +58,10 @@ jest.mock('../../../client/src/api', () =>
       'fetchPickerCloudProviders',
       'updateProjectMembers',
       'fetchProjectShareTargets',
-      'transferProject'
+      'transferProject',
+      'publishProject',
+      'addCatalogProject',
+      'removeCatalogProject'
     ].map(name => [name, (...args) => mockApi[name](...args)])
   )
 );
@@ -163,7 +169,12 @@ function makeProject(overrides = {}) {
 
 function LocationProbe() {
   const location = useLocation();
-  return <div data-testid="location">{location.pathname}</div>;
+  return (
+    <>
+      <div data-testid="location">{location.pathname}</div>
+      <div data-testid="location-notice">{location.state?.notice || ''}</div>
+    </>
+  );
 }
 
 // In-app navigation the way Back/Forward moves the router: the page stays
@@ -478,6 +489,268 @@ describe('ProjectPage – owner', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
     await waitFor(() => expect(mockApi.uploadProjectItem).toHaveBeenCalledTimes(3));
     expect(mockApi.uploadProjectItem.mock.calls[2][1].file).toBe(b);
+  });
+});
+
+describe('ProjectPage – documents linked from other projects', () => {
+  const SOURCE = makeProject({
+    id: 'prj_docs',
+    name: 'Delivery docs',
+    items: [
+      { id: 'itm_install', kind: 'upload', name: 'Install.md', status: 'ready' },
+      { id: 'itm_ops', kind: 'upload', name: 'Operations.md', status: 'ready' }
+    ]
+  });
+
+  test('links the ticked documents of another project', async () => {
+    const config = {
+      ...CONFIG,
+      kinds: [
+        ...CONFIG.kinds,
+        { id: 'project-item', name: { en: 'From another project' }, picker: { type: 'project' } }
+      ]
+    };
+    mockApi.fetchProjectsConfig.mockResolvedValue(config);
+    mockApi.fetchProject.mockImplementation(async id =>
+      id === 'prj_docs'
+        ? SOURCE
+        : makeProject({
+            items: [
+              {
+                id: 'itm_link',
+                kind: 'project-item',
+                name: 'Install.md',
+                status: 'ready',
+                ref: { projectId: 'prj_docs', itemId: 'itm_install' },
+                provenance: { origin: 'linked', source: { site: 'Delivery docs' } },
+                link: { state: 'forbidden' }
+              }
+            ]
+          })
+    );
+    mockApi.fetchProjects.mockResolvedValue([
+      makeProject({ items: undefined }),
+      { ...SOURCE, items: undefined, role: 'user' }
+    ]);
+    mockApi.addProjectItem.mockResolvedValue({ id: 'itm_new', kind: 'project-item' });
+    renderPage();
+
+    // A link the viewer may not read says so.
+    expect(await screen.findByText('No access')).toBeInTheDocument();
+    expect(screen.getByText('Linked from Delivery docs')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add documents' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'From another project' }));
+    const select = await screen.findByLabelText('Project');
+    // Only the other project is offered.
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map(option => option.value)
+    ).toEqual(['', 'prj_docs']);
+    fireEvent.change(select, { target: { value: 'prj_docs' } });
+
+    // The document linked already cannot be ticked again.
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByRole('checkbox', { name: /Install\.md/ })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Operations\.md/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Link 1 documents' }));
+
+    await waitFor(() =>
+      expect(mockApi.addProjectItem).toHaveBeenCalledWith('prj_a', {
+        kind: 'project-item',
+        ref: { projectId: 'prj_docs', itemId: 'itm_ops' },
+        pinned: false
+      })
+    );
+  });
+});
+
+describe('ProjectPage – the catalog', () => {
+  test('an owner publishes after confirming, while the catalog is on', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({ ...CONFIG, sharing: { allowCatalog: true } });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.publishProject.mockResolvedValue(makeProject());
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish to the catalog' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/do not see the members’ chats/)).toBeInTheDocument();
+    expect(mockApi.publishProject).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Publish to the catalog' }));
+    await waitFor(() => expect(mockApi.publishProject).toHaveBeenCalledWith('prj_a', true));
+  });
+
+  test('offers publishing only with the sharing permission', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({
+      ...CONFIG,
+      userProjects: { ...CONFIG.userProjects, canShare: false },
+      sharing: { allowCatalog: true }
+    });
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+  });
+
+  test('says a published project is hidden while the catalog is off, and an admin takes it out', async () => {
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({
+        role: 'admin',
+        catalog: { publishedAt: '2026-10-20T10:00:00Z' },
+        permissions: { ...OWNER_PERMISSIONS, canEdit: false, canShare: false, isOwner: false }
+      })
+    );
+    mockApi.publishProject.mockResolvedValue(makeProject());
+    renderPage();
+    expect(await screen.findByText(/the catalog is switched off/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Take out of the catalog' }));
+    await waitFor(() => expect(mockApi.publishProject).toHaveBeenCalledWith('prj_a', false));
+  });
+
+  test('offers no catalog while it is off', async () => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    renderPage();
+    await screen.findByText('Lease.pdf');
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+  });
+
+  test('someone from the catalog adds it and sees only their own chats', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({ ...CONFIG, sharing: { allowCatalog: true } });
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({
+        role: 'catalog',
+        subscribed: false,
+        audience: { everyone: false, catalog: true },
+        catalog: { publishedAt: '2026-10-20T10:00:00Z' },
+        members: undefined,
+        memberCount: 2,
+        permissions: {
+          canUse: true,
+          canEdit: false,
+          canShare: false,
+          canDelete: false,
+          canTransfer: false,
+          readsAllChats: false,
+          canHoldChats: false,
+          isOwner: false,
+          readOnly: false
+        }
+      })
+    );
+    mockApi.addCatalogProject.mockResolvedValue({});
+    renderPage();
+
+    expect(await screen.findByText('From the catalog')).toBeInTheDocument();
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    // No chat runs inside it for them: theirs attach the project.
+    expect(screen.queryByRole('heading', { name: 'Chats' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to my projects' }));
+    await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_a'));
+  });
+});
+
+describe('ProjectPage – transfer ownership', () => {
+  async function pickNewOwner() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Transfer ownership' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByRole('searchbox'), { target: { value: 'ben' } });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Ben Baker/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer to Ben Baker' }));
+    return dialog;
+  }
+
+  beforeEach(() => {
+    mockApi.fetchProject.mockResolvedValue(makeProject());
+    mockApi.fetchProjectShareTargets.mockResolvedValue({
+      users: [{ id: 'u_ben', name: 'Ben Baker', email: 'ben@example.com' }],
+      groups: []
+    });
+  });
+
+  test('asks again and explains the transfer before anything is sent', async () => {
+    renderPage();
+    const dialog = await pickNewOwner();
+
+    expect(
+      within(dialog).getByRole('heading', { name: 'Transfer “Case 2026-114” to Ben Baker?' })
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Ben Baker becomes the owner/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/You are no longer the owner/)).toBeInTheDocument();
+    expect(mockApi.transferProject).not.toHaveBeenCalled();
+
+    // Back returns to the choice, still without a request.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
+    expect(within(dialog).getByRole('button', { name: 'Transfer to Ben Baker' })).toBeEnabled();
+    expect(mockApi.transferProject).not.toHaveBeenCalled();
+  });
+
+  test('an administrator who handed the project over goes back to the list', async () => {
+    // The server still shows the project to a full admin, for compliance.
+    mockApi.transferProject.mockResolvedValue(
+      makeProject({
+        owner: { name: 'Ben Baker', active: true },
+        role: 'admin',
+        permissions: { ...OWNER_PERMISSIONS, canEdit: false, isOwner: false }
+      })
+    );
+    renderPage();
+    const dialog = await pickNewOwner();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, transfer ownership' }));
+
+    await waitFor(() => expect(mockApi.transferProject).toHaveBeenCalledWith('prj_a', 'u_ben'));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/projects'));
+    expect(screen.getByTestId('location-notice')).toHaveTextContent(
+      /^“Case 2026-114” now belongs to Ben Baker\.$/
+    );
+  });
+
+  test('names the catalog among what still reaches the former owner', async () => {
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({ audience: { everyone: false, catalog: true } })
+    );
+    renderPage();
+    const dialog = await pickNewOwner();
+    expect(
+      within(dialog).getByText(
+        'It stays shared with the project catalog. If you belong to one of them, you keep that access.'
+      )
+    ).toBeInTheDocument();
+    // Back returns the focus to the search, inside the dialog.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
+    expect(within(dialog).getByRole('searchbox')).toHaveFocus();
+  });
+
+  test('warns about group shares and says why the project is still listed', async () => {
+    mockApi.fetchProject.mockResolvedValue(
+      makeProject({
+        members: [
+          { type: 'group', id: 'sales', name: 'Sales', role: 'editor' },
+          { type: 'everyone', id: null, role: 'user' }
+        ]
+      })
+    );
+    mockApi.transferProject.mockResolvedValue(
+      makeProject({
+        owner: { name: 'Ben Baker', active: true },
+        role: 'editor',
+        permissions: { ...OWNER_PERMISSIONS, canDelete: false, isOwner: false }
+      })
+    );
+    renderPage();
+    const dialog = await pickNewOwner();
+    expect(
+      within(dialog).getByText(
+        'It stays shared with Sales, everyone signed in. If you belong to one of them, you keep that access.'
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, transfer ownership' }));
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/projects'));
+    expect(screen.getByTestId('location-notice')).toHaveTextContent(
+      'You still see it under “Shared with me”, because a share reaches you.'
+    );
   });
 });
 

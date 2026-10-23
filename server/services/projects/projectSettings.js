@@ -48,7 +48,8 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   sharing: Object.freeze({
     allowUsers: true,
     allowGroups: true,
-    allowEveryone: false
+    allowEveryone: false,
+    allowCatalog: false
   }),
   retentionDays: 0,
   loadAllMaxTokens: 50000,
@@ -86,7 +87,7 @@ function readPositive(value, fallback) {
  * @param {Object} [platformConfig] - Platform configuration.
  * @returns {{tierPolicy: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
- *   allowGroups: boolean, allowEveryone: boolean}, retentionDays: number,
+ *   allowGroups: boolean, allowEveryone: boolean, allowCatalog: boolean}, retentionDays: number,
  *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string},
  *   scan: {provider: string, command: string, timeoutMs: number, onError: string},
  *   ingest: {concurrency: number, staleAfterMinutes: number}}}
@@ -116,7 +117,8 @@ export function projectSettings(platformConfig) {
     sharing: {
       allowUsers: readBoolean(sharing.allowUsers, defaults.sharing.allowUsers),
       allowGroups: readBoolean(sharing.allowGroups, defaults.sharing.allowGroups),
-      allowEveryone: readBoolean(sharing.allowEveryone, defaults.sharing.allowEveryone)
+      allowEveryone: readBoolean(sharing.allowEveryone, defaults.sharing.allowEveryone),
+      allowCatalog: readBoolean(sharing.allowCatalog, defaults.sharing.allowCatalog)
     },
     retentionDays: Math.max(0, Math.floor(readNumber(block.retentionDays, defaults.retentionDays))),
     loadAllMaxTokens: readPositive(block.loadAllMaxTokens, defaults.loadAllMaxTokens),

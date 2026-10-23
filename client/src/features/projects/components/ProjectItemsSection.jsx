@@ -11,7 +11,9 @@ import {
   estimateProjectTokens,
   fetchPickerCloudProviders,
   fetchPickerPages,
+  fetchProject,
   fetchProjectItemText,
+  fetchProjects,
   searchPickerIFinder,
   uploadProjectItem
 } from '../../../api';
@@ -41,6 +43,8 @@ function userItemApi(errorMessage) {
     searchIFinder: query => searchPickerIFinder(query),
     checkUrl: url => checkPickerUrl(url),
     fetchCloudProviders: () => fetchPickerCloudProviders(),
+    fetchLinkSources: () => fetchProjects(),
+    fetchLinkSource: projectId => fetchProject(projectId),
     errorMessage
   };
 }
@@ -187,6 +191,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           config={config}
           api={itemApi}
           cloud
+          projectLinks
           hideUnavailable
           multipleUploads
           project={project}

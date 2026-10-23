@@ -38,6 +38,8 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import { cleanUpProjectsOfUser } from '../services/projects/projectUserCleanup.js';
+import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
+import { content as projectSourceContent } from '../services/sources/providers/project.js';
 import { listSnapshots } from '../services/ChangeHistoryService.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
@@ -46,6 +48,7 @@ const CAROL = { id: 'user-carol', name: 'Carol Shaw', groups: ['engineers'] };
 const EDITOR = { id: 'user-editor', name: 'Content Editor', groups: ['editors'] };
 const ROOT = { id: 'user-root', name: 'Root', groups: ['admins'] };
 const NOBODY = { id: 'user-nobody', name: 'No Projects', groups: ['readers'] };
+const SOLO = { id: 'user-solo', name: 'Keeps To Herself', groups: ['solo'] };
 const RUNNER = { id: 'user-runner', name: 'Workflow Runner', groups: ['runners'] };
 const THIRD_PARTY = { ...GRACE, authMode: 'oauth_authorization_code' };
 
@@ -137,6 +140,10 @@ const route = {
   members: handlersFor(projectRoutes, 'put', '/api/projects/:projectId/members'),
   transfer: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/transfer'),
   chats: handlersFor(projectRoutes, 'get', '/api/projects/:projectId/chats'),
+  catalog: handlersFor(projectRoutes, 'get', '/api/projects/_catalog'),
+  publish: handlersFor(projectRoutes, 'put', '/api/projects/:projectId/catalog'),
+  subscribe: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/subscription'),
+  unsubscribe: handlersFor(projectRoutes, 'delete', '/api/projects/:projectId/subscription'),
   estimate: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/estimate'),
   adminEstimate: handlersFor(adminRoutes, 'post', '/api/admin/projects/:id/estimate'),
   adminList: handlersFor(adminRoutes, 'get', '/api/admin/projects'),
@@ -190,7 +197,7 @@ function setFeatures(overrides = {}) {
 
 async function writeUsers() {
   const users = {};
-  for (const user of [ADA, GRACE, CAROL, EDITOR, ROOT, NOBODY]) {
+  for (const user of [ADA, GRACE, CAROL, EDITOR, ROOT, NOBODY, SOLO]) {
     users[user.id] = { ...user, username: user.id.replace('user-', ''), active: true };
   }
   const usersFile = path.join(scratch, 'users.json');
@@ -241,6 +248,11 @@ before(async () => {
           id: 'readers',
           name: 'Readers',
           permissions: { apps: ['support'] }
+        },
+        solo: {
+          id: 'solo',
+          name: 'Projects without sharing',
+          permissions: { apps: ['chat'], projects: true, projectSharing: false }
         },
         runners: {
           id: 'runners',
@@ -518,6 +530,345 @@ describe('user projects', () => {
     assert.deepEqual(res.body.allowed, { user: true, group: true, everyone: false });
     assert.ok(res.body.users.some(user => user.id === GRACE.id));
     assert.ok(res.body.groups.every(group => group.id !== 'anonymous'));
+  });
+});
+
+describe('documents linked from another project', () => {
+  it('never follows a stored link to itself, and checks links in a new admin project', async () => {
+    const project = await create(ADA, { name: 'Loop' });
+    await getProjectRepository().mutate(project.id, current => ({
+      ...current,
+      items: [
+        {
+          id: 'itm_loop',
+          kind: 'project-item',
+          name: 'Loop',
+          ref: { projectId: project.id, itemId: 'itm_loop' },
+          storage: 'link',
+          status: 'ready',
+          pinned: false
+        }
+      ]
+    }));
+    await assert.rejects(
+      projectSourceContent({
+        ref: { id: 'itm_loop', scope: project.id },
+        user: ADA,
+        format: 'original'
+      }),
+      error => error.status === 404
+    );
+
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: {
+        id: 'loop-admin',
+        name: { en: 'Loop' },
+        items: [{ kind: 'project-item', ref: { projectId: 'loop-admin', itemId: 'itm_1' } }]
+      }
+    });
+    assert.equal(created.statusCode, 400, JSON.stringify(created.body));
+    assert.equal(created.body.details.code, 'INVALID_REF');
+  });
+
+  async function addLink(user, projectId, ref) {
+    return drive(route.addItem, {
+      user,
+      params: { projectId },
+      body: { kind: 'project-item', ref }
+    });
+  }
+
+  async function linkState(user, projectId) {
+    const res = await drive(route.get, { user, params: { projectId } });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    return res.body.items.find(item => item.kind === 'project-item')?.link;
+  }
+
+  it('links the original without copying it, for callers who may use the source', async () => {
+    const source = await create(ADA, { name: 'Delivery' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/install' }, name: 'Install guide' }
+    });
+    const target = await create(ADA, { name: 'iHub' });
+
+    const linked = await addLink(ADA, target.id, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
+    assert.equal(linked.body.item.name, 'Install guide');
+    assert.equal(linked.body.item.storage, 'link');
+    assert.equal(linked.body.item.status, 'ready');
+    assert.deepEqual(linked.body.item.provenance.source, {
+      site: 'Delivery',
+      url: `/projects/${source.id}`
+    });
+    assert.deepEqual(await linkState(ADA, target.id), {
+      state: 'ok',
+      projectName: 'Delivery',
+      status: 'ready'
+    });
+
+    // A link to a link is stored as a link to the original.
+    const third = await create(ADA, { name: 'Third' });
+    const chained = await addLink(ADA, third.id, {
+      projectId: target.id,
+      itemId: linked.body.item.id
+    });
+    assert.equal(chained.statusCode, 201, JSON.stringify(chained.body));
+    assert.deepEqual(chained.body.item.ref, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+
+    // Its own documents are already in the project.
+    const own = await addLink(ADA, source.id, {
+      projectId: source.id,
+      itemId: original.body.item.id
+    });
+    assert.equal(own.statusCode, 400);
+    assert.equal(own.body.details.code, 'INVALID_REF');
+  });
+
+  it('refuses a source the caller only sees for compliance or not at all', async () => {
+    const source = await create(ADA, { name: 'Private notes' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/notes' } }
+    });
+    const ref = { projectId: source.id, itemId: original.body.item.id };
+    for (const user of [GRACE, ROOT]) {
+      const target = await create(user, { name: `${user.name}'s project` });
+      const res = await addLink(user, target.id, ref);
+      assert.equal(res.statusCode, 404, `${user.id}: ${JSON.stringify(res.body)}`);
+      assert.equal(res.body.details.code, 'PROJECT_NOT_FOUND');
+    }
+    const target = await create(ADA, { name: 'Target' });
+    const missing = await addLink(ADA, target.id, { projectId: source.id, itemId: 'itm_gone' });
+    assert.equal(missing.statusCode, 404);
+    assert.equal(missing.body.details.code, 'ITEM_NOT_FOUND');
+  });
+
+  it("reads the source with the reader's own access, and says when it is gone", async () => {
+    const source = await create(ADA, { name: 'Handbook' });
+    const original = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: source.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/handbook' } }
+    });
+    const target = await create(ADA, { name: 'Team space' });
+    await addLink(ADA, target.id, { projectId: source.id, itemId: original.body.item.id });
+    await setMembers(ADA, target.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+
+    // A member of the linking project is not a member of the source.
+    assert.deepEqual(await linkState(GRACE, target.id), { state: 'forbidden' });
+    await setMembers(ADA, source.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    assert.equal((await linkState(GRACE, target.id)).state, 'ok');
+
+    await drive(route.removeItem, {
+      user: ADA,
+      params: { projectId: source.id, itemId: original.body.item.id }
+    });
+    assert.deepEqual(await linkState(ADA, target.id), { state: 'gone' });
+  });
+});
+
+describe('the project catalog', () => {
+  async function publish(user, projectId, published = true) {
+    return drive(route.publish, { user, params: { projectId }, body: { published } });
+  }
+
+  async function listIds(user) {
+    const res = await drive(route.list, { user, query: { scope: 'all' } });
+    return res.body.items.map(project => project.id);
+  }
+
+  it('publishes only while the catalog is on, and only for those who may share', async () => {
+    const project = await create(ADA, { name: 'Off by default' });
+    const off = await publish(ADA, project.id);
+    assert.equal(off.statusCode, 403, JSON.stringify(off.body));
+    assert.deepEqual((await drive(route.catalog, { user: GRACE })).body, {
+      enabled: false,
+      items: []
+    });
+
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
+    assert.equal((await publish(GRACE, project.id)).statusCode, 403, 'a user member may not');
+    const on = await publish(ADA, project.id);
+    assert.equal(on.statusCode, 200, JSON.stringify(on.body));
+    assert.deepEqual(on.body.audience, { everyone: false, catalog: true });
+    assert.ok(on.body.catalog.publishedAt);
+  });
+
+  it("lets everyone signed in browse and add a published project, without the members' chats", async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, {
+      name: 'iHub knowledge',
+      description: 'Curated delivery docs'
+    });
+    await publish(ADA, project.id);
+
+    const found = await drive(route.catalog, { user: CAROL, query: { q: 'delivery' } });
+    assert.equal(found.statusCode, 200);
+    const entry = found.body.items.find(item => item.id === project.id);
+    assert.ok(entry, 'listed by its description');
+    assert.equal(entry.subscribed, false);
+    assert.equal(entry.role, 'catalog');
+    assert.equal(
+      (await drive(route.catalog, { user: CAROL, query: { q: 'nothing-like-it' } })).body.items
+        .length,
+      0
+    );
+
+    // Readable before it is added, but not in the list yet.
+    const opened = await drive(route.get, { user: CAROL, params: { projectId: project.id } });
+    assert.equal(opened.statusCode, 200);
+    assert.equal(opened.body.role, 'catalog');
+    assert.equal(opened.body.subscribed, false);
+    assert.equal(opened.body.permissions.canEdit, false);
+    assert.equal(opened.body.permissions.readsAllChats, false);
+    assert.equal((await listIds(CAROL)).includes(project.id), false);
+
+    const added = await drive(route.subscribe, { user: CAROL, params: { projectId: project.id } });
+    assert.equal(added.statusCode, 200, JSON.stringify(added.body));
+    assert.equal((await listIds(CAROL)).includes(project.id), true);
+    assert.equal(
+      (await drive(route.catalog, { user: CAROL })).body.items.find(item => item.id === project.id)
+        .subscribed,
+      true
+    );
+
+    // A member reads the members' chats; someone from the catalog does not.
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-catalog-1',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Owner notes'
+    });
+    const moved = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
+    assert.equal((await authorizeChat(chat.id, CAROL, { repository: chats })).ok, false);
+    const listed = await drive(route.chats, {
+      user: CAROL,
+      params: { projectId: project.id },
+      query: { filter: 'all' }
+    });
+    assert.equal(listed.statusCode, 200, JSON.stringify(listed.body));
+    assert.equal(listed.body.items.length, 0);
+
+    const removed = await drive(route.unsubscribe, {
+      user: CAROL,
+      params: { projectId: project.id }
+    });
+    assert.equal(removed.statusCode, 204);
+    assert.equal((await listIds(CAROL)).includes(project.id), false);
+  });
+
+  it('keeps the chats of someone from the catalog out of the project, so members never read them', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Salary bands' });
+    await publish(ADA, project.id);
+
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-catalog-own',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'My negotiation'
+    });
+    const moved = await drive(route.chatPatch, {
+      user: CAROL,
+      params: { chatId: chat.id },
+      body: { projectId: project.id }
+    });
+    assert.equal(moved.statusCode, 404, JSON.stringify(moved.body));
+
+    const req = { user: { ...CAROL }, headers: {} };
+    const inside = await resolveChatProjects({
+      req,
+      chat: null,
+      app: { id: 'chat' },
+      projectId: project.id,
+      projects: undefined
+    });
+    assert.equal(inside.ok, false, 'no chat starts inside it');
+    const attached = await resolveChatProjects({
+      req: { user: { ...CAROL }, headers: {} },
+      chat: null,
+      app: { id: 'chat' },
+      projectId: undefined,
+      projects: [project.id]
+    });
+    assert.equal(attached.ok, true, JSON.stringify(attached));
+    assert.deepEqual(attached.attachedIds, [project.id], 'attached to a chat of her own');
+
+    const opened = await drive(route.get, { user: CAROL, params: { projectId: project.id } });
+    assert.equal(opened.body.permissions.canHoldChats, false);
+  });
+
+  it('lets a full admin keep the compliance view and take any project out', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Left behind' });
+    await publish(ADA, project.id);
+    const asAdmin = await drive(route.get, { user: ROOT, params: { projectId: project.id } });
+    assert.equal(asAdmin.body.role, 'admin');
+    assert.equal(asAdmin.body.permissions.readsAllChats, true);
+
+    const republish = await publish(ROOT, project.id, true);
+    assert.equal(republish.statusCode, 403);
+    assert.equal(republish.body.details.code, 'PERMISSION_DENIED');
+    const out = await publish(ROOT, project.id, false);
+    assert.equal(out.statusCode, 200, JSON.stringify(out.body));
+    assert.equal(out.body.audience.catalog, false);
+  });
+
+  it('takes the projectSharing permission to publish, not to take a project out', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(SOLO, { name: 'Mine alone' });
+    const refused = await publish(SOLO, project.id);
+    assert.equal(refused.statusCode, 403);
+    assert.equal(refused.body.details.code, 'PERMISSION_DENIED');
+    await getProjectRepository().setPublished(project.id, true, { actor: ADA });
+    assert.equal((await publish(SOLO, project.id, false)).statusCode, 200);
+  });
+
+  it('disappears for those who added it once it is taken out or the catalog is off', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Short-lived' });
+    await publish(ADA, project.id);
+    await drive(route.subscribe, { user: CAROL, params: { projectId: project.id } });
+    assert.equal((await listIds(CAROL)).includes(project.id), true);
+
+    setProjectSettings({ sharing: { allowCatalog: false } });
+    assert.equal((await listIds(CAROL)).includes(project.id), false);
+    assert.equal(
+      (await drive(route.get, { user: CAROL, params: { projectId: project.id } })).statusCode,
+      404
+    );
+
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    assert.equal((await publish(ADA, project.id, false)).statusCode, 200);
+    assert.equal((await listIds(CAROL)).includes(project.id), false);
+    assert.equal(
+      (await drive(route.catalog, { user: CAROL })).body.items.some(item => item.id === project.id),
+      false
+    );
+    // Taking it off the list still works without access.
+    assert.equal(
+      (await drive(route.unsubscribe, { user: CAROL, params: { projectId: project.id } }))
+        .statusCode,
+      204
+    );
   });
 });
 

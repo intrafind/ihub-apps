@@ -11,3 +11,30 @@ A company CA that is installed on the machine (Linux CA store, Windows or macOS 
 such as LLM endpoints, MCP servers and `wss://` voice transcription, in addition to Node's built-in roots.
 Nothing needs to be configured, and the Docker image, binaries and `npm start` all behave the same. Set `NODE_USE_SYSTEM_CA=0` to turn it off. 
 This needs Node 24.5 or later; on older runtimes set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` instead.
+
+## Projects: link documents from other projects
+
+A project can now use documents of another project without copying them. **Add documents → From
+another project** lists the projects you use (your own, shared ones, and the admin projects of your
+apps, such as the shipped iHub documentation); tick documents and link them.
+
+- Chats read the original as it is now, so a change there shows in every project that links it.
+  A link counts as one item and takes no storage.
+- Everyone reads a linked document with their own rights: a member who may not use the source
+  project sees **No access** for it and the chat does not get its text.
+- A removed original shows **Source removed**.
+
+## Projects: global projects and the project catalog
+
+Users can now make a project available to everyone: a few people curate it, everyone else uses it.
+Admins choose which ways are open under **Admin → Projects → Sharing of user projects** (specific
+users, groups, everyone signed in, the catalog); until now the "everyone" option could only be set
+in `platform.json`.
+
+- **Publish to the catalog** on a project page puts it in the catalog. Users find it under
+  **Projects → Browse catalog** and add it to their projects. They use its documents by attaching it
+  to their own chats; their chats and the members' chats stay apart.
+- Projects shared with everyone show **Global**, published ones **Published**, and projects taken
+  from the catalog **From the catalog**.
+- The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
+  taking a project out, removes it from the lists of those who added it.

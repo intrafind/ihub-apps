@@ -38,6 +38,12 @@ export const PROJECT_CHAT_FILTERS = Object.freeze(['all', 'mine']);
 /** The URL query parameter a chat started from a project page carries. */
 export const PROJECT_QUERY_PARAM = 'project';
 
+/**
+ * Query parameter of a chat started with a project attached rather than
+ * inside it: someone who took the project from the catalog uses it this way.
+ */
+export const ATTACH_PROJECT_QUERY_PARAM = 'attachProject';
+
 /** Share of a quota from which the usage bar turns amber. */
 const QUOTA_WARN_RATIO = 0.8;
 
@@ -376,10 +382,14 @@ export function chatPath(chat) {
  *
  * @param {string} appId
  * @param {string} projectId
+ * @param {{attach?: boolean}} [options] - `attach: true` starts a chat outside the
+ *   project with the project attached (its documents, not its chat list).
  * @returns {string}
  */
-export function projectChatStartPath(appId, projectId) {
-  const query = new URLSearchParams({ [PROJECT_QUERY_PARAM]: projectId });
+export function projectChatStartPath(appId, projectId, { attach = false } = {}) {
+  const query = new URLSearchParams({
+    [attach ? ATTACH_PROJECT_QUERY_PARAM : PROJECT_QUERY_PARAM]: projectId
+  });
   return `/apps/${encodeURIComponent(appId)}?${query}`;
 }
 
@@ -399,9 +409,9 @@ export function appsForProjectChats(apps) {
 }
 
 /**
- * The projects a chat may move into: user projects the caller may use,
- * except the one the chat is in (admin projects are not containers, the
- * server refuses them).
+ * The projects a chat may move into: user projects the caller may use and
+ * may hold chats in (not ones taken from the catalog), except the one the
+ * chat is in (admin projects are not containers, the server refuses them).
  *
  * @param {Array<Object>} projects
  * @param {string|null} currentProjectId
@@ -412,6 +422,8 @@ export function chatMoveTargets(projects, currentProjectId) {
     project =>
       project?.ownership === 'user' &&
       project.permissions?.canUse !== false &&
+      // Taken from the catalog: attached to chats, never holding one.
+      project.permissions?.canHoldChats !== false &&
       project.id !== currentProjectId
   );
 }

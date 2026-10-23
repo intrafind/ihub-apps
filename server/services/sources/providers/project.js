@@ -11,7 +11,8 @@
  *    text items (the iHub tier keeps no originals; the client falls back to
  *    a text preview); a link item's reader is sent to its source — the web
  *    page, the iHub page, or the iFinder document through the iFinder
- *    provider with the reader's own credentials.
+ *    provider with the reader's own credentials; a document linked from
+ *    another project is served from there, for the reader's membership there.
  *
  * @module services/sources/providers/project
  */
@@ -22,6 +23,7 @@ import { projectName } from '../../projects/projectView.js';
 import { getItemText } from '../../knowledge/ItemTextService.js';
 import { KnowledgeError, docOf } from '../../knowledge/types.js';
 import { getProjectRepository } from '../../projects/ProjectRepository.js';
+import { PROJECT_ITEM_KIND } from '../../projects/projectItemLinks.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from '../../projects/projectSettings.js';
 import { getSourceProvider, hasSourceProvider, sourceProviderError } from '../providers.js';
 
@@ -57,12 +59,13 @@ function safeName(name, extension) {
 }
 
 /**
- * @param {{ref: {id: string, scope?: string}, user: Object, format?: 'original'|'pdf'|'text'}} request
+ * @param {{ref: {id: string, scope?: string}, user: Object, format?: 'original'|'pdf'|'text',
+ *   followed?: boolean}} request - `followed`: reached through a linked document.
  */
-async function content({ ref, user, format = 'original' }) {
+async function content({ ref, user, format = 'original', followed = false }) {
   const { project, item } = await load({ ref, user });
   if (format !== 'text') {
-    if (item.storage === 'link') return linkContent(project, item, { user, format });
+    if (item.storage === 'link') return linkContent(project, item, { user, format, followed });
     const error = sourceProviderError(410, 'Only the extracted text of this document is kept');
     error.code = 'ORIGINAL_DISCARDED';
     throw error;
@@ -103,7 +106,21 @@ async function content({ ref, user, format = 'original' }) {
  * fall back to the extracted text (410, like a discarded upload), and the
  * card's URL opens the page where it lives.
  */
-async function linkContent(project, item, { user, format }) {
+async function linkContent(project, item, { user, format, followed = false }) {
+  // A document linked from another project: its original, for this reader.
+  // One hop only, as for its text: a link to a link (or to itself) is not
+  // followed, so a stored cycle cannot loop.
+  if (item.kind === PROJECT_ITEM_KIND) {
+    if (followed || !item.ref?.projectId || !item.ref?.itemId) {
+      throw sourceProviderError(404, 'Document not found');
+    }
+    return content({
+      ref: { id: item.ref.itemId, scope: item.ref.projectId },
+      user,
+      format,
+      followed: true
+    });
+  }
   if (item.kind === 'ifinder-document' && item.ref?.documentId && hasSourceProvider('ifinder')) {
     const ifinder = await getSourceProvider('ifinder');
     return ifinder.content({

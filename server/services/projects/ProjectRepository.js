@@ -172,11 +172,26 @@ function digest(value) {
   return createHash('sha256').update(String(value)).digest('hex').slice(0, 24);
 }
 
+/** The marker target that lists a project in the catalog. */
+export const CATALOG_TARGET_KEY = 'catalog';
+
+/**
+ * The marker target of one user's catalog additions (projects they took from
+ * the catalog into their list). Prefixed apart from the member targets.
+ *
+ * @param {string} userId
+ * @returns {string}
+ */
+export function subscriptionTargetKey(userId) {
+  return `catalog-user:${String(userId)}`;
+}
+
 /**
  * Key of one member marker: the project id plus a digest of the target key.
  *
  * @param {string} projectId
- * @param {string} targetKey - `user:<id>`, `group:<name>` or `everyone`.
+ * @param {string} targetKey - `user:<id>`, `group:<name>`, `everyone`, or a
+ *   catalog target ({@link CATALOG_TARGET_KEY}, {@link subscriptionTargetKey}).
  * @returns {string}
  */
 export function memberMarkerKey(projectId, targetKey) {
@@ -769,6 +784,105 @@ export class ProjectRepository {
     });
   }
 
+  /**
+   * Publish a user project to the catalog, or take it out. The project
+   * document records it (`catalog`), a marker under {@link CATALOG_TARGET_KEY}
+   * lists it. Publishing again keeps the first date.
+   *
+   * @param {string} projectId
+   * @param {boolean} published
+   * @param {Object} [options]
+   * @param {{id: string, name?: string}} [options.actor]
+   * @param {(project: Object) => boolean} [options.authorize]
+   * @param {string} [options.now]
+   * @returns {Promise<Object|null>} The stored project, or null.
+   */
+  async setPublished(projectId, published, { actor, authorize, now } = {}) {
+    if (!this.isAvailable() || !isUserProjectId(projectId)) return null;
+    return this._withLock(projectId, async () => {
+      const { project, etag } = await this._loadUser(projectId);
+      if (!project) return null;
+      assertWritable(authorize, project);
+      const stamp = now || new Date().toISOString();
+      const catalog = published
+        ? project.catalog?.publishedAt
+          ? project.catalog
+          : { publishedAt: stamp, publishedBy: actor ? actorOf(actor) : null }
+        : null;
+      const stored = await this._writeUser(
+        {
+          ...project,
+          catalog,
+          updatedAt: stamp,
+          updatedBy: actor ? actorOf(actor) : project.updatedBy
+        },
+        etag
+      );
+      if (published) await this._writeMemberMarkers(projectId, [CATALOG_TARGET_KEY]);
+      else await this._removeMemberMarkers(projectId, [CATALOG_TARGET_KEY]);
+      return stored;
+    });
+  }
+
+  /**
+   * The projects in the catalog. A marker whose project was taken out is
+   * dropped on the way.
+   *
+   * @returns {Promise<Object[]>}
+   */
+  async listCatalog() {
+    const projects = await this.listSharedWith([CATALOG_TARGET_KEY]);
+    const published = [];
+    for (const project of projects) {
+      if (project.catalog?.publishedAt) published.push(project);
+      else await this._removeMemberMarkers(project.id, [CATALOG_TARGET_KEY]).catch(() => {});
+    }
+    return published;
+  }
+
+  /**
+   * Take a project from the catalog into one user's list, or drop it again.
+   * Only the marker records it: the access comes from the catalog itself.
+   *
+   * @param {string} projectId
+   * @param {string} userId
+   * @param {boolean} subscribed
+   * @returns {Promise<void>}
+   */
+  async setSubscribed(projectId, userId, subscribed) {
+    if (!this.isAvailable() || !isUserProjectId(projectId)) return;
+    const targetKey = subscriptionTargetKey(userId);
+    if (subscribed) await this._writeMemberMarkers(projectId, [targetKey]);
+    else await this._removeMemberMarkers(projectId, [targetKey]);
+  }
+
+  /**
+   * The projects one user took from the catalog, whether or not they are
+   * still published (the caller's access check decides).
+   *
+   * @param {string} userId
+   * @returns {Promise<Object[]>}
+   */
+  listSubscribed(userId) {
+    return this.listSharedWith([subscriptionTargetKey(userId)]);
+  }
+
+  /**
+   * Whether one user took a project from the catalog.
+   *
+   * @param {string} projectId
+   * @param {string} userId
+   * @returns {Promise<boolean>}
+   */
+  async isSubscribed(projectId, userId) {
+    if (!this.isAvailable()) return false;
+    const doc = await this.documents.get(
+      USER_PROJECT_SHARES_NAMESPACE,
+      memberMarkerKey(projectId, subscriptionTargetKey(userId))
+    );
+    return Boolean(doc);
+  }
+
   async _writeMemberMarkers(projectId, targetKeys) {
     for (const targetKey of targetKeys) {
       await this.documents.put(
@@ -886,10 +1000,10 @@ export class ProjectRepository {
         // `listSharedWith`, while the caller's cascade (blobs, chat markers,
         // chats) must still run.
         try {
-          await this._removeMemberMarkers(
-            projectId,
-            (project.members || []).map(member => memberTargetKey(member))
-          );
+          await this._removeMemberMarkers(projectId, [
+            ...(project.members || []).map(member => memberTargetKey(member)),
+            ...(project.catalog?.publishedAt ? [CATALOG_TARGET_KEY] : [])
+          ]);
         } catch (error) {
           this.logger.warn('Member marker cleanup failed after project delete', {
             component: 'ProjectRepository',

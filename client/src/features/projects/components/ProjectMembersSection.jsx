@@ -69,7 +69,7 @@ function MemberRow({ member }) {
  * @param {Object} props.project
  * @param {string|null} props.userId - The viewer.
  * @param {(project: Object) => void} props.onChanged - The project after a member change.
- * @param {(result: Object) => void} props.onTransferred
+ * @param {(result: Object, newOwner: Object) => void} props.onTransferred
  * @param {() => void} props.onLeft
  * @returns {JSX.Element}
  */
@@ -199,9 +199,9 @@ function ProjectMembersSection({ project, userId, onChanged, onTransferred, onLe
         <TransferProjectDialog
           project={project}
           onClose={() => setTransferring(false)}
-          onTransferred={result => {
+          onTransferred={(result, newOwner) => {
             setTransferring(false);
-            onTransferred(result);
+            onTransferred(result, newOwner);
           }}
         />
       )}

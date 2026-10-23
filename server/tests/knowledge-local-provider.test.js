@@ -24,6 +24,7 @@ import {
   setTextReader,
   evictItemText
 } from '../services/knowledge/ItemTextService.js';
+import { KnowledgeError } from '../services/knowledge/types.js';
 import { createSourceManager } from '../sources/index.js';
 import URLHandler from '../sources/URLHandler.js';
 import {
@@ -619,6 +620,45 @@ describe('scope and planner: incomplete loads', () => {
     const pendingPlan = await planKnowledgeScope(pendingScope, { model, settings, ctx });
     assert.equal(pendingPlan.projects[0].mode, 'loaded');
     for (const id of [partial.id, gone.id, pending.id]) evictProjectIndex(id);
+  });
+});
+
+describe('documents linked from another project', () => {
+  it("read the original's text for a reader who may use its project, and nobody else", async () => {
+    const team = await repo.createUser({ owner: GRACE, content: { name: 'Team space' } });
+    const link = {
+      id: 'itm_linked_contract',
+      kind: 'project-item',
+      name: 'Lease.md',
+      ref: { projectId: textProject.id, itemId: 'itm_contract' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: { id: GRACE.id, name: GRACE.name }, at: '2026-10-20' }
+    };
+    await repo.mutate(team.id, p => ({ ...p, items: [link] }));
+
+    // Grace is a member of the source project.
+    const read = await getItemText(team, link, { user: GRACE, language: 'en' });
+    assert.equal(read.text, CONTRACT);
+
+    // A reader of the team space who is no member of the source gets nothing.
+    const stranger = { id: 'user-carol', name: 'Carol', groups: ['authenticated'] };
+    await assert.rejects(
+      getItemText(team, link, { user: stranger, language: 'en' }),
+      error => error instanceof KnowledgeError && error.code === 'SOURCE_FORBIDDEN'
+    );
+    await assert.rejects(
+      getItemText(
+        team,
+        { ...link, ref: { projectId: textProject.id, itemId: 'itm_gone' } },
+        {
+          user: GRACE
+        }
+      ),
+      error => error instanceof KnowledgeError && error.code === 'SOURCE_GONE'
+    );
   });
 });
 

@@ -69,6 +69,7 @@ import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { estimateProject } from '../services/projects/projectEstimate.js';
 import { RESULT_BUDGET_TOKENS } from '../sources/documentRetrieval.js';
 import { projectName, serializeItem, serializeProject } from '../services/projects/projectView.js';
+import { linkStatesFor } from '../services/projects/projectItemLinks.js';
 import {
   addItemSchema,
   adminProjectUpdateSchema,
@@ -160,7 +161,11 @@ function serializeFor(project, user, context, options = {}) {
     project.ownership === 'user' && project.owner?.id
       ? isActiveUser(context.users, project.owner.id)
       : true;
-  return serializeProject(project, permissions, { ownerActive, ...options });
+  return serializeProject(project, permissions, {
+    ownerActive,
+    catalogOn: context.catalog === true,
+    ...options
+  });
 }
 
 /**
@@ -176,11 +181,20 @@ async function listProjects(user, repo, scope) {
     }
   }
   if (scope === 'all' || scope === 'shared') {
+    const seen = new Set();
     const candidates = await repo.listSharedWith(principalMemberKeys(user, context.groups));
     for (const project of candidates) {
       if (String(project.owner?.id) === String(user.id)) continue;
       // The membership is what earns a place in "shared with me".
       if (!memberRoleFor(project, user, context.groups)) continue;
+      seen.add(project.id);
+      items.push(serializeFor(project, user, context, { includeItems: false }));
+    }
+    // And the projects the caller took from the catalog, while they are in it.
+    for (const project of await repo.listSubscribed(String(user.id))) {
+      if (seen.has(project.id)) continue;
+      if (permissionsFor(project, user, context).role !== 'catalog') continue;
+      seen.add(project.id);
       items.push(serializeFor(project, user, context, { includeItems: false }));
     }
   }
@@ -311,6 +325,54 @@ export default function registerProjectRoutes(app) {
 
   /**
    * @swagger
+   * /api/projects/_catalog:
+   *   get:
+   *     summary: The projects published to the catalog
+   *     description: |
+   *       Every user project an owner or editor published, for everyone signed
+   *       in to browse and add to their list. Empty while the catalog is off
+   *       (`platform.projects.sharing.allowCatalog`).
+   *     tags: [Projects]
+   *     parameters:
+   *       - in: query
+   *         name: q
+   *         schema: { type: string }
+   */
+  app.get(route('/_catalog'), ...gate, authenticatedOnly, async (req, res) => {
+    try {
+      const deps = requireUserProjects(req, res);
+      if (!deps) return;
+      if (!deps.settings.sharing.allowCatalog) {
+        return res.json({ enabled: false, items: [] });
+      }
+      const context = callerContext(req.user);
+      const me = String(req.user.id);
+      const raw = typeof req.query.q === 'string' ? req.query.q : '';
+      const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
+      const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
+      const items = [];
+      for (const project of await deps.repo.listCatalog()) {
+        const text = [project.name, project.description, project.owner?.name]
+          .filter(value => typeof value === 'string')
+          .join(' ')
+          .toLowerCase();
+        if (q && !text.includes(q)) continue;
+        const permissions = permissionsFor(project, req.user, context);
+        if (!permissions.canUse) continue;
+        items.push({
+          ...serializeFor(project, req.user, context, { includeItems: false }),
+          subscribed: subscribed.has(project.id)
+        });
+      }
+      items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      res.json({ enabled: true, items });
+    } catch (error) {
+      sendFailedOperationError(res, 'list the project catalog', error);
+    }
+  });
+
+  /**
+   * @swagger
    * /api/projects:
    *   get:
    *     summary: The projects the caller may use
@@ -388,9 +450,24 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('use'),
-    (req, res) => {
+    async (req, res) => {
       try {
-        res.json(serializeFor(req.project, req.user, req.projectContext));
+        const body = serializeFor(req.project, req.user, req.projectContext);
+        if (req.projectPermissions.role === 'catalog') {
+          body.subscribed = await getProjectRepository().isSubscribed(
+            req.project.id,
+            String(req.user.id)
+          );
+        }
+        // A document linked from another project says whether this viewer
+        // can read it there, so a broken link shows before a chat needs it.
+        const links = await linkStatesFor(req.project, req.user);
+        if (links.size > 0 && Array.isArray(body.items)) {
+          body.items = body.items.map(item =>
+            links.has(item.id) ? { ...item, link: links.get(item.id) } : item
+          );
+        }
+        res.json(body);
       } catch (error) {
         sendFailedOperationError(res, 'get project', error);
       }
@@ -758,6 +835,123 @@ export default function registerProjectRoutes(app) {
     }
   );
 
+  // --- catalog --------------------------------------------------------------
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/catalog:
+   *   put:
+   *     summary: Publish a project to the catalog, or take it out
+   *     description: |
+   *       Owners and editors who may share. Publishing needs the catalog to be
+   *       on (`platform.projects.sharing.allowCatalog`) and the `projectSharing`
+   *       permission; taking a project out does not, and full admins may take
+   *       out any project.
+   *     tags: [Projects]
+   */
+  app.put(
+    route('/:projectId/catalog'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    async (req, res) => {
+      try {
+        const deps = requireUserProjects(req, res, { manage: true });
+        if (!deps) return;
+        if (!isUserProjectId(req.project.id)) {
+          return sendBadRequest(res, 'Only user projects are published to the catalog');
+        }
+        if (typeof req.body?.published !== 'boolean') {
+          return sendBadRequest(res, '"published" must be true or false');
+        }
+        const { published } = req.body;
+        // Publishing takes owners and editors who may share, with the catalog
+        // on. Taking a project out takes them too, or a full admin: a project
+        // whose owner left would otherwise stay published.
+        const allowed = loaded => {
+          const permissions = permissionsFor(loaded, req.user, req.projectContext);
+          return published
+            ? permissions.canShare
+            : permissions.canShare || req.projectContext.isAdmin;
+        };
+        if (!allowed(req.project)) {
+          return sendErrorResponse(res, 403, 'You may not change this project in the catalog', {
+            details: { code: 'PERMISSION_DENIED', required: 'share' }
+          });
+        }
+        if (published && !(deps.settings.sharing.allowCatalog && mayShareProjects(req.user))) {
+          return sendErrorResponse(res, 403, 'Publishing projects to the catalog is not allowed', {
+            details: { code: 'PERMISSION_DENIED', required: 'publish' }
+          });
+        }
+        const project = await deps.repo.setPublished(req.project.id, published, {
+          actor: req.user,
+          authorize: allowed
+        });
+        if (!project) return sendNotFound(res, 'Project');
+        logAudit({
+          req,
+          action: 'share',
+          resource: 'projectShare',
+          resourceId: project.id,
+          summary: `${published ? 'Published' : 'Took'} project "${project.name}" ${
+            published ? 'to' : 'out of'
+          } the catalog`
+        });
+        res.json(serializeFor(project, req.user, req.projectContext));
+      } catch (error) {
+        sendProjectError(res, error, 'publish project');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/subscription:
+   *   post:
+   *     summary: Add a published project to the caller's list
+   *     tags: [Projects]
+   *   delete:
+   *     summary: Remove a project taken from the catalog from the caller's list
+   *     tags: [Projects]
+   */
+  app.post(
+    route('/:projectId/subscription'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    async (req, res) => {
+      try {
+        const deps = requireUserProjects(req, res);
+        if (!deps) return;
+        if (req.projectPermissions.role !== 'catalog') {
+          return sendBadRequest(res, 'Only projects reached through the catalog are added');
+        }
+        await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);
+        res.json({
+          ...serializeFor(req.project, req.user, req.projectContext),
+          subscribed: true
+        });
+      } catch (error) {
+        sendProjectError(res, error, 'add project from the catalog');
+      }
+    }
+  );
+
+  // No access check: a project taken out of the catalog can still be removed
+  // from the list. Only the caller's own marker is touched.
+  app.delete(route('/:projectId/subscription'), ...gate, authenticatedOnly, async (req, res) => {
+    try {
+      if (!validateIdForPath(req.params.projectId, 'project', res)) return;
+      const deps = requireUserProjects(req, res);
+      if (!deps) return;
+      await deps.repo.setSubscribed(req.params.projectId, String(req.user.id), false);
+      res.status(204).end();
+    } catch (error) {
+      sendProjectError(res, error, 'remove project from the list');
+    }
+  });
+
   // --- chats ----------------------------------------------------------------
 
   /**
@@ -791,9 +985,13 @@ export default function registerProjectRoutes(app) {
       try {
         const chats = getChatRepository();
         if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
-        const filter = ['all', 'mine', 'others'].includes(req.query.filter)
-          ? req.query.filter
-          : 'all';
+        // Someone who took the project from the catalog sees their own chats
+        // only; the members' chats stay among the members.
+        const filter = !req.projectPermissions.readsAllChats
+          ? 'mine'
+          : ['all', 'mine', 'others'].includes(req.query.filter)
+            ? req.query.filter
+            : 'all';
         const markers = await getProjectRepository().listChatMarkers(req.project.id);
         const me = String(req.user.id);
         // A chat records its owner in the identity mode of its day (a
