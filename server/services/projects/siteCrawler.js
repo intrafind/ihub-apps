@@ -14,7 +14,7 @@
  *
  * @module services/projects/siteCrawler
  */
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import { fetchWebPage } from '../../tools/webContentExtractor.js';
 
 /** Defaults and upper bounds of a crawl request. */
@@ -181,11 +181,9 @@ export function inCrawlScope(url, scope) {
  * @returns {{title: string, links: string[]}}
  */
 export function extractPageLinks(html, pageUrl) {
-  // Scripts and styles carry no links and are where JSDOM is slowest.
-  const source = String(html || '')
-    .replaceAll(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replaceAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  const dom = new JSDOM(source, { url: pageUrl });
+  // Scripts are not run, and a stylesheet JSDOM cannot parse is reported to
+  // the console rather than thrown: neither is anything to log for a crawl.
+  const dom = new JSDOM(String(html || ''), { url: pageUrl, virtualConsole: new VirtualConsole() });
   const { document } = dom.window;
   const title = (document.querySelector('title')?.textContent || '').replace(/\s+/g, ' ').trim();
   const seen = new Set();

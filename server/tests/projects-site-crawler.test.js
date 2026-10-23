@@ -131,10 +131,15 @@ describe('crawlSite', () => {
       ]
     );
     assert.equal(result.truncated, false);
-    // Off-site, out-of-folder, asset and document links are never fetched.
-    assert.ok(!fetched.some(url => /other\.com|blog|logo|manual/.test(url)));
-    // Depth 2 is listed, but its links are not followed.
-    assert.ok(!fetched.includes('https://x.com/docs/guide/deeper'));
+    // Off-site, out-of-folder, asset and document links are never fetched,
+    // and the links of a page at depth 2 are not followed.
+    assert.deepEqual(fetched, [
+      'https://x.com/docs/',
+      'https://x.com/docs/intro',
+      'https://x.com/docs/guide/',
+      'https://x.com/docs/missing',
+      'https://x.com/docs/guide/deep'
+    ]);
   });
 
   it('stops at the page limit and says so', async () => {
