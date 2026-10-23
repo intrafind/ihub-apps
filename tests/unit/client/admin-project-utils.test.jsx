@@ -244,3 +244,31 @@ describe('list and delete', () => {
     expect(dependenciesFromDeleteError(new Error('boom'))).toBeNull();
   });
 });
+
+describe('availability', () => {
+  const {
+    availabilityFlags,
+    projectAvailability,
+    projectIdFromName
+  } = require('../../../client/src/features/admin/utils/projectAdmin');
+
+  test('folds enabled and published into one choice; a disabled project is off', () => {
+    expect(projectAvailability({})).toBe('apps');
+    expect(projectAvailability({ enabled: true, published: true })).toBe('everyone');
+    expect(projectAvailability({ enabled: false, published: true })).toBe('off');
+    expect(projectAvailability({ enabled: false })).toBe('off');
+  });
+
+  test('maps a choice back to the stored flags', () => {
+    expect(availabilityFlags('apps')).toEqual({ enabled: true, published: false });
+    expect(availabilityFlags('everyone')).toEqual({ enabled: true, published: true });
+    expect(availabilityFlags('off')).toEqual({ enabled: false, published: false });
+  });
+
+  test('derives a valid id from the English name, else the first filled one', () => {
+    expect(projectIdFromName({ en: 'Employee Handbook 2026' })).toBe('employee-handbook-2026');
+    expect(projectIdFromName({ en: '', de: 'Über uns' })).toBe('ber-uns');
+    expect(projectIdFromName({ en: '' })).toBe('');
+    expect(projectIdFromName({ en: 'x'.repeat(80) })).toHaveLength(50);
+  });
+});

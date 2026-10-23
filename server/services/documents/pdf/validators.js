@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import xmldoc from 'xmldoc';
-
-const { XmlDocument } = xmldoc;
+import { XmlDocument } from 'xmldoc';
 
 /**
  * Validation shared by the Markdown converter and the layout-block sanitiser.
