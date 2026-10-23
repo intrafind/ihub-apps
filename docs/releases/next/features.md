@@ -66,3 +66,6 @@ The view and edit pages of an admin project now share the layout of a user's pro
 items in the wide column, the settings beside them (compact rows on the view page, a compact form
 on the edit page), so the documents are no longer pushed below a long form. The results of
 **Test** and **Estimate tokens** appear above the items.
+
+**Apps no longer carry a prompt template that is only `{{content}}`.**
+Such a template changed nothing, because the message is sent as typed anyway. The app creator stops adding it, and an upgrade removes it from existing apps. Templates with other text around `{{content}}` are kept.
