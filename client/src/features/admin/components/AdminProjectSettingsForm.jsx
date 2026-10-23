@@ -96,21 +96,13 @@ function AdminProjectSettingsForm({
               id="project-id"
               type="text"
               value={form.id}
-              disabled={!isNew}
               maxLength={MAX_PROJECT_ID_LENGTH}
               onChange={e => onFieldChange('id', e.target.value)}
               placeholder="employee-handbook"
               aria-invalid={Boolean(idError)}
-              className={`${INPUT_CLASS} ${!isNew ? 'opacity-60 cursor-not-allowed' : ''} ${
-                idError ? 'border-red-400' : ''
-              }`}
+              className={`${INPUT_CLASS} ${idError ? 'border-red-400' : ''}`}
             />
             {idError && <p className="mt-1 text-sm text-red-600">{idError}</p>}
-            {!isNew && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.projects.fields.idFixed', 'The ID cannot be changed after creation.')}
-              </p>
-            )}
           </div>
           <div className="flex items-end gap-6">
             <label className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300">
