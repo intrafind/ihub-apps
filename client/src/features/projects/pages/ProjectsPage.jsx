@@ -258,7 +258,14 @@ export default function ProjectsPage() {
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
-                {filterLabels[id]} <span className="opacity-70">({counts[id]})</span>
+                {filterLabels[id]}{' '}
+                {/* A full-colour count: dimmed by opacity it failed contrast on
+                    the selected (indigo) tab. */}
+                <span
+                  className={filter === id ? 'text-indigo-100' : 'text-gray-500 dark:text-gray-400'}
+                >
+                  ({counts[id]})
+                </span>
               </button>
             ))}
           </div>

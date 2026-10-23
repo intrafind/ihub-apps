@@ -316,6 +316,9 @@ const KNOWN_VIOLATIONS = {
 const CLEAN_PAGES = [
   '/projects',
   '/admin/projects',
+  // A shipped project, so a fresh contents/ has it: the view and the edit page.
+  '/admin/projects/ihub-documentation',
+  '/admin/projects/ihub-documentation/edit',
   '/apps',
   '/tasks',
   '/workflows',
@@ -398,6 +401,41 @@ test.describe('Accessibility — signed-in pages (WCAG 2.2 AA)', () => {
       await expectNoBlockingViolations(page, path, KNOWN_VIOLATIONS[path]);
     });
   }
+});
+
+// A user project page: personal projects ship switched off and a fresh
+// contents/ has no user project, so the test switches the feature on, creates
+// one, scans its page, and puts both back.
+test.describe('Accessibility — a user project page', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+  });
+
+  test('/projects/:id should not have critical or serious accessibility violations', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    const features = await page.request.get('/api/admin/features');
+    const wasOn = (await features.json()).features?.find(f => f.id === 'userProjects')?.enabled;
+    await page.request.put('/api/admin/features', { data: { userProjects: true } });
+    let projectId = null;
+    try {
+      const created = await page.request.post('/api/projects', {
+        data: { name: 'Accessibility check', instructions: 'Answer briefly.' }
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      projectId = (await created.json()).id;
+      const path = `/projects/${projectId}`;
+      await gotoSettled(page, path);
+      expect(new URL(page.url()).pathname).toBe(path);
+      await expectNoBlockingViolations(page, 'User project page');
+    } finally {
+      if (projectId) await page.request.delete(`/api/projects/${projectId}`);
+      if (wasOn !== true) {
+        await page.request.put('/api/admin/features', { data: { userProjects: false } });
+      }
+    }
+  });
 });
 
 // axe's WCAG tag set does not include the landmark rules (they are best

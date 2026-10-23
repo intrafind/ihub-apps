@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { updateProject } from '../../../api';
 import Modal from '../../../shared/components/Modal';
@@ -20,6 +20,9 @@ import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
 const PREVIEW = 'text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words line-clamp-3';
 const EMPTY = 'text-gray-500 dark:text-gray-400';
+
+/** How long "Saved." stays on screen. */
+const SAVED_NOTICE_MS = 4000;
 
 /**
  * The instructions and the default app of a project, as rows of the project
@@ -77,6 +80,13 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const changes = editable ? buildProjectChanges(form, base) : null;
+
+  // "Saved." is a confirmation, not a state: it goes away after a moment.
+  useEffect(() => {
+    if (!message?.ok) return undefined;
+    const timer = setTimeout(() => setMessage(null), SAVED_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   /** Start the draft over from `source` (after a save, a discard, another project). */
   function resetTo(source) {
@@ -175,48 +185,52 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
         />
       )}
       {instructionsRow}
-      <ProjectPanelRow
-        icon="chat-bubble-left-right"
-        title={t('projects.form.defaultApp', 'Default app')}
-        titleId="project-default-app-title"
-        action={
-          editable ? (
-            <button
-              type="button"
-              onClick={() => openEditor('defaultAppId')}
-              className={ROW_ACTION}
-              aria-label={t('projects.settings.changeDefaultApp', 'Change default app')}
-            >
-              {t('projects.panel.change', 'Change')}
-            </button>
-          ) : null
-        }
-      >
-        <p
-          className={
-            defaultApp || project.defaultAppId ? 'text-gray-600 dark:text-gray-400' : EMPTY
+      {/* The default app is a user project's: an admin project's chats start
+          in the apps that link it. */}
+      {project.ownership === 'user' && (
+        <ProjectPanelRow
+          icon="chat-bubble-left-right"
+          title={t('projects.form.defaultApp', 'Default app')}
+          titleId="project-default-app-title"
+          action={
+            editable ? (
+              <button
+                type="button"
+                onClick={() => openEditor('defaultAppId')}
+                className={ROW_ACTION}
+                aria-label={t('projects.settings.changeDefaultApp', 'Change default app')}
+              >
+                {t('projects.panel.change', 'Change')}
+              </button>
+            ) : null
           }
         >
-          {defaultApp
-            ? defaultApp.name
-            : project.defaultAppId
-              ? // The apps list is still loading: the app is not missing yet.
-                appsLoading
-                ? t('common.loading', 'Loading...')
-                : t('projects.appSelect.unavailable', '{{id}} (not available)', {
-                    id: project.defaultAppId
-                  })
-              : t('projects.settings.noDefaultApp', 'None — the first app is used')}
-        </p>
-      </ProjectPanelRow>
-      {message && !editing && (
-        <p
-          role={message.ok ? 'status' : 'alert'}
-          className={`px-4 py-2 text-sm ${message.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-        >
-          {message.text}
-        </p>
+          <p
+            className={
+              defaultApp || project.defaultAppId ? 'text-gray-600 dark:text-gray-400' : EMPTY
+            }
+          >
+            {defaultApp
+              ? defaultApp.name
+              : project.defaultAppId
+                ? // The apps list is still loading: the app is not missing yet.
+                  appsLoading
+                  ? t('common.loading', 'Loading...')
+                  : t('projects.appSelect.unavailable', '{{id}} (not available)', {
+                      id: project.defaultAppId
+                    })
+                : t('projects.settings.noDefaultApp', 'None — the first app is used')}
+          </p>
+        </ProjectPanelRow>
       )}
+      {/* Always in the page, so a screen reader announces the text when it
+          arrives; "Saved." goes away again after a moment. */}
+      <p
+        role="status"
+        className={`text-sm empty:hidden ${message?.ok ? 'px-4 py-2 text-green-700 dark:text-green-400' : ''}`}
+      >
+        {message?.ok && !editing ? message.text : ''}
+      </p>
 
       {editable && (
         <Modal

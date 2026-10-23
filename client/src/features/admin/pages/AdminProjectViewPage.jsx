@@ -178,7 +178,7 @@ function AdminProjectViewPageContent({ id }) {
               </span>
               {project.published === true && (
                 <span
-                  className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
+                  className="px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
                   title={t(
                     'admin.projects.fields.publishedHint',
                     'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
