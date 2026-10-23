@@ -343,6 +343,44 @@ export const checkPickerUrl = async url => {
 };
 
 /**
+ * The text a URL item would give the model, read before the item is added.
+ *
+ * @param {string} url
+ * @returns {Promise<{ok: boolean, title?: string, finalUrl?: string, text?: string,
+ *   chars?: number, truncated?: boolean, error?: string}>}
+ */
+export const previewPickerUrl = async url => {
+  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/preview`, { url }));
+  return data || { ok: false };
+};
+
+/**
+ * How long the client waits for a site crawl: past the server's 25-second
+ * crawl deadline (which answers with the pages found so far), with room for
+ * the last pages it parses.
+ */
+export const CRAWL_REQUEST_TIMEOUT_MS = 45_000;
+
+/**
+ * The pages of a website below a start URL, found by following its links.
+ *
+ * @param {string} url
+ * @param {{maxPages?: number, maxDepth?: number, samePath?: boolean}} [options]
+ * @returns {Promise<{ok: boolean, pages?: Array<{url: string, title: string, depth: number,
+ *   type: 'page'|'document'}>, truncated?: boolean, error?: string}>}
+ */
+export const crawlPickerUrl = async (url, options = {}) => {
+  const data = await call(() =>
+    apiClient.post(
+      `${PROJECTS_PATH}/pickers/url/crawl`,
+      { url, ...options },
+      { timeout: CRAWL_REQUEST_TIMEOUT_MS }
+    )
+  );
+  return data || { ok: false };
+};
+
+/**
  * The cloud storage providers a cloud item can be picked from.
  *
  * @returns {Promise<Array<{id: string, type: string, displayName: string}>>}

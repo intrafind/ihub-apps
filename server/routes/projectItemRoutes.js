@@ -5,7 +5,7 @@
  * The item handlers the user and the admin projects routers share (spec 3
  * §2, §4, §9): the multipart upload, the refresh of a picked document, the
  * text of an item, and the pickers (iFinder search and metadata, the page
- * list, the URL check).
+ * list, the URL check, preview and site crawl).
  *
  * The upload goes to disk first (multer `diskStorage` into a private
  * directory per request under `contents/data/tmp/project-uploads/`), never
@@ -40,7 +40,9 @@ import { projectName, serializeItem } from '../services/projects/projectView.js'
 import {
   ifinderPickerSchema,
   itemTextUpdateSchema,
-  urlCheckSchema
+  urlCheckSchema,
+  urlCrawlSchema,
+  urlPreviewSchema
 } from '../validators/projectSchema.js';
 
 /** Field name of the uploaded file. */
@@ -412,6 +414,9 @@ function readablePage(pageConfig, user) {
   return true;
 }
 
+/** Users with a site crawl running in this process. */
+const crawlsRunning = new Set();
+
 /**
  * Register the picker endpoints under `/api/projects/pickers`.
  *
@@ -481,6 +486,61 @@ export function registerProjectPickerRoutes(app) {
       res.json({ ok: true, ...result });
     } catch (error) {
       res.status(200).json({ ok: false, error: error.message });
+    }
+  });
+
+  // The text a URL item would give the model, before the item exists: read
+  // through the same handler a URL item is read with. Not through the
+  // handler's own cache, which keeps every entry: the page reader's bounded
+  // page cache below it still answers a repeated preview.
+  app.post(route('/url/preview'), ...gate, async (req, res) => {
+    const parsed = urlPreviewSchema.safeParse(req.body || {});
+    if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    try {
+      const { createSourceManager } = await import('../sources/index.js');
+      const { content, metadata } = await createSourceManager()
+        .getHandler('url')
+        .loadContent({ url: parsed.data.url });
+      res.json({
+        ok: true,
+        title: metadata?.title || '',
+        finalUrl: metadata?.finalUrl || parsed.data.url,
+        text: content || '',
+        chars: (content || '').length,
+        truncated: metadata?.truncated === true
+      });
+    } catch (error) {
+      res.status(200).json({ ok: false, error: error.message });
+    }
+  });
+
+  // The pages of a site below a start URL, for picking several at once. One
+  // crawl per user at a time (per server process), cancelled when the client
+  // goes away.
+  app.post(route('/url/crawl'), ...gate, async (req, res) => {
+    const parsed = urlCrawlSchema.safeParse(req.body || {});
+    if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    const userId = req.user.id;
+    if (crawlsRunning.has(userId)) {
+      return res.status(200).json({
+        ok: false,
+        code: 'CRAWL_RUNNING',
+        error: 'A search for pages is already running. Wait for it to finish.'
+      });
+    }
+    crawlsRunning.add(userId);
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    try {
+      const { crawlSite } = await import('../services/projects/siteCrawler.js');
+      const result = await crawlSite({ ...parsed.data, signal: controller.signal });
+      if (!controller.signal.aborted) res.json({ ok: true, ...result });
+    } catch (error) {
+      if (!controller.signal.aborted) res.status(200).json({ ok: false, error: error.message });
+    } finally {
+      crawlsRunning.delete(userId);
     }
   });
 

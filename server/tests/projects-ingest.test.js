@@ -13,6 +13,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, it } from 'node:test';
@@ -142,7 +143,12 @@ function handlersFor(routes, method, suffix) {
 }
 
 function makeResponse() {
-  const res = { statusCode: 200, body: null, headers: {} };
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200,
+    body: null,
+    headers: {},
+    writableEnded: false
+  });
   res.status = code => {
     res.statusCode = code;
     return res;
@@ -2375,7 +2381,9 @@ describe('routes', () => {
     editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
     refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
-    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check')
+    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check'),
+    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/preview'),
+    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/crawl')
   };
 
   async function create() {
@@ -2574,6 +2582,37 @@ describe('routes', () => {
     assert.match(inside.body.error, /private/);
     const local = await drive(route.urlCheck, { user: ADA, body: { url: 'http://localhost/' } });
     assert.equal(local.body.ok, false);
+    // The preview and the crawl read through the page reader, held to the same line.
+    for (const picker of [route.urlPreview, route.urlCrawl]) {
+      const badPick = await drive(picker, { user: ADA, body: { url: 'ftp://example.com' } });
+      assert.equal(badPick.statusCode, 400);
+      const insidePick = await drive(picker, {
+        user: ADA,
+        body: { url: 'http://127.0.0.1:9/admin' }
+      });
+      assert.equal(insidePick.statusCode, 200);
+      assert.equal(insidePick.body.ok, false);
+      assert.match(insidePick.body.error, /private/);
+    }
+    const tooDeep = await drive(route.urlCrawl, {
+      user: ADA,
+      body: { url: 'https://example.com/', maxDepth: 9 }
+    });
+    assert.equal(tooDeep.statusCode, 400);
+  });
+
+  it('runs one site crawl per user at a time', async () => {
+    const crawl = url => drive(route.urlCrawl, { user: ADA, body: { url } });
+    const [first, second] = await Promise.all([
+      crawl('http://127.0.0.1:9/a'),
+      crawl('http://127.0.0.1:9/b')
+    ]);
+    assert.match(first.body.error, /private/);
+    assert.equal(second.body.ok, false);
+    assert.equal(second.body.code, 'CRAWL_RUNNING');
+    // The first one finished, so the next may start.
+    const third = await crawl('http://127.0.0.1:9/c');
+    assert.match(third.body.error, /private/);
   });
 
   it('sizes a probed body up to a bound and drops the rest', async () => {

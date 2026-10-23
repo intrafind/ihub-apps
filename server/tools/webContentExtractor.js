@@ -73,19 +73,25 @@ export const DEFAULT_READER_USER_AGENT =
  *
  * @returns {Promise<{response: Object, finalUrl: URL}>}
  */
-async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage }) {
+async function fetchPage(
+  validUrl,
+  { sslConfig, shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url' }
+) {
   let hopUrl = validUrl;
   let response;
   for (let redirectCount = 0; ; redirectCount++) {
     if (redirectCount > MAX_REDIRECTS) {
       throw createError('Too many redirects while fetching webpage', 'TOO_MANY_REDIRECTS');
     }
+    if (signal?.aborted) throw createError('The request was cancelled', 'ABORTED');
 
     const addresses = await assertHopIsSafe(hopUrl, sslConfig);
     const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const onAbort = () => controller.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     // Build base fetch options
     const fetchOptions = {
@@ -114,9 +120,10 @@ async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage 
     );
 
     try {
-      response = await throttledFetch('read_url', hopUrl.toString(), enhancedOptions);
+      response = await throttledFetch(throttleId, hopUrl.toString(), enhancedOptions);
     } finally {
       clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
     }
 
     if (response.status >= 300 && response.status < 400) {
@@ -138,6 +145,39 @@ async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage 
     break;
   }
   return { response, finalUrl: hopUrl };
+}
+
+/**
+ * Fetch one URL the way the page reader does — SSRF guard on every redirect
+ * hop, DNS pinned, proxy applied — and hand back the response unread. For
+ * callers that need the raw page (the project site crawler) rather than its
+ * extracted text; the caller reads or drops the body.
+ *
+ * Certificate checks are skipped only for hosts on `ssl.domainWhitelist`
+ * (with `ssl.ignoreInvalidCertificates` on), decided per hop.
+ *
+ * @param {string} url - Absolute http(s) URL
+ * @param {Object} [options]
+ * @param {string} [options.language] - The reader's language (Accept-Language)
+ * @param {AbortSignal} [options.signal] - Cancels the fetch
+ * @param {string} [options.throttleId='read_url'] - Request throttle queue; a
+ *   caller that fetches many pages takes its own, so it never queues the
+ *   chat's page reads behind it
+ * @returns {Promise<{response: Object, finalUrl: URL}>}
+ */
+export async function fetchWebPage(url, { language, signal, throttleId } = {}) {
+  const validUrl = new URL(url);
+  if (!['http:', 'https:'].includes(validUrl.protocol)) {
+    throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
+  }
+  return fetchPage(validUrl, {
+    sslConfig: getSSLConfig(),
+    // null: `createAgent` decides per hop from the domain whitelist.
+    shouldIgnoreSSL: null,
+    acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language)),
+    signal,
+    throttleId
+  });
 }
 
 /**

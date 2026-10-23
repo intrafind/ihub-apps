@@ -303,6 +303,108 @@ export function buildItemRequest(tabId, draft = {}) {
   }
 }
 
+/** The longest item name the server takes. */
+const MAX_ITEM_NAME_CHARS = 300;
+
+/**
+ * The JSON bodies of the pages picked from a site crawl: one `url` item per
+ * page, named after the page's title (the server names it after the URL
+ * when there is none).
+ *
+ * @param {Array<{url: string, title?: string}>} pages
+ * @param {{pinned?: boolean}} [options]
+ * @returns {Array<{kind: 'url', ref: {url: string}, name?: string, pinned: boolean}>}
+ *
+ * @example
+ * buildUrlItemRequests([{ url: 'https://x.com/a', title: 'A' }])
+ * // => [{ kind: 'url', ref: { url: 'https://x.com/a' }, name: 'A', pinned: false }]
+ */
+export function buildUrlItemRequests(pages, { pinned = false } = {}) {
+  return (pages || [])
+    .filter(page => isHttpUrl(page?.url))
+    .map(page => {
+      const name = String(page.title || '')
+        .trim()
+        .slice(0, MAX_ITEM_NAME_CHARS);
+      return {
+        kind: 'url',
+        ref: { url: page.url.trim() },
+        ...(name ? { name } : {}),
+        pinned: pinned === true
+      };
+    });
+}
+
+/**
+ * Whether `count` more items fit the project's item quota.
+ *
+ * @param {number} count
+ * @param {{limits?: {maxFiles?: number}}|null} config
+ * @param {{items?: number}|null} usage
+ * @returns {null|'quotaFiles'}
+ */
+export function validateItemCount(count, config, usage) {
+  const maxFiles = config?.limits?.maxFiles;
+  if (Number.isFinite(maxFiles) && (usage?.items || 0) + count > maxFiles) return 'quotaFiles';
+  return null;
+}
+
+/**
+ * How many more items the project takes: `Infinity` without a limit.
+ *
+ * @param {{limits?: {maxFiles?: number}}|null} config
+ * @param {{items?: number}|null} usage
+ * @returns {number}
+ */
+export function remainingItemSlots(config, usage) {
+  const maxFiles = config?.limits?.maxFiles;
+  if (!Number.isFinite(maxFiles)) return Infinity;
+  return Math.max(0, maxFiles - (usage?.items || 0));
+}
+
+/**
+ * A URL in the form two links to the same page share, to tell whether a page
+ * is in a project already: parsed (lower-case host, `/` for an empty path,
+ * default port dropped), without fragment or credentials, and without the
+ * trailing slash of a path. The address as typed when it does not parse.
+ *
+ * @param {string} value
+ * @returns {string}
+ *
+ * @example
+ * comparableUrl('HTTPS://Example.com#top') === comparableUrl('https://example.com/') // true
+ */
+export function comparableUrl(value) {
+  const text = String(value || '').trim();
+  try {
+    const url = new URL(text);
+    url.hash = '';
+    url.username = '';
+    url.password = '';
+    if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+      url.pathname = url.pathname.slice(0, -1);
+    }
+    return url.href;
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * The URLs a project links already, to mark them in a crawl result; compare
+ * with `comparableUrl`.
+ *
+ * @param {{items?: Array<{kind: string, ref?: {url?: string}}>}|null} project
+ * @returns {Set<string>} `comparableUrl` forms
+ */
+export function projectUrls(project) {
+  return new Set(
+    (project?.items || [])
+      .filter(item => item?.kind === 'url' && item.ref?.url)
+      .map(item => comparableUrl(item.ref.url))
+  );
+}
+
 /** Drop `undefined`, `null` and empty strings from a flat object. */
 function compact(object) {
   return Object.fromEntries(

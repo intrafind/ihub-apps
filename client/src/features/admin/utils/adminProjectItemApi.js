@@ -4,8 +4,10 @@
 import {
   addAdminProjectItem,
   checkProjectPickerUrl,
+  crawlProjectPickerUrl,
   fetchProjectPickerPages,
   getAdminApiErrorMessage,
+  previewProjectPickerUrl,
   searchProjectPickerIFinder,
   uploadAdminProjectItem
 } from '../../../api/adminApi';
@@ -20,5 +22,7 @@ export const ADMIN_ITEM_API = {
   fetchPages: () => fetchProjectPickerPages(),
   searchIFinder: query => searchProjectPickerIFinder(query),
   checkUrl: url => checkProjectPickerUrl(url),
+  previewUrl: url => previewProjectPickerUrl(url),
+  crawlUrl: (url, options) => crawlProjectPickerUrl(url, options),
   errorMessage: err => getAdminApiErrorMessage(err)
 };

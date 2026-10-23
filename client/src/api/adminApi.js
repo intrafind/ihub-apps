@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { apiClient } from './client.js';
+import { CRAWL_REQUEST_TIMEOUT_MS } from './endpoints/projects.js';
 import { buildApiUrl } from '../utils/runtimeBasePath';
 
 const isPlainObjectForBody = value =>
@@ -742,6 +743,38 @@ export const checkProjectPickerUrl = async url => {
   return response.data || { ok: false };
 };
 
+/**
+ * The text a URL item would give the model, read before the item is added.
+ *
+ * @param {string} url
+ * @returns {Promise<{ok: boolean, title?: string, finalUrl?: string, text?: string,
+ *   chars?: number, truncated?: boolean, error?: string}>}
+ */
+export const previewProjectPickerUrl = async url => {
+  const response = await makeAdminApiCall('/projects/pickers/url/preview', {
+    method: 'POST',
+    body: { url }
+  });
+  return response.data || { ok: false };
+};
+
+/**
+ * The pages of a website below a start URL, found by following its links.
+ *
+ * @param {string} url
+ * @param {{maxPages?: number, maxDepth?: number, samePath?: boolean}} [options]
+ * @returns {Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean, error?: string}>}
+ */
+export const crawlProjectPickerUrl = async (url, options = {}) => {
+  const response = await makeAdminApiCall('/projects/pickers/url/crawl', {
+    method: 'POST',
+    body: { url, ...options },
+    // Past the server's crawl deadline; see `CRAWL_REQUEST_TIMEOUT_MS`.
+    timeout: CRAWL_REQUEST_TIMEOUT_MS
+  });
+  return response.data || { ok: false };
+};
+
 // Workflow API functions
 export const fetchAdminWorkflows = async () => {
   try {
@@ -1421,6 +1454,8 @@ export const adminApi = {
   fetchProjectPickerPages,
   searchProjectPickerIFinder,
   checkProjectPickerUrl,
+  previewProjectPickerUrl,
+  crawlProjectPickerUrl,
 
   // Workflow functions
   fetchAdminWorkflows,

@@ -479,6 +479,7 @@ function AdminProjectEditPage() {
               kinds={kinds}
               config={config}
               api={ADMIN_ITEM_API}
+              project={project}
               onAdded={() => {
                 // The items changed: an estimate of the old set no longer holds.
                 clearEstimate();

@@ -417,9 +417,51 @@ A project page shows:
 ### Adding documents
 
 **Add documents** offers one tab per kind the installation allows: upload (several files, drag and
-drop), text, web page (checked before it is added), iHub page, iFinder document or search, and
-OneDrive / SharePoint, Google Drive and Nextcloud through the cloud file browsers. The text of a
-picked cloud file is taken with your account; refresh the item later to take it again.
+drop), text, web page, iHub page, iFinder document or search, and OneDrive / SharePoint, Google
+Drive and Nextcloud through the cloud file browsers. The text of a picked cloud file is taken with
+your account; refresh the item later to take it again.
+
+### Adding web pages
+
+The **Web page (URL)** tab (in user projects and in the admin project editor) adds one page or
+several pages of a website:
+
+- **Check** tells whether the page can be read.
+- **Preview** shows the text the model gets from the page, before it is added: the same reader
+  and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
+  automated access shows up here as an empty or short text.
+- **Find more pages of this website** opens the site search. **Find pages** follows the links of
+  the page that stay on the same website and lists the pages it finds, with their titles. Tick the
+  pages to add (filter the list, **Select all**, or preview a page with its eye icon); **Add N
+  pages** adds each as its own web page item, named after its title. Pages the project has already
+  are marked and cannot be ticked again, also when written differently (`https://example.com` and
+  `https://example.com/#top`). No more pages can be ticked than the project's item limit leaves
+  room for; the list says how many more fit.
+  - **Link depth** (1–3) is how many links away from the start page the search goes.
+  - **At most** caps the list (25–200 pages); when the cap or the 25-second time limit stops the
+    search, the list says so.
+  - **Stay in this part of the website** keeps the search in the start page's folder. The start
+    page counts as read after redirects, so `https://example.com` that answers from
+    `https://www.example.com/` searches `www.example.com`. From a page such as
+    `https://example.com/docs/intro.html` or `https://example.com/blog/my-post` it lists the pages
+    below `/docs/` or `/blog/`; from `https://example.com/docs` it lists the pages below `/docs/`
+    when the page links there. The list shows which part was searched. Untick it to search the
+    whole website.
+  - Links to PDF files are listed too; images, scripts, archives and office files are not. Links
+    marked `rel="nofollow"` are not followed, and dead links are left out. A page that redirects
+    is listed once, under the address it was read from.
+  - The website's `robots.txt` is honored: links its rules for every crawler (`User-agent: *`)
+    disallow are left out, and the list says how many. The start page itself is read as asked.
+  - Tracking and session parameters (`utm_*`, `fbclid`, `gclid`, `jsessionid`, …) are dropped from
+    the links, and at most three addresses that differ only in their query (`?page=2`, `?sort=…`)
+    are listed per page, so a calendar or a paged list does not fill the list.
+
+The search runs on the server with the same protections as the page reader: no private or internal
+addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, certificate checks
+skipped only for hosts in `ssl.domainWhitelist`, and at most 2 MB read per page. It reads on its own
+request queue (`project_crawl`, `requestConcurrency` slots), so a search does not hold up the page
+reads of chats. A user runs one search at a time, and a search stops when the browser stops
+waiting for it.
 
 ### Linking documents from other projects
 
@@ -774,6 +816,8 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/search`  | iFinder search with your rights; `?q=&profile=&limit=`.         |
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
 | `POST` | `/api/projects/pickers/url/check`       | Check a URL `{ url }` before adding it.                         |
+| `POST` | `/api/projects/pickers/url/preview`     | The text a URL `{ url }` gives the model, before it is added.   |
+| `POST` | `/api/projects/pickers/url/crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API

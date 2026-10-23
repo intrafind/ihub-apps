@@ -57,19 +57,23 @@ class URLHandler extends SourceHandler {
         ignoreSSL: shouldIgnoreSSL
       });
 
+      // The page reader returns its metadata at the top level, the fallback
+      // extractor under `metadata`.
+      const meta = { ...result.metadata, ...result };
+      const finalUrl = meta.finalUrl || url;
       return {
         content: result.content,
         metadata: {
           type: 'url',
           url,
-          link: result.metadata?.finalUrl || url, // Use final URL as link for references
-          title: result.metadata?.title || '',
-          description: result.metadata?.description || '',
+          link: finalUrl, // Use final URL as link for references
+          title: meta.title || '',
+          description: meta.description || '',
           contentLength: result.content.length,
           extractedAt: new Date().toISOString(),
-          statusCode: result.metadata?.statusCode,
-          finalUrl: result.metadata?.finalUrl || url,
-          contentType: result.metadata?.contentType,
+          statusCode: meta.statusCode,
+          finalUrl,
+          contentType: meta.contentType,
           // Only the first `maxContentLength` characters (or the reader's
           // own cap) came back: a consumer must not take this as the page.
           truncated: result.truncated === true || result.incomplete === true,

@@ -341,6 +341,56 @@ function absolutizeLinks(element) {
   }
 }
 
+/** Openers and closers of the raw-text elements `dropRawTextElements` knows, by tag list. */
+const rawTextPatterns = new Map();
+
+function rawTextPattern(tag, closing = false) {
+  const key = `${closing ? '/' : ''}${tag}`;
+  let pattern = rawTextPatterns.get(key);
+  if (!pattern) {
+    pattern = new RegExp(`<${closing ? '/' : ''}(${tag})(?=[\\s/>]|$)`, 'gi');
+    rawTextPatterns.set(key, pattern);
+  }
+  return pattern;
+}
+
+/**
+ * Drop raw-text elements (`<style>`, `<script>`) with their content, in one
+ * linear pass: a regex such as `<style[^>]*>[\s\S]*?</style>` takes quadratic
+ * time on a page of unclosed openers, which a hostile page can send. An
+ * element left open runs to the end of the page, as it does in the HTML
+ * parser, so the rest is dropped with it.
+ *
+ * Not a sanitizer: the result is only parsed by JSDOM, which runs no scripts.
+ *
+ * @param {string} html
+ * @param {string[]} tags - Lower-case tag names
+ * @returns {string}
+ */
+export function dropRawTextElements(html, tags) {
+  const source = String(html || '');
+  const opener = rawTextPattern(tags.join('|'));
+  const parts = [];
+  let position = 0;
+  while (position < source.length) {
+    opener.lastIndex = position;
+    const open = opener.exec(source);
+    if (!open) break;
+    parts.push(source.slice(position, open.index));
+    const closer = rawTextPattern(open[1].toLowerCase(), true);
+    closer.lastIndex = opener.lastIndex;
+    const close = closer.exec(source);
+    if (!close) {
+      position = source.length;
+      break;
+    }
+    const end = source.indexOf('>', closer.lastIndex);
+    position = end === -1 ? source.length : end + 1;
+  }
+  parts.push(source.slice(position));
+  return parts.join('');
+}
+
 /**
  * Extract the main content of an HTML page as Markdown.
  *
@@ -355,14 +405,8 @@ function absolutizeLinks(element) {
  */
 export function extractHtmlPage(html, { url } = {}) {
   // Style blocks are dropped before parsing: JSDOM's CSS parser throws on some
-  // real-world stylesheets, and nothing in them is content. Looped so nested or
-  // overlapping blocks a single pass would miss go too.
-  let source = String(html || '');
-  let previous;
-  do {
-    previous = source;
-    source = source.replaceAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  } while (source !== previous);
+  // real-world stylesheets, and nothing in them is content.
+  const source = dropRawTextElements(html, ['style']);
 
   const dom = new JSDOM(source, url ? { url } : undefined);
   const document = dom.window.document;
