@@ -90,7 +90,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
             'projects.catalog.dialogHint',
-            'Projects their owners published for everyone, and projects administrators made available to everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.'
+            'Projects their owners published for everyone: add one to your projects to use it in your chats; its owner and editors keep it up to date. Projects from the administrators are open to everyone already: open one to read it or to link its documents into your projects.'
           )}
         </p>
         <input
@@ -116,8 +116,10 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
           <ul className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
             {items.map(project => {
               const description = localizedText(project.description, language);
-              // An admin project available to everyone is in everyone's list already.
-              const inList = project.ownership === 'admin' || project.role !== 'catalog';
+              // An admin project is open to everyone and managed by the
+              // administrators: there is nothing to add.
+              const fromAdmins = project.ownership === 'admin';
+              const inList = project.role !== 'catalog';
               return (
                 <li key={project.id} className="px-3 py-3 flex items-start gap-3">
                   <Icon name="folder" size="md" className="mt-0.5 text-indigo-500 flex-none" />
@@ -135,7 +137,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
                       </p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {project.ownership === 'admin'
+                      {fromAdmins
                         ? t('projects.catalog.byAdmins', 'From the administrators')
                         : t('projects.catalog.byOwner', 'By {{name}}', {
                             name:
@@ -147,7 +149,11 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
                       })}
                     </p>
                   </div>
-                  {inList ? (
+                  {fromAdmins ? (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
+                      {t('projects.catalog.openToEveryone', 'Open to everyone')}
+                    </span>
+                  ) : inList ? (
                     <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
                       {t('projects.catalog.inYourList', 'In your projects')}
                     </span>

@@ -338,7 +338,7 @@ export default function registerProjectRoutes(app) {
    *     description: |
    *       Every user project an owner or editor published, for everyone signed
    *       in to browse and add to their list, and every admin project made
-   *       available to everyone signed in (in everyone's list already). Empty
+   *       available to everyone signed in (open to everyone, not added). Empty
    *       while the catalog is off (`platform.projects.sharing.allowCatalog`).
    *     tags: [Projects]
    *     parameters:
@@ -359,7 +359,7 @@ export default function registerProjectRoutes(app) {
       const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
       const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
       // An admin project made available to everyone signed in is listed too:
-      // it is in everyone's projects already, so it is found here, not added.
+      // it is open to everyone already, so it is found here, not added.
       const adminPublished = (await deps.repo.listAdmin({ includeDisabled: false })).filter(
         isPublished
       );

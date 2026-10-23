@@ -10,7 +10,7 @@
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   fetchAdminProject: jest.fn(),
@@ -246,6 +246,35 @@ describe('AdminProjectEditPage – create', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
 
     expect(await screen.findByText('A project with this ID already exists.')).toBeInTheDocument();
+  });
+});
+
+describe('AdminProjectEditPage – routes', () => {
+  test('starts the create form fresh after an existing project', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    function GoToNew() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/admin/projects/new')}>
+          go to new
+        </button>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/admin/projects/handbook/edit']}>
+        <Routes>
+          {['/admin/projects/new', '/admin/projects/:id/edit'].map(routePath => (
+            <Route key={routePath} path={routePath} element={<AdminProjectEditPage />} />
+          ))}
+        </Routes>
+        <GoToNew />
+      </MemoryRouter>
+    );
+    await screen.findByTestId('project-side-panel');
+
+    fireEvent.click(screen.getByRole('button', { name: 'go to new' }));
+    expect(await screen.findByLabelText('Project ID *')).toHaveValue('');
+    expect(screen.getByLabelText('Project name')).toHaveValue('');
   });
 });
 

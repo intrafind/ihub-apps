@@ -962,7 +962,7 @@ describe('the project catalog', () => {
     );
   });
 
-  it('lists the admin projects available to everyone, which are in every list already', async () => {
+  it('lists the admin projects available to everyone signed in', async () => {
     setProjectSettings({ sharing: { allowCatalog: true } });
     const repo = getProjectRepository();
     await repo.createAdmin({

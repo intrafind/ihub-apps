@@ -51,7 +51,8 @@ in `platform.json`.
 - The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
   taking a project out, removes it from the lists of those who added it.
 - Admin projects set to **Everyone signed in** are listed in the catalog too, marked **From the
-  administrators**. They are in everyone's projects already, so there is nothing to add.
+  administrators** and **Open to everyone**: users open them to read them or link their documents
+  into their own projects; there is nothing to add.
 
 ## Apps: switch projects off per app
 

@@ -492,8 +492,8 @@ published one, tick its documents and link them.
 **Everyone signed in** on an admin project (**Admin → Projects → a project → Availability →
 Change**, `"published": true` in `contents/projects/<id>.json`) makes it available to everyone
 signed in: they can use it and link its documents into their own projects, without an app that
-links it. It is in every user's projects and, while the catalog is on, listed under **Projects →
-Browse catalog** as **From the administrators**. Only administrators change it. The shipped iHub documentation project is published; installations that upgrade get it
+links it. While the catalog is on, it is listed under **Projects → Browse catalog** as **From the
+administrators**. Only administrators change it. The shipped iHub documentation project is published; installations that upgrade get it
 published too (migration V181), unless an administrator already set the switch.
 
 ### Roles and sharing

@@ -59,14 +59,12 @@ const adminErrorMessage = err => getAdminApiErrorMessage(err);
  * While an item is being extracted the page re-reads the project every two
  * seconds.
  *
+ * @param {{id: string}} props - The project id, or `new`.
  * @returns {JSX.Element}
  */
-function AdminProjectEditPage() {
+function AdminProjectEditPageContent({ id }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
-  // `/admin/projects/new` has no id in its path.
-  const { id: routeId } = useParams();
-  const id = routeId ?? 'new';
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = id === 'new';
@@ -519,6 +517,19 @@ function AdminProjectEditPage() {
       />
     </div>
   );
+}
+
+/**
+ * The page of the project in the URL. Mounted per id, so the create form and
+ * one project's items never carry state over to another route: React Router
+ * reuses the element when only the path changes.
+ *
+ * @returns {JSX.Element}
+ */
+function AdminProjectEditPage() {
+  // `/admin/projects/new` has no id in its path.
+  const { id = 'new' } = useParams();
+  return <AdminProjectEditPageContent key={id} id={id} />;
 }
 
 export default AdminProjectEditPage;
