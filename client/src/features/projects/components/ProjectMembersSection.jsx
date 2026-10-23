@@ -15,6 +15,7 @@ import {
   ownMemberEntry,
   sharesToMembers
 } from '../utils/projectView';
+import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
 import TransferProjectDialog from './TransferProjectDialog';
 
 const TARGET_ICONS = { user: 'user', group: 'user-group', everyone: 'globe' };
@@ -38,13 +39,13 @@ function MemberRow({ member }) {
       ? t('projects.members.everyone', 'Everyone signed in')
       : member.name || member.id;
   return (
-    <li className="flex items-center gap-2 py-1.5 text-sm">
+    <li className="flex items-center gap-2 py-1">
       <Icon
         name={TARGET_ICONS[member.type] || 'user'}
-        size="sm"
-        className="text-gray-500 flex-none"
+        size="xs"
+        className="text-gray-400 flex-none"
       />
-      <span className="flex-1 min-w-0 truncate text-gray-900 dark:text-gray-100">{name}</span>
+      <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">{name}</span>
       <span className="text-xs text-gray-500 dark:text-gray-400">
         {member.role === 'editor'
           ? t('projects.roles.editor', 'Editor')
@@ -96,83 +97,78 @@ function ProjectMembersSection({ project, userId, onChanged, onTransferred, onLe
   };
 
   return (
-    <section
-      className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5"
-      aria-labelledby="project-members-title"
-    >
-      <h2
-        id="project-members-title"
-        className="text-base font-semibold text-gray-900 dark:text-gray-100"
+    <>
+      <ProjectPanelRow
+        icon="user-group"
+        title={t('projects.members.title', 'Members')}
+        titleId="project-members-title"
+        action={
+          permissions.canShare ? (
+            <button type="button" onClick={() => setSharing(true)} className={ROW_ACTION}>
+              {t('projects.members.manage', 'Share')}
+            </button>
+          ) : null
+        }
       >
-        {t('projects.members.title', 'Members')}
-      </h2>
-      <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-        <Icon name="user" size="sm" className="text-gray-500" />
-        <span className="truncate">
-          {project.owner?.name || t('projects.members.unknownOwner', 'Unknown')}
-        </span>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {t('projects.roles.owner', 'Owner')}
-          {project.owner?.active === false && ` · ${t('projects.members.inactive', 'inactive')}`}
-        </span>
-      </p>
-      {members ? (
-        members.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-            <Icon name="lock" size="sm" />
-            {t('projects.members.private', 'Only the owner — this project is private.')}
-          </p>
+        <p className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+          <span className="truncate">
+            {project.owner?.name || t('projects.members.unknownOwner', 'Unknown')}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 flex-none">
+            {t('projects.roles.owner', 'Owner')}
+            {project.owner?.active === false && ` · ${t('projects.members.inactive', 'inactive')}`}
+          </span>
+        </p>
+        {members ? (
+          members.length === 0 ? (
+            <p className="mt-1 text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <Icon name="lock" size="xs" />
+              {t('projects.members.private', 'Only the owner — this project is private.')}
+            </p>
+          ) : (
+            <ul className="mt-0.5 max-h-48 overflow-y-auto">
+              {members.map(member => (
+                <MemberRow key={`${member.type}:${member.id ?? ''}`} member={member} />
+              ))}
+            </ul>
+          )
         ) : (
-          <ul className="mt-1 max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
-            {members.map(member => (
-              <MemberRow key={`${member.type}:${member.id ?? ''}`} member={member} />
-            ))}
-          </ul>
-        )
-      ) : (
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          {t('projects.members.count', '{{count}} members', { count: memberCountOf(project) })}
-        </p>
-      )}
+          <p className="mt-1 text-gray-500 dark:text-gray-400">
+            {t('projects.members.count', '{{count}} members', { count: memberCountOf(project) })}
+          </p>
+        )}
 
-      {error && (
-        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p role="alert" className="mt-2 text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {permissions.canShare && (
-          <button
-            type="button"
-            onClick={() => setSharing(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            <Icon name="share" size="sm" />
-            {t('projects.members.manage', 'Share')}
-          </button>
+        {((permissions.canTransfer && permissions.isOwner) || canLeave) && (
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {permissions.canTransfer && permissions.isOwner && (
+              <button
+                type="button"
+                onClick={() => setTransferring(true)}
+                className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+              >
+                <Icon name="arrows-right-left" size="xs" />
+                {t('projects.members.transfer', 'Transfer ownership')}
+              </button>
+            )}
+            {canLeave && (
+              <button
+                type="button"
+                onClick={() => setLeaving(true)}
+                className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+              >
+                <Icon name="logout" size="xs" />
+                {t('projects.members.leave', 'Leave project')}
+              </button>
+            )}
+          </div>
         )}
-        {permissions.canTransfer && permissions.isOwner && (
-          <button
-            type="button"
-            onClick={() => setTransferring(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            <Icon name="arrows-right-left" size="sm" />
-            {t('projects.members.transfer', 'Transfer ownership')}
-          </button>
-        )}
-        {canLeave && (
-          <button
-            type="button"
-            onClick={() => setLeaving(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
-          >
-            <Icon name="logout" size="sm" />
-            {t('projects.members.leave', 'Leave project')}
-          </button>
-        )}
-      </div>
+      </ProjectPanelRow>
 
       {sharing && (
         <PromptShareDialog
@@ -217,7 +213,7 @@ function ProjectMembersSection({ project, userId, onChanged, onTransferred, onLe
         onConfirm={leave}
         onDeny={() => setLeaving(false)}
       />
-    </section>
+    </>
   );
 }
 

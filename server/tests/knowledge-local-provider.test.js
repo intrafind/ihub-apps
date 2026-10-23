@@ -1279,6 +1279,20 @@ describe('feature switches', () => {
       );
       assert.ok((await providerContent({ ref: kbRef, user: reader, format: 'text' })).body);
 
+      configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
+      // An app the admin switched projects off for reaches none of its own;
+      // a workflow's links are the workflow's.
+      const appOff = { ...appConfig, features: { projects: false } };
+      assert.deepEqual(await resolveProjectScope({ appConfig: appOff, user: reader }), []);
+      const workflowLinks = await resolveProjectScope({
+        appConfig: { ...appOff, _workflowProjects: ['kb'] },
+        user: reader
+      });
+      assert.deepEqual(
+        workflowLinks.map(entry => entry.project.id),
+        ['kb']
+      );
+
       configCache.setCacheEntry('config/features.json', { projects: false, userProjects: true });
       assert.deepEqual(await resolveProjectScope({ appConfig, user: reader }), []);
       for (const ref of [kbRef, userRef]) {
@@ -1363,6 +1377,17 @@ describe('chat container', () => {
     } finally {
       configCache.setCacheEntry('config/features.json', { projects: true, userProjects: true });
     }
+
+    // So are they for an app the admin switched projects off for.
+    const appOff = await resolveChatProjects({
+      req: req(),
+      chat: null,
+      app: { id: 'chat', features: { projects: false } },
+      projectId: textProject.id
+    });
+    assert.equal(appOff.ok, true);
+    assert.equal(appOff.newContainer, false);
+    assert.equal(appOff.containerId, null);
   });
 });
 

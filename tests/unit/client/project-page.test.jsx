@@ -97,6 +97,12 @@ const mockT = (key, defaultOrOptions, maybeOptions) => {
 };
 const mockI18n = { t: mockT, i18n: { language: 'en-GB' } };
 jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
+// The start page's chat input (covered in app-chat-starter.test.jsx) needs
+// the whole chat stack; a field stands in for it here.
+jest.mock('../../../client/src/features/chat/components/AppChatStarter', () => ({
+  __esModule: true,
+  default: ({ app }) => <textarea aria-label={`Message ${app?.id}`} />
+}));
 
 const ProjectPage = require('../../../client/src/features/projects/pages/ProjectPage').default;
 const ProjectSettingsCard =
@@ -205,6 +211,15 @@ function renderPage({ withList = false } = {}) {
   );
 }
 
+/** Open the settings dialog from the side panel's Instructions row. */
+async function openSettings() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit instructions' }));
+  return screen.getByRole('dialog', { name: 'Settings' });
+}
+
+/** A field of the open settings dialog. */
+const field = label => within(screen.getByRole('dialog')).getByLabelText(label);
+
 /** A promise the test settles. */
 function deferred() {
   let resolve;
@@ -260,10 +275,9 @@ describe('ProjectPage – owner', () => {
     await screen.findByText('Lease.pdf');
 
     const composer = screen.getByTestId('project-chat-composer');
-    expect(within(composer).getByRole('textbox')).toHaveAttribute(
-      'placeholder',
-      'New chat in Case 2026-114'
-    );
+    expect(composer).toHaveAccessibleName('New chat in Case 2026-114');
+    // The start page's chat input, for the project's app.
+    expect(within(composer).getByRole('textbox', { name: 'Message chat' })).toBeInTheDocument();
     // Starting a chat is not in the header any more.
     expect(screen.getAllByRole('button', { name: 'New chat' })).toHaveLength(1);
     expect(composer).toContainElement(screen.getByRole('button', { name: 'New chat' }));
@@ -346,7 +360,11 @@ describe('ProjectPage – owner', () => {
     mockApi.updateProject.mockResolvedValue(makeProject({ instructions: 'Answer in German.' }));
     renderPage();
 
-    const instructions = await screen.findByLabelText('Instructions');
+    // The side panel shows the instructions; they are edited in a dialog.
+    const panel = await screen.findByTestId('project-side-panel');
+    expect(within(panel).getByText('Answer briefly.')).toBeInTheDocument();
+    await openSettings();
+    const instructions = field('Instructions');
     fireEvent.change(instructions, { target: { value: 'Answer in German.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -356,6 +374,7 @@ describe('ProjectPage – owner', () => {
       })
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   test('sets and clears the default app of the project', async () => {
@@ -363,7 +382,8 @@ describe('ProjectPage – owner', () => {
     mockApi.updateProject.mockResolvedValue(makeProject());
     renderPage();
 
-    const select = await screen.findByLabelText('Default app');
+    fireEvent.click(await screen.findByRole('button', { name: 'Change default app' }));
+    const select = field('Default app');
     expect(select).toHaveValue('chat');
     fireEvent.change(select, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -383,7 +403,8 @@ describe('ProjectPage – owner', () => {
     mockApi.updateProject.mockReturnValue(save.promise);
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText('Instructions'), {
+    await openSettings();
+    fireEvent.change(field('Instructions'), {
       target: { value: 'Answer in German.' }
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -400,7 +421,8 @@ describe('ProjectPage – owner', () => {
     });
     expect(screen.getByRole('heading', { name: 'Team wiki' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Case 2026-114' })).toBeNull();
-    expect(screen.getByLabelText('Instructions')).toHaveValue('Be terse.');
+    await openSettings();
+    expect(field('Instructions')).toHaveValue('Be terse.');
   });
 
   test('a saved rename reaches the shared project list', async () => {
@@ -414,7 +436,8 @@ describe('ProjectPage – owner', () => {
       expect(screen.getByTestId('list-probe')).toHaveTextContent('Case 2026-114')
     );
 
-    fireEvent.change(await screen.findByLabelText('Name'), {
+    await openSettings();
+    fireEvent.change(field('Name'), {
       target: { value: 'Case 2026-115' }
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -869,6 +892,7 @@ describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
     const onSaved = jest.fn();
     const first = makeProject();
     const { rerender } = render(<ProjectSettingsCard project={first} editable onSaved={onSaved} />);
+    await openSettings();
     // A poll (an item is still extracting) brings another editor's update.
     rerender(
       <ProjectSettingsCard
@@ -877,11 +901,11 @@ describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
         onSaved={onSaved}
       />
     );
-    expect(screen.getByLabelText('Instructions')).toHaveValue('Answer in German.');
+    expect(field('Instructions')).toHaveValue('Answer in German.');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
     // An unsaved local edit survives the next poll.
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Case 2026-115' } });
+    fireEvent.change(field('Name'), { target: { value: 'Case 2026-115' } });
     rerender(
       <ProjectSettingsCard
         project={makeProject({ instructions: 'Answer in German.', usage: { items: 3 } })}
@@ -889,7 +913,7 @@ describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
         onSaved={onSaved}
       />
     );
-    expect(screen.getByLabelText('Name')).toHaveValue('Case 2026-115');
+    expect(field('Name')).toHaveValue('Case 2026-115');
 
     mockApi.updateProject.mockResolvedValue(
       makeProject({ name: 'Case 2026-115', instructions: 'Answer in German.' })
@@ -899,6 +923,8 @@ describe('ProjectSettingsCard – a newer copy arrives while editing', () => {
       expect(mockApi.updateProject).toHaveBeenCalledWith('prj_a', { name: 'Case 2026-115' })
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    // The dialog closed; opened again it holds nothing left to save.
+    await openSettings();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 });
@@ -908,17 +934,19 @@ describe('ProjectSettingsCard – while a save is out', () => {
     const save = deferred();
     mockApi.updateProject.mockReturnValue(save.promise);
     render(<ProjectSettingsCard project={makeProject()} editable onSaved={jest.fn()} />);
+    await openSettings();
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Case 2026-115' } });
+    fireEvent.change(field('Name'), { target: { value: 'Case 2026-115' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     for (const label of ['Name', 'Description', 'Instructions']) {
-      expect(screen.getByLabelText(label)).toBeDisabled();
+      expect(field(label)).toBeDisabled();
     }
     await act(async () => {
       save.resolve(makeProject({ name: 'Case 2026-115' }));
     });
-    expect(screen.getByLabelText('Instructions')).toBeEnabled();
-    expect(screen.getByLabelText('Name')).toHaveValue('Case 2026-115');
+    await openSettings();
+    expect(field('Instructions')).toBeEnabled();
+    expect(field('Name')).toHaveValue('Case 2026-115');
   });
 });

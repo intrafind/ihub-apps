@@ -379,7 +379,11 @@ describe('project page rules', () => {
       '/apps/chat?attachProject=prj_a'
     );
     expect(
-      appsForProjectChats([{ id: 'a' }, { id: 'b', features: { userProjects: false } }])
+      appsForProjectChats([
+        { id: 'a' },
+        { id: 'b', features: { userProjects: false } },
+        { id: 'c', features: { projects: false } }
+      ])
     ).toEqual([{ id: 'a' }]);
     // Only chat apps start a chat; an omitted type is a chat app.
     expect(

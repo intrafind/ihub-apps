@@ -323,7 +323,14 @@ const featuresSchema = z
     // Response feedback (star rating + comment) for this app. Absent means
     // enabled: only an explicit `false` opts the app out, and the platform-wide
     // `feedback` feature flag still has to be on for it to show at all.
-    feedback: z.boolean().optional()
+    feedback: z.boolean().optional(),
+    // Projects in this app (#1036). Absent means on: only an explicit `false`
+    // switches off its linked projects, chats inside a project and attached
+    // projects. `userProjects: false` keeps the admin projects but takes no
+    // personal ones. The platform-wide `projects` / `userProjects` feature
+    // flags still have to be on.
+    projects: z.boolean().optional(),
+    userProjects: z.boolean().optional()
   })
   .passthrough(); // Allow additional feature flags
 

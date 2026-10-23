@@ -117,7 +117,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
                   ? undefined
                   : t('projects.items.full', 'This project holds as many items as it may.')
               }
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
             >
               <Icon name="plus" size="sm" />
               {t('projects.items.add', 'Add documents')}

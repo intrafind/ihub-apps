@@ -235,17 +235,26 @@ system prompt.
 </projects>
 ```
 
-### Switching user projects off for an app
+### Switching projects off for an app
 
-`features.userProjects` on an app (default `true`) decides whether chats in this app may run inside
-a user project. An app that answers from a fixed knowledge set turns it off:
+Two switches on an app decide what it does with projects. Both are on unless set to `false`, and
+both are under **Admin → Apps → Edit → Projects**:
+
+| Setting                 | Admin label                  | When `false`                                                                                                                               |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `features.projects`     | **Use projects in this app** | The app uses no project at all: not its linked admin projects, no chat runs inside a project and none can be attached from the chat input. |
+| `features.userProjects` | **Allow personal projects**  | The app keeps its admin project links, but no chat of it runs inside a user project or attaches one.                                       |
+
+An app that answers from a fixed knowledge set turns personal projects off:
 
 ```json
 { "features": { "userProjects": false } }
 ```
 
-The app's own admin project links keep working. The project page offers only apps that allow
-projects when you start a chat.
+The project page offers only apps that allow personal projects when you start a chat. The
+installation-wide feature flags `projects` and `userProjects` still have to be on; the app
+switches can only narrow them. A workflow step's own project links are the workflow's and are not
+affected.
 
 ### Checking a project
 
@@ -381,13 +390,13 @@ instructions). The button shows how many projects you have against `maxProjectsP
 
 A project page shows:
 
-- **A chat field** at the top, the main action: type a message and press Enter (or **Send**) to
-  start a chat in the project, with that message already sent. The app next to the button is the
-  project's default app (see **Settings**); pick another one to chat with it this time. Without a
-  message the button reads **New chat** and opens an empty chat. The message goes to the chat in
-  the link that opens it. A message whose link would be longer than 7,500 characters (a little over
-  7,000 characters of ordinary text, fewer for text with many non-English characters) shows an error
-  when you click **Send** and no chat is started.
+- **A chat input** at the top, the main action: the same input as the start page, with
+  attachments, the model selector, tools, web search, magic prompt and dictation. Send a message to
+  start a chat in the project, with that message already sent. The app above the input is the
+  project's default app; pick another one to chat with it this time. **New chat** opens an empty
+  chat. The message goes to the chat in the link that opens it. A message whose link would be
+  longer than 7,500 characters (a little over 7,000 characters of ordinary text, fewer for text
+  with many non-English characters) shows an error when you send it and no chat is started.
 - **Chats** in the project, all or only your own, above the documents so that a long document list
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
   page pages its list the same way; a list on these pages never grows with its content.
@@ -395,11 +404,13 @@ A project page shows:
   documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
   and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
   document and the project weigh.
-- **Settings**: name (up to 200 characters), description (up to 2,000 characters),
-  instructions (up to 20,000 characters) and the **default app**. The instructions apply to every
-  chat in the project. The default app is where new chats of the project start; everyone can still
-  pick another app in the chat field. If you cannot use the default app (it was removed, or it is
-  not shared with you), the first app that allows projects is used instead.
+- **A side panel** of compact rows: the **Instructions** (a preview), the **default app**, the
+  **Members** and, where it applies, the **Catalog**. Owners and editors click **Edit** or
+  **Change** to open the settings: name (up to 200 characters), description (up to 2,000
+  characters), instructions (up to 20,000 characters) and the default app. The instructions apply
+  to every chat in the project. The default app is where new chats of the project start; everyone
+  can still pick another app above the chat input. If you cannot use the default app (it was
+  removed, or it is not shared with you), the first app that allows projects is used instead.
 - **Members**: the owner, the members, **Share**, **Transfer ownership**, **Leave project** and
   **Delete project**.
 

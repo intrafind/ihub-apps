@@ -14,6 +14,7 @@ import ProjectMembersSection from '../components/ProjectMembersSection';
 import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
 import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
+import { PANEL_CARD } from '../components/ProjectPanelRow';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -229,7 +230,8 @@ function ProjectPageContent({ projectId }) {
               reload={reload}
             />
           </div>
-          <div className="space-y-6 min-w-0">
+          {/* The side panel: one card of compact rows; editing opens a dialog. */}
+          <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
             <ProjectSettingsCard
               project={project}
               editable={editable}

@@ -2715,7 +2715,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onChange: setAttachedProjectIds,
         disabled: processing || hydrating,
         attached: attachedProjects,
-        attachDisabled: app?.features?.userProjects === false
+        attachDisabled: app?.features?.projects === false || app?.features?.userProjects === false
       };
 
   const renderComposer = () => {

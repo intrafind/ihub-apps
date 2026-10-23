@@ -182,7 +182,7 @@ function AdminProjectViewPageContent({ id }) {
             <button
               type="button"
               onClick={() => setHistoryOpen(true)}
-              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {t('admin.projects.history', 'History')}
             </button>
@@ -191,7 +191,7 @@ function AdminProjectViewPageContent({ id }) {
               type="button"
               onClick={handleTest}
               disabled={testing}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium flex items-center"
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg border border-transparent text-sm font-medium flex items-center"
             >
               <Icon
                 name={testing ? 'arrow-path' : 'beaker'}
@@ -203,7 +203,7 @@ function AdminProjectViewPageContent({ id }) {
             </button>
             <Link
               to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg border border-transparent text-sm font-medium flex items-center"
             >
               <Icon name="pencil" className="h-4 w-4 mr-2" />
               {t('admin.projects.view.edit', 'Edit')}

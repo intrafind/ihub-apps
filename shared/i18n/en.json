@@ -3038,7 +3038,11 @@
           "confirmDelete": "Delete the usage guide of this app?"
         },
         "projects": "Projects",
-        "projectsDesc": "Link admin projects whose knowledge this app uses. Choose per project whether it is loaded into the prompt, searched with tools, or decided automatically by size."
+        "projectsDesc": "Link admin projects whose knowledge this app uses. Choose per project whether it is loaded into the prompt, searched with tools, or decided automatically by size.",
+        "projectsEnabled": "Use projects in this app",
+        "projectsEnabledNote": "When off, the app uses no project: neither the linked ones below nor chats started in a project or projects attached in the chat.",
+        "userProjectsEnabled": "Allow personal projects",
+        "userProjectsEnabledNote": "Users can start chats of this app in their own projects and attach them in the chat. The platform-level personal projects feature must also be enabled."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3777,6 +3781,7 @@
       }
     },
     "projects": {
+      "settings": "Settings",
       "itemCount": "{{count}} items",
       "deleteTitle": "Delete project",
       "deleteConfirm": "Delete \"{{name}}\" and all of its items? This cannot be undone.",
@@ -5286,6 +5291,7 @@
     "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."
   },
   "startPage": {
+    "messageTooLong": "This message is too long to send from here.",
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
@@ -6550,7 +6556,16 @@
       "user": "User",
       "catalog": "From the catalog"
     },
+    "panel": {
+      "add": "Add",
+      "view": "View",
+      "change": "Change"
+    },
     "settings": {
+      "editInstructions": "Edit instructions",
+      "viewInstructions": "View instructions",
+      "changeDefaultApp": "Change default app",
+      "noDefaultApp": "None — the first app is used",
       "editTitle": "Settings",
       "noInstructions": "No instructions.",
       "reset": "Discard changes",
@@ -6629,12 +6644,9 @@
       "full": "A chat can use at most {{max}} projects."
     },
     "composer": {
-      "title": "Start a chat in this project",
       "placeholder": "New chat in {{name}}",
       "hint": "The app gets the project’s instructions and documents.",
-      "app": "App",
-      "send": "Send",
-      "tooLong": "This message is too long to send from here."
+      "app": "App"
     },
     "appSelect": {
       "unavailable": "{{id}} (not available)"

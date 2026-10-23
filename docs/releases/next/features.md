@@ -13,9 +13,11 @@ Nothing needs to be configured, and the Docker image, binaries and `npm start` a
 This needs Node 24.5 or later; on older runtimes set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` instead.
 
 **Projects are easier to use: start a chat from the project, and pick the projects of a chat in the "+" menu.**
-The project page now has a chat field at the top: type a message and press Enter to start a chat in the project, with that message already sent.
-Next to it you can choose another app for this chat; without a message the button opens an empty chat.
-Each project has a **default app** (project page → **Settings**), which is where its new chats start.
+The project page now has the same chat input as the start page at the top, with attachments, the model selector, tools, web search and magic prompt:
+send a message to start a chat in the project, with that message already sent.
+Above it you can choose another app for this chat; **New chat** opens an empty one.
+Each project has a **default app**, which is where its new chats start.
+The side panel of the project page is now a compact list (instructions, default app, members, catalog); **Edit** and **Change** open the settings in a dialog.
 The projects a chat draws on, and the project it runs in, now sit beside the message box instead of in a bar under the header: tick projects under **Projects for this chat** in the **+** menu.
 
 ## Projects: link documents from other projects
@@ -44,3 +46,17 @@ in `platform.json`.
   from the catalog **From the catalog**.
 - The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
   taking a project out, removes it from the lists of those who added it.
+
+## Apps: switch projects off per app
+
+**Admin → Apps → Edit → Projects** now has two switches, both on by default:
+
+- **Use projects in this app**: when off, the app uses no project at all, neither its linked admin
+  projects nor chats started in a project or projects attached in the chat.
+- **Allow personal projects**: when off, the app keeps its admin projects but takes no user
+  projects (`features.userProjects: false`, which could so far only be set in the app's JSON).
+
+## Admin Projects: the items come first
+
+The edit page of an admin project shows its items in the wide column and the settings in a compact
+form beside them, so the documents are no longer pushed below a long form.
