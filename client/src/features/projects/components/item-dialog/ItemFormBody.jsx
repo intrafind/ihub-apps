@@ -8,6 +8,7 @@ import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
 import {
   buildItemRequest,
   buildUrlItemRequests,
+  remainingItemSlots,
   validateItemCount,
   validateUploads
 } from '../../utils/projectItems';
@@ -142,9 +143,13 @@ async function addAllUrls(api, projectId, pages, { pinned }) {
  * @param {Object} props.api - See `AddProjectItemDialog`.
  * @param {boolean} props.multipleUploads
  * @param {{items?: number, bytes?: number}|null} props.usage
- * @param {Set<string>} [props.existingUrls] - URLs the project has already.
- * @param {(item: Object) => void} props.onAdded
+ * @param {Set<string>} [props.existingUrls] - `comparableUrl` forms of the URLs
+ *   the project has already.
+ * @param {(item: Object) => void} props.onAdded - Called after an add, with the
+ *   item added (once for several files or pages, with the last one).
  * @param {() => void} props.onClose
+ * @param {(busy: boolean) => void} [props.onBusyChange] - Items are being added:
+ *   the dialog must not close.
  * @returns {JSX.Element}
  */
 function ItemFormBody({
@@ -156,7 +161,8 @@ function ItemFormBody({
   usage,
   existingUrls,
   onAdded,
-  onClose
+  onClose,
+  onBusyChange
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(EMPTY_DRAFT);
@@ -167,12 +173,19 @@ function ItemFormBody({
   const update = changes => setDraft(prev => ({ ...prev, ...changes }));
   // Pages picked from a site crawl: added instead of the URL in the field.
   const pickedUrls = tab.id === 'url' ? draft.selectedUrls.length : 0;
+  const markSubmitting = value => {
+    setSubmitting(value);
+    onBusyChange?.(value);
+  };
 
-  // A new tab starts without the previous tab's error (adjusted during render).
+  // A new tab starts without the previous tab's error, and without pages
+  // picked from a crawl, whose list the URL tab no longer shows (adjusted
+  // during render).
   const [errorTab, setErrorTab] = useState(tab.id);
   if (errorTab !== tab.id) {
     setErrorTab(tab.id);
     setError(null);
+    if (draft.selectedUrls.length > 0) update({ selectedUrls: [] });
   }
 
   // The page list is loaded once, the first time the page tab is shown.
@@ -190,16 +203,16 @@ function ItemFormBody({
   const submitUpload = async () => {
     const uploadError = validateUploads(files, config, usage);
     if (uploadError) return setError(validationMessage(t, uploadError, config));
-    setSubmitting(true);
+    markSubmitting(true);
     const { added, uploaded, failures } = await uploadAll(api, projectId, files, {
       name: draft.name.trim(),
       pinned: draft.pinned
     });
-    added.forEach(item => onAdded(item));
+    if (added.length > 0) onAdded(added.at(-1));
     // The added files leave the selection: after a partial failure, Add
     // retries only the files that failed instead of adding the others again.
     setFiles(prev => prev.filter(file => !uploaded.includes(file)));
-    setSubmitting(false);
+    markSubmitting(false);
     if (failures.length > 0) return setError(failures.join('\n'));
     return onClose();
   };
@@ -207,14 +220,17 @@ function ItemFormBody({
   const submitUrls = async () => {
     const quotaError = validateItemCount(draft.selectedUrls.length, config, usage);
     if (quotaError) return setError(validationMessage(t, quotaError, config));
-    setSubmitting(true);
+    markSubmitting(true);
     const { added, addedUrls, failures } = await addAllUrls(api, projectId, draft.selectedUrls, {
       pinned: draft.pinned
     });
-    added.forEach(item => onAdded(item));
+    if (added.length > 0) onAdded(added.at(-1));
     // As with uploads: Add retries only the pages that failed.
-    update({ selectedUrls: draft.selectedUrls.filter(page => !addedUrls.includes(page.url)) });
-    setSubmitting(false);
+    setDraft(prev => ({
+      ...prev,
+      selectedUrls: prev.selectedUrls.filter(page => !addedUrls.includes(page.url))
+    }));
+    markSubmitting(false);
     if (failures.length > 0) return setError(failures.join('\n'));
     return onClose();
   };
@@ -222,14 +238,14 @@ function ItemFormBody({
   const submitJson = async () => {
     const { body, error: requestError } = buildItemRequest(tab.id, draft);
     if (requestError) return setError(validationMessage(t, requestError, config));
-    setSubmitting(true);
+    markSubmitting(true);
     try {
       onAdded(await api.addItem(projectId, body));
       onClose();
     } catch (err) {
       setError(api.errorMessage(err));
     } finally {
-      setSubmitting(false);
+      markSubmitting(false);
     }
     return undefined;
   };
@@ -265,6 +281,8 @@ function ItemFormBody({
             previewUrl={api.previewUrl}
             crawlUrl={api.crawlUrl}
             existingUrls={existingUrls}
+            remaining={remainingItemSlots(config, usage)}
+            busy={submitting}
             errorMessage={api.errorMessage}
           />
         );
@@ -336,13 +354,18 @@ function ItemFormBody({
       </div>
 
       <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
+        {/* Closing while items are being added would leave them half added. */}
+        <button type="button" onClick={onClose} disabled={submitting} className={SECONDARY_BUTTON}>
           {t('common.cancel', 'Cancel')}
         </button>
         <button type="submit" disabled={!tab.enabled || submitting} className={PRIMARY_BUTTON}>
           {submitting && <Icon name="arrow-path" size="sm" className="animate-spin mr-2" />}
           {pickedUrls > 0
-            ? t('projects.addItem.submitPages', 'Add {{count}} pages', { count: pickedUrls })
+            ? t('projects.addItem.submitPages', {
+                count: pickedUrls,
+                defaultValue_one: 'Add {{count}} page',
+                defaultValue_other: 'Add {{count}} pages'
+              })
             : t('projects.addItem.submit', 'Add')}
         </button>
       </div>

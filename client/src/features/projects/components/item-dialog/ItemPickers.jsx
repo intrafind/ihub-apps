@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
@@ -135,7 +135,10 @@ export function TextPicker({ draft, update }) {
  * @param {(url: string) => Promise<Object>} [props.previewUrl] - See `UrlPreviewPanel`.
  * @param {(url: string, options: Object) => Promise<Object>} [props.crawlUrl] - See
  *   `SiteCrawlPanel`.
- * @param {Set<string>} [props.existingUrls] - URLs the project has already.
+ * @param {Set<string>} [props.existingUrls] - `comparableUrl` forms of the URLs
+ *   the project has already.
+ * @param {number} [props.remaining] - Items the project still takes.
+ * @param {boolean} [props.busy] - The picked pages are being added.
  * @param {(error: Error) => string} props.errorMessage
  * @returns {JSX.Element}
  */
@@ -146,12 +149,23 @@ export function UrlPicker({
   previewUrl,
   crawlUrl,
   existingUrls,
+  remaining,
+  busy,
   errorMessage
 }) {
   const { t } = useTranslation();
   const [check, setCheck] = useState(null);
   const [preview, setPreview] = useState(null);
+  // The control a preview was opened from, to give the focus back on close.
+  const previewOpenerRef = useRef(null);
   const selected = draft.selectedUrls || [];
+
+  const closePreview = () => {
+    setPreview(null);
+    const opener = previewOpenerRef.current;
+    previewOpenerRef.current = null;
+    if (opener?.isConnected) opener.focus();
+  };
 
   // A check answers for the URL it was started for: one that comes back
   // after the URL was edited (or checked again) is dropped, so a slow answer
@@ -172,6 +186,7 @@ export function UrlPicker({
   const runPreview = async (target, title) => {
     const url = String(target || '').trim();
     if (!url) return;
+    if (typeof document !== 'undefined') previewOpenerRef.current = document.activeElement;
     setPreview({ loading: true, url, title });
     let outcome;
     try {
@@ -238,7 +253,7 @@ export function UrlPicker({
           </p>
         )}
       </div>
-      {preview && <UrlPreviewPanel preview={preview} onClose={() => setPreview(null)} />}
+      {preview && <UrlPreviewPanel preview={preview} onClose={closePreview} />}
       {crawlUrl && (
         <SiteCrawlPanel
           url={draft.url}
@@ -248,6 +263,8 @@ export function UrlPicker({
           onSelectedChange={selectedUrls => update({ selectedUrls })}
           onPreview={previewUrl ? runPreview : undefined}
           existingUrls={existingUrls}
+          remaining={remaining}
+          busy={busy}
         />
       )}
     </div>

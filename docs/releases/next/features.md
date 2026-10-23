@@ -75,10 +75,15 @@ one URL at a time.
 
 - **Preview** shows the extracted text of the page: the same reader and length limit the project
   uses, so a page that needs JavaScript or blocks automated access is visible before adding it.
-- **Find pages** follows the page's links that stay on the same website (by default only below the
-  start address, up to 3 links deep and 200 pages) and lists the pages found with their titles.
-  Filter the list, tick pages or **Select all**, preview any of them, and **Add N pages** adds each
-  as its own web page item, named after its title. Pages already in the project are marked.
+- **Find more pages of this website** follows the page's links that stay on the same website (by
+  default only in the start page's part of it, up to 3 links deep and 200 pages) and lists the
+  pages found with their titles. Filter the list, tick pages or **Select all**, preview any of
+  them, and **Add N pages** adds each as its own web page item, named after its title. Pages
+  already in the project are marked, and no more pages can be ticked than the project takes.
+- The search honors the website's `robots.txt`, follows the start page's redirects (so
+  `example.com` answered from `www.example.com` works), lists a redirected page once, and leaves
+  out tracking parameters and endless `?page=N` variants. It stops after 25 seconds with the pages
+  found so far, and does not slow down the page reads of chats.
 
 ## Projects: a clearer way to create a project and to say who can use it
 

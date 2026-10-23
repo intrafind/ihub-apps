@@ -13,8 +13,10 @@ import {
   buildUrlItemRequests,
   cloudItemRef,
   cloudProvidersForKind,
+  comparableUrl,
   isItemReadable,
   projectUrls,
+  remainingItemSlots,
   validateItemCount,
   validateUploads,
   visibleItemDialogTabs,
@@ -227,6 +229,29 @@ describe('project items — pages picked from a site crawl', () => {
     });
     expect([...urls]).toEqual(['https://x.com/a']);
     expect(projectUrls(null).size).toBe(0);
+  });
+
+  test('two ways of writing the same page compare equal', () => {
+    const same = [
+      'https://x.com',
+      'https://X.com/',
+      'https://x.com:443/#top',
+      'https://user:pw@x.com/'
+    ].map(comparableUrl);
+    expect(new Set(same).size).toBe(1);
+    expect(comparableUrl('https://x.com/docs/')).toBe(comparableUrl('https://x.com/docs'));
+    expect(comparableUrl('https://x.com/a')).not.toBe(comparableUrl('https://x.com/b'));
+    expect(comparableUrl('not a url ')).toBe('not a url');
+    // The project's own items are compared in that form.
+    const urls = projectUrls({ items: [{ kind: 'url', ref: { url: 'https://X.com/docs/' } }] });
+    expect(urls.has(comparableUrl('https://x.com/docs#intro'))).toBe(true);
+  });
+
+  test('the items a project still takes', () => {
+    expect(remainingItemSlots({ limits: { maxFiles: 10 } }, { items: 7 })).toBe(3);
+    expect(remainingItemSlots({ limits: { maxFiles: 10 } }, { items: 12 })).toBe(0);
+    expect(remainingItemSlots({ limits: { maxFiles: 10 } }, null)).toBe(10);
+    expect(remainingItemSlots(null, { items: 7 })).toBe(Infinity);
   });
 });
 

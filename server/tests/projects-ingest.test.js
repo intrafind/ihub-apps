@@ -13,6 +13,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, it } from 'node:test';
@@ -142,7 +143,12 @@ function handlersFor(routes, method, suffix) {
 }
 
 function makeResponse() {
-  const res = { statusCode: 200, body: null, headers: {} };
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200,
+    body: null,
+    headers: {},
+    writableEnded: false
+  });
   res.status = code => {
     res.statusCode = code;
     return res;
@@ -2593,6 +2599,20 @@ describe('routes', () => {
       body: { url: 'https://example.com/', maxDepth: 9 }
     });
     assert.equal(tooDeep.statusCode, 400);
+  });
+
+  it('runs one site crawl per user at a time', async () => {
+    const crawl = url => drive(route.urlCrawl, { user: ADA, body: { url } });
+    const [first, second] = await Promise.all([
+      crawl('http://127.0.0.1:9/a'),
+      crawl('http://127.0.0.1:9/b')
+    ]);
+    assert.match(first.body.error, /private/);
+    assert.equal(second.body.ok, false);
+    assert.equal(second.body.code, 'CRAWL_RUNNING');
+    // The first one finished, so the next may start.
+    const third = await crawl('http://127.0.0.1:9/c');
+    assert.match(third.body.error, /private/);
   });
 
   it('sizes a probed body up to a bound and drops the rest', async () => {

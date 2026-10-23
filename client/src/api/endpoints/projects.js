@@ -355,6 +355,13 @@ export const previewPickerUrl = async url => {
 };
 
 /**
+ * How long the client waits for a site crawl: past the server's 25-second
+ * crawl deadline (which answers with the pages found so far), with room for
+ * the last pages it parses.
+ */
+export const CRAWL_REQUEST_TIMEOUT_MS = 45_000;
+
+/**
  * The pages of a website below a start URL, found by following its links.
  *
  * @param {string} url
@@ -364,7 +371,11 @@ export const previewPickerUrl = async url => {
  */
 export const crawlPickerUrl = async (url, options = {}) => {
   const data = await call(() =>
-    apiClient.post(`${PROJECTS_PATH}/pickers/url/crawl`, { url, ...options })
+    apiClient.post(
+      `${PROJECTS_PATH}/pickers/url/crawl`,
+      { url, ...options },
+      { timeout: CRAWL_REQUEST_TIMEOUT_MS }
+    )
   );
   return data || { ok: false };
 };

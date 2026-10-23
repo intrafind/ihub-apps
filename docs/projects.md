@@ -430,22 +430,38 @@ several pages of a website:
 - **Preview** shows the text the model gets from the page, before it is added: the same reader
   and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
   automated access shows up here as an empty or short text.
-- **Find pages** follows the links of the page that stay on the same website and lists the pages
-  it finds, with their titles. Tick the pages to add (filter the list, **Select all**, or preview a
-  page with its eye icon); **Add N pages** adds each as its own web page item, named after its
-  title. Pages the project has already are marked and cannot be ticked again.
+- **Find more pages of this website** opens the site search. **Find pages** follows the links of
+  the page that stay on the same website and lists the pages it finds, with their titles. Tick the
+  pages to add (filter the list, **Select all**, or preview a page with its eye icon); **Add N
+  pages** adds each as its own web page item, named after its title. Pages the project has already
+  are marked and cannot be ticked again, also when written differently (`https://example.com` and
+  `https://example.com/#top`). No more pages can be ticked than the project's item limit leaves
+  room for; the list says how many more fit.
   - **Link depth** (1–3) is how many links away from the start page the search goes.
-  - **At most** caps the list (25–200 pages); when the cap or the 45-second time limit stops the
+  - **At most** caps the list (25–200 pages); when the cap or the 25-second time limit stops the
     search, the list says so.
-  - **Only pages below this address** keeps the search in the start page's folder: from
-    `https://example.com/docs/intro.html` it lists `https://example.com/docs/…` only. Untick it to
-    search the whole website.
+  - **Stay in this part of the website** keeps the search in the start page's folder. The start
+    page counts as read after redirects, so `https://example.com` that answers from
+    `https://www.example.com/` searches `www.example.com`. From a page such as
+    `https://example.com/docs/intro.html` or `https://example.com/blog/my-post` it lists the pages
+    below `/docs/` or `/blog/`; from `https://example.com/docs` it lists the pages below `/docs/`
+    when the page links there. The list shows which part was searched. Untick it to search the
+    whole website.
   - Links to PDF files are listed too; images, scripts, archives and office files are not. Links
-    marked `rel="nofollow"` are not followed, and dead links are left out.
+    marked `rel="nofollow"` are not followed, and dead links are left out. A page that redirects
+    is listed once, under the address it was read from.
+  - The website's `robots.txt` is honored: links its rules for every crawler (`User-agent: *`)
+    disallow are left out, and the list says how many. The start page itself is read as asked.
+  - Tracking and session parameters (`utm_*`, `fbclid`, `gclid`, `jsessionid`, …) are dropped from
+    the links, and at most three addresses that differ only in their query (`?page=2`, `?sort=…`)
+    are listed per page, so a calendar or a paged list does not fill the list.
 
 The search runs on the server with the same protections as the page reader: no private or internal
-addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, and at most 2 MB
-read per page.
+addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, certificate checks
+skipped only for hosts in `ssl.domainWhitelist`, and at most 2 MB read per page. It reads on its own
+request queue (`project_crawl`, `requestConcurrency` slots), so a search does not hold up the page
+reads of chats. A user runs one search at a time, and a search stops when the browser stops
+waiting for it.
 
 ### Linking documents from other projects
 

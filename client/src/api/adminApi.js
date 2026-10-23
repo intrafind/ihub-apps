@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { apiClient } from './client.js';
+import { CRAWL_REQUEST_TIMEOUT_MS } from './endpoints/projects.js';
 import { buildApiUrl } from '../utils/runtimeBasePath';
 
 const isPlainObjectForBody = value =>
@@ -767,7 +768,9 @@ export const previewProjectPickerUrl = async url => {
 export const crawlProjectPickerUrl = async (url, options = {}) => {
   const response = await makeAdminApiCall('/projects/pickers/url/crawl', {
     method: 'POST',
-    body: { url, ...options }
+    body: { url, ...options },
+    // Past the server's crawl deadline; see `CRAWL_REQUEST_TIMEOUT_MS`.
+    timeout: CRAWL_REQUEST_TIMEOUT_MS
   });
   return response.data || { ok: false };
 };

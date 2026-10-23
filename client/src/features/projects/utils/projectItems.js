@@ -350,16 +350,58 @@ export function validateItemCount(count, config, usage) {
 }
 
 /**
- * The URLs a project links already, to mark them in a crawl result.
+ * How many more items the project takes: `Infinity` without a limit.
+ *
+ * @param {{limits?: {maxFiles?: number}}|null} config
+ * @param {{items?: number}|null} usage
+ * @returns {number}
+ */
+export function remainingItemSlots(config, usage) {
+  const maxFiles = config?.limits?.maxFiles;
+  if (!Number.isFinite(maxFiles)) return Infinity;
+  return Math.max(0, maxFiles - (usage?.items || 0));
+}
+
+/**
+ * A URL in the form two links to the same page share, to tell whether a page
+ * is in a project already: parsed (lower-case host, `/` for an empty path,
+ * default port dropped), without fragment or credentials, and without the
+ * trailing slash of a path. The address as typed when it does not parse.
+ *
+ * @param {string} value
+ * @returns {string}
+ *
+ * @example
+ * comparableUrl('HTTPS://Example.com#top') === comparableUrl('https://example.com/') // true
+ */
+export function comparableUrl(value) {
+  const text = String(value || '').trim();
+  try {
+    const url = new URL(text);
+    url.hash = '';
+    url.username = '';
+    url.password = '';
+    if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+      url.pathname = url.pathname.slice(0, -1);
+    }
+    return url.href;
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * The URLs a project links already, to mark them in a crawl result; compare
+ * with `comparableUrl`.
  *
  * @param {{items?: Array<{kind: string, ref?: {url?: string}}>}|null} project
- * @returns {Set<string>}
+ * @returns {Set<string>} `comparableUrl` forms
  */
 export function projectUrls(project) {
   return new Set(
     (project?.items || [])
       .filter(item => item?.kind === 'url' && item.ref?.url)
-      .map(item => item.ref.url)
+      .map(item => comparableUrl(item.ref.url))
   );
 }
 
