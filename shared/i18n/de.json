@@ -4066,10 +4066,18 @@
     },
     "projects": {
       "settings": "Einstellungen",
+      "availability": {
+        "legend": "Wer kann dieses Projekt nutzen?",
+        "apps": { "label": "Nur verknüpfte Apps", "badge": "Nur verknüpfte Apps", "hint": "Wird von den Apps, Workflows und Agenten genutzt, die es verknüpfen, und steht allen offen, die diese nutzen dürfen." },
+        "everyone": { "label": "Alle angemeldeten Benutzer", "badge": "Alle angemeldeten Benutzer", "hint": "Alle angemeldeten Benutzer können Dokumente und Anweisungen lesen und in eigene Projekte verknüpfen, auch ohne Zugriff auf die Apps, die es nutzen." },
+        "off": { "label": "Aus", "badge": "Aus", "hint": "Nichts nutzt es und niemand kann es nutzen. Administratoren können es weiter bearbeiten. Geeignet für einen Entwurf oder um ein Projekt zu pausieren." }
+      },
+      "details": "Kategorie und Tags (optional)",
+      "createHint": "Als Nächstes fügen Sie die Dokumente hinzu. Solange das Projekt mit keiner App verknüpft ist, sehen es nur Administratoren.",
       "publish": {
-        "confirmTitle": "Dieses Projekt veröffentlichen?",
+        "confirmTitle": "Dieses Projekt für alle verfügbar machen?",
         "confirmMessage": "Alle angemeldeten Benutzer können dann seine Dokumente und Anweisungen lesen und mit eigenen Projekten verknüpfen, auch wer die Apps, Workflows oder Agenten, die es verknüpfen, nicht nutzen darf. Nur Administratoren können es ändern.",
-        "confirm": "Veröffentlichen"
+        "confirm": "Verfügbar machen"
       },
       "itemCount": "{{count}} Elemente",
       "deleteTitle": "Projekt löschen",
@@ -4079,7 +4087,7 @@
       "columns": {
         "name": "Name",
         "items": "Elemente",
-        "enabled": "Status",
+        "availability": "Verfügbar für",
         "categoryTags": "Kategorie / Tags",
         "updated": "Aktualisiert"
       },
@@ -4135,9 +4143,7 @@
       "fields": {
         "id": "Projekt-ID",
         "idFixed": "Die ID kann nach dem Anlegen nicht geändert werden.",
-        "enabled": "Aktiviert",
-        "published": "Veröffentlicht",
-        "publishedHint": "Alle angemeldeten Benutzer können es nutzen und seine Dokumente mit eigenen Projekten verknüpfen, auch ohne Zugriff auf die Apps, die es verknüpfen.",
+        "idHint": "Wird aus dem Namen gefüllt. Apps und Links verwenden sie, und sie lässt sich nach dem Anlegen nicht ändern.",
         "name": "Name",
         "namePlaceholder": "Projektname",
         "description": "Beschreibung",
@@ -4154,7 +4160,6 @@
       "items": {
         "title": "Elemente",
         "add": "Element hinzufügen",
-        "saveFirst": "Legen Sie das Projekt zuerst an; danach können Sie Elemente hinzufügen.",
         "removeTitle": "Element entfernen",
         "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
         "actions": {

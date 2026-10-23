@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
   fetchAdminProjectDependencies,
+  fetchAdminProjectConfig,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
   getAdminApiErrorMessage,
@@ -21,11 +22,15 @@ import {
   ProjectDetailLayout,
   useAdminProjectChecks
 } from '../components/AdminProjectDetail';
+import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
+import { ProjectAvailabilityBadge, availabilityOptions } from '../components/ProjectAvailability';
+import { ADMIN_ITEM_API } from '../utils/adminProjectItemApi';
 import { useAdminProject } from '../hooks/useAdminProject';
 import { localizedText } from '../../projects/utils/projectItems';
+import { projectAvailability } from '../utils/projectAdmin';
 
 /** Where the admin edits each kind of resource that links a project. */
 const DEPENDENCY_LINKS = {
@@ -38,10 +43,13 @@ const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
 
 /** One labelled block of the view. */
-function Card({ title, children }) {
+function Card({ title, action, children }) {
   return (
     <section className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">{title}</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -59,8 +67,10 @@ function AdminProjectViewPageContent({ id }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const navigate = useNavigate();
-  const { project, setProject, loading, error: loadError } = useAdminProject(id);
+  const { project, setProject, loading, error: loadError, reload } = useAdminProject(id);
   const [kinds, setKinds] = useState([]);
+  const [config, setConfig] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
   // `null` until the lookup answered; an error is not an empty list.
   const [dependencies, setDependencies] = useState(null);
   const [dependenciesFailed, setDependenciesFailed] = useState(false);
@@ -73,6 +83,9 @@ function AdminProjectViewPageContent({ id }) {
     fetchAdminProjectKinds()
       .then(setKinds)
       .catch(err => console.error('Failed to load item kinds:', err));
+    fetchAdminProjectConfig()
+      .then(setConfig)
+      .catch(err => console.error('Failed to load project settings:', err));
     setDependenciesFailed(false);
     fetchAdminProjectDependencies(id)
       .then(setDependencies)
@@ -118,7 +131,6 @@ function AdminProjectViewPageContent({ id }) {
 
   const title = localizedText(project.name, language) || project.id;
   const description = localizedText(project.description, language);
-  const enabled = project.enabled !== false;
   const typeLabels = {
     app: t('admin.projects.dependencies.types.app', 'App'),
     workflow: t('admin.projects.dependencies.types.workflow', 'Workflow'),
@@ -141,26 +153,7 @@ function AdminProjectViewPageContent({ id }) {
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
               <Icon name="folder" className="h-6 w-6" />
               <span className="break-words">{title}</span>
-              <span
-                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  enabled
-                    ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                    : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
-                }`}
-              >
-                {enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
-              </span>
-              {project.published === true && (
-                <span
-                  className="px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                  title={t(
-                    'admin.projects.fields.publishedHint',
-                    'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
-                  )}
-                >
-                  {t('admin.projects.fields.published', 'Published')}
-                </span>
-              )}
+              <ProjectAvailabilityBadge project={project} />
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">{project.id}</p>
           </div>
@@ -182,7 +175,19 @@ function AdminProjectViewPageContent({ id }) {
             <>
               <AdminProjectCheckResults checks={checks} />
 
-              <Card title={t('admin.projects.items.title', 'Items')}>
+              <Card
+                title={t('admin.projects.items.title', 'Items')}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setAddOpen(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center"
+                  >
+                    <Icon name="plus" className="h-4 w-4 mr-2" />
+                    {t('admin.projects.items.add', 'Add item')}
+                  </button>
+                }
+              >
                 <ProjectItemsTable
                   items={project.items || []}
                   kinds={kinds}
@@ -336,15 +341,11 @@ function AdminProjectViewPageContent({ id }) {
                 }
               >
                 <p className="text-gray-600 dark:text-gray-400">
-                  {project.published === true
-                    ? t(
-                        'admin.projects.fields.publishedHint',
-                        'Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.'
-                      )
-                    : t(
-                        'admin.projects.view.notPublished',
-                        'Only the apps, workflows and agents that link this project use it.'
-                      )}
+                  {
+                    availabilityOptions(t).find(
+                      option => option.id === projectAvailability(project)
+                    )?.hint
+                  }
                 </p>
               </ProjectPanelRow>
             </div>
@@ -377,6 +378,21 @@ function AdminProjectViewPageContent({ id }) {
         }}
         errorMessage={adminErrorMessage}
       />
+      {addOpen && kinds.length > 0 && (
+        <AddProjectItemDialog
+          isOpen
+          onClose={() => setAddOpen(false)}
+          projectId={id}
+          kinds={kinds}
+          config={config}
+          api={ADMIN_ITEM_API}
+          onAdded={() => {
+            // The items changed: an estimate of the old set no longer holds.
+            clearEstimate();
+            void reload();
+          }}
+        />
+      )}
       <ChangeHistoryDrawer
         isOpen={historyOpen}
         onClose={() => setHistoryOpen(false)}

@@ -3782,10 +3782,18 @@
     },
     "projects": {
       "settings": "Settings",
+      "availability": {
+        "legend": "Who can use this project?",
+        "apps": { "label": "Linked apps only", "badge": "Linked apps only", "hint": "Used by the apps, workflows and agents that link it, and open to everyone who may use them." },
+        "everyone": { "label": "Everyone signed in", "badge": "Everyone signed in", "hint": "Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it." },
+        "off": { "label": "Off", "badge": "Off", "hint": "Nothing uses it and nobody can use it. Administrators can still edit it. Use it for a draft or to pause a project." }
+      },
+      "details": "Category and tags (optional)",
+      "createHint": "Next you add the documents. Until the project is linked to an app, only administrators see it.",
       "publish": {
-        "confirmTitle": "Publish this project?",
+        "confirmTitle": "Make this project available to everyone?",
         "confirmMessage": "Everyone signed in can then read its documents and instructions and link them into their own projects, also those who may not use the apps, workflows or agents that link it. Only administrators can change it.",
-        "confirm": "Publish"
+        "confirm": "Make available"
       },
       "itemCount": "{{count}} items",
       "deleteTitle": "Delete project",
@@ -3795,7 +3803,7 @@
       "columns": {
         "name": "Name",
         "items": "Items",
-        "enabled": "Status",
+        "availability": "Available to",
         "categoryTags": "Category / tags",
         "updated": "Updated"
       },
@@ -3851,9 +3859,7 @@
       "fields": {
         "id": "Project ID",
         "idFixed": "The ID cannot be changed after creation.",
-        "enabled": "Enabled",
-        "published": "Published",
-        "publishedHint": "Everyone signed in can use it and link its documents into their own projects, even without access to the apps that link it.",
+        "idHint": "Filled in from the name. Apps and links use it, and it cannot be changed after creation.",
         "name": "Name",
         "namePlaceholder": "Project name",
         "description": "Description",
@@ -3870,7 +3876,6 @@
       "items": {
         "title": "Items",
         "add": "Add item",
-        "saveFirst": "Create the project first; then you can add items to it.",
         "removeTitle": "Remove item",
         "removeConfirm": "Remove \"{{name}}\" from the project?",
         "actions": {
