@@ -136,9 +136,16 @@ it('starts the chat with the caller’s parameters and runs its hook first', asy
   expect(consumePendingChatStart('chat')).toMatchObject({ appId: 'chat' });
 });
 
+it('takes a long message where no limit is set, as the start page does', async () => {
+  await renderStarter();
+  await send('x'.repeat(MAX_START_PATH_LENGTH));
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+});
+
 it('shows an error when the link would be too long, and starts nothing', async () => {
   const onBeforeStart = jest.fn();
-  await renderStarter({ onBeforeStart });
+  await renderStarter({ onBeforeStart, maxPathLength: MAX_START_PATH_LENGTH });
 
   await send('x'.repeat(MAX_START_PATH_LENGTH));
 
@@ -153,4 +160,38 @@ it('shows an error when the link would be too long, and starts nothing', async (
   expect(screen.queryByRole('alert')).toBeNull();
   await send('word '.repeat(1400).trim());
   expect(mockNavigate).toHaveBeenCalledTimes(1);
+});
+
+it('starts another app on its own model, not the one picked for the previous app', async () => {
+  const api = require('../../../client/src/api');
+  api.fetchModels.mockResolvedValueOnce([
+    { id: 'gpt', name: { en: 'GPT' } },
+    { id: 'claude', name: { en: 'Claude' } }
+  ]);
+  api.fetchAppDetails.mockImplementation(id =>
+    // Without tools, so both models suit both apps.
+    Promise.resolve({
+      ...mockApp,
+      id,
+      tools: [],
+      websearch: { enabled: false },
+      preferredModel: id === 'chat' ? 'gpt' : 'claude'
+    })
+  );
+  try {
+    const { rerender } = await renderStarter();
+    await send('first');
+    expect(mockNavigate).toHaveBeenLastCalledWith('/apps/chat?prefill=first&send=true');
+    rerender(<AppChatStarter app={{ id: 'summarizer' }} />);
+    // The new app's input, once its config has loaded.
+    await waitFor(() => expect(api.fetchAppDetails).toHaveBeenLastCalledWith('summarizer'));
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument());
+
+    await send('hello');
+
+    // Its preferred model is the default, so no `model=` rides along.
+    expect(mockNavigate).toHaveBeenLastCalledWith('/apps/summarizer?prefill=hello&send=true');
+  } finally {
+    api.fetchAppDetails.mockImplementation(() => Promise.resolve(mockApp));
+  }
 });

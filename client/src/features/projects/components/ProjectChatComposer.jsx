@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { clearConversationId, resetChatId } from '../../../utils/chatId';
-import AppChatStarter from '../../chat/components/AppChatStarter';
+import AppChatStarter, { MAX_START_PATH_LENGTH } from '../../chat/components/AppChatStarter';
 import {
   ATTACH_PROJECT_QUERY_PARAM,
   PROJECT_QUERY_PARAM,
@@ -114,7 +114,12 @@ function ProjectChatComposer({ project, projectName, attach = false }) {
           {t('projects.chats.noApps', 'No app can chat inside projects.')}
         </p>
       ) : (
-        <AppChatStarter app={app} startParams={startParams} onBeforeStart={freshChat} />
+        <AppChatStarter
+          app={app}
+          startParams={startParams}
+          onBeforeStart={freshChat}
+          maxPathLength={MAX_START_PATH_LENGTH}
+        />
       )}
 
       {!noApps && (

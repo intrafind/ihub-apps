@@ -42,9 +42,11 @@ export const MAX_START_PATH_LENGTH = 7500;
  *   carries before the message, e.g. `{ project: 'prj_…' }`.
  * @param {(appId: string) => void} [props.onBeforeStart] - Runs right before the chat
  *   page opens (e.g. to mint a fresh chat id).
+ * @param {number} [props.maxPathLength] - Refuse a message whose start link would be
+ *   longer (see {@link MAX_START_PATH_LENGTH}); no limit when omitted.
  * @returns {JSX.Element|null}
  */
-export default function AppChatStarter({ app, startParams, onBeforeStart }) {
+export default function AppChatStarter({ app, startParams, onBeforeStart, maxPathLength }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const authKey = useAuthKey();
@@ -85,12 +87,15 @@ export default function AppChatStarter({ app, startParams, onBeforeStart }) {
 
   // Load the full app config so the chat input renders exactly what the app
   // is configured for (uploads, input mode, placeholder, etc.). Switching to
-  // another app drops an attachment picked for the previous one: what it
-  // accepts may differ.
+  // another app drops what was picked for the previous one: the attachment
+  // (what it accepts may differ) and the model, so the new app starts on its
+  // own preferred model rather than one the user never chose for it.
   useEffect(() => {
     setDetailsFailed(false);
     setAppDetails(null);
     setSelectedFile(null);
+    setSelectedModel(null);
+    setTooLong(false);
     if (!app?.id) return;
     let mounted = true;
     fetchAppDetails(app.id)
@@ -253,7 +258,7 @@ export default function AppChatStarter({ app, startParams, onBeforeStart }) {
 
       const path = startPath(text);
       // Checked on Send, not while typing: the link is what would be too long.
-      if (path.length > MAX_START_PATH_LENGTH) {
+      if (maxPathLength && path.length > maxPathLength) {
         setTooLong(true);
         return;
       }
@@ -276,6 +281,7 @@ export default function AppChatStarter({ app, startParams, onBeforeStart }) {
     [
       app,
       appDetails,
+      maxPathLength,
       draft,
       fileUploadHandler,
       startPath,

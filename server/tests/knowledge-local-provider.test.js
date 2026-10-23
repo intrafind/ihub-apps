@@ -41,6 +41,7 @@ import {
   scopeSummary
 } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeToolsFor } from '../services/knowledge/knowledgeTools.js';
+import { linkedProjectIds } from '../services/projects/projectLinks.js';
 import { list, read, search } from '../tools/knowledge.js';
 import { projectSource, projectSourceProducer } from '../services/sources/producers/project.js';
 import { extractToolSources } from '../services/sources/index.js';
@@ -1253,6 +1254,29 @@ describe('sources', () => {
 });
 
 describe('feature switches', () => {
+  it('grants no project through an app that switched projects off', () => {
+    const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, projects: ['kb'] },
+      {
+        id: 'dark',
+        name: { en: 'Dark' },
+        enabled: true,
+        projects: ['kb-dark'],
+        features: { projects: false }
+      }
+    ]);
+    try {
+      const ids = linkedProjectIds(reader);
+      assert.ok(ids.has('kb'));
+      assert.equal(ids.has('kb-dark'), false, 'the switched-off app grants nothing');
+    } finally {
+      configCache.setCacheEntry('config/apps.json', [
+        { id: 'chat', name: { en: 'Chat' }, enabled: true }
+      ]);
+    }
+  });
+
   it('darkens admin and user projects with the master switch, user projects with their own', async () => {
     const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
     await repo.createAdmin(
