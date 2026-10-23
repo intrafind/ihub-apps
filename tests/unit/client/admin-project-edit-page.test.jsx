@@ -10,7 +10,7 @@
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   fetchAdminProject: jest.fn(),
@@ -249,6 +249,35 @@ describe('AdminProjectEditPage – create', () => {
   });
 });
 
+describe('AdminProjectEditPage – routes', () => {
+  test('starts the create form fresh after an existing project', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    function GoToNew() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/admin/projects/new')}>
+          go to new
+        </button>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/admin/projects/handbook/edit']}>
+        <Routes>
+          {['/admin/projects/new', '/admin/projects/:id/edit'].map(routePath => (
+            <Route key={routePath} path={routePath} element={<AdminProjectEditPage />} />
+          ))}
+        </Routes>
+        <GoToNew />
+      </MemoryRouter>
+    );
+    await screen.findByTestId('project-side-panel');
+
+    fireEvent.click(screen.getByRole('button', { name: 'go to new' }));
+    expect(await screen.findByLabelText('Project ID *')).toHaveValue('');
+    expect(screen.getByLabelText('Project name')).toHaveValue('');
+  });
+});
+
 describe('AdminProjectEditPage – items', () => {
   test('shows each item status and warns about unscanned uploads', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(
@@ -276,7 +305,7 @@ describe('AdminProjectEditPage – items', () => {
     renderAt('/admin/projects/handbook/edit');
 
     expect(await screen.findByText('policies.pdf')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Answer briefly.')).toBeInTheDocument();
+    expect(screen.getByTestId('project-side-panel')).toHaveTextContent('Answer briefly.');
     expect(screen.getByText(/~1.2K tokens|~1,200 tokens|~1200 tokens/)).toBeInTheDocument();
     expect(screen.getByText('Outdated')).toBeInTheDocument();
     expect(screen.getByText('The PDF is encrypted')).toBeInTheDocument();
@@ -395,22 +424,124 @@ describe('AdminProjectEditPage – items', () => {
   });
 });
 
+describe('AdminProjectEditPage – settings', () => {
+  test('shows the settings as rows and changes the instructions in a dialog that saves at once', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    mockApi.updateAdminProject.mockResolvedValue({
+      ...makeProject([]),
+      instructions: 'Cite the handbook.'
+    });
+    renderAt('/admin/projects/handbook/edit');
+
+    const panel = await screen.findByTestId('project-side-panel');
+    expect(panel).toHaveTextContent('Answer briefly.');
+    // No form beside the items: nothing to save at the bottom of the column.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Edit instructions' }));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Instructions'), {
+      target: { value: 'Cite the handbook.' }
+    });
+    fireEvent.click(save);
+
+    await waitFor(() =>
+      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
+        'handbook',
+        expect.objectContaining({ instructions: 'Cite the handbook.', tags: ['policy'] })
+      )
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(panel).toHaveTextContent('Cite the handbook.');
+    expect(panel).toHaveTextContent('Saved.');
+  });
+
+  test('a name is required', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    renderAt('/admin/projects/handbook/edit');
+
+    const panel = await screen.findByTestId('project-side-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Edit name and description' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Project name'), { target: { value: '' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText('A name is required.')).toBeInTheDocument();
+    expect(mockApi.updateAdminProject).not.toHaveBeenCalled();
+  });
+});
+
 describe('AdminProjectEditPage – availability', () => {
-  test('one choice replaces Enabled and Published; "everyone" asks first and says what it opens', async () => {
+  async function openAvailability() {
+    const panel = await screen.findByTestId('project-side-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Change visibility' }));
+    return screen.findByRole('dialog');
+  }
+
+  test('one choice replaces Enabled and Published; "everyone" says what it opens before saving', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.updateAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
     renderAt('/admin/projects/handbook/edit');
 
-    const apps = await screen.findByRole('radio', { name: /Linked apps only/ });
-    const everyone = screen.getByRole('radio', { name: /Everyone signed in/ });
-    expect(screen.queryByRole('checkbox', { name: 'Published' })).toBeNull();
+    const dialog = await openAvailability();
+    const apps = within(dialog).getByRole('radio', { name: /Linked apps only/ });
+    const everyone = within(dialog).getByRole('radio', { name: /Everyone signed in/ });
+    expect(within(dialog).queryByRole('checkbox', { name: 'Published' })).toBeNull();
     expect(apps).toBeChecked();
     // The consequence is on screen and tied to the choice, not hidden in a tooltip.
     expect(everyone).toHaveAccessibleDescription(/even without access to the apps/);
+    expect(everyone).toHaveAccessibleDescription(/project catalog/);
 
     fireEvent.click(everyone);
-    const dialog = await screen.findByRole('alertdialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(everyone).toBeChecked();
+    // No second dialog over this one: the warning sits beside the button.
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(dialog).toHaveTextContent('It is then listed in the project catalog.');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Make available' }));
+    await waitFor(() =>
+      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
+        'handbook',
+        expect.objectContaining({ enabled: true, published: true })
+      )
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('project-availability-badge')).toHaveTextContent(
+      'Everyone signed in'
+    );
+  });
+
+  test('"off" disables and unpublishes without a warning', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
+    mockApi.updateAdminProject.mockResolvedValue(makeProject([]));
+    renderAt('/admin/projects/handbook/edit');
+
+    const dialog = await openAvailability();
+    expect(within(dialog).getByRole('radio', { name: /Everyone signed in/ })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('radio', { name: /^Off/ }));
+    expect(dialog).not.toHaveTextContent('It is then listed in the project catalog.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
+        'handbook',
+        expect.objectContaining({ enabled: false, published: false })
+      )
+    );
+  });
+});
+
+describe('AdminProjectEditPage – create availability', () => {
+  test('"everyone" asks first in a dialog above the page', async () => {
+    renderAt('/admin/projects/new');
+
+    const apps = screen.getByRole('radio', { name: /Linked apps only/ });
+    const everyone = screen.getByRole('radio', { name: /Everyone signed in/ });
+    fireEvent.click(everyone);
+    const confirm = await screen.findByRole('alertdialog');
+    // Rendered into the body, out of any sticky or scrolling column.
+    expect(confirm.closest('form')).toBeNull();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
     expect(apps).toBeChecked();
 
     fireEvent.click(everyone);
@@ -418,30 +549,5 @@ describe('AdminProjectEditPage – availability', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make available' })
     );
     expect(everyone).toBeChecked();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() =>
-      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
-        'handbook',
-        expect.objectContaining({ enabled: true, published: true })
-      )
-    );
-  });
-
-  test('"off" disables and unpublishes without asking', async () => {
-    mockApi.fetchAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
-    mockApi.updateAdminProject.mockResolvedValue(makeProject([]));
-    renderAt('/admin/projects/handbook/edit');
-
-    expect(await screen.findByRole('radio', { name: /Everyone signed in/ })).toBeChecked();
-    fireEvent.click(screen.getByRole('radio', { name: /^Off/ }));
-    expect(screen.queryByRole('alertdialog')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() =>
-      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
-        'handbook',
-        expect.objectContaining({ enabled: false, published: false })
-      )
-    );
   });
 });

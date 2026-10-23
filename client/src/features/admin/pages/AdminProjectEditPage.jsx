@@ -14,7 +14,6 @@ import {
   fetchAdminProjectKinds,
   getAdminApiErrorMessage,
   refreshAdminProjectItem,
-  updateAdminProject,
   updateAdminProjectItem,
   updateAdminProjectItemText
 } from '../../../api/adminApi';
@@ -24,6 +23,7 @@ import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
+import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import {
   AdminProjectCheckResults,
   AdminProjectHeaderActions,
@@ -39,7 +39,6 @@ import {
   buildProjectPayload,
   createEmptyProjectForm,
   parseTags,
-  projectFormFromProject,
   projectIdFromName,
   uploadsAreUnscanned,
   validateProjectForm
@@ -51,21 +50,21 @@ const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
 
 /**
- * Admin → Projects → new / edit (#1036). Edits the project's settings (id on
- * create only, localized name and description, instructions, enabled,
- * category, tags) and, once the project exists, its items: add (one tab per
- * kind), pin, preview the text, retry, refresh, remove, and a test of every
- * item. While an item is being extracted the page re-reads the project
- * every two seconds.
+ * Admin → Projects → new / edit (#1036). A new project starts with the full
+ * settings form (id, localized name and description, availability,
+ * instructions, category, tags). Once it exists, the page works on its
+ * items: add (one tab per kind), pin, preview the text, retry, refresh,
+ * remove, and a test of every item; the settings sit beside them as rows
+ * that each open a dialog and save at once, as on a user's project page.
+ * While an item is being extracted the page re-reads the project every two
+ * seconds.
  *
+ * @param {{id: string}} props - The project id, or `new`.
  * @returns {JSX.Element}
  */
-function AdminProjectEditPage() {
+function AdminProjectEditPageContent({ id }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
-  // `/admin/projects/new` has no id in its path.
-  const { id: routeId } = useParams();
-  const id = routeId ?? 'new';
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = id === 'new';
@@ -77,8 +76,9 @@ function AdminProjectEditPage() {
     error: loadError,
     reload
   } = useAdminProject(isNew ? null : id);
+  // Only a new project has a form; an existing one saves each change at once.
   const [form, setForm] = useState(() => (isNew ? createEmptyProjectForm() : null));
-  const [initialForm, setInitialForm] = useState(() => (isNew ? createEmptyProjectForm() : null));
+  const [initialForm] = useState(() => (isNew ? createEmptyProjectForm() : null));
   const [tagsText, setTagsText] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -100,17 +100,6 @@ function AdminProjectEditPage() {
 
   const checks = useAdminProjectChecks(id);
   const { estimate, byItem: estimateByItem, clearEstimate } = checks;
-
-  // The form is filled once per loaded project (state adjusted during render,
-  // not in an effect); polling later only refreshes the items.
-  const [filledFor, setFilledFor] = useState(null);
-  if (!isNew && project && project.id !== filledFor) {
-    const next = projectFormFromProject(project);
-    setFilledFor(project.id);
-    setForm(next);
-    setInitialForm(next);
-    setTagsText(next.tags.join(', '));
-  }
 
   // Kinds and upload settings drive the item dialog; a failure only limits it.
   useEffect(() => {
@@ -169,10 +158,10 @@ function AdminProjectEditPage() {
     }
   };
 
-  const handleSave = async event => {
+  const handleCreate = async event => {
     event.preventDefault();
     const nextForm = { ...form, tags: parseTags(tagsText) };
-    const errors = validateProjectForm(nextForm, { isNew });
+    const errors = validateProjectForm(nextForm, { isNew: true });
     setValidationErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -180,23 +169,13 @@ function AdminProjectEditPage() {
     setError(null);
     try {
       const payload = buildProjectPayload(nextForm);
-      if (isNew) {
-        const created = await createAdminProject(payload);
-        markSaved();
-        // Items can be added once the project exists.
-        navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}/edit`, {
-          replace: true,
-          state: { openAdd: true }
-        });
-        return;
-      }
-      const updated = await updateAdminProject(id, payload);
-      if (updated) setProject(updated);
-      const saved = projectFormFromProject(updated || { ...project, ...payload });
-      setForm(saved);
-      setInitialForm(saved);
-      setTagsText(saved.tags.join(', '));
+      const created = await createAdminProject(payload);
       markSaved();
+      // Items can be added once the project exists.
+      navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}/edit`, {
+        replace: true,
+        state: { openAdd: true }
+      });
     } catch (err) {
       if (err?.response?.status === 409) {
         setValidationErrors({ id: 'exists' });
@@ -259,7 +238,7 @@ function AdminProjectEditPage() {
     void reload();
   };
 
-  if (loading || (!isNew && (!project || !form) && !loadError)) {
+  if (loading || (!isNew && !project && !loadError)) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="flex items-center justify-center h-64">
@@ -306,10 +285,9 @@ function AdminProjectEditPage() {
       : validationMessages.id[validationErrors.id]
     : null;
 
-  const settingsForm = (
+  const createForm = isNew && (
     <AdminProjectSettingsForm
       form={form}
-      isNew={isNew}
       saving={saving}
       idError={idError}
       nameError={validationErrors.name ? validationMessages.name.required : null}
@@ -319,10 +297,8 @@ function AdminProjectEditPage() {
         setTagsText(text);
         setForm(prev => ({ ...prev, tags: parseTags(text) }));
       }}
-      onSubmit={handleSave}
-      onCancel={() =>
-        navigate(isNew ? '/admin/projects' : `/admin/projects/${encodeURIComponent(id)}`)
-      }
+      onSubmit={handleCreate}
+      onCancel={() => navigate('/admin/projects')}
     />
   );
 
@@ -452,11 +428,11 @@ function AdminProjectEditPage() {
 
         {isNew ? (
           // Items come right after the create: no empty card to look at first.
-          <div className="max-w-3xl">{settingsForm}</div>
+          <div className="max-w-3xl">{createForm}</div>
         ) : (
           // The items are what an admin works on here: they take the wide
-          // column (and come first on a narrow screen); the settings sit in a
-          // compact form beside them.
+          // column (and come first on a narrow screen); the settings sit
+          // beside them as rows, each changed in its own dialog.
           <ProjectDetailLayout
             main={
               <>
@@ -464,7 +440,7 @@ function AdminProjectEditPage() {
                 {itemsSection}
               </>
             }
-            side={settingsForm}
+            side={<AdminProjectSettingsPanel project={project} onSaved={setProject} />}
           />
         )}
       </div>
@@ -541,6 +517,19 @@ function AdminProjectEditPage() {
       />
     </div>
   );
+}
+
+/**
+ * The page of the project in the URL. Mounted per id, so the create form and
+ * one project's items never carry state over to another route: React Router
+ * reuses the element when only the path changes.
+ *
+ * @returns {JSX.Element}
+ */
+function AdminProjectEditPage() {
+  // `/admin/projects/new` has no id in its path.
+  const { id = 'new' } = useParams();
+  return <AdminProjectEditPageContent key={id} id={id} />;
 }
 
 export default AdminProjectEditPage;

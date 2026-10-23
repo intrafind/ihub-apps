@@ -258,7 +258,16 @@ describe('ProjectsPage', () => {
           role: 'catalog',
           subscribed: false
         },
-        { ...PROJECTS[0], subscribed: false }
+        { ...PROJECTS[0], subscribed: false },
+        {
+          id: 'company-faq',
+          ownership: 'admin',
+          name: { en: 'Company FAQ' },
+          owner: null,
+          usage: { items: 3 },
+          role: 'catalog',
+          subscribed: false
+        }
       ]
     });
     mockApi.addCatalogProject.mockResolvedValue({ id: 'prj_docs', subscribed: true });
@@ -268,6 +277,11 @@ describe('ProjectsPage', () => {
     expect(await within(dialog).findByText('iHub knowledge')).toBeInTheDocument();
     // A project of your own is in your list already.
     expect(within(dialog).getByText('In your projects')).toBeInTheDocument();
+    // An admin project is open to everyone: nothing to add.
+    const faq = within(dialog).getByText('Company FAQ').closest('li');
+    expect(faq).toHaveTextContent('From the administrators');
+    expect(faq).toHaveTextContent('Open to everyone');
+    expect(within(faq).queryByRole('button')).toBeNull();
 
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Add iHub knowledge to my projects' })

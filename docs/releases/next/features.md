@@ -50,6 +50,9 @@ in `platform.json`.
   from the catalog **From the catalog**.
 - The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
   taking a project out, removes it from the lists of those who added it.
+- Admin projects set to **Everyone signed in** are listed in the catalog too, marked **From the
+  administrators** and **Open to everyone**: users open them to read them or link their documents
+  into their own projects; there is nothing to add.
 
 ## Apps: switch projects off per app
 
@@ -63,9 +66,14 @@ in `platform.json`.
 ## Admin Projects: the items come first
 
 The view and edit pages of an admin project now share the layout of a user's project page: the
-items in the wide column, the settings beside them (compact rows on the view page, a compact form
-on the edit page), so the documents are no longer pushed below a long form. The results of
-**Test** and **Estimate tokens** appear above the items.
+items in the wide column, the settings beside them, so the documents are no longer pushed below a
+long form. The results of **Test** and **Estimate tokens** appear above the items.
+
+- The settings are rows (**Name and description**, **Instructions**, **Availability**), each with
+  an **Edit** or **Change** that opens a dialog and saves at once; there is no form with a **Save**
+  at the bottom of the side column any more.
+- On the view page, **Edit items** leads to the page that pins, refreshes, moves and removes
+  items.
 
 ## Projects: preview web pages and add several pages of a website at once
 
@@ -92,8 +100,8 @@ instructions, and the optional category and tags in a collapsed section. After *
 and the project's view page has an **Add item** button too, so documents can be added without going through **Edit**.
 
 The two checkboxes **Enabled** and **Published** are replaced by one choice, **Who can use this project?**:
-**Linked apps only** (the default), **Everyone signed in** (asks for confirmation, because it opens the documents past the app and group
-restrictions) or **Off** (a draft, or a paused project that nothing uses). The list and the view page show the same choice as a badge,
+**Linked apps only** (the default), **Everyone signed in** (lists the project in the project catalog; asks for confirmation, because it
+opens the documents past the app and group restrictions) or **Off** (a draft, or a paused project that nothing uses). The list and the view page show the same choice as a badge,
 and the list column **Status** is now **Available to**. The stored `enabled` and `published` flags do not change; **Off** is `enabled: false`.
 A project that was disabled and published now shows as **Off**, which is what it behaved like.
 

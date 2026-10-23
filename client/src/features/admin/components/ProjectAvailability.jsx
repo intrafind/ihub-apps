@@ -35,7 +35,7 @@ export function availabilityOptions(t) {
       badge: t('admin.projects.availability.everyone.badge', 'Everyone signed in'),
       hint: t(
         'admin.projects.availability.everyone.hint',
-        'Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it.'
+        'Listed in the project catalog. Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it.'
       ),
       badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
     },
@@ -84,17 +84,19 @@ export function ProjectAvailabilityBadge({ project }) {
  * @param {Object} props
  * @param {{enabled: boolean, published: boolean}} props.value
  * @param {(flags: {enabled: boolean, published: boolean}) => void} props.onChange
- * @param {boolean} [props.compact] - Stacked rows without the icons, for the narrow edit column.
+ * @param {boolean} [props.compact] - Stacked rows, for a dialog.
+ * @param {boolean} [props.confirmEveryone] - Ask before "everyone"; off where the
+ *   caller says what it opens itself (the change dialog does, beside its Save).
  * @returns {JSX.Element}
  */
-function ProjectAvailability({ value, onChange, compact = false }) {
+function ProjectAvailability({ value, onChange, compact = false, confirmEveryone = true }) {
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   const selected = projectAvailability(value);
 
   const choose = id => {
     if (id === selected) return;
-    if (id === 'everyone') setConfirming(true);
+    if (id === 'everyone' && confirmEveryone) setConfirming(true);
     else onChange(availabilityFlags(id));
   };
 
@@ -145,7 +147,7 @@ function ProjectAvailability({ value, onChange, compact = false }) {
         title={t('admin.projects.publish.confirmTitle', 'Make this project available to everyone?')}
         message={t(
           'admin.projects.publish.confirmMessage',
-          'Everyone signed in can then read its documents and instructions and link them into their own projects, also those who may not use the apps, workflows or agents that link it. Only administrators can change it.'
+          'It is then listed in the project catalog. Everyone signed in can read its documents and instructions and link them into their own projects, also those who may not use the apps, workflows or agents that link it. Only administrators can change it.'
         )}
         confirmLabel={t('admin.projects.publish.confirm', 'Make available')}
         onConfirm={() => {

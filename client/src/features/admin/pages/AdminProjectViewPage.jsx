@@ -25,12 +25,10 @@ import {
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
-import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
-import { ProjectAvailabilityBadge, availabilityOptions } from '../components/ProjectAvailability';
+import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import { ADMIN_ITEM_API } from '../utils/adminProjectItemApi';
 import { useAdminProject } from '../hooks/useAdminProject';
 import { localizedText } from '../../projects/utils/projectItems';
-import { projectAvailability } from '../utils/projectAdmin';
 
 /** Where the admin edits each kind of resource that links a project. */
 const DEPENDENCY_LINKS = {
@@ -56,10 +54,11 @@ function Card({ title, action, children }) {
 }
 
 /**
- * Admin → Projects → one project (read-only). The name of a project in the
- * list opens this view: its description and instructions, its items with the
- * text preview (whose text an admin can edit there), what links it, and the checks (test, token estimate). **Edit**
- * leads to the form.
+ * Admin → Projects → one project. The name of a project in the list opens
+ * this view: its items with the text preview (whose text an admin can edit
+ * there), what links it, the checks (test, token estimate), and its
+ * settings beside them, each changed in place in a dialog. **Edit items**
+ * leads to the page that pins, refreshes, moves and removes items.
  *
  * @returns {JSX.Element}
  */
@@ -130,7 +129,6 @@ function AdminProjectViewPageContent({ id }) {
   }
 
   const title = localizedText(project.name, language) || project.id;
-  const description = localizedText(project.description, language);
   const typeLabels = {
     app: t('admin.projects.dependencies.types.app', 'App'),
     workflow: t('admin.projects.dependencies.types.workflow', 'Workflow'),
@@ -153,7 +151,6 @@ function AdminProjectViewPageContent({ id }) {
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
               <Icon name="folder" className="h-6 w-6" />
               <span className="break-words">{title}</span>
-              <ProjectAvailabilityBadge project={project} />
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">{project.id}</p>
           </div>
@@ -163,13 +160,13 @@ function AdminProjectViewPageContent({ id }) {
               className={FILLED_HEADER_BUTTON}
             >
               <Icon name="pencil" className="h-4 w-4 mr-2" />
-              {t('admin.projects.view.edit', 'Edit')}
+              {t('admin.projects.view.editItems', 'Edit items')}
             </Link>
           </AdminProjectHeaderActions>
         </div>
 
         {/* The same layout as a user's project page: the documents in the wide
-            column, the settings as compact rows beside them. */}
+            column, the settings as rows beside them, each changed in a dialog. */}
         <ProjectDetailLayout
           main={
             <>
@@ -247,109 +244,7 @@ function AdminProjectViewPageContent({ id }) {
               </Card>
             </>
           }
-          side={
-            <div className={`${PANEL_CARD} min-w-0`} data-testid="project-side-panel">
-              <ProjectPanelRow
-                icon="information-circle"
-                title={t('admin.projects.fields.description', 'Description')}
-                titleId="admin-project-description-title"
-                action={
-                  <Link
-                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                    className={ROW_ACTION}
-                    aria-label={t('admin.projects.view.editDescription', 'Edit description')}
-                  >
-                    {t('common.edit', 'Edit')}
-                  </Link>
-                }
-              >
-                {description ? (
-                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words">
-                    {description}
-                  </p>
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400">
-                    {t('admin.projects.view.noDescription', 'No description.')}
-                  </p>
-                )}
-                {(project.category || (project.tags || []).length > 0) && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {project.category && (
-                      <span className="text-xs text-gray-600 dark:text-gray-400">
-                        {project.category}
-                      </span>
-                    )}
-                    {(project.tags || []).map(tag => (
-                      <span
-                        key={tag}
-                        className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </ProjectPanelRow>
-              <ProjectPanelRow
-                icon="document-text"
-                title={t('admin.projects.fields.instructions', 'Instructions')}
-                titleId="admin-project-instructions-title"
-                action={
-                  <Link
-                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                    className={ROW_ACTION}
-                    aria-label={
-                      project.instructions
-                        ? t('projects.settings.editInstructions', 'Edit instructions')
-                        : t('projects.settings.addInstructions', 'Add instructions')
-                    }
-                  >
-                    {project.instructions
-                      ? t('common.edit', 'Edit')
-                      : t('projects.panel.add', 'Add')}
-                  </Link>
-                }
-              >
-                {project.instructions ? (
-                  <pre className="max-h-48 overflow-y-auto text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words font-sans">
-                    {project.instructions}
-                  </pre>
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400">
-                    {t('admin.projects.view.noInstructions', 'No instructions.')}
-                  </p>
-                )}
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.projects.view.instructionsHint',
-                    'The instructions are added to the system prompt of every app, workflow step or agent that links this project.'
-                  )}
-                </p>
-              </ProjectPanelRow>
-              <ProjectPanelRow
-                icon="globe"
-                title={t('admin.projects.view.visibility', 'Visibility')}
-                titleId="admin-project-visibility-title"
-                action={
-                  <Link
-                    to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
-                    className={ROW_ACTION}
-                    aria-label={t('admin.projects.view.changeVisibility', 'Change visibility')}
-                  >
-                    {t('projects.panel.change', 'Change')}
-                  </Link>
-                }
-              >
-                <p className="text-gray-600 dark:text-gray-400">
-                  {
-                    availabilityOptions(t).find(
-                      option => option.id === projectAvailability(project)
-                    )?.hint
-                  }
-                </p>
-              </ProjectPanelRow>
-            </div>
-          }
+          side={<AdminProjectSettingsPanel project={project} onSaved={setProject} />}
         />
       </div>
 

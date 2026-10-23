@@ -3781,7 +3781,6 @@
       }
     },
     "projects": {
-      "settings": "Settings",
       "availability": {
         "legend": "Who can use this project?",
         "apps": {
@@ -3792,7 +3791,7 @@
         "everyone": {
           "label": "Everyone signed in",
           "badge": "Everyone signed in",
-          "hint": "Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it."
+          "hint": "Listed in the project catalog. Everyone signed in can read its documents and instructions and link them into their own projects, even without access to the apps that use it."
         },
         "off": {
           "label": "Off",
@@ -3804,7 +3803,7 @@
       "createHint": "Next you add the documents. Until the project is linked to an app, only administrators see it.",
       "publish": {
         "confirmTitle": "Make this project available to everyone?",
-        "confirmMessage": "Everyone signed in can then read its documents and instructions and link them into their own projects, also those who may not use the apps, workflows or agents that link it. Only administrators can change it.",
+        "confirmMessage": "It is then listed in the project catalog. Everyone signed in can read its documents and instructions and link them into their own projects, also those who may not use the apps, workflows or agents that link it. Only administrators can change it.",
         "confirm": "Make available"
       },
       "itemCount": "{{count}} items",
@@ -3870,7 +3869,6 @@
       "scanWarning": "Uploads are not scanned for malware. Configure platform.projects.scan to scan them.",
       "fields": {
         "id": "Project ID",
-        "idFixed": "The ID cannot be changed after creation.",
         "idHint": "Filled in from the name. Apps and links use it, and it cannot be changed after creation.",
         "name": "Name",
         "namePlaceholder": "Project name",
@@ -3977,17 +3975,15 @@
         "dependentsUnknown": "Which apps, workflows or agents link these projects could not be checked; the merge still updates their links."
       },
       "view": {
-        "edit": "Edit",
         "noDescription": "No description.",
-        "visibility": "Visibility",
-        "editDescription": "Edit description",
         "changeVisibility": "Change visibility",
         "notPublished": "Only the apps, workflows and agents that link this project use it.",
         "noInstructions": "No instructions.",
         "instructionsHint": "The instructions are added to the system prompt of every app, workflow step or agent that links this project.",
         "usedBy": "Used by",
         "notLinked": "No app, workflow or agent links this project.",
-        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
+        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded.",
+        "editItems": "Edit items"
       },
       "sharing": {
         "title": "Sharing of user projects",
@@ -4000,6 +3996,12 @@
         "allowCatalogHelp": "Owners and editors publish a project; every user can browse the catalog and add it to their projects. Turning this off hides published projects again.",
         "permissionHint": "Users also need the \"projectSharing\" permission of their group.",
         "saved": "Saved"
+      },
+      "panel": {
+        "details": "Name and description",
+        "editDetails": "Edit name and description",
+        "availability": "Availability",
+        "saved": "Saved."
       }
     }
   },
@@ -6743,11 +6745,13 @@
       "confirmTitle": "Publish to the catalog?",
       "confirmMessage": "Everyone signed in can then find this project in the catalog, read its documents and instructions, and chat with it. They do not become members: they cannot change it and do not see the members’ chats. You can take it out again at any time.",
       "dialogTitle": "Project catalog",
-      "dialogHint": "Projects their owners published for everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.",
+      "dialogHint": "Projects their owners published for everyone: add one to your projects to use it in your chats; its owner and editors keep it up to date. Projects from the administrators are open to everyone already: open one to read it or to link its documents into your projects.",
       "search": "Search the catalog",
       "noMatches": "No published project matches.",
       "empty": "Nothing has been published yet.",
       "byOwner": "By {{name}}",
+      "byAdmins": "From the administrators",
+      "openToEveryone": "Open to everyone",
       "inYourList": "In your projects",
       "removeNamed": "Remove {{name}} from my projects",
       "addNamed": "Add {{name}} to my projects",

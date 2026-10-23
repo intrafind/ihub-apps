@@ -17,7 +17,7 @@ const ROW_BUTTON =
 
 /**
  * The project catalog: projects their owners published for everyone signed
- * in. Search it, open a project, and add one to your projects (or remove it
+ * in, and admin projects available to everyone signed in. Search it, open a project, and add one to your projects (or remove it
  * again). A project you own or are a member of is in your list already.
  *
  * Mount it only while open.
@@ -90,7 +90,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
             'projects.catalog.dialogHint',
-            'Projects their owners published for everyone. Add one to your projects to use it in your chats; its owner and editors keep it up to date.'
+            'Projects their owners published for everyone: add one to your projects to use it in your chats; its owner and editors keep it up to date. Projects from the administrators are open to everyone already: open one to read it or to link its documents into your projects.'
           )}
         </p>
         <input
@@ -116,6 +116,9 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
           <ul className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
             {items.map(project => {
               const description = localizedText(project.description, language);
+              // An admin project is open to everyone and managed by the
+              // administrators: there is nothing to add.
+              const fromAdmins = project.ownership === 'admin';
               const inList = project.role !== 'catalog';
               return (
                 <li key={project.id} className="px-3 py-3 flex items-start gap-3">
@@ -134,16 +137,23 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
                       </p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {t('projects.catalog.byOwner', 'By {{name}}', {
-                        name: project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
-                      })}
+                      {fromAdmins
+                        ? t('projects.catalog.byAdmins', 'From the administrators')
+                        : t('projects.catalog.byOwner', 'By {{name}}', {
+                            name:
+                              project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
+                          })}
                       {' · '}
                       {t('projects.list.itemCount', '{{count}} items', {
                         count: project.usage?.items ?? 0
                       })}
                     </p>
                   </div>
-                  {inList ? (
+                  {fromAdmins ? (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
+                      {t('projects.catalog.openToEveryone', 'Open to everyone')}
+                    </span>
+                  ) : inList ? (
                     <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
                       {t('projects.catalog.inYourList', 'In your projects')}
                     </span>

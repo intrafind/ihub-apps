@@ -3,8 +3,8 @@
 
 /**
  * Admin → Projects → one project (read-only view): shows the description,
- * the instructions, the items and what links the project; leads to the edit
- * form; and "Estimate tokens" shows the size and the recommendation for the
+ * the instructions, the items and what links the project; leads to the items
+ * editor; and "Estimate tokens" shows the size and the recommendation for the
  * project and for every item, web pages included.
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -146,6 +146,7 @@ describe('AdminProjectViewPage', () => {
     mockApi.addAdminProjectItem.mockResolvedValue({ id: 'new', status: 'pending' });
     renderView();
     await screen.findByRole('heading', { level: 1 });
+    // Who can use it shows once, in the side panel where it is changed.
     expect(screen.getByTestId('project-availability-badge')).toHaveTextContent('Linked apps only');
 
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
@@ -164,7 +165,7 @@ describe('AdminProjectViewPage', () => {
     await waitFor(() => expect(mockApi.fetchAdminProject).toHaveBeenCalledTimes(2));
   });
 
-  test('shows the project read-only and leads to the edit form', async () => {
+  test('shows the items read-only and leads to the items editor', async () => {
     renderView();
 
     expect(
@@ -173,7 +174,7 @@ describe('AdminProjectViewPage', () => {
     expect(screen.getByText('Pages of the IntraFind website')).toBeInTheDocument();
     expect(screen.getByText('Answer from the pages only.')).toBeInTheDocument();
     expect(screen.getAllByText('https://www.intrafind.com').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'Edit' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Edit items' })).toHaveAttribute(
       'href',
       '/admin/projects/intrafind-website/edit'
     );

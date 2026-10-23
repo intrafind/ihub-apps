@@ -337,8 +337,9 @@ export default function registerProjectRoutes(app) {
    *     summary: The projects published to the catalog
    *     description: |
    *       Every user project an owner or editor published, for everyone signed
-   *       in to browse and add to their list. Empty while the catalog is off
-   *       (`platform.projects.sharing.allowCatalog`).
+   *       in to browse and add to their list, and every admin project made
+   *       available to everyone signed in (open to everyone, not added). Empty
+   *       while the catalog is off (`platform.projects.sharing.allowCatalog`).
    *     tags: [Projects]
    *     parameters:
    *       - in: query
@@ -357,9 +358,15 @@ export default function registerProjectRoutes(app) {
       const raw = typeof req.query.q === 'string' ? req.query.q : '';
       const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
       const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
+      // An admin project made available to everyone signed in is listed too:
+      // it is open to everyone already, so it is found here, not added.
+      const adminPublished = (await deps.repo.listAdmin({ includeDisabled: false })).filter(
+        isPublished
+      );
       const items = [];
-      for (const project of await deps.repo.listCatalog()) {
+      for (const project of [...(await deps.repo.listCatalog()), ...adminPublished]) {
         const text = [project.name, project.description, project.owner?.name]
+          .flatMap(value => (value && typeof value === 'object' ? Object.values(value) : [value]))
           .filter(value => typeof value === 'string')
           .join(' ')
           .toLowerCase();
@@ -371,7 +378,8 @@ export default function registerProjectRoutes(app) {
           subscribed: subscribed.has(project.id)
         });
       }
-      items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      const language = req.user?.language || 'en';
+      items.sort((a, b) => projectName(a, language).localeCompare(projectName(b, language)));
       res.json({ enabled: true, items });
     } catch (error) {
       sendFailedOperationError(res, 'list the project catalog', error);

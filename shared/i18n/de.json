@@ -4065,7 +4065,6 @@
       }
     },
     "projects": {
-      "settings": "Einstellungen",
       "availability": {
         "legend": "Wer kann dieses Projekt nutzen?",
         "apps": {
@@ -4076,7 +4075,7 @@
         "everyone": {
           "label": "Alle angemeldeten Benutzer",
           "badge": "Alle angemeldeten Benutzer",
-          "hint": "Alle angemeldeten Benutzer können Dokumente und Anweisungen lesen und in eigene Projekte verknüpfen, auch ohne Zugriff auf die Apps, die es nutzen."
+          "hint": "Steht im Projektkatalog. Alle angemeldeten Benutzer können Dokumente und Anweisungen lesen und in eigene Projekte verknüpfen, auch ohne Zugriff auf die Apps, die es nutzen."
         },
         "off": {
           "label": "Aus",
@@ -4088,7 +4087,7 @@
       "createHint": "Als Nächstes fügen Sie die Dokumente hinzu. Solange das Projekt mit keiner App verknüpft ist, sehen es nur Administratoren.",
       "publish": {
         "confirmTitle": "Dieses Projekt für alle verfügbar machen?",
-        "confirmMessage": "Alle angemeldeten Benutzer können dann seine Dokumente und Anweisungen lesen und mit eigenen Projekten verknüpfen, auch wer die Apps, Workflows oder Agenten, die es verknüpfen, nicht nutzen darf. Nur Administratoren können es ändern.",
+        "confirmMessage": "Es steht dann im Projektkatalog. Alle angemeldeten Benutzer können seine Dokumente und Anweisungen lesen und mit eigenen Projekten verknüpfen, auch wer die Apps, Workflows oder Agenten, die es verknüpfen, nicht nutzen darf. Nur Administratoren können es ändern.",
         "confirm": "Verfügbar machen"
       },
       "itemCount": "{{count}} Elemente",
@@ -4154,7 +4153,6 @@
       "scanWarning": "Uploads werden nicht auf Schadsoftware geprüft. Konfigurieren Sie platform.projects.scan, um sie zu prüfen.",
       "fields": {
         "id": "Projekt-ID",
-        "idFixed": "Die ID kann nach dem Anlegen nicht geändert werden.",
         "idHint": "Wird aus dem Namen gefüllt. Apps und Links verwenden sie, und sie lässt sich nach dem Anlegen nicht ändern.",
         "name": "Name",
         "namePlaceholder": "Projektname",
@@ -4261,17 +4259,15 @@
         "dependentsUnknown": "Welche Apps, Workflows oder Agenten diese Projekte verknüpfen, konnte nicht geprüft werden; die Zusammenführung aktualisiert ihre Verknüpfungen trotzdem."
       },
       "view": {
-        "edit": "Bearbeiten",
         "noDescription": "Keine Beschreibung.",
-        "visibility": "Sichtbarkeit",
-        "editDescription": "Beschreibung bearbeiten",
         "changeVisibility": "Sichtbarkeit ändern",
         "notPublished": "Nur die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, nutzen es.",
         "noInstructions": "Keine Anweisungen.",
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",
         "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
-        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
+        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden.",
+        "editItems": "Elemente bearbeiten"
       },
       "sharing": {
         "title": "Teilen von Benutzerprojekten",
@@ -4284,6 +4280,12 @@
         "allowCatalogHelp": "Besitzer und Bearbeiter veröffentlichen ein Projekt; alle Benutzer können den Katalog durchsuchen und es zu ihren Projekten hinzufügen. Ausschalten blendet veröffentlichte Projekte wieder aus.",
         "permissionHint": "Benutzer brauchen außerdem die Berechtigung „projectSharing“ ihrer Gruppe.",
         "saved": "Gespeichert"
+      },
+      "panel": {
+        "details": "Name und Beschreibung",
+        "editDetails": "Name und Beschreibung bearbeiten",
+        "availability": "Verfügbarkeit",
+        "saved": "Gespeichert."
       }
     }
   },
@@ -6708,11 +6710,13 @@
       "confirmTitle": "Im Katalog veröffentlichen?",
       "confirmMessage": "Alle angemeldeten Personen können das Projekt dann im Katalog finden, seine Dokumente und Anweisungen lesen und damit chatten. Sie werden keine Mitglieder: Sie können es nicht ändern und sehen die Chats der Mitglieder nicht. Sie können es jederzeit wieder herausnehmen.",
       "dialogTitle": "Projektkatalog",
-      "dialogHint": "Projekte, die ihre Besitzer für alle veröffentlicht haben. Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen; Besitzer und Bearbeiter halten es aktuell.",
+      "dialogHint": "Projekte, die ihre Besitzer für alle veröffentlicht haben: Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen; Besitzer und Bearbeiter halten es aktuell. Projekte der Administratoren stehen allen bereits offen: Öffnen Sie eines, um es zu lesen oder seine Dokumente mit Ihren Projekten zu verknüpfen.",
       "search": "Katalog durchsuchen",
       "noMatches": "Kein veröffentlichtes Projekt passt.",
       "empty": "Noch nichts veröffentlicht.",
       "byOwner": "Von {{name}}",
+      "byAdmins": "Von den Administratoren",
+      "openToEveryone": "Für alle offen",
       "inYourList": "In Ihren Projekten",
       "removeNamed": "{{name}} aus meinen Projekten entfernen",
       "addNamed": "{{name}} zu meinen Projekten hinzufügen",
