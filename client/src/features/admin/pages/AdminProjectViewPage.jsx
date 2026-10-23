@@ -351,7 +351,11 @@ function AdminProjectViewPageContent({ id }) {
                 <Link
                   to={`/admin/projects/${encodeURIComponent(project.id)}/edit`}
                   className={ROW_ACTION}
-                  aria-label={t('projects.settings.editInstructions', 'Edit instructions')}
+                  aria-label={
+                    project.instructions
+                      ? t('projects.settings.editInstructions', 'Edit instructions')
+                      : t('projects.settings.addInstructions', 'Add instructions')
+                  }
                 >
                   {project.instructions ? t('common.edit', 'Edit') : t('projects.panel.add', 'Add')}
                 </Link>

@@ -39,7 +39,7 @@ const EMPTY = 'text-gray-400 dark:text-gray-500';
  */
 function ProjectSettingsCard({ project, editable, onSaved }) {
   const { t, i18n } = useTranslation();
-  const { choices } = useProjectChatApps();
+  const { choices, loading: appsLoading } = useProjectChatApps();
   const [form, setForm] = useState(() => projectFormFrom(project));
   // What the draft started from. Changes are measured against it, not
   // against the latest project, so a newer copy from a poll never makes an
@@ -114,7 +114,11 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
             type="button"
             onClick={openEditor}
             className={ROW_ACTION}
-            aria-label={t('projects.settings.editInstructions', 'Edit instructions')}
+            aria-label={
+              instructions
+                ? t('projects.settings.editInstructions', 'Edit instructions')
+                : t('projects.settings.addInstructions', 'Add instructions')
+            }
           >
             {instructions ? t('common.edit', 'Edit') : t('projects.panel.add', 'Add')}
           </button>
@@ -166,9 +170,12 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
           {defaultApp
             ? defaultApp.name
             : project.defaultAppId
-              ? t('projects.appSelect.unavailable', '{{id}} (not available)', {
-                  id: project.defaultAppId
-                })
+              ? // The apps list is still loading: the app is not missing yet.
+                appsLoading
+                ? t('common.loading', 'Loading...')
+                : t('projects.appSelect.unavailable', '{{id}} (not available)', {
+                    id: project.defaultAppId
+                  })
               : t('projects.settings.noDefaultApp', 'None — the first app is used')}
         </p>
       </ProjectPanelRow>

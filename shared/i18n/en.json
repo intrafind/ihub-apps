@@ -6568,6 +6568,7 @@
       "change": "Change"
     },
     "settings": {
+      "addInstructions": "Add instructions",
       "editInstructions": "Edit instructions",
       "viewInstructions": "View instructions",
       "changeDefaultApp": "Change default app",
