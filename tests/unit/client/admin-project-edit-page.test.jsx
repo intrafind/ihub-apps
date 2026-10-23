@@ -210,6 +210,26 @@ describe('AdminProjectEditPage – create', () => {
     );
   });
 
+  test('fills the id from the name until the admin types one, and lands on the add dialog', async () => {
+    mockApi.createAdminProject.mockResolvedValue(makeProject([]));
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
+    renderAt('/admin/projects/new');
+
+    expect(screen.queryByText(/Create the project first/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Project name'), {
+      target: { value: 'Employee Handbook 2026' }
+    });
+    expect(screen.getByLabelText('Project ID *')).toHaveValue('employee-handbook-2026');
+
+    fireEvent.change(screen.getByLabelText('Project ID *'), { target: { value: 'hr' } });
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Other name' } });
+    expect(screen.getByLabelText('Project ID *')).toHaveValue('hr');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook/edit');
+  });
+
   test('shows the server message when the id is taken', async () => {
     mockApi.createAdminProject.mockRejectedValue(
       Object.assign(new Error('conflict'), {
@@ -375,32 +395,52 @@ describe('AdminProjectEditPage – items', () => {
   });
 });
 
-describe('AdminProjectEditPage – publishing', () => {
-  test('asks before publishing, says what it opens, and saves the switch', async () => {
+describe('AdminProjectEditPage – availability', () => {
+  test('one choice replaces Enabled and Published; "everyone" asks first and says what it opens', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.updateAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
     renderAt('/admin/projects/handbook/edit');
 
-    const published = await screen.findByRole('checkbox', { name: 'Published' });
-    // The consequence is on screen and names the switch, not hidden in a tooltip.
-    expect(published).toHaveAccessibleDescription(/even without access to the apps/);
+    const apps = await screen.findByRole('radio', { name: /Linked apps only/ });
+    const everyone = screen.getByRole('radio', { name: /Everyone signed in/ });
+    expect(screen.queryByRole('checkbox', { name: 'Published' })).toBeNull();
+    expect(apps).toBeChecked();
+    // The consequence is on screen and tied to the choice, not hidden in a tooltip.
+    expect(everyone).toHaveAccessibleDescription(/even without access to the apps/);
 
-    fireEvent.click(published);
+    fireEvent.click(everyone);
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(published).not.toBeChecked();
+    expect(apps).toBeChecked();
 
-    fireEvent.click(published);
+    fireEvent.click(everyone);
     fireEvent.click(
-      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Publish' })
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make available' })
     );
-    expect(published).toBeChecked();
+    expect(everyone).toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
         'handbook',
-        expect.objectContaining({ published: true })
+        expect.objectContaining({ enabled: true, published: true })
+      )
+    );
+  });
+
+  test('"off" disables and unpublishes without asking', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
+    mockApi.updateAdminProject.mockResolvedValue(makeProject([]));
+    renderAt('/admin/projects/handbook/edit');
+
+    expect(await screen.findByRole('radio', { name: /Everyone signed in/ })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: /^Off/ }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.updateAdminProject).toHaveBeenCalledWith(
+        'handbook',
+        expect.objectContaining({ enabled: false, published: false })
       )
     );
   });

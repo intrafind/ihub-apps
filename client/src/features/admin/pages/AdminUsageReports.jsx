@@ -15,6 +15,15 @@ import UsageTimeline from '../components/UsageTimeline';
 import PromptCachePanel from '../components/PromptCachePanel';
 import { summarizePromptCache } from '../utils/promptCacheStats';
 
+const entryValue = value =>
+  typeof value === 'object' && value !== null
+    ? value.total || (value.good || 0) + (value.bad || 0)
+    : value || 0;
+
+// Sort [key, value] entries of a usage map from highest to lowest value
+const sortEntriesDesc = (data, getValue = entryValue) =>
+  Object.entries(data || {}).sort(([, a], [, b]) => getValue(b) - getValue(a));
+
 function StatCard({ title, value, icon, color, change, changeType, linkTo, linkLabel }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
@@ -115,7 +124,7 @@ function TopUsersCard({ title, data, color, showRating = false }) {
 
 function AppUsageCard({ data }) {
   const { t } = useTranslation();
-  const apps = Object.entries(data || {});
+  const apps = sortEntriesDesc(data);
   const total = apps.reduce(
     (sum, [, value]) =>
       sum +
@@ -488,7 +497,7 @@ function AdminUsageReports() {
           {t('admin.usage.appTokenUsage', 'App Token Usage')}
         </h3>
         <div className="space-y-4">
-          {Object.entries(tokens.perApp || {}).map(([app, tokenCount]) => (
+          {sortEntriesDesc(tokens.perApp).map(([app, tokenCount]) => (
             <div
               key={app}
               className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
@@ -543,7 +552,7 @@ function AdminUsageReports() {
             {t('admin.usage.sections.appUsage', 'App Usage')}
           </h3>
           <div className="space-y-4">
-            {Object.entries(magicPrompt.perApp || {}).map(([app, count]) => (
+            {sortEntriesDesc(magicPrompt.perApp).map(([app, count]) => (
               <div
                 key={app}
                 className="flex justify-between items-center p-3 bg-purple-50 dark:bg-purple-900/30 rounded-lg"
@@ -571,7 +580,7 @@ function AdminUsageReports() {
               {t('admin.usage.sections.inputTokenDistribution', 'Input Token Distribution')}
             </h4>
             <div className="space-y-3">
-              {Object.entries(magicPrompt.tokensIn.perUser || {}).map(([user, tokens]) => {
+              {sortEntriesDesc(magicPrompt.tokensIn.perUser).map(([user, tokens]) => {
                 const maxTokens = Math.max(...Object.values(magicPrompt.tokensIn.perUser || {}));
                 const percentage = maxTokens > 0 ? (tokens / maxTokens) * 100 : 0;
 
@@ -602,7 +611,7 @@ function AdminUsageReports() {
               {t('admin.usage.sections.outputTokenDistribution', 'Output Token Distribution')}
             </h4>
             <div className="space-y-3">
-              {Object.entries(magicPrompt.tokensOut.perUser || {}).map(([user, tokens]) => {
+              {sortEntriesDesc(magicPrompt.tokensOut.perUser).map(([user, tokens]) => {
                 const maxTokens = Math.max(...Object.values(magicPrompt.tokensOut.perUser || {}));
                 const percentage = maxTokens > 0 ? (tokens / maxTokens) * 100 : 0;
 
@@ -639,92 +648,100 @@ function AdminUsageReports() {
           Model Usage Details
         </h3>
         <div className="space-y-4">
-          {Object.entries(messages.perModel || {}).map(([model, messageCount]) => {
-            const tokenCount = tokens.perModel[model] || 0;
-            const promptTokens = tokens.prompt.perModel[model] || 0;
-            const completionTokens = tokens.completion.perModel[model] || 0;
-            const avgTokensPerMessage =
-              messageCount > 0 ? Math.round(tokenCount / messageCount) : 0;
+          {Object.entries(messages.perModel || {})
+            .sort(
+              ([modelA, countA], [modelB, countB]) =>
+                (tokens.perModel?.[modelB] || 0) - (tokens.perModel?.[modelA] || 0) ||
+                countB - countA
+            )
+            .map(([model, messageCount]) => {
+              const tokenCount = tokens.perModel[model] || 0;
+              const promptTokens = tokens.prompt.perModel[model] || 0;
+              const completionTokens = tokens.completion.perModel[model] || 0;
+              const avgTokensPerMessage =
+                messageCount > 0 ? Math.round(tokenCount / messageCount) : 0;
 
-            return (
-              <div
-                key={model}
-                className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                      {model}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">AI Model</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {messageCount}
+              return (
+                <div
+                  key={model}
+                  className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h4 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                        {model}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">AI Model</p>
                     </div>
-                    <div className="text-sm text-gray-600">messages</div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {messageCount}
+                      </div>
+                      <div className="text-sm text-gray-600">messages</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-white dark:bg-gray-600 rounded-lg">
+                      <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                        {new Intl.NumberFormat().format(tokenCount)}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300">Total Tokens</div>
+                    </div>
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {new Intl.NumberFormat().format(promptTokens)}
+                      </div>
+                      <div className="text-xs text-blue-600 dark:text-blue-400">Prompt Tokens</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                      <div className="text-lg font-bold text-green-700 dark:text-green-400">
+                        {new Intl.NumberFormat().format(completionTokens)}
+                      </div>
+                      <div className="text-xs text-green-700 dark:text-green-400">
+                        Completion Tokens
+                      </div>
+                    </div>
+                    <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+                      <div className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                        {avgTokensPerMessage}
+                      </div>
+                      <div className="text-xs text-amber-700 dark:text-amber-400">Avg/Message</div>
+                    </div>
+                  </div>
+
+                  {/* Token Distribution Visual */}
+                  <div className="mt-4">
+                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                      <span>Token Distribution</span>
+                      <span>
+                        {tokenCount > 0 ? ((promptTokens / tokenCount) * 100).toFixed(1) : 0}%
+                        prompt /{' '}
+                        {tokenCount > 0 ? ((completionTokens / tokenCount) * 100).toFixed(1) : 0}%
+                        completion
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
+                      <div className="h-full flex">
+                        <div
+                          className="bg-blue-500"
+                          style={{
+                            width: tokenCount > 0 ? `${(promptTokens / tokenCount) * 100}%` : '0%'
+                          }}
+                        ></div>
+                        <div
+                          className="bg-green-500"
+                          style={{
+                            width:
+                              tokenCount > 0 ? `${(completionTokens / tokenCount) * 100}%` : '0%'
+                          }}
+                        ></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-white dark:bg-gray-600 rounded-lg">
-                    <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                      {new Intl.NumberFormat().format(tokenCount)}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-300">Total Tokens</div>
-                  </div>
-                  <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                      {new Intl.NumberFormat().format(promptTokens)}
-                    </div>
-                    <div className="text-xs text-blue-600 dark:text-blue-400">Prompt Tokens</div>
-                  </div>
-                  <div className="text-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-green-700 dark:text-green-400">
-                      {new Intl.NumberFormat().format(completionTokens)}
-                    </div>
-                    <div className="text-xs text-green-700 dark:text-green-400">
-                      Completion Tokens
-                    </div>
-                  </div>
-                  <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-amber-700 dark:text-amber-400">
-                      {avgTokensPerMessage}
-                    </div>
-                    <div className="text-xs text-amber-700 dark:text-amber-400">Avg/Message</div>
-                  </div>
-                </div>
-
-                {/* Token Distribution Visual */}
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    <span>Token Distribution</span>
-                    <span>
-                      {tokenCount > 0 ? ((promptTokens / tokenCount) * 100).toFixed(1) : 0}% prompt
-                      / {tokenCount > 0 ? ((completionTokens / tokenCount) * 100).toFixed(1) : 0}%
-                      completion
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
-                    <div className="h-full flex">
-                      <div
-                        className="bg-blue-500"
-                        style={{
-                          width: tokenCount > 0 ? `${(promptTokens / tokenCount) * 100}%` : '0%'
-                        }}
-                      ></div>
-                      <div
-                        className="bg-green-500"
-                        style={{
-                          width: tokenCount > 0 ? `${(completionTokens / tokenCount) * 100}%` : '0%'
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
 

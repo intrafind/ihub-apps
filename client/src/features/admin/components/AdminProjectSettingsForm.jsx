@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../shared/components/Icon';
 import { MAX_PROJECT_ID_LENGTH } from '../utils/projectAdmin';
-import ProjectPublishedSwitch from './ProjectPublishedSwitch';
+import ProjectAvailability from './ProjectAvailability';
 
 const INPUT_CLASS =
   'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
@@ -55,71 +55,20 @@ function AdminProjectSettingsForm({
       }`}
     >
       {!isNew && (
-        // The title above the switches: the Published hint needs the width.
-        <div className="space-y-3">
-          <div className="min-w-0">
-            <h2
-              id="project-settings-title"
-              className="text-lg font-medium text-gray-900 dark:text-gray-100"
-            >
-              {t('admin.projects.settings', 'Settings')}
-            </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {t('admin.projects.fields.id', 'Project ID')}:{' '}
-              <code className="font-mono">{form.id}</code>
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-2">
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={e => onFieldChange('enabled', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-              />
-              {t('admin.projects.fields.enabled', 'Enabled')}
-            </label>
-            <ProjectPublishedSwitch
-              checked={form.published}
-              onChange={published => onFieldChange('published', published)}
-            />
-          </div>
-        </div>
-      )}
-      {isNew && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label htmlFor="project-id" className={LABEL_CLASS}>
-              {t('admin.projects.fields.id', 'Project ID')} *
-            </label>
-            <input
-              id="project-id"
-              type="text"
-              value={form.id}
-              maxLength={MAX_PROJECT_ID_LENGTH}
-              onChange={e => onFieldChange('id', e.target.value)}
-              placeholder="employee-handbook"
-              aria-invalid={Boolean(idError)}
-              className={`${INPUT_CLASS} ${idError ? 'border-red-400' : ''}`}
-            />
-            {idError && <p className="mt-1 text-sm text-red-600">{idError}</p>}
-          </div>
-          <div className="flex items-end gap-6">
-            <label className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={e => onFieldChange('enabled', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
-              />
-              {t('admin.projects.fields.enabled', 'Enabled')}
-            </label>
-            <ProjectPublishedSwitch
-              checked={form.published}
-              onChange={published => onFieldChange('published', published)}
-              className="pb-2"
-            />
-          </div>
+        <div className="min-w-0">
+          <h2
+            id="project-settings-title"
+            className="text-lg font-medium text-gray-900 dark:text-gray-100"
+          >
+            {t('admin.projects.settings', 'Settings')}
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t('admin.projects.fields.id', 'Project ID')}:{' '}
+            <code className="font-mono">{form.id}</code>
+            <span className="ml-1">
+              ({t('admin.projects.fields.idFixed', 'The ID cannot be changed after creation.')})
+            </span>
+          </p>
         </div>
       )}
 
@@ -134,6 +83,36 @@ function AdminProjectSettingsForm({
         />
       </div>
 
+      {isNew && (
+        <div>
+          <label htmlFor="project-id" className={LABEL_CLASS}>
+            {t('admin.projects.fields.id', 'Project ID')} *
+          </label>
+          <input
+            id="project-id"
+            type="text"
+            value={form.id}
+            maxLength={MAX_PROJECT_ID_LENGTH}
+            onChange={e => onFieldChange('id', e.target.value)}
+            placeholder="employee-handbook"
+            aria-invalid={Boolean(idError)}
+            aria-describedby={idError ? 'project-id-error project-id-hint' : 'project-id-hint'}
+            className={`${INPUT_CLASS} font-mono ${idError ? 'border-red-400' : ''}`}
+          />
+          <p id="project-id-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.projects.fields.idHint',
+              'Filled in from the name. Apps and links use it, and it cannot be changed after creation.'
+            )}
+          </p>
+          {idError && (
+            <p id="project-id-error" role="alert" className="mt-1 text-sm text-red-600">
+              {idError}
+            </p>
+          )}
+        </div>
+      )}
+
       <div>
         <DynamicLanguageEditor
           label={t('admin.projects.fields.description', 'Description')}
@@ -147,6 +126,15 @@ function AdminProjectSettingsForm({
           type="textarea"
         />
       </div>
+
+      <ProjectAvailability
+        compact={!isNew}
+        value={form}
+        onChange={flags => {
+          onFieldChange('enabled', flags.enabled);
+          onFieldChange('published', flags.published);
+        }}
+      />
 
       <div>
         <label htmlFor="project-instructions" className={LABEL_CLASS}>
@@ -167,38 +155,48 @@ function AdminProjectSettingsForm({
         </p>
       </div>
 
-      <div className={`grid grid-cols-1 ${isNew ? 'md:grid-cols-2 gap-6' : 'gap-5'}`}>
-        <div>
-          <label htmlFor="project-category" className={LABEL_CLASS}>
-            {t('admin.projects.fields.category', 'Category')}
-          </label>
-          <input
-            id="project-category"
-            type="text"
-            value={form.category}
-            maxLength={100}
-            onChange={e => onFieldChange('category', e.target.value)}
-            placeholder={t('admin.projects.fields.categoryPlaceholder', 'Optional category')}
-            className={INPUT_CLASS}
-          />
+      <details
+        className="group rounded-lg border border-gray-200 dark:border-gray-700"
+        open={Boolean(form.category) || tagsText.trim() !== ''}
+      >
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+          {t('admin.projects.details', 'Category and tags (optional)')}
+        </summary>
+        <div className="px-4 pb-4">
+          <div className={`grid grid-cols-1 ${isNew ? 'md:grid-cols-2 gap-6' : 'gap-5'}`}>
+            <div>
+              <label htmlFor="project-category" className={LABEL_CLASS}>
+                {t('admin.projects.fields.category', 'Category')}
+              </label>
+              <input
+                id="project-category"
+                type="text"
+                value={form.category}
+                maxLength={100}
+                onChange={e => onFieldChange('category', e.target.value)}
+                placeholder={t('admin.projects.fields.categoryPlaceholder', 'Optional category')}
+                className={INPUT_CLASS}
+              />
+            </div>
+            <div>
+              <label htmlFor="project-tags" className={LABEL_CLASS}>
+                {t('admin.projects.fields.tags', 'Tags')}
+              </label>
+              <input
+                id="project-tags"
+                type="text"
+                value={tagsText}
+                onChange={e => onTagsTextChange(e.target.value)}
+                placeholder={t('admin.projects.fields.tagsPlaceholder', 'hr, policies')}
+                className={INPUT_CLASS}
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t('admin.projects.fields.tagsHint', 'Separate tags with commas.')}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <label htmlFor="project-tags" className={LABEL_CLASS}>
-            {t('admin.projects.fields.tags', 'Tags')}
-          </label>
-          <input
-            id="project-tags"
-            type="text"
-            value={tagsText}
-            onChange={e => onTagsTextChange(e.target.value)}
-            placeholder={t('admin.projects.fields.tagsPlaceholder', 'hr, policies')}
-            className={INPUT_CLASS}
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {t('admin.projects.fields.tagsHint', 'Separate tags with commas.')}
-          </p>
-        </div>
-      </div>
+      </details>
 
       <div className="flex items-center justify-between pt-2">
         <button
@@ -208,6 +206,14 @@ function AdminProjectSettingsForm({
         >
           {t('common.cancel', 'Cancel')}
         </button>
+        {isNew && (
+          <p className="hidden sm:block flex-1 px-4 text-right text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.projects.createHint',
+              'Next you add the documents. Until the project is linked to an app, only administrators see it.'
+            )}
+          </p>
+        )}
         <button
           type="submit"
           disabled={saving}

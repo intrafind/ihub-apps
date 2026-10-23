@@ -7,13 +7,15 @@
  * form; and "Estimate tokens" shows the size and the recommendation for the
  * project and for every item, web pages included.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockApi = {
   fetchAdminProject: jest.fn(),
   fetchAdminProjectKinds: jest.fn(),
+  fetchAdminProjectConfig: jest.fn(),
+  addAdminProjectItem: jest.fn(),
   fetchAdminProjectDependencies: jest.fn(),
   estimateAdminProject: jest.fn(),
   testAdminProject: jest.fn(),
@@ -29,6 +31,8 @@ jest.mock('../../../client/src/api/adminApi', () => {
   return {
     fetchAdminProject: forward('fetchAdminProject'),
     fetchAdminProjectKinds: forward('fetchAdminProjectKinds'),
+    fetchAdminProjectConfig: forward('fetchAdminProjectConfig'),
+    addAdminProjectItem: forward('addAdminProjectItem'),
     fetchAdminProjectDependencies: forward('fetchAdminProjectDependencies'),
     estimateAdminProject: forward('estimateAdminProject'),
     testAdminProject: forward('testAdminProject'),
@@ -127,12 +131,39 @@ beforeEach(() => {
     { id: 'upload', name: { en: 'Upload' } },
     { id: 'url', name: { en: 'Web page (URL)' } }
   ]);
+  mockApi.fetchAdminProjectConfig.mockResolvedValue({
+    upload: { available: true, accept: ['.pdf'], mimeTypes: [], summary: 'PDF' },
+    scan: { provider: 'none' },
+    limits: { maxFileBytes: 1024 }
+  });
   mockApi.fetchAdminProjectDependencies.mockResolvedValue([
     { type: 'app', id: 'intrafind-websites-bot', name: 'IntraFind Website Bot' }
   ]);
 });
 
 describe('AdminProjectViewPage', () => {
+  test('adds an item straight from the view and reads the project again', async () => {
+    mockApi.addAdminProjectItem.mockResolvedValue({ id: 'new', status: 'pending' });
+    renderView();
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.getByTestId('project-availability-badge')).toHaveTextContent('Linked apps only');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Text' }));
+    fireEvent.change(within(dialog).getByLabelText('Text'), { target: { value: 'Hello' } });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Greeting' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+
+    await waitFor(() =>
+      expect(mockApi.addAdminProjectItem).toHaveBeenCalledWith(
+        'intrafind-website',
+        expect.objectContaining({ name: 'Greeting', text: 'Hello' })
+      )
+    );
+    await waitFor(() => expect(mockApi.fetchAdminProject).toHaveBeenCalledTimes(2));
+  });
+
   test('shows the project read-only and leads to the edit form', async () => {
     renderView();
 

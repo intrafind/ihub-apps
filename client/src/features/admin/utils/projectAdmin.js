@@ -21,6 +21,7 @@
  */
 
 import { localizedText } from '../../projects/utils/projectItems';
+import { slugify } from './modelImport';
 
 /** How a linked project reaches the model. `auto` lets the server decide by size. */
 export const PROJECT_LINK_MODES = Object.freeze(['auto', 'context', 'tools']);
@@ -180,6 +181,44 @@ export function projectFormFromProject(project) {
     category: project?.category || '',
     tags: Array.isArray(project?.tags) ? [...project.tags] : []
   };
+}
+
+/**
+ * Who can use an admin project, as one decision instead of the two stored
+ * flags `enabled` and `published`: `off` (nothing uses it), `apps` (the apps,
+ * workflows and agents that link it), `everyone` (also everyone signed in).
+ * A disabled project is `off` whatever `published` says: the server gives
+ * nobody but admins access to it then.
+ *
+ * @param {{enabled?: boolean, published?: boolean}} project
+ * @returns {'off'|'apps'|'everyone'}
+ */
+export function projectAvailability(project) {
+  if (project?.enabled === false) return 'off';
+  return project?.published === true ? 'everyone' : 'apps';
+}
+
+/**
+ * The stored flags of an availability.
+ *
+ * @param {'off'|'apps'|'everyone'} availability
+ * @returns {{enabled: boolean, published: boolean}}
+ */
+export function availabilityFlags(availability) {
+  return { enabled: availability !== 'off', published: availability === 'everyone' };
+}
+
+/**
+ * The id a new project gets from its name until the admin types one: the
+ * English name, else the first one filled, as a safe id.
+ *
+ * @param {string|Object<string, string>} name
+ * @returns {string}
+ */
+export function projectIdFromName(name) {
+  const record = typeof name === 'string' ? { en: name } : name || {};
+  const text = record.en?.trim() || Object.values(record).find(value => value?.trim()) || '';
+  return slugify(text).slice(0, MAX_PROJECT_ID_LENGTH);
 }
 
 /**

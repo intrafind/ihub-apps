@@ -316,8 +316,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     # Only commit version changes for real releases; workflow_dispatch inputs
-    # are not guaranteed to be valid release tags (see #1765).
-    if: github.event_name == 'release'
+    # are not guaranteed to be valid release tags (see #1765). Prereleases (v5.6.0-RC3) are for
+    # testing only: no version-bump PR, `main` keeps the last final version.
+    if: |
+      github.event_name == 'release' &&
+      !github.event.release.prerelease &&
+      !contains(github.event.release.tag_name, '-')
     permissions:
       contents: write
       pull-requests: write

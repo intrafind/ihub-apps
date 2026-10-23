@@ -133,7 +133,7 @@ switch `admin.pages.projects`; content admins and full admins may use it.
    refresh or remove an item from the items table.
 4. Link the project to apps, workflows and agents.
 
-A disabled project is skipped by everything that links it. A project that something still links
+A project set to **Off** (`"enabled": false`) is skipped by everything that links it; use it for a draft while you add documents. A project that something still links
 cannot be deleted: the dialog lists the apps, workflows and agents to change first.
 
 ### Moving, copying and merging
@@ -473,7 +473,7 @@ published one, tick its documents and link them.
 
 ### Publishing admin projects
 
-**Published** on an admin project (**Admin → Projects → Edit**, `"published": true` in
+**Everyone signed in** on an admin project (**Admin → Projects → Edit → Who can use this project?**, `"published": true` in
 `contents/projects/<id>.json`) makes it available to everyone signed in: they can use it and link
 its documents into their own projects, without an app that links it. Only administrators change
 it. The shipped iHub documentation project is published; installations that upgrade get it
