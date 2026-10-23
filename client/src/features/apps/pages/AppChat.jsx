@@ -78,6 +78,7 @@ import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
 import { ATTACH_PROJECT_QUERY_PARAM, PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
+import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
 
 /**
  * Initialize variables with default values from app configuration
@@ -2715,7 +2716,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onChange: setAttachedProjectIds,
         disabled: processing || hydrating,
         attached: attachedProjects,
-        attachDisabled: app?.features?.projects === false || app?.features?.userProjects === false
+        attachDisabled: !appAllowsUserProjects(app)
       };
 
   const renderComposer = () => {

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { appAllowsUserProjects, appUsesProjects } from '../../../../../../shared/appProjects.js';
 import ProjectPicker from '../ProjectPicker';
 
 /**
@@ -19,15 +20,20 @@ import ProjectPicker from '../ProjectPicker';
  * @returns {JSX.Element}
  */
 function ProjectsConfigSection({ app, onChange, t }) {
-  const projectsOn = app.features?.projects !== false;
-  const userProjectsOn = app.features?.userProjects !== false;
+  const projectsOn = appUsesProjects(app);
+  const userProjectsOn = appAllowsUserProjects(app);
 
   const handleProjectsChange = links => {
     onChange({ ...app, projects: links });
   };
 
+  // Absent means on, so switching back on removes the key instead of
+  // writing `true` (as FeedbackSection does).
   const setFeature = (key, enabled) => {
-    onChange({ ...app, features: { ...app.features, [key]: enabled } });
+    const features = { ...app.features };
+    if (enabled) delete features[key];
+    else features[key] = false;
+    onChange({ ...app, features });
   };
 
   return (
@@ -73,7 +79,7 @@ function ProjectsConfigSection({ app, onChange, t }) {
               <input
                 id="app-user-projects-enabled"
                 type="checkbox"
-                checked={projectsOn && userProjectsOn}
+                checked={userProjectsOn}
                 disabled={!projectsOn}
                 onChange={e => setFeature('userProjects', e.target.checked)}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"

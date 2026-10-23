@@ -19,6 +19,7 @@
  * @module features/projects/utils/projectView
  */
 
+import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
 import { localizedText } from './projectItems';
 
 /** Prefix of user project ids (`prj_` + 22 url-safe characters). */
@@ -419,12 +420,7 @@ export function projectChatStartPath(appId, projectId, { attach = false, message
  * @returns {Array<Object>}
  */
 export function appsForProjectChats(apps) {
-  return (apps || []).filter(
-    app =>
-      (app?.type || 'chat') === 'chat' &&
-      app?.features?.projects !== false &&
-      app?.features?.userProjects !== false
-  );
+  return (apps || []).filter(app => (app?.type || 'chat') === 'chat' && appAllowsUserProjects(app));
 }
 
 /**

@@ -21,6 +21,9 @@
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
 
+// The per-app switches live in shared/ so the browser reads them alike.
+export { appAllowsUserProjects, appUsesProjects } from '../../../shared/appProjects.js';
+
 /** Feature flag gating all projects, the admin pages and the picker endpoints. */
 export const PROJECTS_FEATURE = 'projects';
 
@@ -174,31 +177,6 @@ export function isUserProjectsConfigured(featureConfig = {}) {
   return (
     isProjectsConfigured(featureConfig) && isFeatureEnabled(USER_PROJECTS_FEATURE, featureConfig)
   );
-}
-
-/**
- * Whether an app uses projects at all (`features.projects`, absent means
- * yes): its linked admin projects, chats started inside a project and the
- * projects attached from the chat input. Set by the admin per app; the
- * installation's `projects` flag still has to be on.
- *
- * @param {Object|null|undefined} app - The app configuration.
- * @returns {boolean}
- */
-export function appUsesProjects(app) {
-  return app?.features?.projects !== false;
-}
-
-/**
- * Whether an app takes personal (user) projects (`features.userProjects`,
- * absent means yes): only while it uses projects at all. The installation's
- * `userProjects` flag still has to be on.
- *
- * @param {Object|null|undefined} app - The app configuration.
- * @returns {boolean}
- */
-export function appAllowsUserProjects(app) {
-  return appUsesProjects(app) && app?.features?.userProjects !== false;
 }
 
 /**
