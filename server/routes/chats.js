@@ -48,7 +48,6 @@ import {
   sendNotFound
 } from '../utils/responseHelpers.js';
 import configCache from '../configCache.js';
-import { logAudit } from '../services/AuditLogService.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
