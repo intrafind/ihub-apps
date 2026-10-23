@@ -372,7 +372,7 @@ describe('crawlSite', () => {
     const result = await crawlSite({ url: 'https://x.com/' }, deps);
     assert.deepEqual(urlsOf(result), ['https://x.com/', 'https://x.com/a']);
     assert.equal(result.robotsExcluded, 2);
-    assert.ok(!fetched.includes('https://x.com/private/b'));
+    assert.ok(!new Set(fetched).has('https://x.com/private/b'));
   });
 
   it('lists only the start page at depth 0', async () => {
