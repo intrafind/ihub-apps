@@ -378,6 +378,8 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
     }
   ].map(section => ({
     ...section,
-    items: section.items.filter(item => item.visible)
+    items: section.items
+      .filter(item => item.visible)
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
   }));
 }

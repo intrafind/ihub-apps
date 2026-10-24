@@ -66,3 +66,8 @@ been completed. It is now only shown while onboarding is still open.
 
 The toggle reported "saved" but the setting was lost on the next page load, because the server
 dropped it when writing the platform configuration. It now persists.
+
+## Admin sidebar entries are sorted alphabetically
+
+The entries inside each section of the admin navigation (for example AI Workspace, Observability or
+Platform) are now ordered A–Z by their displayed name, in the language you use.
