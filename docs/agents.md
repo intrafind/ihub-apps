@@ -20,6 +20,7 @@ leave durable artifacts behind.
 | **Dynamic tasks** | Agents may call `create_task` to enqueue work onto `state.data._taskQueue`. A drain-mode loop processes the queue until empty (bounded by `dynamicTasks.maxDepth` and the existing 200-iteration cap). |
 | **App-as-tool** | When `features.appAsTool: true` and a node has `config.apps: [appId, ...]`, the LLM sees `app__<appId>` synthetic tools that call into `ChatService.invokeAppInternal` via the shared gateway (`server/services/chat/appToolsGateway.js`). Regular chat apps can use the same mechanism through their own `apps: [...]` config field (see [App Configuration](apps.md#apps-as-tools-concierge-pattern)). App→App nesting is forbidden. |
 | **HITL** | Explicit `human` nodes in the workflow pause until an operator in `profile.hitl.approverGroups` answers the run's pending interaction via `POST /api/runs/:runId/interactions/:id/answer`. |
+| **Projects** | `profile.projects` links admin projects like an app does (a project id, or `{ id, mode, write }`); the links are copied into every generated prompt node, so the agent gets the projects' instructions and text or the knowledge tools (`knowledge_search`, `knowledge_read`, `knowledge_list`). See [Projects](projects.md#linking-a-project). |
 | **Artifacts** | Agents call `write_artifact({ name, content })` to persist to `contents/data/agent-artifacts/<execId>/`. Each run can produce multiple artifacts. |
 
 ## Quick start

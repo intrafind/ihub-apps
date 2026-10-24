@@ -1,98 +1,106 @@
 # Breaking Changes — Unreleased
 
-## Sources are now Projects
+## Sources Are Now Projects
 
-Admin-configured sources have become **admin projects**: the knowledge an admin links to apps,
-workflows and agents, kept as encrypted text with per-document search. Every entry of
-`config/sources.json` is migrated to `contents/projects/<id>.json` with the same id and one item
-of the source's kind, so apps, workflows and agents keep their knowledge. The admin pages are now
-**Projects**.
+Sources are replaced by **projects**: a container for documents, links and instructions that apps,
+workflows and agents draw on. The upgrade converts every source into an admin project with the
+same id, so apps, workflows and agents keep their knowledge without any manual step. Only an id
+that starts with `prj_` or is longer than 50 characters is renamed (`legacy-…`, logged); the apps,
+workflows and agents that use it are updated too, but anything outside iHub that names such a
+source by its id has to be changed by hand. In the admin area, **Sources** is now **Projects**. What a project can do is described under Features.
 
-- The `sources` list on apps, workflows, workflow nodes, planner task templates and agent
-  profiles is renamed to `projects`. A prompt source becomes `{ "id": "…", "mode": "context" }`
-  (always in the prompt), a tool source `{ "id": "…", "mode": "tools" }` (reachable through the
-  knowledge tools). There are no aliases: a configuration that still says `sources` is rejected
-  by validation.
-- The `source_<id>` tools are gone. Apps, workflow nodes and agents that link a project get the
-  tools `knowledge_search`, `knowledge_read` and `knowledge_list` automatically. System prompts
-  that told the model to call "the source tool" or to pass `section` should be reworded; the
-  shipped iHub Support Bot prompt is updated by migration when it was not customised.
-- The `{{sources}}` and `{{source}}` placeholders are renamed to `{{projects}}` by migration; a
+What changes for configuration and integrations:
+
+- **Config files:** the `sources` list on apps, workflows, workflow steps, planner task templates
+  and agent profiles is now called `projects`. A former prompt source becomes
+  `{ "id": "…", "mode": "context" }` (always in the prompt), a former tool source
+  `{ "id": "…", "mode": "tools" }` (searched when needed). The upgrade rewrites shipped and existing
+  files. There are no aliases: a file you import later that still says `sources` is rejected by
+  validation.
+- **Tools:** the `source_<id>` tools are gone. Anything that links a project gets the tools
+  `knowledge_search`, `knowledge_read` and `knowledge_list` instead. Reword system prompts that tell
+  the model to call "the source tool" or to pass a `section`. The shipped iHub Support Bot prompt
+  is updated automatically if you did not customise it.
+- **Placeholders:** `{{sources}}` and `{{source}}` are renamed to `{{projects}}` by the upgrade. A
   prompt without the placeholder gets the projects block appended, as before.
-- The admin API `/api/admin/sources*` is replaced by `/api/admin/projects*`. The file-editing
-  routes under `/api/admin/sources/:id/files` are replaced by
-  `PUT /api/admin/projects/:id/items/:itemId/text`, which replaces the stored text of an
-  uploaded, written or migrated document.
-- The MCP gateway exposes `ihub://project/<id>` resources instead of `ihub://source/<id>`.
-- The feature flag `sources` and the admin page switch `admin.pages.sources` are renamed to
-  `projects`; their values are carried over.
-- Files under `contents/sources/` (and the shipped FAQ, meeting knowledge base and iHub
-  documentation) are imported into encrypted project storage at the first start. The copy under
-  `contents/sources/` is deleted once its project item shows as ready; the consolidated
-  documentation is refreshed from the shipped defaults whenever it changes.
+- **Admin API:** `/api/admin/sources*` is replaced by `/api/admin/projects*`. The file-editing
+  routes `/api/admin/sources/:id/files` are replaced by
+  `PUT /api/admin/projects/:id/items/:itemId/text`.
+- **MCP gateway:** resources are `ihub://project/<id>` instead of `ihub://source/<id>`.
+- **Feature flag and admin page switch:** `sources` and `admin.pages.sources` are now `projects`
+  and `admin.pages.projects`; their values are carried over.
+- **Files:** the files under `contents/sources/` (and the shipped FAQ, meeting knowledge base and
+  iHub documentation) are imported into encrypted project storage at the first start. Each copy
+  under `contents/sources/` is deleted once its project item shows as ready. The six shipped
+  `intrafind-website-*` sources end up as one `intrafind-website` project, and the apps that linked
+  them are re-pointed (sources you changed are left as separate projects).
 - `config/sources.json` is kept as `config/sources.json.migrated` for reference and is no longer
   read.
 
-**Before upgrading:** back up `contents/`. The migration is forward-only. If you deploy several
-instances, every instance needs the same `TOKEN_ENCRYPTION_KEY` (or the same
-`contents/.encryption-key`) and a shared volume, or the same storage provider, for
-`contents/data/blobs/project-files`. After the start, check **Admin → Projects**: every migrated
-item should show as *ready*; a *failed* item names the file it could not import.
+**Before upgrading:** back up `contents/`. The conversion only works forwards. If you run several
+instances, they all need the same `TOKEN_ENCRYPTION_KEY` (or the same `contents/.encryption-key`)
+and shared storage for `contents/data/blobs/project-files`, or the same storage provider. After
+the first start, open **Admin → Projects**: every converted item should show as *ready*. A
+*failed* item names the file it could not import. See [Projects](../../projects.md#migration-from-sources).
 
-## Every chat is stored on the server; temporary chats replace browser-only chats
+## Every Chat Is Stored on the Server; Temporary Chats Replace Browser-Only Chats
 
-Chats no longer live in the browser. Every conversation — signed in or anonymous, incognito,
-compare mode, canvas, apps marked `ephemeral`, the Outlook add-in and the browser extension — is
-held by the server, which assembles the history for the model. A chat the user does not want kept
-is a **temporary chat**: stored the same way, so a reload or a lost connection no longer loses it,
-but never listed in the history or shareable, and deleted once it has been idle for the configured
-retention period (24 hours by default). Starting a new chat, clearing it, or switching incognito
-deletes it at once; closing the tab or navigating away leaves it to the retention sweep, so a
-reload can still bring it back.
+Chats no longer live in the browser. Every conversation is held by the server, whether the user is
+signed in or anonymous, and in incognito, compare mode, canvas, apps marked `ephemeral`, the
+Outlook add-in and the browser extension alike. A reload or a lost connection no longer loses a
+chat.
 
-- The **Durable Chats** feature is now called **Chat History**. It decides whether chats are
-  *kept* in a history; with it off — the default — every chat is temporary.
-- Anonymous visitors own their chats through an HttpOnly guest cookie (`ihubGuest`). Their chats
-  are always temporary. An anonymous chat embedded in a cross-site iframe that blocks third-party
-  cookies cannot be continued after its first turn; the second turn answers
-  `404 GUEST_COOKIE_MISSING`, and the chat UI says why.
-- Switching incognito on in a saved chat starts a new temporary chat; switching it off in a
+A chat the user does not want to keep is a **temporary chat**. It is stored the same way but never
+appears in the chat history, cannot be shared, and is deleted once it has been idle for the
+retention period (24 hours by default). Starting a new chat or clearing the chat deletes it right
+away.
+
+What changes:
+
+- **Durable Chats is now called Chat History.** It decides whether chats are *kept* in a history.
+  With it off (the default), every chat is temporary.
+- **Incognito:** switching it on in a saved chat starts a new temporary chat; switching it off in a
   temporary chat saves that chat to the history. The toggle only appears where the history is on.
-- New setting **Admin → Observability → Chat History → Temporary chats (hours)**
-  (`platform.chats.temporaryRetentionHours`, default 24, at least 1, at most 720), checked hourly.
-  A chat a turn is still producing into is never removed by a retention rule. Kept chats follow the
-  existing retention rules, which still only run while the history is on.
-- `POST /api/apps/:appId/chat/:chatId` accepts exactly one message for every caller. Posting the
-  whole conversation — including with `ephemeral: true`, which used to keep a turn out of storage —
-  is refused:
-
-  > 400 CLIENT_HISTORY_NOT_ALLOWED
-
-  `ephemeral: true` on a chat's first turn now creates a temporary chat. Clients that hold the
-  conversation themselves should use the stateless OpenAI-compatible API
-  (`/api/inference/v1/chat/completions`).
-- A turn answers `503 CHAT_STORAGE_UNAVAILABLE` when the storage provider did not come up, instead
-  of falling back to a browser-only chat.
-- `GET` and `DELETE /api/chats/:chatId` (and a chat's artifacts) work for temporary chats and for
-  guests, and so does renaming a chat or changing its projects with `PATCH`.
-  `PATCH /api/chats/:chatId { "temporary": false }` keeps a temporary chat; it needs the history,
-  as does the listing.
-- `POST /api/chat-handoffs` and `POST /api/chat-handoffs/claim` are removed: **Open in web app**
-  in Outlook opens every chat by its address.
-- The run ledger now records whenever storage is up, for every run — anonymous ones too — because
-  chats are rebuilt from it; the `runLog` setting no longer switches it off. Deleting a chat, by
-  hand or by retention, deletes its runs with it; only a run whose cascade failed (logged) waits for
-  the ledger's own retention (`runLog.retentionDays`). Runs are listed only to admins
-  (`GET /api/runs`).
-- The iAssistant conversation resume is gone from the chat page: the stored chat is the
-  transcript, so reopening it brings the conversation back, and the conversation itself still
-  continues on the server.
+- **New setting:** **Admin → Observability → Chat History → Temporary chats (hours)**
+  (`platform.chats.temporaryRetentionHours`, default 24, 1–720). A chat that is still receiving an
+  answer is never removed. Kept chats follow the existing retention rules.
+- **Anonymous visitors** own their chats through an HttpOnly cookie (`ihubGuest`), and their chats
+  are always temporary. An anonymous chat embedded in a cross-site iframe that blocks third-party
+  cookies can only answer its first message; the second one fails with `404 GUEST_COOKIE_MISSING`,
+  and the chat explains why.
+- **Chat API:** `POST /api/apps/:appId/chat/:chatId` accepts exactly one new message per call.
+  Posting the whole conversation, including with `ephemeral: true`, is refused with
+  `400 CLIENT_HISTORY_NOT_ALLOWED`. `ephemeral: true` on the first message now creates a temporary
+  chat. Clients that keep the conversation themselves should use the stateless OpenAI-compatible
+  API (`/api/inference/v1/chat/completions`).
+- If the storage provider did not start, a message fails with `503 CHAT_STORAGE_UNAVAILABLE`
+  instead of falling back to a browser-only chat.
+- `GET`, `PATCH` and `DELETE /api/chats/:chatId` (and a chat's artifacts) work for temporary chats
+  and for anonymous visitors. `PATCH /api/chats/:chatId { "temporary": false }` keeps a temporary
+  chat; that, and the chat list, need the history to be on.
+- `POST /api/chat-handoffs` and `POST /api/chat-handoffs/claim` are removed. **Open in web app** in
+  Outlook now opens every chat by its address.
+- **Run ledger:** it now records every run whenever storage is available, anonymous runs included,
+  because chats are rebuilt from it. The `runLog` setting no longer switches it off. Deleting a
+  chat, by hand or by retention, deletes its runs too. Only admins can list runs (`GET /api/runs`).
+- **iAssistant:** the separate "resume conversation" on the chat page is gone; reopening the stored
+  chat brings the conversation back.
 
 **Before upgrading:** chat content is now written to `contents/data/` on every installation, at
-least for the temporary-chat window — review data-protection statements that relied on "no chat
-content on disk" and lower **Temporary chats (hours)** if needed. Update integrations that post the
-full message history to the chat route to send one message per turn, or move them to the
-OpenAI-compatible API. Budget disk for chats and the run ledger: anonymous traffic is bounded only
-by the per-IP rate limit (`rateLimit.publicApi`), the message size and count limits, and the
-temporary-chat window — there is no cap on how many temporary chats anonymous visitors create, so a
-public installation should keep its rate limit and the window tight.
+least for the temporary-chat period. Review data-protection statements that relied on "no chat
+content on disk", and lower **Temporary chats (hours)** if needed. Update integrations that post the
+full message history to the chat route so they send one message per call, or move them to the
+OpenAI-compatible API. Plan disk space for chats and the run ledger: anonymous traffic is limited
+only by the per-IP rate limit (`rateLimit.publicApi`), the message size and count limits and the
+temporary-chat period, so a public installation should keep the rate limit and the period tight.
+See [Chat Persistence](../../chat-persistence.md).
+
+## Scheduled Tasks: Run Retention Now Deletes the Run's Chat as Well
+
+The periodic clean-up of scheduled-task runs (`runRetentionDays`, default 90) now deletes the chat
+of a run together with its run record. Before, it removed only the record and left the chat to the
+chat retention rules. Installations that keep chats longer than 90 days will therefore lose
+scheduled-run chats once they reach that age.
+
+**Before upgrading:** if you want to keep run history and its chats longer, raise
+`runRetentionDays` under **Admin → Scheduled Tasks**, or set it to `0` to keep them indefinitely.

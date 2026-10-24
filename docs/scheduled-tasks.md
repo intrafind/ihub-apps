@@ -21,7 +21,7 @@ All of these have to hold before anyone sees the feature:
 | Condition                                  | Where it comes from                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------ |
 | `features.scheduledTasks` is on            | Admin → Platform → Features → **Scheduled Tasks** (preview, off by default) |
-| Durable chats work                         | `features.chatPersistence` on and storage up — see [Chat Persistence](chat-persistence.md) |
+| Chat History works                         | `features.chatPersistence` on and storage up — see [Chat Persistence](chat-persistence.md) |
 | `platform.scheduledTasks.enabled !== false` | `contents/config/platform.json`, or Admin → Scheduled Tasks → Settings    |
 | The user's groups grant `scheduledTasks`   | Admin → Groups → permissions                                             |
 
@@ -148,7 +148,7 @@ browser's by default).
 
 ## Runs
 
-Each run starts a **new durable chat** in the task's app, titled
+Each run starts a **new kept chat** (listed in the owner's chat history) in the task's app, titled
 "<task name> · <date>", with `origin: { createdVia: 'scheduled-task', taskId,
 runId, taskName }`. The chat shows a banner — "Scheduled run of <task> ·
 <time>" with a link back to the task — and can be continued like any chat.
@@ -283,9 +283,13 @@ What a run with memory does:
 
 1. **It starts with the notes.** They are added to the run's system prompt
    (never to the stored chat) as data, not instructions, together with the
-   instruction to inform itself first: read the notes, call `list_task_runs`
-   and read the last successful run with `get_task_run` — what it reported and
-   anything the owner replied in that chat — and then report only what is new
+   instruction to inform itself first: read the notes and, when the run can
+   call tools, call `list_task_runs` and read the last successful run with
+   `get_task_run` — what it reported and anything the owner replied in that
+   chat. Without tools the notes are its only record of earlier runs. Either
+   way it then compares before it answers: it checks the current state against the watermark in its notes
+   (latest version or date, item titles or ids, source) and what the last run
+   reported, drops everything already covered, and reports only what is new
    or changed.
 2. **It can read earlier runs.** `list_task_runs` lists the earlier runs of
    this task (newest first, default 5, at most 20) and `get_task_run` returns

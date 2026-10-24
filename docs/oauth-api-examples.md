@@ -401,12 +401,13 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 
 | Field | Type | Description |
 |---|---|---|
-| `messages` | array | **Required.** Array of `{role, content}` objects |
+| `messages` | array | **Required.** Exactly one `{role, content}` object — the new message; the server holds the history (see [3g](#3g-multi-turn-conversation)) |
 | `modelId` | string | Override the app's default model |
 | `outputFormat` | string | `markdown`, `text`, `json`, or `html` |
 | `language` | string | BCP 47 language code (e.g., `de`, `fr`) |
 | `enabledTools` | array | Tool names to enable for this request |
 | `thinkingEnabled` | boolean | Enable extended thinking |
+| `ephemeral` | boolean | First turn only: make the chat temporary (never listed or shared, deleted after `chats.temporaryRetentionHours`) |
 
 ### 3g. Multi-Turn Conversation
 

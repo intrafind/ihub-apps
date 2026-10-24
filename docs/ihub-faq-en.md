@@ -54,7 +54,7 @@ GPU selection is done case-by-case together with IntraFind, depending on:
 ### How do I integrate the LLM into iHub?
 1. **Download & extract iHub**
 2. **Choose API access:**
-   - Cloud models: Enter API key in `config.env`
+   - Cloud models: Enter the API key in the setup wizard on first start, or later under **Admin → Providers**
    - Local model: Adjust model config in `contents/models/local-vllm.json` or create new one
 3. **Start iHub** with the appropriate start script
 4. **Open browser**: http://localhost:3001/
@@ -65,13 +65,13 @@ GPU selection is done case-by-case together with IntraFind, depending on:
 1. **Download iHub** from the product page or GitHub
 2. **Extract ZIP**
 3. **Choose LLM option**: Cloud LLM, IntraFind LLM, or own local LLM
-4. **Configure**: Fill `config.env` with API keys or adjust `contents/models/local-vllm.json` or similar
+4. **Configure**: Enter API keys in the setup wizard (or under **Admin → Providers**) or adjust `contents/models/local-vllm.json` or similar
 5. **Start**: Execute appropriate start script (`.bat` for Windows, `.sh` for macOS/Linux) or start container
 6. **Open browser**: http://localhost:3001/
 7. **Test**: Try out the included micro-apps
 
 ### What else needs to be configured in iHub?
-- **config.env**: Enter API keys for cloud models
+- **API keys**: Enter them for cloud models in the setup wizard or under **Admin → Providers** (stored encrypted)
 - **Model profiles**: For local LLM, adjust `contents/models/local-vllm.json`
 - **Secure operation**: E2E encryption and IP whitelisting with IntraFind LLM
 - **Operating mode**: Choice between on-premises or cloud operation
@@ -136,7 +136,7 @@ Depending on the chosen option:
 - Contact IntraFind for project-specific consultation on model selection and GPU configuration
 
 ### Which files are important for configuration?
-- `config.env`: API keys for cloud models
+- `config.env`: Process settings of the binary (port, host, workers, HTTPS, CA certificates); API keys are entered under **Admin → Providers**
 - `contents/models/local-vllm.json`: Configuration for local models
 - Start scripts: `ihub-apps-<version>-win.bat` / `-macos` / `-linux`
 
@@ -166,7 +166,7 @@ Yes, iHub is extensible. You can:
    - LLM via IntraFind (managed service)
    - Own local LLM (GPU required)
 4. **Configure**:
-   - For cloud: Add API keys to `config.env`
+   - For cloud: Add API keys in the setup wizard or under **Admin → Providers**
    - For local: Modify `contents/models/local-vllm.json`
 5. **Start iHub**:
    - Windows: Run `ihub-apps-<version>-win.bat`

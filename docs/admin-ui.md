@@ -17,7 +17,7 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | Section | What's inside |
 |---------|--------------|
 | **Overview** | Dashboard, What's New |
-| **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Sources, Workflows, Agents (Agent Factory), Marketplace |
+| **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (Jira, Office 365, Google Drive, Nextcloud, iFinder, Outlook add-in, browser extension, …), MCP servers, MCP gateway, A2A agents, Credentials |
 | **Customization** | UI Customization, Localization, Pages, Short Links |
@@ -47,7 +47,7 @@ Press `g` followed by a letter within 300ms:
 | `g` `p` | Prompts |
 | `g` `u` | Users |
 | `g` `g` | Groups |
-| `g` `s` | Sources |
+| `g` `j` | Projects |
 | `g` `l` | Audit Log |
 
 ### Other shortcuts
@@ -70,7 +70,7 @@ Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux) from anywhere in the admin UI to
 
 The palette lets you:
 - **Navigate** to any admin page by name
-- **Search entities** — type an app name, model ID, user, prompt, or source to jump directly to its edit page
+- **Search entities** — type an app name, model ID, user, prompt, or project to jump directly to its edit page
 - **Run actions** — "New App", "Run Backup", "Check for Updates", "View Audit Log"
 - **See recent pages** — the last 5 pages you visited appear at the top
 
@@ -92,13 +92,15 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 - **Conversations** — total chat sessions recorded
 - **Version** — current iHub Apps version; shows an update badge if a newer version is available
 
-**Platform status panel:** Shows enabled/total counts for providers, models, sources, and tools, plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
+**Platform status panel:** Shows enabled/total counts for providers, models, projects, and tools, plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
 
 **Low-disk banner:** When that disk is 80 % full or more, a banner at the top of every admin page (not only the dashboard) says so and links to [System Resources](#system-resources). See [Low-disk warnings](#low-disk-warnings).
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
 **Setup checklist:** Shown on fresh installations to guide initial configuration. Disappears once the checklist steps are complete.
+
+**First-run onboarding:** While the setup wizard has not been completed, a card says whether it is shown to users or hidden for everyone, shows the demo-account status and links to **Platform → Advanced → First-run onboarding**, where the wizard can be switched off (`setup.disabled`). The card disappears once onboarding is completed. See [Getting Started](GETTING_STARTED.md).
 
 ---
 
@@ -133,7 +135,7 @@ Apps are the AI-powered tools your users interact with. Each app has its own sys
 - **System prompt** — the instruction given to the AI model before the user's message.
 - **Preferred model** — override the platform default for this app; optionally restrict the selectable models or hide the model selector. Token limits come from the model (context window and output limit), not from the app.
 - **Variables** — user-facing input fields (text, date, select, etc.), shown beside the chat or as a start form (see below).
-- **Tools, sources, skills, workflows** — what the app may use beyond the model.
+- **Tools, projects, skills, workflows** — what the app may use beyond the model. The **Projects** card links admin projects and has the switches **Use projects in this app** and **Allow personal projects** (see [Projects](projects.md#switching-projects-off-for-an-app)).
 - **Upload, transcription, web search, image generation** — per-app features users switch on in the chat input's **+** menu.
 - **Permissions** — which groups can access this app. The **Group access** card on the edit page shows the groups that already have access as chips, with a search box to grant more; every change saves immediately; see [Managing Groups](#managing-groups).
 
@@ -154,7 +156,7 @@ greyed out until the app is enabled (in the editor: enabled and saved).
 
 **Testing an app:** **Test** in the editor header opens the app's chat next to the editor (full
 screen on small screens), so you can check the start screen, send messages and see how the prompt,
-model, tools and sources behave without leaving the editor. It is the same chat users get, not a
+model, tools and projects behave without leaving the editor. It is the same chat users get, not a
 separate preview.
 
 - The test runs the **saved** version of the app. While you have unsaved changes the panel says so;
@@ -190,7 +192,7 @@ Models define which AI providers and specific model versions are available on yo
 
 **Import from URL** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
 
-![Import models from URL](assets/screenshots/admin-models-import.png)
+![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
 
 **Testing a model:** Use the **Test** button on the model list page to verify connectivity and authentication.
 
@@ -247,11 +249,28 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 **Permissions:** Each group can be configured with:
 - Which apps, prompts, and models are accessible
 - Whether admin access is granted (`adminAccess: true`)
+- Feature permissions such as `scheduledTasks`, `projects` (create user projects) and `projectSharing` (add members to a project)
 - External group mappings (for OIDC/LDAP — maps an external group name to this internal group)
 
 **Group access from the content side:** Every app, prompt, skill, tool and workflow edit page has a **Group access** card showing the same permission lists per group, as a search-and-add list rather than a long list of every group: groups that already have access appear as chips, and a search box finds the rest by name — the same pattern used to add apps, models or prompts to a group elsewhere in the admin area. Picking a group in the search results adds the item to that group's list in `groups.json`; removing its chip takes it off. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown as a locked chip, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
 
 **Content admins:** Members of a group with `contentAdmin: true` (the shipped `content-admins` group) can use the **Group access** card too, but only for the groups they belong to and for the groups that inherit from those. A content admin who is in `sales` can grant or withdraw content for `sales` and for every group with `sales` in its `inherits` chain, and sees no other groups. The `authenticated` and `anonymous` groups every user carries implicitly do not count as membership, so a content admin cannot publish to all users unless an administrator has explicitly made them a member of such a group. Everything else about a group — name, inheritance, models, external mappings, admin flags — stays with full administrators.
+
+---
+
+## Projects
+
+**AI Workspace → Projects** (`/admin/projects`) manages the admin projects: knowledge — uploaded
+files, text, web pages (also crawled from a site), iHub pages and iFinder documents — that apps,
+workflows and agents link and the model reaches through its prompt or the knowledge tools. Create a
+project, decide **Who can use this project?**, add items, check the token estimate against the
+model budgets, and move, copy or merge projects. Projects replace the former **Sources** page.
+The page needs the `projects` feature and the `admin.pages.projects` switch. User projects —
+projects users create themselves — are a separate preview feature (**User Projects**).
+
+![Admin → Projects](assets/screenshots/admin-projects.png)
+
+See [Projects](projects.md).
 
 ---
 
@@ -267,7 +286,7 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 
 ## Features
 
-**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Chat History (keeping chats in a history; every chat is stored either way) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Sources, Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Chat History (keeping chats in a history; every chat is stored either way) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 
@@ -522,7 +541,7 @@ Go to **Platform → Updates** to:
 | `g` `p` | Go to Prompts |
 | `g` `u` | Go to Users |
 | `g` `g` | Go to Groups |
-| `g` `s` | Go to Sources |
+| `g` `j` | Go to Projects |
 | `g` `l` | Go to Audit Log |
 | `n` | New item on current list page |
 | `?` | Show shortcut cheatsheet |
