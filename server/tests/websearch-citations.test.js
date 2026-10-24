@@ -619,3 +619,14 @@ describe('shared/sources', () => {
     );
   });
 });
+
+describe('Google grounding redirects', () => {
+  it('leaves links that are not grounding redirects untouched', async () => {
+    const { resolveGroundingMetadataLinks } = await import('../utils/groundingRedirects.js');
+    const metadata = {
+      groundingChunks: [{ web: { uri: 'https://example.com/a', title: 'example.com' } }],
+      webSupports: [{ text: 'Claim.', urls: ['https://example.com/a'] }]
+    };
+    assert.equal(await resolveGroundingMetadataLinks(metadata), metadata);
+  });
+});

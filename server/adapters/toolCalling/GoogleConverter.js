@@ -22,6 +22,7 @@ import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidato
 import { extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+import { resolveGroundingMetadataLinks } from '../../utils/groundingRedirects.js';
 import { getLocalizedString } from '../../utils/localize.js';
 
 const HALLUCINATION_NOTICE_PREFIX = '[provider:google dropped malformed function call]';
@@ -489,10 +490,10 @@ export async function convertGoogleResponseToGeneric(data, streamId = 'default')
     // candidates[0] location first and fall back to top-level for forward
     // compatibility.
     const candidateGrounding = parsed.candidates?.[0]?.groundingMetadata;
-    if (candidateGrounding) {
-      result.groundingMetadata = withWebSupports(candidateGrounding);
-    } else if (parsed.groundingMetadata) {
-      result.groundingMetadata = withWebSupports(parsed.groundingMetadata);
+    const rawGrounding = candidateGrounding || parsed.groundingMetadata;
+    if (rawGrounding) {
+      // Gemini links each source through a redirect, naming only its domain.
+      result.groundingMetadata = await resolveGroundingMetadataLinks(withWebSupports(rawGrounding));
     }
 
     if (parsed.candidates && parsed.candidates[0]?.finishReason) {

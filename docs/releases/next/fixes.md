@@ -53,3 +53,11 @@ Platform) are now ordered A–Z by their displayed name, in the language you use
   contrast ratio, and dismissible ones have a labelled **Dismiss** button.
 - **Prompt library cards** no longer contain buttons inside a button, which screen readers handled
   unpredictably. Clicking anywhere on a card still opens the prompt.
+
+## Gemini Web Search Sources Show the Real Pages
+
+The sources panel listed Google's native web search results only by generic names such as
+"google.dev", because Gemini returns its sources as redirect links. These are now resolved to the
+actual page addresses, so each source shows its real site and opens the page directly. Opening a
+source link in a browser also no longer shows a false "The link could not be opened" message after
+the page opened.
