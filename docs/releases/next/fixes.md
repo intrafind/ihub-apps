@@ -61,3 +61,8 @@ no longer need to add this to the task's prompt.
 
 The "First-run onboarding" box on the admin start page stayed visible after the setup wizard had
 been completed. It is now only shown while onboarding is still open.
+
+## The "Don't show the onboarding" setting in Admin → Advanced is now saved
+
+The toggle reported "saved" but the setting was lost on the next page load, because the server
+dropped it when writing the platform configuration. It now persists.
