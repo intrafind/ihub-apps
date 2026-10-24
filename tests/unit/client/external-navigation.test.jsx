@@ -108,7 +108,27 @@ describe('openExternalUrl', () => {
     await Promise.resolve();
   });
 
-  it('reports failure when the popup is blocked', () => {
+  it('does not treat the null of a noopener window.open as a failure in the browser', () => {
+    windowOpen.mockReturnValue(null);
+    expect(openExternalUrl('https://example.test/doc')).toBe(true);
+  });
+
+  it('reports failure when an embedded host opens nothing', () => {
+    global.Office = {
+      context: {
+        ui: {
+          openBrowserWindow: jest.fn(() => {
+            throw new Error('x');
+          })
+        }
+      }
+    };
+    windowOpen.mockReturnValue(null);
+    expect(openExternalUrl('https://example.test/doc')).toBe(false);
+  });
+
+  it('reports failure in an Office pane that lacks openBrowserWindow', () => {
+    global.Office = { context: {} };
     windowOpen.mockReturnValue(null);
     expect(openExternalUrl('https://example.test/doc')).toBe(false);
   });
@@ -159,8 +179,6 @@ describe('openExternalUrlSettled', () => {
 
   it('resolves what openExternalUrl reports in the web app', async () => {
     await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(true);
-    windowOpen.mockReturnValue(null);
-    await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(false);
     await expect(openExternalUrlSettled('')).resolves.toBe(false);
   });
 });

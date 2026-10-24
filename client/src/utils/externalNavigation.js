@@ -170,9 +170,14 @@ function handOffExternalUrl(url) {
   }
 
   try {
-    if (window.open(url, '_blank', WINDOW_FEATURES)) return true;
+    const opened = window.open(url, '_blank', WINDOW_FEATURES);
+    // In a browser `noopener` makes window.open return null even when the tab
+    // opened, so null is no sign of a block there. Embedded hosts (the Outlook
+    // pane) return null when nothing happened.
+    const inOfficePane = typeof Office !== 'undefined' && Boolean(Office?.context);
+    if (opened || (host === 'web' && !inOfficePane)) return true;
   } catch {
-    // Popup blocked or window.open unavailable.
+    // window.open unavailable.
   }
 
   return false;

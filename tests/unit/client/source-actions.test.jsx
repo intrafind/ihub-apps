@@ -195,7 +195,23 @@ describe('opening and downloading', () => {
     expect(windowOpen).not.toHaveBeenCalled();
   });
 
+  test('does not report an error when a browser opens the link with noopener', () => {
+    windowOpen.mockReturnValue(null);
+    renderSources();
+    fireEvent.click(screen.getByTitle('Open in browser'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('tells the user when the host blocked the open, and clears it once one works', async () => {
+    global.Office = {
+      context: {
+        ui: {
+          openBrowserWindow: jest.fn(() => {
+            throw new Error('requirement set not supported');
+          })
+        }
+      }
+    };
     windowOpen.mockReturnValue(null);
     renderSources();
     fireEvent.click(screen.getByTitle('Open in browser'));
