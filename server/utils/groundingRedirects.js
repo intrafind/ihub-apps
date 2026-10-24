@@ -7,7 +7,6 @@
  * the site's domain as its title. Resolving the redirect gives the sources
  * panel the real page address.
  */
-import { httpFetch } from './httpConfig.js';
 import logger from './logger.js';
 
 const REDIRECT_PREFIX = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/';
@@ -28,6 +27,8 @@ async function resolveOne(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    // Loaded on first use: the converter imports this file on every Gemini call.
+    const { httpFetch } = await import('./httpConfig.js');
     const response = await httpFetch(url, {
       method: 'HEAD',
       redirect: 'manual',
