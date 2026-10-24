@@ -9,10 +9,10 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   CUSTOM_PROVIDER_API_TYPES,
-  LLM_PROVIDER_PRESETS,
   getProviderApiType,
   isCustomLlmProvider,
-  isReservedProviderId
+  isReservedProviderId,
+  providerEnvKeyName
 } from '../../../../../shared/llmProviders.js';
 import {
   apiTypeLabel,
@@ -71,8 +71,10 @@ function formatTokens(value) {
  * "Import from URL": list the models an endpoint offers and create the ones the
  * admin picks. The models are linked to a provider — an existing one, or a new
  * one created here with the endpoint's API type and key — so the key lives on
- * the provider and not on every model. A new provider can also be created
- * without any model, to import its models later.
+ * the provider and not on every model. A key entered for an existing provider
+ * that has none (such as the shipped OpenRouter entry) is saved on it before
+ * the models are created. A new provider can also be created without any
+ * model, to import its models later.
  *
  * Mount it only while it is open: its state is not reset between openings.
  */
@@ -86,6 +88,8 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   const [providerChoice, setProviderChoice] = useState(NEW_PROVIDER);
   const [newProvider, setNewProvider] = useState(EMPTY_NEW_PROVIDER);
   const [url, setUrl] = useState('');
+  // Key typed for an existing provider without one; saved on it at import.
+  const [providerKey, setProviderKey] = useState('');
 
   const [discovering, setDiscovering] = useState(false);
   const [discoveryError, setDiscoveryError] = useState(null);
@@ -105,6 +109,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
   const importableProviders = useMemo(() => getImportableProviders(providers), [providers]);
   const existingProvider =
     providerChoice === NEW_PROVIDER ? null : providers.find(p => p.id === providerChoice);
+  const asksProviderKey = Boolean(existingProvider && !existingProvider.apiKeySet);
   const providerIds = useMemo(() => new Set(providers.map(p => p.id)), [providers]);
 
   // The page mounts the dialog only while it is open, so every opening starts
@@ -134,6 +139,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
 
   const chooseProvider = value => {
     setProviderChoice(value);
+    setProviderKey('');
     setDiscoveryError(null);
     const provider = providers.find(p => p.id === value);
     setUrl(provider?.baseUrl || '');
@@ -146,19 +152,6 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       if (field === 'id') next.idEdited = true;
       return next;
     });
-  };
-
-  const applyPreset = preset => {
-    setNewProvider(prev => ({
-      ...prev,
-      name: preset.name,
-      id: preset.id,
-      idEdited: true,
-      description: preset.description,
-      apiType: preset.apiType
-    }));
-    setUrl(preset.baseUrl);
-    setDiscoveryError(null);
   };
 
   const newProviderIdProblem = (() => {
@@ -203,7 +196,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       const body =
         providerChoice === NEW_PROVIDER
           ? { url: url.trim(), apiType: newProvider.apiType, apiKey: newProvider.apiKey }
-          : { url: url.trim(), providerId: providerChoice };
+          : { url: url.trim(), providerId: providerChoice, apiKey: providerKey };
       const response = await makeAdminApiCall('/admin/models/_discover', {
         method: 'POST',
         body
@@ -311,6 +304,31 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       }
     }
 
+    if (asksProviderKey && providerKey.trim()) {
+      // PUT replaces the entry: send it back as listed, plus the key.
+      const { apiKeySet: _set, apiKeyMasked: _masked, ...entry } = existingProvider;
+      try {
+        await makeAdminApiCall(`/admin/providers/${encodeURIComponent(existingProvider.id)}`, {
+          method: 'PUT',
+          body: { ...entry, apiKey: providerKey.trim() }
+        });
+        setProviders(prev =>
+          prev.map(p => (p.id === existingProvider.id ? { ...p, apiKeySet: true } : p))
+        );
+        setProviderKey('');
+      } catch (err) {
+        setImportError(
+          t(
+            'admin.models.import.errors.providerKeySaveFailed',
+            'Could not save the API key on the provider: {{error}}',
+            { error: getAdminApiErrorMessage(err) }
+          )
+        );
+        setImporting(false);
+        return;
+      }
+    }
+
     const outcome = [];
     for (const model of selectedModels) {
       const id = targetIdOf(model);
@@ -373,19 +391,6 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
 
       {providerChoice === NEW_PROVIDER ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-md border border-gray-200 dark:border-gray-700 p-4">
-          <div className="sm:col-span-2 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <span>{t('admin.models.import.presets', 'Start from:')}</span>
-            {LLM_PROVIDER_PRESETS.map(preset => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => applyPreset(preset)}
-                className={SECONDARY_BUTTON}
-              >
-                {preset.name}
-              </button>
-            ))}
-          </div>
           <div>
             <label htmlFor="import-provider-name" className={LABEL}>
               {t('admin.providers.fields.name', 'Name')} <span className="text-red-500">*</span>
@@ -458,17 +463,14 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
               {t('admin.providers.fields.apiType', 'API type')}:{' '}
               <span className="font-medium">{apiTypeLabel(t, apiType)}</span>
             </div>
-            <div className="mt-1">
-              {existingProvider.apiKeySet
-                ? t(
-                    'admin.models.import.usesProviderKey',
-                    'The API key stored on this provider is used.'
-                  )
-                : t(
-                    'admin.models.import.noProviderKey',
-                    'No API key is stored on this provider: its environment variable is used if set, otherwise the endpoint is called without a key.'
-                  )}
-            </div>
+            {existingProvider.apiKeySet && (
+              <div className="mt-1">
+                {t(
+                  'admin.models.import.usesProviderKey',
+                  'The API key stored on this provider is used.'
+                )}
+              </div>
+            )}
           </div>
         )
       )}
@@ -510,6 +512,29 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
             {t(
               'admin.models.import.apiKeyHint',
               'Optional. Stored encrypted on the new provider, not on the models. Leave empty for endpoints without authentication, such as a local vLLM server.'
+            )}
+          </p>
+        </div>
+      )}
+
+      {asksProviderKey && (
+        <div>
+          <label htmlFor="import-provider-key" className={LABEL}>
+            {t('admin.models.import.apiKey', 'API key')}
+          </label>
+          <input
+            id="import-provider-key"
+            type="password"
+            autoComplete="off"
+            value={providerKey}
+            onChange={e => setProviderKey(e.target.value)}
+            className={FIELD}
+          />
+          <p className={HINT}>
+            {t(
+              'admin.models.import.providerKeyHint',
+              'No API key is stored on this provider yet. The key entered here is saved encrypted on the provider when you import. Leave it empty to use the environment variable {{envVar}}, or to call an endpoint without authentication.',
+              { envVar: providerEnvKeyName(existingProvider.id) }
             )}
           </p>
         </div>

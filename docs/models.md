@@ -269,7 +269,7 @@ you pick, so they need not be typed in one by one.
    models**: the provider is created with the endpoint's normalized base URL and the key, for an
    endpoint that lists no models yet or to import its models later.
 
-For [OpenRouter](https://openrouter.ai), choose the **OpenRouter** preset under **+ New provider** (ID `openrouter`, base URL `https://openrouter.ai/api/v1`) and enter your OpenRouter key. The endpoint URL is prefilled with the default and can be changed, for example to a regional endpoint; it is stored as the provider's base URL, which you can edit later under **Admin → Providers**.
+[OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Providers**, for example for a regional endpoint.
 
 Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
 OpenRouter, Together, Groq), Mistral, Anthropic and Google. The call goes through the platform's

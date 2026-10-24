@@ -38,6 +38,15 @@
       "category": "llm"
     },
     {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "description": "OpenRouter — one API for models of many vendors",
+      "enabled": true,
+      "category": "llm",
+      "apiType": "openai",
+      "baseUrl": "https://openrouter.ai/api/v1"
+    },
+    {
       "id": "brave",
       "name": "Brave Search",
       "description": "Brave web search API for privacy-focused search results",

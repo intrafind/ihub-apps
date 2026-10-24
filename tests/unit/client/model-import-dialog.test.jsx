@@ -158,3 +158,47 @@ test('an existing provider still needs a model to import', async () => {
   ).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Import 0 models' })).toBeDisabled();
 });
+
+test('a key entered for an existing provider without one is saved on it at import', async () => {
+  const openRouter = {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    category: 'llm',
+    apiType: 'openai',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKeySet: false
+  };
+  mockApi({ providers: [openRouter], models: [{ id: 'gpt-x', name: 'GPT X', type: 'chat' }] });
+  await renderDialog({ initialProviderId: 'openrouter' });
+
+  expect(screen.getByText(/OPENROUTER_API_KEY/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('API key'), { target: { value: ' sk-or-1 ' } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Load models/ }));
+  });
+  const [[, discover]] = calls('/admin/models/_discover', 'POST');
+  expect(discover.body).toMatchObject({ providerId: 'openrouter', apiKey: ' sk-or-1 ' });
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'GPT X' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 models' }));
+  });
+  const [[, saveKey]] = calls('/admin/providers/openrouter', 'PUT');
+  expect(saveKey.body).toEqual({
+    id: 'openrouter',
+    name: 'OpenRouter',
+    category: 'llm',
+    apiType: 'openai',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKey: 'sk-or-1'
+  });
+  const [[, createModel]] = calls('/admin/models', 'POST');
+  expect(createModel.body).toMatchObject({ providerId: 'openrouter' });
+});
+
+test('no key field for a provider that already holds a key', async () => {
+  mockApi({ providers: [{ ...LLM_HUB, apiKeySet: true }] });
+  await renderDialog({ initialProviderId: 'llmhub' });
+  expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
+  expect(screen.getByText('The API key stored on this provider is used.')).toBeInTheDocument();
+});
