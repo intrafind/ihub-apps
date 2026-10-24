@@ -10,7 +10,7 @@
 import logger from './logger.js';
 
 const REDIRECT_PREFIX = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/';
-const TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 1000;
 const CACHE_LIMIT = 500;
 const FAILED_TTL_MS = 60 * 1000;
 
@@ -27,17 +27,29 @@ async function resolveOne(url) {
   const cached = cache.get(url);
   if (cached && cached.expiresAt > Date.now()) return cached.target;
   let resolved = null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     // Loaded on first use: the converter imports this file on every Gemini call.
+    // Loaded before the timer starts, so a cold start does not eat the budget.
     const { httpFetch } = await import('./httpConfig.js');
-    const response = await httpFetch(url, {
-      method: 'HEAD',
-      redirect: 'manual',
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 iHub-Apps' }
+    const controller = new AbortController();
+    let timer;
+    // The race, not just the abort, bounds the wait: a stalled proxy tunnel
+    // can ignore the signal.
+    const timedOut = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`timed out after ${TIMEOUT_MS}ms`));
+      }, TIMEOUT_MS);
     });
+    const response = await Promise.race([
+      httpFetch(url, {
+        method: 'HEAD',
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 iHub-Apps' }
+      }),
+      timedOut
+    ]).finally(() => clearTimeout(timer));
     const location = response.headers.get('location');
     if (/^https?:\/\//i.test(location || '') && !isGroundingRedirect(location)) {
       resolved = location;
@@ -47,8 +59,6 @@ async function resolveOne(url) {
       component: 'groundingRedirects',
       error: error.message
     });
-  } finally {
-    clearTimeout(timer);
   }
   if (!cache.has(url) && cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value);
   cache.set(url, {
