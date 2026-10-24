@@ -1081,8 +1081,10 @@ https.get('https://your.internal.host/api', (res) => {
 ```
 
 > **First check the OS certificate store.** On Node 24.5 or later iHub trusts the operating system's
-> certificate store by default (startup log: `Added the operating system certificate store to the
-> trusted CAs`), so a company CA installed in the OS needs no further setup. See
+> certificate store by default, unless `NODE_USE_SYSTEM_CA=0` is set or Node was started with an
+> explicit CA option. When the startup log says `Added the operating system certificate store to
+> the trusted CAs`, a company CA installed in the OS needs no further setup; when it does not, use
+> one of the solutions below. See
 > [SSL Certificates → Operating System Certificate Store](ssl-certificates.md#method-1b-operating-system-certificate-store-default).
 > The solutions below are for a CA that is not in the OS store.
 

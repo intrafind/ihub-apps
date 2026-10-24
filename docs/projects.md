@@ -864,7 +864,7 @@ changing it takes a content admin.
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
 | `PUT`    | `/api/projects/:projectId/catalog`            | editor    | Publish a user project to the catalog or take it out: `{ published }`. Publishing needs `projectSharing` and the catalog on; a full admin may take any project out. |
-| `POST`   | `/api/projects/:projectId/subscription`       | member    | Add a project from the catalog (or an admin project for everyone) to your list; anything else answers `400`. |
+| `POST`   | `/api/projects/:projectId/subscription`       | signed in | Add a project from the catalog (or an enabled admin project for everyone) to your list; a project you are already a member of, or any other, answers `400`. |
 | `DELETE` | `/api/projects/:projectId/subscription`       | —         | Remove it from your list again.                                                                  |
 | `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project, newest first, a page at a time: `?filter=all`, `mine` or `others`; `limit` (default 20, at most 100) and `cursor`. Answers `{ items, nextCursor, total }`. |
 | `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). |

@@ -39,7 +39,7 @@ See [Projects](../../projects.md).
 
 Users can now keep their own projects: documents, instructions and chats in one place, private
 until they share them. This is a preview and is off by default: turn on the `userProjects` feature
-flag under **Admin → Features**. The group permissions `projects` and `projectSharing` decide who
+flag under **Admin → Platform → Features**. The group permissions `projects` and `projectSharing` decide who
 may create and share projects.
 
 - **Projects** in the sidebar lists your own projects, those shared with you and those you added
@@ -69,8 +69,9 @@ A few people can now maintain a project that everyone else uses.
   **Projects → Browse catalog** and add it to their own list. They use its documents in their
   chats; their chats stay their own. The catalog is off by default
   (`platform.projects.sharing.allowCatalog`).
-- **Admin projects for everyone:** an admin project set to **Everyone signed in** appears in the
-  catalog as **From the administrators**. The shipped iHub documentation project is available to
+- **Admin projects for everyone:** an admin project set to **Everyone signed in** can be used and
+  linked by everyone signed in and, while the catalog is on, appears in it as **From the
+  administrators**. The shipped iHub documentation project is available to
   everyone signed in by default, also after an upgrade.
 - **Link documents from another project:** **Add documents → From another project** links
   documents of your own projects, or of published ones, without copying them. A chat always reads
@@ -119,7 +120,7 @@ Runs can also be deleted by hand on the task page: one run, a selection, or all 
 ## Turn Off the First-Run Onboarding for Everyone
 
 **Skip** in the setup wizard used to skip it only for the current browser session, so it came back
-in every new tab, browser or for every other user. **Admin → Advanced → First-run onboarding** now
+in every new tab, browser or for every other user. **Admin → Platform → Advanced → First-run onboarding** now
 has a switch (`setup.disabled`) that stops the redirect to the wizard for everyone. When an admin
 skips the wizard, they are asked whether to hide it for good.
 

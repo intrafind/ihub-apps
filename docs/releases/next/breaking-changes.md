@@ -4,8 +4,10 @@
 
 Sources are replaced by **projects**: a container for documents, links and instructions that apps,
 workflows and agents draw on. The upgrade converts every source into an admin project with the
-same id, so apps, workflows and agents keep their knowledge without any manual step. In the admin
-area, **Sources** is now **Projects**. What a project can do is described under Features.
+same id, so apps, workflows and agents keep their knowledge without any manual step. Only an id
+that starts with `prj_` or is longer than 50 characters is renamed (`legacy-…`, logged); the apps,
+workflows and agents that use it are updated too, but anything outside iHub that names such a
+source by its id has to be changed by hand. In the admin area, **Sources** is now **Projects**. What a project can do is described under Features.
 
 What changes for configuration and integrations:
 
@@ -50,8 +52,8 @@ chat.
 
 A chat the user does not want to keep is a **temporary chat**. It is stored the same way but never
 appears in the chat history, cannot be shared, and is deleted once it has been idle for the
-retention period (24 hours by default). Starting a new chat, clearing the chat or switching
-incognito deletes it right away.
+retention period (24 hours by default). Starting a new chat or clearing the chat deletes it right
+away.
 
 What changes:
 

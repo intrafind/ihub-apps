@@ -283,13 +283,14 @@ What a run with memory does:
 
 1. **It starts with the notes.** They are added to the run's system prompt
    (never to the stored chat) as data, not instructions, together with the
-   instruction to inform itself first: read the notes, call `list_task_runs`
-   and read the last successful run with `get_task_run` — what it reported and
-   anything the owner replied in that chat. It then compares before it
-   answers: it checks the current state against the watermark in its notes
+   instruction to inform itself first: read the notes and, when the run can
+   call tools, call `list_task_runs` and read the last successful run with
+   `get_task_run` — what it reported and anything the owner replied in that
+   chat. Without tools the notes are its only record of earlier runs. Either
+   way it then compares before it answers: it checks the current state against the watermark in its notes
    (latest version or date, item titles or ids, source) and what the last run
    reported, drops everything already covered, and reports only what is new
-   or changed. The compare step applies with and without tool access.
+   or changed.
 2. **It can read earlier runs.** `list_task_runs` lists the earlier runs of
    this task (newest first, default 5, at most 20) and `get_task_run` returns
    what one of them answered, optionally with the conversation that followed

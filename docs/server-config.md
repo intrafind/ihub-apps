@@ -74,7 +74,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `CONTENTS_DIR`             | Contents directory, absolute or relative to the installation root | `contents`                                       |
 | `DATA_DIR`                 | Directory for storing application data                            | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
-| `NODE_EXTRA_CA_CERTS`      | PEM file with extra CA certificates to trust for outbound HTTPS (read by Node at process start). See [SSL Certificates](ssl-certificates.md). | – |
+| `NODE_EXTRA_CA_CERTS`      | PEM file with extra CA certificates to trust for outbound HTTPS. Node reads it at process start: the binaries' `config.env` works (the launcher starts the server with it), but a `.env` read by `npm start` comes too late, so set it in the environment there. See [SSL Certificates](ssl-certificates.md). | – |
 | `NODE_USE_SYSTEM_CA`       | iHub trusts the operating system's certificate store by default (Node 24.5+); set to `0` to turn that off. See [SSL Certificates](ssl-certificates.md#method-1b-operating-system-certificate-store-default). | – |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
