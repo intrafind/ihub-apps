@@ -64,7 +64,7 @@ ihub-apps-v*-win.bat
 
 ### Step 3 — Open iHub and connect a model
 
-Open **http://localhost:3001** — the binary's port is set in `config.env` next to the executable (Docker uses port 3000). On a fresh installation the **setup wizard** opens: sign in with the shipped administrator account (`admin` / `password123`), pick a provider — Google Gemini, Anthropic Claude, OpenAI, Mistral AI or a local server such as LM Studio, Jan.ai, Ollama or vLLM — paste its API key and test the connection. Then choose **Add your models** to pick the models of that provider you want to use.
+Open **http://localhost:3001** — the binary's port is set in `config.env` next to the executable (Docker uses port 3000). On a fresh installation the **setup wizard** opens: sign in with the shipped administrator account (`admin` / `password123`), pick a provider — Google Gemini, Anthropic Claude, OpenAI, Mistral AI or a local server such as LM Studio, Jan.ai, Ollama or vLLM — paste its API key and test the connection (a local server needs neither: just continue). Then choose **Add your models** to pick the models of that provider you want to use.
 
 <p align="center">
   <img src="docs/assets/screenshots/setup-wizard-welcome.png" alt="Setup wizard: welcome step" width="45%">

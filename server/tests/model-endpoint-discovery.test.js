@@ -404,6 +404,20 @@ test('buildSpeechTarget follows the host and scheme of the endpoint', () => {
       url: 'wss://gemini-proxy.example/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent'
     }
   );
+  // A gateway's path prefix stays (Cloudflare AI Gateway: …/google-ai-studio/v1beta).
+  const gateway = 'https://gateway.example/v1/acct/gw/google-ai-studio/v1beta';
+  assert.equal(
+    buildSpeechTarget('google', gateway, { id: 'gemini-x-transcribe', type: 'transcription' }).url,
+    'https://gateway.example/v1/acct/gw/google-ai-studio'
+  );
+  assert.equal(
+    buildSpeechTarget('google', gateway, {
+      id: 'gemini-x-transcribe-live',
+      type: 'transcription',
+      realtime: true
+    }).url,
+    'wss://gateway.example/v1/acct/gw/google-ai-studio/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
+  );
   assert.equal(
     buildSpeechTarget('mistral', 'http://voxtral.local:8000/v1', {
       id: 'voxtral-realtime',

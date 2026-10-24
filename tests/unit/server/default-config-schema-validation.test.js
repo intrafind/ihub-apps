@@ -43,7 +43,7 @@ describe('default app and model configs', () => {
 
     // A fresh install ships no enabled chat model and so no default: the first
     // chat model an admin enables becomes the default (ensureOneDefaultModel).
-    expect(defaultModelCount).toBeLessThanOrEqual(1);
+    expect(defaultModelCount).toBe(0);
 
     const defaultApps = readDefaultConfigs(defaultAppsDir);
     for (const { fileName, config } of defaultApps) {

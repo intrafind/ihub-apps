@@ -200,13 +200,22 @@ function toWebSocketUrl(baseUrl) {
 }
 
 /**
- * Gemini's Live API endpoint on the host of `baseUrl`, in the API version the
- * base names (`…/v1beta` → `…v1beta.GenerativeService.BidiGenerateContent`).
+ * Split a Google API base into the root it hangs off and its API version:
+ * `https://gw.example/google/v1beta` → `https://gw.example/google` and `v1beta`.
+ * A gateway's path prefix stays on the root.
+ */
+function splitGoogleBase(baseUrl) {
+  const match = /^(.*)\/(v\d+\w*)$/i.exec(baseUrl);
+  return match ? { root: match[1], version: match[2] } : { root: baseUrl, version: 'v1beta' };
+}
+
+/**
+ * Gemini's Live API endpoint under the root of `baseUrl`, in the API version
+ * the base names (`…/v1beta` → `…v1beta.GenerativeService.BidiGenerateContent`).
  */
 function googleLiveUrl(baseUrl) {
-  const { origin, pathname } = new URL(baseUrl);
-  const version = pathname.split('/').findLast(segment => /^v\d+\w*$/i.test(segment)) || 'v1beta';
-  return `${toWebSocketUrl(origin)}/ws/google.ai.generativelanguage.${version}.GenerativeService.BidiGenerateContent`;
+  const { root, version } = splitGoogleBase(baseUrl);
+  return `${toWebSocketUrl(root)}/ws/google.ai.generativelanguage.${version}.GenerativeService.BidiGenerateContent`;
 }
 
 /**
@@ -236,7 +245,8 @@ export function buildSpeechTarget(provider, baseUrl, entry) {
         : {
             modelType: 'transcription',
             backend: 'google-transcribe',
-            url: new URL(baseUrl).origin
+            // The API root: the backend adds the version to each call.
+            url: splitGoogleBase(baseUrl).root
           };
     }
     if (provider === 'mistral' && entry.realtime) {
