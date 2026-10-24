@@ -383,9 +383,10 @@ available on this installation.
 
 ### The Projects page
 
-**Projects** in the sidebar lists the projects you own and the projects shared with you. Projects
-that administrators created are not listed: they are linked to apps and managed by administrators,
-and no chat can start in one. Filter by all, mine or shared, search by name, and create a project with **New project** (name, description,
+**Projects** in the sidebar lists the projects you own, the projects shared with you, and those
+you added from the catalog. Projects that administrators created are listed only once you added
+one from the catalog (under **Shared with me**); the others are linked to apps and managed by
+administrators, and no chat can start in one. Filter by all, mine or shared, search by name, and create a project with **New project** (name, description,
 instructions). The button shows how many projects you have against `maxProjectsPerUser`.
 
 A project page shows:

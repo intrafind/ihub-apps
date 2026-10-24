@@ -200,8 +200,9 @@ share projects.
   or 50), so no list grows with its content; `GET /api/projects/:id/chats` takes `limit` and
   `cursor` and answers `total`. File names with accents, dashes or umlauts keep their characters when a file
   is uploaded.
-- The Projects page lists only your own and shared projects. Projects that administrators created
-  are linked to apps and managed by administrators, so they are no longer listed there.
+- The Projects page lists your own and shared projects, and the ones you added from the catalog.
+  Other projects that administrators created are linked to apps and managed by administrators,
+  so they are no longer listed there.
 - Answers name the project they drew on, and citations from a project show whether the document
   was uploaded or picked ("Picked from SharePoint · text taken 12 Oct 2026"); the preview shows the
   stored text with the cited passages highlighted, since originals are not kept.

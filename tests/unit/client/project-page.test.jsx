@@ -606,7 +606,8 @@ describe('ProjectPage – documents linked from other projects', () => {
     // The picked project replaces the list, with a way back to it.
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).queryByRole('listbox')).toBeNull();
-    expect(within(dialog).getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    // The focus follows: the search it was in is gone.
+    expect(within(dialog).getByRole('button', { name: 'Change' })).toHaveFocus();
     // The document linked already cannot be ticked again.
     expect(await within(dialog).findByRole('checkbox', { name: /Install\.md/ })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /Operations\.md/ }));

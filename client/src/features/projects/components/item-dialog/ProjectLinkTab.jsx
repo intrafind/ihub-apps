@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { linkSourceProjects, linkableItems } from '../../utils/projectItems';
 import Icon from '../../../../shared/components/Icon';
@@ -33,6 +33,12 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
   const [projects, setProjects] = useState(null);
   const [sourceId, setSourceId] = useState('');
   const [focusPicker, setFocusPicker] = useState(false);
+  // A pick replaces the list (and its focused search) with the picked
+  // project: the focus goes to its "Change" button rather than to the page.
+  const changeRef = useRef(null);
+  useEffect(() => {
+    if (sourceId) changeRef.current?.focus();
+  }, [sourceId]);
   const [source, setSource] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
   const [pinned, setPinned] = useState(false);
@@ -173,6 +179,7 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
                     )}
                   </span>
                   <button
+                    ref={changeRef}
                     type="button"
                     onClick={() => choose('')}
                     disabled={busy}

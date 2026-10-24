@@ -129,7 +129,9 @@ export function ProjectPickerPanel({
   return (
     <div className={className} data-testid="project-picker">
       {hint && <p className="px-3 pt-3 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+      {/* The search keeps the focus while the arrow keys move through the
+          list, so the ring around it is the focus indicator. */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500">
         <Icon name="search" size="sm" className="flex-none text-gray-500 dark:text-gray-400" />
         <input
           ref={searchRef}
