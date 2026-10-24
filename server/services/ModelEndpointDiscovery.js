@@ -205,8 +205,13 @@ function toWebSocketUrl(baseUrl) {
  * A gateway's path prefix stays on the root.
  */
 function splitGoogleBase(baseUrl) {
-  const match = /^(.*)\/(v\d+\w*)$/i.exec(baseUrl);
-  return match ? { root: match[1], version: match[2] } : { root: baseUrl, version: 'v1beta' };
+  // Split at the last slash rather than with `/^(.*)\/(v…)$/`, which
+  // backtracks super-linearly.
+  const slash = baseUrl.lastIndexOf('/');
+  const last = baseUrl.slice(slash + 1);
+  return slash > 0 && /^v\d+\w*$/i.test(last)
+    ? { root: baseUrl.slice(0, slash), version: last }
+    : { root: baseUrl, version: 'v1beta' };
 }
 
 /**
@@ -230,46 +235,52 @@ function googleLiveUrl(baseUrl) {
  * @returns {{ modelType: 'transcription'|'tts', backend: string, url: string }|null}
  */
 export function buildSpeechTarget(provider, baseUrl, entry) {
-  if (entry.type === 'transcription') {
-    if (TRANSCRIPTION_API_TYPES.includes(provider)) {
-      return {
-        modelType: 'transcription',
-        backend: provider,
-        url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type)
-      };
-    }
-    if (provider === 'google') {
-      // Live (WebSocket) or file transcription through the Gemini Files API.
-      return entry.realtime
-        ? { modelType: 'transcription', backend: 'google-live', url: googleLiveUrl(baseUrl) }
-        : {
-            modelType: 'transcription',
-            backend: 'google-transcribe',
-            // The API root: the backend adds the version to each call.
-            url: splitGoogleBase(baseUrl).root
-          };
-    }
-    if (provider === 'mistral' && entry.realtime) {
-      return {
-        modelType: 'transcription',
-        backend: 'mistral',
-        url: `${toWebSocketUrl(baseUrl)}/audio/transcriptions/realtime`
-      };
-    }
-    return null;
+  if (entry.type === 'transcription') return transcriptionTarget(provider, baseUrl, entry);
+  if (entry.type === 'tts') return ttsTarget(provider, baseUrl, entry);
+  return null;
+}
+
+/** {@link buildSpeechTarget} for a speech-to-text model. */
+function transcriptionTarget(provider, baseUrl, entry) {
+  if (TRANSCRIPTION_API_TYPES.includes(provider)) {
+    return {
+      modelType: 'transcription',
+      backend: provider,
+      url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type)
+    };
   }
-  if (entry.type === 'tts') {
-    if (provider === 'google') {
-      return {
-        modelType: 'tts',
-        backend: 'google',
-        url: buildInferenceUrl(provider, baseUrl, entry.id)
-      };
-    }
-    if (provider === 'mistral') {
-      return { modelType: 'tts', backend: 'mistral', url: `${baseUrl}/audio/speech` };
-    }
-    return null;
+  if (provider === 'google') {
+    // Live (WebSocket) or file transcription through the Gemini Files API.
+    return entry.realtime
+      ? { modelType: 'transcription', backend: 'google-live', url: googleLiveUrl(baseUrl) }
+      : {
+          modelType: 'transcription',
+          backend: 'google-transcribe',
+          // The API root: the backend adds the version to each call.
+          url: splitGoogleBase(baseUrl).root
+        };
+  }
+  if (provider === 'mistral' && entry.realtime) {
+    return {
+      modelType: 'transcription',
+      backend: 'mistral',
+      url: `${toWebSocketUrl(baseUrl)}/audio/transcriptions/realtime`
+    };
+  }
+  return null;
+}
+
+/** {@link buildSpeechTarget} for a text-to-speech model. */
+function ttsTarget(provider, baseUrl, entry) {
+  if (provider === 'google') {
+    return {
+      modelType: 'tts',
+      backend: 'google',
+      url: buildInferenceUrl(provider, baseUrl, entry.id)
+    };
+  }
+  if (provider === 'mistral') {
+    return { modelType: 'tts', backend: 'mistral', url: `${baseUrl}/audio/speech` };
   }
   return null;
 }
@@ -379,6 +390,20 @@ function classifyType(item, meta, id) {
 }
 
 /**
+ * Whether a speech model streams over a WebSocket rather than taking a file:
+ * Google's Live API models (`bidiGenerateContent` only), Mistral's
+ * `…-realtime` transcription.
+ */
+function isRealtimeSpeech(item, id, type) {
+  if (type !== 'transcription' && type !== 'tts') return false;
+  if (/(^|[-_])(live|realtime)([-_]|$)/i.test(id)) return true;
+  const methods = Array.isArray(item.supportedGenerationMethods)
+    ? item.supportedGenerationMethods
+    : [];
+  return methods.includes('bidiGenerateContent') && !methods.includes('generateContent');
+}
+
+/**
  * Normalize one listing entry. Returns null for entries without a usable id.
  *
  * Fields read, by source:
@@ -451,15 +476,7 @@ export function normalizeModelEntry(item) {
   const endOfLife = firstString(meta.end_of_life_date, item.deprecation);
 
   const type = classifyType(item, meta, id);
-  // A speech model that streams over a WebSocket rather than taking a file:
-  // Google's Live API models (`bidiGenerateContent` only), Mistral's
-  // `…-realtime` transcription.
-  const methods = Array.isArray(item.supportedGenerationMethods)
-    ? item.supportedGenerationMethods
-    : [];
-  const realtime =
-    /(^|[-_])(live|realtime)([-_]|$)/i.test(id) ||
-    (methods.includes('bidiGenerateContent') && !methods.includes('generateContent'));
+  const realtime = isRealtimeSpeech(item, id, type);
 
   return {
     id,
@@ -467,7 +484,7 @@ export function normalizeModelEntry(item) {
     description: firstString(item.description)?.slice(0, 500) || null,
     ownedBy: firstString(item.owned_by),
     type,
-    ...(realtime && (type === 'transcription' || type === 'tts') ? { realtime: true } : {}),
+    ...(realtime ? { realtime: true } : {}),
     contextWindow,
     maxOutputTokens,
     supportsVision,
