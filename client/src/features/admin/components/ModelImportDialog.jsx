@@ -484,7 +484,11 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           type="url"
           value={url}
           onChange={e => setUrl(e.target.value)}
-          placeholder="https://llm-server.llmhub.t-systems.net/v2"
+          placeholder={
+            apiType === 'local'
+              ? 'http://localhost:8080/v1'
+              : 'https://llm-server.llmhub.t-systems.net/v2'
+          }
           className={FIELD}
         />
         <p className={HINT}>

@@ -462,6 +462,19 @@ function describeHttpFailure(status, sentKey) {
   });
 }
 
+/**
+ * Whether an HTTP 400 is Google's answer to a wrong key: it reports
+ * `API_KEY_INVALID` in the error body instead of answering 401.
+ */
+async function isInvalidKeyAnswer(response) {
+  if (response.status !== 400) return false;
+  try {
+    return (await response.text()).includes('API_KEY_INVALID');
+  } catch {
+    return false;
+  }
+}
+
 function responseTooLarge() {
   return new ModelDiscoveryError('invalidResponse', 'The model list is too large', {
     details: `The response exceeds ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB.`
@@ -573,6 +586,12 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
       provider,
       status: response.status
     });
+    if (key && (await isInvalidKeyAnswer(response))) {
+      throw new ModelDiscoveryError('authenticationFailed', 'The endpoint rejected the API key', {
+        upstreamStatus: response.status,
+        details: 'HTTP 400 (API_KEY_INVALID). Check the API key.'
+      });
+    }
     throw describeHttpFailure(response.status, Boolean(key));
   }
 

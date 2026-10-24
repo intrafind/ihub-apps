@@ -223,9 +223,11 @@ Clicking **Skip** in the setup wizard only skipped it for the current browser se
 When a signed-in admin skips the wizard, they are asked whether to hide it for good; anyone else still skips for the current session only.
 The admin overview also has an Onboarding card that links there. Next to the switch, the page shows whether a demo account (`admin` / `user`) still signs in with the shipped password, and the skip prompt warns about it too.
 
-## OpenRouter as a provider
+## OpenRouter as a provider; built-in providers come with their API URL
 
 OpenRouter is now a provider next to OpenAI, Anthropic and the others. Updates add it automatically, unless an `openrouter` provider already exists. In **Admin → Models → Import from URL**, choose **OpenRouter**, enter your OpenRouter key, load the model list and import the models you want. A key entered there for a provider without one is stored encrypted on the provider, so the imported models use it. You can also set the key under **Admin → Providers** or in `OPENROUTER_API_KEY`. Models that generate images or audio instead of text are marked and not selected by **Select all**.
+
+The OpenAI, Anthropic, Google and Mistral providers now carry their public API base URL, so choosing one of them in **Import from URL** fills in the endpoint and **Load models** works right away, with no URL to look up (for Google, `https://generativelanguage.googleapis.com/v1beta`). Updates add the URL to these providers unless one is already set. Change it in the dialog for one import, or under **Admin → Providers** to keep it, for example for a proxy or a regional endpoint. **Local LLM** has no fixed address; enter your server's URL there. A wrong Google API key is now reported as a rejected key instead of a bare "HTTP 400".
 
 ## Scheduled tasks: keep fewer runs, delete runs
 

@@ -9,6 +9,7 @@
  *
  * The fetch is injected, so nothing here touches the network.
  */
+import fs from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -356,6 +357,74 @@ test('discoverModels maps endpoint failures onto messageKeys', async () => {
         err instanceof ModelDiscoveryError && err.messageKey === messageKey && err.status === 502,
       messageKey
     );
+  }
+});
+
+test('Google answering a wrong key with HTTP 400 API_KEY_INVALID reads as a rejected key', async () => {
+  const body = {
+    error: { code: 400, status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] }
+  };
+  const { fetch } = fakeFetch(fakeResponse(400, body));
+  await assert.rejects(
+    discoverModels({ url: 'https://g/v1beta', provider: 'google', apiKey: 'bad' }, { fetch }),
+    err => err.messageKey === 'authenticationFailed' && err.upstreamStatus === 400
+  );
+  const other = fakeFetch(fakeResponse(400, { error: { message: 'Bad page size' } }));
+  await assert.rejects(
+    discoverModels(
+      { url: 'https://g/v1beta', provider: 'google', apiKey: 'k' },
+      { fetch: other.fetch }
+    ),
+    err => err.messageKey === 'upstreamError'
+  );
+});
+
+test('the base URLs shipped on the built-in providers list models and build working inference URLs', async () => {
+  const { providers } = JSON.parse(
+    await fs.readFile(new URL('../defaults/config/providers.json', import.meta.url), 'utf8')
+  );
+  const baseUrlOf = id => providers.find(p => p.id === id).baseUrl;
+  const cases = [
+    {
+      provider: 'openai',
+      listing: 'https://api.openai.com/v1/models',
+      header: ['Authorization', 'Bearer k'],
+      body: { data: [{ id: 'gpt-x' }] },
+      url: 'https://api.openai.com/v1/chat/completions'
+    },
+    {
+      provider: 'anthropic',
+      listing: 'https://api.anthropic.com/v1/models?limit=1000',
+      header: ['x-api-key', 'k'],
+      body: { data: [{ id: 'claude-x', display_name: 'Claude X' }] },
+      url: 'https://api.anthropic.com/v1/messages'
+    },
+    {
+      provider: 'google',
+      listing: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',
+      header: ['x-goog-api-key', 'k'],
+      body: {
+        models: [{ name: 'models/gemini-x', supportedGenerationMethods: ['generateContent'] }]
+      },
+      url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-x:streamGenerateContent'
+    },
+    {
+      provider: 'mistral',
+      listing: 'https://api.mistral.ai/v1/models',
+      header: ['Authorization', 'Bearer k'],
+      body: { data: [{ id: 'mistral-x' }] },
+      url: 'https://api.mistral.ai/v1/chat/completions'
+    }
+  ];
+  for (const c of cases) {
+    const { fetch, calls } = fakeFetch(fakeResponse(200, c.body));
+    const result = await discoverModels(
+      { url: baseUrlOf(c.provider), provider: c.provider, apiKey: 'k' },
+      { fetch }
+    );
+    assert.equal(calls[0].url, c.listing, c.provider);
+    assert.equal(calls[0].init.headers[c.header[0]], c.header[1], c.provider);
+    assert.equal(result.models[0].url, c.url, c.provider);
   }
 });
 

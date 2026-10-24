@@ -251,8 +251,10 @@ you pick, so they need not be typed in one by one.
    API type and API key. The key is stored on the provider, not on the models. Opening **Import
    models** on a provider's page preselects it and uses its stored key and base URL.
 2. Enter the endpoint URL: the API base (`https://llm-server.llmhub.t-systems.net/v2`), its
-   `/models` listing, or a chat completions URL. A bare host is read as `<host>/v1`. Leave the API
-   key empty for endpoints without authentication, such as a local vLLM server.
+   `/models` listing, or a chat completions URL. A bare host is read as `<host>/v1` (`<host>/v1beta`
+   for Google). Choosing a provider fills in its stored base URL, which you can change for this
+   import. Leave the API key empty for endpoints without authentication, such as a local vLLM
+   server.
 3. **Load models** calls `GET <base>/models` and lists what it returns. The endpoint's own
    metadata is used where it reports it: display name, context window and output limit (vLLM
    `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
@@ -268,6 +270,19 @@ you pick, so they need not be typed in one by one.
    With **+ New provider**, you can also pick no model and choose **Create provider without
    models**: the provider is created with the endpoint's normalized base URL and the key, for an
    endpoint that lists no models yet or to import its models later.
+
+The built-in providers ship with their public API base, so importing from them needs no URL:
+
+| Provider   | Base URL                                           |
+| ---------- | -------------------------------------------------- |
+| OpenAI     | `https://api.openai.com/v1`                        |
+| Anthropic  | `https://api.anthropic.com/v1`                     |
+| Google     | `https://generativelanguage.googleapis.com/v1beta` |
+| Mistral AI | `https://api.mistral.ai/v1`                        |
+| OpenRouter | `https://openrouter.ai/api/v1`                     |
+
+Change a provider's base URL under **Admin → Providers** to point it at a proxy or a regional
+endpoint. **Local LLM** has none: enter your server's address, such as `http://localhost:8080/v1`.
 
 [OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Providers**, for example for a regional endpoint.
 
