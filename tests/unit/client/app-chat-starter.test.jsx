@@ -21,7 +21,20 @@ jest.mock('react-i18next', () => ({
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate
+  useNavigate: () => mockNavigate,
+  // The project chips link to their projects.
+  Link: ({ to, children, ...rest }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  )
+}));
+
+// The viewer's projects, for the project picker (off unless a test turns it on).
+let mockUserProjects = { enabled: false, projects: [] };
+jest.mock('../../../client/src/features/projects/hooks/useProjects', () => ({
+  useProjectsAvailability: () => ({ userProjectsEnabled: mockUserProjects.enabled }),
+  useMyProjects: () => ({ projects: mockUserProjects.projects })
 }));
 
 const mockApp = {
@@ -118,6 +131,7 @@ async function send(text) {
 }
 
 beforeEach(() => {
+  mockUserProjects = { enabled: false, projects: [] };
   mockNavigate.mockClear();
   sessionStorage.clear();
   consumePendingChatStart('chat');
@@ -194,4 +208,40 @@ it('starts another app on its own model, not the one picked for the previous app
   } finally {
     api.fetchAppDetails.mockImplementation(() => Promise.resolve(mockApp));
   }
+});
+
+it('attaches the projects ticked in its project picker to the chat it starts', async () => {
+  mockUserProjects = {
+    enabled: true,
+    projects: [
+      { id: 'prj_case', ownership: 'user', name: 'Case 2026-114', permissions: { isOwner: true } },
+      { id: 'policies', ownership: 'admin', name: { en: 'Policies' }, subscribed: true },
+      // Comes with an app, not added: not offered.
+      { id: 'faq', ownership: 'admin', name: { en: 'FAQ' } }
+    ]
+  };
+  await renderStarter({ pickProjects: true });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Projects for this chat' }));
+  expect(screen.queryByRole('option', { name: 'FAQ' })).toBeNull();
+  fireEvent.click(screen.getByRole('option', { name: 'Case 2026-114' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Policies' }));
+  // Ticked, they show as chips beside the input.
+  // (This `t` does not interpolate the names.)
+  expect(screen.getAllByRole('button', { name: /^Remove .* from this chat$/ })).toHaveLength(2);
+
+  await send('What changed?');
+
+  expect(mockNavigate).toHaveBeenCalledWith(
+    '/apps/chat?attachProject=prj_case&attachProject=policies&prefill=What+changed%3F&send=true'
+  );
+});
+
+it('offers no project picker unless the caller asks for one', async () => {
+  mockUserProjects = {
+    enabled: true,
+    projects: [{ id: 'prj_case', ownership: 'user', name: 'Case', permissions: { isOwner: true } }]
+  };
+  await renderStarter();
+  expect(screen.queryByRole('button', { name: 'Projects for this chat' })).toBeNull();
 });

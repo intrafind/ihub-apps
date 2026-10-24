@@ -477,9 +477,12 @@ export class ProjectRepository {
    * caller's access check to decide. A marker whose project is gone is pruned.
    *
    * @param {string[]} targetKeys
+   * @param {Object} [options]
+   * @param {boolean} [options.anyOwnership=false] - Admin projects too: a user's
+   *   catalog additions may name one an admin made available to everyone.
    * @returns {Promise<Object[]>}
    */
-  async listSharedWith(targetKeys) {
+  async listSharedWith(targetKeys, { anyOwnership = false } = {}) {
     if (!this.isAvailable()) return [];
     const projectIds = new Set();
     for (const targetKey of [...new Set(targetKeys || [])]) {
@@ -488,7 +491,10 @@ export class ProjectRepository {
         ownerId: targetKey
       });
       for (const doc of docs) {
-        if (isUserProjectId(doc.data?.projectId)) projectIds.add(doc.data.projectId);
+        const projectId = doc.data?.projectId;
+        if (anyOwnership ? isProjectId(projectId) : isUserProjectId(projectId)) {
+          projectIds.add(projectId);
+        }
       }
       if (projectIds.size >= MAX_SCANNED) break;
     }
@@ -842,7 +848,8 @@ export class ProjectRepository {
   }
 
   /**
-   * Take a project from the catalog into one user's list, or drop it again.
+   * Take a project from the catalog into one user's list, or drop it again:
+   * a published user project, or an admin project available to everyone.
    * Only the marker records it: the access comes from the catalog itself.
    *
    * @param {string} projectId
@@ -851,7 +858,7 @@ export class ProjectRepository {
    * @returns {Promise<void>}
    */
   async setSubscribed(projectId, userId, subscribed) {
-    if (!this.isAvailable() || !isUserProjectId(projectId)) return;
+    if (!this.isAvailable() || !isProjectId(projectId)) return;
     const targetKey = subscriptionTargetKey(userId);
     if (subscribed) await this._writeMemberMarkers(projectId, [targetKey]);
     else await this._removeMemberMarkers(projectId, [targetKey]);
@@ -865,7 +872,7 @@ export class ProjectRepository {
    * @returns {Promise<Object[]>}
    */
   listSubscribed(userId) {
-    return this.listSharedWith([subscriptionTargetKey(userId)]);
+    return this.listSharedWith([subscriptionTargetKey(userId)], { anyOwnership: true });
   }
 
   /**

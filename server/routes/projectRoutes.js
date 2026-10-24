@@ -171,11 +171,36 @@ function serializeFor(project, user, context, options = {}) {
 }
 
 /**
+ * Whether the caller may add a project to their list from the catalog (and
+ * whether a project in their list says if they did): a published user
+ * project they reach only through the catalog — members have it in their
+ * list already — or an admin project made available to everyone signed in.
+ *
+ * @param {Object} project - Stored project.
+ * @param {ReturnType<typeof permissionsFor>} permissions - The caller's.
+ * @returns {boolean}
+ */
+function subscribable(project, permissions) {
+  if (!permissions.canUse) return false;
+  if (project.ownership === 'admin') return isPublished(project) && project.enabled !== false;
+  return permissions.role === 'catalog';
+}
+
+/**
  * The projects the caller may use: owned, shared with them, and admin
- * projects reached through their apps, workflows and agents.
+ * projects reached through their apps, workflows and agents. A project the
+ * caller may add from the catalog says whether they did (`subscribed`).
  */
 async function listProjects(user, repo, scope) {
   const context = callerContext(user);
+  const subscribedProjects = canHoldProjects(user)
+    ? await repo.listSubscribed(String(user.id))
+    : [];
+  const subscribedIds = new Set(subscribedProjects.map(project => project.id));
+  const withSubscription = (project, body) =>
+    subscribable(project, permissionsFor(project, user, context))
+      ? { ...body, subscribed: subscribedIds.has(project.id) }
+      : body;
   const items = [];
   if (scope === 'all' || scope === 'mine') {
     for (const project of await repo.listOwned(String(user.id))) {
@@ -193,11 +218,14 @@ async function listProjects(user, repo, scope) {
       items.push(serializeFor(project, user, context, { includeItems: false }));
     }
     // And the projects the caller took from the catalog, while they are in it.
-    for (const project of await repo.listSubscribed(String(user.id))) {
-      if (seen.has(project.id)) continue;
+    // Admin projects among them are listed with the admin scope below.
+    for (const project of subscribedProjects) {
+      if (seen.has(project.id) || project.ownership !== 'user') continue;
       if (permissionsFor(project, user, context).role !== 'catalog') continue;
       seen.add(project.id);
-      items.push(serializeFor(project, user, context, { includeItems: false }));
+      items.push(
+        withSubscription(project, serializeFor(project, user, context, { includeItems: false }))
+      );
     }
   }
   if (scope === 'all' || scope === 'admin') {
@@ -208,7 +236,9 @@ async function listProjects(user, repo, scope) {
         context.isContentAdmin ||
         (isPublished(project) && canHoldProjects(user));
       if (!reaches) continue;
-      items.push(serializeFor(project, user, context, { includeItems: false }));
+      items.push(
+        withSubscription(project, serializeFor(project, user, context, { includeItems: false }))
+      );
     }
   }
   return items.sort((a, b) =>
@@ -338,7 +368,8 @@ export default function registerProjectRoutes(app) {
    *     description: |
    *       Every user project an owner or editor published, for everyone signed
    *       in to browse and add to their list, and every admin project made
-   *       available to everyone signed in (open to everyone, not added). Empty
+   *       available to everyone signed in (open to everyone; added to the list
+   *       to find it among one's projects and in the chat input). Empty
    *       while the catalog is off (`platform.projects.sharing.allowCatalog`).
    *     tags: [Projects]
    *     parameters:
@@ -359,7 +390,7 @@ export default function registerProjectRoutes(app) {
       const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
       const subscribed = new Set((await deps.repo.listSubscribed(me)).map(project => project.id));
       // An admin project made available to everyone signed in is listed too:
-      // it is open to everyone already, so it is found here, not added.
+      // open to everyone already, it is added to bring it into one's list.
       const adminPublished = (await deps.repo.listAdmin({ includeDisabled: false })).filter(
         isPublished
       );
@@ -468,7 +499,7 @@ export default function registerProjectRoutes(app) {
     async (req, res) => {
       try {
         const body = serializeFor(req.project, req.user, req.projectContext);
-        if (req.projectPermissions.role === 'catalog') {
+        if (subscribable(req.project, req.projectPermissions)) {
           body.subscribed = await getProjectRepository().isSubscribed(
             req.project.id,
             String(req.user.id)
@@ -926,6 +957,10 @@ export default function registerProjectRoutes(app) {
    * /api/projects/{projectId}/subscription:
    *   post:
    *     summary: Add a published project to the caller's list
+   *     description: |
+   *       A user project published to the catalog that the caller is no member
+   *       of, or an admin project available to everyone signed in.
+   *       Anything else answers 400.
    *     tags: [Projects]
    *   delete:
    *     summary: Remove a project taken from the catalog from the caller's list
@@ -940,9 +975,9 @@ export default function registerProjectRoutes(app) {
       try {
         const deps = requireUserProjects(req, res);
         if (!deps) return;
-        // A published admin project reaches everyone already; there is no
-        // list to add it to.
-        if (req.projectPermissions.role !== 'catalog' || !isUserProjectId(req.project.id)) {
+        // A member has the project in their list already, and an admin
+        // project that comes with an app is not in the catalog.
+        if (!subscribable(req.project, req.projectPermissions)) {
           return sendBadRequest(res, 'Only projects reached through the catalog are added');
         }
         await deps.repo.setSubscribed(req.project.id, String(req.user.id), true);

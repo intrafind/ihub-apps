@@ -30,6 +30,7 @@ import {
   chatPath,
   countProjectGroups,
   filterProjectList,
+  isInMyProjects,
   membersToShares,
   membersWithout,
   ownMemberEntry,
@@ -37,6 +38,7 @@ import {
   projectCreation,
   projectFormFrom,
   projectListGroup,
+  projectPickerSections,
   projectUsage,
   quotaState,
   reconcileProjectForm,
@@ -348,6 +350,33 @@ describe('project page rules', () => {
     expect(filterProjectList([mine, shared, admin], { filter: 'shared' })).toEqual([shared]);
     expect(filterProjectList([mine, shared, admin], { search: 'dana' })).toEqual([shared]);
     expect(filterProjectList([mine, shared, admin], { search: 'faq' })).toEqual([admin]);
+  });
+
+  test('lists an admin project in my projects once I added it from the catalog', () => {
+    const added = { ...admin, id: 'policies', subscribed: true };
+    expect([mine, shared, admin, added].filter(isInMyProjects)).toEqual([mine, shared, added]);
+    // Added from the catalog counts as shared with me, like a user project from there.
+    expect(projectListGroup(added)).toBe('shared');
+    expect(projectListGroup({ ...admin, subscribed: false })).toBe('apps');
+  });
+
+  test('puts the picker list in sections and searches it', () => {
+    const later = { ...mine, id: 'prj_c', name: 'Case 200' };
+    expect(projectPickerSections([admin, shared, mine, later])).toEqual([
+      // Each section keeps the order it was given.
+      { id: 'mine', projects: [mine, later] },
+      { id: 'shared', projects: [shared] },
+      { id: 'admin', projects: [admin] }
+    ]);
+    // Name, description and owner are searched; empty sections are left out.
+    expect(projectPickerSections([admin, shared, mine], { search: ' DANA ' })).toEqual([
+      { id: 'shared', projects: [shared] }
+    ]);
+    expect(projectPickerSections([admin, shared, mine], { search: 'faq', language: 'de' })).toEqual(
+      [{ id: 'admin', projects: [admin] }]
+    );
+    expect(projectPickerSections([mine], { search: 'nothing' })).toEqual([]);
+    expect(projectPickerSections(null)).toEqual([]);
   });
 
   test('validates the form and sends only what changed', () => {

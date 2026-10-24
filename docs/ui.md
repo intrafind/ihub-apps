@@ -421,6 +421,8 @@ features the app itself offers — web search, the app's tools, the
 image-generation settings and Magic Prompt — each shown only when the app (and the platform
 feature flag) enables it. The toggles open in the state already chosen for that app in the
 current session, and whatever is picked applies to the first message when it is sent in the app.
+Where projects are on, its **Project** button picks projects for the new chat (see
+[Projects](projects.md#using-a-project-in-any-chat)); they are attached when the chat opens.
 
 ![The start page: greeting, the default app's chat input, featured apps and recent chats](assets/screenshots/start-page.png)
 

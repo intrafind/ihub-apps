@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The projects of a chat: the "+" menu section where the viewer's user
- * projects are ticked, and the chips beside the input that show the project
- * the chat runs in and the ones it draws on. A tick is saved at once for a
- * stored chat and kept in state (to ride on the next message) for a chat that
- * is not stored yet. A chat is never moved into a project once it exists.
+ * The projects of a chat: the chat input's project picker, where the
+ * viewer's projects are searched and ticked, and the chips beside the input
+ * that show the project the chat runs in and the ones it draws on. A tick is
+ * saved at once for a stored chat and kept in state (to ride on the next
+ * message) for a chat that is not stored yet. A chat is never moved into a
+ * project once it exists.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -46,15 +47,28 @@ jest.mock('react-i18next', () => ({
 
 const ChatProjectChips =
   require('../../../client/src/features/projects/components/ChatProjectChips').default;
-const ChatProjectsMenuSection =
-  require('../../../client/src/features/projects/components/ChatProjectsMenuSection').default;
+const ChatProjectPicker =
+  require('../../../client/src/features/projects/components/ChatProjectPicker').default;
 const {
   useOfferedProjects
-} = require('../../../client/src/features/projects/components/ChatProjectsMenuSection');
+} = require('../../../client/src/features/projects/components/ChatProjectPicker');
 
-const HANDBOOK = { id: 'prj_handbook', ownership: 'user', name: 'Handbook' };
+const HANDBOOK = {
+  id: 'prj_handbook',
+  ownership: 'user',
+  name: 'Handbook',
+  permissions: { isOwner: true }
+};
 const CASE = { id: 'prj_case', ownership: 'user', name: 'Case 2026-114' };
+// Comes with an app: not in the viewer's list.
 const ADMIN = { id: 'faq', ownership: 'admin', name: { en: 'FAQ' } };
+// Available to everyone, and the viewer added it from the catalog.
+const ADDED_ADMIN = {
+  id: 'policies',
+  ownership: 'admin',
+  name: { en: 'Policies' },
+  subscribed: true
+};
 
 const {
   useChatAttachedProjects
@@ -62,7 +76,7 @@ const {
 
 /**
  * The chat page's shape: one attached-projects controller, shared by the
- * chips and the "+" menu section, both fed from one `projectContext`.
+ * chips and the project picker, both fed from one `projectContext`.
  */
 function Harness({ params, showMenu = true, showChips = true }) {
   const attached = useChatAttachedProjects({
@@ -75,13 +89,7 @@ function Harness({ params, showMenu = true, showChips = true }) {
   const offered = useOfferedProjects(projectContext);
   return (
     <MemoryRouter>
-      {showMenu && (
-        <ChatProjectsMenuSection
-          projectContext={projectContext}
-          offered={offered}
-          navTabIndex={() => 0}
-        />
-      )}
+      {showMenu && <ChatProjectPicker projectContext={projectContext} offered={offered} />}
       {showChips && <ChatProjectChips projectContext={projectContext} />}
     </MemoryRouter>
   );
@@ -99,12 +107,16 @@ function context(overrides = {}) {
   };
 }
 
+/** Open the picker; it stays open while projects are ticked. */
+const openPicker = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Projects for this chat' }));
+const option = name => screen.getByRole('option', { name });
+
 const renderMenu = overrides => {
   const params = context(overrides);
-  return {
-    projectContext: params,
-    ...render(<Harness params={params} showChips={false} />)
-  };
+  const view = render(<Harness params={params} showChips={false} />);
+  openPicker();
+  return { projectContext: params, ...view };
 };
 
 const renderChips = overrides => {
@@ -117,57 +129,87 @@ const renderChips = overrides => {
 
 beforeEach(() => {
   mockSetAttached.mockReset();
-  mockProjects = [HANDBOOK, CASE, ADMIN];
+  mockProjects = [HANDBOOK, CASE, ADMIN, ADDED_ADMIN];
   mockEnabled = true;
 });
 
-describe('projects menu section', () => {
-  test("offers the viewer's user projects, not admin ones or the chat's own container", () => {
+describe('project picker', () => {
+  test("offers the viewer's list — not the admin projects of their apps, nor the chat's own container", () => {
     renderMenu({ containerProjectId: CASE.id });
 
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Handbook' })).toBeInTheDocument();
+    expect(option('Handbook')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Case 2026-114' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'FAQ' })).not.toBeInTheDocument();
+    // An admin project added from the catalog is offered, in its own section.
+    const admins = screen.getByRole('group', { name: 'From the administrators' });
+    expect(within(admins).getByRole('option', { name: 'Policies' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemcheckbox', { name: 'Case 2026-114' })
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitemcheckbox', { name: 'FAQ' })).not.toBeInTheDocument();
+      within(screen.getByRole('group', { name: 'My projects' })).getByRole('option', {
+        name: 'Handbook'
+      })
+    ).toBeInTheDocument();
+  });
+
+  test('narrows the list with the search', () => {
+    renderMenu();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Projects for this chat' }), {
+      target: { value: 'case' }
+    });
+
+    expect(option('Case 2026-114')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Handbook' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'nothing like it' } });
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(screen.getByText('No project matches.')).toBeInTheDocument();
   });
 
   test('saves a tick at once for a stored chat and shows the list the server kept', async () => {
     mockSetAttached.mockResolvedValue({ chat: { attachedProjectIds: [HANDBOOK.id] } });
     const { projectContext } = renderMenu();
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    fireEvent.click(option('Handbook'));
 
     await waitFor(() => expect(mockSetAttached).toHaveBeenCalledWith('chat-1', [HANDBOOK.id]));
     await waitFor(() => expect(projectContext.onChange).toHaveBeenCalledWith([HANDBOOK.id]));
+    // Ticking keeps the picker open for the next one.
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
 
-  test('ticks with the keyboard too', async () => {
+  test('ticks with the keyboard too, and Escape closes it', async () => {
     mockSetAttached.mockResolvedValue({ chat: { attachedProjectIds: [CASE.id] } });
     renderMenu();
+    const search = screen.getByRole('combobox');
+    expect(search).toHaveFocus();
 
-    fireEvent.keyDown(screen.getByRole('menuitemcheckbox', { name: 'Case 2026-114' }), {
-      key: ' '
-    });
+    fireEvent.change(search, { target: { value: 'case' } });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(search).toHaveAttribute('aria-activedescendant', option('Case 2026-114').id);
+    fireEvent.keyDown(search, { key: 'Enter' });
 
     await waitFor(() => expect(mockSetAttached).toHaveBeenCalledWith('chat-1', [CASE.id]));
+
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Projects for this chat' })).toHaveFocus();
   });
 
   test('keeps the pick in state for a chat that is not stored yet', () => {
     const { projectContext } = renderMenu({ stored: false, chatId: null });
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Case 2026-114' }));
+    fireEvent.click(option('Case 2026-114'));
 
     expect(mockSetAttached).not.toHaveBeenCalled();
     expect(projectContext.onChange).toHaveBeenCalledWith([CASE.id]);
   });
 
-  test('shows a ticked project as checked and unticks it', async () => {
+  test('shows a ticked project as selected and unticks it', async () => {
     mockSetAttached.mockResolvedValue({ chat: { attachedProjectIds: [] } });
     renderMenu({ value: [HANDBOOK.id] });
 
-    const row = screen.getByRole('menuitemcheckbox', { name: 'Handbook' });
-    expect(row).toHaveAttribute('aria-checked', 'true');
+    const row = option('Handbook');
+    expect(row).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(row);
 
     await waitFor(() => expect(mockSetAttached).toHaveBeenCalledWith('chat-1', []));
@@ -177,33 +219,36 @@ describe('projects menu section', () => {
     mockSetAttached.mockRejectedValue(new Error('nope'));
     const params = context();
     render(<Harness params={params} />);
+    openPicker();
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    fireEvent.click(option('Handbook'));
 
-    // The failure shows in the chips, which stay when the menu has closed.
+    // The failure shows in the chips, which stay when the picker has closed.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(params.onChange).not.toHaveBeenCalled();
   });
 
-  test('a menu that closes while a change is saving loses neither the result nor the error', async () => {
+  test('a picker that closes while a change is saving loses neither the result nor the error', async () => {
     mockSetAttached.mockRejectedValue(new Error('nope'));
     const params = context();
     const { rerender } = render(<Harness params={params} />);
+    openPicker();
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
-    // The "+" menu unmounts its section (Escape); the controller lives above it.
+    fireEvent.click(option('Handbook'));
+    // The picker unmounts; the controller lives above it.
     rerender(<Harness params={params} showMenu={false} />);
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
-  test('one change at a time: the chips and the menu share a single saving flag', async () => {
+  test('one change at a time: the chips and the picker share a single saving flag', async () => {
     let finish;
     mockSetAttached.mockReturnValue(new Promise(resolve => (finish = resolve)));
     const params = context({ value: [CASE.id] });
     render(<Harness params={params} />);
+    openPicker();
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    fireEvent.click(option('Handbook'));
     expect(mockSetAttached).toHaveBeenCalledTimes(1);
 
     // Mid-save, neither the chip's × nor another row starts a second PATCH
@@ -211,7 +256,8 @@ describe('projects menu section', () => {
     expect(
       screen.getByRole('button', { name: 'Remove Case 2026-114 from this chat' })
     ).toBeDisabled();
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Case 2026-114' }));
+    expect(option('Case 2026-114')).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(option('Case 2026-114'));
     expect(mockSetAttached).toHaveBeenCalledTimes(1);
 
     finish({ chat: { attachedProjectIds: [CASE.id, HANDBOOK.id] } });
@@ -220,12 +266,13 @@ describe('projects menu section', () => {
 
   test('renders nothing while user projects are off or there is nothing to pick', () => {
     mockEnabled = false;
-    const { container, rerender, projectContext } = renderMenu();
+    const params = context();
+    const { container, rerender } = render(<Harness params={params} showChips={false} />);
     expect(container).toBeEmptyDOMElement();
 
     mockEnabled = true;
     mockProjects = [ADMIN];
-    rerender(<Harness params={projectContext} showChips={false} />);
+    rerender(<Harness params={params} showChips={false} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -245,8 +292,9 @@ describe('a save that outlives its chat', () => {
     mockSetAttached.mockReturnValue(new Promise(resolve => (finish = resolve)));
     const onChange = jest.fn();
     const { rerender } = render(<Switchable chatId="chat-1" onChange={onChange} />);
+    openPicker();
 
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    fireEvent.click(option('Handbook'));
     rerender(<Switchable chatId="chat-2" onChange={onChange} />);
     finish({ chat: { attachedProjectIds: [HANDBOOK.id] } });
     await waitFor(() => expect(mockSetAttached).toHaveBeenCalledTimes(1));
@@ -255,7 +303,7 @@ describe('a save that outlives its chat', () => {
 
     // The same for a failure: no error appears in the new chat.
     mockSetAttached.mockRejectedValue(new Error('nope'));
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Handbook' }));
+    fireEvent.click(option('Handbook'));
     rerender(<Switchable chatId="chat-3" onChange={onChange} />);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -267,7 +315,9 @@ describe('an app that opts out of projects', () => {
     const params = context({ attachDisabled: true, containerProjectId: CASE.id });
     render(<Harness params={params} />);
 
-    expect(screen.queryByRole('menuitemcheckbox')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Projects for this chat' })
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'In project: Case 2026-114' })).toBeInTheDocument();
   });
 

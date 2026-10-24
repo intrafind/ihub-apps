@@ -159,6 +159,28 @@ describe('ProjectsPage', () => {
     expect(screen.queryByText('Team wiki')).not.toBeInTheDocument();
   });
 
+  test('lists an admin project the viewer added from the catalog, as shared with them', async () => {
+    mockApi.fetchProjects.mockResolvedValue([
+      ...PROJECTS,
+      {
+        id: 'policies',
+        ownership: 'admin',
+        name: { en: 'Company policies' },
+        usage: { items: 5, bytes: 10 },
+        role: 'catalog',
+        subscribed: true,
+        permissions: { isOwner: false, canUse: true }
+      }
+    ]);
+    renderPage();
+    expect(await screen.findByText('Company policies')).toBeInTheDocument();
+    expect(screen.queryByText('FAQ')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Shared with me/ }));
+    expect(screen.getByText('Company policies')).toBeInTheDocument();
+    expect(screen.getByText('Team wiki')).toBeInTheDocument();
+  });
+
   test('pages a long list of projects and starts again at the first page when searching', async () => {
     const many = Array.from({ length: 23 }, (_, index) => ({
       id: `prj_${index}`,
@@ -277,11 +299,15 @@ describe('ProjectsPage', () => {
     expect(await within(dialog).findByText('iHub knowledge')).toBeInTheDocument();
     // A project of your own is in your list already.
     expect(within(dialog).getByText('In your projects')).toBeInTheDocument();
-    // An admin project is open to everyone: nothing to add.
+    // An admin project available to everyone is added to the list the same way.
     const faq = within(dialog).getByText('Company FAQ').closest('li');
     expect(faq).toHaveTextContent('From the administrators');
-    expect(faq).toHaveTextContent('Open to everyone');
-    expect(within(faq).queryByRole('button')).toBeNull();
+    mockApi.addCatalogProject.mockResolvedValueOnce({ id: 'company-faq', subscribed: true });
+    fireEvent.click(within(faq).getByRole('button', { name: 'Add Company FAQ to my projects' }));
+    await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('company-faq'));
+    expect(
+      await within(faq).findByRole('button', { name: 'Remove Company FAQ from my projects' })
+    ).toBeInTheDocument();
 
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Add iHub knowledge to my projects' })

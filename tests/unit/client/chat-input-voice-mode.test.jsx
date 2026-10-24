@@ -43,7 +43,7 @@ jest.mock('../../../client/src/features/prompts/hooks/usePromptLauncher', () => 
 }));
 jest.mock('../../../client/src/features/chat/components/WorkflowMentionSearch', () => () => null);
 jest.mock('../../../client/src/features/projects/components/ChatProjectChips', () => () => null);
-jest.mock('../../../client/src/features/projects/components/ChatProjectsMenuSection', () => ({
+jest.mock('../../../client/src/features/projects/components/ChatProjectPicker', () => ({
   __esModule: true,
   default: () => null,
   useOfferedProjects: () => []

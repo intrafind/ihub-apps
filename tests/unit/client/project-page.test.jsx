@@ -590,17 +590,24 @@ describe('ProjectPage – documents linked from other projects', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add documents' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'From another project' }));
-    const select = await screen.findByLabelText('Project');
-    // Only the other project is offered.
+    // Only the other project is offered, in a list with a search.
+    const list = await screen.findByRole('listbox', { name: 'Choose a project…' });
     expect(
-      within(select)
+      within(list)
         .getAllByRole('option')
-        .map(option => option.value)
-    ).toEqual(['', 'prj_docs']);
-    fireEvent.change(select, { target: { value: 'prj_docs' } });
+        .map(option => option.textContent)
+    ).toEqual(['Delivery docs']);
+    const search = screen.getByRole('combobox', { name: 'Choose a project…' });
+    fireEvent.change(search, { target: { value: 'nothing like it' } });
+    expect(within(list).queryByRole('option')).toBeNull();
+    fireEvent.change(search, { target: { value: 'delivery' } });
+    fireEvent.click(within(list).getByRole('option', { name: 'Delivery docs' }));
 
-    // The document linked already cannot be ticked again.
+    // The picked project replaces the list, with a way back to it.
     const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByRole('listbox')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    // The document linked already cannot be ticked again.
     expect(await within(dialog).findByRole('checkbox', { name: /Install\.md/ })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /Operations\.md/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Link 1 documents' }));
@@ -697,6 +704,41 @@ describe('ProjectPage – the catalog', () => {
     expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add to my projects' }));
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_a'));
+  });
+
+  test('an admin project available to everyone is added and chatted with attached', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({ ...CONFIG, sharing: { allowCatalog: true } });
+    const adminProject = makeProject({
+      id: 'policies',
+      ownership: 'admin',
+      name: { en: 'Company policies' },
+      owner: undefined,
+      members: undefined,
+      role: 'catalog',
+      published: true,
+      subscribed: true,
+      permissions: {
+        canUse: true,
+        canEdit: false,
+        canShare: false,
+        canDelete: false,
+        canTransfer: false,
+        readsAllChats: false,
+        canHoldChats: false,
+        isOwner: false,
+        readOnly: true
+      }
+    });
+    mockApi.fetchProject.mockResolvedValue(adminProject);
+    mockApi.removeCatalogProject.mockResolvedValue({});
+    renderPage();
+
+    expect(await screen.findByText(/the administrators keep it up to date/)).toBeInTheDocument();
+    // A chat with it attached starts here; none runs inside it.
+    expect(screen.getByTestId('project-chat-composer')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chats' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from my projects' }));
+    await waitFor(() => expect(mockApi.removeCatalogProject).toHaveBeenCalledWith('policies'));
   });
 });
 

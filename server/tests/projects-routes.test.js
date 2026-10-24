@@ -988,6 +988,31 @@ describe('the project catalog', () => {
       assert.ok(await find('common questions'), 'found by its description');
       assert.equal((await listIds(CAROL)).includes('catalog-faq'), true);
 
+      // Added to one's list, it says so in the list, the catalog and on its page.
+      const listed = async () =>
+        (await drive(route.list, { user: CAROL, query: { scope: 'all' } })).body.items.find(
+          item => item.id === 'catalog-faq'
+        );
+      assert.equal(entry.subscribed, false);
+      assert.equal((await listed()).subscribed, false);
+      const added = await drive(route.subscribe, {
+        user: CAROL,
+        params: { projectId: 'catalog-faq' }
+      });
+      assert.equal(added.statusCode, 200, JSON.stringify(added.body));
+      assert.equal(added.body.subscribed, true);
+      assert.equal((await listed()).subscribed, true);
+      assert.equal((await find()).subscribed, true);
+      const opened = await drive(route.get, { user: CAROL, params: { projectId: 'catalog-faq' } });
+      assert.equal(opened.body.subscribed, true);
+      // Removed again, it stays open to everyone but leaves the list.
+      const removed = await drive(route.unsubscribe, {
+        user: CAROL,
+        params: { projectId: 'catalog-faq' }
+      });
+      assert.equal(removed.statusCode, 204);
+      assert.equal((await listed()).subscribed, false);
+
       assert.equal((await patch({ enabled: false })).statusCode, 200);
       assert.equal(await find(), undefined, 'off: not in the catalog');
     } finally {
@@ -1020,6 +1045,12 @@ describe('admin projects', () => {
     assert.equal(linked.statusCode, 200, JSON.stringify(linked.body));
     assert.equal(linked.body.role, 'linked');
     assert.equal(linked.body.permissions.canEdit, false);
+    // It comes with the app, not from the catalog: there is nothing to add.
+    assert.equal(linked.body.subscribed, undefined);
+    assert.equal(
+      (await drive(route.subscribe, { user: NOBODY, params: { projectId: 'faq' } })).statusCode,
+      400
+    );
     assert.equal(
       (await drive(route.get, { user: ADA, params: { projectId: 'faq' } })).statusCode,
       404

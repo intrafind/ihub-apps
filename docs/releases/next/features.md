@@ -12,19 +12,22 @@ such as LLM endpoints, MCP servers and `wss://` voice transcription, in addition
 Nothing needs to be configured, and the Docker image, binaries and `npm start` all behave the same. Set `NODE_USE_SYSTEM_CA=0` to turn it off. 
 This needs Node 24.5 or later; on older runtimes set `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` instead.
 
-**Projects are easier to use: start a chat from the project, and pick the projects of a chat in the "+" menu.**
+**Projects are easier to use: start a chat from the project, and pick the projects of a chat in the chat input.**
 The project page now has the same chat input as the start page at the top, with attachments, the model selector, tools, web search and magic prompt:
 send a message to start a chat in the project, with that message already sent.
 Above it you can choose another app for this chat; **New chat** opens an empty one.
 Each project has a **default app**, which is where its new chats start.
 The side panel of the project page is now a compact list (instructions, default app, members, catalog); **Edit** and **Change** open the settings in a dialog.
-The projects a chat draws on, and the project it runs in, now sit beside the message box instead of in a bar under the header: tick projects under **Projects for this chat** in the **+** menu.
+The projects a chat draws on, and the project it runs in, now sit beside the message box instead of in a bar under the header: open **Project** in the chat input, search, and tick projects.
+The start page's chat input has the same **Project** button, so a chat can start with projects attached right there.
+The list has a search field and sections (**My projects**, **Shared with me**, **From the administrators**) and keeps one height however many projects there are.
 
 ## Projects: link documents from other projects
 
 A project can now use documents of another project without copying them. **Add documents → From
 another project** lists your own projects and published ones (catalog projects, and admin projects
-an administrator published, such as the shipped iHub documentation); tick documents and link them.
+an administrator published, such as the shipped iHub documentation), with a search and in
+sections, so a long list stays easy to scan; pick one, tick documents and link them.
 
 - Administrators make an admin project available to **Everyone signed in** under **Admin → Projects → Edit**:
   everyone signed in can then use it and link its documents. The iHub documentation project is
@@ -51,8 +54,11 @@ in `platform.json`.
 - The catalog is off by default (`platform.projects.sharing.allowCatalog`). Turning it off, or
   taking a project out, removes it from the lists of those who added it.
 - Admin projects set to **Everyone signed in** are listed in the catalog too, marked **From the
-  administrators** and **Open to everyone**: users open them to read them or link their documents
-  into their own projects; there is nothing to add.
+  administrators**. Users add them to their projects like published ones: they then show on the
+  Projects page (under **Shared with me**) and in the chat input's **Project** picker, and their page
+  starts a chat with the project attached. Admins thus create global projects that they manage and
+  everyone uses in their chats. Without adding, users can still open them or link their documents
+  into their own projects.
 
 ## Apps: switch projects off per app
 
@@ -185,7 +191,7 @@ share projects.
 - The project page lists its chats (all, or only your own) and starts new ones in any app that
   allows projects. A stored chat moves into a project or out of it from the chat page or the chat
   history, and both show which project a chat belongs to.
-- **Add project** above the message box lets a chat use any of your own or shared projects, without
+- **Project** in the message box lets a chat use any of your own or shared projects, without
   starting the chat in it: tick a project and its documents are available to the
   answers (its instructions are not); a chip takes it away again (up to 10 projects per chat). The chat stays where it is.
 - On a project's page **New chat** is the button in the header, the chats come before the

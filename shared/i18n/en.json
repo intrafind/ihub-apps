@@ -6385,8 +6385,6 @@
       "linkNoProjects": "There is no other project you can use.",
       "linkProject": "Project",
       "linkChooseProject": "Choose a project…",
-      "linkPublished": "{{name}} (published)",
-      "linkFromApps": "{{name}} (from apps)",
       "linkNoItems": "This project has no documents.",
       "linkDocuments": "Documents",
       "linkAlready": "Already linked",
@@ -6432,7 +6430,10 @@
       "crawlNoPages": "No pages found.",
       "crawlAlready": "Already added",
       "submitPages_one": "Add {{count}} page",
-      "submitPages_other": "Add {{count}} pages"
+      "submitPages_other": "Add {{count}} pages",
+      "linkChangeProject": "Change",
+      "linkPublishedDetail": "Published for everyone",
+      "linkFromAppsDetail": "Comes with one of your apps"
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -6716,7 +6717,8 @@
       "title": "Projects for this chat",
       "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
       "remove": "Remove {{name}} from this chat",
-      "full": "A chat can use at most {{max}} projects."
+      "full": "A chat can use at most {{max}} projects.",
+      "button": "Project"
     },
     "composer": {
       "placeholder": "New chat in {{name}}",
@@ -6745,20 +6747,31 @@
       "confirmTitle": "Publish to the catalog?",
       "confirmMessage": "Everyone signed in can then find this project in the catalog, read its documents and instructions, and chat with it. They do not become members: they cannot change it and do not see the members’ chats. You can take it out again at any time.",
       "dialogTitle": "Project catalog",
-      "dialogHint": "Projects their owners published for everyone: add one to your projects to use it in your chats; its owner and editors keep it up to date. Projects from the administrators are open to everyone already: open one to read it or to link its documents into your projects.",
+      "dialogHint": "Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.",
       "search": "Search the catalog",
       "noMatches": "No published project matches.",
       "empty": "Nothing has been published yet.",
       "byOwner": "By {{name}}",
       "byAdmins": "From the administrators",
-      "openToEveryone": "Open to everyone",
       "inYourList": "In your projects",
       "removeNamed": "Remove {{name}} from my projects",
       "addNamed": "Add {{name}} to my projects",
       "added": "Added",
       "addShort": "Add",
       "browse": "Browse catalog",
-      "publishedOffHint": "Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again."
+      "publishedOffHint": "Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again.",
+      "adminAddedHint": "You added this project to your projects; the administrators keep it up to date. New chat starts a chat with the project attached, and the chat input offers it.",
+      "adminNotAddedHint": "The administrators made this project available to everyone. Add it to your projects to find it in your list and in the chat input."
+    },
+    "picker": {
+      "search": "Search projects",
+      "noMatches": "No project matches.",
+      "empty": "There is no project to choose.",
+      "sections": {
+        "mine": "My projects",
+        "shared": "Shared with me",
+        "admin": "From the administrators"
+      }
     }
   }
 }

@@ -159,7 +159,7 @@ export default function StartPage() {
               </button>
             </div>
 
-            <AppChatStarter app={defaultApp} />
+            <AppChatStarter app={defaultApp} pickProjects />
           </div>
         )}
 
