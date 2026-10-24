@@ -209,7 +209,8 @@ function splitGoogleBase(baseUrl) {
   // backtracks super-linearly.
   const slash = baseUrl.lastIndexOf('/');
   const last = baseUrl.slice(slash + 1);
-  return slash > 0 && /^v\d+\w*$/i.test(last)
+  // `v1`, `v1beta`, `v1alpha`; letters only after the digits, so nothing overlaps.
+  return slash > 0 && /^v\d+[a-z]*$/i.test(last)
     ? { root: baseUrl.slice(0, slash), version: last }
     : { root: baseUrl, version: 'v1beta' };
 }
