@@ -40,8 +40,11 @@ On a fresh installation the browser opens the setup wizard:
    password `password123`.
 3. **Connect your first AI provider** — Google Gemini (with a free tier), Anthropic Claude,
    OpenAI, Mistral AI or a local provider (LM Studio, Jan.ai, Ollama, vLLM). Paste the API key,
-   **Test Connection**, **Save & Continue**. The key is stored encrypted on the provider.
-4. **Finish** — you land on the start page and can chat right away.
+   **Test Connection**, **Save & Continue**. The key is stored encrypted on the provider. A local
+   provider needs neither: just continue.
+4. **Finish** — choose **Add your models** to pick the models of the provider you connected. A fresh
+   installation has no enabled chat model, so chatting starts once you have imported or enabled
+   one; the first chat model you enable becomes the default.
 
 <p align="center">
   <img src="assets/screenshots/setup-wizard-welcome.png" alt="Setup wizard: welcome" width="45%">
