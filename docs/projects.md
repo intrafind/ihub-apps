@@ -9,7 +9,7 @@ Projects come in two kinds behind one model:
 |                     | Admin projects                                                    | User projects                                                    |
 | ------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Created by          | Content admins, under **Admin → Projects**                        | Users, under **Projects** in the sidebar                         |
-| Used by             | Everyone who may use an app, workflow or agent that links them    | The owner and the members it is shared with                      |
+| Used by             | Everyone who may use an app, workflow or agent that links them; with **Everyone signed in**, every signed-in user | The owner and the members it is shared with                      |
 | Stored as           | Configuration, `contents/projects/<id>.json`                      | Runtime data in the storage provider                             |
 | Id                  | Chosen by the admin (`faq`, at most 50 characters, not `prj_…`)   | Minted, `prj_` followed by 22 characters                         |
 | Name, description   | Localized (`{ "en": "…", "de": "…" }`)                            | Plain text                                                       |
@@ -79,7 +79,7 @@ largest allowed.
 ### Writing and editing text
 
 The **Text** tab of the **Add item** dialog stores typed or pasted text as a document without an
-upload, as the sources editor did. **Preview text** on an uploaded, written or migrated document
+upload. **Preview text** on an uploaded, written or migrated document
 offers **Edit text**: the whole text opens in a text area, and saving replaces the stored document
 (`PUT …/items/:itemId/text`). The item then counts as written by the editor, and the model reads
 the new text from the next question on. A web page, an iHub page and a document picked from a
@@ -121,20 +121,36 @@ every 15 minutes.
 
 ### Managing admin projects
 
-**Admin → Projects** lists every admin project with its items, status and links, and the number
-of user projects on the installation. The page needs the `projects` feature flag and the admin page
-switch `admin.pages.projects`; content admins and full admins may use it.
+**Admin → Projects** lists every admin project with its number of items, who it is **Available to**,
+its category and tags and when it was last updated, with counts of all, enabled and disabled
+projects and of the user projects on the installation; filter by item kind and status. The page
+needs the `projects` feature flag and the admin page switch `admin.pages.projects`; content admins
+and full admins may use it. Full administrators also find **Sharing of user projects** there (see
+[Roles and sharing](#roles-and-sharing)).
 
-1. Create a project with an id, name, optional description and **instructions**, category and tags.
-2. Open it and add items with **Add item**: upload a file, paste text, or add a web page, an iHub
-   page, an iFinder document or an iFinder search.
+1. **New project** opens one form: the name (the **Project ID** is filled in from it until you
+   type one; it cannot be changed later), an optional description, **Who can use this project?**,
+   the **instructions**, and, under **Category and tags (optional)**, a category and tags.
+2. **Create and add items** creates the project and opens its editor with the **Add item** dialog
+   already open: upload files, paste text, or add a web page, an iHub page, an iFinder document or
+   an iFinder search.
 3. Pin items that must always reach the model (see [Load in full or search](#load-in-full-or-search)).
    Preview the stored text, edit the text of an uploaded, written or migrated document, rename,
    refresh or remove an item from the items table.
 4. Link the project to apps, workflows and agents.
 
-A project set to **Off** (`"enabled": false`) is skipped by everything that links it; use it for a draft while you add documents. A project that something still links
-cannot be deleted: the dialog lists the apps, workflows and agents to change first.
+**Who can use this project?** has three answers:
+
+| Choice                 | Stored as                                  | Meaning                                                                                                                                  |
+| ---------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linked apps only**   | `"enabled": true`                          | Used by the apps, workflows and agents that link it, and open to everyone who may use them.                                             |
+| **Everyone signed in** | `"enabled": true, "published": true`       | Also listed in the project catalog: everyone signed in can read it and link its documents into their own projects (see [Admin projects for everyone](#admin-projects-for-everyone)). Asks for a confirmation. |
+| **Off**                | `"enabled": false`                         | Skipped by everything that links it; administrators can still edit it. Use it for a draft while you add documents, or to pause a project. |
+
+After the project is created, its settings are rows beside the items — **Name and description**
+(with category and tags), **Instructions** and **Availability** — and each one opens a dialog
+with **Edit** or **Change** that saves at once. A project that something still links cannot be
+deleted: the dialog lists the apps, workflows and agents to change first.
 
 ### Moving, copying and merging
 
@@ -142,7 +158,7 @@ Projects that belong together are often split: the sources migration made one pr
 so a website that was five sources is five projects with one item each. Two tools bring them
 together.
 
-**Move or copy items.** Tick items in a project's items table and choose **Move to…** or
+**Move or copy items.** Tick items in the items table of a project's editor and choose **Move to…** or
 **Copy to…**, or use **Move or copy to…** in a row's menu. Pick the target project and confirm.
 
 - A move leaves the source and arrives in the target; a copy leaves the source as it is.
@@ -269,8 +285,10 @@ affected.
   of its text). It also names the context window a model needs to load the project in full. The
   numbers are an estimate; the real decision of a request is made against the model in use.
   User projects have the same button on their page (`POST /api/projects/:projectId/estimate`).
-- The name of a project on **Admin → Projects** opens its read-only view; **Edit** leads to the
-  form (`/admin/projects/:id/edit`).
+- The name of a project on **Admin → Projects** opens its view: the items (read-only), **Used by**
+  with the apps, workflows and agents that link it, and the settings rows. **Edit items** (or
+  **Edit project** in the list) opens the editor (`/admin/projects/:id/edit`), where items are
+  added, pinned, moved and removed.
 - `GET /api/admin/projects/_tokens` reports each admin project's size in tokens, items and bytes,
   together with the load-all budget (`loadAllBudgetTokens`) and the tool result budget. The app
   editor uses it to explain whether a linked project will be loaded in full.
@@ -363,7 +381,7 @@ User projects are a preview feature.
 
 ### Switching user projects on
 
-1. Turn on the feature flag `userProjects` (**Admin → Features**). The `projects` flag must be on
+1. Turn on the feature flag `userProjects` (**Admin → Platform → Features**, **User Projects**). The `projects` flag must be on
    as well; it is by default.
 2. Check the group permissions in `groups.json` (**Admin → Groups**):
 
@@ -475,10 +493,12 @@ published one, tick its documents and link them.
   every project that links it. A linked document counts as one item against the project's limit,
   and none of its bytes.
 - You can link documents only from a project you own or a published one: a user project in the
-  catalog (while the catalog is on) or an admin project switched to **Published**. A project
-  shared with you, an admin project you reach only through an app, or a full administrator's
-  compliance view of someone else's project is not enough. Into an admin project, an
-  administrator also links from the admin projects they manage. Links added earlier keep working.
+  catalog (while the catalog is on) or an admin project available to **Everyone signed in**. A
+  project shared with you, an admin project you reach only through an app, or a full
+  administrator's compliance view of someone else's project is not enough. Into an admin project,
+  an administrator also links from the admin projects they manage, through the API
+  (`POST /api/admin/projects/:id/items` with `{ "kind": "project-item", "ref": { "projectId", "itemId" } }`);
+  the admin editor offers no tab for it. Links added earlier keep working.
 - Everyone reads a linked document with their own rights: a member of your project who may not use
   the source project gets nothing from it, and the document shows **No access** for them. Sharing
   your project does not share the projects it links.
@@ -488,18 +508,21 @@ published one, tick its documents and link them.
 - Moving an admin project's document to another project, or merging admin projects, does not
   re-point the links to it: they show **Source removed** and are linked again from the new place.
 
-### Publishing admin projects
+### Admin projects for everyone
 
-**Everyone signed in** on an admin project (**Admin → Projects → a project → Availability →
-Change**, `"published": true` in `contents/projects/<id>.json`) makes it available to everyone
-signed in: they can use it and link its documents into their own projects, without an app that
-links it. While the catalog is on, it is listed under **Projects → Browse catalog** as **From the
-administrators**, and users **Add** it to their projects like a published user project: it then
+**Everyone signed in** under **Who can use this project?** (in the create form, or later under
+**Admin → Projects → a project → Availability → Change**; `"published": true` in
+`contents/projects/<id>.json`) makes an admin project available to everyone signed in, after a
+confirmation (**Make available**): they can use it and link its documents into their own projects,
+without an app that links it. While the catalog is on, it is listed under **Projects → Browse
+catalog** as **From the administrators**, and users add it with **Add to my projects** like a
+published user project: it then
 shows on their Projects page (under **Shared with me**) and in the chat input's **Project** picker,
 and its page starts a chat with the project attached (an admin project never holds chats). This is
 how administrators offer global projects that they manage and everyone uses in their chats. Only
-administrators change it. The shipped iHub documentation project is published; installations that upgrade get it
-published too (migration V181), unless an administrator already set the switch.
+administrators change it. The shipped iHub documentation project is available to everyone signed
+in; installations that upgrade get it switched too (migration V181), unless an administrator
+already set the switch.
 
 ### Roles and sharing
 
@@ -518,7 +541,8 @@ that reaches you wins. The `anonymous` group cannot be a member. A project holds
 members. Who you may add depends on the `projectSharing` permission and on
 `platform.projects.sharing`: users and groups by default, everyone signed in only when an admin
 allows it. Full administrators change these audiences under **Admin → Projects → Sharing of user
-projects** (`GET`/`PUT /api/admin/projects/_settings`).
+projects** (`GET`/`PUT /api/admin/projects/_settings`); a change there applies at once, without a
+restart.
 
 A project shared with everyone signed in shows **Global**; one in the catalog shows **Published**.
 
@@ -531,14 +555,14 @@ everyone else uses it:
   list under **Shared with me**, marked **Global**, in the role you chose. Everyone becomes a member,
   and members read each other's chats in the project.
 - **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
-  by itself. Users find it under **Projects → Browse catalog**, open it and **Add** it to their
-  projects (and **Remove** it again). It shows **From the catalog** for them. They read its documents
+  by itself. Users find it under **Projects → Browse catalog**, open it and add it with **Add to my
+  projects** (and take it away with **Remove from my projects**). It shows **From the catalog** for them. They read its documents
   and instructions, link its documents and attach it to their chats, but never hold a chat inside
   it: **New chat** on its page starts a chat with the project attached, and a chat cannot be moved
   into it. So the members do not see their chats, and they do not see the members' chats.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
-confirmation, and take it out the same way. Publishing needs the `projectSharing` permission;
+confirmation, and take it out with **Take out of the catalog**. Publishing needs the `projectSharing` permission;
 taking it out does not, and a full administrator can take any project out (for example one whose
 owner has left). Taking a project out, or turning `sharing.allowCatalog` off, removes it
 from the lists of everyone who added it from the catalog; members keep their access. Published
@@ -572,7 +596,10 @@ instructions and documents (mode `auto`), next to whatever the app itself links.
 a project from its first message on: it is started from the project page. A chip beside the message
 box and the chat history show which project a chat belongs to. Only user projects hold chats.
 
-Every member may open the chats in a project; chats of other members are read-only.
+Every member may open the chats in a project; chats of other members are read-only. Only kept
+chats are listed: a temporary chat (incognito, or every chat while the Chat History feature is off,
+see [Chat Persistence](chat-persistence.md#temporary-chats-and-guests)) runs with the project but
+is not listed on its page, and it cannot be moved into a project.
 
 ### Using a project in any chat
 
@@ -584,8 +611,9 @@ answers of that chat can use its documents (the project is loaded or searched li
 runs in); its instructions do not apply, only those of the project the chat runs in and of the
 app's own links. A chip beside the message box names each attached project and links to it; its
 **×** takes the project away again. Up to 10
-projects can be attached. For a stored chat the change is saved at once and is still there when the
-chat is opened later; a chat that is not stored yet keeps the choice for its messages. Attaching
+projects can be attached. Once the chat has its first message, the change is saved at once and is still there when the
+chat is opened later; before that, the choice is kept and saved with the chat. Projects picked on
+the start page ride along to the chat that opens. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
 see it. When the chat runs in a shared project, its members read the answers, including what was
 drawn from an attached private project.
@@ -618,7 +646,8 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ## Platform settings
 
-`platform.json` → `projects`. Platform changes take effect after a server restart.
+`platform.json` → `projects`. Platform changes take effect after a server restart, except the
+sharing audiences changed under **Admin → Projects → Sharing of user projects**.
 
 ```json
 {
@@ -754,7 +783,9 @@ Back up `contents/` before upgrading; the migration is forward-only. Details: th
 note "Sources are now Projects" in the release notes.
 
 Every source becomes a project of its own, also when several sources belonged together (the pages
-of one website, the documents of one department). Bring them together afterwards with
+of one website, the documents of one department). For the shipped IntraFind website sources,
+migration `V178__merge_intrafind_website_projects` does this already: the six projects become the
+one project `intrafind-website`, unless an admin changed one of them. Bring them together afterwards with
 [Moving, copying and merging](#moving-copying-and-merging): merge the projects, or move the items
 you want into one project.
 
@@ -792,6 +823,7 @@ changing it takes a content admin.
 | Method   | Path                                          | Who       | What it does                                                                                     |
 | -------- | --------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
 | `GET`    | `/api/projects/_config`                       | —         | Flags, limits, sharing audiences, enabled kinds, accepted upload types, your project count.      |
+| `GET`    | `/api/projects/_catalog`                      | —         | The catalog: published user projects and admin projects for everyone signed in; `?q=` filters. `{ enabled: false, items: [] }` while the catalog is off. |
 | `GET`    | `/api/projects`                               | —         | Your projects; `?scope=all` (default), `mine`, `shared` or `admin`.                               |
 | `POST`   | `/api/projects`                               | `projects` permission | Create a project `{ name, description?, instructions?, defaultAppId? }`.                                        |
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
@@ -809,6 +841,9 @@ changing it takes a content admin.
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
+| `PUT`    | `/api/projects/:projectId/catalog`            | editor    | Publish a user project to the catalog or take it out: `{ published }`. Publishing needs `projectSharing` and the catalog on; a full admin may take any project out. |
+| `POST`   | `/api/projects/:projectId/subscription`       | member    | Add a project from the catalog (or an admin project for everyone) to your list; anything else answers `400`. |
+| `DELETE` | `/api/projects/:projectId/subscription`       | —         | Remove it from your list again.                                                                  |
 | `GET`    | `/api/projects/:projectId/chats`              | member    | The chats in the project, newest first, a page at a time: `?filter=all`, `mine` or `others`; `limit` (default 20, at most 100) and `cursor`. Answers `{ items, nextCursor, total }`. |
 | `PATCH`  | `/api/chats/:chatId`                          | chat owner | `{ attachedProjectIds }` replaces the projects attached to the chat (new ones need the right to use them; `404` otherwise). |
 
@@ -838,6 +873,8 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `GET`    | `/api/admin/projects/_stats`                | Counts of admin and user projects, items by kind, the limits.                               |
 | `GET`    | `/api/admin/projects/_kinds`                | Every item kind with whether it is enabled.                                                 |
 | `GET`    | `/api/admin/projects/_config`               | Upload availability and accepted types, scan provider, limits, `loadAllMaxTokens`.          |
+| `GET`    | `/api/admin/projects/_settings`             | The sharing audiences of user projects (full admins).                                       |
+| `PUT`    | `/api/admin/projects/_settings`             | Change them: `{ sharing: { allowUsers?, allowGroups?, allowEveryone?, allowCatalog? } }` (full admins). |
 | `GET`    | `/api/admin/projects/_tokens`               | Size of each admin project and the budgets, for the app editor.                             |
 | `GET`    | `/api/admin/projects/_dependencies/:id`     | Apps, workflows and agents that link the project.                                           |
 | `POST`   | `/api/admin/projects/:id/estimate`          | Tokens of every item and the recommendation (prompt or search) per item and for the project. |
