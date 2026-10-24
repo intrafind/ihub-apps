@@ -229,6 +229,10 @@ OpenRouter is now a provider next to OpenAI, Anthropic and the others. Updates a
 
 The OpenAI, Anthropic, Google and Mistral providers now carry their public API base URL, so choosing one of them in **Import from URL** fills in the endpoint and **Load models** works right away, with no URL to look up (for Google, `https://generativelanguage.googleapis.com/v1beta`). Updates add the URL to these providers unless one is already set. Change it in the dialog for one import, or under **Admin → Providers** to keep it, for example for a proxy or a regional endpoint. **Local LLM** has no fixed address; enter your server's URL there. A wrong Google API key is now reported as a rejected key instead of a bare "HTTP 400".
 
+## New installations start without cloud models
+
+A new installation no longer ships preconfigured Gemini, Claude, GPT and Mistral models. It starts with the disabled local models only (vLLM chat, Voxtral transcription on vLLM, iAssistant), and you add the cloud models you want from the provider: while fewer than five models are configured, **Admin → Models** shows **Import from provider** and **Create new model** in the middle of the page, and the setup wizard ends with **Add your models** for the provider you connected. The first chat model you enable becomes the default. The former model configurations are in the **iHub Examples** registry under **Admin → Marketplace**, including the Gemini text-to-speech and live transcription models. Existing installations keep their models unchanged.
+
 ## Scheduled tasks: keep fewer runs, delete runs
 
 A scheduled task can now limit its run history by **count** (keep at most N runs) and by **age**

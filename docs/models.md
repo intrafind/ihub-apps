@@ -295,6 +295,21 @@ each model before enabling it for users.
 The import uses `POST /api/admin/models/_discover`, which returns the normalized list without
 storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
+### Models on a New Installation
+
+A new installation ships only local models, all disabled: **Local vLLM** (chat,
+`http://localhost:8080/v1`), **Voxtral Mini (Transcription)** (self-hosted Voxtral realtime on vLLM,
+`ws://localhost:8080/v1/realtime`) and **iAssistant Conversation**. No cloud model is preconfigured.
+While fewer than five models are configured, **Admin → Models** shows **Import from provider** and
+**Create new model** in the middle of the page; the setup wizard ends with a shortcut to import the
+models of the provider it connected. The first chat model you enable becomes the default model.
+
+The cloud model configurations earlier versions shipped (Gemini, Claude, GPT-5, Mistral, Voxtral
+on Mistral's API, and the Gemini transcription and text-to-speech models) are in the **iHub
+Examples** registry under **Admin → Marketplace** (`examples/models/`), for models that importing
+from a provider cannot set up, such as the Gemini text-to-speech and live transcription models.
+Existing installations keep the models they have.
+
 ### Models from the Marketplace
 
 A model installed from **Admin → Marketplace** brings its own configuration, including the

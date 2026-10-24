@@ -115,7 +115,7 @@ describe('model supportsTools', () => {
   });
 
   it('shows the newest Claude models as unable to be forced', () => {
-    const dir = path.join(getRootDir(), 'server', 'defaults', 'models');
+    const dir = path.join(getRootDir(), 'examples', 'models', 'anthropic');
     for (const file of ['claude-fable-5-1.json', 'claude-opus-5.json', 'claude-sonnet-5.json']) {
       const shipped = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
       assert.equal(shipped.supportsTools, 'auto', file);

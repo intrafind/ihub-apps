@@ -1268,6 +1268,16 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID."
         }
+      },
+      "getStarted": {
+        "title": "Add the models your apps use",
+        "description": "Import the models of a provider such as OpenAI, Anthropic, Google, Mistral or your own endpoint, or configure a model by hand.",
+        "import": "Import from provider",
+        "importHint": "List the models of a provider and pick the ones to add.",
+        "create": "Create new model",
+        "createHint": "Enter the endpoint and settings yourself.",
+        "marketplacePrefix": "Or install a ready-made model from",
+        "marketplace": "the Marketplace"
       }
     },
     "auth": {
@@ -5173,6 +5183,10 @@
         "blocked": "Enabled models without a usable API key: {{count}}.",
         "fix": "Review the models"
       }
+    },
+    "finish": {
+      "addModels": "Add your models",
+      "addModelsDesc": "No model is set up yet. Pick the models of {{provider}} to use in iHub."
     }
   },
   "apps": {

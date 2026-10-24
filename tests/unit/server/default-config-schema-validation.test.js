@@ -41,7 +41,9 @@ describe('default app and model configs', () => {
       }
     }
 
-    expect(defaultModelCount).toBe(1);
+    // A fresh install ships no enabled chat model and so no default: the first
+    // chat model an admin enables becomes the default (ensureOneDefaultModel).
+    expect(defaultModelCount).toBeLessThanOrEqual(1);
 
     const defaultApps = readDefaultConfigs(defaultAppsDir);
     for (const { fileName, config } of defaultApps) {
@@ -56,6 +58,40 @@ describe('default app and model configs', () => {
       if (parsedApp.data.preferredModel) {
         expect(modelIds.has(parsedApp.data.preferredModel)).toBe(true);
       }
+    }
+  });
+});
+
+// The cloud models that used to ship as defaults live in examples/models and
+// are installed from the iHub Examples marketplace.
+describe('example model configs', () => {
+  const exampleModelsDir = path.join(repoRoot, 'examples/models');
+  const readModel = file => JSON.parse(fs.readFileSync(path.join(exampleModelsDir, file), 'utf8'));
+
+  it('every model the examples catalog lists exists and validates', () => {
+    const catalog = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'examples/catalog.json'), 'utf8')
+    );
+    const problems = catalog.items
+      .filter(item => item.type === 'model')
+      .flatMap(item => {
+        const file = path.join(repoRoot, 'examples', item.source.path);
+        if (!fs.existsSync(file)) return [`${item.name}: missing ${item.source.path}`];
+        const parsed = modelConfigSchema.safeParse(JSON.parse(fs.readFileSync(file, 'utf8')));
+        if (!parsed.success) return [`${item.name}: ${JSON.stringify(parsed.error.issues)}`];
+        return parsed.data.id === item.name ? [] : [`${item.name}: model id ${parsed.data.id}`];
+      });
+    expect(problems).toEqual([]);
+  });
+
+  it('keeps the Anthropic sampling flags and the opt-in Gemini transcription models', () => {
+    // Anthropic's newer models reject sampling parameters: every request 400s.
+    for (const id of ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5-1']) {
+      expect(readModel(`anthropic/${id}.json`).supportsTemperature).toBe(false);
+    }
+    // Enabling a Gemini transcription model sends audio to Google: never by default.
+    for (const id of ['gemini-3.5-transcribe-live', 'gemini-3.5-transcribe']) {
+      expect(readModel(`google/${id}.json`).enabled).toBe(false);
     }
   });
 });

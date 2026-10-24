@@ -44,9 +44,9 @@ describe('registry and schema', () => {
     expect(googleTts.sampleRate).toBe(24000);
   });
 
-  test('the shipped default models validate', async () => {
+  test('the example models validate', async () => {
     for (const id of ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts']) {
-      const { default: shipped } = await import(`../defaults/models/${id}.json`, {
+      const { default: shipped } = await import(`../../examples/models/google/${id}.json`, {
         with: { type: 'json' }
       });
       expect(modelConfigSchema.safeParse(shipped).success).toBe(true);

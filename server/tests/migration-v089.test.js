@@ -227,7 +227,10 @@ test('promotes the Nano Banana preview ids to their stable release', async () =>
   assert.equal(proImage.thinking.level, 'high');
 });
 
-test('seeds the new models from the real shipped defaults', async () => {
+test('skips the models that are no longer shipped in server/defaults', async () => {
+  // The cloud models this migration seeded moved to examples/models (iHub
+  // Examples marketplace): a fresh install starts without them, and an update
+  // that reaches V089 only now skips them instead of failing.
   const ctx = fakeCtx({ 'config/platform.json': {} });
 
   await up(ctx);
@@ -242,18 +245,12 @@ test('seeds the new models from the real shipped defaults', async () => {
     'gemini-3.5-transcribe-live',
     'gemini-3.5-transcribe'
   ]) {
-    assert.ok(ctx.files[`models/${id}.json`], `expected models/${id}.json to be seeded`);
-    assert.equal(ctx.files[`models/${id}.json`].id, id);
+    assert.equal(ctx.files[`models/${id}.json`], undefined, id);
+    assert.ok(
+      ctx.logs.some(m => m.includes(`${id}.json not found`)),
+      `expected a warning for ${id}`
+    );
   }
-  // Anthropic's newer models must ship with sampling parameters turned off, or
-  // every request 400s.
-  assert.equal(ctx.files['models/claude-opus-5.json'].supportsTemperature, false);
-  assert.equal(ctx.files['models/claude-sonnet-5.json'].supportsTemperature, false);
-  assert.equal(ctx.files['models/claude-fable-5-1.json'].supportsTemperature, false);
-  // The Gemini transcription models must never be enabled without an explicit
-  // opt-in: enabling them sends audio to Google.
-  assert.equal(ctx.files['models/gemini-3.5-transcribe-live.json'].enabled, false);
-  assert.equal(ctx.files['models/gemini-3.5-transcribe.json'].enabled, false);
 });
 
 test('never overwrites an existing model file with the same id', async () => {

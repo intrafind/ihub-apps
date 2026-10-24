@@ -2,7 +2,9 @@
   "name": "iHub Examples",
   "description": "In-repo example apps, models, prompts, and skills shipped with iHub Apps.",
   "version": "1",
-  "categories": ["models"],
+  "categories": [
+    "models"
+  ],
   "items": [
     {
       "type": "model",
@@ -16,8 +18,17 @@
         "de": "Anthropic Claude 3.5 Sonnet über AWS Bedrock — Vision, Dokumente und Tool-Aufrufe."
       },
       "category": "model",
-      "tags": ["bedrock", "anthropic", "claude", "vision", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-3-5-sonnet.json" }
+      "tags": [
+        "bedrock",
+        "anthropic",
+        "claude",
+        "vision",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-claude-3-5-sonnet.json"
+      }
     },
     {
       "type": "model",
@@ -31,8 +42,18 @@
         "de": "Anthropic Claude 3.7 Sonnet über AWS Bedrock — erweitertes Denken, Vision, Dokumente, Tool-Aufrufe."
       },
       "category": "model",
-      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "thinking"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-3-7-sonnet.json" }
+      "tags": [
+        "bedrock",
+        "anthropic",
+        "claude",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-claude-3-7-sonnet.json"
+      }
     },
     {
       "type": "model",
@@ -46,8 +67,18 @@
         "de": "Anthropic Claude Sonnet 4.6 über AWS Bedrock mit regionsübergreifender Inferenz (global)."
       },
       "category": "model",
-      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "global"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-sonnet-4-6.json" }
+      "tags": [
+        "bedrock",
+        "anthropic",
+        "claude",
+        "vision",
+        "tools",
+        "global"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-claude-sonnet-4-6.json"
+      }
     },
     {
       "type": "model",
@@ -61,8 +92,18 @@
         "de": "Anthropic Claude 3.5 Haiku über AWS Bedrock — schnell, kostengünstig, mit Vision und Tool-Aufrufen."
       },
       "category": "model",
-      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "fast"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-haiku-3-5.json" }
+      "tags": [
+        "bedrock",
+        "anthropic",
+        "claude",
+        "vision",
+        "tools",
+        "fast"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-claude-haiku-3-5.json"
+      }
     },
     {
       "type": "model",
@@ -76,8 +117,18 @@
         "de": "Amazon Nova Pro über AWS Bedrock — multimodal mit Vision, Video, Dokumenten und Tools."
       },
       "category": "model",
-      "tags": ["bedrock", "amazon", "nova", "vision", "tools", "documents"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-pro.json" }
+      "tags": [
+        "bedrock",
+        "amazon",
+        "nova",
+        "vision",
+        "tools",
+        "documents"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-nova-pro.json"
+      }
     },
     {
       "type": "model",
@@ -91,8 +142,17 @@
         "de": "Amazon Nova Lite über AWS Bedrock — schnelles multimodales Modell mit Vision und Tool-Aufrufen."
       },
       "category": "model",
-      "tags": ["bedrock", "amazon", "nova", "vision", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-lite.json" }
+      "tags": [
+        "bedrock",
+        "amazon",
+        "nova",
+        "vision",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-nova-lite.json"
+      }
     },
     {
       "type": "model",
@@ -106,8 +166,17 @@
         "de": "Amazon Nova Micro über AWS Bedrock — nur Text, optimiert für latenzarme Tool-Aufrufe."
       },
       "category": "model",
-      "tags": ["bedrock", "amazon", "nova", "tools", "fast"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-micro.json" }
+      "tags": [
+        "bedrock",
+        "amazon",
+        "nova",
+        "tools",
+        "fast"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-nova-micro.json"
+      }
     },
     {
       "type": "model",
@@ -121,8 +190,16 @@
         "de": "Meta Llama 3.3 70B über AWS Bedrock mit regionsübergreifender Inferenz. Tool-Aufrufe, keine Vision."
       },
       "category": "model",
-      "tags": ["bedrock", "meta", "llama", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-llama-3-3-70b.json" }
+      "tags": [
+        "bedrock",
+        "meta",
+        "llama",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-llama-3-3-70b.json"
+      }
     },
     {
       "type": "model",
@@ -136,8 +213,17 @@
         "de": "Meta Llama 4 Scout über AWS Bedrock — multimodal mit Vision und Tool-Aufrufen."
       },
       "category": "model",
-      "tags": ["bedrock", "meta", "llama", "vision", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-llama-4-scout.json" }
+      "tags": [
+        "bedrock",
+        "meta",
+        "llama",
+        "vision",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-llama-4-scout.json"
+      }
     },
     {
       "type": "model",
@@ -151,8 +237,15 @@
         "de": "Mistral Large 2 über AWS Bedrock — starkes Reasoning und Tool-Aufrufe, nur Text."
       },
       "category": "model",
-      "tags": ["bedrock", "mistral", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-mistral-large-2.json" }
+      "tags": [
+        "bedrock",
+        "mistral",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-mistral-large-2.json"
+      }
     },
     {
       "type": "model",
@@ -166,8 +259,17 @@
         "de": "Mistral Pixtral Large über AWS Bedrock — multimodal mit Vision und Tool-Aufrufen."
       },
       "category": "model",
-      "tags": ["bedrock", "mistral", "pixtral", "vision", "tools"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-pixtral-large.json" }
+      "tags": [
+        "bedrock",
+        "mistral",
+        "pixtral",
+        "vision",
+        "tools"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-pixtral-large.json"
+      }
     },
     {
       "type": "model",
@@ -181,8 +283,479 @@
         "de": "Cohere Command R+ über AWS Bedrock — RAG-optimiert mit starken Tool-Aufrufen."
       },
       "category": "model",
-      "tags": ["bedrock", "cohere", "command-r", "tools", "rag"],
-      "source": { "type": "relative", "path": "models/bedrock/bedrock-command-r-plus.json" }
+      "tags": [
+        "bedrock",
+        "cohere",
+        "command-r",
+        "tools",
+        "rag"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/bedrock/bedrock-command-r-plus.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "claude-fable-5-1",
+      "displayName": {
+        "en": "Claude Fable 5.1",
+        "de": "Claude Fable 5.1"
+      },
+      "description": {
+        "en": "Anthropic's most capable model, for the hardest reasoning and long-horizon agentic work. Thinking is always on and single turns can run for minutes.",
+        "de": "Anthropics leistungsfähigstes Modell für schwierigstes Reasoning und langlaufende agentische Aufgaben. Denken ist immer aktiv, einzelne Antworten können Minuten dauern."
+      },
+      "category": "model",
+      "tags": [
+        "anthropic",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/anthropic/claude-fable-5-1.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "claude-haiku-4-5",
+      "displayName": {
+        "en": "Claude Haiku 4.5",
+        "de": "Claude Haiku 4.5"
+      },
+      "description": {
+        "en": "Anthropic's fastest and most cost-efficient Claude model for high-volume tasks.",
+        "de": "Anthropics schnellstes und kostengünstigstes Claude-Modell für Aufgaben mit hohem Volumen."
+      },
+      "category": "model",
+      "tags": [
+        "anthropic",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/anthropic/claude-haiku-4-5.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "claude-opus-5",
+      "displayName": {
+        "en": "Claude Opus 5",
+        "de": "Claude Opus 5"
+      },
+      "description": {
+        "en": "Anthropic's flagship model for demanding reasoning and agentic work. Adaptive thinking is on by default.",
+        "de": "Anthropics Spitzenmodell für anspruchsvolles Reasoning und agentische Aufgaben. Adaptives Denken ist standardmäßig aktiv."
+      },
+      "category": "model",
+      "tags": [
+        "anthropic",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/anthropic/claude-opus-5.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "claude-sonnet-5",
+      "displayName": {
+        "en": "Claude Sonnet 5",
+        "de": "Claude Sonnet 5"
+      },
+      "description": {
+        "en": "Balanced Claude model for everyday and enterprise workloads, with a 1M token context window.",
+        "de": "Ausgewogenes Claude-Modell für Alltags- und Unternehmensaufgaben mit 1 Mio. Token Kontextfenster."
+      },
+      "category": "model",
+      "tags": [
+        "anthropic",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/anthropic/claude-sonnet-5.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3-pro-image",
+      "displayName": {
+        "en": "Nano Banana Pro (Gemini 3 Pro Image)",
+        "de": "Nano Banana Pro (Gemini 3 Pro Image)"
+      },
+      "description": {
+        "en": "Google's highest-quality image generation and editing model, for professional asset production. Text-to-image, image editing and multi-turn refinement at up to 4K.",
+        "de": "Googles hochwertigstes Modell zur Bildgenerierung und -bearbeitung für professionelle Asset-Produktion. Text-zu-Bild, Bildbearbeitung und mehrstufige Verfeinerung bis 4K."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3-pro-image.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.1-flash-image",
+      "displayName": {
+        "en": "Nano Banana 2 (Gemini 3.1 Flash Image)",
+        "de": "Nano Banana 2 (Gemini 3.1 Flash Image)"
+      },
+      "description": {
+        "en": "Fast, general-purpose image generation and editing. Text-to-image, image editing and multi-turn refinement at a much lower cost than Nano Banana Pro.",
+        "de": "Schnelle Allzweck-Bildgenerierung und -bearbeitung. Text-zu-Bild, Bildbearbeitung und mehrstufige Verfeinerung zu deutlich geringeren Kosten als Nano Banana Pro."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.1-flash-image.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.1-flash-lite-image",
+      "displayName": {
+        "en": "Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)",
+        "de": "Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)"
+      },
+      "description": {
+        "en": "Google's cheapest image generation and editing model, for high-volume or draft-quality assets.",
+        "de": "Googles günstigstes Modell zur Bildgenerierung und -bearbeitung für hohe Volumina oder Entwurfsqualität."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.1-flash-lite-image.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.1-pro",
+      "displayName": {
+        "en": "Gemini 3.1 Pro",
+        "de": "Gemini 3.1 Pro"
+      },
+      "description": {
+        "en": "Google's most capable Gemini model, for complex reasoning, long documents and code. Still a preview release.",
+        "de": "Googles leistungsfähigstes Gemini-Modell für komplexes Reasoning, lange Dokumente und Code. Noch eine Preview-Version."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.1-pro.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.5-flash-lite",
+      "displayName": {
+        "en": "Gemini 3.5 Flash Lite",
+        "de": "Gemini 3.5 Flash Lite"
+      },
+      "description": {
+        "en": "Google's current stable Flash Lite model, pinned to a specific version. Optimized for cost and latency.",
+        "de": "Googles aktuelles stabiles Flash-Lite-Modell, auf eine feste Version fixiert. Optimiert für Kosten und Latenz."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.5-flash-lite.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.5-transcribe-live",
+      "displayName": {
+        "en": "Gemini 3.5 Transcribe Live",
+        "de": "Gemini 3.5 Transcribe Live"
+      },
+      "description": {
+        "en": "Google's hosted realtime speech-to-text over the Gemini Live API. Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. A session runs for at most 10 minutes, so use Gemini 3.5 Transcribe for longer recordings.",
+        "de": "Googles gehostete Echtzeit-Spracherkennung über die Gemini Live API. Liefert das Transkript, während das Audio noch eintrifft, erkennt über 85 Sprachen automatisch und beherrscht Sprachwechsel. Eine Sitzung dauert maximal 10 Minuten — für längere Aufnahmen Gemini 3.5 Transcribe verwenden."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "transcription"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.5-transcribe-live.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.5-transcribe",
+      "displayName": {
+        "en": "Gemini 3.5 Transcribe",
+        "de": "Gemini 3.5 Transcribe"
+      },
+      "description": {
+        "en": "Google's hosted speech-to-text for complete recordings, up to one hour of audio. Transcribes in a single request instead of streaming, so the transcript arrives at the end. The audio is uploaded to Google's Files API first and deleted again afterwards.",
+        "de": "Googles gehostete Spracherkennung für vollständige Aufnahmen mit bis zu einer Stunde Audio. Transkribiert in einer einzigen Anfrage statt im Stream, das Transkript erscheint daher am Ende. Das Audio wird zuvor in Googles Files API geladen und danach wieder gelöscht."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "transcription"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.5-transcribe.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.8-flash-lite-tts",
+      "displayName": {
+        "en": "Gemini 3.8 Flash-Lite TTS (Read aloud)",
+        "de": "Gemini 3.8 Flash-Lite TTS (Vorlesen)"
+      },
+      "description": {
+        "en": "Google's fast, cost-efficient Gemini text-to-speech model. Reads chat messages aloud, streaming the audio as it is generated, and detects the language by itself. Uses the Google API key.",
+        "de": "Googles schnelles, kostengünstiges Gemini-Sprachausgabemodell. Liest Chat-Nachrichten vor, streamt das Audio, während es erzeugt wird, und erkennt die Sprache selbst. Verwendet den Google-API-Schlüssel."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "tts"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.8-flash-lite-tts.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.8-flash-tts",
+      "displayName": {
+        "en": "Gemini 3.8 Flash TTS (Read aloud)",
+        "de": "Gemini 3.8 Flash TTS (Vorlesen)"
+      },
+      "description": {
+        "en": "Google's Gemini text-to-speech model with the most natural, expressive voices. Reads chat messages aloud, streaming the audio as it is generated, and detects the language by itself. Uses the Google API key.",
+        "de": "Googles Gemini-Sprachausgabemodell mit den natürlichsten, ausdrucksstärksten Stimmen. Liest Chat-Nachrichten vor, streamt das Audio, während es erzeugt wird, und erkennt die Sprache selbst. Verwendet den Google-API-Schlüssel."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "tts"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.8-flash-tts.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-3.8-flash",
+      "displayName": {
+        "en": "Gemini 3.8 Flash",
+        "de": "Gemini 3.8 Flash"
+      },
+      "description": {
+        "en": "Google's current stable Flash model, pinned to a specific version. Strong quality-per-cost for text, code, images, audio and video.",
+        "de": "Googles aktuelles stabiles Flash-Modell, auf eine feste Version fixiert. Starkes Preis-Leistungs-Verhältnis für Text, Code, Bilder, Audio und Video."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-3.8-flash.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-flash-latest",
+      "displayName": {
+        "en": "Gemini Flash (latest)",
+        "de": "Gemini Flash (aktuellste)"
+      },
+      "description": {
+        "en": "Google's fast all-round model. This alias always resolves to the newest Gemini Flash release, so it follows Google's releases without a config change.",
+        "de": "Googles schnelles Allround-Modell. Dieser Alias verweist immer auf die neueste Gemini-Flash-Version und folgt damit Googles Releases ohne Konfigurationsänderung."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-flash-latest.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gemini-flash-lite-latest",
+      "displayName": {
+        "en": "Gemini Flash Lite (latest)",
+        "de": "Gemini Flash Lite (aktuellste)"
+      },
+      "description": {
+        "en": "Google's cheapest and lowest-latency model, for high-volume and simple tasks. This alias always resolves to the newest Gemini Flash Lite release.",
+        "de": "Googles günstigstes Modell mit der geringsten Latenz für einfache Aufgaben mit hohem Volumen. Dieser Alias verweist immer auf die neueste Gemini-Flash-Lite-Version."
+      },
+      "category": "model",
+      "tags": [
+        "google",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/google/gemini-flash-lite-latest.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "gpt-5",
+      "displayName": {
+        "en": "GPT-5",
+        "de": "GPT-5"
+      },
+      "description": {
+        "en": "OpenAI's most advanced reasoning model with enhanced capabilities using the Responses API",
+        "de": "OpenAIs fortschrittlichstes Reasoning-Modell mit erweiterten Funktionen über die Responses API"
+      },
+      "category": "model",
+      "tags": [
+        "openai",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/openai/gpt-5.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "mistral-large",
+      "displayName": {
+        "en": "Mistral Large",
+        "de": "Mistral Large"
+      },
+      "description": {
+        "en": "Mistral's open-weight, general-purpose multimodal flagship (Mistral Large 3). The -latest alias follows Mistral's releases without a config change.",
+        "de": "Mistrals allgemeines multimodales Flaggschiff mit offenen Gewichten (Mistral Large 3). Der -latest-Alias folgt Mistrals Releases ohne Konfigurationsänderung."
+      },
+      "category": "model",
+      "tags": [
+        "mistral",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/mistral/mistral-large.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "mistral-medium",
+      "displayName": {
+        "en": "Mistral Medium",
+        "de": "Mistral Medium"
+      },
+      "description": {
+        "en": "Mistral's frontier-class multimodal model optimized for agentic and coding use cases (Mistral Medium 3.5).",
+        "de": "Mistrals multimodales Spitzenmodell, optimiert für agentische und Coding-Anwendungen (Mistral Medium 3.5)."
+      },
+      "category": "model",
+      "tags": [
+        "mistral",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/mistral/mistral-medium.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "mistral-small",
+      "displayName": {
+        "en": "Mistral Small",
+        "de": "Mistral Small"
+      },
+      "description": {
+        "en": "Mistral's efficient model unifying instruct, reasoning and coding (Mistral Small 4). Apache 2.0 licensed and self-hostable.",
+        "de": "Mistrals effizientes Modell, das Instruct, Reasoning und Coding vereint (Mistral Small 4). Apache-2.0-Lizenz und selbst hostbar."
+      },
+      "category": "model",
+      "tags": [
+        "mistral",
+        "chat"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/mistral/mistral-small.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "voxtral-mini-transcribe-realtime",
+      "displayName": {
+        "en": "Voxtral Mini Transcribe Realtime (Mistral)",
+        "de": "Voxtral Mini Transcribe Realtime (Mistral)"
+      },
+      "description": {
+        "en": "Mistral's hosted Voxtral realtime speech-to-text. Streams the transcript while the audio is still arriving and detects the language by itself. Uses the Mistral API key and sends the audio to Mistral; Voxtral Mini (Transcription) is the self-hosted alternative on vLLM.",
+        "de": "Mistrals gehostete Voxtral-Echtzeit-Spracherkennung. Liefert das Transkript, während das Audio noch eintrifft, und erkennt die Sprache selbst. Verwendet den Mistral-API-Schlüssel und sendet das Audio an Mistral; Voxtral Mini (Transkription) ist die selbst gehostete Alternative auf vLLM."
+      },
+      "category": "model",
+      "tags": [
+        "mistral",
+        "transcription"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/mistral/voxtral-mini-transcribe-realtime.json"
+      }
+    },
+    {
+      "type": "model",
+      "name": "voxtral-mini-tts",
+      "displayName": {
+        "en": "Voxtral TTS (Read aloud)",
+        "de": "Voxtral TTS (Vorlesen)"
+      },
+      "description": {
+        "en": "Mistral's Voxtral text-to-speech model. Reads chat messages aloud, streaming the audio as it is generated. Uses the Mistral API key.",
+        "de": "Mistrals Voxtral-Sprachausgabemodell. Liest Chat-Nachrichten vor und streamt das Audio, während es erzeugt wird. Verwendet den Mistral-API-Schlüssel."
+      },
+      "category": "model",
+      "tags": [
+        "mistral",
+        "tts"
+      ],
+      "source": {
+        "type": "relative",
+        "path": "models/mistral/voxtral-mini-tts.json"
+      }
     }
   ]
 }

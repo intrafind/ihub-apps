@@ -81,9 +81,10 @@ direct URL.
 - **26 apps** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram Generator, Image
   Generator, File Analyzer, NDA Risk Analyzer and more; some ship disabled and are switched on in
   **Admin → Apps**.
-- **Model configurations** for OpenAI, Anthropic, Google, Mistral, AWS Bedrock and a local vLLM
-  server, plus transcription (Voxtral, Gemini) and text-to-speech (Voxtral TTS) models. Only the
-  ones whose provider has a key can answer.
+- **Providers** for OpenAI, Anthropic, Google, Mistral, OpenRouter, AWS Bedrock and local servers,
+  with their API addresses filled in. No cloud model is preconfigured: **Admin → Models → Import
+  from provider** lists the models of a provider and adds the ones you pick. The disabled local
+  models (vLLM chat, Voxtral transcription on vLLM, iAssistant) are ready to switch on.
 - **Two marketplace registries**: the iHub Official Marketplace (90 apps, 98 skills, 19 models,
   6 workflows, 5 prompts) and the iHub Examples.
 - **Authentication**: local accounts and anonymous access are on.
