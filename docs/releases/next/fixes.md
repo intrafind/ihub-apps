@@ -56,3 +56,13 @@ A task that remembers between runs sometimes reported items again without checki
 run is now told explicitly to compare the current state with the saved watermark (latest version or
 date, item titles or ids) and the previous report, and to leave out everything already covered. You
 no longer need to add this to the task's prompt.
+
+## The onboarding box disappears from the admin start page once onboarding is completed
+
+The "First-run onboarding" box on the admin start page stayed visible after the setup wizard had
+been completed. It is now only shown while onboarding is still open.
+
+## The "Don't show the onboarding" setting in Admin → Advanced is now saved
+
+The toggle reported "saved" but the setting was lost on the next page load, because the server
+dropped it when writing the platform configuration. It now persists.

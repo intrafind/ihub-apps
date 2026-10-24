@@ -756,12 +756,14 @@ export default function AdminOverview() {
 
         {/* Side column */}
         <div className="space-y-6">
-          {!isContentAdminOnly && systemPagesVisible && (
-            <OnboardingCard
-              disabled={platformConfig?.setup?.disabled === true}
-              configured={platformConfig?.setup?.configured ?? true}
-            />
-          )}
+          {!isContentAdminOnly &&
+            systemPagesVisible &&
+            platformConfig?.setup?.configured !== true && (
+              <OnboardingCard
+                disabled={platformConfig?.setup?.disabled === true}
+                configured={platformConfig?.setup?.configured ?? true}
+              />
+            )}
           {isFreshInstance ? (
             <SetupChecklist />
           ) : (
