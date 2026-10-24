@@ -30,6 +30,11 @@ Apps, token usage per app, magic prompt apps and users, and the model details ar
 highest to lowest instead of in the order they were first recorded. Models are sorted by total
 tokens.
 
+## Admin Sidebar Entries Are Sorted Alphabetically
+
+The entries inside each section of the admin navigation (for example AI Workspace, Observability or
+Platform) are now ordered A–Z by their displayed name, in the language you use.
+
 ## Accessibility Improvements
 
 - **"Skip to content" works:** the skip link at the top of a page took keyboard and screen-reader
