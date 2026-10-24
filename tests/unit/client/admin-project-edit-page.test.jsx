@@ -56,6 +56,10 @@ jest.mock('../../../client/src/api/adminApi', () => {
     getAdminApiErrorMessage: err => err?.response?.data?.error ?? err?.message ?? 'error'
   };
 });
+jest.mock('../../../client/src/features/projects/components/ProjectAppSelect', () => ({
+  __esModule: true,
+  default: () => null
+}));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null

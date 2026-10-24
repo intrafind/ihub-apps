@@ -553,7 +553,9 @@ export default function registerAdminProjectsRoutes(app) {
           enabled: body.enabled,
           published: body.published,
           category: body.category,
-          tags: body.tags
+          tags: body.tags,
+          // A PUT carries the whole project: an absent default app clears it.
+          defaultAppId: body.defaultAppId ?? null
         },
         { actor: req.user }
       );

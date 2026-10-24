@@ -1073,6 +1073,30 @@ describe('admin projects', () => {
     );
   });
 
+  it('keep a default app that users see and an admin can clear', async () => {
+    const created = await drive(route.adminCreate, {
+      user: EDITOR,
+      body: { id: 'faq-default', name: { en: 'FAQ' }, defaultAppId: 'support' }
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    assert.equal(created.body.project.defaultAppId, 'support');
+
+    const patched = await drive(route.adminPatch, {
+      user: EDITOR,
+      params: { id: 'faq-default' },
+      body: { defaultAppId: 'chat' }
+    });
+    assert.equal(patched.statusCode, 200, JSON.stringify(patched.body));
+    assert.equal(patched.body.project.defaultAppId, 'chat');
+
+    const cleared = await drive(route.adminPatch, {
+      user: EDITOR,
+      params: { id: 'faq-default' },
+      body: { defaultAppId: null }
+    });
+    assert.equal(cleared.body.project.defaultAppId, null);
+  });
+
   it('refuses import pointers and managed files from API callers', async () => {
     // The startup importer reads such a file into the project and deletes
     // it: a content admin must not be able to aim it at config/platform.json.

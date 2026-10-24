@@ -164,6 +164,33 @@ working.
 
 ## Apps No Longer Carry an Empty `{{content}}` Prompt Template
 
+OpenRouter is now a provider next to OpenAI, Anthropic and the others. Updates add it automatically,
+unless an `openrouter` provider already exists. In **Admin → Models → Import from URL**,
+choose **OpenRouter**, enter your OpenRouter key, load the model list and import the models you want.
+A key entered there for a provider without one is stored encrypted on the provider, so the imported models use it.
+You can also set the key under **Admin → Providers** or in `OPENROUTER_API_KEY`.
+Models that generate images or audio instead of text are marked and not selected by **Select all**.
+
+## Scheduled tasks: keep fewer runs, delete runs
+
+A scheduled task can now limit its run history by **count** (keep at most N runs) and by **age**
+(delete runs older than D days); set both in the task editor. Runs past a limit are deleted together
+with their chats, and runs in progress are never touched. Administrators can set an installation-wide
+cap with the new `maxRunsPerTask` setting next to `runRetentionDays` (Admin → Scheduled Tasks); the
+stricter of the platform and the task limit applies.
+
+Runs can also be deleted by hand from the task page — one run, a selection, or all finished runs.
+
+**Upgrade note:** the periodic age sweep (`runRetentionDays`, default 90) now deletes the run's chat
+together with its run record. Before, it removed only the record and left the chat to the chat
+retention rules, so installations that keep chats longer than 90 days will now lose scheduled-run
+chats at that age. Set `runRetentionDays` to `0` to keep run history and its chats indefinitely.
+
+## Default app for admin projects
+
+Admin-created projects can now have a default app, just like personal projects.
+Set it in the project's name and description dialog; chats in the project then start in that app,
+so users who add the project to theirs get the right app selected automatically. They can still pick another app.
 A prompt template that consists only of `{{content}}` changes nothing, because the message is sent
 as typed anyway. The app creator no longer adds one, and the upgrade removes it from existing apps.
 Templates with other text around `{{content}}` are kept.

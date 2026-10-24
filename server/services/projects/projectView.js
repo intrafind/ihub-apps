@@ -126,7 +126,8 @@ export function serializeProject(
           category: project.category || '',
           tags: project.tags || []
         }
-      : { defaultAppId: project.defaultAppId || null }),
+      : {}),
+    defaultAppId: project.defaultAppId || null,
     owner: project.owner
       ? {
           name: project.owner.name || '',
