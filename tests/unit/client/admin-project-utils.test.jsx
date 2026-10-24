@@ -111,7 +111,8 @@ describe('project form', () => {
       enabled: true,
       published: false,
       category: '',
-      tags: ['x']
+      tags: ['x'],
+      defaultAppId: ''
     });
   });
 
