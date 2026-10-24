@@ -103,33 +103,29 @@ Validates LLM model definitions and connection parameters.
 }
 ```
 
-### 3. Source Configuration (`sourceConfigSchema.js`)
+### 3. Project Configuration (`projectSchema.js`)
 
-Validates data source configurations with type-specific validation.
+Validates admin projects (`contents/projects/<id>.json`), user projects, their items and the
+request bodies of `/api/projects` and `/api/admin/projects`. It replaces the former source schema:
+sources have become [projects](projects.md).
 
-**Source Types:**
-- **filesystem**: Local file access
-- **url**: HTTP/HTTPS endpoints  
-- **ifinder**: iFinder search integration
-- **page**: Internal page references
+**Key Components:**
+- **Project**: id, localized `name` / `description`, `instructions`, `enabled`, `published`,
+  `category`, `tags`
+- **Items**: `kind` (e.g. upload, URL, iFinder document, page), `ref`, `status`, `pinned`; item ids
+  must be unique within a project
+- **Links**: the `projects` list of apps, workflows and agents — a project id, or
+  `{ "id", "mode": "auto" | "context" | "tools", "write" }`
 
 **Example Valid Configuration:**
 ```json
 {
   "id": "documentation",
-  "name": {
-    "en": "Documentation"
-  },
-  "type": "url",
-  "config": {
-    "url": "https://docs.example.com/api",
-    "method": "GET",
-    "timeout": 10000,
-    "followRedirects": true,
-    "cleanContent": true
-  },
+  "name": { "en": "Documentation" },
+  "description": { "en": "Product documentation" },
+  "instructions": "Cite the section you answer from.",
   "enabled": true,
-  "exposeAs": "prompt"
+  "items": []
 }
 ```
 

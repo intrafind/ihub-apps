@@ -1,4 +1,4 @@
-# Chat Persistence (Durable Chats)
+# Chat Persistence (Chat History)
 
 Every chat lives on the server. The transcript is two documents in the
 [storage provider](storage.md), the server assembles the history it sends to the
@@ -108,7 +108,7 @@ an admin turns it on.
 ## Admin → Chat History
 
 Admin → Observability → **Chat History** (`/admin/chat-history`) is where an
-administrator configures and reviews durable chats and the run ledger:
+administrator configures and reviews stored chats and the run ledger:
 
 - **Status** — each condition from [How a chat is stored](#how-a-chat-is-stored)
   on its own (feature flag, `chats.enabled`, storage provider), plus whether the

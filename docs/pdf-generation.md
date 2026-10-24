@@ -82,7 +82,7 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 A file the model created takes the path a generated picture takes. There is no download route of its own:
 
 - **While the answer streams:** `create_pdf` keeps the PDF in server memory and returns only a descriptor, so the model never sees the bytes. The bytes reach the chat with the tool's `tool/completed` event, and the download card below the answer saves them.
-- **Stored with the answer:** in a durable chat, the PDF is stored as a `document` [artifact](artifacts.md) of the chat. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
+- **Stored with the answer:** in a stored chat (every chat is), the PDF is stored as a `document` [artifact](artifacts.md) of the chat. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
 - **Chats that are not stored:** the file lives as long as the page, like a generated picture. After a reload, the card says it is no longer available.
 - **Limits:**
   - 25 MB per file.

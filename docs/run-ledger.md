@@ -9,14 +9,24 @@ checkpoints, interactions raised and answered, and how the run ended.
 
 It is the single source of truth behind run detail pages, re-sync of live
 streams, audit, cost accounting and support debugging ("what exactly did the
-model see?"). It ships **dark**: nothing is persisted until an admin turns the
-feature on.
+model see?").
 
 ## Enabling
 
-1. Turn on the `runLog` feature flag (Admin → Platform → Features, or
-   `features.runLog: true` in `contents/config/platform.json`).
-2. Optionally tune `platform.json → runLog`:
+**The ledger records whenever a [storage provider](storage.md) is up** — as the default
+filesystem provider normally is. Every chat is stored server-side and
+a chat answer is read back from its run's events, so the ledger cannot be
+switched off while chats are stored: neither the `runLog` feature flag nor
+`platform.runLog.enabled: false` stops it then (see
+[Chat Persistence](chat-persistence.md#stored-chats-turn-on-the-run-ledger)).
+The flag and the switch only matter on an installation where no storage provider
+came up.
+
+1. The `runLog` feature flag (Admin → Platform → Features, or
+   `features.runLog: true` in `contents/config/features.json`) turns the
+   ledger on even without a storage provider.
+2. Optionally tune `platform.json → runLog` (also editable under Admin →
+   Observability → Chat History):
 
 ```json
 {
@@ -33,7 +43,7 @@ feature on.
 
 | Key                   | Default   | Meaning                                                                                                                |
 | --------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `enabled`             | `true`    | Second switch under the feature flag; `false` keeps the in-memory event stream (live views) but writes nothing to disk |
+| `enabled`             | `true`    | Second switch under the feature flag; `false` keeps the in-memory event stream (live views) but writes nothing to disk — ignored while a storage provider is up |
 | `identityMode`        | `default` | What is recorded about the acting user — see below                                                                     |
 | `retentionDays`       | `90`      | Runs older than this are deleted by the daily sweep                                                                    |
 | `cleanupEnabled`      | `true`    | Turn the sweep off to keep runs forever (or to run your own)                                                           |
@@ -80,7 +90,8 @@ index did: workflow executions and agent runs are recorded there too, so one
 namespace answers `GET /api/runs`, *My Executions* and the admin execution
 list. Each document carries the run's principal as its owner, so "this user's
 runs" never scans. The ledger writes a summary under the same switch as the
-rest of the ledger (`runLog.enabled` and the feature flag); workflow and agent
+rest of the ledger (on while storage is up, otherwise `runLog.enabled` and the
+feature flag); workflow and agent
 executions get theirs either way, because their registry always recorded them.
 Listings are still newest-first and still never include an anonymous run.
 
@@ -267,8 +278,9 @@ file (`locks/`), so two recovering workers never allocate the same number.
   distributed locks is what changes that.
 - **Gap re-sync needs the ledger.** A client that reconnects to a live stream
   fills the gap from `GET /api/runs/:runId/events`, retrying a failed read with
-  backoff (five attempts) before it gives up and keeps its live view. With `features.runLog` off
-  there is nothing to read back; the client rebuilds its view from the events
+  backoff (five attempts) before it gives up and keeps its live view. With the
+  ledger off (no storage provider and `features.runLog` off) there is nothing
+  to read back; the client rebuilds its view from the events
   it receives from then on.
 - **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
   is the only chat / workflow / run stream; the ledger flag decides what is

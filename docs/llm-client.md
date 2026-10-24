@@ -124,7 +124,7 @@ provider body), `retryAfterMs`, `provider`, `modelId`, `cause`. Getters:
 | `LLM_DEBUG_DUMP_ALL=1`          | off     | Dump every outbound request body to `contents/data/debug/llm-request/`     |
 | `model.maxOutputTokens`         | —       | Default `maxTokens` for calls that do not set one                          |
 | `model.concurrency`, `requestDelayMs` | — | Per-model throttling                                                       |
-| `features.runLog`               | off     | Persist the per-run ledger the client writes into (see [Run Ledger](run-ledger.md)) |
+| `features.runLog`               | off     | Persist the per-run ledger the client writes into without a storage provider; with one up the ledger always records (see [Run Ledger](run-ledger.md)) |
 
 Requests to a model whose provider returns a non-transient 4xx are dumped to
 `contents/data/debug/llm-failures/<timestamp>-<model>-<status>.json` with

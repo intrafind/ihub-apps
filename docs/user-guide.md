@@ -84,6 +84,10 @@ in the form again. The values stay with the chat, so they are still there when y
 - **Enter** sends, **Shift+Enter** adds a line break. Type `/` to search the prompt library.
 - **+** opens the per-chat options the app offers — for example **Web Search**, the app's tools
   or image settings. A switched-on option shows as a chip in the input.
+- **Project** (where projects are on, also on the start page) attaches one of your projects, one
+  shared with you or one from the catalog to the chat, so its answers can use the project's
+  documents. A chip names each attached project; its **×** removes it. See
+  [Projects](projects.md#using-a-project-in-any-chat).
 
   ![The chat input's options menu with web search](assets/screenshots/chat-input-menu.png)
 
@@ -138,10 +142,24 @@ See [Compare Mode](compare-mode.md) for details.
 
 ## Chat history
 
-With chat history enabled, every conversation is stored on the server: reopen it from **Recents** or
-**All chats**, on any device, and continue where you left off. A reopened chat still shows what each
-answer was based on — the searches it ran, the documents it read and the tools it used. Chats can
-be renamed and deleted from the sidebar.
+Every conversation is stored on the server. With chat history enabled, it is kept: reopen it from
+**Recents** or **All chats**, on any device, and continue where you left off. A reopened chat still
+shows what each answer was based on — the searches it ran, the documents it read and the tools it
+used. Chats can be renamed and deleted from the sidebar.
+
+A **temporary chat** is never listed or shared and is deleted a while after its last activity (24
+hours by default), or as soon as you start a new chat. Switch on **Incognito mode** (the ghost icon
+next to **Send**) for one; switching it off again keeps the chat. Without chat history, and for
+visitors who are not signed in, every chat is temporary. See
+[Chat Persistence](chat-persistence.md#temporary-chats-and-guests).
+
+## Projects
+
+Where your administrator switched on user projects, **Projects** in the sidebar collects documents,
+instructions and chats on one topic, and you can share a project with colleagues. A chat started on
+a project's page answers from its documents and follows its instructions; the **Project** button in
+the chat input attaches a project to any other chat. Administrators also offer projects for
+everyone in the catalog (**Projects → Browse catalog**). See [Projects](projects.md#user-projects).
 
 ## Transcription and voice
 

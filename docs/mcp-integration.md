@@ -81,6 +81,13 @@ Values are stored in plaintext, so `Authorization` is refused here —
 credentials go in the `auth` block. Header names the transport sets
 itself are refused as well.
 
+**Private certificates.** `streamableHttp` and `sse` connections trust the
+operating system's certificate store and honor `ssl.ignoreInvalidCertificates`
+plus `ssl.domainWhitelist` in `platform.json`; for a whitelisted host iHub does
+not follow HTTP redirects on its own. The `websocket` transport takes no TLS
+options, so the whitelist does not apply to it. See
+[SSL Certificates](ssl-certificates.md).
+
 ### Authentication
 
 The `auth` block on a server entry supports:
@@ -870,8 +877,8 @@ active = cimd.enabled
 ```
 
 Under **Admin → OAuth → Clients**, metadata-document clients are real
-rows — kind badge, document URL, connection count, first seen, last used —
-with these actions:
+rows — the *Client metadata* kind badge, `Identified as: <displayName> · <host>`,
+document URL, connection count, first seen, last used — with these actions:
 
 | Action | Effect |
 |--------|--------|
@@ -949,6 +956,12 @@ other client and can be narrowed (`allowedApps`, `allowedGroups`, …),
 suspended, or deleted there. They carry the *Dynamic* kind badge, and the
 list hides them behind the kind filter by default so hand-made service
 accounts stay readable.
+
+The kind badge says how a client was provisioned, not what the users who
+connect through it may do: **Static** (configured by an administrator),
+**Personal** (created by a user for their own use), **Dynamic** (registered
+through DCR) or **Client metadata** (identified by a client metadata
+document). The kind filter offers each of them, plus *Without dynamic*.
 
 If DCR stays disabled, create the client manually at
 `/admin/oauth/clients` and configure its id/secret in the MCP client.
@@ -1047,13 +1060,14 @@ callers with the matching scope.
 - **iHub workflow** → MCP tool with id `workflow__<workflowId>` and
   `inputSchema` derived from the start node's `inputVariables`. Dispatch
   goes through the existing `runTool('workflow_<id>', args)` path.
-- **iHub sources** → MCP resources at `ihub://source/<sourceId>`.
-  `resources/list` enumerates every enabled source the OAuth client
-  has scope for; `resources/read` returns the content the source
-  produces (filesystem text, URL fetch, iFinder document, page). Sources
-  marked `exposeAs: "tool"` show up in the list with a sentinel body
-  pointing the agent at the corresponding `source_*` tool — calling
-  those over `tools/call` is how dynamic queries (search etc.) work.
+- **iHub admin projects** → MCP resources at `ihub://project/<projectId>`.
+  `resources/list` enumerates every enabled admin project that an app
+  the caller can access links (and that has projects switched on), and
+  only while the `projects` feature is on; `resources/read` returns the
+  text of the project's documents as Markdown, one `# <name>` section per
+  document, with documents that cannot be read marked as unavailable. A
+  project is read whole. These replace the former
+  `ihub://source/<sourceId>` resources; see [Projects](projects.md).
 - **iHub skills** → MCP resources at `ihub://skill/<skillName>`.
   Returns the skill's `SKILL.md` body. The files a skill bundles are
   enumerated as resources of their own at
