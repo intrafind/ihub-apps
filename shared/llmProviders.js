@@ -40,20 +40,6 @@ export const CUSTOM_PROVIDER_API_TYPES = Object.freeze([
 ]);
 
 /**
- * Ready-made settings for well-known gateways, offered when creating a
- * provider in the model import dialog. The key is still entered by the admin.
- */
-export const LLM_PROVIDER_PRESETS = Object.freeze([
-  Object.freeze({
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: 'OpenRouter — one API for models of many vendors',
-    apiType: 'openai',
-    baseUrl: 'https://openrouter.ai/api/v1'
-  })
-]);
-
-/**
  * API types whose speech-to-text models iHub can run: they speak the OpenAI
  * audio API (`/audio/transcriptions`), served by
  * server/transcription/openaiTranscribeProvider.js. Model import turns a

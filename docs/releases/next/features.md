@@ -218,7 +218,7 @@ The admin overview also has an Onboarding card that links there. Next to the swi
 
 ## OpenRouter as a provider
 
-**Admin → Models → Import from URL** has an **OpenRouter** preset when you create a new provider: one click fills in the name, ID `openrouter`, the OpenAI-compatible API type and `https://openrouter.ai/api/v1`. Enter your OpenRouter key (change the prefilled URL for a regional endpoint if needed), load the model list and import the models you want; the key is stored encrypted on the provider. Models that generate images or audio instead of text are marked and not selected by **Select all**.
+OpenRouter is now a provider next to OpenAI, Anthropic and the others. Updates add it automatically, unless an `openrouter` provider already exists. In **Admin → Models → Import from URL**, choose **OpenRouter**, enter your OpenRouter key, load the model list and import the models you want. A key entered there for a provider without one is stored encrypted on the provider, so the imported models use it. You can also set the key under **Admin → Providers** or in `OPENROUTER_API_KEY`. Models that generate images or audio instead of text are marked and not selected by **Select all**.
 
 ## Scheduled tasks: keep fewer runs, delete runs
 
