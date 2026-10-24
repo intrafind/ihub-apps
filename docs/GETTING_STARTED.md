@@ -64,6 +64,8 @@ is under **Admin → Advanced → First-run onboarding** (`setup.disabled` in `p
 the demo-account status. With it on, nobody is redirected to `/setup`; the page stays reachable by
 direct URL.
 
+![Admin → Advanced → First-run onboarding, with the demo-account warning](assets/screenshots/admin-onboarding.png)
+
 ## 3. Look around
 
 ![The start page after setup](assets/screenshots/start-page.png)

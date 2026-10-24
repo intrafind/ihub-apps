@@ -192,7 +192,7 @@ Models define which AI providers and specific model versions are available on yo
 
 **Import from URL** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
 
-![Import models from URL](assets/screenshots/admin-models-import.png)
+![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
 
 **Testing a model:** Use the **Test** button on the model list page to verify connectivity and authentication.
 
@@ -267,6 +267,8 @@ project, decide **Who can use this project?**, add items, check the token estima
 model budgets, and move, copy or merge projects. Projects replace the former **Sources** page.
 The page needs the `projects` feature and the `admin.pages.projects` switch. User projects —
 projects users create themselves — are a separate preview feature (**User Projects**).
+
+![Admin → Projects](assets/screenshots/admin-projects.png)
 
 See [Projects](projects.md).
 

@@ -88,8 +88,8 @@ The **Web page (URL)** tab of **Add item** / **Add documents** has two new helpe
 - **Preview** shows the text the model will get from a page before you add it. A page that needs
   JavaScript or blocks automated access shows up as empty or short text.
 - **Find more pages of this website** follows the page's links within the same website (by default
-  within the start page's section, up to 3 links deep and 200 pages) and lists what it finds with
-  titles. Filter, tick pages or **Select all**, and **Add N pages** adds each one as its own item.
+  within the start page's section, 2 links deep and up to 50 pages; at most 3 links and 200 pages)
+  and lists what it finds with titles. Filter, tick pages or **Select all**, and **Add N pages** adds each one as its own item.
   Pages already in the project are marked. The search respects the website's `robots.txt`, skips
   tracking parameters and endless page lists, and stops after 25 seconds with what it has found.
 

@@ -121,6 +121,8 @@ every 15 minutes.
 
 ### Managing admin projects
 
+![Admin → Projects: every admin project with its items, who it is available to, category and tags](assets/screenshots/admin-projects.png)
+
 **Admin → Projects** lists every admin project with its number of items, who it is **Available to**,
 its category and tags and when it was last updated, with counts of all, enabled and disabled
 projects and of the user projects on the installation; filter by item kind and status. The page
@@ -138,6 +140,8 @@ and full admins may use it. Full administrators also find **Sharing of user proj
    Preview the stored text, edit the text of an uploaded, written or migrated document, rename,
    refresh or remove an item from the items table.
 4. Link the project to apps, workflows and agents.
+
+![The New project form: name, project ID filled in from the name, description, who can use the project, instructions](assets/screenshots/admin-project-new.png)
 
 **Who can use this project?** has three answers:
 
@@ -253,6 +257,8 @@ system prompt.
 
 ### Switching projects off for an app
 
+![The Projects card of the app editor: Use projects in this app, Allow personal projects and the linked admin projects](assets/screenshots/admin-app-projects.png)
+
 Two switches on an app decide what it does with projects. Both are on unless set to `false`, and
 both are under **Admin → Apps → Edit → Projects**:
 
@@ -273,6 +279,8 @@ switches can only narrow them. A workflow step's own project links are the workf
 affected.
 
 ### Checking a project
+
+![An admin project's view page: items, the apps and workflows that use it, and the settings rows with Availability](assets/screenshots/admin-project-view.png)
 
 - **Test** (`POST /api/admin/projects/:id/test`) reads every item the way a chat would, with your
   own credentials for iFinder items, and reports per item whether it was readable, its size and
@@ -401,6 +409,8 @@ available on this installation.
 
 ### The Projects page
 
+![The Projects page: own projects, projects shared with you and projects added from the catalog, with their badges](assets/screenshots/projects.png)
+
 **Projects** in the sidebar lists the projects you own, the projects shared with you, and those
 you added from the catalog. Projects that administrators created are listed only once you added
 one from the catalog (under **Shared with me**); the others are linked to apps and managed by
@@ -408,6 +418,8 @@ administrators, and no chat can start in one. Filter by all, mine or shared, sea
 instructions). The button shows how many projects you have against `maxProjectsPerUser`.
 
 A project page shows:
+
+![A project page: the chat input with the project's default app, the chats, the documents and the side panel](assets/screenshots/project-page.png)
 
 - **A chat input** at the top, the main action: the same input as the start page, with
   attachments, the model selector, tools, web search, magic prompt and dictation. Send a message to
@@ -442,6 +454,8 @@ your account; refresh the item later to take it again.
 
 ### Adding web pages
 
+![Add item → Web page (URL) with Preview: the text the model gets from the page](assets/screenshots/project-add-web-preview.png)
+
 The **Web page (URL)** tab (in user projects and in the admin project editor) adds one page or
 several pages of a website:
 
@@ -474,6 +488,8 @@ several pages of a website:
   - Tracking and session parameters (`utm_*`, `fbclid`, `gclid`, `jsessionid`, …) are dropped from
     the links, and at most three addresses that differ only in their query (`?page=2`, `?sort=…`)
     are listed per page, so a calendar or a paged list does not fill the list.
+
+![Find more pages of this website: the pages found on the site, ticked to be added as separate items](assets/screenshots/project-add-web-crawl.png)
 
 The search runs on the server with the same protections as the page reader: no private or internal
 addresses (unless the host is in `ssl.domainWhitelist`), every redirect checked, certificate checks
@@ -548,6 +564,8 @@ A project shared with everyone signed in shows **Global**; one in the catalog sh
 
 ### Global projects and the catalog
 
+![The project catalog: projects published by users and by the administrators, with Added and In your projects](assets/screenshots/projects-catalog.png)
+
 There are two ways to make a project available to everyone, so that a few people curate it and
 everyone else uses it:
 
@@ -591,6 +609,8 @@ never edit one.
 
 ### Chats in a project
 
+![A chat in a project: the answer names the project it was loaded from, and the chip beside the message box shows the project](assets/screenshots/project-chat.png)
+
 A chat started from the project page runs inside the project: it answers with the project's
 instructions and documents (mode `auto`), next to whatever the app itself links. A chat belongs to
 a project from its first message on: it is started from the project page. A chip beside the message
@@ -602,6 +622,8 @@ see [Chat Persistence](chat-persistence.md#temporary-chats-and-guests)) runs wit
 is not listed on its page, and it cannot be moved into a project.
 
 ### Using a project in any chat
+
+![The Project picker in the chat input: search, My projects, Shared with me and From the administrators](assets/screenshots/chat-project-picker.png)
 
 A chat does not have to start in a project to use one. **Project** in the message box (on the start
 page too) opens the project picker: a search field over your own projects, those shared with you

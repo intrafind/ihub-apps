@@ -161,6 +161,8 @@ a project's page answers from its documents and follows its instructions; the **
 the chat input attaches a project to any other chat. Administrators also offer projects for
 everyone in the catalog (**Projects → Browse catalog**). See [Projects](projects.md#user-projects).
 
+![A project page with its chat input, chats and documents](assets/screenshots/project-page.png)
+
 ## Transcription and voice
 
 Transcription models appear in the chat's model selector next to the chat models. With one
