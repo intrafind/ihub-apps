@@ -25,7 +25,8 @@ import {
   getProviderApiType,
   inspectProviderApiKey,
   isCustomLlmProvider,
-  isReservedProviderId
+  isReservedProviderId,
+  linkedModelProvider
 } from '../../services/llmProviders.js';
 import { stripTrailingSlashes } from '../../services/ModelEndpointDiscovery.js';
 
@@ -88,7 +89,8 @@ function normalizeProviderFields(provider) {
 
 /**
  * Point every model linked to a custom LLM provider at the provider's API
- * type, so changing it on the provider changes it for all of its models.
+ * type, so changing it on the provider changes it for all of its models. A
+ * Google transcription model keeps its speech backend (linkedModelProvider).
  *
  * @param {Object} provider - The saved provider entry
  * @returns {Promise<string[]>} Ids of the models rewritten
@@ -99,10 +101,11 @@ async function syncLinkedModelsApiType(provider) {
   const { data: models = [] } = configCache.getModels(true);
   const updated = [];
   for (const model of getLinkedModels(provider.id, models)) {
-    if (model.provider === apiType) continue;
+    const next = linkedModelProvider(apiType, model);
+    if (model.provider === next) continue;
     const modelPath = await configStore.resolveIdToPath('models', model.id);
     if (!modelPath) continue;
-    await configStore.writeJson(modelPath, { ...model, provider: apiType });
+    await configStore.writeJson(modelPath, { ...model, provider: next });
     updated.push(model.id);
   }
   if (updated.length > 0) {

@@ -32,6 +32,7 @@ import {
 import {
   BUILT_IN_LLM_PROVIDERS,
   getProviderApiType,
+  linkedModelProvider,
   resolveProviderApiKey
 } from '../../services/llmProviders.js';
 import { inspectModelApiKey } from '../../utils.js';
@@ -242,7 +243,8 @@ export { describeModelTestFailure };
 
 /**
  * Bring a model's link to a provider entry in line with that entry, in place:
- * the model's `provider` becomes the entry's API type, and a link to a built-in
+ * the model's `provider` becomes the entry's API type (a Google transcription
+ * model keeps its speech backend, see linkedModelProvider), and a link to a built-in
  * entry (`providerId: "openai"`) is dropped, since the model reaches it through
  * its API type anyway. A link to a custom entry is always kept. A model
  * therefore cannot claim one API type while its provider declares another.
@@ -263,7 +265,7 @@ function applyProviderLink(model) {
   if (!apiType) {
     return `Provider "${model.providerId}" does not exist or is not an LLM provider`;
   }
-  model.provider = apiType;
+  model.provider = linkedModelProvider(apiType, model);
   if (BUILT_IN_LLM_PROVIDERS.includes(model.providerId)) {
     delete model.providerId;
   }

@@ -31,7 +31,7 @@
  *
  * Docs: https://ai.google.dev/gemini-api/docs/live-api/live-transcribe
  */
-import { expandEnvVars, resolveApiKey } from './credentials.js';
+import { expandEnvVars, resolveVendorApiKey } from './credentials.js';
 
 /** Default Live API endpoint. Overridable per model via `url`. */
 export const DEFAULT_LIVE_URL =
@@ -56,7 +56,7 @@ export function resolveUpstream(model) {
     : [];
   return {
     url,
-    apiKey: resolveApiKey(model, { credentialProvider: 'google', envVars: ['GOOGLE_API_KEY'] }),
+    apiKey: resolveVendorApiKey(model, 'google', 'GOOGLE_API_KEY'),
     model: model?.modelId || '',
     languageCodes
   };

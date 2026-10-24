@@ -4,25 +4,29 @@
       "id": "openai",
       "name": "OpenAI",
       "description": "OpenAI API for GPT models",
-      "enabled": true
+      "enabled": true,
+      "baseUrl": "https://api.openai.com/v1"
     },
     {
       "id": "anthropic",
       "name": "Anthropic",
       "description": "Anthropic API for Claude models",
-      "enabled": true
+      "enabled": true,
+      "baseUrl": "https://api.anthropic.com/v1"
     },
     {
       "id": "google",
       "name": "Google",
       "description": "Google Gemini API",
-      "enabled": true
+      "enabled": true,
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta"
     },
     {
       "id": "mistral",
       "name": "Mistral AI",
       "description": "Mistral AI API",
-      "enabled": true
+      "enabled": true,
+      "baseUrl": "https://api.mistral.ai/v1"
     },
     {
       "id": "local",

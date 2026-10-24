@@ -19,8 +19,18 @@ import {
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 const MODEL_PATH = 'models/voxtral-mini-transcribe-realtime.json';
+// The model no longer ships in server/defaults; its config lives on as an
+// example (iHub Examples marketplace) and serves as the fixture here.
 const shippedDefault = () =>
-  JSON.parse(fs.readFileSync(new URL(`../defaults/${MODEL_PATH}`, import.meta.url), 'utf8'));
+  JSON.parse(
+    fs.readFileSync(
+      new URL(
+        '../../examples/models/mistral/voxtral-mini-transcribe-realtime.json',
+        import.meta.url
+      ),
+      'utf8'
+    )
+  );
 
 function fakeCtx(files, defaults = { [MODEL_PATH]: shippedDefault() }) {
   const logs = [];
@@ -53,7 +63,7 @@ test('precondition requires platform.json', async () => {
   assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-test('the shipped default is a valid, disabled Mistral transcription model', () => {
+test('the example is a valid, disabled Mistral transcription model', () => {
   const model = shippedDefault();
   assert.equal(modelConfigSchema.safeParse(model).success, true);
   assert.equal(model.provider, 'mistral');

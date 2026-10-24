@@ -16,6 +16,87 @@ import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+
+/**
+ * Below this many configured models the page leads with the ways to add one.
+ * A fresh install ships only the disabled local models.
+ */
+const GET_STARTED_THRESHOLD = 5;
+
+/**
+ * The two ways to add models, as large buttons in the middle of the page, so an
+ * admin of a fresh install sees what to do first.
+ */
+function GetStartedPanel({ t, onCreate, onImport, marketplaceLink }) {
+  const choice =
+    'flex flex-1 flex-col items-center gap-2 rounded-lg border-2 px-6 py-6 text-center focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2';
+  return (
+    <section
+      aria-labelledby="models-get-started"
+      className="mx-auto mt-8 max-w-3xl rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 sm:p-8 text-center shadow-xs"
+    >
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
+        <Icon name="cpu-chip" className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+      </div>
+      <h2
+        id="models-get-started"
+        className="mt-4 text-xl font-semibold text-gray-900 dark:text-gray-100"
+      >
+        {t('admin.models.getStarted.title', 'Add the models your apps use')}
+      </h2>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        {t(
+          'admin.models.getStarted.description',
+          'Import the models of a provider such as OpenAI, Anthropic, Google, Mistral or your own endpoint, or configure a model by hand.'
+        )}
+      </p>
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row">
+        <button
+          type="button"
+          onClick={onImport}
+          className={`${choice} border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700`}
+        >
+          <Icon name="link" className="h-6 w-6" />
+          <span className="text-base font-semibold">
+            {t('admin.models.getStarted.import', 'Import from provider')}
+          </span>
+          <span className="text-xs text-indigo-100">
+            {t(
+              'admin.models.getStarted.importHint',
+              'List the models of a provider and pick the ones to add.'
+            )}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onCreate}
+          className={`${choice} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600`}
+        >
+          <Icon name="plus" className="h-6 w-6" />
+          <span className="text-base font-semibold">
+            {t('admin.models.getStarted.create', 'Create new model')}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {t('admin.models.getStarted.createHint', 'Enter the endpoint and settings yourself.')}
+          </span>
+        </button>
+      </div>
+      {marketplaceLink && (
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          {t('admin.models.getStarted.marketplacePrefix', 'Or install a ready-made model from')}{' '}
+          <button
+            type="button"
+            onClick={marketplaceLink}
+            className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {t('admin.models.getStarted.marketplace', 'the Marketplace')}
+          </button>
+        </p>
+      )}
+    </section>
+  );
+}
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -63,6 +144,7 @@ function AdminModelsPage() {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const location = useLocation();
+  const featureFlags = useFeatureFlags();
   const [models, setModels] = useState([]);
   const { statuses: keyStatuses, reload: reloadKeyStatus } = useApiKeyStatus('models');
   const [loading, setLoading] = useState(true);
@@ -434,6 +516,19 @@ function AdminModelsPage() {
             </div>
           </div>
         </div>
+
+        {!loading && models.length < GET_STARTED_THRESHOLD && (
+          <GetStartedPanel
+            t={t}
+            onCreate={() => navigate('/admin/models/new')}
+            onImport={() => setImportDialog({ open: true, providerId: null })}
+            marketplaceLink={
+              featureFlags.isEnabled('marketplace', true)
+                ? () => navigate('/admin/marketplace?type=model')
+                : null
+            }
+          />
+        )}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <SearchInput

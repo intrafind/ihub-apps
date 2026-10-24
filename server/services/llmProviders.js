@@ -20,6 +20,7 @@ export {
   getModelProviderId,
   getLinkedModels,
   isReservedProviderId,
+  linkedModelProvider,
   MODEL_API_TYPES,
   providerEnvKeyName
 } from '../../shared/llmProviders.js';

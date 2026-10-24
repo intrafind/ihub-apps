@@ -77,8 +77,8 @@ describe('modelConfigSchema — modelType tts', () => {
     expect(result.error.issues[0].path).toEqual(['tts']);
   });
 
-  test('the shipped default model validates', async () => {
-    const { default: model } = await import('../defaults/models/voxtral-mini-tts.json', {
+  test('the example model validates', async () => {
+    const { default: model } = await import('../../examples/models/mistral/voxtral-mini-tts.json', {
       with: { type: 'json' }
     });
     const result = modelConfigSchema.safeParse(model);

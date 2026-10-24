@@ -32,7 +32,7 @@
  * (the frame names are those of Mistral's SDK, `@mistralai/mistralai`
  * `extra/realtime`).
  */
-import { expandEnvVars, resolveApiKey } from './credentials.js';
+import { expandEnvVars, resolveVendorApiKey } from './credentials.js';
 
 /** Default realtime endpoint. Overridable per model via `url`. */
 export const DEFAULT_REALTIME_URL = 'wss://api.mistral.ai/v1/audio/transcriptions/realtime';
@@ -55,7 +55,7 @@ export function resolveUpstream(model) {
     url: expandEnvVars(model?.url || '').trim() || DEFAULT_REALTIME_URL,
     // Same chain a Mistral chat model uses: model key, the `mistral` provider
     // key, <MODEL_ID>_API_KEY, MISTRAL_API_KEY.
-    apiKey: resolveApiKey(model, { credentialProvider: 'mistral', envVars: ['MISTRAL_API_KEY'] }),
+    apiKey: resolveVendorApiKey(model, 'mistral', 'MISTRAL_API_KEY'),
     model: model?.modelId || '',
     targetStreamingDelayMs: Number.isInteger(delay) && delay > 0 ? delay : null
   };

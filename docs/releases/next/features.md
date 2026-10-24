@@ -127,7 +127,7 @@ skips the wizard, they are asked whether to hide it for good.
 The page also warns when a demo account (`admin` / `user`) still signs in with its shipped
 password, and the admin start page shows an onboarding box until onboarding is completed.
 
-## OpenRouter as a Provider
+## OpenRouter as a Provider; Built-In Providers Come With Their API URL
 
 OpenRouter is now available next to OpenAI, Anthropic and the other providers, and is added on
 upgrade unless an `openrouter` provider already exists. In **Admin → Models → Import from URL**,
@@ -137,6 +137,14 @@ that generate images or audio instead of text are marked and not included in **S
 A key entered during the import for a provider that has none yet is stored encrypted on the
 provider, so the imported models work right away. You can also set the key under **Admin →
 Providers** or in `OPENROUTER_API_KEY`.
+
+The OpenAI, Anthropic, Google and Mistral providers now carry their public API base URL, so choosing one of them in **Import from URL** fills in the endpoint and **Load models** works right away, with no URL to look up (for Google, `https://generativelanguage.googleapis.com/v1beta`). Updates add the URL to these providers unless one is already set. Change it in the dialog for one import, or under **Admin → Providers** to keep it, for example for a proxy or a regional endpoint. **Local LLM** has no fixed address; enter your server's URL there. A wrong Google API key is now reported as a rejected key instead of a bare "HTTP 400".
+
+## New Installations Start Without Cloud Models
+
+A new installation no longer ships preconfigured Gemini, Claude, GPT and Mistral models. It starts with the disabled local models only (vLLM chat, Voxtral transcription on vLLM, iAssistant), and you add the cloud models you want from the provider: while fewer than five models are configured, **Admin → Models** shows **Import from provider** and **Create new model** in the middle of the page, and the setup wizard ends with **Add your models** for the provider you connected. The first chat model you enable becomes the default. The former model configurations are in the **iHub Examples** registry under **Admin → Marketplace**. Existing installations keep their models unchanged.
+
+**Import from URL** now also sets up the speech models of Google and Mistral: Gemini transcription and live transcription, Gemini text-to-speech, and Voxtral realtime transcription and text-to-speech are imported as transcription or text-to-speech models, ready for voice input, recording and read aloud. A speech model iHub cannot run, such as Mistral's batch transcription, is listed but cannot be picked. Such models imported through a custom provider use that provider's API key.
 
 ## iHub Trusts the Server's Own Certificate Store
 
@@ -164,12 +172,9 @@ working.
 
 ## Apps No Longer Carry an Empty `{{content}}` Prompt Template
 
-OpenRouter is now a provider next to OpenAI, Anthropic and the others. Updates add it automatically,
-unless an `openrouter` provider already exists. In **Admin → Models → Import from URL**,
-choose **OpenRouter**, enter your OpenRouter key, load the model list and import the models you want.
-A key entered there for a provider without one is stored encrypted on the provider, so the imported models use it.
-You can also set the key under **Admin → Providers** or in `OPENROUTER_API_KEY`.
-Models that generate images or audio instead of text are marked and not selected by **Select all**.
+A prompt template that consists only of `{{content}}` changes nothing, because the message is sent
+as typed anyway. The app creator no longer adds one, and the upgrade removes it from existing apps.
+Templates with other text around `{{content}}` are kept.
 
 ## Scheduled tasks: keep fewer runs, delete runs
 
@@ -191,6 +196,3 @@ chats at that age. Set `runRetentionDays` to `0` to keep run history and its cha
 Admin-created projects can now have a default app, just like personal projects.
 Set it in the project's name and description dialog; chats in the project then start in that app,
 so users who add the project to theirs get the right app selected automatically. They can still pick another app.
-A prompt template that consists only of `{{content}}` changes nothing, because the message is sent
-as typed anyway. The app creator no longer adds one, and the upgrade removes it from existing apps.
-Templates with other text around `{{content}}` are kept.

@@ -192,6 +192,100 @@ export function buildInferenceUrl(provider, baseUrl, modelId, type) {
   }
 }
 
+/**
+ * `baseUrl` with its scheme turned into the WebSocket one (`https` → `wss`).
+ */
+function toWebSocketUrl(baseUrl) {
+  return baseUrl.replace(/^http(s?):/i, (_m, secure) => (secure ? 'wss:' : 'ws:'));
+}
+
+/**
+ * Split a Google API base into the root it hangs off and its API version:
+ * `https://gw.example/google/v1beta` → `https://gw.example/google` and `v1beta`.
+ * A gateway's path prefix stays on the root.
+ */
+function splitGoogleBase(baseUrl) {
+  // Split at the last slash rather than with `/^(.*)\/(v…)$/`, which
+  // backtracks super-linearly.
+  const slash = baseUrl.lastIndexOf('/');
+  const last = baseUrl.slice(slash + 1);
+  // `v1`, `v1beta`, `v1alpha`; letters only after the digits, so nothing overlaps.
+  return slash > 0 && /^v\d+[a-z]*$/i.test(last)
+    ? { root: baseUrl.slice(0, slash), version: last }
+    : { root: baseUrl, version: 'v1beta' };
+}
+
+/**
+ * Gemini's Live API endpoint under the root of `baseUrl`, in the API version
+ * the base names (`…/v1beta` → `…v1beta.GenerativeService.BidiGenerateContent`).
+ */
+function googleLiveUrl(baseUrl) {
+  const { root, version } = splitGoogleBase(baseUrl);
+  return `${toWebSocketUrl(root)}/ws/google.ai.generativelanguage.${version}.GenerativeService.BidiGenerateContent`;
+}
+
+/**
+ * How iHub runs a speech model listed by an endpoint of API type `provider`:
+ * the model `provider` (the speech backend in server/transcription/ or
+ * server/tts/) and the URL it calls. Null when iHub has no backend for it —
+ * Mistral's batch transcription, OpenAI's text-to-speech.
+ *
+ * @param {string} provider - API type of the endpoint
+ * @param {string} baseUrl - API base returned by {@link resolveModelsEndpoint}
+ * @param {{ id: string, type: string, realtime?: boolean }} entry - Normalized entry
+ * @returns {{ modelType: 'transcription'|'tts', backend: string, url: string }|null}
+ */
+export function buildSpeechTarget(provider, baseUrl, entry) {
+  if (entry.type === 'transcription') return transcriptionTarget(provider, baseUrl, entry);
+  if (entry.type === 'tts') return ttsTarget(provider, baseUrl, entry);
+  return null;
+}
+
+/** {@link buildSpeechTarget} for a speech-to-text model. */
+function transcriptionTarget(provider, baseUrl, entry) {
+  if (TRANSCRIPTION_API_TYPES.includes(provider)) {
+    return {
+      modelType: 'transcription',
+      backend: provider,
+      url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type)
+    };
+  }
+  if (provider === 'google') {
+    // Live (WebSocket) or file transcription through the Gemini Files API.
+    return entry.realtime
+      ? { modelType: 'transcription', backend: 'google-live', url: googleLiveUrl(baseUrl) }
+      : {
+          modelType: 'transcription',
+          backend: 'google-transcribe',
+          // The API root: the backend adds the version to each call.
+          url: splitGoogleBase(baseUrl).root
+        };
+  }
+  if (provider === 'mistral' && entry.realtime) {
+    return {
+      modelType: 'transcription',
+      backend: 'mistral',
+      url: `${toWebSocketUrl(baseUrl)}/audio/transcriptions/realtime`
+    };
+  }
+  return null;
+}
+
+/** {@link buildSpeechTarget} for a text-to-speech model. */
+function ttsTarget(provider, baseUrl, entry) {
+  if (provider === 'google') {
+    return {
+      modelType: 'tts',
+      backend: 'google',
+      url: buildInferenceUrl(provider, baseUrl, entry.id)
+    };
+  }
+  if (provider === 'mistral') {
+    return { modelType: 'tts', backend: 'mistral', url: `${baseUrl}/audio/speech` };
+  }
+  return null;
+}
+
 /** First argument that is a positive integer within [min, max], else null. */
 function firstTokenCount(min, max, ...values) {
   for (const value of values) {
@@ -227,7 +321,7 @@ const DECLARED_TYPES = {
   image: 'image',
   moderation: 'moderation',
   audio: 'audio',
-  tts: 'audio',
+  tts: 'tts',
   // Speech-to-text has a type of its own: it can be imported as a
   // transcription model (LLM Hub declares Whisper as "STT").
   stt: 'transcription',
@@ -247,7 +341,8 @@ function typeFromId(id) {
   if (/embed|(^|[-_/])(bge|gte|e5)[-_]/.test(s)) return 'embedding';
   if (/moderation/.test(s)) return 'moderation';
   if (/whisper|transcri/.test(s)) return 'transcription';
-  if (/(^|[-_/])tts([-_]|$)|speech|realtime/.test(s)) return 'audio';
+  if (/(^|[-_/])tts([-_]|$)/.test(s)) return 'tts';
+  if (/speech|realtime/.test(s)) return 'audio';
   if (/dall-e|gpt-image|imagen|stable-diffusion|sdxl|(^|[-_/])flux/.test(s)) return 'image';
   if (/(^|[-_/])ocr([-_]|$)/.test(s)) return 'other';
   return 'chat';
@@ -280,7 +375,11 @@ function classifyType(item, meta, id) {
 
   const methods = item.supportedGenerationMethods;
   if (Array.isArray(methods)) {
-    // Google
+    // Google. Its speech models answer `generateContent` like chat models
+    // (text-to-speech, file transcription) or only `bidiGenerateContent` (live
+    // transcription): only their ids tell them apart.
+    const speech = typeFromId(id);
+    if (speech === 'transcription' || speech === 'tts') return speech;
     if (methods.includes('generateContent')) return 'chat';
     if (methods.includes('embedContent') || methods.includes('embedText')) return 'embedding';
     if (methods.includes('bidiGenerateContent')) return 'audio';
@@ -289,6 +388,20 @@ function classifyType(item, meta, id) {
   }
 
   return typeFromId(id);
+}
+
+/**
+ * Whether a speech model streams over a WebSocket rather than taking a file:
+ * Google's Live API models (`bidiGenerateContent` only), Mistral's
+ * `…-realtime` transcription.
+ */
+function isRealtimeSpeech(item, id, type) {
+  if (type !== 'transcription' && type !== 'tts') return false;
+  if (/(^|[-_])(live|realtime)([-_]|$)/i.test(id)) return true;
+  const methods = Array.isArray(item.supportedGenerationMethods)
+    ? item.supportedGenerationMethods
+    : [];
+  return methods.includes('bidiGenerateContent') && !methods.includes('generateContent');
 }
 
 /**
@@ -363,12 +476,16 @@ export function normalizeModelEntry(item) {
 
   const endOfLife = firstString(meta.end_of_life_date, item.deprecation);
 
+  const type = classifyType(item, meta, id);
+  const realtime = isRealtimeSpeech(item, id, type);
+
   return {
     id,
     name: name === `models/${id}` ? id : name,
     description: firstString(item.description)?.slice(0, 500) || null,
     ownedBy: firstString(item.owned_by),
-    type: classifyType(item, meta, id),
+    type,
+    ...(realtime ? { realtime: true } : {}),
     contextWindow,
     maxOutputTokens,
     supportsVision,
@@ -462,6 +579,19 @@ function describeHttpFailure(status, sentKey) {
   });
 }
 
+/**
+ * Whether an HTTP 400 is Google's answer to a wrong key: it reports
+ * `API_KEY_INVALID` in the error body instead of answering 401.
+ */
+async function isInvalidKeyAnswer(response) {
+  if (response.status !== 400) return false;
+  try {
+    return (await response.text()).includes('API_KEY_INVALID');
+  } catch {
+    return false;
+  }
+}
+
 function responseTooLarge() {
   return new ModelDiscoveryError('invalidResponse', 'The model list is too large', {
     details: `The response exceeds ${MAX_RESPONSE_BYTES / (1024 * 1024)} MB.`
@@ -514,7 +644,10 @@ async function readJsonBody(response) {
  * @param {Object} [deps]
  * @param {typeof httpFetch} [deps.fetch] - Injected for tests
  * @returns {Promise<{ provider: string, modelsUrl: string, baseUrl: string,
- *   models: Array<ReturnType<typeof normalizeModelEntry> & { url: string }> }>}
+ *   models: Array<ReturnType<typeof normalizeModelEntry> & { url: string,
+ *     modelType?: 'transcription'|'tts', backend?: string, unsupported?: true }> }>}
+ *   A speech model carries the `modelType` and the `backend` (model `provider`)
+ *   it is imported with, or `unsupported` when iHub cannot run it.
  * @throws {ModelDiscoveryError}
  */
 export async function discoverModels({ url, provider = 'openai', apiKey } = {}, deps = {}) {
@@ -573,13 +706,26 @@ export async function discoverModels({ url, provider = 'openai', apiKey } = {}, 
       provider,
       status: response.status
     });
+    if (key && (await isInvalidKeyAnswer(response))) {
+      throw new ModelDiscoveryError('authenticationFailed', 'The endpoint rejected the API key', {
+        upstreamStatus: response.status,
+        details: 'HTTP 400 (API_KEY_INVALID). Check the API key.'
+      });
+    }
     throw describeHttpFailure(response.status, Boolean(key));
   }
 
-  const models = parseModelsResponse(await readJsonBody(response)).map(entry => ({
-    ...entry,
-    url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type)
-  }));
+  const models = parseModelsResponse(await readJsonBody(response)).map(entry => {
+    if (entry.type !== 'transcription' && entry.type !== 'tts') {
+      return { ...entry, url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type) };
+    }
+    // A speech model is imported for the backend that runs it, or not at all:
+    // as a chat model it could never answer.
+    const speech = buildSpeechTarget(provider, baseUrl, entry);
+    return speech
+      ? { ...entry, ...speech }
+      : { ...entry, url: buildInferenceUrl(provider, baseUrl, entry.id), unsupported: true };
+  });
 
   logger.info('Model endpoint discovered', {
     component: 'ModelEndpointDiscovery',

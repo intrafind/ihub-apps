@@ -15,8 +15,15 @@ import { up, precondition, version } from '../migrations/V150__seed_google_tts_m
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 const PATHS = ['models/gemini-3.8-flash-tts.json', 'models/gemini-3.8-flash-lite-tts.json'];
+// The models no longer ship in server/defaults; their configs live on as
+// examples (iHub Examples marketplace) and serve as the fixtures here.
 const shipped = path =>
-  JSON.parse(fs.readFileSync(new URL(`../defaults/${path}`, import.meta.url), 'utf8'));
+  JSON.parse(
+    fs.readFileSync(
+      new URL(`../../examples/models/google/${path.slice('models/'.length)}`, import.meta.url),
+      'utf8'
+    )
+  );
 const allDefaults = () => Object.fromEntries(PATHS.map(path => [path, shipped(path)]));
 
 function fakeCtx(files, defaults = allDefaults()) {
@@ -50,7 +57,7 @@ test('precondition requires platform.json', async () => {
   assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-test('the shipped defaults are valid, disabled Google TTS models', () => {
+test('the examples are valid, disabled Google TTS models', () => {
   for (const path of PATHS) {
     const model = shipped(path);
     assert.equal(modelConfigSchema.safeParse(model).success, true, path);

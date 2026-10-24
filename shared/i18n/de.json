@@ -1500,7 +1500,8 @@
           "transcription": "Transkription",
           "image": "Bild",
           "moderation": "Moderation",
-          "other": "Kein Chat-Modell"
+          "other": "Kein Chat-Modell",
+          "tts": "Sprachausgabe"
         },
         "errors": {
           "idInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
@@ -1525,7 +1526,18 @@
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
-        }
+        },
+        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen"
+      },
+      "getStarted": {
+        "title": "Fügen Sie die Modelle hinzu, die Ihre Apps nutzen",
+        "description": "Importieren Sie die Modelle eines Anbieters wie OpenAI, Anthropic, Google, Mistral oder Ihres eigenen Endpunkts, oder konfigurieren Sie ein Modell von Hand.",
+        "import": "Von Anbieter importieren",
+        "importHint": "Die Modelle eines Anbieters auflisten und die gewünschten auswählen.",
+        "create": "Neues Modell anlegen",
+        "createHint": "Endpunkt und Einstellungen selbst eingeben.",
+        "marketplacePrefix": "Oder installieren Sie ein fertiges Modell aus",
+        "marketplace": "dem Marketplace"
       }
     },
     "chat": {
@@ -5141,6 +5153,10 @@
         "blocked": "Aktivierte Modelle ohne nutzbaren API-Schlüssel: {{count}}.",
         "fix": "Modelle prüfen"
       }
+    },
+    "finish": {
+      "addModels": "Modelle hinzufügen",
+      "addModelsDesc": "Noch ist kein Modell eingerichtet. Wählen Sie die Modelle von {{provider}} aus, die iHub nutzen soll."
     }
   },
   "apps": {

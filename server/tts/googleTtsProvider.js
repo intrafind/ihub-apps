@@ -31,7 +31,7 @@
 import { createParser } from 'eventsource-parser';
 import { httpFetch } from '../utils/httpConfig.js';
 import { getReadableStream } from '../utils/streamUtils.js';
-import { expandEnvVars, resolveApiKey } from '../transcription/credentials.js';
+import { expandEnvVars, resolveVendorApiKey } from '../transcription/credentials.js';
 import { selectVoice } from './language.js';
 import { TtsUpstreamError } from './errors.js';
 
@@ -120,7 +120,7 @@ export function resolveUpstream(model, { language } = {}) {
     url: streamUrl(expandEnvVars(model?.url || ''), modelId),
     // Same chain a Gemini chat model uses: model key, the `google` provider
     // key, <MODEL_ID>_API_KEY, GOOGLE_API_KEY.
-    apiKey: resolveApiKey(model, { credentialProvider: 'google', envVars: ['GOOGLE_API_KEY'] }),
+    apiKey: resolveVendorApiKey(model, 'google', 'GOOGLE_API_KEY'),
     model: modelId,
     voice: selectVoice(model?.tts, language) || DEFAULT_VOICE
   };

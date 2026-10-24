@@ -126,6 +126,9 @@ export default function SetupWizard() {
   }, [platformConfig, navigate, step]);
 
   const isLocal = selectedProvider.id === 'local';
+  // A fresh install ships no enabled model: until one exists, the next step is
+  // to import the models of the provider just connected.
+  const needsModels = !keyCheck || keyCheck.ready + keyCheck.blocked === 0;
 
   // On the last step, ask the server whether the enabled models can actually
   // be called: a key saved here is not worth much if, say, the stored one
@@ -540,6 +543,38 @@ export default function SetupWizard() {
 
               {/* CTA cards */}
               <div className="mb-6 space-y-2.5">
+                {needsModels && (
+                  <button
+                    onClick={() => {
+                      sessionStorage.removeItem('setup_wizard_step');
+                      navigate('/admin/models', {
+                        replace: true,
+                        state: { importProviderId: selectedProvider.id }
+                      });
+                    }}
+                    className="w-full flex items-center gap-4 rounded-xl border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 p-4 text-left transition-colors group"
+                    data-testid="setup-add-models"
+                  >
+                    <span className="shrink-0 w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center text-xl">
+                      🧠
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {t('setup.finish.addModels', 'Add your models')}
+                      </span>
+                      <span className="block text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+                        {t(
+                          'setup.finish.addModelsDesc',
+                          'No model is set up yet. Pick the models of {{provider}} to use in iHub.',
+                          { provider: selectedProvider.name }
+                        )}
+                      </span>
+                    </span>
+                    <span className="text-indigo-400 group-hover:text-indigo-600 transition-colors">
+                      →
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     sessionStorage.removeItem('setup_wizard_step');

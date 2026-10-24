@@ -18,6 +18,7 @@
  */
 import configCache from '../configCache.js';
 import config from '../config.js';
+import { providerEnvKeyName } from '../../shared/llmProviders.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 
 /**
@@ -117,4 +118,22 @@ export function resolveApiKey(model, { credentialProvider, envVars = [] } = {}) 
   return '';
 }
 
-export default { expandEnvVars, resolveApiKey };
+/**
+ * The key of a model whose backend speaks a vendor's own API (Google, Mistral).
+ * A model linked to a custom provider of that API type (`providerId`) uses that
+ * provider's key and its environment variable, as the vendor's chat models do;
+ * any other model the vendor's built-in provider entry and `envVar`.
+ *
+ * @param {Object} model - Speech model config as stored in cache.
+ * @param {string} vendor - Built-in provider id (`google`, `mistral`)
+ * @param {string} envVar - The vendor's environment variable (`GOOGLE_API_KEY`)
+ * @returns {string} The key, or '' when none is configured.
+ */
+export function resolveVendorApiKey(model, vendor, envVar) {
+  const linked = model?.providerId && model.providerId !== vendor ? model.providerId : '';
+  return linked
+    ? resolveApiKey(model, { credentialProvider: linked, envVars: [providerEnvKeyName(linked)] })
+    : resolveApiKey(model, { credentialProvider: vendor, envVars: [envVar] });
+}
+
+export default { expandEnvVars, resolveApiKey, resolveVendorApiKey };
