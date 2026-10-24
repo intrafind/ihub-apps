@@ -12,9 +12,11 @@ import logger from './logger.js';
 const REDIRECT_PREFIX = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/';
 const TIMEOUT_MS = 5000;
 const CACHE_LIMIT = 500;
+const FAILED_TTL_MS = 60 * 1000;
 
-// Resolved targets by redirect URL; `null` when resolution failed, so a dead
-// link is not retried on every streamed payload.
+// `{ target, expiresAt }` by redirect URL. A failed lookup (`target: null`) is
+// kept briefly so a dead link is not retried on every streamed payload, but
+// not for good: the endpoint may recover.
 const cache = new Map();
 
 export function isGroundingRedirect(url) {
@@ -22,7 +24,8 @@ export function isGroundingRedirect(url) {
 }
 
 async function resolveOne(url) {
-  if (cache.has(url)) return cache.get(url);
+  const cached = cache.get(url);
+  if (cached && cached.expiresAt > Date.now()) return cached.target;
   let resolved = null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -47,8 +50,11 @@ async function resolveOne(url) {
   } finally {
     clearTimeout(timer);
   }
-  if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value);
-  cache.set(url, resolved);
+  if (!cache.has(url) && cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value);
+  cache.set(url, {
+    target: resolved,
+    expiresAt: resolved ? Infinity : Date.now() + FAILED_TTL_MS
+  });
   return resolved;
 }
 

@@ -174,7 +174,8 @@ function handOffExternalUrl(url) {
     // In a browser `noopener` makes window.open return null even when the tab
     // opened, so null is no sign of a block there. Embedded hosts (the Outlook
     // pane) return null when nothing happened.
-    if (opened || host === 'web') return true;
+    const inOfficePane = typeof Office !== 'undefined' && Boolean(Office?.context);
+    if (opened || (host === 'web' && !inOfficePane)) return true;
   } catch {
     // window.open unavailable.
   }

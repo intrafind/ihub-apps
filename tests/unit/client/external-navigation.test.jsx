@@ -127,6 +127,12 @@ describe('openExternalUrl', () => {
     expect(openExternalUrl('https://example.test/doc')).toBe(false);
   });
 
+  it('reports failure in an Office pane that lacks openBrowserWindow', () => {
+    global.Office = { context: {} };
+    windowOpen.mockReturnValue(null);
+    expect(openExternalUrl('https://example.test/doc')).toBe(false);
+  });
+
   it('reports failure when there is no URL', () => {
     expect(openExternalUrl('')).toBe(false);
     expect(windowOpen).not.toHaveBeenCalled();
