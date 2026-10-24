@@ -77,6 +77,15 @@ Interactive elements follow a logical tab order that matches the visual reading 
 | `Enter` | Send the current message (when the input is focused) |
 | `Shift + Enter` | Insert a newline in the message input |
 
+### Workflow Editor
+
+Connecting steps on the canvas is a drag movement. The same can be done with the keyboard: select a
+step, and the **Connections** section of its configuration panel lists its outgoing connections. Pick
+a step under **Connect to** (and, for a decision step, the **Branch**) and press **Add connection**;
+**Condition** edits a connection's condition and **Remove** deletes it. The rules are the same as
+for drawing an edge on the canvas. A step's delete button also appears when the step has keyboard
+focus.
+
 ## Screen Reader Considerations
 
 ### Live Regions

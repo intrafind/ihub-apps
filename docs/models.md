@@ -245,7 +245,7 @@ the OpenAI API is never sent the OpenAI key.
 **Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
 you pick, so they need not be typed in one by one.
 
-![Import models from URL with a new provider](assets/screenshots/admin-models-import.png)
+![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
 
 1. Choose the provider the models belong to, or **+ New provider** to create one with a name, ID,
    API type and API key. The key is stored on the provider, not on the models. Opening **Import

@@ -267,12 +267,13 @@ Check that:
 
 ### SSL Certificate Issues
 
-If you encounter SSL certificate errors with your proxy, you can configure the application to ignore invalid certificates:
+If you encounter SSL certificate errors with your proxy, you can configure the application to skip certificate validation for specific hosts. `ignoreInvalidCertificates` only takes effect for the hosts listed in `domainWhitelist`; with an empty whitelist every certificate is still validated (see [SSL Certificates](ssl-certificates.md)):
 
 ```json
 {
   "ssl": {
-    "ignoreInvalidCertificates": true
+    "ignoreInvalidCertificates": true,
+    "domainWhitelist": ["llm.internal.example.com"]
   },
   "proxy": {
     "enabled": true,

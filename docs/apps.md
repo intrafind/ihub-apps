@@ -486,7 +486,7 @@ The following fields are specific to chat apps and are not used for redirect or 
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `usageGuide`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
-- `sources`, `thinking`, `ephemeral`
+- `projects`, `thinking`, `ephemeral`
 
 ## Basic App Structure
 
@@ -552,7 +552,7 @@ Each app is defined with the following essential properties:
 | `toolChoice`            | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
-| `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
+| `projects`              | Array   | Optional. Admin projects linked to the app — a project id, or `{ "id", "mode": "auto" \| "context" \| "tools", "write" }`. Replaces the former `sources`. See [Projects → Linking a project](projects.md#linking-a-project). `features.projects` / `features.userProjects` (`false`) switch projects or personal projects off for this app, see [Switching projects off for an app](projects.md#switching-projects-off-for-an-app) |
 | `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
 | `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
 | `inheritanceLevel`      | Number  | Optional. Depth of the inheritance chain                                                                                 |
@@ -972,7 +972,7 @@ to English. It is not stored with the chat and does not appear in exports.
 In the admin app editor, the **Usage Guide** section writes the guide by hand or generates it:
 **Generate with AI** asks the default chat model once, for the chosen language, using the
 editor's current form (name, description, instructions, input fields, starter prompts, uploads,
-tools and knowledge sources). Review and edit the text, then save the app. **Regenerate**
+tools and linked projects). Review and edit the text, then save the app. **Regenerate**
 replaces the text of that language; **Delete guide** removes the guide.
 
 #### Content Restrictions

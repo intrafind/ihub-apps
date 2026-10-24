@@ -1014,10 +1014,10 @@ Controls SSL/TLS certificate validation for outbound requests made by the server
 
 | Field                       | Type    | Default | Description                                                                                                                                          |
 | --------------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ignoreInvalidCertificates` | Boolean | `false` | Disable SSL certificate validation for **all** outbound requests. Use only in development; never enable in production                                |
-| `domainWhitelist`           | Array   | `[]`    | Domains or glob patterns for which SSL validation is skipped. Supports exact matches (`api.example.com`) and wildcards (`*.example.com`). Prefer this over `ignoreInvalidCertificates` |
+| `ignoreInvalidCertificates` | Boolean | `false` | Master switch for skipping certificate validation. When `true`, validation is skipped **only** for the hosts in `domainWhitelist`; with an empty whitelist every certificate is still validated |
+| `domainWhitelist`           | Array   | `[]`    | Domains or glob patterns for which SSL validation is skipped while `ignoreInvalidCertificates` is `true`. Supports exact matches (`api.example.com`) and wildcards (`*.example.com`). Applies to HTTP(S) requests (LLM providers, tools, MCP over HTTP) and to `wss://` voice transcription |
 
-For configuration details see [SSL Certificates](ssl-certificates.md).
+iHub also trusts the operating system's certificate store by default (opt out with `NODE_USE_SYSTEM_CA=0`). For configuration details see [SSL Certificates](ssl-certificates.md).
 
 ## Logging
 
@@ -1322,3 +1322,15 @@ Configures the skills system, which provides reusable AI behaviors that can be a
 | `maxCatalogTokens`   | Number | `3000`               | Maximum tokens of the list of skills the model is offered (`<available_skills>`). Over it, descriptions are shortened, then left out, and the model searches the skills with the `find_skill` tool |
 
 See [How skills reach the model](skills.md#how-skills-reach-the-model).
+
+## Further Sections
+
+These `platform.json` sections are documented with their feature:
+
+| Section          | What it configures                                                                 | Documentation                                         |
+| ---------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `setup`          | First-run onboarding: `configured` (set when the wizard completes) and `disabled` (never redirect to `/setup`; Admin → Platform → Advanced) | [Getting Started](GETTING_STARTED.md)                 |
+| `chats`          | Chat history and temporary chats: `enabled`, `retentionDays`, `maxChatsPerUser`, `maxMessagesPerChat`, `temporaryRetentionHours` | [Chat Persistence](chat-persistence.md#enabling)      |
+| `runLog`         | The run ledger: identity mode, retention, flush interval, spill threshold          | [Run Ledger](run-ledger.md)                           |
+| `projects`       | Project limits, sharing audiences (`sharing.*`), item kinds, retention             | [Projects](projects.md#platform-settings)             |
+| `scheduledTasks` | Scheduled task limits, run retention (`runRetentionDays`, `maxRunsPerTask`), memory | [Scheduled Tasks](scheduled-tasks.md)                 |

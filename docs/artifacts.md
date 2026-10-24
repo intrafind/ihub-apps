@@ -113,7 +113,7 @@ would otherwise create a scope nothing else can find or sweep.
 
 | Scope  | Id             | Used by                                              |
 | ------ | -------------- | ---------------------------------------------------- |
-| `chat` | chat id        | a durable chat's turns; swept when the chat is deleted |
+| `chat` | chat id        | a stored chat's turns; swept when the chat is deleted |
 | `run`  | run/execution id | a workflow execution or an agent run                |
 
 Every artifact of one scope shares a key prefix, which is what makes

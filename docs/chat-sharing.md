@@ -5,8 +5,8 @@ recipient sees the conversation as it was when it was shared — the messages
 and the images it generated — and can view or download those artifacts. They
 cannot type into it, edit it, rate it or continue it.
 
-Sharing rides on [Chat Persistence](chat-persistence.md): only a durable chat
-can be shared, because a link needs something stored to point at. It ships
+Sharing rides on [Chat Persistence](chat-persistence.md): only a kept chat
+can be shared — a temporary chat is refused with `409 CHAT_TEMPORARY`. It ships
 **dark** behind its own feature flag, and an administrator decides which
 audiences an installation offers.
 
@@ -193,7 +193,7 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
   never carries the conversation. It is offered to signed-in users, who own the
   links they create (see `shortLinks` in [Platform](platform.md)). With both on offer they are two tabs, and
   the conversation is preselected once the chat has a message; with one, the
-  dialog shows only that one. The conversation needs a durable chat
+  dialog shows only that one. The conversation needs a kept chat
   (`/apps/:appId/c/:chatId`) with at least one message.
 - In **This conversation**: pick the audience, the recipients for a `users`
   share, an expiry and an open limit, acknowledge the warning for a public
