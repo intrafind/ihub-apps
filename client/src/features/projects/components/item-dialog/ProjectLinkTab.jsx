@@ -1,17 +1,20 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { linkSourceProjects, linkableItems } from '../../utils/projectItems';
+import Icon from '../../../../shared/components/Icon';
 import { projectDisplayName } from '../../utils/projectView';
 import ProjectItemStatus from '../ProjectItemStatus';
+import { ProjectPickerPanel } from '../ProjectPicker';
 import CheckableList from './CheckableList';
-import { INPUT_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from './dialogStyles';
+import { LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from './dialogStyles';
 
 /**
  * The "From another project" tab of the "Add item" dialog: pick a project
- * the viewer may use, tick its documents, and add each as a link
+ * the viewer may use (searched in a list, however many there are), tick its
+ * documents, and add each as a link
  * (`kind: 'project-item'`). Nothing is copied: chats read the original, with
  * the reading user's own access to its project.
  *
@@ -29,6 +32,13 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
   const language = i18n?.language || 'en';
   const [projects, setProjects] = useState(null);
   const [sourceId, setSourceId] = useState('');
+  const [focusPicker, setFocusPicker] = useState(false);
+  // A pick replaces the list (and its focused search) with the picked
+  // project: the focus goes to its "Change" button rather than to the page.
+  const changeRef = useRef(null);
+  useEffect(() => {
+    if (sourceId) changeRef.current?.focus();
+  }, [sourceId]);
   const [source, setSource] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
   const [pinned, setPinned] = useState(false);
@@ -67,7 +77,20 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
     [source, sourceId, project]
   );
 
+  // Where a project came from, under its name.
+  const describe = candidate =>
+    candidate.ownership !== 'admin'
+      ? candidate.permissions?.isOwner || !candidate.owner?.name
+        ? ''
+        : t('projects.catalog.byOwner', 'By {{name}}', { name: candidate.owner.name })
+      : candidate.published === true
+        ? t('projects.addItem.linkPublishedDetail', 'Published for everyone')
+        : t('projects.addItem.linkFromAppsDetail', 'Comes with one of your apps');
+  const sourceProject = (sourceId && projects?.find(entry => entry.id === sourceId)) || null;
+
   const choose = id => {
+    // "Change" goes back to the list: focus its search.
+    setFocusPicker(!id);
     setSourceId(id);
     setSource(null);
     setPicked(new Set());
@@ -133,46 +156,60 @@ function ProjectLinkTab({ projectId, project, api, onAdded, onClose }) {
             {t('projects.addItem.linkNoProjects', 'There is no other project you can use.')}
           </p>
         ) : (
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex-1 min-w-[14rem]">
-              <label htmlFor="project-item-link-source" className={LABEL_CLASS}>
-                {t('projects.addItem.linkProject', 'Project')}
-              </label>
-              <select
-                id="project-item-link-source"
-                value={sourceId}
-                onChange={e => choose(e.target.value)}
+          <div className="space-y-2">
+            <span id="project-item-link-source-label" className={LABEL_CLASS}>
+              {t('projects.addItem.linkProject', 'Project')}
+            </span>
+            {sourceProject ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2"
+                  aria-labelledby="project-item-link-source-label"
+                  role="group"
+                >
+                  <Icon name="folder" size="sm" className="flex-none text-indigo-500" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-gray-900 dark:text-gray-100">
+                      {projectDisplayName(sourceProject, language)}
+                    </span>
+                    {describe(sourceProject) && (
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {describe(sourceProject)}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    ref={changeRef}
+                    type="button"
+                    onClick={() => choose('')}
+                    disabled={busy}
+                    className="flex-none text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                  >
+                    {t('projects.addItem.linkChangeProject', 'Change')}
+                  </button>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={pinned}
+                    onChange={e => setPinned(e.target.checked)}
+                    disabled={busy}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+                  />
+                  {t('projects.addItem.pinned', 'Pinned (always in the prompt)')}
+                </label>
+              </div>
+            ) : (
+              <ProjectPickerPanel
+                projects={projects}
+                selectedIds={[]}
+                onPick={choose}
+                describe={describe}
+                label={t('projects.addItem.linkChooseProject', 'Choose a project…')}
                 disabled={busy}
-                className={INPUT_CLASS}
-              >
-                <option value="">
-                  {t('projects.addItem.linkChooseProject', 'Choose a project…')}
-                </option>
-                {projects.map(candidate => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.ownership !== 'admin'
-                      ? projectDisplayName(candidate, language)
-                      : candidate.published === true
-                        ? t('projects.addItem.linkPublished', '{{name}} (published)', {
-                            name: projectDisplayName(candidate, language)
-                          })
-                        : t('projects.addItem.linkFromApps', '{{name}} (from apps)', {
-                            name: projectDisplayName(candidate, language)
-                          })}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 pb-2">
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={e => setPinned(e.target.checked)}
-                disabled={busy}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+                focusOnMount={focusPicker}
               />
-              {t('projects.addItem.pinned', 'Pinned (always in the prompt)')}
-            </label>
+            )}
           </div>
         )}
         {sourceId && !source && !error && (

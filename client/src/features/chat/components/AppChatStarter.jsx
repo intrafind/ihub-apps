@@ -12,6 +12,9 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { loadAppSettings } from '../../../utils/appSettings';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
+import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
+import { ATTACH_PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
+import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
 import { setPendingChatStart } from '../startChatHandoff';
 import ChatInput from './ChatInput';
 
@@ -32,7 +35,7 @@ export const MAX_START_PATH_LENGTH = 7500;
  * prompts, placeholder, input mode, model selector, tools, web search, magic
  * prompt, dictation) that starts a chat in the app on submit. The message
  * travels via `prefill` + `send=true` (so a reload or a shared link keeps
- * working); the attachments and the toggles picked in the `+` menu ride on
+ * working), with the projects ticked in its project picker; the attachments and the toggles picked in the `+` menu ride on
  * the in-memory handoff (`setPendingChatStart`). Used by the start page and
  * the project page, so both offer the same input.
  *
@@ -44,9 +47,17 @@ export const MAX_START_PATH_LENGTH = 7500;
  *   page opens (e.g. to mint a fresh chat id).
  * @param {number} [props.maxPathLength] - Refuse a message whose start link would be
  *   longer (see {@link MAX_START_PATH_LENGTH}); no limit when omitted.
+ * @param {boolean} [props.pickProjects=false] - Offer the project picker: the projects
+ *   ticked here are attached to the chat (`?attachProject=`), where the app takes them.
  * @returns {JSX.Element|null}
  */
-export default function AppChatStarter({ app, startParams, onBeforeStart, maxPathLength }) {
+export default function AppChatStarter({
+  app,
+  startParams,
+  onBeforeStart,
+  maxPathLength,
+  pickProjects = false
+}) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const authKey = useAuthKey();
@@ -71,6 +82,29 @@ export default function AppChatStarter({ app, startParams, onBeforeStart, maxPat
   const [websearchEnabled, setWebsearchEnabled] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageQuality, setImageQuality] = useState('Medium');
+
+  // The projects ticked in the input's project picker, for a chat that does
+  // not exist yet: they ride on the start link. Kept across an app switch;
+  // an app that takes no projects just does not get them.
+  const [projectIds, setProjectIds] = useState([]);
+  const attachedProjects = useChatAttachedProjects({
+    chatId: null,
+    stored: false,
+    value: projectIds,
+    onChange: setProjectIds
+  });
+  const projectsOffered = pickProjects && appAllowsUserProjects(appDetails);
+  const projectContext = projectsOffered
+    ? {
+        chatId: null,
+        stored: false,
+        containerProjectId: null,
+        value: projectIds,
+        onChange: setProjectIds,
+        disabled: false,
+        attached: attachedProjects
+      }
+    : null;
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
@@ -224,6 +258,9 @@ export default function AppChatStarter({ app, startParams, onBeforeStart, maxPat
   const startPath = useCallback(
     (text = '') => {
       const params = new URLSearchParams(startParams || {});
+      if (projectsOffered) {
+        projectIds.forEach(id => params.append(ATTACH_PROJECT_QUERY_PARAM, id));
+      }
       if (text) {
         params.set('prefill', text);
         params.set('send', 'true');
@@ -235,7 +272,7 @@ export default function AppChatStarter({ app, startParams, onBeforeStart, maxPat
       const qs = params.toString();
       return `/apps/${encodeURIComponent(app.id)}${qs ? `?${qs}` : ''}`;
     },
-    [app?.id, startParams, selectedModel, appDetails?.preferredModel]
+    [app?.id, startParams, selectedModel, appDetails?.preferredModel, projectsOffered, projectIds]
   );
 
   const open = useCallback(
@@ -367,6 +404,7 @@ export default function AppChatStarter({ app, startParams, onBeforeStart, maxPat
         onModelChange={setSelectedModel}
         showModelSelector={showModelSelector}
         currentLanguage={currentLanguage}
+        projectContext={projectContext}
       />
       {tooLong && (
         <p role="alert" className="mt-1 text-sm text-red-600 dark:text-red-400">

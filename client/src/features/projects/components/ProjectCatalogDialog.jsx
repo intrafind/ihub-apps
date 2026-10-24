@@ -17,8 +17,10 @@ const ROW_BUTTON =
 
 /**
  * The project catalog: projects their owners published for everyone signed
- * in, and admin projects available to everyone signed in. Search it, open a project, and add one to your projects (or remove it
- * again). A project you own or are a member of is in your list already.
+ * in, and admin projects available to everyone signed in. Search it, open a
+ * project, and add one to your projects (or remove it again): it then shows
+ * in your list and in the chat input's project picker. A project you own or
+ * are a member of is in your list already.
  *
  * Mount it only while open.
  *
@@ -90,7 +92,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
             'projects.catalog.dialogHint',
-            'Projects their owners published for everyone: add one to your projects to use it in your chats; its owner and editors keep it up to date. Projects from the administrators are open to everyone already: open one to read it or to link its documents into your projects.'
+            'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
           )}
         </p>
         <input
@@ -117,9 +119,10 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
             {items.map(project => {
               const description = localizedText(project.description, language);
               // An admin project is open to everyone and managed by the
-              // administrators: there is nothing to add.
+              // administrators; anyone adds it to their list. A user project
+              // they own or are a member of is in their list already.
               const fromAdmins = project.ownership === 'admin';
-              const inList = project.role !== 'catalog';
+              const inList = !fromAdmins && project.role !== 'catalog';
               return (
                 <li key={project.id} className="px-3 py-3 flex items-start gap-3">
                   <Icon name="folder" size="md" className="mt-0.5 text-indigo-500 flex-none" />
@@ -149,11 +152,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
                       })}
                     </p>
                   </div>
-                  {fromAdmins ? (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
-                      {t('projects.catalog.openToEveryone', 'Open to everyone')}
-                    </span>
-                  ) : inList ? (
+                  {inList ? (
                     <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
                       {t('projects.catalog.inYourList', 'In your projects')}
                     </span>

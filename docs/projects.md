@@ -383,9 +383,10 @@ available on this installation.
 
 ### The Projects page
 
-**Projects** in the sidebar lists the projects you own and the projects shared with you. Projects
-that administrators created are not listed: they are linked to apps and managed by administrators,
-and no chat can start in one. Filter by all, mine or shared, search by name, and create a project with **New project** (name, description,
+**Projects** in the sidebar lists the projects you own, the projects shared with you, and those
+you added from the catalog. Projects that administrators created are listed only once you added
+one from the catalog (under **Shared with me**); the others are linked to apps and managed by
+administrators, and no chat can start in one. Filter by all, mine or shared, search by name, and create a project with **New project** (name, description,
 instructions). The button shows how many projects you have against `maxProjectsPerUser`.
 
 A project page shows:
@@ -493,7 +494,11 @@ published one, tick its documents and link them.
 Change**, `"published": true` in `contents/projects/<id>.json`) makes it available to everyone
 signed in: they can use it and link its documents into their own projects, without an app that
 links it. While the catalog is on, it is listed under **Projects → Browse catalog** as **From the
-administrators**. Only administrators change it. The shipped iHub documentation project is published; installations that upgrade get it
+administrators**, and users **Add** it to their projects like a published user project: it then
+shows on their Projects page (under **Shared with me**) and in the chat input's **Project** picker,
+and its page starts a chat with the project attached (an admin project never holds chats). This is
+how administrators offer global projects that they manage and everyone uses in their chats. Only
+administrators change it. The shipped iHub documentation project is published; installations that upgrade get it
 published too (migration V181), unless an administrator already set the switch.
 
 ### Roles and sharing
@@ -571,8 +576,10 @@ Every member may open the chats in a project; chats of other members are read-on
 
 ### Using a project in any chat
 
-A chat does not have to start in a project to use one. In the message box's **+** menu, the
-**Projects for this chat** section lists your own and the shared user projects; tick one and the
+A chat does not have to start in a project to use one. **Project** in the message box (on the start
+page too) opens the project picker: a search field over your own projects, those shared with you
+and those you added from the catalog, in sections (**My projects**, **Shared with me**, **From the
+administrators**); however many there are, the list keeps one height. Tick one and the
 answers of that chat can use its documents (the project is loaded or searched like one the chat
 runs in); its instructions do not apply, only those of the project the chat runs in and of the
 app's own links. A chip beside the message box names each attached project and links to it; its

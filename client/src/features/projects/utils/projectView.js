@@ -6,6 +6,7 @@
  * §9.4), kept out of the React components so they can be unit tested:
  *
  *  - the project list: filters (mine, shared with me, from apps) and search;
+ *  - the project picker: the same search, in sections;
  *  - creating and editing: validation and the PATCH body;
  *  - quotas: usage against the limits, and whether a new project or item fits;
  *  - members: the member list as the share dialog's shares and back, and the
@@ -71,14 +72,42 @@ export function projectDisplayName(project, language = 'en') {
 }
 
 /**
- * Which list filter a project belongs to.
+ * Whether a project is in the viewer's own list: a user project they own, are
+ * a member of or added from the catalog, or an admin project they added from
+ * the catalog. An admin project that only comes with an app is not.
  *
- * @param {{ownership?: string, permissions?: {isOwner?: boolean}}} project
+ * @param {{ownership?: string, subscribed?: boolean}|null} project
+ * @returns {boolean}
+ */
+export function isInMyProjects(project) {
+  return project?.ownership === 'user' || project?.subscribed === true;
+}
+
+/**
+ * Which list filter a project belongs to. An admin project the viewer added
+ * from the catalog counts as shared with them, like a user project added
+ * from there.
+ *
+ * @param {{ownership?: string, subscribed?: boolean, permissions?: {isOwner?: boolean}}} project
  * @returns {'mine'|'shared'|'apps'}
  */
 export function projectListGroup(project) {
-  if (project?.ownership === 'admin') return 'apps';
+  if (project?.ownership === 'admin') return project.subscribed === true ? 'shared' : 'apps';
   return project?.permissions?.isOwner ? 'mine' : 'shared';
+}
+
+/** Whether a project matches a lower-cased search: its name, description or owner. */
+function matchesProjectSearch(project, query, language) {
+  if (!query) return true;
+  return [
+    projectDisplayName(project, language),
+    localizedText(project.description, language),
+    project.owner?.name
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(query);
 }
 
 /**
@@ -92,17 +121,36 @@ export function filterProjectList(projects, { filter = 'all', search = '', langu
   const query = search.trim().toLowerCase();
   return (projects || []).filter(project => {
     if (filter !== 'all' && projectListGroup(project) !== filter) return false;
-    if (!query) return true;
-    const haystack = [
-      projectDisplayName(project, language),
-      localizedText(project.description, language),
-      project.owner?.name
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(query);
+    return matchesProjectSearch(project, query, language);
   });
+}
+
+/** The sections of the project picker, in the order they are shown. */
+export const PROJECT_PICKER_SECTIONS = Object.freeze(['mine', 'shared', 'admin']);
+
+/**
+ * The project picker's list: the projects matching the search, in sections —
+ * the viewer's own, those shared with them (or added from the catalog), and
+ * those from the administrators. Each section keeps the order it was given
+ * (the list comes most recently active first); empty sections are left out.
+ *
+ * @param {Array<Object>} projects
+ * @param {{search?: string, language?: string}} [options]
+ * @returns {Array<{id: 'mine'|'shared'|'admin', projects: Array<Object>}>}
+ */
+export function projectPickerSections(projects, { search = '', language = 'en' } = {}) {
+  const query = search.trim().toLowerCase();
+  const sections = Object.fromEntries(PROJECT_PICKER_SECTIONS.map(id => [id, []]));
+  for (const project of projects || []) {
+    if (!project || !matchesProjectSearch(project, query, language)) continue;
+    const section =
+      project.ownership === 'admin' ? 'admin' : project.permissions?.isOwner ? 'mine' : 'shared';
+    sections[section].push(project);
+  }
+  return PROJECT_PICKER_SECTIONS.filter(id => sections[id].length > 0).map(id => ({
+    id,
+    projects: sections[id]
+  }));
 }
 
 /**

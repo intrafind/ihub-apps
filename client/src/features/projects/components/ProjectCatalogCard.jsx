@@ -12,8 +12,9 @@ import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
 /**
  * The project catalog on a project page. Owners and editors publish the
  * project there for everyone signed in to find, or take it out; someone who
- * reaches it through the catalog adds it to their projects or removes it.
- * Nothing is shown to anyone else.
+ * reaches it through the catalog — a published user project they are no
+ * member of, or an admin project available to everyone — adds it to their
+ * projects or removes it. Nothing is shown to anyone else.
  *
  * @param {Object} props
  * @param {Object} props.project
@@ -34,7 +35,9 @@ function ProjectCatalogCard({ project, config, onChanged }) {
   const mayPublish = permissions.canShare === true && config?.userProjects?.canShare === true;
   const mayUnpublish = permissions.canShare === true || project.role === 'admin';
   const curator = published ? mayUnpublish : mayPublish && catalogOn;
-  const fromCatalog = project.role === 'catalog';
+  // The server says whether the viewer added it exactly when they may.
+  const fromCatalog = project.role === 'catalog' || typeof project.subscribed === 'boolean';
+  const fromAdmins = project.ownership === 'admin';
   if (!curator && !fromCatalog) return null;
 
   const run = async action => {
@@ -108,31 +111,43 @@ function ProjectCatalogCard({ project, config, onChanged }) {
         action={action}
       >
         <p className="text-gray-600 dark:text-gray-400">
-          {fromCatalog
+          {fromCatalog && fromAdmins
             ? project.subscribed
               ? t(
-                  'projects.catalog.addedHint',
-                  'You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.'
+                  'projects.catalog.adminAddedHint',
+                  'You added this project to your projects; the administrators keep it up to date. New chat starts a chat with the project attached, and the chat input offers it.'
                 )
               : t(
-                  'projects.catalog.notAddedHint',
-                  'This project is in the catalog. Add it to your projects to find it in your list and in chats.'
+                  'projects.catalog.adminNotAddedHint',
+                  'The administrators made this project available to everyone. Add it to your projects to find it in your list and in the chat input.'
                 )
-            : published && !catalogOn
-              ? t(
-                  'projects.catalog.publishedOffHint',
-                  'Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again.'
-                )
-              : published
+            : fromCatalog
+              ? project.subscribed
                 ? t(
-                    'projects.catalog.publishedHint',
-                    'Published on {{date}}. Everyone signed in can find it in the catalog and use it.',
-                    { date: formatSnapshotDate(project.catalog.publishedAt, i18n?.language) || '' }
+                    'projects.catalog.addedHint',
+                    'You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.'
                   )
                 : t(
-                    'projects.catalog.unpublishedHint',
-                    'Publish the project so that everyone signed in can find it in the catalog and add it.'
-                  )}
+                    'projects.catalog.notAddedHint',
+                    'This project is in the catalog. Add it to your projects to find it in your list and in chats.'
+                  )
+              : published && !catalogOn
+                ? t(
+                    'projects.catalog.publishedOffHint',
+                    'Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again.'
+                  )
+                : published
+                  ? t(
+                      'projects.catalog.publishedHint',
+                      'Published on {{date}}. Everyone signed in can find it in the catalog and use it.',
+                      {
+                        date: formatSnapshotDate(project.catalog.publishedAt, i18n?.language) || ''
+                      }
+                    )
+                  : t(
+                      'projects.catalog.unpublishedHint',
+                      'Publish the project so that everyone signed in can find it in the catalog and add it.'
+                    )}
         </p>
         {error && (
           <p role="alert" className="mt-2 text-red-600 dark:text-red-400">

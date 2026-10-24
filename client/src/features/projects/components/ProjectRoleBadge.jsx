@@ -23,10 +23,11 @@ const STYLES = {
 function ProjectRoleBadge({ project }) {
   const { t } = useTranslation();
   let role = 'user';
-  // A published admin project reached without an app is a catalog project
-  // to its viewer.
-  if (project?.ownership === 'admin') role = project?.role === 'catalog' ? 'catalog' : 'admin';
-  else if (project?.permissions?.isOwner || project?.role === 'owner') role = 'owner';
+  // A published admin project reached without an app, or added from the
+  // catalog, is a catalog project to its viewer.
+  if (project?.ownership === 'admin') {
+    role = project?.role === 'catalog' || project?.subscribed === true ? 'catalog' : 'admin';
+  } else if (project?.permissions?.isOwner || project?.role === 'owner') role = 'owner';
   else if (project?.role === 'editor') role = 'editor';
   else if (project?.role === 'catalog') role = 'catalog';
   const labels = {

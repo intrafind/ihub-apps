@@ -6350,8 +6350,6 @@
       "linkNoProjects": "Es gibt kein anderes Projekt, das Sie nutzen können.",
       "linkProject": "Projekt",
       "linkChooseProject": "Projekt wählen…",
-      "linkPublished": "{{name}} (veröffentlicht)",
-      "linkFromApps": "{{name}} (aus Apps)",
       "linkNoItems": "Dieses Projekt hat keine Dokumente.",
       "linkDocuments": "Dokumente",
       "linkAlready": "Schon verknüpft",
@@ -6397,7 +6395,10 @@
       "crawlNoPages": "Keine Seiten gefunden.",
       "crawlAlready": "Bereits hinzugefügt",
       "submitPages_one": "{{count}} Seite hinzufügen",
-      "submitPages_other": "{{count}} Seiten hinzufügen"
+      "submitPages_other": "{{count}} Seiten hinzufügen",
+      "linkChangeProject": "Ändern",
+      "linkPublishedDetail": "Für alle veröffentlicht",
+      "linkFromAppsDetail": "Gehört zu einer Ihrer Apps"
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -6681,7 +6682,8 @@
       "title": "Projekte für diesen Chat",
       "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
       "remove": "{{name}} aus diesem Chat entfernen",
-      "full": "Ein Chat kann höchstens {{max}} Projekte nutzen."
+      "full": "Ein Chat kann höchstens {{max}} Projekte nutzen.",
+      "button": "Projekt"
     },
     "composer": {
       "placeholder": "Neuer Chat in {{name}}",
@@ -6710,20 +6712,31 @@
       "confirmTitle": "Im Katalog veröffentlichen?",
       "confirmMessage": "Alle angemeldeten Personen können das Projekt dann im Katalog finden, seine Dokumente und Anweisungen lesen und damit chatten. Sie werden keine Mitglieder: Sie können es nicht ändern und sehen die Chats der Mitglieder nicht. Sie können es jederzeit wieder herausnehmen.",
       "dialogTitle": "Projektkatalog",
-      "dialogHint": "Projekte, die ihre Besitzer für alle veröffentlicht haben: Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen; Besitzer und Bearbeiter halten es aktuell. Projekte der Administratoren stehen allen bereits offen: Öffnen Sie eines, um es zu lesen oder seine Dokumente mit Ihren Projekten zu verknüpfen.",
+      "dialogHint": "Projekte, die ihre Besitzer oder die Administratoren für alle veröffentlicht haben: Fügen Sie eines zu Ihren Projekten hinzu, um es in Ihren Chats zu nutzen. Wer es veröffentlicht hat, hält es aktuell.",
       "search": "Katalog durchsuchen",
       "noMatches": "Kein veröffentlichtes Projekt passt.",
       "empty": "Noch nichts veröffentlicht.",
       "byOwner": "Von {{name}}",
       "byAdmins": "Von den Administratoren",
-      "openToEveryone": "Für alle offen",
       "inYourList": "In Ihren Projekten",
       "removeNamed": "{{name}} aus meinen Projekten entfernen",
       "addNamed": "{{name}} zu meinen Projekten hinzufügen",
       "added": "Hinzugefügt",
       "addShort": "Hinzufügen",
       "browse": "Katalog durchsuchen",
-      "publishedOffHint": "Veröffentlicht, aber der Katalog ist ausgeschaltet: Niemand findet oder nutzt es über den Katalog, bis ein Administrator ihn wieder einschaltet."
+      "publishedOffHint": "Veröffentlicht, aber der Katalog ist ausgeschaltet: Niemand findet oder nutzt es über den Katalog, bis ein Administrator ihn wieder einschaltet.",
+      "adminAddedHint": "Sie haben dieses Projekt zu Ihren Projekten hinzugefügt; die Administratoren halten es aktuell. „Neuer Chat“ startet einen Chat mit angehängtem Projekt, und die Chat-Eingabe bietet es an.",
+      "adminNotAddedHint": "Die Administratoren haben dieses Projekt für alle bereitgestellt. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in der Chat-Eingabe zu finden."
+    },
+    "picker": {
+      "search": "Projekte durchsuchen",
+      "noMatches": "Kein Projekt passt.",
+      "empty": "Es gibt kein Projekt zur Auswahl.",
+      "sections": {
+        "mine": "Meine Projekte",
+        "shared": "Mit mir geteilt",
+        "admin": "Von den Administratoren"
+      }
     }
   }
 }

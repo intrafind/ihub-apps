@@ -21,6 +21,7 @@ import {
   PROJECT_LIST_FILTERS,
   countProjectGroups,
   filterProjectList,
+  isInMyProjects,
   memberCountOf,
   projectCreation,
   projectDisplayName
@@ -29,7 +30,10 @@ import {
 /** Projects per page: the default, and the choices. */
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
-/** The list shows the viewer's own and shared projects; admin ones are not listed. */
+/**
+ * The list shows the viewer's own and shared projects and those they added
+ * from the catalog; the admin projects that come with their apps are not listed.
+ */
 const USER_PROJECT_LIST_FILTERS = PROJECT_LIST_FILTERS.filter(id => id !== 'apps');
 
 /** A date in the user's language. */
@@ -114,11 +118,9 @@ export default function ProjectsPage() {
   const { config } = useProjectsConfig();
   const { projects: allProjects, loading, error } = useMyProjects();
   // Projects an admin created are linked to apps and managed by admins: a user
-  // cannot start a chat in one, so they are not listed here.
-  const projects = useMemo(
-    () => allProjects.filter(project => project.ownership === 'user'),
-    [allProjects]
-  );
+  // cannot start a chat in one, so they are not listed here — unless the
+  // viewer added one made available to everyone from the catalog.
+  const projects = useMemo(() => allProjects.filter(isInMyProjects), [allProjects]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);

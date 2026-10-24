@@ -76,7 +76,10 @@ import { startLiveTranscription } from '../../../utils/liveTranscription';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
-import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
+import {
+  MAX_ATTACHED_PROJECTS,
+  useChatAttachedProjects
+} from '../../projects/hooks/useChatAttachedProjects';
 import { ATTACH_PROJECT_QUERY_PARAM, PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
 
@@ -280,9 +283,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // A chat started from a project page (`?project=<id>`, #1036 spec 1 §6.3):
   // the project rides on the chat request as `projectId`.
   const projectParam = searchParams.get(PROJECT_QUERY_PARAM);
-  // A chat started with a project attached (`?attachProject=<id>`), the way
-  // someone who took a project from the catalog uses it.
-  const attachProjectParam = searchParams.get(ATTACH_PROJECT_QUERY_PARAM);
+  // A chat started with projects attached (`?attachProject=<id>`, once per
+  // project): the way someone who took a project from the catalog uses it,
+  // and the projects ticked in the start page's chat input.
+  const attachProjectParams = searchParams.getAll(ATTACH_PROJECT_QUERY_PARAM);
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
   // Set by handleResendMessage once the resend content/variables/files have
@@ -949,7 +953,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // picks on the message.
   const chatStoredServerSide = Boolean(routeChatId) || chatStarted;
   // One controller for the projects attached to the chat, shared by the chips
-  // and the "+" menu: their changes cannot race, and a failure is still shown
+  // and the project picker: their changes cannot race, and a failure is still shown
   // after the menu has closed.
   const attachedProjects = useChatAttachedProjects({
     chatId,
@@ -987,7 +991,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setChatProjectId(null);
     setStoredTemporary(null);
     // A stored chat brings its own list when it loads below.
-    setAttachedProjectIds(!embedded && attachProjectParam ? [attachProjectParam] : []);
+    setAttachedProjectIds(
+      embedded
+        ? []
+        : [...new Set(attachProjectParams.filter(Boolean))].slice(0, MAX_ATTACHED_PROJECTS)
+    );
     // eslint-disable-next-line @eslint-react/exhaustive-deps -- once per chat, not per URL change
   }, [chatId]);
 
@@ -2702,7 +2710,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // keyboard listeners are on the window. `48rem` is Tailwind's `md`.
   const isDesktopLayout = useMediaQuery('(min-width: 48rem)');
 
-  // The projects of the chat, for the composer's chips and "+" menu and for the
+  // The projects of the chat, for the composer's chips and project picker and for the
   // start form. Where the app takes no personal projects (switched off after
   // the chat began), none is shown: the answers do not use them, so chips
   // saying "in project X" would mislead. A chat is never moved into a
@@ -2796,7 +2804,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
       // The project the chat runs in (started from the project page) and the
-      // ones it draws on, chosen in the "+" menu. A chat is never moved into a
+      // ones it draws on, chosen in the project picker. A chat is never moved into a
       // project once it exists.
       projectContext: projectContextOfChat,
       // Ephemeral chat toggle (rendered next to the send button)

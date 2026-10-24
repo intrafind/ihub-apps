@@ -16,7 +16,7 @@ import {
 } from '../utils/slashCommand';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
-import { useOfferedProjects } from '../../projects/components/ChatProjectsMenuSection';
+import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
@@ -435,8 +435,7 @@ function ChatInput({
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
   const offeredProjects = useOfferedProjects(projectContext);
-  const hasProjectMenu = offeredProjects.length > 0;
-  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (hasProjectMenu ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
   const isSingleActionOptimization =
     totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
@@ -831,11 +830,12 @@ function ChatInput({
               onWebsearchEnabledChange={onWebsearchEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
-              projectContext={projectContext}
-              offeredProjects={offeredProjects}
             />
 
-            {/* The projects of the chat. The choice itself lives in the "+" menu. */}
+            {/* The projects of the chat: picked in the project picker, shown as chips. */}
+            {projectContext && (
+              <ChatProjectPicker projectContext={projectContext} offered={offeredProjects} />
+            )}
             {projectContext && <ChatProjectChips projectContext={projectContext} />}
 
             {/* Web search is on: say so in the bar, and turn it off in one

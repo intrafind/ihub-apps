@@ -50,7 +50,10 @@ function ProjectsConfigSection({ app, onChange, t }) {
             )}
           </p>
         </div>
-        <div className="mt-5 md:col-span-2 md:mt-0 space-y-4">
+        {/* `min-w-0` here and on the fieldset: both would otherwise grow to
+            their content's width, so a long project description overflowed
+            the card instead of being truncated. */}
+        <div className="mt-5 md:col-span-2 md:mt-0 space-y-4 min-w-0">
           <div>
             <div className="flex items-center">
               <input
@@ -103,7 +106,7 @@ function ProjectsConfigSection({ app, onChange, t }) {
           <fieldset
             disabled={!projectsOn}
             aria-label={t('admin.apps.edit.projects', 'Projects')}
-            className={projectsOn ? '' : 'opacity-50'}
+            className={`min-w-0 ${projectsOn ? '' : 'opacity-50'}`}
           >
             <ProjectPicker value={app.projects || []} onChange={handleProjectsChange} />
           </fieldset>

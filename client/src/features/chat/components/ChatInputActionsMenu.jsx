@@ -14,9 +14,6 @@ import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import ChatProjectsMenuSection, {
-  projectNavKey
-} from '../../projects/components/ChatProjectsMenuSection';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -58,14 +55,9 @@ function ChatInputActionsMenu({
   // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
   // `hostContextFlags` is the user-visible state map keyed by toggle.key.
   hostContextFlags = null,
-  onHostContextFlagChange = null,
-  // Projects the chat can draw on: the chat's `projectContext`, and the
-  // projects offered for ticking (computed once, by ChatInput).
-  projectContext = null,
-  offeredProjects = []
+  onHostContextFlagChange = null
 }) {
   const { t, i18n } = useTranslation();
-  const hasProjects = offeredProjects.length > 0;
   const { platformConfig } = usePlatformConfig();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
@@ -204,12 +196,7 @@ function ChatInputActionsMenu({
   // Check if we have any actions to show
   const hasHostContextToggles = hostContextToggles.length > 0;
   const hasActions =
-    hasTools ||
-    hasWebsearch ||
-    hasProjects ||
-    hasHostContextToggles ||
-    hasCloudProviders ||
-    quickActionCount > 0;
+    hasTools || hasWebsearch || hasHostContextToggles || hasCloudProviders || quickActionCount > 0;
 
   if (!hasActions) return null;
 
@@ -219,7 +206,6 @@ function ChatInputActionsMenu({
     quickActionCount +
     (hasTools ? 1 : 0) +
     (hasWebsearch ? 1 : 0) +
-    (hasProjects ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
@@ -293,7 +279,6 @@ function ChatInputActionsMenu({
     if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
   });
   if (hasWebsearch) menuNavItems.push('websearch');
-  offeredProjects.forEach(project => menuNavItems.push(projectNavKey(project.id)));
   grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
@@ -302,11 +287,7 @@ function ChatInputActionsMenu({
   // Quick Actions and Image Generation are hidden on desktop with md:hidden
   // So only Cloud Storage, Web Search, and Tools remain visible on desktop
   const hasDesktopMenuContent =
-    enabledCloudProviders.length > 0 ||
-    hasWebsearch ||
-    hasProjects ||
-    hasTools ||
-    hasHostContextToggles;
+    enabledCloudProviders.length > 0 || hasWebsearch || hasTools || hasHostContextToggles;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -470,9 +451,7 @@ function ChatInputActionsMenu({
           {hostContextToggles.length > 0 && (
             <div
               className={`p-3 ${
-                hasTools || hasWebsearch || hasProjects
-                  ? 'border-b border-gray-200 dark:border-gray-700'
-                  : ''
+                hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''
               }`}
             >
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -515,9 +494,7 @@ function ChatInputActionsMenu({
           {/* Web Search Section */}
           {hasWebsearch && (
             <div
-              className={`p-3 ${
-                hasTools || hasProjects ? 'border-b border-gray-200 dark:border-gray-700' : ''
-              }`}
+              className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
               <div
                 role="menuitemcheckbox"
@@ -557,16 +534,6 @@ function ChatInputActionsMenu({
                 </span>
               </div>
             </div>
-          )}
-
-          {/* Projects the chat draws on */}
-          {hasProjects && (
-            <ChatProjectsMenuSection
-              projectContext={projectContext}
-              offered={offeredProjects}
-              navTabIndex={navTabIndex}
-              divider={hasTools}
-            />
           )}
 
           {/* Tools Section */}

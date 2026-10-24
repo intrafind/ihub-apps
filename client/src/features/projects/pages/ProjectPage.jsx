@@ -153,6 +153,10 @@ function ProjectPageContent({ projectId }) {
   const editable = isUserProject && permissions.canEdit === true && !permissions.readOnly;
   const readOnlyOwnerGone =
     isUserProject && (permissions.readOnly === true || project.owner?.active === false);
+  // An admin project available to everyone: added from the catalog, and
+  // chatted with attached. The server sends `subscribed` for exactly those.
+  const usableAdminProject =
+    project.ownership === 'admin' && typeof project.subscribed === 'boolean';
   const description = localizedText(project.description, language);
 
   return (
@@ -216,8 +220,9 @@ function ProjectPageContent({ projectId }) {
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* The main thing to do with a project: chat with its documents. Someone
-                who took it from the catalog starts a chat outside it, with it attached. */}
-            {isUserProject && !readOnlyOwnerGone && (
+                who took it from the catalog starts a chat outside it, with it attached;
+                so does everyone with an admin project made available to everyone. */}
+            {(isUserProject ? !readOnlyOwnerGone : usableAdminProject) && (
               <ProjectChatComposer
                 project={project}
                 projectName={projectDisplayName(project, language)}
@@ -258,7 +263,7 @@ function ProjectPageContent({ projectId }) {
                 onLeft={backToList}
               />
             )}
-            {isUserProject && (
+            {(isUserProject || usableAdminProject) && (
               <ProjectCatalogCard
                 project={project}
                 config={config}
