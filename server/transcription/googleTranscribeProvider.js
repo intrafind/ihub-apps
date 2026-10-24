@@ -37,7 +37,7 @@
  */
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
-import { expandEnvVars, resolveApiKey } from './credentials.js';
+import { expandEnvVars, resolveVendorApiKey } from './credentials.js';
 import { annotationsOf, formatTranscript, parseOffset } from './transcriptFormat.js';
 import { pcm16ToWav, splitPcm } from './wav.js';
 
@@ -189,7 +189,7 @@ export function isPendingStatus(status) {
 export function resolveUpstream(model) {
   return {
     url: normalizeApiBase(expandEnvVars(model?.url || '')),
-    apiKey: resolveApiKey(model, { credentialProvider: 'google', envVars: ['GOOGLE_API_KEY'] }),
+    apiKey: resolveVendorApiKey(model, 'google', 'GOOGLE_API_KEY'),
     model: model?.modelId || '',
     options: model?.config || {}
   };

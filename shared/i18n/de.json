@@ -1500,7 +1500,8 @@
           "transcription": "Transkription",
           "image": "Bild",
           "moderation": "Moderation",
-          "other": "Kein Chat-Modell"
+          "other": "Kein Chat-Modell",
+          "tts": "Sprachausgabe"
         },
         "errors": {
           "idInvalid": "Nur Kleinbuchstaben, Ziffern, Punkte, Binde- und Unterstriche verwenden.",
@@ -1525,7 +1526,8 @@
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
-        }
+        },
+        "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen"
       },
       "getStarted": {
         "title": "Fügen Sie die Modelle hinzu, die Ihre Apps nutzen",

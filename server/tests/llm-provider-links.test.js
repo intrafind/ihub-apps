@@ -44,6 +44,13 @@ function reset() {
         enabled: true
       },
       { id: 'gateway', name: 'Gateway', category: 'llm', apiType: 'openai', enabled: true },
+      {
+        id: 'gemini-proxy',
+        name: 'Gemini proxy',
+        category: 'llm',
+        apiType: 'google',
+        enabled: true
+      },
       { id: 'nokey', name: 'No key', category: 'llm', apiType: 'openai', enabled: true },
       // Created before API-type names were reserved as provider IDs.
       {
@@ -205,6 +212,27 @@ describe('POST/PUT /api/admin/models with providerId', () => {
         .send({ ...baseModel, id: `m-${providerId}`, provider: 'openai', providerId });
       expect(res.status).toBe(400);
     }
+  });
+
+  it('keeps the speech backend of a Google transcription model linked to a Google provider', async () => {
+    const live = {
+      ...baseModel,
+      id: 'proxy-transcribe-live',
+      provider: 'google-live',
+      providerId: 'gemini-proxy',
+      modelType: 'transcription'
+    };
+    const res = await request(app).post('/api/admin/models').send(live);
+    expect(res.status).toBe(200);
+    expect(store['models/proxy-transcribe-live.json']).toMatchObject({
+      provider: 'google-live',
+      providerId: 'gemini-proxy'
+    });
+
+    // A chat model on a speech backend is not one: it gets the API type.
+    const chat = { ...live, id: 'proxy-chat', modelType: 'chat' };
+    await request(app).post('/api/admin/models').send(chat);
+    expect(store['models/proxy-chat.json']?.provider).not.toBe('google-live');
   });
 
   it('keeps the link in line on update', async () => {

@@ -16,6 +16,7 @@ import {
   resolveModelsEndpoint,
   buildDiscoveryHeaders,
   buildInferenceUrl,
+  buildSpeechTarget,
   parseModelsResponse,
   discoverModels,
   comparableUrl,
@@ -258,7 +259,7 @@ test('OpenAI ids without metadata are typed by name; duplicates and id-less entr
   const types = Object.fromEntries(models.map(m => [m.id, m.type]));
   assert.deepEqual(types, {
     'dall-e-3': 'image',
-    'gpt-4o-mini-tts': 'audio',
+    'gpt-4o-mini-tts': 'tts',
     'gpt-4o-transcribe': 'transcription',
     'gpt-5': 'chat',
     'omni-moderation-latest': 'moderation',
@@ -287,9 +288,139 @@ test('a speech-to-text model is a transcription model, called on the audio API',
   const whisper = models.find(m => m.id === 'whisper-large-v3-turbo');
   assert.equal(whisper.type, 'transcription');
   assert.equal(whisper.url, 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions');
+  assert.equal(whisper.modelType, 'transcription');
+  assert.equal(whisper.backend, 'openai');
   // Other types keep their chat URL.
   const embed = models.find(m => m.id === 'text-embedding-bge-m3');
   assert.equal(embed.url, 'https://llm-server.llmhub.t-systems.net/v2/chat/completions');
+});
+
+/** The model configs iHub ships as examples, which an import must reproduce. */
+const exampleModel = async file =>
+  JSON.parse(await fs.readFile(new URL(`../../examples/models/${file}`, import.meta.url), 'utf8'));
+
+test('Google speech models are imported for the backend that runs them', async () => {
+  const body = {
+    models: [
+      {
+        name: 'models/gemini-3.5-transcribe',
+        displayName: 'Gemini 3.5 Transcribe',
+        inputTokenLimit: 98304,
+        supportedGenerationMethods: ['generateContent', 'countTokens']
+      },
+      {
+        name: 'models/gemini-3.5-transcribe-live',
+        displayName: 'Gemini 3.5 Transcribe Live',
+        inputTokenLimit: 131072,
+        supportedGenerationMethods: ['bidiGenerateContent']
+      },
+      {
+        name: 'models/gemini-3.8-flash-tts',
+        displayName: 'Gemini 3.8 Flash TTS',
+        supportedGenerationMethods: ['generateContent', 'countTokens']
+      },
+      {
+        name: 'models/gemini-3.8-flash-native-audio',
+        supportedGenerationMethods: ['bidiGenerateContent']
+      },
+      { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }
+    ]
+  };
+  const { fetch } = fakeFetch(fakeResponse(200, body));
+  const { models } = await discoverModels(
+    { url: 'https://generativelanguage.googleapis.com/v1beta', provider: 'google', apiKey: 'k' },
+    { fetch }
+  );
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+
+  // Same backend and URL as the shipped examples, so a model already set up
+  // from one of them shows as "Already added".
+  for (const [id, type] of [
+    ['gemini-3.5-transcribe', 'transcription'],
+    ['gemini-3.5-transcribe-live', 'transcription'],
+    ['gemini-3.8-flash-tts', 'tts']
+  ]) {
+    const example = await exampleModel(`google/${id}.json`);
+    assert.equal(byId[id].type, type, id);
+    assert.equal(byId[id].modelType, example.modelType, id);
+    assert.equal(byId[id].backend, example.provider, id);
+    assert.equal(byId[id].url, example.url, id);
+  }
+  assert.equal(byId['gemini-3.5-transcribe-live'].backend, 'google-live');
+  assert.equal(byId['gemini-3.5-transcribe'].backend, 'google-transcribe');
+
+  // A Live API model that is not a transcription model stays an audio model.
+  assert.equal(byId['gemini-3.8-flash-native-audio'].type, 'audio');
+  assert.equal(byId['gemini-3.8-flash-native-audio'].modelType, undefined);
+  assert.equal(byId['gemini-3.8-flash'].type, 'chat');
+  assert.equal(byId['gemini-3.8-flash'].modelType, undefined);
+});
+
+test('Mistral realtime transcription and text-to-speech are imported; batch transcription is not supported', async () => {
+  const notChat = { completion_chat: false, function_calling: false, vision: false };
+  const body = {
+    data: [
+      { id: 'voxtral-mini-transcribe-realtime-2602', capabilities: notChat },
+      { id: 'voxtral-mini-tts-2603', capabilities: notChat },
+      { id: 'voxtral-mini-transcribe-2507', capabilities: notChat },
+      { id: 'mistral-small-latest', capabilities: { completion_chat: true } }
+    ]
+  };
+  const { fetch } = fakeFetch(fakeResponse(200, body));
+  const { models } = await discoverModels(
+    { url: 'https://api.mistral.ai/v1', provider: 'mistral', apiKey: 'k' },
+    { fetch }
+  );
+  const byId = Object.fromEntries(models.map(m => [m.id, m]));
+
+  const realtime = await exampleModel('mistral/voxtral-mini-transcribe-realtime.json');
+  assert.equal(byId['voxtral-mini-transcribe-realtime-2602'].modelType, 'transcription');
+  assert.equal(byId['voxtral-mini-transcribe-realtime-2602'].backend, realtime.provider);
+  assert.equal(byId['voxtral-mini-transcribe-realtime-2602'].url, realtime.url);
+
+  const tts = await exampleModel('mistral/voxtral-mini-tts.json');
+  assert.equal(byId['voxtral-mini-tts-2603'].type, 'tts');
+  assert.equal(byId['voxtral-mini-tts-2603'].modelType, 'tts');
+  assert.equal(byId['voxtral-mini-tts-2603'].backend, tts.provider);
+  assert.equal(byId['voxtral-mini-tts-2603'].url, tts.url);
+
+  // iHub runs Mistral transcription over the realtime API only.
+  assert.equal(byId['voxtral-mini-transcribe-2507'].type, 'transcription');
+  assert.equal(byId['voxtral-mini-transcribe-2507'].unsupported, true);
+  assert.equal(byId['voxtral-mini-transcribe-2507'].modelType, undefined);
+  assert.equal(byId['mistral-small-latest'].unsupported, undefined);
+});
+
+test('buildSpeechTarget follows the host and scheme of the endpoint', () => {
+  assert.deepEqual(
+    buildSpeechTarget('google', 'https://gemini-proxy.example/v1alpha', {
+      id: 'gemini-x-transcribe-live',
+      type: 'transcription',
+      realtime: true
+    }),
+    {
+      modelType: 'transcription',
+      backend: 'google-live',
+      url: 'wss://gemini-proxy.example/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent'
+    }
+  );
+  assert.equal(
+    buildSpeechTarget('mistral', 'http://voxtral.local:8000/v1', {
+      id: 'voxtral-realtime',
+      type: 'transcription',
+      realtime: true
+    }).url,
+    'ws://voxtral.local:8000/v1/audio/transcriptions/realtime'
+  );
+  // No backend for OpenAI text-to-speech or Anthropic speech.
+  assert.equal(
+    buildSpeechTarget('openai', 'https://api.openai.com/v1', { id: 'tts-1', type: 'tts' }),
+    null
+  );
+  assert.equal(
+    buildSpeechTarget('google', 'https://g/v1beta', { id: 'gemini', type: 'chat' }),
+    null
+  );
 });
 
 test('only the OpenAI API types call a transcription model on the audio API', () => {

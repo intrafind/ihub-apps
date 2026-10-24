@@ -70,6 +70,30 @@ export const MODEL_API_TYPES = Object.freeze([
   'google-transcribe'
 ]);
 
+/**
+ * Speech backends a transcription model may run on instead of the adapter of
+ * its provider's API type: Gemini's Live API and its Files API transcription
+ * (server/transcription/), reached with the key of a Google provider.
+ */
+const SPEECH_BACKENDS = Object.freeze({
+  google: Object.freeze(['google-live', 'google-transcribe'])
+});
+
+/**
+ * The `provider` (API type) of a model linked to a provider entry of API type
+ * `apiType`: that API type, except for a transcription model on one of its
+ * speech backends, which keeps the backend.
+ *
+ * @param {string} apiType - API type of the provider entry
+ * @param {Object} model - Model config (`provider`, `modelType`)
+ * @returns {string}
+ */
+export function linkedModelProvider(apiType, model) {
+  return model?.modelType === 'transcription' && SPEECH_BACKENDS[apiType]?.includes(model.provider)
+    ? model.provider
+    : apiType;
+}
+
 /** True for an ID a new provider entry cannot take (see MODEL_API_TYPES). */
 export function isReservedProviderId(id) {
   return MODEL_API_TYPES.includes(id);

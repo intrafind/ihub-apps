@@ -131,10 +131,13 @@ describe('buildImportedModelConfig', () => {
     expect(config.enabled).toBe(false);
   });
 
+  // As discovery returns it: the speech backend and URL it is imported with.
   const whisper = {
     id: 'whisper-large-v3-turbo',
     name: 'Whisper Large v3 Turbo',
     type: 'transcription',
+    modelType: 'transcription',
+    backend: 'openai',
     url: 'https://llm-server.llmhub.t-systems.net/v2/audio/transcriptions',
     contextWindow: 4096
   };
@@ -157,14 +160,66 @@ describe('buildImportedModelConfig', () => {
     expect(config.contextWindow).toBeUndefined();
   });
 
-  it('leaves it a plain import where iHub cannot run the API type’s speech models', () => {
-    const config = buildImportedModelConfig(whisper, {
+  it('imports a Gemini live transcription model for the Live API backend', () => {
+    const live = {
+      id: 'gemini-3.5-transcribe-live',
+      name: 'Gemini 3.5 Transcribe Live',
+      type: 'transcription',
+      modelType: 'transcription',
+      backend: 'google-live',
+      url: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent',
+      contextWindow: 131072
+    };
+    const config = buildImportedModelConfig(live, {
+      id: 'gemini-3.5-transcribe-live',
+      apiType: 'google',
+      providerId: 'google',
+      modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
+    });
+    expect(config).toMatchObject({
+      modelId: 'gemini-3.5-transcribe-live',
+      provider: 'google-live',
+      modelType: 'transcription',
+      url: live.url
+    });
+    // Reached through the built-in Google provider: no link stored.
+    expect(config.providerId).toBeUndefined();
+    expect(config.contextWindow).toBeUndefined();
+  });
+
+  it('imports a text-to-speech model, keeping the link to a custom provider', () => {
+    const tts = {
+      id: 'voxtral-mini-tts-2603',
+      name: 'Voxtral Mini TTS',
+      type: 'tts',
+      modelType: 'tts',
+      backend: 'mistral',
+      url: 'https://mistral-gw.example/v1/audio/speech'
+    };
+    const config = buildImportedModelConfig(tts, {
+      id: 'gw-voxtral-mini-tts',
+      apiType: 'mistral',
+      providerId: 'mistral-gw',
+      modelsUrl: 'https://mistral-gw.example/v1/models'
+    });
+    expect(config).toMatchObject({
+      provider: 'mistral',
+      providerId: 'mistral-gw',
+      modelType: 'tts',
+      url: tts.url
+    });
+  });
+
+  it('leaves it a plain import when discovery names no speech backend', () => {
+    const { modelType: _type, backend: _backend, ...unmapped } = whisper;
+    const config = buildImportedModelConfig(unmapped, {
       id: 'm',
       apiType: 'mistral',
       providerId: 'mistral',
       modelsUrl: 'https://api.mistral.ai/v1/models'
     });
     expect(config.modelType).toBeUndefined();
+    expect(config.provider).toBe('mistral');
   });
 });
 

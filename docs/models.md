@@ -262,10 +262,20 @@ you pick, so they need not be typed in one by one.
    moderation models are marked and not selected by **Select all**. Models already configured for
    the same endpoint show as **Already added**.
 
-   A **Transcription** model (Whisper; LLM Hub reports it as `model_type: "STT"`) from an
-   OpenAI-compatible endpoint is imported as a [transcription model](#transcription-models) on
-   the endpoint's `/audio/transcriptions`, ready for voice input and recording. With the provider
-   it keeps the provider's key.
+   Speech models are imported for the backend that runs them, ready for voice input, recording
+   and read aloud. With the provider they keep the provider's key.
+
+   | Listed model                                                                   | Imported as                                                                                       |
+   | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+   | Whisper on an OpenAI-compatible endpoint (LLM Hub reports `model_type: "STT"`) | [Transcription model](#transcription-models) on the endpoint's `/audio/transcriptions`            |
+   | Gemini transcription (`gemini-…-transcribe`)                                   | Transcription model on the Gemini Files API (`google-transcribe`)                                 |
+   | Gemini live transcription (`gemini-…-transcribe-live`)                         | Transcription model on the Gemini Live API WebSocket (`google-live`)                              |
+   | Gemini text-to-speech (`gemini-…-tts`)                                         | [Text-to-speech model](#text-to-speech-models) on the model's `streamGenerateContent`            |
+   | Voxtral realtime transcription (`voxtral-…-transcribe-realtime-…`)             | Transcription model on Mistral's realtime WebSocket (`…/audio/transcriptions/realtime`)           |
+   | Voxtral text-to-speech (`voxtral-…-tts-…`)                                     | Text-to-speech model on Mistral's `/audio/speech`                                                 |
+
+   A speech model iHub has no backend for, such as Mistral's batch transcription or OpenAI's
+   text-to-speech, is listed but cannot be picked.
 4. Adjust the iHub model IDs if needed (an ID prefix applies to all of them), and **Import**.
    With **+ New provider**, you can also pick no model and choose **Create provider without
    models**: the provider is created with the endpoint's normalized base URL and the key, for an
@@ -306,9 +316,8 @@ models of the provider it connected. The first chat model you enable becomes the
 
 The cloud model configurations earlier versions shipped (Gemini, Claude, GPT-5, Mistral, Voxtral
 on Mistral's API, and the Gemini transcription and text-to-speech models) are in the **iHub
-Examples** registry under **Admin → Marketplace** (`examples/models/`), for models that importing
-from a provider cannot set up, such as the Gemini text-to-speech and live transcription models.
-Existing installations keep the models they have.
+Examples** registry under **Admin → Marketplace** (`examples/models/`), with the settings they
+shipped with, such as a preset voice. Existing installations keep the models they have.
 
 ### Models from the Marketplace
 

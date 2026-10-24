@@ -15,7 +15,6 @@
 import {
   BUILT_IN_LLM_PROVIDERS,
   CUSTOM_PROVIDER_API_TYPES,
-  TRANSCRIPTION_API_TYPES,
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 import { TOOL_SUPPORT } from '../../../../../shared/modelCapabilities.js';
@@ -183,11 +182,14 @@ export function buildImportedModelConfig(
   if (providerId && !BUILT_IN_LLM_PROVIDERS.includes(providerId)) {
     config.providerId = providerId;
   }
-  // Whisper and co. on an OpenAI-compatible endpoint: a transcription model,
-  // called on the audio API (the URL discovery built) and offered for voice
-  // input and transcription. Chat settings mean nothing to it.
-  if (entry.type === 'transcription' && TRANSCRIPTION_API_TYPES.includes(apiType)) {
-    config.modelType = 'transcription';
+  // A speech model — Whisper on an OpenAI-compatible endpoint, Gemini or
+  // Voxtral transcription and text-to-speech — runs on the speech backend
+  // discovery named (`google-live`, `mistral`, …) at the URL it built, and is
+  // offered for voice input, transcription or read aloud. Chat settings mean
+  // nothing to it.
+  if (entry.modelType === 'transcription' || entry.modelType === 'tts') {
+    config.provider = entry.backend || apiType;
+    config.modelType = entry.modelType;
     return config;
   }
   if (entry.contextWindow) config.contextWindow = entry.contextWindow;

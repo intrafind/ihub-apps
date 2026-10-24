@@ -202,3 +202,49 @@ test('no key field for a provider that already holds a key', async () => {
   expect(screen.queryByLabelText('API key')).not.toBeInTheDocument();
   expect(screen.getByText('The API key stored on this provider is used.')).toBeInTheDocument();
 });
+
+test('speech models are imported for their backend; one iHub cannot run cannot be picked', async () => {
+  const google = {
+    id: 'google',
+    name: 'Google',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    apiKeySet: true
+  };
+  const liveUrl =
+    'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+  mockApi({
+    providers: [google],
+    models: [
+      {
+        id: 'gemini-3.5-transcribe-live',
+        name: 'Gemini 3.5 Transcribe Live',
+        type: 'transcription',
+        modelType: 'transcription',
+        backend: 'google-live',
+        url: liveUrl
+      },
+      { id: 'speaker-x', name: 'Speaker X', type: 'tts', unsupported: true, url: 'https://g/x' }
+    ]
+  });
+  await renderDialog({ initialProviderId: 'google' });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Load models/ }));
+  });
+
+  expect(screen.getByText('Text-to-speech')).toBeInTheDocument();
+  expect(screen.getByText('iHub cannot run this model from this provider')).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Speaker X' })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Gemini 3.5 Transcribe Live' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 models' }));
+  });
+  const [[, createModel]] = calls('/admin/models', 'POST');
+  expect(createModel.body).toMatchObject({
+    id: 'gemini-3.5-transcribe-live',
+    provider: 'google-live',
+    modelType: 'transcription',
+    url: liveUrl
+  });
+  expect(createModel.body.providerId).toBeUndefined();
+});

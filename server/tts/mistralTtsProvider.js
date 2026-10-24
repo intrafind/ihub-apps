@@ -21,7 +21,7 @@
 import { createParser } from 'eventsource-parser';
 import { httpFetch } from '../utils/httpConfig.js';
 import { getReadableStream } from '../utils/streamUtils.js';
-import { expandEnvVars, resolveApiKey } from '../transcription/credentials.js';
+import { expandEnvVars, resolveVendorApiKey } from '../transcription/credentials.js';
 import { selectVoice } from './language.js';
 import { TtsUpstreamError } from './errors.js';
 
@@ -50,7 +50,7 @@ export function resolveUpstream(model, { language } = {}) {
     url: expandEnvVars(model?.url || '').trim() || DEFAULT_URL,
     // Same chain a Mistral chat model uses: model key, the `mistral` provider
     // key, <MODEL_ID>_API_KEY, MISTRAL_API_KEY.
-    apiKey: resolveApiKey(model, { credentialProvider: 'mistral', envVars: ['MISTRAL_API_KEY'] }),
+    apiKey: resolveVendorApiKey(model, 'mistral', 'MISTRAL_API_KEY'),
     model: model?.modelId || DEFAULT_MODEL,
     voice: selectVoice(model?.tts, language) || DEFAULT_VOICE
   };

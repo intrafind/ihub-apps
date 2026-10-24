@@ -36,7 +36,7 @@ import googleTranscribe, {
 import { formatClock } from '../transcription/transcriptFormat.js';
 import { pcm16ToWav } from '../transcription/wav.js';
 import vllmRealtime from '../transcription/vllmRealtimeProvider.js';
-import { resolveApiKey } from '../transcription/credentials.js';
+import { resolveApiKey, resolveVendorApiKey } from '../transcription/credentials.js';
 
 const liveModel = {
   id: 'gemini-3.5-transcribe-live',
@@ -712,6 +712,35 @@ describe('transcription credential resolution', () => {
     } finally {
       if (before === undefined) delete process.env.GOOGLE_API_KEY;
       else process.env.GOOGLE_API_KEY = before;
+    }
+  });
+
+  test("a model linked to a custom provider takes that provider's key, not the vendor's", () => {
+    const before = { google: process.env.GOOGLE_API_KEY, proxy: process.env.GEMINI_PROXY_API_KEY };
+    process.env.GOOGLE_API_KEY = 'google-env-key';
+    process.env.GEMINI_PROXY_API_KEY = 'proxy-env-key';
+    try {
+      const linked = { id: 'gemini-x', provider: 'google-live', providerId: 'gemini-proxy' };
+      expect(resolveVendorApiKey(linked, 'google', 'GOOGLE_API_KEY')).toBe('proxy-env-key');
+      expect(googleLive.resolveUpstream(linked).apiKey).toBe('proxy-env-key');
+      expect(
+        googleTranscribe.resolveUpstream({ ...linked, provider: 'google-transcribe' }).apiKey
+      ).toBe('proxy-env-key');
+      // Unlinked, or linked to the vendor's own entry: the vendor's key.
+      expect(resolveVendorApiKey({ id: 'gemini-x' }, 'google', 'GOOGLE_API_KEY')).toBe(
+        'google-env-key'
+      );
+      expect(
+        resolveVendorApiKey({ id: 'gemini-x', providerId: 'google' }, 'google', 'GOOGLE_API_KEY')
+      ).toBe('google-env-key');
+    } finally {
+      for (const [name, value] of [
+        ['GOOGLE_API_KEY', before.google],
+        ['GEMINI_PROXY_API_KEY', before.proxy]
+      ]) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   });
 

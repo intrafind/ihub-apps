@@ -231,7 +231,9 @@ The OpenAI, Anthropic, Google and Mistral providers now carry their public API b
 
 ## New installations start without cloud models
 
-A new installation no longer ships preconfigured Gemini, Claude, GPT and Mistral models. It starts with the disabled local models only (vLLM chat, Voxtral transcription on vLLM, iAssistant), and you add the cloud models you want from the provider: while fewer than five models are configured, **Admin → Models** shows **Import from provider** and **Create new model** in the middle of the page, and the setup wizard ends with **Add your models** for the provider you connected. The first chat model you enable becomes the default. The former model configurations are in the **iHub Examples** registry under **Admin → Marketplace**, including the Gemini text-to-speech and live transcription models. Existing installations keep their models unchanged.
+A new installation no longer ships preconfigured Gemini, Claude, GPT and Mistral models. It starts with the disabled local models only (vLLM chat, Voxtral transcription on vLLM, iAssistant), and you add the cloud models you want from the provider: while fewer than five models are configured, **Admin → Models** shows **Import from provider** and **Create new model** in the middle of the page, and the setup wizard ends with **Add your models** for the provider you connected. The first chat model you enable becomes the default. The former model configurations are in the **iHub Examples** registry under **Admin → Marketplace**. Existing installations keep their models unchanged.
+
+**Import from URL** now also sets up the speech models of Google and Mistral: Gemini transcription and live transcription, Gemini text-to-speech, and Voxtral realtime transcription and text-to-speech are imported as transcription or text-to-speech models, ready for voice input, recording and read aloud. A speech model iHub cannot run, such as Mistral's batch transcription, is listed but cannot be picked. Such models imported through a custom provider use that provider's API key.
 
 ## Scheduled tasks: keep fewer runs, delete runs
 

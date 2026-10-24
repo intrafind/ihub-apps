@@ -53,6 +53,7 @@ function typeLabel(t, type) {
     rerank: t('admin.models.import.types.rerank', 'Reranker'),
     audio: t('admin.models.import.types.audio', 'Audio'),
     transcription: t('admin.models.import.types.transcription', 'Transcription'),
+    tts: t('admin.models.import.types.tts', 'Text-to-speech'),
     image: t('admin.models.import.types.image', 'Image'),
     moderation: t('admin.models.import.types.moderation', 'Moderation'),
     other: t('admin.models.import.types.other', 'Not a chat model')
@@ -235,7 +236,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
     );
   }, [models, search]);
 
-  const selectedModels = models.filter(m => selected[m.id]);
+  const selectedModels = models.filter(m => selected[m.id] && !m.unsupported);
   const idProblems = findIdProblems(
     selectedModels.map(m => ({ key: m.id, id: targetIdOf(m) })),
     existingModelIds
@@ -665,6 +666,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={model.unsupported}
                         onChange={e =>
                           setSelected(prev => ({ ...prev, [model.id]: e.target.checked }))
                         }
@@ -685,6 +687,16 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
                             className={`${BADGE} bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300`}
                           >
                             {typeLabel(t, model.type)}
+                          </span>
+                        )}
+                        {model.unsupported && (
+                          <span
+                            className={`${BADGE} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}
+                          >
+                            {t(
+                              'admin.models.import.unsupported',
+                              'iHub cannot run this model from this provider'
+                            )}
                           </span>
                         )}
                         {model.supportsVision && (
