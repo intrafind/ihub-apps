@@ -4162,6 +4162,9 @@
         "instructionsHint": "Wird dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen, in jedem Verknüpfungsmodus. Beschreiben Sie, wie das Wissen zu verwenden ist; Fakten gehören in Dokumente.",
         "category": "Kategorie",
         "categoryPlaceholder": "Optionale Kategorie",
+        "defaultApp": "Standard-App",
+        "defaultAppNone": "Kein Standard (erste verfügbare App)",
+        "defaultAppHint": "Chats in diesem Projekt starten in dieser App. So ist die richtige App automatisch ausgewählt, wenn Nutzer das Projekt zu ihren Projekten hinzufügen. Sie können weiterhin eine andere App wählen.",
         "tags": "Tags",
         "tagsPlaceholder": "hr, richtlinien",
         "tagsHint": "Tags durch Kommas trennen."

@@ -241,3 +241,7 @@ Runs can also be deleted by hand from the task page — one run, a selection, or
 together with its run record. Before, it removed only the record and left the chat to the chat
 retention rules, so installations that keep chats longer than 90 days will now lose scheduled-run
 chats at that age. Set `runRetentionDays` to `0` to keep run history and its chats indefinitely.
+
+## Default app for admin projects
+
+Admin-created projects can now have a default app, just like personal projects. Set it in the project's name and description dialog; chats in the project then start in that app, so users who add the project to theirs get the right app selected automatically. They can still pick another app.

@@ -145,7 +145,8 @@ export function setProjectLinkMode(links, projectId, mode) {
  * The form of a project that does not exist yet.
  *
  * @returns {{id: string, name: Object, description: Object, instructions: string,
- *   enabled: boolean, published: boolean, category: string, tags: string[]}}
+ *   enabled: boolean, published: boolean, category: string, tags: string[],
+ *   defaultAppId: string}}
  */
 export function createEmptyProjectForm() {
   return {
@@ -156,7 +157,8 @@ export function createEmptyProjectForm() {
     enabled: true,
     published: false,
     category: '',
-    tags: []
+    tags: [],
+    defaultAppId: ''
   };
 }
 
@@ -179,7 +181,8 @@ export function projectFormFromProject(project) {
     enabled: project?.enabled !== false,
     published: project?.published === true,
     category: project?.category || '',
-    tags: Array.isArray(project?.tags) ? [...project.tags] : []
+    tags: Array.isArray(project?.tags) ? [...project.tags] : [],
+    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : ''
   };
 }
 
@@ -287,7 +290,8 @@ export function buildProjectPayload(form) {
     enabled: form.enabled !== false,
     published: form.published === true,
     ...(category ? { category } : {}),
-    tags: Array.isArray(form.tags) ? form.tags : []
+    tags: Array.isArray(form.tags) ? form.tags : [],
+    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {})
   };
 }
 

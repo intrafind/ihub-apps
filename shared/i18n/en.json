@@ -3878,6 +3878,9 @@
         "instructionsHint": "Added to the system prompt of every app, workflow step or agent that links this project, in every link mode. Say how the knowledge is to be used; put facts into documents.",
         "category": "Category",
         "categoryPlaceholder": "Optional category",
+        "defaultApp": "Default app",
+        "defaultAppNone": "No default (first available app)",
+        "defaultAppHint": "Chats in this project start in this app, so users who add the project to theirs get the right app selected automatically. They can still pick another app.",
         "tags": "Tags",
         "tagsPlaceholder": "hr, policies",
         "tagsHint": "Separate tags with commas."
