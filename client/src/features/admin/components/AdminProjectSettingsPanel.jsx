@@ -19,7 +19,11 @@ import {
   projectFormFromProject,
   validateProjectForm
 } from '../utils/projectAdmin';
-import { ProjectCategoryTagsFields, ProjectInstructionsField } from './AdminProjectSettingsForm';
+import {
+  ProjectCategoryTagsFields,
+  ProjectDefaultAppField,
+  ProjectInstructionsField
+} from './AdminProjectSettingsForm';
 import ProjectAvailability, {
   ProjectAvailabilityBadge,
   availabilityOptions
@@ -128,6 +132,10 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
                 tagsText={tagsText}
                 onCategoryChange={value => update('category', value)}
                 onTagsTextChange={setTagsText}
+              />
+              <ProjectDefaultAppField
+                value={form.defaultAppId}
+                onChange={value => update('defaultAppId', value)}
               />
             </>
           )}
@@ -256,6 +264,11 @@ function AdminProjectSettingsPanel({ project, onSaved }) {
             ))}
           </div>
         )}
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {t('admin.projects.fields.defaultApp', 'Default app')}:{' '}
+          {project.defaultAppId ||
+            t('admin.projects.fields.defaultAppNone', 'No default (first available app)')}
+        </p>
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {t('admin.projects.fields.id', 'Project ID')}:{' '}
           <code className="font-mono">{project.id}</code>

@@ -217,6 +217,8 @@ export const adminProjectSchema = z
     published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).prefault([]),
+    // The app new chats start in; users who open the project get it preselected.
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -264,6 +266,7 @@ export const adminProjectCreateSchema = z
     published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).prefault([]),
+    defaultAppId: zSafeId.min(1).max(100).optional(),
     items: z.array(adminItemCreateSchema).max(MAX_FILES_CEILING).prefault([])
   })
   .strict()
@@ -304,7 +307,8 @@ export const adminProjectUpdateSchema = z
     enabled: z.boolean().optional(),
     published: z.boolean().optional(),
     category: z.string().max(100).optional(),
-    tags: z.array(z.string().max(100)).optional()
+    tags: z.array(z.string().max(100)).optional(),
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
   })
   .strict();
 

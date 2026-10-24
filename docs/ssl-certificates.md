@@ -141,7 +141,7 @@ iHub Apps provides a secure way to handle SSL certificate validation through the
   - **Empty array** (default): SSL validation is **enabled** for all domains (secure default)
   - **With domains**: Only bypasses SSL for explicitly specified domains
 
-The whitelist also applies to `wss://` connections made by realtime voice transcription (for example a vLLM Voxtral `/v1/realtime` endpoint). Add the transcription model's hostname to `domainWhitelist` and set `ignoreInvalidCertificates` to `true`; plain `ws://` endpoints have no certificate to verify.
+The whitelist applies to every outbound connection to a configurable URL: HTTP(S) requests (LLM providers, Gemini batch transcription, tools, MCP servers over HTTP) and `wss://` connections made by realtime voice transcription (for example a vLLM Voxtral `/v1/realtime` endpoint). The MCP `websocket` transport is the exception: it cannot use the whitelist. Add the transcription model's hostname to `domainWhitelist` and set `ignoreInvalidCertificates` to `true`; plain `ws://` endpoints have no certificate to verify.
 
 **Supported Domain Patterns:**
 - **Exact match**: `api.example.com` - matches only that specific domain

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../shared/components/Icon';
 import { MAX_PROJECT_ID_LENGTH } from '../utils/projectAdmin';
+import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 import ProjectAvailability from './ProjectAvailability';
 
 const INPUT_CLASS =
@@ -39,6 +40,39 @@ export function ProjectInstructionsField({ value, onChange, rows = 5 }) {
         {t(
           'admin.projects.fields.instructionsHint',
           'Added to the system prompt of every app, workflow step or agent that links this project, in every link mode. Say how the knowledge is to be used; put facts into documents.'
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The app new chats of an admin project start in. Users who add the project
+ * to theirs get it selected automatically.
+ *
+ * @param {Object} props
+ * @param {string} props.value - The app id; empty for none.
+ * @param {(appId: string) => void} props.onChange
+ * @returns {JSX.Element}
+ */
+export function ProjectDefaultAppField({ value, onChange }) {
+  const { t } = useTranslation();
+  return (
+    <div>
+      <label htmlFor="project-defaultAppId" className={LABEL_CLASS}>
+        {t('admin.projects.fields.defaultApp', 'Default app')}
+      </label>
+      <ProjectAppSelect
+        id="project-defaultAppId"
+        value={value || ''}
+        noneLabel={t('admin.projects.fields.defaultAppNone', 'No default (first available app)')}
+        onChange={onChange}
+        className={INPUT_CLASS}
+      />
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {t(
+          'admin.projects.fields.defaultAppHint',
+          'Chats in this project start in this app, so users who add the project to theirs get the right app selected automatically. They can still pick another app.'
         )}
       </p>
     </div>
@@ -197,6 +231,11 @@ function AdminProjectSettingsForm({
       <ProjectInstructionsField
         value={form.instructions}
         onChange={value => onFieldChange('instructions', value)}
+      />
+
+      <ProjectDefaultAppField
+        value={form.defaultAppId}
+        onChange={value => onFieldChange('defaultAppId', value)}
       />
 
       <details

@@ -344,15 +344,20 @@ curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
 Test the app-specific chat endpoint:
 
 ```bash
-curl -X POST "$IHUB_API_URL/api/apps/chat/chat" \
+APP_ID="your-app-id"
+CHAT_ID=$(uuidgen)
+curl -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "Hello, this is a test!",
-    "modelId": "gpt-4",
-    "variables": {}
+    "messages": [{ "role": "user", "content": "Hello, this is a test!" }],
+    "modelId": "gpt-4"
   }' | jq .
 ```
+
+Every chat is stored server-side: post only the new message, reusing `CHAT_ID` for follow-ups.
+More than one message is refused with `400 CLIENT_HISTORY_NOT_ALLOWED`. See
+[API Curl Examples](oauth-api-examples.md#3g-multi-turn-conversation).
 
 #### Step 5: List Available Models
 

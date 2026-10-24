@@ -50,7 +50,8 @@ On a fresh installation the browser opens the setup wizard:
 </p>
 
 You can add more providers and models at any time under **Admin → Providers** and
-**Admin → Models** (including **Import from URL** for whole endpoints). API keys can also come from
+**Admin → Models** (including **Import from URL** for whole endpoints; OpenRouter ships as a
+provider whose key you enter there). API keys can also come from
 environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
 `MISTRAL_API_KEY` — see [Models](models.md) and [Environment Variables](environment-variables.md).
 
@@ -63,6 +64,8 @@ is under **Admin → Advanced → First-run onboarding** (`setup.disabled` in `p
 the demo-account status. With it on, nobody is redirected to `/setup`; the page stays reachable by
 direct URL.
 
+![Admin → Advanced → First-run onboarding, with the demo-account warning](assets/screenshots/admin-onboarding.png)
+
 ## 3. Look around
 
 ![The start page after setup](assets/screenshots/start-page.png)
@@ -72,7 +75,7 @@ direct URL.
 - **Admin** (`/admin`, or the user menu) configures everything: apps, models, providers, users,
   groups, authentication, branding. See the [Admin UI Guide](admin-ui.md).
 - **Admin → Platform → Features** switches on the preview features: Chat History, Scheduled
-  Tasks, Marketplace, Workflows, Agent Skills and more.
+  Tasks, User Projects, Marketplace, Workflows, Agent Skills and more.
 - **Admin → Marketplace** (once enabled) installs more apps, skills, models, workflows and prompts
   — see [Marketplace](marketplace.md).
 

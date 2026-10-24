@@ -202,7 +202,7 @@ export class ProjectService {
 
   /**
    * Change name, description, instructions (and, on user projects, the default
-   * app — `null` clears it; on admin projects, enabled, category and tags).
+   * app — `null` clears it; on admin projects too, plus enabled, category and tags).
    *
    * @param {string} projectId
    * @param {Object} patch
@@ -211,7 +211,16 @@ export class ProjectService {
    */
   async updateProject(projectId, patch, { actor, authorize }) {
     const allowed = isAdminProjectId(projectId)
-      ? ['name', 'description', 'instructions', 'enabled', 'published', 'category', 'tags']
+      ? [
+          'name',
+          'description',
+          'instructions',
+          'enabled',
+          'published',
+          'category',
+          'tags',
+          'defaultAppId'
+        ]
       : ['name', 'description', 'instructions', 'defaultAppId'];
     try {
       return await this.repository.mutate(
