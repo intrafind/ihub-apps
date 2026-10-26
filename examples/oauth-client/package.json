@@ -12,5 +12,8 @@
     "dotenv": "^16.0.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.1"
+  },
+  "overrides": {
+    "body-parser": "^2.4.0"
   }
 }
