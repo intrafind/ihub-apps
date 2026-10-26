@@ -187,7 +187,7 @@ export async function assertPublicTarget(parsedUrl) {
   // Node's dns.resolve*() truncates a hostname at the first NUL byte, so
   // `attacker.example\0.trusted.example` would be validated as one host but
   // resolved as another. Reject control characters outright.
-  // eslint-disable-next-line no-control-regex
+
   if (/[\u0000-\u001f\u007f]/.test(host)) {
     return { ok: false, reason: 'hostname contains control characters' };
   }
