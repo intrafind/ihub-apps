@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies Installation
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS dependencies
+FROM node:25-alpine AS dependencies
 
 # Apply pending Alpine security patches, then install build dependencies.
 # The base image is only rebuilt periodically, so it regularly lags behind
@@ -70,7 +70,7 @@ CMD ["npm", "run", "dev"]
 # -----------------------------------------------------------------------------
 # Stage 4: Production Runtime
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS production
+FROM node:25-alpine AS production
 
 # Set production environment
 ENV NODE_ENV=production
