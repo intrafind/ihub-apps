@@ -112,20 +112,36 @@ authority. `fa_index_write` is never given to end users.
 - `processing.contentExtraction.status = pending`. No `processing.*` or `processing.callback.url` from
   the client. This closes the callback-URL request path and the SSRF path of the HTTP download handler.
 
-**Client-supplied:** the file, a display name, an optional title, and an idempotency key. A retry with
-the same key returns the same document id and does not write a second blob.
+**Client-supplied:** the file, a display name, an optional title, and an idempotency key.
+
+**Idempotency contract.** The key is stored under tenant, principal and collection, never by its raw
+value, so one user's key can never return another user's document id. The server claims the key
+atomically before it reserves anything and records a digest of the content. A retry with the same key
+and the same digest returns the original document id and writes no second blob. The same key with a
+different digest is rejected (`409`). A claim that was never completed expires, and a retry after the
+expiry starts over.
+
+**Rate limits.** Per principal and per tenant, enforced before the storage reservation: requests per
+minute, concurrent streams and bytes per hour. An exceeded limit returns `429` with `Retry-After`. They
+are separate from the storage quota, which only limits retained bytes.
 
 **Order of operations**, so a failure never leaves a visible half state:
 
-1. Check quota, size and type. Reserve the document id and the object key (includes a version id, so
-   re-uploads never overwrite).
-2. Encrypt and write the blob to a `pending/` prefix, then the sidecar.
-3. Create the document with status `pending`.
-4. Add the id to the collection (no existence check, so this works before indexing).
-5. Return `202` with the document id and status URL.
+1. Check rate limit, quota, size and type, and claim the idempotency key. Persist an **upload intent**
+   (document id, object key with a version id so re-uploads never overwrite, collection id, owner,
+   state `reserved`). The intent is the recovery record for every later step.
+2. Encrypt and write the blob to a `pending/` prefix, then the sidecar. State `stored`.
+3. Create the document with status `pending`, scan status `pending`. State `indexed`.
+4. Add the id to the collection (no existence check, so this works before indexing). State `complete`.
+   A failure here keeps the state `indexed` and is retried from the intent record with backoff.
+5. Return `202` with the document id and status URL. The status resource reports `queued` only once the
+   state is `complete`, and `failed` (reason `collection`) if the retries are exhausted.
 
-A reconciler removes `pending/` objects older than a day that have no document, and documents whose
-blob is gone.
+A reconciler works through the intents: it deletes `pending/` objects and sidecars of intents that
+never got past `reserved` or `stored` after a day, retries step 4 for `indexed` intents, and after the
+retry limit deletes the document, blob and sidecar together (compensation) and marks the intent
+`failed`. It also removes documents whose blob is gone. A document without a collection membership
+therefore never survives unnoticed.
 
 ## 6. Encryption
 
@@ -134,12 +150,19 @@ blob is gone.
   Java side uses Tink 1.15, which the repo pins, and which contains the streaming primitive.
 - **Associated data:** tenant, object key, version id. Both sides derive it from fields stored on the
   document, never from a path.
-- **Data key:** random 256 bit, one per object.
+- **Data key:** random 256-bit, one per object.
 - **Wrap:** the config-store key, through an iFinder-internal component with these properties the stock
   `/encrypt` endpoint lacks: authenticated callers, associated-data binding, a stored key id, and an
   integrity tag. The wrapped key, key id, format id and associated-data inputs go into the **sidecar
-  object**. A copy in the index is allowed for speed, never the only copy. A reindex rebuilds the
-  index from sources, and here the blob and sidecar are the source.
+  object**. A copy in the index is allowed for speed, never the only copy.
+- **The sidecar is also the manifest.** A reindex rebuilds the index from sources, and here the blob
+  and sidecar are the source, so the sidecar carries every field a rebuild needs: the owner and the ACL
+  principal, the collection id, the original file name, size and media type, `sourceName`, the upload
+  time, the scan result and the last known processing state. The ACL and the collection id are written
+  once at step 3 of the upload and never change (collections are private and not transferable). A
+  rebuild reads the manifest, re-creates the document with those fields and status `pending`, and the
+  processor extracts again. Anything the manifest does not hold (for example ranking signals) is not
+  promised by a rebuild.
 - **Unwrap:** document processor and access service, through the same component. Today they can only
   decrypt `{cipher}` strings with a local copy of `encrypt.key`. A cached unwrapped key lives for a
   short TTL.
@@ -165,9 +188,14 @@ The wrap output has no integrity tag and no associated data.
   at or below it.
 - The **PDF and thumbnail caches** hold decrypted content for ten hours, per instance, with no ACL
   check. Either skip the cache for encrypted sources or add an evict on delete (section 9).
-- `contentExtractionJob` must be enabled with the query
-  `processing.contentExtraction.status.keyword:pending`, with `prerequisites` so the embedding job
-  waits for the text.
+- **Malware scan is a gate.** Every upload carries a scan status (`pending`, `passed`, `failed`,
+  `error`). A scan step in the processor runs first. `contentExtractionJob` is enabled with the query
+  `processing.contentExtraction.status.keyword:pending AND processing.scan.status.keyword:passed`, with
+  `prerequisites` so the embedding job waits for the text. OCR, conversion, preview, thumbnails and
+  download do not run before `passed`: the storage handler refuses to open a source whose scan status
+  is not `passed`. A `failed` scan quarantines the document (blob and sidecar stay for audit, no
+  access) and sets the status resource to `failed` with reason `scan`. An `error` is retried, then
+  treated as `failed`.
 - A **missing blob** throws and today leaves the document `pending`, so it is retried every run. The
   processor must mark it `failed` with a reason after a bounded number of tries.
 - **Lost update:** the processor rewrites the whole document and does not send `primary_term` and
@@ -203,7 +231,8 @@ The wrap output has no integrity tag and no associated data.
 | State | Meaning |
 |---|---|
 | `uploading` | blob being written (iHub-side only) |
-| `queued` | document created, status `pending`, not yet picked up |
+| `scanning` | malware scan pending or running |
+| `queued` | scan passed, extraction `pending`, not yet picked up |
 | `processing` | extraction, OCR or embedding running |
 | `searchable` | text extracted, passages and embeddings present, visible to retrieval |
 | `failed` | with a reason: unsupported type, empty text, too large, scan, blob missing |
@@ -217,11 +246,22 @@ The wrap output has no integrity tag and no associated data.
 - A chat that starts while items are not yet `searchable` says how many documents are still
   processing, through the `knowledge/scope` event.
 
-**Deletion**, one operation that must remove, in this order: the collection membership, the index
-document (passages and embeddings with it), the blob, the sidecar (the key is shredded here), and the
-access-service caches. The access service needs an evict endpoint that finds keys by source and item id
-(the cache key also holds `lastModified` and the sub-item path) and reaches every instance. The
-operation must also stop an in-flight extraction from re-creating the document (section 7).
+**Deletion** is a resumable operation with a persisted state, not a sequence that can stop halfway:
+
+1. Write a **tombstone** for the document id (state `deleting`). From this point the status resource
+   answers `404`, the access service refuses preview and download, and the processor must not write
+   the document: its write checks the tombstone, and uses `primary_term`/`seq_no` (section 7).
+2. Evict the access-service caches. The access service needs an evict endpoint that finds keys by
+   source and item id (the cache key also holds `lastModified` and the sub-item path) and reaches
+   **every instance**. Retry until every instance has acknowledged.
+3. Remove the collection membership, then the index document (passages and embeddings with it).
+4. Remove the blob, then the sidecar (the key is shredded here).
+5. Mark the tombstone `deleted` and keep it for a retention period, so a late processor write is still
+   refused.
+
+Each step is idempotent, and the reconciler resumes a tombstone that is stuck in `deleting`. The
+operation reports success to the caller only when step 5 is done; before that it reports `202` and the
+status resource shows `deleting`. Deleting a collection runs this for each of its uploads.
 
 ## 10. iHub side
 
@@ -236,7 +276,10 @@ operation must also stop an in-flight extraction from re-creating the document (
   only. "Edit text" and the cloud kinds are hidden. The project page shows the tier and the fact that
   the original is kept (and downloadable by the owner).
 - **Project list:** `GET /api/projects` merges the local list with the user's collections, with a short
-  timeout and a cache. If iFinder is slow or down, the local list still returns, with a warning. Collections created
+  timeout and a cache. The cache key contains the tenant and the principal, an entry is never shared
+  between users, and the response is built for the requesting principal on every call, including cache
+  hits (no collection id or name from another user's entry). If iFinder is slow or down, the local list
+  still returns, with a warning. Collections created
   elsewhere appear as projects. Instructions, pins and chats have no place in a smart collection, so
   iHub keeps a reference record keyed by the collection id (created on first open).
 - **Knowledge provider** for the tier: search through the retrieval scope `ifinder_smart_collection`
@@ -257,7 +300,8 @@ operation must also stop an in-flight extraction from re-creating the document (
 | Version skew across webapp, doc processor and access service | The capability call hides the tier until all three support it |
 | Plaintext in the access-service cache after delete | Evict endpoint, or no cache for encrypted sources |
 | Search leakage: uploads surface in every search profile of the owner | Fixed `sourceName`, profiles exclude it unless wanted |
-| Upload quota, rate limits and malware scan are missing in iFinder | Quota in the endpoint, scan hook in the doc processor (iHub already has one) |
+| Upload quota, rate limits and malware scan are missing in iFinder | Quota in the endpoint. Per-principal and per-tenant rate limits before the storage reservation (`429`). A scan gate in the doc processor: nothing is extracted, previewed or downloaded before the scan passes (section 7). iHub already has a scan hook to reuse |
+| A failed step leaves a document, blob or cache entry behind | Upload intents with a reconciler (section 5), resumable deletion with a tombstone (section 9) |
 
 ## 12. Evidence and gaps
 
@@ -269,7 +313,7 @@ and the ragtime resolver and `FilterBuilder`. Checked directly: the `permitAll` 
 `denyAll` on `/decrypt`, `fa_index_write`, and `refresh: false`.
 
 Inferred and still to confirm: the cipher details of the config store encryptor (jar not inspected),
-how utilities maps the JWT claim to the owner, whether `s3://` item ids work end to end in the filesystem
+how utilities maps the JWT claim to the owner, whether `s3://` item ids work end-to-end in the filesystem
 handler, whether `GET /docs/{id}` is real time, and whether the embedding job waits for the text
 without `prerequisites`. The file launcher module was not read.
 
