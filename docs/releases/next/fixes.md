@@ -61,3 +61,10 @@ The sources panel listed Google's native web search results only by generic name
 actual page addresses, so each source shows its real site and opens the page directly. Opening a
 source link in a browser also no longer shows a false "The link could not be opened" message after
 the page opened.
+
+## Stricter Hostname Check for Outbound Requests
+
+Node.js 24.22.1 fixes a flaw where a hostname containing a NUL byte was checked as one host but
+looked up as another. The built-in protection against requests to internal addresses now also
+rejects hostnames with control characters. Rebuild the Docker image without cache to get the patched
+Node.js runtime.
