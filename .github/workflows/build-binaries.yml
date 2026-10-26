@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
+          check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
           cache: 'npm' # zizmor: ignore[cache-poisoning] PR/push check only; release jobs restore no cache
 
       - name: Install mdBook
@@ -127,6 +128,7 @@ jobs:
         with:
           package-manager-cache: false
           node-version: '24'
+          check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
@@ -342,6 +344,7 @@ jobs:
         with:
           package-manager-cache: false
           node-version: '24'
+          check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -472,6 +475,7 @@ jobs:
         with:
           package-manager-cache: false
           node-version: '24'
+          check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
 
       - name: Generate SBOMs (CycloneDX)
         # The production dependencies the binaries ship: the server's runtime
