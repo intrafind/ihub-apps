@@ -184,6 +184,14 @@ export async function assertPublicTarget(parsedUrl) {
     host = host.slice(1, -1);
   }
 
+  // Node's dns.resolve*() truncates a hostname at the first NUL byte, so
+  // `attacker.example\0.trusted.example` would be validated as one host but
+  // resolved as another. Reject control characters outright.
+
+  if (/[\u0000-\u001f\u007f]/.test(host)) {
+    return { ok: false, reason: 'hostname contains control characters' };
+  }
+
   // Block obvious magic hostnames before DNS even runs.
   const lowerHost = host.toLowerCase();
   if (lowerHost === 'localhost' || lowerHost.endsWith('.localhost')) {

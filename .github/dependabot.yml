@@ -107,3 +107,15 @@ updates:
       all-minors:
         update-types:
           - "minor"
+
+  # The Node.js base image is not an npm dependency, so runtime security
+  # releases only reach us through this entry.
+  - package-ecosystem: 'docker'
+    directory: '/docker'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 7
