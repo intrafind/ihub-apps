@@ -102,6 +102,14 @@ A new endpoint, separate from the Indexing API, for example
 **Authorization.** A dedicated authority (for example `fa_upload`) plus the existing smart collection
 authority. `fa_index_write` is never given to end users.
 
+**Principal type.** The upload route and the collection-editing routes accept only the token of an
+interactive user: the per-user JWT iHub or the webapp mints for a signed-in person. They reject
+personal API keys, OAuth clients, agents and any other delegated or machine principal with `403`,
+before any collection, document or storage lookup, so the response does not reveal whether a
+resource exists. The check reads the principal type from the token, never from a request field. Letting
+a scheduled agent or a workflow upload on a user's behalf is a separate decision, with its own
+audit trail, and is off until it is taken.
+
 **Server-forced values, never taken from the request:**
 
 - `aclAllows` = the caller's principal. `aclDenies` empty. Never the public marker.
