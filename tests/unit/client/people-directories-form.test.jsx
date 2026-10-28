@@ -248,7 +248,8 @@ describe('server issues → inputs', () => {
   test.each([
     ['url', 'pd-url'],
     ['bind.dn', 'pd-bind-dn'],
-    ['bind', 'pd-bind-mode'],
+    ['bind', 'pd-bind-mode-anonymous'],
+    ['dataFlow', 'pd-data-flow-internal'],
     ['attributeMapping.jobTitle', 'pd-mapping-jobTitle'],
     ['name.de', 'pd-name.de'],
     ['tlsOptions', null]

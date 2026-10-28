@@ -86,7 +86,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 | `personFilter`, `searchAttributes`, `attributeMapping` | Override the preset (see [Presets](#presets-and-mapping)). |
 | `units` | Offer `list_units` and the `unit` parameter: the one-level children of the search base (authorities in x500.bund.de). |
 | `allowPlaintext` | Default `false`. A plain `ldap://` URL without StartTLS is refused unless this is `true`, anonymous binds included. A service bind is never sent in plain text. |
-| `tlsCa` | Trust anchors from the [certificate store](#certificates). When set, only these anchors are trusted for this directory; verification stays on. When unset, Node's default roots are used. |
+| `tlsCa` | Trust anchors from the [certificate store](#certificates). When set, only these anchors are trusted for this directory, and verification stays on — unless the host is on the platform's SSL whitelist, which switches verification off for every connection to it. When unset, Node's default roots are used. |
 | `allowedHosts` | Hosts this directory may reach although they resolve to a private address (`*.corp.example` patterns allowed). |
 | `maxResults` | Default 10, at most 50. The most people one search returns; a tool call can ask for fewer, never more. |
 | `timeoutMs` | Default 8000, at most 30000. |

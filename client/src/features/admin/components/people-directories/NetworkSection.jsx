@@ -128,7 +128,7 @@ function NetworkSection({
         <p id="pd-tls-ca-help" className={`${HELP_CLASS} mt-0 mb-2`}>
           {t(
             'admin.peopleDirectories.network.tlsCaHelp',
-            "When you pick certificates here, only they verify the server's certificate. Leave all unchecked to trust the usual public roots. Certificate verification always stays on."
+            "When you pick certificates here, only they verify the server's certificate. Leave all unchecked to trust the usual public roots. Verification stays on unless the host is on the platform's SSL whitelist (ssl.ignoreInvalidCertificates with ssl.domainWhitelist): then it is switched off for this directory too, whatever you pick here."
           )}
         </p>
         {certificatesError && (

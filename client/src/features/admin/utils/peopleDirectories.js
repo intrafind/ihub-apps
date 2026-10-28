@@ -97,7 +97,8 @@ export const FIELD_INPUT_IDS = {
   starttls: 'pd-starttls',
   baseDn: 'pd-base-dn',
   preset: 'pd-preset',
-  bind: 'pd-bind-mode',
+  // Error links go to a control that is always rendered.
+  bind: 'pd-bind-mode-anonymous',
   'bind.dn': 'pd-bind-dn',
   'bind.passwordRef': 'pd-bind-password-ref',
   searchBase: 'pd-search-base',
@@ -112,7 +113,7 @@ export const FIELD_INPUT_IDS = {
   concurrency: 'pd-concurrency',
   requestDelayMs: 'pd-request-delay-ms',
   groups: 'pd-groups',
-  dataFlow: 'pd-data-flow',
+  dataFlow: 'pd-data-flow-internal',
   name: 'pd-name',
   description: 'pd-description'
 };

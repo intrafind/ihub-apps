@@ -4506,7 +4506,7 @@
         "title": "Netzwerk",
         "tlsCa": "Vertrauenswürdige Zertifikate",
         "tlsCaEmpty": "Der Zertifikatsspeicher ist leer.",
-        "tlsCaHelp": "Wenn Sie hier Zertifikate auswählen, prüfen nur diese das Serverzertifikat. Lassen Sie alle leer, um den üblichen öffentlichen Wurzelzertifikaten zu vertrauen. Die Zertifikatsprüfung bleibt immer eingeschaltet.",
+        "tlsCaHelp": "Wenn Sie hier Zertifikate auswählen, prüfen nur diese das Serverzertifikat. Lassen Sie alle leer, um den üblichen öffentlichen Wurzelzertifikaten zu vertrauen. Die Prüfung bleibt eingeschaltet, außer der Host steht auf der SSL-Whitelist der Plattform (ssl.ignoreInvalidCertificates mit ssl.domainWhitelist): Dann ist sie auch für dieses Verzeichnis ausgeschaltet, unabhängig von der Auswahl hier.",
         "tlsCaLoadError": "Der Zertifikatsspeicher konnte nicht geladen werden: {{error}}",
         "tlsCaMissing": "Nicht im Speicher",
         "transport": "Transport"

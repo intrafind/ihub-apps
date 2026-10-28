@@ -1795,6 +1795,17 @@ class ConfigCache {
 
     const originalToolsCount = tools.length;
     let userSpecificEtag = toolsEtag || 'no-etag';
+    // People directory tools come from peopleDirectories.json, which the tools
+    // ETag does not cover: a renamed or re-enabled directory must not be
+    // answered with a 304 for the old list.
+    const { etag: directoriesEtag } = this.getPeopleDirectories();
+    if (directoriesEtag) {
+      const directoriesHash = createHash('md5')
+        .update(String(directoriesEtag))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${userSpecificEtag}-d${directoriesHash}`;
+    }
 
     // Apply filtering based on user permissions
     let allowedTools = null;
@@ -1835,7 +1846,7 @@ class ConfigCache {
         .update(JSON.stringify(toolIds))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${toolsEtag}-${contentHash}`;
+      userSpecificEtag = `${userSpecificEtag}-${contentHash}`;
     }
 
     return { data: tools, etag: userSpecificEtag };

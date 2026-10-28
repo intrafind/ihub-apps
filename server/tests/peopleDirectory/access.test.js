@@ -58,8 +58,17 @@ const DIRECTORIES = [
   }
 ];
 
-const state = { directories: DIRECTORIES, tools: [], mcpServers: [], a2aAgents: [] };
-configCache.getPeopleDirectories = () => ({ data: { directories: state.directories } });
+const state = {
+  directories: DIRECTORIES,
+  directoriesEtag: 'dirs-1',
+  tools: [],
+  mcpServers: [],
+  a2aAgents: []
+};
+configCache.getPeopleDirectories = () => ({
+  data: { directories: state.directories },
+  etag: state.directoriesEtag
+});
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getGroups = () => ({
   data: {
@@ -190,6 +199,22 @@ describe('people directory access', () => {
         'en'
       );
       assert.deepEqual(directoryToolIds(forOutsider.data), []);
+    });
+
+    it('change the /api/tools ETag when the directories change, even with the same tool ids', async () => {
+      const platform = { defaultLanguage: 'en' };
+      const before = await configCache.getToolsForUser(member, platform, 'en');
+      state.directories = DIRECTORIES.map(directory =>
+        directory.id === 'x500bund' ? { ...directory, name: { en: 'Renamed' } } : directory
+      );
+      state.directoriesEtag = 'dirs-2';
+      const after = await configCache.getToolsForUser(member, platform, 'en');
+      assert.deepEqual(
+        after.data.map(tool => tool.id),
+        before.data.map(tool => tool.id)
+      );
+      assert.notEqual(after.etag, before.etag);
+      state.directoriesEtag = 'dirs-1';
     });
 
     it('narrow an app that lists a directory', async () => {
