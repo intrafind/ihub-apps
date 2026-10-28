@@ -75,6 +75,7 @@ A new config file, loaded through `configCache`, so adding or changing a directo
       "enabled": true,
       "type": "ldap",
       "url": "ldap://x500.bund.de:389",
+      "allowPlaintext": true,                 // only until LDAPS/StartTLS is confirmed (open question 2)
       "baseDn": "o=Bund,c=DE",
       "preset": "ivbb",
       "bind": { "mode": "anonymous" },
@@ -107,7 +108,10 @@ Fields:
 | `searchAttributes` | Attributes free-text tokens are matched against (preset default) |
 | `attributeMapping` | Override of the preset's mapping onto the person fields below |
 | `units` | Offer `list_units` and the `unit` parameter (one-level children of the search base) |
-| `maxResults` (≤ 50), `timeoutMs` (≤ 30000), `concurrency`, `requestDelayMs` | Limits; the last two reuse the existing per-tool throttling fields |
+| `allowPlaintext` | Default `false`. A plain `ldap://` URL without StartTLS is refused unless this is `true`, for anonymous binds too. A service bind is never sent in plain text, whatever this says. |
+| `allowedHosts` | Hosts this directory may reach although they resolve to a private address (see §5) |
+| `maxResults` (default 10, ≤ 50), `timeoutMs` (default 8000, ≤ 30000) | Upper bounds; a tool call can ask for fewer results, never more |
+| `concurrency` (default 2), `requestDelayMs` (default 0) | One queue per directory, shared by all of its tools and the admin test (see §5) |
 | `groups` | Who may use the directory. Applied when tools are listed *and* again in the tool, because the tool gets `user` with every call. |
 | `dataFlow` | `internal` (default) or `external`; carried into the tool definition for the approval work in [#2945](https://github.com/intrafind/ihub-apps/issues/2945) |
 
@@ -140,6 +144,15 @@ For each enabled directory the user may use, `discoverPeopleDirectoryTools()` ad
 | `<id>__search_people` | `query` (required, name / e-mail / free text, ≥ 2 chars per token), optional `firstName`, `lastName`, `email`, `unit`, `maxResults` | `{ directory, results: Person[], truncated, hint? }` |
 | `<id>__get_person` | `personId` (from a search result) | `Person` with all mapped fields |
 | `<id>__list_units` (only with `units: true`) | — | `[{ unitId, name }]` of the search base's one-level children, cached for 1 h |
+
+**Who sees a directory's tools.** `loadTools()` has no user, so the directory's `groups` cannot be applied there. The discovered tools carry `_peopleDirectory: { id }`, and one helper, `mayUseDirectory(user, directoryId)`, is applied wherever tools are narrowed to a user:
+
+- `configCache.getToolsForUser`, which serves the `/api/tools` listing;
+- `getToolsForApp`, which builds the chat's tool list and has `context.user`;
+- `mayRunTool` (direct tool runs) and the MCP gateway permission check;
+- the tool itself at execution time, as the last guard.
+
+`groups` is ANDed with the existing grants. An app that lists `x500bund__search_people`, or a `permissions.tools: ["*"]` grant, does not hand the directory to a user outside its `groups`.
 
 The tool's name and description come from the directory's `name` and `description`, so the model sees "Federal directory (IVBB) – staff of German federal authorities…" and can decide which directory fits the question. Searching the own and the external directory is two tool calls the model makes in parallel; nothing is merged server-side, and each result says which directory it came from.
 
@@ -180,24 +193,40 @@ The model never supplies an LDAP filter. The tool builds it:
 - Every value goes through `escapeLdapFilterValue` (RFC 4515).
 - Tokens shorter than 2 characters and wildcard-only queries are rejected with a message the model can act on.
 - `unit` must be one of `list_units`' ids; it narrows the search base (`ou=THW,o=Bund,c=DE`). It is never concatenated from free text.
-- `personId` for `get_person` must be a syntactically valid DN that ends with the directory's search base (case- and space-insensitive comparison of parsed RDNs), so the tool cannot be used to read entries elsewhere, such as `o=PKI-1-VERWALTUNG`.
+- `personId` for `get_person` must lie inside the directory's search base, so the tool cannot be used to read entries elsewhere, such as `o=PKI-1-VERWALTUNG`. The check works on parsed DNs, never on strings:
+  - Parse with an RFC 4514 parser that handles escaped separators (`\,`, `\+`, hex escapes) and multi-valued RDNs (`cn=a+uid=b`). A DN that does not parse is rejected.
+  - Normalise each attribute type: lower-case it, and map the OID form (`2.5.4.3`) and known aliases (`commonName`) onto the short name.
+  - Normalise values with the attribute's equality rule. For the naming attributes involved here (`c`, `o`, `ou`, `l`, `dc`, `cn`, `uid`) that is caseIgnoreMatch: trim, collapse inner whitespace, and fold case.
+  - Treat a multi-valued RDN as an unordered set.
+  - Accept the DN only when its RDN sequence ends with the search base's RDN sequence and is longer than it.
+  - String suffix matching is not used anywhere. `cn=x\,ou=people,o=firma` does not lie in `ou=people,o=firma`.
 - Only mapped attributes are requested (never `*`), so binary or sensitive attributes (`userCertificate`, `userPassword`, `jpegPhoto`) never leave the directory.
-- `sizeLimit` = `maxResults + 1`, `timeLimit` from `timeoutMs`. LDAP result code 4 (size limit exceeded) or more entries than requested → `truncated: true` and a hint to narrow the search (`unit`, first name).
+- `effectiveMaxResults = min(requested maxResults ?? directory.maxResults, directory.maxResults)`. `sizeLimit` = `effectiveMaxResults + 1`, `timeLimit` from `timeoutMs`. LDAP result code 4 (size limit exceeded) or more entries than `effectiveMaxResults` → at most `effectiveMaxResults` results, `truncated: true` and a hint to narrow the search (`unit`, first name).
 
 ### 5. Connection
 
 `server/services/peopleDirectory/LdapDirectory.js` with `ldapts`:
 
-- New `Client({ url, timeout, connectTimeout, tlsOptions: { ...getTlsBypassOptions(url), ...directory.tlsOptions } })`; for StartTLS `client.startTLS(buildStartTlsOptions(url, …))`, which already sets the right `host`/`servername`.
+- **Target check, every connection.** The directory URL can come from an admin, an inherited sign-in provider or the inline test entry, so it goes through the SSRF guard (REVIEW.md, A01):
+  - The host is resolved through `dnsGuard`, and every address is classified with `ssrfGuard.isPrivateIP`.
+  - A private, loopback or link-local address is refused unless the host is allowed explicitly. That can be the directory's `allowedHosts`, the platform-wide `ssrf.allowedHosts` (the same rule the MCP `safeFetch` applies), or the host of the referenced `authProvider`, which iHub already connects to on every sign-in.
+  - Company directories on private addresses are therefore one allow-list entry, or no extra step at all when they reuse the sign-in provider.
+  - The check runs at connection time, not only when the config is saved, and also covers inline test entries.
+- **Pinned address.** The client connects to the validated IP literal, not to the host name, so a DNS change between check and connect cannot redirect it. TLS still verifies the certificate against the host name, by passing `servername`/`host` = host name; `buildStartTlsOptions` already does this for StartTLS.
+- New `Client({ url: <pinned>, timeout, connectTimeout, tlsOptions: { ...getTlsBypassOptions(url), ...directory.tlsOptions, servername } })`; for StartTLS `client.startTLS(buildStartTlsOptions(url, …))`.
 - One connection per call, `unbind()` in `finally`. A small pool is not worth it at chat-tool call rates.
-- Plain `ldap://` without StartTLS is allowed for `bind.mode: anonymous` (public data, no password on the wire), and refused for a service bind unless the admin set `allowInsecureBind: true`, matching the warning the sign-in provider already shows.
+- **Transport.** LDAPS or StartTLS is required by default, for anonymous binds too: search terms and the returned records are personal data. Plain `ldap://` needs `allowPlaintext: true` on the directory. The admin test and the admin page then show the same warning the sign-in provider shows. A service bind is never sent in plain text.
+- **Throttling.** All tools of one directory, and the admin test for it, share one `throttledRun` queue keyed `peopleDirectory:<id>`, with the directory's `concurrency` and `requestDelayMs`. Calls from different tools therefore do not get separate queues. `throttledRun` resolves limits from the tool and model configs only, so it gains an optional explicit `{ concurrency, delayMs }` argument for this.
+- **No per-user quota.** A user can already reach the company directory through the mail client's address book, and x500.bund.de is public. Chat turns are bounded by the tool-round limit, and the admin test sits behind `adminAuth`.
 - LDAP is not HTTP: the `proxy` settings do not apply. External directories need a direct route on port 389/636 from the iHub server. This goes in the docs and in the test endpoint's error text.
 
 ### 6. Admin
 
 Phase 1:
 
-- `GET/PUT /api/admin/people-directories` (whole file, Zod-validated, like other config files) and `POST /api/admin/people-directories/test` that takes a saved id or an inline entry. It reports the steps with `DiagnosticsReport`: resolve (including the inherited provider), connect, StartTLS, bind, run a sample search, and show the attribute mapping of the first hit.
+- `GET/PUT /api/admin/people-directories` (whole file, Zod-validated, like other config files) and `POST /api/admin/people-directories/test` that takes a saved id or an inline entry.
+  - Both routes sit behind `adminAuth`. `adminAuth` already rejects delegated and machine principals (`isAdminEligiblePrincipal`), so personal API keys, OAuth clients and agents get a 403 before any entry is parsed or any connection is opened.
+  - `GET` returns bind passwords only as credential references. It reports the steps with `DiagnosticsReport`: resolve (including the inherited provider), connect, StartTLS, bind, run a sample search, and show the attribute mapping of the first hit.
 - The directory tools appear in the existing app editor tool picker and in `groups.permissions.tools`, with no extra work.
 
 Phase 2: admin page under Integrations, or as part of the Unified Integrations admin section ([#2919](https://github.com/intrafind/ihub-apps/issues/2919)) if that lands first. It would also add a "Use for people search" button on LDAP sign-in providers.
@@ -226,7 +255,8 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 - Read-only. No write operations exist, and nothing is cached beyond `list_units`.
 - Filter injection: escaped values only, no model-supplied filters, and the DN scope check on `get_person`.
 - Attribute allowlist per directory. Admins see in the test result exactly which fields leave the directory.
-- Access: `groups` per directory, checked both when tools are listed and when they execute; existing group tool permissions apply on top.
+- Access: `groups` per directory, ANDed with the existing tool grants, and checked both when tools are listed and when they execute (§3).
+- Network: the SSRF guard with a pinned address on every connection, internal hosts only via an explicit allow-list, and TLS required unless `allowPlaintext` (§5).
 - External data flow: the search terms (names) go to a third-party server. This is marked `dataFlow: external` for the approval policy of #2945, and stated in the directory description.
 - Logging: directory id, user id, result count and duration at `info`; the query text only at `debug` (it is personal data).
 - SSL whitelist honoured through `getTlsBypassOptions`, with tests for a whitelisted and a non-whitelisted host. Known gap, out of scope: the existing sign-in path (`ldap-authentication`) does not apply the whitelist yet.
@@ -235,7 +265,9 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 
 | New | Changed |
 | --- | --- |
-| `server/services/peopleDirectory/PeopleDirectoryService.js` (resolve config, groups, dispatch) | `server/toolLoader.js` (discover + dispatch `_peopleDirectory` tools) |
+| `server/services/peopleDirectory/PeopleDirectoryService.js` (resolve config, groups, dispatch) | `server/toolLoader.js` (discover + dispatch `_peopleDirectory` tools, `mayUseDirectory` in `getToolsForApp`) |
+| `server/services/peopleDirectory/dn.js` (RFC 4514 parse, normalise, containment) | `server/configCache.js` `getToolsForUser`, `server/routes/toolRoutes.js` `mayRunTool`, `server/services/mcp/permissions.js` (directory groups) |
+| | `server/requestThrottler.js` (explicit `{ concurrency, delayMs }` for `throttledRun`) |
 | `server/services/peopleDirectory/LdapDirectory.js` (ldapts client, filter, mapping) | `server/utils/ldapProviderConfig.js` (export `buildStartTlsOptions`, search presets) |
 | `server/services/peopleDirectory/presets.js` | `server/configCache.js` (load `peopleDirectories.json`) |
 | `server/validators/peopleDirectorySchema.js` | `server/package.json` (`ldapts`) |
@@ -248,10 +280,18 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 ## Tests
 
 - Filter builder: escaping (`*`, `(`, `)`, `\`, NUL), tokenisation, minimum length, structured fields, `unit` scoping.
-- `get_person` DN scope check: inside the base, sibling naming context, look-alike suffix (`o=Bund,c=DE.evil`), malformed DN.
+- `get_person` DN scope check:
+  - accepted: inside the base;
+  - rejected: the base itself, a sibling naming context, a look-alike suffix (`o=Bund,c=DE.evil`), an escaped comma (`cn=x\,ou=people,o=firma` against `ou=people,o=firma`), and a malformed DN;
+  - normalised: multi-valued RDNs in either order, OID and alias attribute types (`2.5.4.10=Bund`, `organizationName=Bund`), and case and whitespace differences.
+- Result limit: directory `maxResults: 25` and a request for 50 → `sizeLimit: 26` sent, at most 25 results, `truncated` set when 26 come back.
+- SSRF: a private address is refused without an allow-list entry, accepted with `allowedHosts`, `ssrf.allowedHosts` or the `authProvider` host, and checked again for inline test entries. The connection uses the pinned address while TLS still verifies against the host name.
+- Transport: plain `ldap://` is refused without `allowPlaintext`, and a service bind over plain text is always refused.
+- Throttling: search and get on one directory share one queue.
+- Admin routes: a non-admin, a personal API key and an OAuth client principal each get a 403 before any LDAP connection is made.
 - Preset mapping against fixtures: the x500 entry above, an AD user with `manager`, an OpenLDAP `inetOrgPerson`.
 - Config resolution: `authProvider` inheritance and overrides, missing provider, provider without bind account, inline password rejected by the schema.
-- Groups: tool hidden for a user outside `groups`, and refused when the tool is called anyway.
+- Groups: a user outside `groups` does not see the tool in `/api/tools`, in an app that lists it, or with a `*` grant, and is refused when the tool is called anyway.
 - TLS: `getTlsBypassOptions` applied for a whitelisted host and not for another one; StartTLS `servername`.
 - Size limit / timeout / connection refused → structured results the model can act on (mocked `ldapts` client).
 - Manual (not CI): `x500bund` against the live server.
