@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { createHash } from 'node:crypto';
 import { SizeLimitExceededError, TimeLimitExceededError, NoSuchObjectError } from 'ldapts';
 import { DirectoryConnectionError, isTimeoutError, openDirectoryConnection } from './connection.js';
 import { formatRdn, isDnWithin, parseDn, rdnEquals } from './dn.js';
@@ -42,12 +41,23 @@ export function clearUnitsCache() {
 }
 
 /**
- * The cache key covers the whole resolved directory, so any change to its
+ * The cache key covers every setting that shapes the unit list, so a changed
  * config (here or on another cluster worker, which reloads the file but never
- * ran this worker's `clearUnitsCache`) misses the old list.
+ * ran this worker's `clearUnitsCache`) misses the old list. The bind's
+ * credential reference is left out: rotating a password changes no unit.
  */
 function unitsCacheKey(resolved) {
-  const config = createHash('sha256').update(JSON.stringify(resolved)).digest('hex');
+  const config = JSON.stringify([
+    resolved.url,
+    resolved.starttls,
+    resolved.searchBase,
+    resolved.personFilter,
+    resolved.units,
+    resolved.bind?.mode ?? null,
+    resolved.bind?.dn ?? null,
+    resolved.tlsCa,
+    resolved.allowedHosts
+  ]);
   return `${resolved.id}|${config}`;
 }
 
