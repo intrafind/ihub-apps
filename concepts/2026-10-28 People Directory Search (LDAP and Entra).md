@@ -22,7 +22,9 @@ Verified with `ldapsearch` from a customer-side network on 2026-10-28:
 
 | Fact | Value |
 | --- | --- |
-| Endpoint | `ldap://x500.bund.de:389`, plain LDAP, reachable from the public internet; LDAPS / StartTLS not yet checked |
+| Endpoint | `ldaps://x500.bund.de:636` (TLS) and `ldap://x500.bund.de:389` (plain), both reachable from the public internet |
+| TLS | TLS 1.2, cipher `AES256-SHA256` (RSA key exchange, no forward secrecy; accepted by Node 22's default cipher list), RSA 4096 server key |
+| Certificate chain | `CN=x500.bund.de` (until 2026-12-03) → `CN=CA IVBB Deutsche Telekom AG 23, O=PKI-1-Verwaltung` (until 2029-11-28; the server sends both) → root `CN=PCA-1-Verwaltung-23, O=PKI-1-Verwaltung` (2022-12-01 to 2032-12-31). The server does **not** send the root, and the root is in no public or Node trust store. |
 | Bind | Anonymous bind succeeds |
 | Protocol | LDAPv2 and v3 |
 | Naming contexts | `o=Bund,c=DE` (people), `o=PKI-1-VERWALTUNG,c=DE` (PKI) |
@@ -75,7 +77,15 @@ Consequences:
 
 A new config file, loaded through `configCache`, so adding or changing a directory takes effect without a restart (platform changes need one). Being a new file, it needs no migration.
 
-`server/defaults/config/peopleDirectories.json` ships the `x500bund` entry below with `"enabled": false`. The server is reachable from the internet, so any customer can switch it on in the admin page, but nobody's search terms leave the network until an admin does. Disabled is the safe default (REVIEW.md, A02), even though the entry itself carries `allowPlaintext: true`. The corporate entry is only an example, because it depends on a sign-in provider that may not exist.
+`server/defaults/config/peopleDirectories.json` ships the `x500bund` entry below with `"enabled": false`. The server is reachable from the internet, so any customer can switch it on in the admin page, but nobody's search terms leave the network until an admin does (REVIEW.md, A02). The corporate entry is only an example, because it depends on a sign-in provider that may not exist.
+
+**The BSI root ships with it.** The entry connects over `ldaps://` with full certificate verification. For that it needs the Verwaltungs-PKI root `PCA-1-Verwaltung-23`, which is in no public trust store, so iHub ships it as `server/defaults/config/certs/pca-1-verwaltung-23.pem`. The file was taken from the BSI download, `PCA-1-Verwaltung-23_zip.zip`, and checked on 2026-10-28:
+
+- its SHA-256 fingerprint `1D:32:84:79:E1:65:FD:36:FB:C2:7E:1D:53:11:68:D1:3D:60:D6:6F:A1:9B:1B:81:80:36:C2:68:2D:18:DD:D4` and serial `A5EF9230` match the [BSI fingerprint list](https://www.bsi.bund.de/EN/Themen/Oeffentliche-Verwaltung/Moderner-Staat/Verwaltungs-PKI/Wurzelzertifizierungsstelle/FingerprintsderWurzelzertifikate/pcafingerprint.html);
+- the chain the server sends verifies against it with `openssl verify -verify_hostname x500.bund.de`;
+- the same chain verifies with Node 22's `X509Certificate` (`verify`, `checkHost`).
+
+The root is a public certificate, not a secret. Shipping it only makes iHub trust it for the directories that name it (`tlsCa`), never globally. Like any default file, startup copies it into existing installations. `REUSE.toml` gets an entry for `server/defaults/config/certs/*.pem`.
 
 ```jsonc
 {
@@ -98,8 +108,8 @@ A new config file, loaded through `configCache`, so adding or changing a directo
       "id": "x500bund",
       "enabled": false,
       "type": "ldap",
-      "url": "ldap://x500.bund.de:389",
-      "allowPlaintext": true,                 // only until LDAPS/StartTLS is confirmed (open question 2)
+      "url": "ldaps://x500.bund.de:636",
+      "tlsCa": ["pca-1-verwaltung-23"],       // BSI Verwaltungs-PKI root, shipped in config/certs/
       "baseDn": "o=Bund,c=DE",
       "preset": "ivbb",
       "bind": { "mode": "anonymous" },
@@ -133,6 +143,7 @@ Fields:
 | `attributeMapping` | Override of the preset's mapping onto the person fields below |
 | `units` | Offer `list_units` and the `unit` parameter (one-level children of the search base) |
 | `allowPlaintext` | Default `false`. A plain `ldap://` URL without StartTLS is refused unless this is `true`, for anonymous binds too. A service bind is never sent in plain text, whatever this says. |
+| `tlsCa` | Names of trust anchors in the certificate store `contents/config/certs/<name>.pem` (`^[a-z0-9-]+$`, resolved with the path-security helpers). If set, only these anchors are trusted for this directory, through `tlsOptions.ca`. If unset, Node's default roots are used. Use it for directories whose CA is private (corporate PKI, the Verwaltungs-PKI). Unlike the SSL whitelist, verification stays on. |
 | `allowedHosts` | Hosts this directory may reach although they resolve to a private address (see §5) |
 | `maxResults` (default 10, ≤ 50), `timeoutMs` (default 8000, ≤ 30000) | Upper bounds; a tool call can ask for fewer results, never more |
 | `concurrency` (default 2), `requestDelayMs` (default 0) | One queue per directory, shared by all of its tools and the admin test (see §5) |
@@ -254,7 +265,8 @@ The model never supplies an LDAP filter. The tool builds it:
   - Company directories on private addresses are therefore one allow-list entry, or no extra step at all when they reuse the sign-in provider.
   - The check runs at connection time, not only when the config is saved, and also covers inline test entries.
 - **Pinned address.** The client connects to the validated IP literal, not to the host name, so a DNS change between check and connect cannot redirect it. TLS still verifies the certificate against the host name, by passing `servername`/`host` = host name; `buildStartTlsOptions` already does this for StartTLS.
-- New `Client({ url: <pinned>, timeout, connectTimeout, tlsOptions: { ...getTlsBypassOptions(url), ...directory.tlsOptions, servername } })`; for StartTLS `client.startTLS(buildStartTlsOptions(url, …))`.
+- New `Client({ url: <pinned>, timeout, connectTimeout, tlsOptions: { ...getTlsBypassOptions(url), ca: <tlsCa PEMs, if any>, ...directory.tlsOptions, servername } })`; for StartTLS `client.startTLS(buildStartTlsOptions(url, …))` with the same `ca`.
+- **Certificate errors are explained.** On a verification failure, the test endpoint reports the chain the server sent: subject, issuer, validity, and the SHA-256 fingerprint of each certificate. It names the issuer that is missing ("issuer `PCA-1-Verwaltung-23` is not trusted: add it to the certificate store and to `tlsCa`"). iHub never fetches or adds a root by itself: a trust anchor is an admin decision, checked against a published fingerprint.
 - One connection per call, `unbind()` in `finally`. A small pool is not worth it at chat-tool call rates.
 - **Transport.** LDAPS or StartTLS is required by default, for anonymous binds too: search terms and the returned records are personal data. Plain `ldap://` needs `allowPlaintext: true` on the directory. The admin test and the admin page then show the same warning the sign-in provider shows. A service bind is never sent in plain text.
 - **Throttling.** All tools of one directory, and the admin test for it, share one `throttledRun` queue keyed `peopleDirectory:<id>`, with the directory's `concurrency` and `requestDelayMs`. Calls from different tools therefore do not get separate queues. `throttledRun` resolves limits from the tool and model configs only, so it gains an optional explicit `{ concurrency, delayMs }` argument for this.
@@ -284,11 +296,17 @@ All of this is phase 1.
 - **Editor**, with these sections:
   - **Source:** "Reuse a sign-in provider" (a select over `ldapAuth.providers`), or "Connect directly" (URL, base DN, preset, StartTLS).
   - **Access:** anonymous, or a service account whose password is chosen from the credential store, never typed into this form.
-  - **Network:** `allowPlaintext` with the same warning text as the sign-in provider, and `allowedHosts`.
+  - **Network:** `allowPlaintext` with the same warning text as the sign-in provider, `allowedHosts`, and `tlsCa` (a multi-select over the certificate store).
   - **Visibility:** `groups`, edited with the existing group picker.
   - **Model-facing:** name and description in en and de. The description is what the model reads to choose a directory, so the form shows it as the tool will.
   - **Limits:** `maxResults`, `timeoutMs`, `concurrency`, `requestDelayMs`, and `units`.
   - **Mapping:** the preset's mapping with per-field overrides, showing the effective value next to each empty field.
+- **Certificates tab.** This tab manages the store in `contents/config/certs/`.
+  - It lists each trust anchor with its subject, validity and SHA-256 fingerprint, and which directories use it.
+  - Upload a PEM or DER file. The page shows the parsed subject and fingerprint for the admin to compare with the publisher's, before saving.
+  - Remove a certificate (refused while a directory uses it).
+  - A warning badge appears from 90 days before a certificate expires. The shipped BSI root runs until 2032-12-31.
+  - It is a store of public certificates only. Private keys are rejected on upload.
 - **Test panel**, in the editor. A name field and a "Test" button run the test endpoint against the form as it stands, and show the steps and the mapped result.
 - **Shortcut on sign-in providers:** `LdapProvidersSection` gets a "Use for people search" action on each provider. It opens the editor prefilled with `authProvider` and the provider's display name.
 - Strings in `shared/i18n/en.json` and `de.json`, dark mode, keyboard and screen-reader support. The axe-core and jsx-a11y checks must pass.
@@ -394,6 +412,8 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 | `client/src/features/admin/components/people-directories/` (form sections, mapping table, test panel) | `client/src/features/admin/components/platform-form/LdapProvidersSection.jsx` ("Use for people search") |
 | | `shared/i18n/en.json`, `shared/i18n/de.json` |
 | `server/defaults/apps/people-directory.json` | `server/utils/toolSelection.js` (`_peopleDirectory` id and `peopleDirectories` references) |
+| `server/defaults/config/certs/pca-1-verwaltung-23.pem` (BSI root, fingerprint-checked) | `REUSE.toml` (`server/defaults/config/certs/*.pem`) |
+| `server/services/peopleDirectory/certStore.js` (load, parse, fingerprint, expiry), admin routes for the store | |
 | `examples/config/peopleDirectories.json` (corporate example via `authProvider`) | |
 | `docs/people-directory-search.md`, `docs/releases/next/<entry>.md` | |
 | tests (below) | |
@@ -423,6 +443,12 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 - Config resolution: `authProvider` inheritance and overrides, missing provider, provider without bind account, inline password rejected by the schema.
 - Groups: a user outside `groups` does not see the tool in `/api/tools`, in an app that lists it, or with a `*` grant, and is refused when the tool is called anyway.
 - TLS: `getTlsBypassOptions` applied for a whitelisted host and not for another one; StartTLS `servername`.
+- `tlsCa`, with the handshake tests using certificates generated in the test:
+  - a server whose chain ends in a private root is accepted with that root in `tlsCa` and refused without it;
+  - the refusal names the missing issuer;
+  - a `tlsCa` name with path characters is rejected;
+  - an uploaded private key is rejected.
+- The shipped BSI root: its SHA-256 fingerprint equals the BSI-published value, and the x500.bund.de intermediate (fixture) is signed by it. These are signature checks only, not dated handshakes, so the test does not break when the server certificate expires on 2026-12-03.
 - Size limit / timeout / connection refused → structured results the model can act on (mocked `ldapts` client).
 - Manual (not CI): `x500bund` against the live server.
 
@@ -434,13 +460,13 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 
 ## Open questions
 
-1. **TLS:** does `ldaps://x500.bund.de:636` or StartTLS work? Until it is confirmed, the shipped entry needs `allowPlaintext: true`.
-2. **Server-side limit:** what size limit does x500.bund.de enforce? Run a broad query such as `(sn=M*)` with `-z 0`. The answer sets the entry's default `maxResults`.
+1. **Server-side limit:** what size limit does x500.bund.de enforce? Run a broad query such as `(sn=M*)` with `-z 0`. The answer sets the entry's default `maxResults`.
 
 ## Decisions (2026-10-28)
 
 - **x500 attributes:** settled from a full entry (see "What we know about x500.bund.de").
 - **Reachability:** x500.bund.de is reachable from the public internet, so it ships as a disabled default entry, not only as an example.
+- **TLS:** x500.bund.de serves LDAPS on 636 with a Verwaltungs-PKI certificate. The shipped entry uses `ldaps://` with full verification against the shipped, fingerprint-checked BSI root `PCA-1-Verwaltung-23`, so no `allowPlaintext` is needed.
 - **Admin page:** part of phase 1, not deferred to the Unified Integrations admin section.
 - **App:** a shipped "People search" app (`people-directory`) selects every directory through `peopleDirectories`, so it does not need editing when directories are added.
 - **Search fan-out:** the model decides which directories to search and calls them separately. There is no server-side merge.
