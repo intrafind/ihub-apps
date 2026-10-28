@@ -22,16 +22,38 @@ Verified with `ldapsearch` from a customer-side network on 2026-10-28:
 
 | Fact | Value |
 | --- | --- |
-| Endpoint | `ldap://x500.bund.de:389`, plain LDAP; LDAPS / StartTLS not yet checked |
+| Endpoint | `ldap://x500.bund.de:389`, plain LDAP, reachable from the public internet; LDAPS / StartTLS not yet checked |
 | Bind | Anonymous bind succeeds |
 | Protocol | LDAPv2 and v3 |
 | Naming contexts | `o=Bund,c=DE` (people), `o=PKI-1-VERWALTUNG,c=DE` (PKI) |
 | Layout | `o=Bund,c=DE` → `ou=<authority>` (BSA, BfA, BMBF, BPA, BVerfG, GBA, MRI, THW, Service, …) → optional `l=<city>` → person |
-| Person entry | `objectClass: ivbbPerson, inetOrgPerson, organizationalPerson, person`; `cn: "<Surname> <Given name>"`, `mail`, `telephoneNumber` |
+| Person object classes | `ivbbPerson`, `inetOrgPerson`, `organizationalPerson`, `person` |
 | Example DN | `cn=Greiner Ralf,l=Karlsruhe,ou=MRI,o=Bund,c=DE` |
 | Controls | Paged results (`1.2.840.113556.1.4.319`), server-side sort (`1.2.840.113556.1.4.473`/`.474`), proxied authorization (`2.16.840.1.113730.3.4.18`), plus two vendor controls |
 
-Consequences: the authority and city live in the **DN**, not necessarily in attributes, so the preset reads them from the DN. `cn` is surname-first. The server is a public directory and will enforce a size limit; the tool must treat "size limit exceeded" as a partial result, not as an error.
+A full person entry, read anonymously:
+
+| Attribute | Example | Meaning |
+| --- | --- | --- |
+| `cn` | `Greiner Ralf` | Surname first |
+| `sn`, `givenName` | `Greiner`, `Ralf` | |
+| `displayName` | `Greiner, Ralf` | Surname first, with comma |
+| `title` | `Dr.` | **Academic title**, not the job title |
+| `role` | `Vertreter des Präsidenten` | The function / job title. UTF-8; `ldapsearch` prints it base64-encoded (`role::`) only because of the umlaut. |
+| `vocation` | `Herr` | Salutation |
+| `gouvernmentOrganizationalUnit` | `Leitung` | Organisational unit inside the authority. The attribute name really is spelled `gouvernment…`. |
+| `company` | `MRI` | Authority, same as the DN's `ou` |
+| `telephoneNumber`, `facsimileTelephoneNumber` | `0721 6625 - 300`, `… - 111` | Free-form, with spaces |
+| `mail` | `ralf.greiner@mri.bund.de` | |
+
+The server answers *"Search succeeded but at least one entry is incomplete"*, so it withholds some attributes from anonymous clients. No `l` attribute came back, for example.
+
+Consequences:
+
+- The city is read from the DN's `l` component, and the authority from `company`, falling back to the DN's `ou`.
+- `cn` and `displayName` are surname-first, so the display name is built as `givenName sn`.
+- `title` maps to `academicTitle`, never to the job title.
+- The server is a public directory and will enforce a size limit. The tool treats "size limit exceeded" as a partial result, not an error.
 
 ## What exists today
 
@@ -51,7 +73,9 @@ Consequences: the authority and city live in the **DN**, not necessarily in attr
 
 ### 1. Configuration: `contents/config/peopleDirectories.json`
 
-A new config file, loaded through `configCache`, so adding or changing a directory takes effect without a restart (platform changes need one). Being a new file, it needs no migration; `server/defaults/config/peopleDirectories.json` ships `{ "directories": [] }`.
+A new config file, loaded through `configCache`, so adding or changing a directory takes effect without a restart (platform changes need one). Being a new file, it needs no migration.
+
+`server/defaults/config/peopleDirectories.json` ships the `x500bund` entry below with `"enabled": false`. The server is reachable from the internet, so any customer can switch it on in the admin page, but nobody's search terms leave the network until an admin does. Disabled is the safe default (REVIEW.md, A02), even though the entry itself carries `allowPlaintext: true`. The corporate entry is only an example, because it depends on a sign-in provider that may not exist.
 
 ```jsonc
 {
@@ -70,9 +94,9 @@ A new config file, loaded through `configCache`, so adding or changing a directo
       "groups": ["authenticated"]
     },
     {
-      // External, anonymous: everything stated here
+      // External, anonymous: everything stated here. Shipped as a default, disabled.
       "id": "x500bund",
-      "enabled": true,
+      "enabled": false,
       "type": "ldap",
       "url": "ldap://x500.bund.de:389",
       "allowPlaintext": true,                 // only until LDAPS/StartTLS is confirmed (open question 2)
@@ -82,8 +106,8 @@ A new config file, loaded through `configCache`, so adding or changing a directo
       "dataFlow": "external",
       "name": { "en": "Federal directory (IVBB)", "de": "Verzeichnisdienst des Bundes (IVBB)" },
       "description": {
-        "en": "Staff of German federal authorities (BMBF, BVerfG, THW, …). Search by surname; narrow by authority with list_units.",
-        "de": "Beschäftigte von Bundesbehörden (BMBF, BVerfG, THW, …). Nach Nachnamen suchen; mit list_units auf eine Behörde eingrenzen."
+        "en": "Public directory of German federal authorities (BMBF, BVerfG, THW, …): name, function, unit, phone, e-mail. External service. Search by surname; narrow by authority with list_units.",
+        "de": "Öffentliches Verzeichnis der Bundesbehörden (BMBF, BVerfG, THW, …): Name, Funktion, Organisationseinheit, Telefon, E-Mail. Externer Dienst. Nach Nachnamen suchen; mit list_units auf eine Behörde eingrenzen."
       },
       "units": true,
       "maxResults": 25,
@@ -98,7 +122,7 @@ Fields:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | `^[a-z0-9][a-z0-9_-]{1,31}$`; becomes the tool id prefix. Validated against MCP/A2A/tool ids for collisions at load. |
+| `id` | `^[a-z0-9][a-z0-9-]{1,31}$`, so no `_`: `isToolSelected` treats the part before the first `_` as a tool's base id. The id becomes the tool id prefix, and is validated against MCP, A2A and tool ids for collisions at load. |
 | `type` | `ldap` now, `entra` in phase 2 |
 | `authProvider` | Name of an `ldapAuth.providers[]` entry. Inherits `url`, `starttls`, `tlsOptions`, `baseDn`, `preset`, `adminDn` + `adminPasswordRef`. Any field set on the directory overrides the inherited one. Resolved at call time, so a provider edit (after the platform restart it needs anyway) is picked up. |
 | `url`, `starttls`, `baseDn`, `preset`, `tlsOptions` | As in the sign-in provider schema; required when there is no `authProvider` |
@@ -115,7 +139,7 @@ Fields:
 | `groups` | Who may use the directory. Applied when tools are listed *and* again in the tool, because the tool gets `user` with every call. |
 | `dataFlow` | `internal` (default) or `external`; carried into the tool definition for the approval work in [#2945](https://github.com/intrafind/ihub-apps/issues/2945) |
 
-Why one entry per directory and not a flag on the sign-in provider: exposing the company directory to an LLM is a data-protection decision of its own, the external directories have no sign-in provider, and the search needs settings (description, groups, limits) that do not belong to login. Admin UI shortcut: "Use for people search" on a configured LDAP sign-in provider creates the referencing entry (phase 2).
+Why one entry per directory and not a flag on the sign-in provider: exposing the company directory to an LLM is a data-protection decision of its own, the external directories have no sign-in provider, and the search needs settings (description, groups, limits) that do not belong to login. Admin UI shortcut: "Use for people search" on a configured LDAP sign-in provider creates the referencing entry (§6).
 
 **Bind requirement for referenced providers.** iHub never keeps a user's LDAP password, so a search cannot run "as the user". A referenced provider needs a bind account, or the directory sets `bind.mode: anonymous` if the directory allows anonymous search. Active Directory normally does not. The test endpoint says so.
 
@@ -127,13 +151,19 @@ The sign-in presets (`openldap`, `activeDirectory`) gain a `search` block. `ivbb
 | --- | --- | --- | --- |
 | Person filter | `(objectClass=inetOrgPerson)` | `(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))` (enabled accounts only) | `(objectClass=ivbbPerson)` |
 | Free-text attributes | `cn`, `sn`, `givenName`, `displayName`, `mail`, `uid` | `cn`, `sn`, `givenName`, `displayName`, `mail`, `sAMAccountName` | `cn`, `sn`, `givenName`, `mail` |
-| Name | `displayName` → `givenName sn` → `cn` | same | `givenName sn` → `cn` (surname-first) |
-| Organization | `o` | `company` | DN component `ou` |
-| Department | `ou`, `departmentNumber` | `department` | — |
-| Location | `l`, `physicalDeliveryOfficeName` | `physicalDeliveryOfficeName`, `l` | DN component `l`, then `l` |
-| Extras | `title`, `mobile` | `title`, `mobile`, `manager` (DN) | — |
+| `name` | `displayName` → `givenName sn` → `cn` | same | `givenName sn` → `cn` (both `displayName` and `cn` are surname-first) |
+| `jobTitle` | `title` | `title` | `role` |
+| `academicTitle` | — | — | `title` |
+| `salutation` | — | — | `vocation` |
+| `organization` | `o` | `company` | `company` → DN component `ou` |
+| `department` | `ou`, `departmentNumber` | `department` | `gouvernmentOrganizationalUnit` |
+| `location` | `l`, `physicalDeliveryOfficeName` | `physicalDeliveryOfficeName`, `l` | DN component `l` → `l` |
+| `phone`, `fax`, `mobile` | `telephoneNumber`, `facsimileTelephoneNumber`, `mobile` | same | `telephoneNumber`, `facsimileTelephoneNumber`, — |
+| `managerId` | — | `manager` (DN) | — |
 
-The `ivbb` column for `sn`, `givenName`, `title`, `ou` and `mobile` still has to be checked against a full entry (see open questions).
+The same attribute name means different things per directory: `title` is the job title in OpenLDAP and AD, but the academic title in the IVBB directory. The presets keep that in one place, and `attributeMapping` overrides it per directory.
+
+`search_people` also accepts `jobTitle` and `department` as structured, prefix-matched parameters when the preset maps them, for example "who is the president's deputy at the MRI". These are not part of the free-text OR-block, which keeps substring scans on a public server to the indexed name attributes.
 
 ### 3. Tools per directory
 
@@ -141,7 +171,7 @@ For each enabled directory the user may use, `discoverPeopleDirectoryTools()` ad
 
 | Tool id | Parameters | Returns |
 | --- | --- | --- |
-| `<id>__search_people` | `query` (required, name / e-mail / free text, ≥ 2 chars per token), optional `firstName`, `lastName`, `email`, `unit`, `maxResults` | `{ directory, results: Person[], truncated, hint? }` |
+| `<id>__search_people` | `query` (required, name / e-mail / free text, ≥ 2 chars per token), optional `firstName`, `lastName`, `email`, `jobTitle`, `department`, `unit`, `maxResults` | `{ directory, results: Person[], truncated, hint? }` |
 | `<id>__get_person` | `personId` (from a search result) | `Person` with all mapped fields |
 | `<id>__list_units` (only with `units: true`) | — | `[{ unitId, name }]` of the search base's one-level children, cached for 1 h |
 
@@ -154,6 +184,12 @@ For each enabled directory the user may use, `discoverPeopleDirectoryTools()` ad
 
 `groups` is ANDed with the existing grants. An app that lists `x500bund__search_people`, or a `permissions.tools: ["*"]` grant, does not hand the directory to a user outside its `groups`.
 
+**How an app selects directories.** `isToolSelected` gains one rule: a tool with `_peopleDirectory` is selected by its directory id, or by the reserved reference `peopleDirectories`, which means every directory.
+
+- `"tools": ["x500bund"]` gives an app all of that directory's tools.
+- `"tools": ["peopleDirectories"]` gives it every enabled directory the user may use, including ones added later, without editing the app.
+- Group permissions accept the same references.
+
 The tool's name and description come from the directory's `name` and `description`, so the model sees "Federal directory (IVBB) – staff of German federal authorities…" and can decide which directory fits the question. Searching the own and the external directory is two tool calls the model makes in parallel; nothing is merged server-side, and each result says which directory it came from.
 
 `Person`:
@@ -165,16 +201,21 @@ The tool's name and description come from the directory's `name` and `descriptio
   "name": "Ralf Greiner",
   "firstName": "Ralf",
   "lastName": "Greiner",
-  "email": "ralf.greiner@mri.bund.de",
-  "phone": "0721 6625 - 300",
-  "mobile": null,
-  "title": null,
-  "department": null,
+  "salutation": "Herr",
+  "academicTitle": "Dr.",
+  "jobTitle": "Vertreter des Präsidenten",
+  "department": "Leitung",
   "organization": "MRI",
   "location": "Karlsruhe",
+  "email": "ralf.greiner@mri.bund.de",
+  "phone": "0721 6625 - 300",
+  "fax": "0721 6625 - 111",
+  "mobile": null,
   "managerId": null
 }
 ```
+
+Fields a directory does not map are `null`, never left out, so the model can tell "unknown" from "not asked". `search_people` returns the same shape. The example is the live x500.bund.de entry and becomes a test fixture.
 
 Tool ids follow the `<instanceId>__<action>` convention MCP tools already use and the Unified Integrations architecture keeps, so a directory later becomes an installed instance of a built-in "People directory" integration without renaming a tool an app references.
 
@@ -222,23 +263,99 @@ The model never supplies an LDAP filter. The tool builds it:
 
 ### 6. Admin
 
-Phase 1:
+All of this is phase 1.
 
-- `GET/PUT /api/admin/people-directories` (whole file, Zod-validated, like other config files) and `POST /api/admin/people-directories/test` that takes a saved id or an inline entry.
-  - Both routes sit behind `adminAuth`. `adminAuth` already rejects delegated and machine principals (`isAdminEligiblePrincipal`), so personal API keys, OAuth clients and agents get a 403 before any entry is parsed or any connection is opened.
-  - `GET` returns bind passwords only as credential references. It reports the steps with `DiagnosticsReport`: resolve (including the inherited provider), connect, StartTLS, bind, run a sample search, and show the attribute mapping of the first hit.
-- The directory tools appear in the existing app editor tool picker and in `groups.permissions.tools`, with no extra work.
+**API**
 
-Phase 2: admin page under Integrations, or as part of the Unified Integrations admin section ([#2919](https://github.com/intrafind/ihub-apps/issues/2919)) if that lands first. It would also add a "Use for people search" button on LDAP sign-in providers.
+- `GET/PUT /api/admin/people-directories` reads and writes the whole file, Zod-validated like other config files. `GET` returns bind passwords only as credential references.
+- `POST /api/admin/people-directories/test` takes a saved id or an inline entry, so an unsaved form can be tested. It reports each step with `DiagnosticsReport`:
+  - resolve the entry, including the inherited sign-in provider;
+  - SSRF check;
+  - connect, then StartTLS;
+  - bind;
+  - a sample search (the admin types a name);
+  - the mapped `Person` of the first hits, next to the raw attributes they came from.
+- `GET /api/admin/people-directories/presets` returns the presets and their mappings, so the form can show the effective value of every field the admin leaves empty. This is the pattern `describeLdapProvider` already uses for sign-in providers.
+- Every route sits behind `adminAuth`, which already rejects delegated and machine principals (`isAdminEligiblePrincipal`). Personal API keys, OAuth clients and agents get a 403 before any entry is parsed or any connection is opened.
 
-### 7. App
+**Page:** `/admin/integrations/people-directories`, with a "People directories" card on the existing Integrations page next to Jira and Office 365. It is nested under `/admin`, so `KNOWN_ROUTES` and `client/index.html` do not change.
 
-An example app `people-directory` (en/de) in `examples/apps/`, whose system prompt tells the model to:
+- **List.** One row per directory: name, source (sign-in provider name, or host), preset, enabled toggle, groups. A warning badge marks plain-text transport, and an *external* badge marks `dataFlow: external`. The shipped `x500bund` entry is listed disabled, so turning it on is one switch.
+- **Editor**, with these sections:
+  - **Source:** "Reuse a sign-in provider" (a select over `ldapAuth.providers`), or "Connect directly" (URL, base DN, preset, StartTLS).
+  - **Access:** anonymous, or a service account whose password is chosen from the credential store, never typed into this form.
+  - **Network:** `allowPlaintext` with the same warning text as the sign-in provider, and `allowedHosts`.
+  - **Visibility:** `groups`, edited with the existing group picker.
+  - **Model-facing:** name and description in en and de. The description is what the model reads to choose a directory, so the form shows it as the tool will.
+  - **Limits:** `maxResults`, `timeoutMs`, `concurrency`, `requestDelayMs`, and `units`.
+  - **Mapping:** the preset's mapping with per-field overrides, showing the effective value next to each empty field.
+- **Test panel**, in the editor. A name field and a "Test" button run the test endpoint against the form as it stands, and show the steps and the mapped result.
+- **Shortcut on sign-in providers:** `LdapProvidersSection` gets a "Use for people search" action on each provider. It opens the editor prefilled with `authProvider` and the provider's display name.
+- Strings in `shared/i18n/en.json` and `de.json`, dark mode, keyboard and screen-reader support. The axe-core and jsx-a11y checks must pass.
 
-- prefer the company directory, and use the external one when the question names an authority or the person is not found internally;
-- call several directories in parallel when unsure, and say which directory each hit came from;
-- ask for a first name or authority when a result is truncated;
-- never guess contact details.
+The directory tools appear in the existing app editor tool picker and in `groups.permissions.tools` with no extra work.
+
+When the Unified Integrations admin section ([#2919](https://github.com/intrafind/ihub-apps/issues/2919)) lands, this page becomes the instance page of the built-in "People directory" integration. The API and the config file stay the same.
+
+### 7. App: "People search" / "Personensuche"
+
+A shipped app, `server/defaults/apps/people-directory.json`.
+
+**Shipping**
+
+- It starts with `"enabled": false`, like the other apps that need an integration first (`ifinder-search`, `iassistant`).
+- Startup copies missing default files into `contents/`, so existing installations get it without a migration.
+- When an admin enables a directory while the app is still disabled, the admin page offers "Also enable the *People search* app".
+
+**Configuration**
+
+```jsonc
+{
+  "id": "people-directory",
+  "enabled": false,
+  "order": 12,
+  "category": "utility",
+  "icon": "user-group",
+  "color": "#1D4ED8",
+  "name": { "en": "People search", "de": "Personensuche" },
+  "description": {
+    "en": "Find people, their function and contact details in the company directory and connected external directories",
+    "de": "Personen, ihre Funktion und Kontaktdaten im Firmenverzeichnis und in angebundenen externen Verzeichnissen finden"
+  },
+  "tools": ["peopleDirectories"],      // every directory the user may use, including ones added later
+  "sendChatHistory": true,
+  "preferredOutputFormat": "markdown",
+  "system": { "en": "…", "de": "…" },  // see below
+  "greeting": {
+    "en": { "title": "Who are you looking for?", "subtitle": "Search by name, function or authority." },
+    "de": { "title": "Wen suchen Sie?", "subtitle": "Suche nach Name, Funktion oder Behörde." }
+  },
+  "starterPrompts": [
+    { "title": { "en": "Find a colleague", "de": "Kollegin oder Kollegen finden" },
+      "message": { "en": "What is the phone number of Ralf Greiner?", "de": "Wie lautet die Telefonnummer von Ralf Greiner?" } },
+    { "title": { "en": "Function at an authority", "de": "Funktion in einer Behörde" },
+      "message": { "en": "Who is the president's deputy at the MRI?", "de": "Wer ist Vertreter des Präsidenten am MRI?" } },
+    { "title": { "en": "Search everywhere", "de": "Überall suchen" },
+      "message": { "en": "Find Müller in our directory and in the federal directory.", "de": "Suche Müller in unserem Verzeichnis und im Bundesverzeichnis." } }
+  ],
+  "settings": { "enabled": true, "model": { "enabled": true }, "chatHistory": { "enabled": true } }
+}
+```
+
+The starter prompts that name x500.bund.de people only make sense with that directory enabled. Their final wording is settled in the implementation, against the directories the default installation has.
+
+**System prompt.** In English and German, it tells the model to:
+
+- **Use the tools.** Never answer contact details, functions or units from memory, and never guess them. Unknown fields stay unknown (`null` means the directory has no value).
+- **Choose directories by their descriptions.** Prefer the company directory. Use an external one when the question names an authority or organisation that lives there, or when the person is not found internally. When unsure, call several directories in parallel.
+- **Name the source.** For every hit, say which directory it came from. Do not merge two hits from different directories into one person unless the e-mail address is identical.
+- **Narrow, don't flood.** On `truncated: true`, ask for a first name, a function or an authority, or use `list_units` and `unit`. Do not page through a directory.
+- **Present people as short contact cards.** Show the name with salutation and academic title ("Herr Dr. Ralf Greiner"), then function, unit and organisation, location, phone, fax and e-mail as links. Use a table for several hits.
+- **Handle ambiguity.** For several plausible matches, list them briefly and ask which one is meant, instead of picking one.
+- **Stay in scope.** It is a directory lookup, not a profiling tool. Do not compile lists of people by personal attributes beyond what was asked.
+- **Answer in the user's language.**
+
+The existing `examples/apps/people-search.json` (Entra) stays as it is. Phase 2 makes Entra a directory type, after which this app covers Entra too.
 
 ### 8. Entra (phase 2)
 
@@ -272,8 +389,12 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 | `server/services/peopleDirectory/presets.js` | `server/configCache.js` (load `peopleDirectories.json`) |
 | `server/validators/peopleDirectorySchema.js` | `server/package.json` (`ldapts`) |
 | `server/defaults/config/peopleDirectories.json` | `docs/tools.md`, `docs/SUMMARY.md` |
-| `server/routes/admin/peopleDirectories.js` | |
-| `examples/config/peopleDirectories.json`, `examples/apps/people-directory.json` | |
+| `server/routes/admin/peopleDirectories.js` | `client/src/App.jsx` (nested admin route) |
+| `client/src/features/admin/pages/AdminPeopleDirectoriesPage.jsx`, `AdminPeopleDirectoryEditPage.jsx` | `client/src/features/admin/pages/AdminIntegrationsPage.jsx` (card) |
+| `client/src/features/admin/components/people-directories/` (form sections, mapping table, test panel) | `client/src/features/admin/components/platform-form/LdapProvidersSection.jsx` ("Use for people search") |
+| | `shared/i18n/en.json`, `shared/i18n/de.json` |
+| `server/defaults/apps/people-directory.json` | `server/utils/toolSelection.js` (`_peopleDirectory` id and `peopleDirectories` references) |
+| `examples/config/peopleDirectories.json` (corporate example via `authProvider`) | |
 | `docs/people-directory-search.md`, `docs/releases/next/<entry>.md` | |
 | tests (below) | |
 
@@ -289,6 +410,15 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 - Transport: plain `ldap://` is refused without `allowPlaintext`, and a service bind over plain text is always refused.
 - Throttling: search and get on one directory share one queue.
 - Admin routes: a non-admin, a personal API key and an OAuth client principal each get a 403 before any LDAP connection is made.
+- Admin page (Playwright e2e against the default local admin):
+  - enable the shipped `x500bund` entry, then disable it;
+  - create a directory from a sign-in provider through "Use for people search";
+  - run the test panel with a mocked directory;
+  - check that the plain-text warning and the external badge appear;
+  - axe-core on the list and editor pages.
+- App selection: `"tools": ["peopleDirectories"]` selects every directory tool the user may use, and none of a disabled directory or one outside the user's groups. `"tools": ["x500bund"]` selects only that directory's tools. Neither reference selects a non-directory tool.
+- Shipped app: `people-directory.json` passes the app schema, and is copied into an existing `contents/` on startup without a migration.
+- `ivbb` mapping: the x500.bund.de entry above maps to the `Person` example in §3. That covers `title` → `academicTitle`, `role` → `jobTitle` with UTF-8 intact, and the city from the DN.
 - Preset mapping against fixtures: the x500 entry above, an AD user with `manager`, an OpenLDAP `inetOrgPerson`.
 - Config resolution: `authProvider` inheritance and overrides, missing provider, provider without bind account, inline password rejected by the schema.
 - Groups: a user outside `groups` does not see the tool in `/api/tools`, in an app that lists it, or with a `*` grant, and is refused when the tool is called anyway.
@@ -298,15 +428,20 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
 
 ## Phases
 
-1. **LDAP directories:** config file and schema, LDAP adapter with the three presets, dynamic tools, group enforcement, admin API with the test endpoint, example config and app, docs and changelog.
-2. **Entra and admin UI:** Entra as directory type with the `findUser` fixes, the admin page, and the "Use for people search" shortcut on sign-in providers.
+1. **LDAP directories:** config file and schema, LDAP adapter with the three presets, dynamic tools, group enforcement, admin API with the test endpoint, the admin page with the "Use for people search" shortcut, `x500bund` shipped disabled, the shipped "People search" app (disabled until a directory is on), docs and changelog.
+2. **Entra:** Entra as directory type with the `findUser` fixes, in the same admin page.
 3. **Unified Integrations:** when #2912/#2973 land, a directory becomes an instance of a built-in "People directory" integration; tool ids stay.
 
 ## Open questions
 
-1. **x500 attributes:** what does a full entry look like? Run `ldapsearch -x -LLL -H ldap://x500.bund.de -b "o=Bund,c=DE" "(cn=Greiner Ralf)" '*'`. This decides the `ivbb` mapping for `sn`, `givenName`, `title`, `ou` and `mobile`.
-2. **TLS:** does `ldaps://x500.bund.de:636` or StartTLS work?
-3. **Server-side limit:** what size limit does x500.bund.de enforce? Run a broad query such as `(sn=M*)` with `-z 0`.
-4. **Reachability:** is x500.bund.de reachable only from the IVBB / federal networks? That decides whether customers outside it can use the shipped example at all.
-5. **Admin UI timing:** should the admin UI be part of phase 1, or wait for the Unified Integrations admin section? The proposal is to wait, with a JSON config plus test endpoint first.
-6. **Shipping x500:** should `x500bund` ship as a disabled default entry, or only as an example? The proposal is example only, because only some customers can reach it.
+1. **TLS:** does `ldaps://x500.bund.de:636` or StartTLS work? Until it is confirmed, the shipped entry needs `allowPlaintext: true`.
+2. **Server-side limit:** what size limit does x500.bund.de enforce? Run a broad query such as `(sn=M*)` with `-z 0`. The answer sets the entry's default `maxResults`.
+
+## Decisions (2026-10-28)
+
+- **x500 attributes:** settled from a full entry (see "What we know about x500.bund.de").
+- **Reachability:** x500.bund.de is reachable from the public internet, so it ships as a disabled default entry, not only as an example.
+- **Admin page:** part of phase 1, not deferred to the Unified Integrations admin section.
+- **App:** a shipped "People search" app (`people-directory`) selects every directory through `peopleDirectories`, so it does not need editing when directories are added.
+- **Search fan-out:** the model decides which directories to search and calls them separately. There is no server-side merge.
+- **Per-user quota:** none. A shared per-directory queue covers concurrency (review discussion on the PR).
