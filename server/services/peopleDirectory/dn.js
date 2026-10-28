@@ -45,6 +45,8 @@ const HEX = /^[0-9a-fA-F]$/;
 const ESCAPABLE = new Set(['\\', '"', '+', ',', ';', '<', '>', ' ', '#', '=']);
 /** Characters a string value must not contain unescaped. */
 const MUST_ESCAPE = new Set(['"', ';', '<', '>', '\u0000']);
+/** Characters `escapeDnValue` escapes with a backslash wherever they appear. */
+const DN_SPECIALS = new Set(['\\', '"', '+', ',', ';', '<', '>', '=']);
 
 export class DnSyntaxError extends Error {
   constructor(message) {
@@ -144,8 +146,8 @@ export function parseDn(input) {
       while (i < text.length && text[i] !== ',' && text[i] !== '+') {
         const ch = text[i];
         if (ch === '\\') {
+          if (i + 1 >= text.length) throw new DnSyntaxError('Dangling escape at end of DN');
           const next = text[i + 1];
-          if (next === undefined) throw new DnSyntaxError('Dangling escape at end of DN');
           if (HEX.test(next) && HEX.test(text[i + 2] || '')) {
             pushText(' '.repeat(pendingSpaces));
             pendingSpaces = 0;
@@ -218,7 +220,7 @@ export function parseDn(input) {
 function rdnKey(rdn) {
   return rdn
     .map(ava => `${ava.normType}=${JSON.stringify(ava.normValue)}`)
-    .sort()
+    .sort((a, b) => (a < b ? -1 : Number(a > b)))
     .join('+');
 }
 
@@ -302,9 +304,12 @@ export function dnComponent(dn, type) {
  * @returns {string}
  */
 export function escapeDnValue(value) {
-  const escaped = String(value).replace(/[\\"+,;<>=\u0000]/g, ch =>
-    ch === '\u0000' ? '\\00' : `\\${ch}`
-  );
+  let escaped = '';
+  for (const ch of String(value)) {
+    if (ch === '\0') escaped += '\\00';
+    else if (DN_SPECIALS.has(ch)) escaped += `\\${ch}`;
+    else escaped += ch;
+  }
   return escaped.replace(/^([ #])/, '\\$1').replace(/ $/, '\\ ');
 }
 

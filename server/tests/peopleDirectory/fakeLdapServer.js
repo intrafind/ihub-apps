@@ -19,6 +19,11 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { BerReader, BerWriter, FilterParser } from 'ldapts';
 
+/** The openssl binary, by absolute path so the tests never run whatever PATH offers. */
+const OPENSSL = ['/usr/bin/openssl', '/usr/local/bin/openssl', '/opt/homebrew/bin/openssl'].find(
+  candidate => fs.existsSync(candidate)
+);
+
 const OP = { bind: 0x60, unbind: 0x42, search: 0x63, extended: 0x77 };
 const START_TLS_OID = '1.3.6.1.4.1.1466.20037';
 
@@ -223,7 +228,7 @@ export async function startFakeLdapServer({
  */
 export function generateCertificates(hostname = 'ldap.test') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-dir-certs-'));
-  const run = args => execFileSync('openssl', args, { cwd: dir, stdio: 'pipe' });
+  const run = args => execFileSync(OPENSSL, args, { cwd: dir, stdio: 'pipe' });
   const write = (name, text) => fs.writeFileSync(path.join(dir, name), text);
   run([
     'req',
@@ -318,8 +323,9 @@ export function generateCertificates(hostname = 'ldap.test') {
 
 /** Whether the openssl CLI is available to generate test certificates. */
 export function hasOpenssl() {
+  if (!OPENSSL) return false;
   try {
-    execFileSync('openssl', ['version'], { stdio: 'pipe' });
+    execFileSync(OPENSSL, ['version'], { stdio: 'pipe' });
     return true;
   } catch {
     return false;

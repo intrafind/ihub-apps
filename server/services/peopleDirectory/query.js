@@ -40,7 +40,7 @@ export class ToolArgumentError extends Error {
  * @returns {string}
  */
 function cleanValue(value) {
-  return typeof value === 'string' ? value.replace(/\*/g, '').trim() : '';
+  return typeof value === 'string' ? value.replaceAll('*', '').trim() : '';
 }
 
 /**
