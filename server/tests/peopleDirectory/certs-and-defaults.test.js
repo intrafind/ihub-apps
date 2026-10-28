@@ -140,7 +140,7 @@ describe('certificate store', { skip: !hasOpenssl() && 'openssl CLI not availabl
   });
 
   it('rejects private keys in PEM and DER, bundles and non-certificates', () => {
-    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 1024 });
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const pkcs8Pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
     const pkcs8Der = privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
     for (const [content, encoding] of [
