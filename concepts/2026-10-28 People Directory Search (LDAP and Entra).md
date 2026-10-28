@@ -135,7 +135,8 @@ Fields:
 | `id` | `^[a-z0-9][a-z0-9-]{1,31}$`, so no `_`: `isToolSelected` treats the part before the first `_` as a tool's base id. The id becomes the tool id prefix, and is validated against MCP, A2A and tool ids for collisions at load. |
 | `type` | `ldap` now, `entra` in phase 2 |
 | `authProvider` | Name of an `ldapAuth.providers[]` entry. Inherits `url`, `starttls`, `tlsOptions`, `baseDn`, `preset`, `adminDn` + `adminPasswordRef`. Any field set on the directory overrides the inherited one. Resolved at call time, so a provider edit (after the platform restart it needs anyway) is picked up. |
-| `url`, `starttls`, `baseDn`, `preset`, `tlsOptions` | As in the sign-in provider schema; required when there is no `authProvider` |
+| `url`, `starttls`, `baseDn`, `preset` | As in the sign-in provider schema; required when there is no `authProvider` |
+| `tlsOptions` | Only `minVersion`, `maxVersion` and `ciphers` are accepted. The schema rejects every other key, including `rejectUnauthorized`, `checkServerIdentity`, `ca` and `servername`. From an inherited sign-in provider, only the same keys are taken over; any others are ignored, and the admin test reports that. Certificate policy comes only from `tlsCa` and the SSL whitelist (§5), never from `tlsOptions`. |
 | `bind` | `{ "mode": "anonymous" }` or `{ "mode": "service", "dn": "…", "passwordRef": "<credential id>" }`. Default with `authProvider`: the provider's bind account. No inline passwords. |
 | `searchBase` | Defaults to `baseDn` (or the provider's `userSearchBase`) |
 | `personFilter` | Override of the preset's object-class filter, e.g. to exclude service accounts |
@@ -182,7 +183,7 @@ For each enabled directory the user may use, `discoverPeopleDirectoryTools()` ad
 
 | Tool id | Parameters | Returns |
 | --- | --- | --- |
-| `<id>__search_people` | `query` (required, name / e-mail / free text, ≥ 2 chars per token), optional `firstName`, `lastName`, `email`, `jobTitle`, `department`, `unit`, `maxResults` | `{ directory, results: Person[], truncated, hint? }` |
+| `<id>__search_people` | `query` (required, name / e-mail / free text, ≥ 2 chars per token), optional `firstName`, `lastName`, `email`, `jobTitle`, `department`, `unit`, `maxResults` (integer, `minimum: 1`, `maximum: directory.maxResults` in the generated JSON schema; validated again in the tool, see §4) | `{ directory, results: Person[], truncated, hint? }` |
 | `<id>__get_person` | `personId` (from a search result) | `Person` with all mapped fields |
 | `<id>__list_units` (only with `units: true`) | — | `[{ unitId, name }]` of the search base's one-level children, cached for 1 h |
 
@@ -253,7 +254,12 @@ The model never supplies an LDAP filter. The tool builds it:
   - Accept the DN only when its RDN sequence ends with the search base's RDN sequence and is longer than it.
   - String suffix matching is not used anywhere. `cn=x\,ou=people,o=firma` does not lie in `ou=people,o=firma`.
 - Only mapped attributes are requested (never `*`), so binary or sensitive attributes (`userCertificate`, `userPassword`, `jpegPhoto`) never leave the directory.
-- `effectiveMaxResults = min(requested maxResults ?? directory.maxResults, directory.maxResults)`. `sizeLimit` = `effectiveMaxResults + 1`, `timeLimit` from `timeoutMs`. LDAP result code 4 (size limit exceeded) or more entries than `effectiveMaxResults` → at most `effectiveMaxResults` results, `truncated: true` and a hint to narrow the search (`unit`, first name).
+- **Result limit.**
+  - A requested `maxResults` must be an integer ≥ 1. Anything else (0, negative, fractional, non-numeric) is rejected with a message the model can act on, before any limit is computed. `ldapts` treats `sizeLimit: 0` as "unlimited", so a value at or below 0 must never reach it.
+  - A valid value above `directory.maxResults` is clamped, not rejected. The JSON schema already announces the maximum, and clamping can only make the result smaller.
+  - `effectiveMaxResults = min(requested maxResults ?? directory.maxResults, directory.maxResults)`, and `sizeLimit = effectiveMaxResults + 1`.
+  - LDAP result code 4 (size limit exceeded), or more entries than `effectiveMaxResults`, gives at most `effectiveMaxResults` results, `truncated: true`, and a hint to narrow the search (`unit`, first name).
+- **Time limit.** `timeLimit = Math.ceil(timeoutMs / 1000)` seconds, because LDAP's `timeLimit` is in seconds and `timeoutMs` in milliseconds. The client-side `timeout` stays `timeoutMs`.
 
 ### 5. Connection
 
@@ -265,7 +271,13 @@ The model never supplies an LDAP filter. The tool builds it:
   - Company directories on private addresses are therefore one allow-list entry, or no extra step at all when they reuse the sign-in provider.
   - The check runs at connection time, not only when the config is saved, and also covers inline test entries.
 - **Pinned address.** The client connects to the validated IP literal, not to the host name, so a DNS change between check and connect cannot redirect it. TLS still verifies the certificate against the host name, by passing `servername`/`host` = host name; `buildStartTlsOptions` already does this for StartTLS.
-- New `Client({ url: <pinned>, timeout, connectTimeout, tlsOptions: { ...getTlsBypassOptions(url), ca: <tlsCa PEMs, if any>, ...directory.tlsOptions, servername } })`; for StartTLS `client.startTLS(buildStartTlsOptions(url, …))` with the same `ca`.
+- New `Client({ url: <pinned>, timeout, connectTimeout, tlsOptions })`, with `tlsOptions` built in this order so that nothing configurable can override certificate policy:
+  1. the allowed `tlsOptions` keys (`minVersion`, `maxVersion`, `ciphers`);
+  2. `ca` from `tlsCa`, if set;
+  3. `servername` and `host`, set to the host name, never the pinned IP;
+  4. `getTlsBypassOptions(url)`, the only source of `rejectUnauthorized: false`, and only for a host on the SSL whitelist.
+
+  StartTLS uses `client.startTLS()` with the same object, built through `buildStartTlsOptions(url, …)`.
 - **Certificate errors are explained.** On a verification failure, the test endpoint reports the chain the server sent: subject, issuer, validity, and the SHA-256 fingerprint of each certificate. It names the issuer that is missing ("issuer `PCA-1-Verwaltung-23` is not trusted: add it to the certificate store and to `tlsCa`"). iHub never fetches or adds a root by itself: a trust anchor is an admin decision, checked against a published fingerprint.
 - One connection per call, `unbind()` in `finally`. A small pool is not worth it at chat-tool call rates.
 - **Transport.** LDAPS or StartTLS is required by default, for anonymous binds too: search terms and the returned records are personal data. Plain `ldap://` needs `allowPlaintext: true` on the directory. The admin test and the admin page then show the same warning the sign-in provider shows. A service bind is never sent in plain text.
@@ -425,7 +437,15 @@ The existing `entraPeopleSearch_*` tool, its ids and its env-variable credential
   - accepted: inside the base;
   - rejected: the base itself, a sibling naming context, a look-alike suffix (`o=Bund,c=DE.evil`), an escaped comma (`cn=x\,ou=people,o=firma` against `ou=people,o=firma`), and a malformed DN;
   - normalised: multi-valued RDNs in either order, OID and alias attribute types (`2.5.4.10=Bund`, `organizationName=Bund`), and case and whitespace differences.
-- Result limit: directory `maxResults: 25` and a request for 50 → `sizeLimit: 26` sent, at most 25 results, `truncated` set when 26 come back.
+- Result limit:
+  - with directory `maxResults: 25`, a request for 50 is clamped: it sends `sizeLimit: 26`, returns at most 25 results, and sets `truncated` when 26 come back;
+  - requests for 0, -1, 2.5 and `"10"` are rejected, and no search is sent.
+- Time limit: `timeoutMs: 8000` sends `timeLimit: 8`, and `timeoutMs: 1500` sends `timeLimit: 2`.
+- TLS policy:
+  - directory `tlsOptions: { rejectUnauthorized: false }` fails schema validation;
+  - a sign-in provider with `tlsOptions.rejectUnauthorized: false`, referenced through `authProvider`, still verifies certificates for a host not on the SSL whitelist, and the admin test reports the ignored key;
+  - verification is disabled only for a whitelisted host;
+  - all of this is checked for both the `ldaps://` path and the StartTLS path.
 - SSRF: a private address is refused without an allow-list entry, accepted with `allowedHosts`, `ssrf.allowedHosts` or the `authProvider` host, and checked again for inline test entries. The connection uses the pinned address while TLS still verifies against the host name.
 - Transport: plain `ldap://` is refused without `allowPlaintext`, and a service bind over plain text is always refused.
 - Throttling: search and get on one directory share one queue.
