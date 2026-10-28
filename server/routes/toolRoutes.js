@@ -15,6 +15,7 @@ import { sendInternalError } from '../utils/responseHelpers.js';
 import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
 import { getVisibleToolIds } from '../services/mcp/permissions.js';
 import { isToolSelected } from '../utils/toolSelection.js';
+import { mayUseDirectory } from '../services/peopleDirectory/PeopleDirectoryService.js';
 
 /**
  * The caller with permissions resolved: an anonymous caller (when anonymous
@@ -40,23 +41,26 @@ function resolveCaller(req, platformConfig) {
  * (`services/mcp/permissions.js`): a tool the caller's groups grant
  * (`permissions.tools`, `*` for all) or an app they can open lists, read the
  * way an app's `tools` are read — exact id, base id of a function-style tool,
- * MCP server id, A2A agent reference (see `isToolSelected`). An admin, who
- * can grant themselves any tool, runs every tool (testing a tool this way is
- * how tool authors check it).
+ * MCP server id, A2A agent reference, people directory (see
+ * `isToolSelected`). An admin, who can grant themselves any tool, runs every
+ * tool (testing a tool this way is how tool authors check it) — except a
+ * people directory's tool, whose own `groups` hold for every caller.
  *
  * @param {Object} user
  * @param {Object} platformConfig
  * @param {string} toolId
  * @returns {Promise<boolean>}
  */
-async function mayRunTool(user, platformConfig, toolId) {
+export async function mayRunTool(user, platformConfig, toolId) {
+  const tools = await loadTools(platformConfig.defaultLanguage || 'en');
+  // The loaded definition carries the MCP server / A2A agent / people
+  // directory it belongs to; a tool that is not in the list (workflow_,
+  // source_, …) is judged by id.
+  const tool = (tools || []).find(t => t.id === toolId) || { id: toolId };
+  if (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id)) return false;
   if (user.permissions?.adminAccess === true) return true;
   const visible = await getVisibleToolIds(user, platformConfig);
   if (visible.has('*')) return true;
-  const tools = await loadTools(platformConfig.defaultLanguage || 'en');
-  // The loaded definition carries the MCP server / A2A agent it belongs to;
-  // a tool that is not in the list (workflow_, source_, …) is judged by id.
-  const tool = (tools || []).find(t => t.id === toolId) || { id: toolId };
   return isToolSelected(tool, visible);
 }
 

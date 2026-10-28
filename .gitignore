@@ -85,6 +85,9 @@ contents/.jwt-secret
 .worktrees/
 
 *.pem
+# Public trust anchors shipped for people directories (no keys; the store
+# refuses private keys).
+!server/defaults/config/certs/*.pem
 contents*/
 .env*
 

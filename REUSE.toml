@@ -38,3 +38,12 @@ path = "server/defaults/skills/interview-to-blog/**"
 precedence = "override"
 SPDX-FileCopyrightText = "The interview-to-blog skill authors"
 SPDX-License-Identifier = "Apache-2.0"
+
+# Public trust anchors shipped for people directories (e.g. the BSI Verwaltungs-PKI
+# root PCA-1-Verwaltung-23 for x500.bund.de), reproduced unchanged from their
+# publisher and checked against the published fingerprint.
+[[annotations]]
+path = "server/defaults/config/certs/*.pem"
+precedence = "override"
+SPDX-FileCopyrightText = "Bundesamt für Sicherheit in der Informationstechnik (BSI)"
+SPDX-License-Identifier = "LicenseRef-Public-Certificate"

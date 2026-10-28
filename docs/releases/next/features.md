@@ -196,3 +196,24 @@ chats at that age. Set `runRetentionDays` to `0` to keep run history and its cha
 Admin-created projects can now have a default app, just like personal projects.
 Set it in the project's name and description dialog; chats in the project then start in that app,
 so users who add the project to theirs get the right app selected automatically. They can still pick another app.
+
+## People Search in Chat: Company Directory and x500.bund.de
+
+Users can ask the chat for people — function, unit, phone, e-mail — in the company's LDAP or
+Active Directory and in external directories such as the directory of the German federal
+administration, x500.bund.de. The model picks the directory by its description and can search
+several in one answer; every hit names the directory it came from.
+
+- **Admin → Integrations → People directories** lists the directories, with an editor, a
+  connection test that shows each step and the mapped results, and a Certificates tab.
+- **Use for people search** on an LDAP sign-in provider creates the company directory in one
+  click. Searching needs the provider's bind account.
+- x500.bund.de ships as a disabled entry. It connects over LDAPS and trusts the Verwaltungs-PKI
+  root `PCA-1-Verwaltung-23`, which iHub ships, checked against the fingerprint the BSI publishes.
+  The iHub server needs a direct route to port 636; LDAP does not use the HTTP proxy.
+- The new **People search** app ships disabled and uses every directory a user may use. The
+  admin page offers to switch it on with the first directory.
+- Each directory has its own groups, on top of the tool permissions. Plain-text LDAP, private
+  addresses and untrusted certificates are refused unless allowed explicitly.
+
+See [People Directory Search](../../people-directory-search.md).
