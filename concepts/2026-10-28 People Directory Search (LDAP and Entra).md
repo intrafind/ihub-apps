@@ -30,23 +30,23 @@ Verified with `ldapsearch` from a customer-side network on 2026-10-28:
 | Naming contexts | `o=Bund,c=DE` (people), `o=PKI-1-VERWALTUNG,c=DE` (PKI) |
 | Layout | `o=Bund,c=DE` → `ou=<authority>` (BSA, BfA, BMBF, BPA, BVerfG, GBA, MRI, THW, Service, …) → optional `l=<city>` → person |
 | Person object classes | `ivbbPerson`, `inetOrgPerson`, `organizationalPerson`, `person` |
-| Example DN | `cn=Greiner Ralf,l=Karlsruhe,ou=MRI,o=Bund,c=DE` |
+| Example DN | `cn=Mustermann Erika,l=Karlsruhe,ou=MRI,o=Bund,c=DE` |
 | Controls | Paged results (`1.2.840.113556.1.4.319`), server-side sort (`1.2.840.113556.1.4.473`/`.474`), proxied authorization (`2.16.840.1.113730.3.4.18`), plus two vendor controls |
 
-A full person entry, read anonymously:
+A full person entry, read anonymously. The values are made up (Erika Mustermann); the attribute names, formats and DN structure are those of a real entry read on 2026-10-28:
 
 | Attribute | Example | Meaning |
 | --- | --- | --- |
-| `cn` | `Greiner Ralf` | Surname first |
-| `sn`, `givenName` | `Greiner`, `Ralf` | |
-| `displayName` | `Greiner, Ralf` | Surname first, with comma |
+| `cn` | `Mustermann Erika` | Surname first |
+| `sn`, `givenName` | `Mustermann`, `Erika` | |
+| `displayName` | `Mustermann, Erika` | Surname first, with comma |
 | `title` | `Dr.` | **Academic title**, not the job title |
-| `role` | `Vertreter des Präsidenten` | The function / job title. UTF-8; `ldapsearch` prints it base64-encoded (`role::`) only because of the umlaut. |
-| `vocation` | `Herr` | Salutation |
+| `role` | `Vertreterin des Präsidenten` | The function / job title. UTF-8; `ldapsearch` prints it base64-encoded (`role::`) only because of the umlaut. |
+| `vocation` | `Frau` | Salutation |
 | `gouvernmentOrganizationalUnit` | `Leitung` | Organisational unit inside the authority. The attribute name really is spelled `gouvernment…`. |
 | `company` | `MRI` | Authority, same as the DN's `ou` |
-| `telephoneNumber`, `facsimileTelephoneNumber` | `0721 6625 - 300`, `… - 111` | Free-form, with spaces |
-| `mail` | `ralf.greiner@mri.bund.de` | |
+| `telephoneNumber`, `facsimileTelephoneNumber` | `0721 0000 - 300`, `… - 111` | Free-form, with spaces |
+| `mail` | `erika.mustermann@example.org` | |
 
 The server answers *"Search succeeded but at least one entry is incomplete"*, so it withholds some attributes from anonymous clients. No `l` attribute came back, for example.
 
@@ -208,25 +208,25 @@ The tool's name and description come from the directory's `name` and `descriptio
 ```json
 {
   "directory": "x500bund",
-  "personId": "cn=Greiner Ralf,l=Karlsruhe,ou=MRI,o=Bund,c=DE",
-  "name": "Ralf Greiner",
-  "firstName": "Ralf",
-  "lastName": "Greiner",
-  "salutation": "Herr",
+  "personId": "cn=Mustermann Erika,l=Karlsruhe,ou=MRI,o=Bund,c=DE",
+  "name": "Erika Mustermann",
+  "firstName": "Erika",
+  "lastName": "Mustermann",
+  "salutation": "Frau",
   "academicTitle": "Dr.",
-  "jobTitle": "Vertreter des Präsidenten",
+  "jobTitle": "Vertreterin des Präsidenten",
   "department": "Leitung",
   "organization": "MRI",
   "location": "Karlsruhe",
-  "email": "ralf.greiner@mri.bund.de",
-  "phone": "0721 6625 - 300",
-  "fax": "0721 6625 - 111",
+  "email": "erika.mustermann@example.org",
+  "phone": "0721 0000 - 300",
+  "fax": "0721 0000 - 111",
   "mobile": null,
   "managerId": null
 }
 ```
 
-Fields a directory does not map are `null`, never left out, so the model can tell "unknown" from "not asked". `search_people` returns the same shape. The example is the live x500.bund.de entry and becomes a test fixture.
+Fields a directory does not map are `null`, never left out, so the model can tell "unknown" from "not asked". `search_people` returns the same shape. The example has the shape of a real x500.bund.de entry with made-up values, and becomes the test fixture; no real person's data goes into the repository.
 
 Tool ids follow the `<instanceId>__<action>` convention MCP tools already use and the Unified Integrations architecture keeps, so a directory later becomes an installed instance of a built-in "People directory" integration without renaming a tool an app references.
 
@@ -350,7 +350,7 @@ A shipped app, `server/defaults/apps/people-directory.json`.
   },
   "starterPrompts": [
     { "title": { "en": "Find a colleague", "de": "Kollegin oder Kollegen finden" },
-      "message": { "en": "What is the phone number of Ralf Greiner?", "de": "Wie lautet die Telefonnummer von Ralf Greiner?" } },
+      "message": { "en": "What is the phone number of Erika Mustermann?", "de": "Wie lautet die Telefonnummer von Erika Mustermann?" } },
     { "title": { "en": "Function at an authority", "de": "Funktion in einer Behörde" },
       "message": { "en": "Who is the president's deputy at the MRI?", "de": "Wer ist Vertreter des Präsidenten am MRI?" } },
     { "title": { "en": "Search everywhere", "de": "Überall suchen" },
@@ -368,7 +368,7 @@ The starter prompts that name x500.bund.de people only make sense with that dire
 - **Choose directories by their descriptions.** Prefer the company directory. Use an external one when the question names an authority or organisation that lives there, or when the person is not found internally. When unsure, call several directories in parallel.
 - **Name the source.** For every hit, say which directory it came from. Do not merge two hits from different directories into one person unless the e-mail address is identical.
 - **Narrow, don't flood.** On `truncated: true`, ask for a first name, a function or an authority, or use `list_units` and `unit`. Do not page through a directory.
-- **Present people as short contact cards.** Show the name with salutation and academic title ("Herr Dr. Ralf Greiner"), then function, unit and organisation, location, phone, fax and e-mail as links. Use a table for several hits.
+- **Present people as short contact cards.** Show the name with salutation and academic title ("Frau Dr. Erika Mustermann"), then function, unit and organisation, location, phone, fax and e-mail as links. Use a table for several hits.
 - **Handle ambiguity.** For several plausible matches, list them briefly and ask which one is meant, instead of picking one.
 - **Stay in scope.** It is a directory lookup, not a profiling tool. Do not compile lists of people by personal attributes beyond what was asked.
 - **Answer in the user's language.**
