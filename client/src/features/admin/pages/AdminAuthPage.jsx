@@ -11,6 +11,22 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
 
+/** A value with its object keys sorted, so key order does not count as a change. */
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map(key => [key, canonical(value[key])])
+  );
+}
+
+/** Whether two configurations hold the same settings. */
+function sameSettings(a, b) {
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
 function AdminAuthPage() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
@@ -19,6 +35,8 @@ function AdminAuthPage() {
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
+  // The configuration as last loaded or saved, to tell unsaved edits apart.
+  const [savedConfig, setSavedConfig] = useState(null);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -98,6 +116,7 @@ function AdminAuthPage() {
         ...prevConfig,
         ...data
       }));
+      setSavedConfig(data);
     } catch (error) {
       setMessage({
         type: 'error',
@@ -124,6 +143,7 @@ function AdminAuthPage() {
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly
+      setSavedConfig(data);
       setMessage({
         type: 'success',
         text: 'Authentication configuration saved successfully!'
@@ -143,6 +163,14 @@ function AdminAuthPage() {
   const handleDataChange = newData => {
     setConfig(newData);
   };
+
+  // "Use for people search" leaves this page: offer it only for providers
+  // that are saved, and only while nothing here is unsaved.
+  const savedLdapProviderNames = (savedConfig?.ldapAuth?.providers || [])
+    .map(provider => provider?.name)
+    .filter(Boolean);
+  const hasUnsavedChanges =
+    savedConfig !== null && !sameSettings(config, { ...config, ...savedConfig });
 
   if (loading) {
     return (
@@ -223,7 +251,11 @@ function AdminAuthPage() {
           value={config}
           onChange={handleDataChange}
           formComponent={PlatformFormEditor}
-          formProps={{ availableGroups }}
+          formProps={{
+            availableGroups,
+            savedLdapProviderNames,
+            hasUnsavedChanges
+          }}
           jsonSchema={jsonSchema}
           title={t('admin.auth.configuration', 'Authentication Configuration')}
         />

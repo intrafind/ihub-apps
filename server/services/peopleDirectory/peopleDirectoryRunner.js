@@ -15,7 +15,12 @@ import {
 } from './LdapDirectory.js';
 import { mapEntryToPerson } from './mapping.js';
 import { ToolArgumentError } from './query.js';
-import { findDirectory, mayUseDirectory, resolveDirectory } from './PeopleDirectoryService.js';
+import {
+  findDirectory,
+  hostOf,
+  mayUseDirectory,
+  resolveDirectory
+} from './PeopleDirectoryService.js';
 
 /**
  * Running people directory tools, and the admin connection test. Loaded when a
@@ -44,9 +49,10 @@ const MODEL_ERROR_MESSAGES = {
  * Throttle queue of a directory: shared by all of its tools and its admin test.
  * @param {Object} resolved
  * @param {() => Promise<*>} fn
+ * @param {string} [queueId] - Another queue, for an entry that is not saved yet
  */
-function inDirectoryQueue(resolved, fn) {
-  return throttledRun(`peopleDirectory:${resolved.id}`, fn, {
+function inDirectoryQueue(resolved, fn, queueId = resolved.id) {
+  return throttledRun(`peopleDirectory:${queueId}`, fn, {
     concurrency: resolved.concurrency,
     delayMs: resolved.requestDelayMs
   });
@@ -171,9 +177,11 @@ const TEST_SAMPLE_SIZE = 3;
  * @param {Object} [options]
  * @param {string} [options.query] - Name to search for
  * @param {Object} [options.deps] - `{ connectOptions }` for tests
+ * @param {boolean} [options.unsaved] - An entry without an id of its own: it is
+ *   queued by host, so tests of different new directories do not wait on each other
  * @returns {Promise<{success: boolean, message: string, summary: Object, steps: Object[], results?: Object[]}>}
  */
-export async function testDirectory(raw, { query, deps = {} } = {}) {
+export async function testDirectory(raw, { query, deps = {}, unsaved = false } = {}) {
   const report = new DiagnosticsReport();
   const resolved = resolveDirectory(raw);
   const finish = (success, message, extra = {}) => ({
@@ -245,93 +253,98 @@ export async function testDirectory(raw, { query, deps = {} } = {}) {
     starttls: 'StartTLS',
     bind: 'Bind'
   };
-  return inDirectoryQueue(resolved, async () => {
-    let client;
-    try {
-      ({ client } = await openDirectoryConnection(resolved, {
-        ...deps.connectOptions,
-        onStep: step =>
-          report.add({ label: labels[step.id] || step.id, status: STATUS.OK, ...step })
-      }));
-    } catch (error) {
-      report.add({
-        id: error?.step && error.step !== 'configuration' ? error.step : 'connect',
-        label: labels[error?.step] || 'Connect',
-        status: STATUS.FAIL,
-        message: error?.message || String(error),
-        details: error?.details,
-        hints: error?.hints
-      });
-      return finish(false, error?.message || 'The directory could not be reached.');
-    }
-
-    try {
-      if (!prepared) {
-        report.skip('search', 'Sample search', 'Enter a name to run a sample search.');
-        return finish(true, 'Connected and bound. Enter a name to run a sample search.');
-      }
-      let outcome;
-      const startedAt = Date.now();
+  const queueId = unsaved ? `test:${hostOf(resolved.url) || 'unknown'}` : resolved.id;
+  return inDirectoryQueue(
+    resolved,
+    async () => {
+      let client;
       try {
-        outcome = await runSearch(resolved, client, prepared);
+        ({ client } = await openDirectoryConnection(resolved, {
+          ...deps.connectOptions,
+          onStep: step =>
+            report.add({ label: labels[step.id] || step.id, status: STATUS.OK, ...step })
+        }));
       } catch (error) {
+        report.add({
+          id: error?.step && error.step !== 'configuration' ? error.step : 'connect',
+          label: labels[error?.step] || 'Connect',
+          status: STATUS.FAIL,
+          message: error?.message || String(error),
+          details: error?.details,
+          hints: error?.hints
+        });
+        return finish(false, error?.message || 'The directory could not be reached.');
+      }
+
+      try {
+        if (!prepared) {
+          report.skip('search', 'Sample search', 'Enter a name to run a sample search.');
+          return finish(true, 'Connected and bound. Enter a name to run a sample search.');
+        }
+        let outcome;
+        const startedAt = Date.now();
+        try {
+          outcome = await runSearch(resolved, client, prepared);
+        } catch (error) {
+          report.add({
+            id: 'search',
+            label: 'Sample search',
+            status: STATUS.FAIL,
+            message: error.message,
+            details: { filter: prepared.filter, base: resolved.searchBase },
+            durationMs: Date.now() - startedAt
+          });
+          return finish(false, `The sample search failed: ${error.message}`);
+        }
+        const result = searchResult(resolved, prepared, outcome);
         report.add({
           id: 'search',
           label: 'Sample search',
-          status: STATUS.FAIL,
-          message: error.message,
-          details: { filter: prepared.filter, base: resolved.searchBase },
+          status: result.results.length > 0 ? STATUS.OK : STATUS.WARN,
+          message: `${result.results.length} ${result.results.length === 1 ? 'person' : 'people'} found${result.truncated ? ' (more match)' : ''}`,
+          details: {
+            base: outcome.base,
+            filter: prepared.filter,
+            attributes: prepared.attributes,
+            sizeLimit: prepared.sizeLimit
+          },
+          hints: result.hint ? [result.hint] : [],
           durationMs: Date.now() - startedAt
         });
-        return finish(false, `The sample search failed: ${error.message}`);
-      }
-      const result = searchResult(resolved, prepared, outcome);
-      report.add({
-        id: 'search',
-        label: 'Sample search',
-        status: result.results.length > 0 ? STATUS.OK : STATUS.WARN,
-        message: `${result.results.length} ${result.results.length === 1 ? 'person' : 'people'} found${result.truncated ? ' (more match)' : ''}`,
-        details: {
-          base: outcome.base,
-          filter: prepared.filter,
-          attributes: prepared.attributes,
-          sizeLimit: prepared.sizeLimit
-        },
-        hints: result.hint ? [result.hint] : [],
-        durationMs: Date.now() - startedAt
-      });
-      if (outcome.entries.length > 0) {
-        report.add({
-          id: 'mapping',
-          label: 'Mapped people',
-          status: STATUS.OK,
-          message: `First ${Math.min(TEST_SAMPLE_SIZE, outcome.entries.length)} hit(s), with the attributes they came from`,
-          details: {
-            people: outcome.entries.slice(0, TEST_SAMPLE_SIZE).map(entry => {
-              const { person, usedSources } = mapEntryToPerson(entry, {
-                directoryId: resolved.id,
-                mapping: resolved.mapping
-              });
-              return { person, usedSources, raw: presentableEntry(entry) };
-            })
-          }
-        });
-      }
-      return finish(
-        true,
-        result.results.length > 0
-          ? 'The directory answers.'
-          : 'Connected, but nobody matched the sample search.',
-        {
-          results: result.results
+        if (outcome.entries.length > 0) {
+          report.add({
+            id: 'mapping',
+            label: 'Mapped people',
+            status: STATUS.OK,
+            message: `First ${Math.min(TEST_SAMPLE_SIZE, outcome.entries.length)} hit(s), with the attributes they came from`,
+            details: {
+              people: outcome.entries.slice(0, TEST_SAMPLE_SIZE).map(entry => {
+                const { person, usedSources } = mapEntryToPerson(entry, {
+                  directoryId: resolved.id,
+                  mapping: resolved.mapping
+                });
+                return { person, usedSources, raw: presentableEntry(entry) };
+              })
+            }
+          });
         }
-      );
-    } finally {
-      try {
-        await client.unbind();
-      } catch {
-        // gone either way
+        return finish(
+          true,
+          result.results.length > 0
+            ? 'The directory answers.'
+            : 'Connected, but nobody matched the sample search.',
+          {
+            results: result.results
+          }
+        );
+      } finally {
+        try {
+          await client.unbind();
+        } catch {
+          // gone either way
+        }
       }
-    }
-  });
+    },
+    queueId
+  );
 }

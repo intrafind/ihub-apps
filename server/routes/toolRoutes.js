@@ -15,7 +15,10 @@ import { sendInternalError } from '../utils/responseHelpers.js';
 import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
 import { getVisibleToolIds } from '../services/mcp/permissions.js';
 import { isToolSelected } from '../utils/toolSelection.js';
-import { mayUseDirectory } from '../services/peopleDirectory/PeopleDirectoryService.js';
+import {
+  directoryOfToolId,
+  mayUseDirectory
+} from '../services/peopleDirectory/PeopleDirectoryService.js';
 
 /**
  * The caller with permissions resolved: an anonymous caller (when anonymous
@@ -52,15 +55,18 @@ function resolveCaller(req, platformConfig) {
  * @returns {Promise<boolean>}
  */
 export async function mayRunTool(user, platformConfig, toolId) {
+  // A directory's tool id names the directory, so its groups are checked
+  // without waiting for the full tool list (MCP and A2A discovery).
+  const directoryId = directoryOfToolId(toolId);
+  if (directoryId && !mayUseDirectory(user, directoryId)) return false;
+  if (user.permissions?.adminAccess === true) return true;
+  const visible = await getVisibleToolIds(user, platformConfig);
+  if (visible.has('*')) return true;
   const tools = await loadTools(platformConfig.defaultLanguage || 'en');
   // The loaded definition carries the MCP server / A2A agent / people
   // directory it belongs to; a tool that is not in the list (workflow_,
   // source_, …) is judged by id.
   const tool = (tools || []).find(t => t.id === toolId) || { id: toolId };
-  if (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id)) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  const visible = await getVisibleToolIds(user, platformConfig);
-  if (visible.has('*')) return true;
   return isToolSelected(tool, visible);
 }
 

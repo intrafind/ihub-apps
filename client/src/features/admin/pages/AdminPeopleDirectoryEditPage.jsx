@@ -90,6 +90,9 @@ function AdminPeopleDirectoryEditPage() {
 
   const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
   const problemsRef = useRef(null);
+  // The stored entry this form's save may replace: the one loaded with the
+  // page, or the newer one a "changed elsewhere" warning has shown.
+  const baselineRef = useRef(undefined);
 
   // Save is at the bottom of a long page: bring the list of problems into view
   // and move focus there, so keyboard and screen-reader users land on it too.
@@ -281,6 +284,24 @@ function AdminPeopleDirectoryEditPage() {
         return;
       }
       const before = isNew ? null : directories.find(d => d.id === directoryId);
+      if (!isNew) {
+        const baseline =
+          baselineRef.current === undefined
+            ? (data.directories.find(d => d.id === directoryId) ?? null)
+            : baselineRef.current;
+        if (JSON.stringify(before ?? null) !== JSON.stringify(baseline)) {
+          // Someone else saved this directory meanwhile: say so once; saving
+          // again overwrites their change.
+          baselineRef.current = before ?? null;
+          setSaveError(
+            t(
+              'admin.peopleDirectories.edit.changedElsewhere',
+              'This directory was changed elsewhere after you opened it. Save again to overwrite that change, or reload the page to see it.'
+            )
+          );
+          return;
+        }
+      }
       list = withDirectory(directories, directory, isNew ? null : directoryId);
       await savePeopleDirectories(list);
       markSaved();
@@ -356,7 +377,7 @@ function AdminPeopleDirectoryEditPage() {
   const preset = presets.find(p => p.id === presetId);
   const presetLabel = t(`admin.peopleDirectories.presets.${presetId}`, preset?.label || presetId);
   const fields = Array.isArray(presetsData?.fields) ? presetsData.fields : DEFAULT_PERSON_FIELDS;
-  const baseDnHint = form.baseDn || provider?.baseDn || '';
+  const baseDnHint = form.baseDn || provider?.userSearchBase || provider?.baseDn || '';
   const status = !isNew ? data.effective?.[directoryId] : null;
   const title = isNew
     ? t('admin.peopleDirectories.edit.createTitle', 'Add people directory')

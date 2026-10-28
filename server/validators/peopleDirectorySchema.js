@@ -28,6 +28,22 @@ import {
  */
 export const PEOPLE_DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
+/**
+ * Ids a directory cannot take: `peopledirectories` selects every directory,
+ * `new` is the admin editor's create route, and `app__`, `workflow_`,
+ * `source_`, `knowledge_` and `a2a__` tool ids are routed (or hidden) by
+ * prefix before a directory tool would be reached.
+ */
+export const RESERVED_DIRECTORY_IDS = [
+  PEOPLE_DIRECTORIES_REFERENCE.toLowerCase(),
+  'new',
+  'app',
+  'workflow',
+  'source',
+  'knowledge',
+  'a2a'
+];
+
 /** Name of a trust anchor in the certificate store `contents/config/certs/<name>.pem`. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
@@ -255,7 +271,7 @@ export const peopleDirectoriesFileSchema = z
         });
       }
       seen.add(directory.id);
-      if (directory.id === PEOPLE_DIRECTORIES_REFERENCE.toLowerCase()) {
+      if (RESERVED_DIRECTORY_IDS.includes(directory.id)) {
         ctx.addIssue({
           code: 'custom',
           path: ['directories', index, 'id'],

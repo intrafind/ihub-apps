@@ -1804,7 +1804,7 @@ class ConfigCache {
         .update(String(directoriesEtag))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${userSpecificEtag}-d${directoriesHash}`;
+      userSpecificEtag = etagWithSuffix(userSpecificEtag, `d${directoriesHash}`);
     }
 
     // Apply filtering based on user permissions
@@ -1846,7 +1846,7 @@ class ConfigCache {
         .update(JSON.stringify(toolIds))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${userSpecificEtag}-${contentHash}`;
+      userSpecificEtag = etagWithSuffix(userSpecificEtag, contentHash);
     }
 
     return { data: tools, etag: userSpecificEtag };

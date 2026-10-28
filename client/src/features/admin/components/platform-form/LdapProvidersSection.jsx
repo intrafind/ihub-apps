@@ -20,8 +20,11 @@ import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../uti
  * `server/utils/ldapProviderConfig.js`), so they live under "Advanced" with the
  * derived value shown as the placeholder — typing one only overrides it.
  *
- * "Use for people search" on a named provider opens the people directory
+ * "Use for people search" on a saved provider opens the people directory
  * editor prefilled to reuse it (`/admin/integrations/people-directories/new`).
+ * It leaves the page, so while anything here is unsaved it only says to save
+ * first; a provider that is not saved yet gets nothing (a directory could not
+ * find it).
  */
 
 /**
@@ -63,7 +66,17 @@ function Field({ id, label, value, onChange, placeholder, help, type = 'text', w
   );
 }
 
-function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
+function LdapProvidersSection({
+  config,
+  onChange,
+  t,
+  availableGroups = [],
+  savedProviderNames,
+  hasUnsavedChanges = false
+}) {
+  const isSaved = provider =>
+    Boolean(provider.name?.trim()) &&
+    (!Array.isArray(savedProviderNames) || savedProviderNames.includes(provider.name));
   const [advancedOpen, setAdvancedOpen] = useState({});
 
   const setProviders = providers =>
@@ -188,7 +201,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 </h4>
               </div>
               <div className="flex items-center gap-3">
-                {provider.name?.trim() && (
+                {isSaved(provider) && !hasUnsavedChanges && (
                   <Link
                     to={peopleSearchUrl(provider)}
                     className="inline-flex items-center gap-1 min-h-[24px] text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline"
@@ -197,6 +210,14 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     {t('admin.auth.ldap.useForPeopleSearch', 'Use for people search')}
                     <span className="sr-only">: {provider.displayName || provider.name}</span>
                   </Link>
+                )}
+                {isSaved(provider) && hasUnsavedChanges && (
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {t(
+                      'admin.auth.ldap.useForPeopleSearchSaveFirst',
+                      'Save the configuration to use this provider for people search'
+                    )}
+                  </span>
                 )}
                 <button
                   type="button"

@@ -75,7 +75,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server (or the base of its `toolPrefix`) or an A2A agent: apps and groups select all of them by id. The admin pages refuse such a clash both ways: a directory cannot take an existing id, and a new tool, MCP server or agent cannot take a directory's id, even a switched-off one's. |
+| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server (or the base of its `toolPrefix`) or an A2A agent: apps and groups select all of them by id. The admin pages refuse such a clash both ways: a directory cannot take an existing id, and a new tool, MCP server or agent cannot take a directory's id, even a switched-off one's. Reserved: `peopleDirectories`, `new`, `app`, `workflow`, `source`, `knowledge`, `a2a`. |
 | `enabled` | Default `true`. A disabled directory offers no tools. |
 | `type` | `ldap` (Entra follows later). |
 | `authProvider` | Name of an `ldapAuth.providers[]` entry. Inherits `url`, `starttls`, TLS version settings, `baseDn`, `preset` and the bind account. Any field set on the directory overrides the inherited one. |

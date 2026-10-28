@@ -80,7 +80,9 @@ export function requestedAttributes(mapping) {
       }
     }
   }
-  return [...names.values()];
+  // An empty list would ask for every attribute; "1.1" asks for none (the DN
+  // still comes back, which is all `dn:` sources need).
+  return names.size > 0 ? [...names.values()] : ['1.1'];
 }
 
 /**

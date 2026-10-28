@@ -255,10 +255,11 @@ export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
- * id or an MCP server's id (`_a2a.idConflict`), so that reference keeps
- * selecting only the local tool or MCP server and never silently grants the
- * remote agent; `a2a__<agentId>` still selects the agent as a whole. The admin API refuses such ids; this covers a hand-edited
- * config and a tool or MCP server added after the agent.
+ * id, an MCP server's id or a people directory's id (`_a2a.idConflict`), so
+ * that reference never silently grants the remote agent; `a2a__<agentId>`
+ * still selects the agent as a whole. The admin API refuses such ids; this
+ * covers a hand-edited config and a tool, MCP server or directory added after
+ * the agent.
  *
  * @param {Array<Object>} a2aTools - Discovered A2A tools
  * @param {Array<Object>} otherTools - Local and MCP tools
@@ -268,13 +269,14 @@ function guardA2aAgentIds(a2aTools, otherTools) {
   if (!a2aTools.length) return a2aTools;
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   for (const [agentId, conflict] of conflicts) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool or MCP server id; select the agent as a2a__<agentId>',
+      'A2A agent id is also a tool, MCP server or people directory id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }

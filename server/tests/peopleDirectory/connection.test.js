@@ -608,6 +608,23 @@ describe('people directory connections', { skip }, () => {
       );
     });
 
+    it('caches the unit list per directory config, so a changed config never reuses it', async () => {
+      const unitSearches = () =>
+        ldaps.requests.filter(request => request.type === 'search' && request.scope === 'one')
+          .length;
+      const before = unitSearches();
+      await listUnits(ldapsDirectory(), {}, { connectOptions: connectOptions() });
+      await listUnits(ldapsDirectory(), {}, { connectOptions: connectOptions() });
+      assert.equal(unitSearches(), before + 1);
+      // Another bind, as another worker would see it after a config change.
+      await listUnits(
+        ldapsDirectory({ bind: { mode: 'service', dn: 'cn=svc', passwordRef: 'svc' } }),
+        {},
+        { connectOptions: connectOptions() }
+      );
+      assert.equal(unitSearches(), before + 2);
+    });
+
     it('reports a unit list the server cut short, and still finds a unit beyond the cut by its id', async () => {
       unitLimit.value = 1;
       const units = await listUnits(ldapsDirectory(), {}, { connectOptions: connectOptions() });
@@ -713,6 +730,41 @@ describe('people directory connections', { skip }, () => {
         assert.equal(slow.maxActiveSearches(), 1);
       } finally {
         await slow.close();
+      }
+    });
+
+    it('queue the tests of unsaved entries by host, so two new directories do not wait on each other', async () => {
+      const servers = await Promise.all([
+        startFakeLdapServer({ onSearch, delayMs: 400 }),
+        startFakeLdapServer({ onSearch })
+      ]);
+      try {
+        const entry = (host, server) => ({
+          id: 'unsaved',
+          url: `ldap://${host}:${server.port}`,
+          baseDn: 'o=Bund,c=DE',
+          preset: 'ivbb',
+          bind: { mode: 'anonymous' },
+          allowPlaintext: true,
+          allowedHosts: [host],
+          concurrency: 1
+        });
+        const deps = { connectOptions: connectOptions() };
+        const started = Date.now();
+        let fastDoneAfter = null;
+        await Promise.all([
+          testDirectory(entry('slow.test', servers[0]), { query: 'Muster', deps, unsaved: true }),
+          testDirectory(entry('fast.test', servers[1]), {
+            query: 'Muster',
+            deps,
+            unsaved: true
+          }).then(() => {
+            fastDoneAfter = Date.now() - started;
+          })
+        ]);
+        assert.ok(fastDoneAfter < 350, `the second test waited ${fastDoneAfter} ms`);
+      } finally {
+        await Promise.all(servers.map(server => server.close()));
       }
     });
 

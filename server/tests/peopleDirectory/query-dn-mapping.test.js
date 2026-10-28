@@ -225,6 +225,8 @@ describe('ivbb mapping', () => {
     assert.ok(attributes.includes('role'));
     assert.ok(attributes.includes('gouvernmentOrganizationalUnit'));
     assert.ok(!attributes.some(name => /password|certificate|photo/i.test(name)));
+    // Only DN sources: ask for no attributes at all, since an empty list means all.
+    assert.deepEqual(requestedAttributes({ name: ['dn:cn'], organization: ['dn:ou'] }), ['1.1']);
   });
 });
 

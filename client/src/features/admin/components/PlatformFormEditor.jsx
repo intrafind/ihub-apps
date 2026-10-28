@@ -54,7 +54,14 @@ function TrustedProxiesInput({ value, onChange }) {
 /**
  * PlatformFormEditor - Form-based editor for platform configuration
  */
-function PlatformFormEditor({ value: config, onChange, onValidationChange, availableGroups = [] }) {
+function PlatformFormEditor({
+  value: config,
+  onChange,
+  onValidationChange,
+  availableGroups = [],
+  savedLdapProviderNames,
+  hasUnsavedChanges = false
+}) {
   const { t } = useTranslation();
 
   // Validation function
@@ -568,6 +575,8 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
         onChange={onChange}
         t={t}
         availableGroups={availableGroups}
+        savedProviderNames={savedLdapProviderNames}
+        hasUnsavedChanges={hasUnsavedChanges}
       />
 
       {/* NTLM Configuration */}

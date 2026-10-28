@@ -66,7 +66,12 @@ function SourceSection({ form, update, ldapProviders, provider, presets }) {
             name="pd-source-mode"
             value="provider"
             checked={reuses}
-            onChange={() => update({ sourceMode: 'provider' })}
+            onChange={() => {
+              update({ sourceMode: 'provider' });
+              // Values typed for a direct connection now override the
+              // provider's; show them rather than save them out of sight.
+              if (hasOverrides) setOverridesOpen(true);
+            }}
             label={t('admin.peopleDirectories.source.reuse', 'Reuse a sign-in provider')}
             help={t(
               'admin.peopleDirectories.source.reuseHelp',

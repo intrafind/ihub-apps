@@ -1,6 +1,18 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect } from 'react';
+
+/**
+ * A tab chosen with the keyboard, focused once a tab bar shows it as active.
+ * Kept outside the component: when each tab is its own (lazy) route, the tab
+ * bar that renders the new tab is another instance, mounted after the route
+ * has loaded. Expires so an abandoned move never steals focus later.
+ * @type {{ id: string, until: number } | null}
+ */
+let pendingFocus = null;
+const PENDING_FOCUS_MS = 5000;
+
 /**
  * Tab bar for admin pages that group related sub-pages.
  *
@@ -20,7 +32,16 @@
  * @param {string} [props.ariaLabel='Tabs']
  */
 function AdminTabs({ tabs = [], activeId, onChange, ariaLabel = 'Tabs' }) {
+  useEffect(() => {
+    if (!pendingFocus || pendingFocus.id !== activeId) return;
+    const { until } = pendingFocus;
+    pendingFocus = null;
+    if (until > Date.now()) document.getElementById(`tab-${activeId}`)?.focus();
+  }, [activeId]);
+
   const handleKeyDown = event => {
+    // Leave browser shortcuts (Alt+Arrow = back, Cmd+Arrow, …) alone.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const index = tabs.findIndex(tab => tab.id === activeId);
     if (index === -1 || tabs.length < 2) return;
     let next = null;
@@ -31,9 +52,8 @@ function AdminTabs({ tabs = [], activeId, onChange, ariaLabel = 'Tabs' }) {
     if (next === null) return;
     event.preventDefault();
     const nextId = tabs[next].id;
+    pendingFocus = { id: nextId, until: Date.now() + PENDING_FOCUS_MS };
     onChange?.(nextId);
-    // The parent re-renders with the new active tab; focus it once it has.
-    requestAnimationFrame(() => document.getElementById(`tab-${nextId}`)?.focus());
   };
 
   return (

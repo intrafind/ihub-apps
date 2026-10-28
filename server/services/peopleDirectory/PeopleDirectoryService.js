@@ -4,10 +4,10 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
-import { PEOPLE_DIRECTORIES_REFERENCE } from '../../utils/toolSelection.js';
 import {
   ALLOWED_TLS_OPTION_KEYS,
   PEOPLE_DIRECTORY_DEFAULTS,
+  RESERVED_DIRECTORY_IDS,
   peopleDirectorySchema
 } from '../../validators/peopleDirectorySchema.js';
 import {
@@ -66,11 +66,27 @@ export function findDirectory(id) {
 }
 
 /**
+ * The configured directory a tool id (`<id>__search_people`, …) belongs to,
+ * read from the id alone, without loading any tools.
+ * @param {string} toolId
+ * @returns {string|null} The directory id
+ */
+export function directoryOfToolId(toolId) {
+  if (typeof toolId !== 'string') return null;
+  const at = toolId.indexOf(TOOL_SEPARATOR);
+  if (at <= 0 || !DIRECTORY_ACTIONS.includes(toolId.slice(at + TOOL_SEPARATOR.length))) {
+    return null;
+  }
+  const directory = findDirectory(toolId.slice(0, at));
+  return directory ? directory.id : null;
+}
+
+/**
  * Host of an LDAP URL, or null.
  * @param {string} url
  * @returns {string|null}
  */
-function hostOf(url) {
+export function hostOf(url) {
   try {
     return parseDirectoryUrl(url).hostname || null;
   } catch {
@@ -301,8 +317,8 @@ export function filterDirectoryToolsForUser(tools, user) {
  */
 export function findDirectoryIdConflict(id, { tools = [], mcpServers = [], a2aAgents = [] } = {}) {
   if (!id) return null;
-  if (id === PEOPLE_DIRECTORIES_REFERENCE) return { kind: 'reserved', id };
   const wanted = id.toLowerCase();
+  if (RESERVED_DIRECTORY_IDS.includes(wanted)) return { kind: 'reserved', id };
   for (const tool of tools) {
     if (!tool?.id || tool._peopleDirectory) continue;
     if (tool.id === id || toolBaseId(tool.id) === id) return { kind: 'tool', id: tool.id };
@@ -367,12 +383,15 @@ export function sendDirectoryIdClash(res, what, directoryId) {
   });
 }
 
-/** Directory ids whose problem has been logged, so each is reported once per kind. */
-const reportedProblems = new Set();
+/**
+ * The last problem logged per `<kind>:<directoryId>`, so each is reported once
+ * and again only when it changes. Bounded by the configured directories.
+ */
+const reportedProblems = new Map();
 
-function reportOnce(key, message, meta) {
-  if (reportedProblems.has(key)) return;
-  reportedProblems.add(key);
+function reportOnce(key, detail, message, meta) {
+  if (reportedProblems.get(key) === detail) return;
+  reportedProblems.set(key, detail);
   logger.warn(message, { component: COMPONENT, ...meta });
 }
 
@@ -508,12 +527,27 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
     a2aAgents: configCache.getA2aAgents?.()?.data?.agents || []
   };
   const tools = [];
+  const seen = new Set();
   for (const raw of directories) {
-    if (!raw || raw.enabled === false) continue;
+    if (!raw) continue;
+    // A hand-edited file may repeat an id; the first entry wins, as in
+    // findDirectory, whose groups decide who may use the tools.
+    if (seen.has(raw.id)) {
+      reportOnce(
+        `duplicate:${raw.id}`,
+        'duplicate',
+        'People directory id appears more than once; only the first entry is offered',
+        { directoryId: raw.id }
+      );
+      continue;
+    }
+    seen.add(raw.id);
+    if (raw.enabled === false) continue;
     const conflict = findDirectoryIdConflict(raw.id, others);
     if (conflict) {
       reportOnce(
         `conflict:${raw.id}`,
+        `${conflict.kind}:${conflict.id}`,
         'People directory id is also used by another tool reference; its tools are not offered',
         { directoryId: raw.id, conflictKind: conflict.kind, conflictId: conflict.id }
       );
@@ -522,7 +556,8 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
     const resolved = resolveDirectory(raw, platform);
     if (resolved.problems.length > 0) {
       reportOnce(
-        `problems:${raw.id}:${resolved.problems.join('|')}`,
+        `problems:${raw.id}`,
+        resolved.problems.join('|'),
         'People directory is not usable; its tools are not offered',
         { directoryId: raw.id, problems: resolved.problems }
       );

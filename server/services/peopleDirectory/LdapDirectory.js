@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { createHash } from 'node:crypto';
 import { SizeLimitExceededError, TimeLimitExceededError, NoSuchObjectError } from 'ldapts';
 import { DirectoryConnectionError, isTimeoutError, openDirectoryConnection } from './connection.js';
 import { formatRdn, isDnWithin, parseDn, rdnEquals } from './dn.js';
@@ -40,8 +41,22 @@ export function clearUnitsCache() {
   unitsCache.clear();
 }
 
+/**
+ * The cache key covers the whole resolved directory, so any change to its
+ * config (here or on another cluster worker, which reloads the file but never
+ * ran this worker's `clearUnitsCache`) misses the old list.
+ */
 function unitsCacheKey(resolved) {
-  return `${resolved.id}|${resolved.url}|${resolved.searchBase}|${resolved.personFilter}`;
+  const config = createHash('sha256').update(JSON.stringify(resolved)).digest('hex');
+  return `${resolved.id}|${config}`;
+}
+
+/** Cache a directory's unit list, dropping the lists of its earlier configs. */
+function cacheUnits(resolved, value) {
+  for (const key of unitsCache.keys()) {
+    if (key.startsWith(`${resolved.id}|`)) unitsCache.delete(key);
+  }
+  unitsCache.set(unitsCacheKey(resolved), { value, expiresAt: Date.now() + UNITS_CACHE_TTL_MS });
 }
 
 /**
@@ -117,7 +132,7 @@ async function fetchUnits(resolved, client) {
   }
   units.sort((a, b) => a.name.localeCompare(b.name));
   const value = { units, truncated };
-  unitsCache.set(key, { value, expiresAt: Date.now() + UNITS_CACHE_TTL_MS });
+  cacheUnits(resolved, value);
   return value;
 }
 

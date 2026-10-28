@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Admin → Integrations → People directories, list and editor:
  *
@@ -340,6 +343,58 @@ describe('people directory editor', () => {
     // Back on the list, with the result and the app offer.
     expect(await screen.findByText('Directory "corp-ad" saved.')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Enable app' })).toBeInTheDocument();
+  });
+
+  test('saving a directory changed elsewhere meanwhile warns once, then overwrites', async () => {
+    const changed = { ...LEGACY, name: { en: 'Renamed elsewhere' } };
+    mockApi.fetchPeopleDirectories
+      .mockResolvedValueOnce(LISTING)
+      .mockResolvedValue({ ...LISTING, directories: [X500, changed] });
+    renderAt('/admin/integrations/people-directories/legacy');
+    await screen.findByLabelText('ID');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+    expect(await screen.findByText(/This directory was changed elsewhere/)).toBeInTheDocument();
+    expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+  });
+
+  test('saving a directory nobody else changed saves at once', async () => {
+    renderAt('/admin/integrations/people-directories/legacy');
+    await screen.findByLabelText('ID');
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/This directory was changed elsewhere/)).not.toBeInTheDocument();
+  });
+
+  test('values typed for a direct connection stay visible as overrides of a provider', async () => {
+    renderAt('/admin/integrations/people-directories/new');
+    await screen.findByLabelText('ID');
+    fireEvent.change(screen.getByLabelText('URL', { exact: false }), {
+      target: { value: 'ldap://typo-host:389' }
+    });
+    fireEvent.click(screen.getByLabelText('Reuse a sign-in provider'));
+
+    expect(document.getElementById('pd-source-overrides')).not.toHaveAttribute('hidden');
+    expect(document.getElementById('pd-url')).toHaveValue('ldap://typo-host:389');
+  });
+
+  test("the search base defaults to the provider's user search base", async () => {
+    mockApi.fetchPeopleDirectories.mockResolvedValue({
+      ...LISTING,
+      ldapProviders: LISTING.ldapProviders.map(provider => ({
+        ...provider,
+        userSearchBase: 'ou=Staff,dc=corp,dc=local'
+      }))
+    });
+    renderAt('/admin/integrations/people-directories/new?authProvider=corp-ad&name=Corporate%20AD');
+    await screen.findByLabelText('ID');
+    expect(screen.getByLabelText('Search base', { exact: false })).toHaveAttribute(
+      'placeholder',
+      'ou=Staff,dc=corp,dc=local'
+    );
   });
 
   test('a new entry without id, URL and base DN is not sent', async () => {

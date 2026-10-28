@@ -24,8 +24,20 @@
 /** Directory ids become the tool id prefix `<id>__search_people`, so no `_`. */
 export const DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
-/** Ids an app can name to mean something else (`peopleDirectories` = every directory). */
-export const RESERVED_DIRECTORY_IDS = ['peopledirectories'];
+/**
+ * Ids a directory cannot take (as on the server): `peopledirectories` selects
+ * every directory, `new` is this editor's create route, and the others are
+ * tool id prefixes the server routes elsewhere.
+ */
+export const RESERVED_DIRECTORY_IDS = [
+  'peopledirectories',
+  'new',
+  'app',
+  'workflow',
+  'source',
+  'knowledge',
+  'a2a'
+];
 
 /** Name of a trust anchor in the certificate store. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;

@@ -1621,7 +1621,8 @@
           "running": "Testing…",
           "resultTitle": "LDAP login test"
         },
-        "useForPeopleSearch": "Use for people search"
+        "useForPeopleSearch": "Use for people search",
+        "useForPeopleSearchSaveFirst": "Save the configuration to use this provider for people search"
       },
       "proxy": {
         "headersIgnoredWarning": "Unless PROXY_AUTH_TRUSTED_PROXIES or PROXY_AUTH_SHARED_SECRET is set on the server, the user and groups headers are ignored until you list trusted proxies or select a shared secret. Without one, any client that can reach the server could set them.",
@@ -4094,6 +4095,7 @@
       "edit": {
         "backToList": "Back to people directories",
         "basics": "Directory",
+        "changedElsewhere": "This directory was changed elsewhere after you opened it. Save again to overwrite that change, or reload the page to see it.",
         "createTitle": "Add people directory",
         "errorsTitle": "Please check these fields",
         "leave": "Leave",

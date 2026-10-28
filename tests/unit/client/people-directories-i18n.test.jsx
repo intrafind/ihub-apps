@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * Every string of the people directory admin pages exists in English and
  * German, with the same placeholders. The client falls back to the English

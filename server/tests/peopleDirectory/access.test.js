@@ -17,6 +17,7 @@ import { mayRunTool } from '../../routes/toolRoutes.js';
 import { buildMcpServer } from '../../services/mcp/McpServerService.js';
 import { MCP_SCOPES } from '../../services/mcp/scopes.js';
 import {
+  directoryOfToolId,
   discoverPeopleDirectoryTools,
   expandUserGroups,
   findDirectoryClaimedBy,
@@ -172,6 +173,44 @@ describe('people directory access', () => {
     assert.equal(findDirectoryClaimedBy(['jira', null, '']), null);
   });
 
+  it('offers only the first of two entries with the same id', () => {
+    state.directories = [
+      { id: 'dup', url: 'ldaps://a.example', baseDn: 'o=A', groups: ['*'] },
+      { id: 'dup', url: 'ldaps://b.example', baseDn: 'o=B', groups: ['*'] }
+    ];
+    const ids = discoverPeopleDirectoryTools().map(tool => tool.id);
+    assert.deepEqual(ids, ['dup__search_people', 'dup__get_person']);
+
+    // A switched-off first entry still wins: its groups are the ones checked.
+    state.directories = [
+      { id: 'dup', enabled: false, url: 'ldaps://a.example', baseDn: 'o=A', groups: ['*'] },
+      { id: 'dup', url: 'ldaps://b.example', baseDn: 'o=B', groups: ['*'] }
+    ];
+    assert.deepEqual(discoverPeopleDirectoryTools(), []);
+  });
+
+  it('reserves the ids whose tool ids are routed elsewhere', () => {
+    for (const id of [
+      'new',
+      'app',
+      'workflow',
+      'source',
+      'knowledge',
+      'a2a',
+      'peopleDirectories'
+    ]) {
+      assert.equal(findDirectoryIdConflict(id)?.kind, 'reserved', id);
+    }
+  });
+
+  it('reads the directory from a tool id without loading tools', () => {
+    assert.equal(directoryOfToolId('x500bund__search_people'), 'x500bund');
+    assert.equal(directoryOfToolId('corp__list_units'), 'corp');
+    assert.equal(directoryOfToolId('corp__other'), null);
+    assert.equal(directoryOfToolId('missing__search_people'), null);
+    assert.equal(directoryOfToolId('braveSearch'), null);
+  });
+
   it('leaves out a directory whose configuration cannot work', () => {
     state.directories = [
       { id: 'noprov', authProvider: 'missing', groups: ['*'] },
@@ -237,6 +276,17 @@ describe('people directory access', () => {
       );
       assert.notEqual(after.etag, before.etag);
       state.directoriesEtag = 'dirs-1';
+    });
+
+    it('keep a quoted tools ETag a single valid entity tag', async () => {
+      const getTools = configCache.getTools;
+      configCache.getTools = () => ({ data: state.tools, etag: '"tools-1"' });
+      try {
+        const { etag } = await configCache.getToolsForUser(member, { defaultLanguage: 'en' }, 'en');
+        assert.match(etag, /^"[^"]+"$/);
+      } finally {
+        configCache.getTools = getTools;
+      }
     });
 
     it('narrow an app that lists a directory', async () => {

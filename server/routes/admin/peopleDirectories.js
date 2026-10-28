@@ -81,6 +81,7 @@ function ldapProviderSummaries(platform) {
         url: provider.url || null,
         host,
         baseDn: provider.baseDn || null,
+        userSearchBase: provider.userSearchBase || null,
         preset: provider.preset || null,
         starttls: provider.starttls === true,
         hasBindAccount: Boolean(provider.adminDn)
@@ -212,6 +213,11 @@ export default function registerAdminPeopleDirectoriesRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/people-directories'), adminAuth, async (req, res) => {
     try {
+      // The schema defaults a missing list to []; a body without one (or with
+      // a misspelled key) must not delete every directory.
+      if (!Array.isArray(req.body?.directories)) {
+        return sendBadRequest(res, '"directories" must be the list of directories');
+      }
       const parsed = peopleDirectoriesFileSchema.safeParse({
         directories: req.body?.directories
       });
@@ -329,7 +335,10 @@ export default function registerAdminPeopleDirectoriesRoutes(app) {
       return sendBadRequest(res, '"query" is too long');
     }
     try {
-      const result = await testDirectory(directory, { query: body.query });
+      const result = await testDirectory(directory, {
+        query: body.query,
+        unsaved: directory.id === INLINE_TEST_ID
+      });
       logger.info('People directory tested', {
         component: 'AdminPeopleDirectories',
         userId: req.user?.id,

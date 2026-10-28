@@ -188,6 +188,7 @@ describe('people directory admin API', () => {
         url: 'ldaps://dc.corp.example',
         host: 'dc.corp.example',
         baseDn: null,
+        userSearchBase: null,
         preset: null,
         starttls: false,
         hasBindAccount: true
@@ -235,6 +236,30 @@ describe('people directory admin API', () => {
     );
     assert.equal(password.status, 400);
     assert.equal(readFile(), null);
+  });
+
+  it('refuses a body without the directory list instead of saving an empty file', async () => {
+    for (const body of [{}, { directory: [] }, { directories: 'x' }]) {
+      const response = await as(
+        'admin',
+        request(app).put('/api/admin/people-directories').send(body)
+      );
+      assert.equal(response.status, 400, JSON.stringify(body));
+    }
+    assert.equal(readFile(), null);
+  });
+
+  it('refuses reserved ids: the editor route and tool prefixes routed elsewhere', async () => {
+    for (const id of ['new', 'app', 'workflow', 'source', 'knowledge', 'a2a']) {
+      const response = await as(
+        'admin',
+        request(app)
+          .put('/api/admin/people-directories')
+          .send({ directories: [{ id, url: 'ldaps://a.example', baseDn: 'o=a' }] })
+      );
+      assert.equal(response.status, 400, id);
+      assert.match(JSON.stringify(response.body.details), /is reserved/);
+    }
   });
 
   it('refuses ids another tool reference already uses', async () => {

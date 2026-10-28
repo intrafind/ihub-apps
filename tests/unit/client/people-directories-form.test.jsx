@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * The form logic behind Admin → Integrations → People directories
  * (client/src/features/admin/utils/peopleDirectories.js):
@@ -204,6 +207,21 @@ describe('validateDirectoryForm', () => {
       defaultValue: 'Another directory uses "{{id}}".',
       values: { id: 'corp' }
     });
+    // `new` is the editor's create route; the others are tool prefixes routed elsewhere.
+    for (const id of [
+      'new',
+      'app',
+      'workflow',
+      'source',
+      'knowledge',
+      'a2a',
+      'peopledirectories'
+    ]) {
+      form.id = id;
+      expect(validateDirectoryForm(form, { isNew: true })[0].message.key).toBe(
+        'admin.peopleDirectories.errors.idReserved'
+      );
+    }
     form.id = 'new-one';
     form.url = 'ldaps://x500.bund.de:636/o=Bund';
     form.personFilter = 'objectClass=person';

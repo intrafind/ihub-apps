@@ -1905,7 +1905,8 @@
           "running": "Test läuft…",
           "resultTitle": "LDAP-Anmeldetest"
         },
-        "useForPeopleSearch": "Für die Personensuche verwenden"
+        "useForPeopleSearch": "Für die Personensuche verwenden",
+        "useForPeopleSearchSaveFirst": "Speichern Sie die Konfiguration, um diesen Anbieter für die Personensuche zu verwenden"
       },
       "proxy": {
         "headersIgnoredWarning": "Sofern PROXY_AUTH_TRUSTED_PROXIES oder PROXY_AUTH_SHARED_SECRET nicht auf dem Server gesetzt ist, werden die Benutzer- und Gruppen-Header ignoriert, bis Sie vertrauenswürdige Proxys eintragen oder ein gemeinsames Geheimnis auswählen. Ohne eines davon könnte jeder Client, der den Server erreicht, sie setzen.",
@@ -4378,6 +4379,7 @@
       "edit": {
         "backToList": "Zurück zu den Personenverzeichnissen",
         "basics": "Verzeichnis",
+        "changedElsewhere": "Dieses Verzeichnis wurde woanders geändert, nachdem Sie es geöffnet haben. Speichern Sie erneut, um diese Änderung zu überschreiben, oder laden Sie die Seite neu, um sie zu sehen.",
         "createTitle": "Personenverzeichnis hinzufügen",
         "errorsTitle": "Bitte prüfen Sie diese Felder",
         "leave": "Verlassen",
