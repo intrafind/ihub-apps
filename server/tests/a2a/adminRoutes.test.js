@@ -21,7 +21,8 @@ const state = {
   initialized: [],
   applied: [],
   tools: [],
-  mcpServers: []
+  mcpServers: [],
+  directories: []
 };
 
 jest.unstable_mockModule('../../services/config/ConfigStore.js', () => ({
@@ -38,7 +39,8 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     refreshCacheEntry: async key => state.refreshed.push(key),
     getPlatform: () => ({}),
     getTools: () => ({ data: state.tools }),
-    getMcpServers: () => ({ data: { servers: state.mcpServers } })
+    getMcpServers: () => ({ data: { servers: state.mcpServers } }),
+    getPeopleDirectories: () => ({ data: { directories: state.directories } })
   },
   resolveEnvVarsInObject: value => value
 }));
@@ -90,6 +92,7 @@ beforeEach(() => {
   state.applied.length = 0;
   state.tools = [];
   state.mcpServers = [];
+  state.directories = [];
 });
 
 describe('admin A2A agent routes', () => {
@@ -124,6 +127,15 @@ describe('admin A2A agent routes', () => {
     expect(bad.status).toBe(400);
     expect(bad.body.details.length).toBeGreaterThan(0);
     expect(state.writes).toHaveLength(1);
+  });
+
+  it('refuse an id a people directory already uses (409)', async () => {
+    state.directories = [{ id: 'langdock', enabled: false }];
+    const res = await admin(request(app).post('/api/admin/a2a/agents')).send(langdock);
+    expect(res.status).toBe(409);
+    expect(res.body.conflict).toEqual({ kind: 'peopleDirectory', id: 'langdock' });
+    expect(res.body.error).toMatch(/people directory "langdock"/);
+    expect(state.writes).toHaveLength(0);
   });
 
   it('refuse an id a local tool or an MCP server already uses (409)', async () => {

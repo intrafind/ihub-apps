@@ -4455,6 +4455,7 @@
         "emptyHint": "Fügen Sie eines hinzu, oder verwenden Sie „Für die Personensuche verwenden“ bei einem LDAP-Anmeldeanbieter in den Authentifizierungseinstellungen.",
         "external": "Extern",
         "externalHint": "Suchbegriffe gehen an ein Verzeichnis, das ein Dritter betreibt.",
+        "gone": "„{{name}}“ gibt es nicht mehr. Die Liste wurde neu geladen.",
         "groups": "Gruppen",
         "loadError": "Die Personenverzeichnisse konnten nicht geladen werden",
         "needsAttention": "Prüfen",

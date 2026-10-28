@@ -302,16 +302,69 @@ export function filterDirectoryToolsForUser(tools, user) {
 export function findDirectoryIdConflict(id, { tools = [], mcpServers = [], a2aAgents = [] } = {}) {
   if (!id) return null;
   if (id === PEOPLE_DIRECTORIES_REFERENCE) return { kind: 'reserved', id };
+  const wanted = id.toLowerCase();
   for (const tool of tools) {
     if (!tool?.id || tool._peopleDirectory) continue;
-    const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
-    if (tool.id === id || baseId === id) return { kind: 'tool', id: tool.id };
+    if (tool.id === id || toolBaseId(tool.id) === id) return { kind: 'tool', id: tool.id };
   }
-  const server = mcpServers.find(entry => entry?.id === id);
-  if (server) return { kind: 'mcpServer', id };
-  const agent = a2aAgents.find(entry => entry?.id === id);
-  if (agent) return { kind: 'a2aAgent', id };
+  const server = mcpServers.find(entry =>
+    mcpServerBaseIds(entry).some(base => base.toLowerCase() === wanted)
+  );
+  if (server) return { kind: 'mcpServer', id: server.id };
+  const agent = a2aAgents.find(entry => String(entry?.id).toLowerCase() === wanted);
+  if (agent) return { kind: 'a2aAgent', id: agent.id };
   return null;
+}
+
+/** The base id apps select a tool by: `jira_search` → `jira`. */
+function toolBaseId(toolId) {
+  return toolId.includes('_') ? toolId.split('_')[0] : toolId;
+}
+
+/**
+ * The base ids an MCP server's tools answer to: its id and, with a custom
+ * `toolPrefix` (`dio_`), the prefix's base.
+ * @param {Object} server
+ * @returns {string[]}
+ */
+export function mcpServerBaseIds(server) {
+  const bases = typeof server?.id === 'string' && server.id ? [server.id] : [];
+  const prefix = typeof server?.toolPrefix === 'string' ? server.toolPrefix.trim() : '';
+  if (prefix && toolBaseId(prefix)) bases.push(toolBaseId(prefix));
+  return bases;
+}
+
+/**
+ * The reverse of {@link findDirectoryIdConflict}, for the routes that add a
+ * tool, an MCP server or an A2A agent: the configured directory whose id one
+ * of `ids` would take over. Switched-off directories count, since switching
+ * one on later would meet the same clash.
+ *
+ * @param {Array<string|null|undefined>} ids - Ids and base ids the new entry answers to
+ * @returns {string|null} The directory id
+ */
+export function findDirectoryClaimedBy(ids) {
+  const wanted = new Set(
+    ids.filter(id => typeof id === 'string' && id).map(id => id.toLowerCase())
+  );
+  const directory = getConfiguredDirectories().find(
+    entry => typeof entry?.id === 'string' && wanted.has(entry.id.toLowerCase())
+  );
+  return directory ? directory.id : null;
+}
+
+/**
+ * Send the 409 for an id a people directory already uses.
+ * @param {import('express').Response} res
+ * @param {string} what - What clashes, e.g. `MCP server id "corp"` or `tool prefix "corp_"`
+ * @param {string} directoryId
+ */
+export function sendDirectoryIdClash(res, what, directoryId) {
+  return res.status(409).json({
+    success: false,
+    error: `The ${what} is already used by the people directory "${directoryId}". Apps and groups reference directories, tools, MCP servers and agents by id, so it needs an id of its own.`,
+    conflict: { kind: 'peopleDirectory', id: directoryId }
+  });
 }
 
 /** Directory ids whose problem has been logged, so each is reported once per kind. */

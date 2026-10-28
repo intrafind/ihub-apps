@@ -11,6 +11,10 @@ import {
 } from '../../validators/a2aAgentConfigSchema.js';
 import a2aClientManager from '../../services/a2a/A2aClientManager.js';
 import { findAgentIdConflict } from '../../services/a2a/a2aTools.js';
+import {
+  findDirectoryClaimedBy,
+  sendDirectoryIdClash
+} from '../../services/peopleDirectory/PeopleDirectoryService.js';
 import configCache from '../../configCache.js';
 import { markConfigApplied } from '../../configReloadHooks.js';
 import logger from '../../utils/logger.js';
@@ -131,6 +135,9 @@ export default function registerAdminA2aAgentsRoutes(app) {
         return res.status(409).json({ success: false, error: 'Agent id already exists' });
       }
       if (refuseIdConflict(res, parsed.data.id)) return;
+      const directoryId = findDirectoryClaimedBy([parsed.data.id]);
+      if (directoryId)
+        return sendDirectoryIdClash(res, `agent id "${parsed.data.id}"`, directoryId);
       await writeConfig({ ...cfg, agents: [...(cfg.agents || []), parsed.data] });
       res.status(201).json({ success: true, agent: parsed.data });
     } catch (error) {

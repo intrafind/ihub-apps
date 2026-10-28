@@ -37,6 +37,7 @@ import {
   testDirectory
 } from '../../services/peopleDirectory/peopleDirectoryRunner.js';
 import { ToolArgumentError } from '../../services/peopleDirectory/query.js';
+import { dnEquals } from '../../services/peopleDirectory/dn.js';
 import { generateCertificates, hasOpenssl, startFakeLdapServer } from './fakeLdapServer.js';
 
 const skip = !hasOpenssl() && 'openssl CLI not available to generate test certificates';
@@ -69,10 +70,20 @@ const UNITS = [
   { dn: 'ou=MRI,o=Bund,c=DE', objectClass: 'organizationalUnit' }
 ];
 
+/** Units the server lists before its own size limit stops it (null: no limit). */
+const unitLimit = { value: null };
+
 function onSearch(request) {
-  if (request.scope === 'one') return { entries: UNITS };
+  if (request.scope === 'one') {
+    // A server-side size limit answers with what fits and result code 4.
+    return unitLimit.value === null
+      ? { entries: UNITS }
+      : { entries: UNITS.slice(0, unitLimit.value), code: 4 };
+  }
   if (request.scope === 'base') {
-    return { entries: PEOPLE.filter(person => person.dn === request.base) };
+    // Like a real server, the base DN matches whatever case it is written in.
+    const candidates = request.filter.startsWith('(!') ? UNITS : PEOPLE;
+    return { entries: candidates.filter(entry => dnEquals(entry.dn, request.base)) };
   }
   return { entries: PEOPLE };
 }
@@ -109,6 +120,7 @@ describe('people directory connections', { skip }, () => {
 
   beforeEach(() => {
     state.platform = {};
+    unitLimit.value = null;
     clearUnitsCache();
   });
 
@@ -594,6 +606,39 @@ describe('people directory connections', { skip }, () => {
         ),
         ToolArgumentError
       );
+    });
+
+    it('reports a unit list the server cut short, and still finds a unit beyond the cut by its id', async () => {
+      unitLimit.value = 1;
+      const units = await listUnits(ldapsDirectory(), {}, { connectOptions: connectOptions() });
+      assert.equal(units.truncated, true);
+      assert.deepEqual(units.units, [{ unitId: 'ou=THW', name: 'THW' }]);
+
+      // MRI is beyond the cut: its id is looked up below the search base.
+      const before = ldaps.requests.length;
+      await searchPeople(
+        ldapsDirectory(),
+        { query: 'Muster', unit: 'OU=mri' },
+        { connectOptions: connectOptions() }
+      );
+      const searches = ldaps.requests.slice(before).filter(request => request.type === 'search');
+      const lookup = searches.find(request => request.scope === 'base');
+      assert.equal(lookup.base, 'OU=mri,o=Bund,c=DE');
+      assert.match(lookup.filter, /^\(!/);
+      assert.equal(searches.find(request => request.scope === 'sub').base, 'OU=mri,o=Bund,c=DE');
+
+      // A name, a unit that does not exist and a DN outside the base are refused.
+      for (const unit of ['MRI', 'ou=Nope', 'ou=MRI,o=Other']) {
+        await assert.rejects(
+          searchPeople(
+            ldapsDirectory(),
+            { query: 'Muster', unit },
+            { connectOptions: connectOptions() }
+          ),
+          error => error instanceof ToolArgumentError && /lists only part/.test(error.message),
+          unit
+        );
+      }
     });
 
     it('reads a person inside the search base and refuses one outside it without connecting', async () => {

@@ -75,7 +75,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server or an A2A agent: apps and groups select all of them by id. |
+| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server (or the base of its `toolPrefix`) or an A2A agent: apps and groups select all of them by id. The admin pages refuse such a clash both ways: a directory cannot take an existing id, and a new tool, MCP server or agent cannot take a directory's id, even a switched-off one's. |
 | `enabled` | Default `true`. A disabled directory offers no tools. |
 | `type` | `ldap` (Entra follows later). |
 | `authProvider` | Name of an `ldapAuth.providers[]` entry. Inherits `url`, `starttls`, TLS version settings, `baseDn`, `preset` and the bind account. Any field set on the directory overrides the inherited one. |
@@ -134,7 +134,7 @@ How a search works:
 - Only mapped attributes are requested — never `*` — so certificates, photos and password hashes never leave the directory.
 - When more people match than `maxResults`, or the server stops at its own size limit, the result is partial: `truncated: true` and a hint to narrow the search.
 - `get_person` only reads entries inside the directory's search base. The check works on parsed DNs, so an escaped comma or a look-alike suffix cannot reach other parts of the directory.
-- `unit` must be one of `list_units`' ids; it is never concatenated into a DN.
+- `unit` must be one of `list_units`' ids. When the server's own size limit cuts the unit list short (`truncated: true`), a unit id beyond the cut (`ou=Name`) is looked up as a direct child of the search base instead. The id is parsed and written back escaped, so the argument itself never becomes part of a DN.
 - Errors come back as `{ directory, error: { code, message } }` the model can act on (`invalid_arguments`, `timeout`, `connection_refused`, …), without internal host names.
 
 ### Selecting directories in an app

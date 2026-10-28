@@ -79,6 +79,7 @@ async function fetchUnits(resolved, client) {
 
   let entries;
   let truncated = false;
+  client.lastSearchResultCode = null;
   try {
     ({ searchEntries: entries } = await client.search(resolved.searchBase, {
       scope: 'one',
@@ -87,6 +88,8 @@ async function fetchUnits(resolved, client) {
       sizeLimit: MAX_UNITS + 1,
       timeLimit: timeLimitSeconds(resolved.timeoutMs)
     }));
+    // Result code 4: the server's own size limit cut the list short.
+    if (client.lastSearchResultCode === SIZE_LIMIT_EXCEEDED) truncated = true;
   } catch (error) {
     if (!(error instanceof SizeLimitExceededError)) throw error;
     entries = [];
@@ -120,8 +123,9 @@ async function fetchUnits(resolved, client) {
 
 /**
  * Find the unit a `unit` argument names, by its id (`ou=THW`) or its name
- * (`THW`). Only a unit from the directory's own list is ever used as a search
- * base; the argument is never concatenated into a DN.
+ * (`THW`). Only a unit from the directory's own list (or, when that list was
+ * cut short, one {@link lookupUnit} found) is ever used as a search base; the
+ * argument is never concatenated into a DN.
  */
 function matchUnit(units, requested) {
   const wanted = requested.trim();
@@ -144,6 +148,41 @@ function matchUnit(units, requested) {
       return false;
     }) || units.find(unit => unit.name.toLowerCase() === wanted.toLowerCase())
   );
+}
+
+/**
+ * Look up a unit the directory's cut-short unit list may have missed. Only a
+ * unit id (`ou=THW`) is looked up, as a direct child of the search base, and
+ * only a non-person entry that exists there is used. The RDN is parsed and
+ * written back escaped, so the argument itself never becomes part of a DN.
+ *
+ * @returns {Promise<{unitId: string, name: string, dn: string}|null>}
+ */
+async function lookupUnit(resolved, client, requested) {
+  let rdns;
+  try {
+    rdns = parseDn(requested.trim());
+  } catch {
+    return null;
+  }
+  if (rdns.length !== 1) return null;
+  const unitId = formatRdn(rdns[0]);
+  const dn = `${unitId},${resolved.searchBase}`;
+  if (!isDnWithin(dn, resolved.searchBase)) return null;
+  try {
+    const { searchEntries } = await client.search(dn, {
+      scope: 'base',
+      filter: `(!${resolved.personFilter})`,
+      attributes: ['1.1'],
+      sizeLimit: 1,
+      timeLimit: timeLimitSeconds(resolved.timeoutMs)
+    });
+    if (searchEntries.length === 0) return null;
+  } catch (error) {
+    if (error instanceof NoSuchObjectError) return null;
+    throw error;
+  }
+  return { unitId, name: rdns[0].map(ava => ava.value).join(' '), dn };
 }
 
 /**
@@ -202,11 +241,15 @@ export function prepareSearch(resolved, args = {}) {
 export async function runSearch(resolved, client, prepared) {
   let base = resolved.searchBase;
   if (prepared.unit) {
-    const { units } = await fetchUnits(resolved, client);
-    const unit = matchUnit(units, prepared.unit);
+    const { units, truncated: partial } = await fetchUnits(resolved, client);
+    const unit =
+      matchUnit(units, prepared.unit) ||
+      (partial ? await lookupUnit(resolved, client, prepared.unit) : null);
     if (!unit) {
       throw new ToolArgumentError(
-        `Unknown unit "${prepared.unit}". Call list_units of this directory and pass one of its unitId values.`
+        partial
+          ? `Unknown unit "${prepared.unit}". The directory lists only part of its units; pass a unitId such as "ou=Name", or search without "unit".`
+          : `Unknown unit "${prepared.unit}". Call list_units of this directory and pass one of its unitId values.`
       );
     }
     base = unit.dn;

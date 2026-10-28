@@ -19,8 +19,10 @@ import { MCP_SCOPES } from '../../services/mcp/scopes.js';
 import {
   discoverPeopleDirectoryTools,
   expandUserGroups,
+  findDirectoryClaimedBy,
   findDirectoryIdConflict,
   mayUseDirectory,
+  mcpServerBaseIds,
   resolveDirectory
 } from '../../services/peopleDirectory/PeopleDirectoryService.js';
 
@@ -148,6 +150,26 @@ describe('people directory access', () => {
       kind: 'a2aAgent',
       id: 'jira'
     });
+  });
+
+  it('counts an MCP server tool prefix as a clash, in both directions', () => {
+    const dio = { id: 'drawio', toolPrefix: 'corp_' };
+    assert.deepEqual(mcpServerBaseIds(dio), ['drawio', 'corp']);
+    assert.deepEqual(findDirectoryIdConflict('corp', { mcpServers: [dio] }), {
+      kind: 'mcpServer',
+      id: 'drawio'
+    });
+    assert.deepEqual(findDirectoryIdConflict('jira', { mcpServers: [{ id: 'JIRA' }] }), {
+      kind: 'mcpServer',
+      id: 'JIRA'
+    });
+
+    // A new tool, MCP server or agent may not take over a directory's id,
+    // even a switched-off one.
+    assert.equal(findDirectoryClaimedBy(mcpServerBaseIds(dio)), 'corp');
+    assert.equal(findDirectoryClaimedBy(['X500BUND']), 'x500bund');
+    assert.equal(findDirectoryClaimedBy(['off']), 'off');
+    assert.equal(findDirectoryClaimedBy(['jira', null, '']), null);
   });
 
   it('leaves out a directory whose configuration cannot work', () => {

@@ -31,7 +31,8 @@ function hostOf(url) {
  * @param {Array<Object>} props.directories - Stored directories
  * @param {Object} props.effective - What the server resolved, by directory id
  * @param {(id: string) => string} props.presetLabel - Display name of a preset id
- * @param {string|null} props.togglingId - Directory whose switch is being saved
+ * @param {string|null} props.togglingId - Directory whose change is being saved; while set,
+ *   every switch and delete button is disabled, so one save cannot undo another
  * @param {(id: string, enabled: boolean) => void} props.onToggle - Switch a directory on or off
  * @param {(id: string) => void} props.onDelete - Ask to delete a directory
  */
@@ -178,7 +179,7 @@ function DirectoryList({ directories, effective, presetLabel, togglingId, onTogg
                     role="switch"
                     aria-checked={enabled}
                     aria-labelledby={nameId}
-                    disabled={togglingId === directory.id}
+                    disabled={togglingId !== null}
                     onClick={() => onToggle(directory.id, !enabled)}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:cursor-wait disabled:opacity-60 ${
                       enabled ? 'bg-blue-600' : 'bg-gray-500 dark:bg-gray-400'
@@ -213,6 +214,7 @@ function DirectoryList({ directories, effective, presetLabel, togglingId, onTogg
                 <button
                   type="button"
                   onClick={() => onDelete(directory.id)}
+                  disabled={togglingId !== null}
                   className={DANGER_BUTTON_CLASS}
                   aria-label={t('admin.peopleDirectories.list.deleteLabel', 'Delete {{name}}', {
                     name

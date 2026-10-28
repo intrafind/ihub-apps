@@ -227,6 +227,63 @@ describe('people directory list', () => {
     expect(screen.queryByRole('button', { name: 'Enable app' })).not.toBeInTheDocument();
   });
 
+  test('a switch writes onto the stored list, so a save made meanwhile elsewhere is kept', async () => {
+    const added = { id: 'corp', authProvider: 'corp-ad', enabled: true };
+    mockApi.fetchPeopleDirectories
+      .mockResolvedValueOnce(LISTING)
+      .mockResolvedValue({ ...LISTING, directories: [...LISTING.directories, added] });
+    renderAt('/admin/integrations/people-directories');
+    fireEvent.click(await screen.findByRole('switch', { name: 'Federal directory (IVBB)' }));
+
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+    expect(mockApi.savePeopleDirectories).toHaveBeenCalledWith([
+      { ...X500, enabled: true },
+      LEGACY,
+      added
+    ]);
+  });
+
+  test('every switch and delete button waits while a save is in flight', async () => {
+    let finish;
+    mockApi.savePeopleDirectories.mockImplementation(
+      directories =>
+        new Promise(resolve => {
+          finish = () => resolve({ success: true, directories });
+        })
+    );
+    renderAt('/admin/integrations/people-directories');
+    fireEvent.click(await screen.findByRole('switch', { name: 'Federal directory (IVBB)' }));
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+
+    const legacy = screen.getByRole('switch', { name: 'Legacy directory' });
+    expect(legacy).toBeDisabled();
+    for (const button of screen.getAllByRole('button', { name: /^Delete / })) {
+      expect(button).toBeDisabled();
+    }
+    fireEvent.click(legacy);
+    finish();
+    await waitFor(() => expect(legacy).not.toBeDisabled());
+    expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1);
+  });
+
+  test('switching a directory deleted meanwhile saves nothing and reloads the list', async () => {
+    mockApi.fetchPeopleDirectories
+      .mockResolvedValueOnce(LISTING)
+      .mockResolvedValue({ ...LISTING, directories: [LEGACY] });
+    renderAt('/admin/integrations/people-directories');
+    fireEvent.click(await screen.findByRole('switch', { name: 'Federal directory (IVBB)' }));
+
+    expect(
+      await screen.findByText(
+        '"Federal directory (IVBB)" no longer exists. The list has been reloaded.'
+      )
+    ).toBeInTheDocument();
+    expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('switch', { name: 'Federal directory (IVBB)' })
+    ).not.toBeInTheDocument();
+  });
+
   test('a failed save shows the schema issues', async () => {
     mockApi.savePeopleDirectories.mockRejectedValue({
       response: {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -67,7 +67,11 @@ function AdminPeopleDirectoriesPage() {
         }
       : null
   );
+  // The directory whose switch or deletion is being saved. While it is set,
+  // every switch and delete button is disabled; `savingRef` also guards clicks
+  // that land before that re-render.
   const [togglingId, setTogglingId] = useState(null);
+  const savingRef = useRef(false);
   const [offerRequested, setOfferRequested] = useState(() => Boolean(location.state?.justEnabled));
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -113,15 +117,41 @@ function AdminPeopleDirectoriesPage() {
     return getLocalizedContent(directory?.name, i18n.language) || id;
   };
 
+  /**
+   * The stored list, read just before a save: the PUT replaces the whole file,
+   * so writing this page's copy would undo a save made meanwhile in the editor
+   * or another tab.
+   */
+  const fetchCurrentDirectories = async () => {
+    const current = await fetchPeopleDirectories();
+    return Array.isArray(current?.directories) ? current.directories : [];
+  };
+
   const toggle = async (id, enabled) => {
-    const before = data.directories.find(d => d.id === id);
+    if (savingRef.current) return;
+    savingRef.current = true;
     setTogglingId(id);
     setMessage(null);
     try {
-      await savePeopleDirectories(withDirectoryEnabled(data.directories, id, enabled));
+      const directories = await fetchCurrentDirectories();
+      const before = directories.find(d => d.id === id);
+      if (!before) {
+        const name = directoryName(id);
+        await load();
+        setMessage({
+          type: 'error',
+          text: t(
+            'admin.peopleDirectories.list.gone',
+            '"{{name}}" no longer exists. The list has been reloaded.',
+            { name }
+          )
+        });
+        return;
+      }
+      await savePeopleDirectories(withDirectoryEnabled(directories, id, enabled));
       await load();
       // Whether the app still needs enabling is read from the reloaded data.
-      if (enabled && before?.enabled === false) setOfferRequested(true);
+      if (enabled && before.enabled === false) setOfferRequested(true);
       setMessage({
         type: 'success',
         text: enabled
@@ -135,6 +165,7 @@ function AdminPeopleDirectoriesPage() {
     } catch (err) {
       setMessage({ type: 'error', text: describeSaveError(err) });
     } finally {
+      savingRef.current = false;
       setTogglingId(null);
     }
   };
@@ -142,11 +173,14 @@ function AdminPeopleDirectoriesPage() {
   const confirmDelete = async () => {
     const id = deleteTarget;
     setDeleteTarget(null);
-    if (!id) return;
+    if (!id || savingRef.current) return;
+    savingRef.current = true;
+    setTogglingId(id);
     const name = directoryName(id);
     setMessage(null);
     try {
-      await savePeopleDirectories(withoutDirectory(data.directories, id));
+      const directories = await fetchCurrentDirectories();
+      await savePeopleDirectories(withoutDirectory(directories, id));
       await load();
       setMessage({
         type: 'success',
@@ -154,6 +188,9 @@ function AdminPeopleDirectoriesPage() {
       });
     } catch (err) {
       setMessage({ type: 'error', text: describeSaveError(err) });
+    } finally {
+      savingRef.current = false;
+      setTogglingId(null);
     }
   };
 

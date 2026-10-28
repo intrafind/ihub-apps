@@ -4171,6 +4171,7 @@
         "emptyHint": "Add one, or use \"Use for people search\" on an LDAP sign-in provider in the authentication settings.",
         "external": "External",
         "externalHint": "Search terms go to a directory run by a third party.",
+        "gone": "\"{{name}}\" no longer exists. The list has been reloaded.",
         "groups": "Groups",
         "loadError": "The people directories could not be loaded",
         "needsAttention": "Needs attention",
