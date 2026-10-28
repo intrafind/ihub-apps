@@ -19,6 +19,7 @@ import configCache from '../../../configCache.js';
 import { canUserAccessResource } from '../../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 import { getLocalizedString } from '../../../utils/localize.js';
+import { isToolSelected } from '../../../utils/toolSelection.js';
 import logger from '../../../utils/logger.js';
 import runLog from '../../loop/RunLog.js';
 import { resolvePrincipal } from '../../loop/runIdentity.js';
@@ -172,11 +173,13 @@ function localizedName(value, language) {
 
 /**
  * The tool ids an app offers a user — what a task may narrow its tools to.
+ * `selectedByApp` tells the tools the app lists itself (which a task can
+ * switch off) from the ones it gets injected.
  *
  * @param {Object} app
  * @param {Object} user
  * @param {string} language
- * @returns {Promise<Array<{id: string, name: string}>>}
+ * @returns {Promise<Array<{id: string, name: string, selectedByApp: boolean}>>}
  */
 export async function toolsOfferedByApp(app, user, language = 'en') {
   const { getToolsForApp } = await import('../../../toolLoader.js');
@@ -187,7 +190,13 @@ export async function toolsOfferedByApp(app, user, language = 'en') {
     // The scheduling tools are not something a task picks for its own runs.
     if (!tool?.id || seen.has(tool.id) || SCHEDULING_TOOLS.has(tool.id)) continue;
     seen.add(tool.id);
-    out.push({ id: tool.id, name: localizedName(tool.name, language) || tool.id });
+    out.push({
+      id: tool.id,
+      name: localizedName(tool.name, language) || tool.id,
+      // Read the way the run reads the app's `tools` (directory, MCP server
+      // and agent references included), so a task can narrow exactly these.
+      selectedByApp: isToolSelected(tool, Array.isArray(app.tools) ? app.tools : [])
+    });
   }
   return out;
 }

@@ -201,6 +201,8 @@ describe('people directory access', () => {
     ]) {
       assert.equal(findDirectoryIdConflict(id)?.kind, 'reserved', id);
     }
+    // A hand-edited file may hold any JSON; a non-string id is no clash and no crash.
+    assert.equal(findDirectoryIdConflict(42), null);
   });
 
   it('reads the directory from a tool id without loading tools', () => {
@@ -287,6 +289,15 @@ describe('people directory access', () => {
       } finally {
         configCache.getTools = getTools;
       }
+    });
+
+    it('let a scheduled task switch off the directory tools an app selects by reference', async () => {
+      const { toolsOfferedByApp } = await import('../../services/scheduler/tasks/taskService.js');
+      const app = { id: 'people', tools: ['peopleDirectories', 'braveSearch'] };
+      const offered = await toolsOfferedByApp(app, member, 'en');
+      const search = offered.find(tool => tool.id === 'x500bund__search_people');
+      assert.equal(search.selectedByApp, true);
+      assert.equal(offered.find(tool => tool.id === 'braveSearch').selectedByApp, true);
     });
 
     it('narrow an app that lists a directory', async () => {

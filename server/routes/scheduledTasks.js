@@ -322,16 +322,15 @@ export default function registerScheduledTaskRoutes(app) {
       const language = requestLanguage(req);
       const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language);
       const { data: toolDefs = [] } = configCache.getTools() || {};
-      const selected = Array.isArray(appConfig.tools) ? appConfig.tools : [];
       res.json({
-        items: offered.map(tool => {
+        items: offered.map(({ selectedByApp, ...tool }) => {
           const def = toolDefs.find(entry => entry.id === tool.id);
           return {
             ...tool,
             requiresApproval: requiresApproval(def),
             // Tools the app lists itself can be toggled; injected ones
             // (web search, sources, workflows, skills) always come along.
-            toggleable: selected.includes(tool.id) || selected.includes(tool.id.split('_')[0])
+            toggleable: selectedByApp
           };
         })
       });

@@ -316,7 +316,7 @@ export function filterDirectoryToolsForUser(tools, user) {
  * @returns {{kind: string, id: string}|null}
  */
 export function findDirectoryIdConflict(id, { tools = [], mcpServers = [], a2aAgents = [] } = {}) {
-  if (!id) return null;
+  if (typeof id !== 'string' || !id) return null;
   const wanted = id.toLowerCase();
   if (RESERVED_DIRECTORY_IDS.includes(wanted)) return { kind: 'reserved', id };
   for (const tool of tools) {
