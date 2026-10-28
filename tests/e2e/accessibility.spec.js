@@ -338,6 +338,8 @@ const CLEAN_PAGES = [
   '/admin/credentials',
   '/admin/integrations',
   '/admin/integrations/jira',
+  '/admin/integrations/people-directories',
+  '/admin/integrations/people-directories/new',
   '/admin/office-integration',
   '/admin/nextcloud-embed',
   '/admin/localization',

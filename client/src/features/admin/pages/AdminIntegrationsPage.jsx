@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AdminIntegrationHubPage from '../components/AdminIntegrationHubPage';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchPeopleDirectories } from '../../../api/peopleDirectoriesAdminApi';
 
 /**
  * Integrations landing page — single entry point for every external system
@@ -17,6 +18,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
  *   - Cloud storage provider entries → cloudStorage.providers[id].enabled
  *   - Jira → jira.clientId present
  *   - Outlook / Nextcloud Embed → corresponding feature flag in platform.features
+ *   - People directories → at least one enabled entry in peopleDirectories.json
+ *     (`GET /admin/people-directories`)
  *
  * If platform config can't be loaded the cards still render but show "Available".
  */
@@ -25,6 +28,7 @@ function AdminIntegrationsPage() {
   const featureFlags = useFeatureFlags();
   const integrationsEnabled = featureFlags.isEnabled('integrations', true);
   const [platform, setPlatform] = useState(null);
+  const [peopleDirectoriesOn, setPeopleDirectoriesOn] = useState(false);
 
   useEffect(() => {
     if (!integrationsEnabled) return;
@@ -35,6 +39,17 @@ function AdminIntegrationsPage() {
       })
       .catch(() => {
         if (!cancelled) setPlatform(null);
+      });
+    fetchPeopleDirectories()
+      .then(res => {
+        if (!cancelled) {
+          setPeopleDirectoriesOn(
+            (res?.directories || []).some(directory => directory?.enabled !== false)
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPeopleDirectoriesOn(false);
       });
     return () => {
       cancelled = true;
@@ -49,6 +64,8 @@ function AdminIntegrationsPage() {
   };
 
   const statusFor = (kind, id) => {
+    // Read from peopleDirectories.json, not from platform.json.
+    if (kind === 'peopleDirectories') return peopleDirectoriesOn ? 'connected' : 'available';
     if (!platform) return 'available';
     switch (kind) {
       case 'cloud': {
@@ -78,6 +95,7 @@ function AdminIntegrationsPage() {
   const productivity = t('admin.integrations.categories.productivity', 'Productivity');
   const storage = t('admin.integrations.categories.storage', 'Cloud Storage');
   const ticketing = t('admin.integrations.categories.ticketing', 'Ticketing');
+  const directories = t('admin.integrations.categories.directories', 'Directories');
 
   const integrations = [
     {
@@ -183,6 +201,19 @@ function AdminIntegrationsPage() {
       href: '/admin/integrations/jira',
       status: statusFor('jira'),
       category: ticketing
+    },
+    {
+      id: 'people-directories',
+      title: t('admin.integrations.cards.peopleDirectories.title', 'People directories'),
+      description: t(
+        'admin.integrations.cards.peopleDirectories.description',
+        'Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de.'
+      ),
+      icon: 'user-group',
+      color: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
+      href: '/admin/integrations/people-directories',
+      status: statusFor('peopleDirectories'),
+      category: directories
     }
   ];
 
@@ -207,7 +238,7 @@ function AdminIntegrationsPage() {
           'Connect iHub to the systems your users already work with — mail, docs, ticketing — and ship the iHub UI inside their browser.'
         )}
         integrations={integrationsEnabled ? integrations : []}
-        categoryOrder={[productivity, storage, ticketing]}
+        categoryOrder={[productivity, storage, ticketing, directories]}
         searchPlaceholder={t('admin.integrations.searchPlaceholder', 'Search integrations…')}
       />
     </>

@@ -57,6 +57,8 @@ import {
 const FILE = 'config/peopleDirectories.json';
 const PEOPLE_SEARCH_APP_ID = 'people-directory';
 const MAX_TEST_QUERY_LENGTH = 200;
+/** Stands in for the id of an unsaved directory under test. */
+const INLINE_TEST_ID = 'unsaved';
 
 /**
  * The sign-in providers a directory can reuse, without their secrets.
@@ -312,7 +314,8 @@ export default function registerAdminPeopleDirectoriesRoutes(app) {
     const body = req.body || {};
     let directory;
     if (body.directory && typeof body.directory === 'object' && !Array.isArray(body.directory)) {
-      directory = body.directory;
+      // A new, unsaved form may not have an id yet; the test does not need one.
+      directory = { ...body.directory, id: body.directory.id || INLINE_TEST_ID };
     } else if (typeof body.id === 'string' && body.id) {
       directory = findDirectory(body.id);
       if (!directory) return sendNotFound(res, 'People directory');

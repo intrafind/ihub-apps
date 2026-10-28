@@ -152,6 +152,17 @@ describe('people directory admin API', () => {
     assert.ok(connections > before);
   });
 
+  it('tests an unsaved form before it has an id', async () => {
+    // eslint-disable-next-line no-unused-vars
+    const { id, ...withoutId } = inlineEntry;
+    const response = await as(
+      'admin',
+      request(app).post('/api/admin/people-directories/test').send({ directory: withoutId })
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.body.steps[0].status, 'ok');
+  });
+
   it('lists directories with summaries, sign-in providers and the app status', async () => {
     state.directories = [
       {
