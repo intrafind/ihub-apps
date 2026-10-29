@@ -33,6 +33,7 @@ import { tokenStorageIdFor } from '../mcp/mcpUserTokens.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { withFileLock } from '../../utils/fileLock.js';
+import { publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import {
   OAuthRefreshError,
@@ -86,6 +87,14 @@ const SUBJECT_TOKEN_REJECTED = new Set(['invalid_grant', 'invalid_token']);
 const exchangedTokens = new Map();
 /** @type {Map<string, Promise<string>>} One exchange in flight per cache key. */
 const inFlight = new Map();
+/**
+ * Bumped by every clear. An exchange that started before a clear (a revoke,
+ * a deactivation, a config change) must not put its token into the cache.
+ */
+let cacheGeneration = 0;
+
+/** Cluster channel: another worker cleared its cache; clear ours too. */
+const CACHE_CLEAR_CHANNEL = 'ifinder-token-exchange:clear';
 
 function errorWithCode(message, code, extra = {}) {
   const error = new Error(message);
@@ -228,18 +237,31 @@ function cacheKey(userId, audience, scope) {
   return JSON.stringify([String(userId), audience, scope]);
 }
 
-/**
- * Forget exchanged tokens: all of them, or one user's.
- * @param {string} [userId]
- */
-export function clearExchangedTokenCache(userId) {
-  if (userId === undefined) {
+/** Forget this worker's exchanged tokens: all of them (`userId` null), or one user's. */
+function clearLocalCache(userId) {
+  cacheGeneration += 1;
+  if (userId === null || userId === undefined) {
     exchangedTokens.clear();
     return;
   }
   for (const [key, entry] of exchangedTokens) {
     if (entry.userId === String(userId)) exchangedTokens.delete(key);
   }
+}
+
+subscribe(CACHE_CLEAR_CHANNEL, payload => clearLocalCache(payload?.userId ?? null));
+
+/**
+ * Forget exchanged tokens on every cluster worker: all of them, or one user's.
+ * A revoked or deactivated user must stop reaching iFinder on all workers, not
+ * only on the one that handled the request; the cache would otherwise keep
+ * serving tokens for as long as the provider issued them.
+ * @param {string} [userId]
+ */
+export function clearExchangedTokenCache(userId) {
+  const target = userId === undefined ? null : String(userId);
+  clearLocalCache(target);
+  publish(CACHE_CLEAR_CHANNEL, { userId: target });
 }
 
 function pruneExpired(now) {
@@ -283,7 +305,10 @@ export async function storeLoginTokens(
     {
       accessToken,
       refreshToken: keptRefreshToken,
-      expiresIn: lifetimeSeconds(expiresIn, accessToken)
+      expiresIn: lifetimeSeconds(expiresIn, accessToken),
+      // When the user signed in. Refreshes keep it; the file's own createdAt
+      // moves with every write.
+      authorizedAt: new Date().toISOString()
     },
     providerName
   );
@@ -311,19 +336,20 @@ export async function deleteLoginTokens(userId, providerName) {
 
 /**
  * Whether the user has a stored background authorization for the exchange
- * provider, without decrypting it.
+ * provider, and when they signed in to grant it. The tokens themselves never
+ * leave this module.
  * @param {string} userId
  * @param {string} providerName
- * @returns {Promise<{authorized: boolean, createdAt?: string}>}
+ * @returns {Promise<{authorized: boolean, authorizedAt?: string}>}
  */
 export async function getLoginTokenStatus(userId, providerName) {
   try {
-    const metadata = await tokenStorageService.getTokenMetadata(
+    const tokens = await tokenStorageService.getUserTokens(
       storageIdOf(userId),
       OIDC_LOGIN_TOKEN_SERVICE,
       providerName
     );
-    return { authorized: true, createdAt: metadata.createdAt };
+    return { authorized: true, authorizedAt: tokens.authorizedAt };
   } catch {
     return { authorized: false };
   }
@@ -484,7 +510,8 @@ async function refreshUnderLock(user, settings, staleAccessToken) {
             accessToken: refreshed.accessToken,
             // Providers that do not rotate answer without a new refresh token.
             refreshToken: refreshed.refreshToken || current.refreshToken,
-            expiresIn: lifetimeSeconds(refreshed.expiresIn, refreshed.accessToken)
+            expiresIn: lifetimeSeconds(refreshed.expiresIn, refreshed.accessToken),
+            authorizedAt: current.authorizedAt
           },
           settings.providerName
         );
@@ -678,9 +705,10 @@ async function getExchangedToken(user, options, platform) {
   const pending = inFlight.get(key);
   if (pending) return pending;
 
+  const generation = cacheGeneration;
   const promise = exchangeForUser(user, settings, scope)
     .then(result => {
-      if (result.expiresAtMs) {
+      if (result.expiresAtMs && generation === cacheGeneration) {
         pruneExpired(Date.now());
         exchangedTokens.set(key, {
           token: result.accessToken,

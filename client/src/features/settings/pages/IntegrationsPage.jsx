@@ -341,7 +341,7 @@ export default function IntegrationsPage() {
         credentials: 'include'
       });
       if (!response.ok) throw new Error(response.statusText);
-      setIFinderAuthorization(prev => ({ ...prev, authorized: false, createdAt: undefined }));
+      setIFinderAuthorization(prev => ({ ...prev, authorized: false, authorizedAt: undefined }));
       setMessage({
         type: 'success',
         text: t('integrations.page.iFinder.revoked', 'iFinder authorization revoked')
@@ -823,8 +823,10 @@ export default function IntegrationsPage() {
                             ? {
                                 displayName: t('integrations.page.iFinder.authorizedSince', {
                                   provider: iFinderAuthorization.provider.displayName,
-                                  date: iFinderAuthorization.createdAt
-                                    ? new Date(iFinderAuthorization.createdAt).toLocaleString(lang)
+                                  date: iFinderAuthorization.authorizedAt
+                                    ? new Date(iFinderAuthorization.authorizedAt).toLocaleString(
+                                        lang
+                                      )
                                     : '',
                                   defaultValue: 'Authorized via {{provider}} on {{date}}'
                                 })

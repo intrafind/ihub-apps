@@ -295,6 +295,22 @@ describe('cache', () => {
 });
 
 describe('refresh', () => {
+  it('keeps the sign-in time across refreshes', async () => {
+    await storeFor(USER, { accessToken: 'old-at', refreshToken: 'rt-1', expiresIn: 1 });
+    const { authorizedAt } = await getLoginTokenStatus(USER.id, PROVIDER);
+    assert.ok(authorizedAt);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    tokenServer.handler = params =>
+      params.grant_type === 'refresh_token'
+        ? { json: { access_token: 'new-at', refresh_token: 'rt-2', expires_in: 3600 } }
+        : { json: { access_token: 'x', expires_in: 600 } };
+    await getAuthorizationHeader(USER);
+    assert.deepEqual(await getLoginTokenStatus(USER.id, PROVIDER), {
+      authorized: true,
+      authorizedAt
+    });
+  });
+
   it('refreshes an expired login token with the login client, then exchanges', async () => {
     await storeFor(USER, { accessToken: 'old-at', refreshToken: 'rt-1', expiresIn: 1 });
     tokenServer.handler = params =>
