@@ -58,18 +58,36 @@ export function templatesDirectory() {
   return getContentsPath(DIR_NAME);
 }
 
+/**
+ * A path inside a directory, refused when it would leave it. Ids and file
+ * names are already restricted by their patterns; this is the boundary check
+ * on top (the relative-path shape `utils/pathSecurity.js` uses).
+ */
+function inside(baseDir, name, message) {
+  const base = path.resolve(baseDir);
+  const relative = path.relative(base, path.resolve(base, name));
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new DocumentTemplateError(message);
+  }
+  return path.join(base, relative);
+}
+
 function templateDirectory(id) {
   if (typeof id !== 'string' || !TEMPLATE_ID_PATTERN.test(id)) {
     throw new DocumentTemplateError('Invalid template id.');
   }
-  return path.join(templatesDirectory(), id);
+  return inside(templatesDirectory(), id, 'Invalid template id.');
+}
+
+function configPath(id) {
+  return inside(templateDirectory(id), CONFIG_FILE, 'Invalid template id.');
 }
 
 function assetPath(id, name) {
   if (typeof name !== 'string' || !ASSET_NAME_PATTERN.test(name) || name === CONFIG_FILE) {
     throw new DocumentTemplateError('Invalid template file name.');
   }
-  return path.join(templateDirectory(id), name);
+  return inside(templateDirectory(id), name, 'Invalid template file name.');
 }
 
 let listCache = null;
@@ -79,7 +97,7 @@ function invalidate() {
 }
 
 async function readTemplateFile(id) {
-  const file = path.join(templateDirectory(id), CONFIG_FILE);
+  const file = configPath(id);
   let raw;
   try {
     raw = await fs.readFile(file, 'utf8');
@@ -322,7 +340,7 @@ async function assetExists(id, name) {
 async function clearOtherDefaults(id) {
   for (const other of await listTemplates({ includeDisabled: true })) {
     if (other.id === id || !other.default) continue;
-    await atomicWriteJSON(path.join(templateDirectory(other.id), CONFIG_FILE), {
+    await atomicWriteJSON(configPath(other.id), {
       ...other,
       default: false
     });
@@ -355,7 +373,7 @@ export async function saveTemplate(id, input, { create = false } = {}) {
   return locked(async () => {
     const dir = templateDirectory(id);
     const exists = await fs
-      .stat(path.join(dir, CONFIG_FILE))
+      .stat(configPath(id))
       .then(() => true)
       .catch(() => false);
     if (create && exists) {
@@ -369,7 +387,7 @@ export async function saveTemplate(id, input, { create = false } = {}) {
     }
     await fs.mkdir(dir, { recursive: true });
     if (template.default) await clearOtherDefaults(id);
-    await atomicWriteJSON(path.join(dir, CONFIG_FILE), template);
+    await atomicWriteJSON(configPath(id), template);
     await removeUnusedAssets(id, template);
     logger.info(create ? 'Document template created' : 'Document template saved', {
       component: COMPONENT,
@@ -384,7 +402,7 @@ async function removeUnusedAssets(id, template) {
   const dir = templateDirectory(id);
   for (const name of await fs.readdir(dir)) {
     if (used.has(name) || !ASSET_NAME_PATTERN.test(name)) continue;
-    await fs.rm(path.join(dir, name), { force: true });
+    await fs.rm(assetPath(id, name), { force: true });
   }
 }
 
@@ -397,7 +415,7 @@ export async function deleteTemplate(id) {
   await locked(async () => {
     const dir = templateDirectory(id);
     try {
-      await fs.stat(path.join(dir, CONFIG_FILE));
+      await fs.stat(configPath(id));
     } catch {
       throw new DocumentTemplateError('Template not found.', 404);
     }
@@ -462,7 +480,7 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
     }
     const template = validate(next, id);
     await atomicWriteFile(assetPath(id, name), data, null);
-    await atomicWriteJSON(path.join(templateDirectory(id), CONFIG_FILE), template);
+    await atomicWriteJSON(configPath(id), template);
     await removeUnusedAssets(id, template);
     logger.info('Document template file uploaded', {
       component: COMPONENT,
@@ -506,7 +524,7 @@ export async function removeTemplateAsset(id, { slot, family, face }) {
       delete next.pptx.layouts;
     } else throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
     const template = validate(next, id);
-    await atomicWriteJSON(path.join(templateDirectory(id), CONFIG_FILE), template);
+    await atomicWriteJSON(configPath(id), template);
     await removeUnusedAssets(id, template);
     return template;
   });
