@@ -59,7 +59,7 @@ OAuth-client tokens (MCP, A2A, Copilot agent) and workflow triggers.
 |---|---|---|
 | Who issues the iFinder token | iHub (own key or OIDC key pair) | The central OIDC provider (Zitadel, Keycloak, Entra) |
 | iFinder `issuer-uri` / `jwk-set-uri` | iHub | The provider |
-| `sub` in the token | `jwtSubjectField` (email, `domain\user`, template) | The provider's subject. iFinder maps the principal from a claim (see §5) |
+| `sub` in the token | `jwtSubjectField` (email, `domain\user`, template) | The provider's subject, the same one iFinder already sees for its own logins (see §5) |
 | Roles and scopes | `scope` claim set by iHub | Provider roles or scopes for the iFinder audience |
 | Needs | Key or OIDC key pair | User signed in through that OIDC provider; client allowed to exchange |
 
@@ -142,7 +142,8 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
   and provider-issued tokens are both accepted. This removes the config conflict
   described in the issue on its own and makes migration safe: iHub can flip modes
   without iFinder downtime.
-- Configure the principal and authorities claims for the provider issuer (see §5).
+- Configure the authorities claims for the provider issuer (see §5). The principal claim
+  needs no change: it is the one iFinder already uses for its own logins.
 - Fail loudly, or at least warn, when `issuer-uri` comes from several sources with
   different values.
 
@@ -235,35 +236,35 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
 
 ## 5. Decisions needed before Phase 1
 
-1. **Subject and ACL mapping.** In `ihubSigned` mode, iHub controls `sub` (email or
-   `DOMAIN\user`), and iFinder's document ACLs are matched against it. A provider's `sub`
-   is usually an opaque id (Zitadel numeric id, Entra `oid`). iFinder therefore has to
-   read the principal from another claim (`preferred_username`, `email`, `upn`, or a
-   custom claim with the NetBIOS name that the provider adds). **This decides whether
-   ACL-filtered search still works, and it is an iFinder and provider setting, not an
-   iHub one.**
-2. **Roles to iFinder authorities.** Provider roles arrive in provider-specific claims
+**Settled: the user identity.** When iHub and iFinder share the provider, the user
+claim is already the same in both products: iFinder resolves users from the provider's
+tokens for its own logins, and the exchanged token names the same user. So there is no
+subject mapping to design, and `jwtSubjectField` does not apply in exchange mode. The
+only thing to check, in the spike in §6, is that the exchanged token carries the claim
+iFinder reads, the same way tokens from iFinder's own login do.
+
+1. **Roles to iFinder authorities.** Provider roles arrive in provider-specific claims
    (Zitadel `urn:zitadel:iam:org:project:roles`, Keycloak `realm_access` / `resource_access`,
    Entra `roles` / `scp`), not in a flat `scope` claim with `fa_*`. Either iFinder maps
    those claims to authorities, or the provider gets a claim mapper or Action that emits
    `scope: "fa_index_read …"`. Prefer the provider-side mapper, so that iFinder's
    authority logic stays the same in both modes.
-3. **Refresh-token retention.** Should we keep them after logout so scheduled tasks keep
+2. **Refresh-token retention.** Should we keep them after logout so scheduled tasks keep
    working (convenient), or delete them on logout so tasks need a recent login (stricter)?
    Proposal: keep them, delete on user deletion or deactivation and on terminal refresh
    failure, and show in the user's profile under "connected" that a background
    authorization exists, with a revoke button (the same pattern as the integrations).
-4. **Exchange policy on the provider.** Which client may exchange for the iFinder audience,
+3. **Exchange policy on the provider.** Which client may exchange for the iFinder audience,
    and with which scopes. Configured in the provider (Zitadel project grants, Keycloak
    client policies, Entra API permissions plus admin consent). We document it; iHub cannot
    enforce it.
-5. **Impersonation.** Offer the Zitadel service-user path at all? It removes per-user
+4. **Impersonation.** Offer the Zitadel service-user path at all? It removes per-user
    refresh tokens but creates a "mint a token for anyone" credential.
 
 ## 6. Suggested first steps
 
-1. Settle §5.1 and §5.2 with the iFinder team. They decide whether the provider token is
-   usable for iFinder at all, independent of any iHub code.
+1. Settle the role mapping (§5.1) with the iFinder team. It decides whether the provider
+   token is usable for iFinder at all, independent of any iHub code.
 2. Spike (half a day, no product code): in a Zitadel test instance, enable token exchange,
    log in to iHub with `offline_access`, run the exchange with curl against the iFinder
    project audience, and check that iFinder (multi-issuer) accepts the result and returns
