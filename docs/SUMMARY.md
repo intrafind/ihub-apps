@@ -51,6 +51,7 @@
     - [Tool Calling](tool-calling.md)
     - [MCP Integration](mcp-integration.md)
     - [Remote A2A Agents as Tools](a2a-agents.md)
+    - [People Directory Search](people-directory-search.md)
     - [Ask User Tool](ask-user-tool.md)
     - [PDF Generation & System Skills](pdf-generation.md)
     - [Structured Output](structured-output.md)

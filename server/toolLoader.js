@@ -20,6 +20,10 @@ import { isInteractiveTool, isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
+import {
+  discoverPeopleDirectoryTools,
+  filterDirectoryToolsForUser
+} from './services/peopleDirectory/PeopleDirectoryService.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
@@ -251,10 +255,11 @@ export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
- * id or an MCP server's id (`_a2a.idConflict`), so that reference keeps
- * selecting only the local tool or MCP server and never silently grants the
- * remote agent; `a2a__<agentId>` still selects the agent as a whole. The admin API refuses such ids; this covers a hand-edited
- * config and a tool or MCP server added after the agent.
+ * id, an MCP server's id or a people directory's id (`_a2a.idConflict`), so
+ * that reference never silently grants the remote agent; `a2a__<agentId>`
+ * still selects the agent as a whole. The admin API refuses such ids; this
+ * covers a hand-edited config and a tool, MCP server or directory added after
+ * the agent.
  *
  * @param {Array<Object>} a2aTools - Discovered A2A tools
  * @param {Array<Object>} otherTools - Local and MCP tools
@@ -264,13 +269,14 @@ function guardA2aAgentIds(a2aTools, otherTools) {
   if (!a2aTools.length) return a2aTools;
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   for (const [agentId, conflict] of conflicts) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool or MCP server id; select the agent as a2a__<agentId>',
+      'A2A agent id is also a tool, MCP server or people directory id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }
@@ -278,7 +284,28 @@ function guardA2aAgentIds(a2aTools, otherTools) {
 }
 
 /**
- * Load tools from local configuration, MCP servers and remote A2A agents.
+ * The tools of the configured people directories (`<directoryId>__search_people`,
+ * …, marked with `_peopleDirectory`). Not narrowed to a user: who may use a
+ * directory is checked wherever tools are narrowed to one (`mayUseDirectory`).
+ * @param {string|null} language
+ * @param {Array<Object>} otherTools - Local, MCP and A2A tools (id clash check)
+ */
+function discoverDirectoryTools(language, otherTools) {
+  try {
+    const platformConfig = configCache.getPlatform() || {};
+    return discoverPeopleDirectoryTools({
+      language: language || platformConfig.defaultLanguage || 'en',
+      otherTools
+    });
+  } catch (error) {
+    logger.error('Error discovering people directory tools', { component: 'ToolLoader', error });
+    return [];
+  }
+}
+
+/**
+ * Load tools from local configuration, MCP servers, remote A2A agents and
+ * people directories.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
@@ -288,7 +315,12 @@ export async function loadTools(language = null) {
     discoverA2aTools()
   ]);
   const a2aTools = guardA2aAgentIds(discoveredA2aTools, [...configured, ...mcpTools]);
-  const discovered = [...mcpTools, ...a2aTools];
+  const directoryTools = discoverDirectoryTools(language, [
+    ...configured,
+    ...mcpTools,
+    ...a2aTools
+  ]);
+  const discovered = [...mcpTools, ...a2aTools, ...directoryTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -603,7 +635,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
   let appTools = [];
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    appTools = allTools.filter(t => isToolSelected(t, app.tools));
+    // A people directory's own `groups` hold on top of the app's selection.
+    appTools = filterDirectoryToolsForUser(
+      allTools.filter(t => isToolSelected(t, app.tools)),
+      context.user
+    );
 
     // Filter by enabledTools if provided in context. Interactive clarification
     // tools (`ask_user`, anything `requiresUserInput`) are a system channel the
@@ -1041,6 +1077,18 @@ export async function runTool(toolId, params = {}, options = {}) {
   const tool = allTools.find(t => t.id === toolId);
   if (!tool) {
     throw new Error(`Tool ${toolId} not found`);
+  }
+
+  // People directory tools run through their directory, as the calling user.
+  if (tool._peopleDirectory) {
+    logger.info('Dispatching people directory tool call', {
+      component: 'ToolLoader',
+      toolId,
+      directoryId: tool._peopleDirectory.id
+    });
+    const { runPeopleDirectoryTool } =
+      await import('./services/peopleDirectory/peopleDirectoryRunner.js');
+    return await runPeopleDirectoryTool(tool, params);
   }
 
   // MCP tools are dispatched through McpClientManager.callTool.

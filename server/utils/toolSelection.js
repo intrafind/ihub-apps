@@ -4,6 +4,9 @@
 /** Prefix of every tool id that maps to a remote A2A agent's skill. */
 const A2A_TOOL_PREFIX = 'a2a__';
 
+/** Reference that selects the tools of every people directory. */
+export const PEOPLE_DIRECTORIES_REFERENCE = 'peopleDirectories';
+
 /**
  * Whether a tool is an interactive clarification channel — `ask_user`, or any
  * tool flagged `requiresUserInput`. The agent loop drives these to pause a turn
@@ -52,9 +55,12 @@ export function a2aAgentReference(agentId) {
  *   agent is selected by `a2a__<agentId>` (or its skills' exact tool ids).
  *   That reference lives in the prefix of the agent's own tool ids
  *   (`a2a__<agentId>__<skill>`; agent ids hold no `__`), so it names one
- *   agent and none of the others.
+ *   agent and none of the others;
+ * - for a tool of a people directory (`<directoryId>__search_people`, …), the
+ *   directory's id, or `peopleDirectories` for every directory — including
+ *   ones added later. `peopleDirectories` selects no other tool.
  *
- * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string, idConflict?: boolean}}} tool - Tool definition
+ * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string, idConflict?: boolean}, _peopleDirectory?: {id?: string}}} tool - Tool definition
  * @param {string[]|Set<string>} refs - Tool references
  * @returns {boolean}
  */
@@ -62,6 +68,9 @@ export function isToolSelected(tool, refs) {
   if (!tool?.id || !refs) return false;
   const has = refs instanceof Set ? id => refs.has(id) : id => refs.includes(id);
   if (has(tool.id)) return true;
+  if (tool._peopleDirectory?.id) {
+    return has(tool._peopleDirectory.id) || has(PEOPLE_DIRECTORIES_REFERENCE);
+  }
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
   if (tool._a2a?.agentId) {
     if (has(a2aAgentReference(tool._a2a.agentId))) return true;
@@ -69,5 +78,5 @@ export function isToolSelected(tool, refs) {
   }
   if (tool._a2a || tool.id.startsWith(A2A_TOOL_PREFIX)) return false;
   const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
-  return has(baseId);
+  return baseId !== PEOPLE_DIRECTORIES_REFERENCE && has(baseId);
 }

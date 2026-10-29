@@ -6,6 +6,7 @@
 ## Quick Links
 
 - [Built-in Tools Reference](tool-calling.md#built-in-tools-reference) — braveSearch, read_url, iFinder, entraPeopleSearch
+- [People Directory Search](people-directory-search.md) — LDAP directories (company directory, x500.bund.de) as `<directoryId>__search_people` tools; apps select them with `peopleDirectories`
 - [Native Web Search Resolution](tool-calling.md#native-web-search-resolution) — how Google/OpenAI/Anthropic native search is resolved (it's not a tool)
 - [Tool Configuration Reference](tool-calling.md#tool-configuration-reference) — tool file field descriptions and `isSpecialTool` explanation
 - [Quick Start](tool-calling.md#quick-start) — Enable a tool for your app in under 10 minutes

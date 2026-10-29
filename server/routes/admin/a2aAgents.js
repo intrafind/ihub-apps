@@ -67,10 +67,10 @@ async function writeConfig(updated) {
 }
 
 /**
- * Refuse an agent id that is also a local tool's (base) id or an MCP server's
- * id: apps and groups select a whole agent by its id, so the same reference
- * would enable both — e.g. an agent `jira` would silently reach every app
- * that lists `jira` for the local Jira tools.
+ * Refuse an agent id that is also a local tool's (base) id, an MCP server's
+ * id or a people directory's id: apps and groups select a whole agent by its
+ * id, so the same reference would enable both — e.g. an agent `jira` would
+ * silently reach every app that lists `jira` for the local Jira tools.
  *
  * @param {import('express').Response} res
  * @param {string} agentId
@@ -79,13 +79,15 @@ async function writeConfig(updated) {
 function refuseIdConflict(res, agentId) {
   const conflict = findAgentIdConflict(agentId, {
     tools: configCache.getTools?.(true)?.data || [],
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   if (!conflict) return false;
-  const what = conflict.kind === 'mcpServer' ? 'MCP server' : 'tool';
+  const what =
+    { mcpServer: 'MCP server', peopleDirectory: 'people directory' }[conflict.kind] || 'tool';
   res.status(409).json({
     success: false,
-    error: `Agent id "${agentId}" is already used by the ${what} "${conflict.id}". Apps and groups reference agents, tools and MCP servers by id, so the agent needs an id of its own.`,
+    error: `Agent id "${agentId}" is already used by the ${what} "${conflict.id}". Apps and groups reference agents, tools, MCP servers and people directories by id, so the agent needs an id of its own.`,
     conflict
   });
   return true;

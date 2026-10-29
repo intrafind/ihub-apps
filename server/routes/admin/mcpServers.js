@@ -15,6 +15,11 @@ import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { listServerConnections } from '../../services/mcp/mcpUserTokens.js';
 import { isUserOAuthServer, revokeUserConnection } from '../../services/mcp/mcpOAuthService.js';
+import {
+  findDirectoryClaimedBy,
+  mcpServerBaseIds,
+  sendDirectoryIdClash
+} from '../../services/peopleDirectory/PeopleDirectoryService.js';
 
 const MCP_FILE = 'config/mcpServers.json';
 
@@ -101,6 +106,10 @@ export default function registerAdminMcpServersRoutes(app) {
           error: `Server id "${parsed.data.id}" is already used by the A2A agent "${clash.id}". Apps and groups reference servers and agents by id, so the server needs an id of its own.`
         });
       }
+      const directoryId = findDirectoryClaimedBy(mcpServerBaseIds(parsed.data));
+      if (directoryId) {
+        return sendDirectoryIdClash(res, `MCP server id "${parsed.data.id}"`, directoryId);
+      }
       const updated = { ...cfg, servers: [...(cfg.servers || []), parsed.data] };
       await writeConfig(updated);
       res.status(201).json({ success: true, server: parsed.data });
@@ -127,6 +136,14 @@ export default function registerAdminMcpServersRoutes(app) {
       const idx = (cfg.servers || []).findIndex(s => s.id === id);
       if (idx === -1) {
         return res.status(404).json({ success: false, error: 'Server not found' });
+      }
+      // A new tool prefix must not take over a people directory's id.
+      const before = new Set(mcpServerBaseIds(cfg.servers[idx]));
+      const directoryId = findDirectoryClaimedBy(
+        mcpServerBaseIds(parsed.data).filter(base => !before.has(base))
+      );
+      if (directoryId) {
+        return sendDirectoryIdClash(res, `tool prefix "${parsed.data.toolPrefix}"`, directoryId);
       }
       // Secrets are referenced by *Ref pointers into the credential store, so
       // the incoming auth block is persisted as-is.

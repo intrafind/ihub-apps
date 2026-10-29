@@ -1164,6 +1164,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **App Usage**: Reference specific methods with dot notation: `"tools": ["iFinder.search", "iFinder.getContent"]`
 - **Documentation**: See [iFinder Integration](iFinder-Integration.md) for detailed setup and usage
 
+### People directories (`<directoryId>__search_people`, …)
+
+- **Provider**: Any model supporting function calling
+- **Description**: Search LDAP people directories — the company directory (reusing an LDAP sign-in provider) and external ones such as x500.bund.de. Each directory configured under **Admin → Integrations → People directories** offers `<directoryId>__search_people`, `<directoryId>__get_person` and optionally `<directoryId>__list_units`, named and described after the directory so the model can choose between them
+- **Type**: Server-side execution, discovered from `contents/config/peopleDirectories.json`
+- **App Usage**: `"tools": ["peopleDirectories"]` for every directory (including ones added later), `"tools": ["x500bund"]` for one directory's tools. A directory's own `groups` still apply
+- **Documentation**: See [People Directory Search](people-directory-search.md)
+
 ### `entraPeopleSearch`
 
 - **Provider**: Any model supporting function calling

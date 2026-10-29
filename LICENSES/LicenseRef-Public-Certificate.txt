@@ -1,0 +1,14 @@
+Public certificate
+
+This file is a public X.509 certificate (a trust anchor) as published by its
+issuer for the purpose of verifying certificates it issued. It is reproduced
+unchanged, byte for byte as the issuer distributes it, and carries no licence
+of its own.
+
+iHub Apps ships it so that an administrator can verify a directory server whose
+certificate chains to it. It is trusted only for the people directories that
+name it in "tlsCa", never globally. Before relying on it, compare its SHA-256
+fingerprint with the value the issuer publishes.
+
+The issuer and the published fingerprint are named in the REUSE.toml entry that
+covers the file and in docs/people-directory-search.md.

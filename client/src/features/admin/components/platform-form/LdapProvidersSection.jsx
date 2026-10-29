@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Icon from '../../../../shared/components/Icon';
 import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
@@ -18,7 +19,26 @@ import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../uti
  * object class and the attribute mapping are all derived from those (see
  * `server/utils/ldapProviderConfig.js`), so they live under "Advanced" with the
  * derived value shown as the placeholder — typing one only overrides it.
+ *
+ * "Use for people search" on a saved provider opens the people directory
+ * editor prefilled to reuse it (`/admin/integrations/people-directories/new`).
+ * It leaves the page, so while anything here is unsaved it only says to save
+ * first; a provider that is not saved yet gets nothing (a directory could not
+ * find it).
  */
+
+/**
+ * The editor URL of a new people directory that reuses a sign-in provider.
+ * @param {Object} provider - LDAP provider entry
+ * @returns {string}
+ */
+function peopleSearchUrl(provider) {
+  const params = new URLSearchParams({
+    authProvider: provider.name,
+    name: provider.displayName || provider.name
+  });
+  return `/admin/integrations/people-directories/new?${params.toString()}`;
+}
 
 const INPUT_CLASS =
   'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
@@ -46,7 +66,17 @@ function Field({ id, label, value, onChange, placeholder, help, type = 'text', w
   );
 }
 
-function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
+function LdapProvidersSection({
+  config,
+  onChange,
+  t,
+  availableGroups = [],
+  savedProviderNames,
+  hasUnsavedChanges = false
+}) {
+  const isSaved = provider =>
+    Boolean(provider.name?.trim()) &&
+    (!Array.isArray(savedProviderNames) || savedProviderNames.includes(provider.name));
   const [advancedOpen, setAdvancedOpen] = useState({});
 
   const setProviders = providers =>
@@ -170,14 +200,34 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   {provider.displayName && `: ${provider.displayName}`}
                 </h4>
               </div>
-              <button
-                type="button"
-                onClick={() => removeLdapProvider(index)}
-                className="text-red-600 hover:text-red-800 text-sm font-medium"
-                aria-label={t('admin.auth.ldap.remove', 'Remove this LDAP provider')}
-              >
-                <Icon name="trash" className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                {isSaved(provider) && !hasUnsavedChanges && (
+                  <Link
+                    to={peopleSearchUrl(provider)}
+                    className="inline-flex items-center gap-1 min-h-[24px] text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline"
+                  >
+                    <Icon name="user-group" className="h-4 w-4" />
+                    {t('admin.auth.ldap.useForPeopleSearch', 'Use for people search')}
+                    <span className="sr-only">: {provider.displayName || provider.name}</span>
+                  </Link>
+                )}
+                {isSaved(provider) && hasUnsavedChanges && (
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {t(
+                      'admin.auth.ldap.useForPeopleSearchSaveFirst',
+                      'Save the configuration to use this provider for people search'
+                    )}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeLdapProvider(index)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  aria-label={t('admin.auth.ldap.remove', 'Remove this LDAP provider')}
+                >
+                  <Icon name="trash" className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
