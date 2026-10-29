@@ -223,7 +223,7 @@ Mistral `json_schema`, vLLM):
 | Field | Notes |
 | --- | --- |
 | `model` | **Required.** Model id or app (`app:<appId>[/<modelId>]`) |
-| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`; PDF, Word (`.docx`), PowerPoint (`.pptx`), OpenDocument (`.odt`, `.ods`, `.odp`) and text files — the text is extracted on the server, see [Documents](#documents)). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
+| `input` | **Required.** A string, or message items `{ role, content }` whose content parts are `input_text`, `input_image` (`image_url` as a `data:` URL) and `input_file` (`file_data` as a `data:` URL plus `filename`; PDF, Word (`.docx`), PowerPoint (`.pptx`), OpenDocument (`.odt`, `.ods`, `.odp`), e-mail (`.eml`, Outlook `.msg`) and text files — the text is extracted on the server, see [Documents](#documents)). Earlier `assistant` messages (`output_text`) may be included. The last item must be a user message |
 | `instructions` | System instructions — plain models only |
 | `prompt` | App variables — apps only |
 | `text.format` | `text`, `json_object` or `json_schema` — plain models only |
@@ -262,11 +262,12 @@ Files travel inline (`input_file` in the Responses API, `file` content parts in 
 | Word (`.docx`) | Markdown with `#` headings, the numbers Word shows in front of headings and list items, tables, footnotes, `[Page break]`, and `[Header]` / `[Footer]` lines. Tracked changes are applied and comments left out |
 | PowerPoint (`.pptx`) | `[Slide N]` in the order of the presentation (`[Slide 3 (hidden)]` for a hidden slide), titles as `# Title`, tables as Markdown tables. Speaker notes are not sent |
 | OpenDocument (`.odt`, `.ods`, `.odp`) | A text as Markdown (headings, the numbers Writer shows in front of list items and headings, tables, footnotes, `[Page break]`); a spreadsheet as `[Sheet: name]` tables with at most 2,000 rows per sheet and 300,000 characters per file; a presentation as `[Slide N]` blocks. Tracked changes are applied, speaker notes are not sent |
+| E-mail (`.eml`, Outlook `.msg`) | `Subject`, `From`, `To`, `Cc` and `Date` lines, then the body (plain text, else HTML as text, else the RTF of an older Outlook). Attachments are named in an `Attachments:` line; their content is not read. A `.msg` is recognised by its file name whatever type it is sent with |
 | Text types | Read as UTF-8 |
 
 Excel files are not accepted through the API (`unsupported_file_type`): reading them needs the SheetJS library, which the server does not carry. Send the data as CSV or text.
 
-Errors, all `400`: `invalid_file` (not a readable PDF, Word, PowerPoint or OpenDocument file, empty data, or a package that is damaged or would unpack to an unreasonable size: more than 5,000 parts, 30 MB for one part or 100 MB in total), `file_has_no_text` (a scanned PDF or an empty Word, PowerPoint or OpenDocument file — send the pages as `input_image`) and `unsupported_file_type`.
+Errors, all `400`: `invalid_file` (not a readable PDF, Word, PowerPoint, OpenDocument or e-mail file, empty data, or a package that is damaged or would unpack to an unreasonable size: more than 5,000 parts, 30 MB for one part or 100 MB in total), `file_has_no_text` (a scanned PDF or an empty Word, PowerPoint, OpenDocument or e-mail file — send the pages as `input_image`) and `unsupported_file_type`.
 
 The admin switch **Structured document extraction** (Admin → Features) applies here as well: when it is off, PDFs are read as one run of words per page without markers and Word, PowerPoint and OpenDocument files are not accepted, as before.
 

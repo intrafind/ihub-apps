@@ -42,6 +42,7 @@ import {
   extractPptxDocument,
   structuredExtractionEnabled
 } from '../documentExtraction.js';
+import { EML_MIME, MSG_MIME, emailText, msgText } from '../projects/extractText.js';
 
 /** Longest document text taken from one file. */
 export const MAX_FILE_TEXT_CHARS = 500_000;
@@ -60,6 +61,20 @@ const OFFICE_DOCUMENTS = new Map([
 const OFFICE_MIME_BY_EXTENSION = new Map(
   [...OFFICE_DOCUMENTS].map(([mimeType, { extension }]) => [extension, mimeType])
 );
+
+/**
+ * E-mails, read the way project files are: the headers that matter and the body; attachments
+ * are named, not read. Browsers and HTTP clients send `.msg` as a generic binary as often as
+ * with the Outlook type, so the name decides too.
+ */
+const EMAIL_DOCUMENTS = new Map([
+  [EML_MIME, { label: 'e-mail', read: async bytes => emailText(bytes) }],
+  [MSG_MIME, { label: 'Outlook message', read: msgText }]
+]);
+const EMAIL_MIME_BY_EXTENSION = new Map([
+  ['.eml', EML_MIME],
+  ['.msg', MSG_MIME]
+]);
 
 /** MIME types read as UTF-8 text. */
 const TEXT_MIME_TYPES = new Set([
@@ -175,14 +190,19 @@ export async function documentFromInlineFile({ data, filename }, param) {
   }
   const parsed = parseInlineData(data);
   const fileName = typeof filename === 'string' && filename ? filename.slice(0, 255) : 'document';
+  const extension = path.extname(fileName).toLowerCase();
   let mimeType = (parsed.mimeType || '').toLowerCase();
   if (!mimeType || mimeType === 'application/octet-stream') {
-    const extension = path.extname(fileName).toLowerCase();
     mimeType =
       mimeFromName(fileName, TEXT_EXTENSIONS) ||
       (extension === '.pdf' ? 'application/pdf' : '') ||
       OFFICE_MIME_BY_EXTENSION.get(extension) ||
+      EMAIL_MIME_BY_EXTENSION.get(extension) ||
       '';
+  } else if (extension === '.msg' && mimeType !== MSG_MIME) {
+    // Outlook messages arrive under several types (`application/x-msg`, `application/msoutlook`,
+    // …); the extension is what identifies them.
+    mimeType = MSG_MIME;
   }
   const bytes = Buffer.from(parsed.base64, 'base64');
   if (bytes.length === 0) {
@@ -243,6 +263,28 @@ export async function documentFromInlineFile({ data, filename }, param) {
         { param }
       );
     }
+  } else if (EMAIL_DOCUMENTS.has(mimeType)) {
+    const { label, read } = EMAIL_DOCUMENTS.get(mimeType);
+    try {
+      text = (await read(bytes)).trim();
+    } catch (error) {
+      throw new InferenceApiError(
+        400,
+        'invalid_file',
+        `${fileName}: not a readable ${label} (${error.message})`,
+        { param }
+      );
+    }
+    if (!text) {
+      throw new InferenceApiError(
+        400,
+        'file_has_no_text',
+        `${fileName}: the ${label} has no text`,
+        {
+          param
+        }
+      );
+    }
   } else if (mimeType && isTextMime(mimeType)) {
     text = bytes.toString('utf8');
   } else {
@@ -251,8 +293,8 @@ export async function documentFromInlineFile({ data, filename }, param) {
       'unsupported_file_type',
       `${fileName}: unsupported file type ${mimeType || '(unknown)'}. Send ${
         structured
-          ? 'PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp)'
-          : 'PDF'
+          ? 'PDF, Word (.docx), PowerPoint (.pptx), OpenDocument (.odt, .ods, .odp), e-mail (.eml, .msg)'
+          : 'PDF, e-mail (.eml, .msg)'
       } or text files, or images as input_image.`,
       { param }
     );

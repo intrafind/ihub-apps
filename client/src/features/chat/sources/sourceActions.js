@@ -129,6 +129,8 @@ const EXTENSION_BY_CONTENT_TYPE = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'application/vnd.ms-powerpoint': 'ppt',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.ms-outlook': 'msg',
+  'message/rfc822': 'eml',
   'text/plain': 'txt',
   'text/html': 'html',
   'text/csv': 'csv',

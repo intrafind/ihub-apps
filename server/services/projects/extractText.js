@@ -516,7 +516,7 @@ function decodeOctets(octets, charset) {
  * @param {Buffer} bytes
  * @returns {string}
  */
-function emailText(bytes) {
+export function emailText(bytes) {
   const hasBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
   const raw = (hasBom ? bytes.subarray(3) : bytes).toString('latin1');
   const normalized = raw.replace(/\r\n/g, '\n');
@@ -822,7 +822,7 @@ export async function msgContentOf(data) {
 }
 
 /** An Outlook message file as text. */
-async function msgText(bytes) {
+export async function msgText(bytes) {
   const MsgReader = await loadMsgReader();
   const reader = new MsgReader(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)

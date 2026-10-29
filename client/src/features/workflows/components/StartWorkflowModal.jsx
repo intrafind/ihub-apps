@@ -58,7 +58,8 @@ function FormField({ variable, value, onChange, disabled, language, error, field
                 'application/pdf',
                 'text/plain',
                 'text/markdown',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-outlook'
               ]
             },
             allowMultiple: variable.multiple || false

@@ -196,3 +196,13 @@ chats at that age. Set `runRetentionDays` to `0` to keep run history and its cha
 Admin-created projects can now have a default app, just like personal projects.
 Set it in the project's name and description dialog; chats in the project then start in that app,
 so users who add the project to theirs get the right app selected automatically. They can still pick another app.
+
+## E-Mail Files Through the API, and `.msg` in More Upload Fields
+
+The OpenAI-compatible API now accepts e-mail files as `input_file`: `.eml` and Outlook `.msg`. The
+model reads them as it does in the chat upload: subject, sender, recipients, date and body, with
+attachments named but not read.
+
+- A `.msg` is recognised by its file name, whatever content type the client sends it with.
+- New apps offer Outlook `.msg` among their default upload formats, and so do workflow file inputs
+  that list no formats of their own.

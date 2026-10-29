@@ -39,7 +39,8 @@ const UPLOAD_TYPE_CONFIGS = {
       'text/vtt',
       'application/json',
       'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-outlook'
     ],
     // Word review marks sent to the model; both are off unless the app asks for them. The first
     // option is the default and is not written to the app file.
