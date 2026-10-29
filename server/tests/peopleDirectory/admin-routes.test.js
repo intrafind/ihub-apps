@@ -7,7 +7,7 @@
  * A non-admin, a personal API key, an OAuth client, an agent and the anonymous
  * principal each get a 403 before any entry is parsed or any connection is
  * opened — checked with a listener that would see the connection. An admin
- * gets validation, id clash detection and the certificate store.
+ * gets validation and id clash detection.
  */
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +17,6 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
-import { generateCertificates, hasOpenssl } from './fakeLdapServer.js';
 
 const contentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-dir-admin-'));
 process.env.CONTENTS_DIR = contentsDir;
@@ -121,15 +120,7 @@ describe('people directory admin API', () => {
         request(app).get('/api/admin/people-directories/presets'),
         request(app)
           .post('/api/admin/people-directories/test')
-          .send({ directory: inlineEntry, query: 'x' }),
-        request(app).get('/api/admin/people-directories/certificates'),
-        request(app)
-          .post('/api/admin/people-directories/certificates/preview')
-          .send({ content: 'x' }),
-        request(app)
-          .post('/api/admin/people-directories/certificates')
-          .send({ name: 'x', content: 'x' }),
-        request(app).delete('/api/admin/people-directories/certificates/x')
+          .send({ directory: inlineEntry, query: 'x' })
       ];
       for (const call of calls) {
         const response = await (principal ? as(principal, call) : call);
@@ -292,74 +283,5 @@ describe('people directory admin API', () => {
     assert.deepEqual(ivbb.attributeMapping.jobTitle, ['role']);
     assert.deepEqual(ivbb.attributeMapping.academicTitle, ['title']);
     assert.equal(response.body.limits.maxResults, 50);
-  });
-
-  describe('certificates', { skip: !hasOpenssl() && 'openssl CLI not available' }, () => {
-    it('previews, stores, lists and removes a certificate, refusing removal while it is used', async () => {
-      const certs = generateCertificates('admin.test');
-      const preview = await as(
-        'admin',
-        request(app)
-          .post('/api/admin/people-directories/certificates/preview')
-          .send({ content: certs.rootPem })
-      );
-      assert.equal(preview.status, 200);
-      assert.equal(preview.body.certificate.subjectCN, 'Test Root CA');
-
-      const key = await as(
-        'admin',
-        request(app)
-          .post('/api/admin/people-directories/certificates')
-          .send({ name: 'leak', content: certs.key })
-      );
-      assert.equal(key.status, 400);
-      assert.match(key.body.error, /private key/);
-
-      const created = await as(
-        'admin',
-        request(app)
-          .post('/api/admin/people-directories/certificates')
-          .send({ name: 'corp-root', content: certs.rootPem })
-      );
-      assert.equal(created.status, 201);
-      const duplicate = await as(
-        'admin',
-        request(app)
-          .post('/api/admin/people-directories/certificates')
-          .send({ name: 'corp-root', content: certs.rootPem })
-      );
-      assert.equal(duplicate.status, 409);
-
-      state.directories = [{ id: 'corp', authProvider: 'corp-ad', tlsCa: ['corp-root'] }];
-      const listed = await as(
-        'admin',
-        request(app).get('/api/admin/people-directories/certificates')
-      );
-      assert.deepEqual(listed.body.certificates.find(c => c.name === 'corp-root').usedBy, ['corp']);
-
-      const inUse = await as(
-        'admin',
-        request(app).delete('/api/admin/people-directories/certificates/corp-root')
-      );
-      assert.equal(inUse.status, 409);
-      assert.deepEqual(inUse.body.usedBy, ['corp']);
-
-      state.directories = [];
-      const removed = await as(
-        'admin',
-        request(app).delete('/api/admin/people-directories/certificates/corp-root')
-      );
-      assert.equal(removed.status, 204);
-      const missing = await as(
-        'admin',
-        request(app).delete('/api/admin/people-directories/certificates/corp-root')
-      );
-      assert.equal(missing.status, 404);
-      const traversal = await as(
-        'admin',
-        request(app).delete('/api/admin/people-directories/certificates/..%2Fx')
-      );
-      assert.equal(traversal.status, 400);
-    });
   });
 });

@@ -147,7 +147,7 @@ export function resolveDirectory(raw, platform = configCache.getPlatform() || {}
   Object.assign(tlsOptions, directory.tlsOptions || {});
   if (ignoredTlsOptionKeys.length > 0) {
     warnings.push(
-      `The sign-in provider's TLS option(s) ${ignoredTlsOptionKeys.join(', ')} are ignored for people search; only ${ALLOWED_TLS_OPTION_KEYS.join(', ')} are taken over. Trust a private CA through the certificate store (tlsCa) instead.`
+      `The sign-in provider's TLS option(s) ${ignoredTlsOptionKeys.join(', ')} are ignored for people search; only ${ALLOWED_TLS_OPTION_KEYS.join(', ')} are taken over. Trust a private CA through tlsCa or the server's certificate store instead.`
     );
   }
 

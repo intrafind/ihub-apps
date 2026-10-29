@@ -215,7 +215,7 @@ administration, x500.bund.de. The model picks the directory by its description a
 several in one answer; every hit names the directory it came from.
 
 - **Admin → Integrations → People directories** lists the directories, with an editor, a
-  connection test that shows each step and the mapped results, and a Certificates tab.
+  connection test that shows each step and the mapped results.
 - **Use for people search** on an LDAP sign-in provider creates the company directory in one
   click. Searching needs the provider's bind account.
 - x500.bund.de ships as a disabled entry. It connects over LDAPS and trusts the Verwaltungs-PKI

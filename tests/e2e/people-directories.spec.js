@@ -18,7 +18,7 @@ import AxeBuilder from '@axe-core/playwright';
  *     API, so it neither changes contents/ nor needs an LDAP server: a sign-in
  *     provider for "Use for people search", a plain-text directory for the
  *     warning badge, and a canned connection-test report.
- *   - axe-core scans the list, the certificate tab and the editor for critical
+ *   - axe-core scans the list and the editor for critical
  *     and serious WCAG 2.2 AA violations, as tests/e2e/accessibility.spec.js does.
  *
  * Run: npx playwright test --config tests/config/playwright.config.js \
@@ -119,20 +119,14 @@ const TEST_REPORT = {
       label: 'Connect',
       status: 'fail',
       message: 'issuer "PCA-1-Verwaltung-23" is not trusted (UNABLE_TO_GET_ISSUER_CERT)',
-      hints: ['Add the issuer to the certificate store and to tlsCa.'],
+      hints: [
+        'Install "PCA-1-Verwaltung-23" in the operating system\'s certificate store of the iHub server, or add it to this directory\'s trusted certificates (tlsCa).'
+      ],
       details: {
         host: 'x500.bund.de',
         port: 636,
-        missingIssuer: 'C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23',
-        certificateChain: [
-          {
-            subject: 'C=DE\nO=Bund\nCN=x500.bund.de',
-            issuer: 'C=DE\nO=PKI-1-Verwaltung\nCN=CA IVBB Deutsche Telekom AG 23',
-            validFrom: 'Dec  3 00:00:00 2025 GMT',
-            validTo: 'Dec  3 23:59:59 2026 GMT',
-            fingerprint256: 'AB:CD:EF:01:23:45:67:89'
-          }
-        ]
+        errorCode: 'UNABLE_TO_GET_ISSUER_CERT',
+        missingIssuer: 'PCA-1-Verwaltung-23'
       },
       durationMs: 80
     }
@@ -258,8 +252,8 @@ function summarize(directory) {
 
 /**
  * Serves the people directory list from memory: GET returns it, PUT replaces
- * it, POST /test answers with `testReport`. Presets and the certificate store
- * still come from the server, read-only.
+ * it, POST /test answers with `testReport`. Presets still come from the
+ * server, read-only.
  *
  * @param {import('@playwright/test').Page} page
  * @param {Object} options
@@ -465,9 +459,8 @@ test.describe('Admin people directories', () => {
       page.getByText(/issuer "PCA-1-Verwaltung-23" is not trusted \(UNABLE/)
     ).toBeVisible();
     await expect(
-      page.getByText(/The issuer "PCA-1-Verwaltung-23" is not trusted\. Get/)
+      page.getByText(/Install "PCA-1-Verwaltung-23" in the operating system/)
     ).toBeVisible();
-    await expect(page.getByText('AB:CD:EF:01:23:45:67:89', { exact: true })).toBeVisible();
     const people = page.getByRole('table', { name: 'Mapped results (1)' });
     await expect(people.getByText('Vertreterin des Präsidenten')).toBeVisible();
     await expect(people.getByText('Karlsruhe')).toBeVisible();
@@ -498,9 +491,7 @@ test.describe('Admin people directories', () => {
     ).toBeVisible();
   });
 
-  test('list, certificates tab and editor have no critical or serious a11y violations', async ({
-    page
-  }) => {
+  test('list and editor have no critical or serious a11y violations', async ({ page }) => {
     await mockDirectoriesApi(page, {
       directories: [X500, LEGACY],
       ldapProviders: [CORP_PROVIDER_SUMMARY]
@@ -509,20 +500,6 @@ test.describe('Admin people directories', () => {
     await open(page, LIST);
     await expect(page.getByRole('switch', { name: 'Legacy directory' })).toBeVisible();
     await expectNoBlockingViolations(page, 'People directories list');
-
-    await page.getByRole('tab', { name: 'Certificates' }).click();
-    await expect(page).toHaveURL(/tab=certificates/);
-    await expect(page.getByRole('heading', { name: 'Certificates in the store' })).toBeVisible();
-    await page.waitForLoadState('networkidle');
-    await expectNoBlockingViolations(page, 'People directory certificates');
-
-    // Arrow keys move between the tabs.
-    await page.getByRole('tab', { name: 'Certificates' }).press('ArrowLeft');
-    await expect(page.getByRole('tab', { name: 'Directories' })).toBeFocused();
-    await expect(page.getByRole('tab', { name: 'Directories' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
 
     await open(page, `${LIST}/new`);
     await expect(page.getByRole('heading', { name: 'Add people directory' })).toBeVisible();

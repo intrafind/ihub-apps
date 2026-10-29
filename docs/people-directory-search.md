@@ -86,7 +86,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 | `personFilter`, `searchAttributes`, `attributeMapping` | Override the preset (see [Presets](#presets-and-mapping)). |
 | `units` | Offer `list_units` and the `unit` parameter: the one-level children of the search base (authorities in x500.bund.de). |
 | `allowPlaintext` | Default `false`. A plain `ldap://` URL without StartTLS is refused unless this is `true`, anonymous binds included. A service bind is never sent in plain text. |
-| `tlsCa` | Trust anchors from the [certificate store](#certificates). When set, only these anchors are trusted for this directory, and verification stays on — unless the host is on the platform's SSL whitelist, which switches verification off for every connection to it. When unset, Node's default roots are used. |
+| `tlsCa` | Names of [trust anchors](#certificates) in `contents/config/certs/<name>.pem`. When set, only these anchors are trusted for this directory, and verification stays on — unless the host is on the platform's SSL whitelist, which switches verification off for every connection to it. When unset, Node's default roots and the server's operating system certificate store are used. |
 | `allowedHosts` | Hosts this directory may reach although they resolve to a private address (`*.corp.example` patterns allowed). |
 | `maxResults` | Default 10, at most 50. The most people one search returns; a tool call can ask for fewer, never more. |
 | `timeoutMs` | Default 8000, at most 30000. |
@@ -183,12 +183,11 @@ Every connection is checked when it is opened, not only when the configuration i
 
 ## Certificates
 
-The **Certificates** tab manages the trust anchors in `contents/config/certs/<name>.pem`. It lists each certificate with subject, validity, SHA-256 fingerprint and the directories that use it, and warns from 90 days before expiry.
+People directories trust the same roots as every other outbound connection: Node's built-in roots and the operating system certificate store of the iHub server (see [SSL Certificates](ssl-certificates.md)). A company CA installed on the server, or added with `NODE_EXTRA_CA_CERTS`, works without further configuration.
 
-- **Upload** a PEM or DER file. The page shows its subject and fingerprint; compare them with the value the publisher states before saving. Private keys are refused.
-- **Remove** a certificate that no directory uses. A shipped certificate comes back on the next start.
+For a CA you do not want to trust server-wide, put its PEM file into `contents/config/certs/<name>.pem` and list `<name>` under **Trusted certificates** (`tlsCa`) of the directory. Only those anchors then verify that directory's server, and no other connection trusts them. Compare the certificate's fingerprint with the one its publisher states before you add it. A shipped certificate comes back on the next start if it is deleted.
 
-iHub never fetches or trusts a root on its own. When a server's certificate is not trusted, the connection test shows the chain the server sent — subject, issuer, validity and fingerprint of each certificate — and names the issuer that is missing.
+iHub never fetches or trusts a root on its own. When a server's certificate is not trusted, the connection test names the issuer that is missing.
 
 ### The shipped Verwaltungs-PKI root
 
@@ -215,7 +214,6 @@ It is trusted only by directories that name it in `tlsCa`.
 - **Directories:** one row per directory with source, preset, groups and an on/off switch; badges for plain-text transport and external data flow.
 - **Editor:** source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), network, visibility, the model-facing name and description, limits and the mapping with the preset's value next to each field.
 - **Test panel:** runs the connection test on the form as it stands — configuration, address check, connect, StartTLS, bind, a sample search, and the mapped people next to the attributes they came from. Nothing is saved.
-- **Certificates:** see above.
 
 The admin API, all behind `adminAuth` (personal API keys, OAuth clients and agents get a 403):
 
@@ -225,16 +223,12 @@ The admin API, all behind `adminAuth` (personal API keys, OAuth clients and agen
 | `PUT` | `/api/admin/people-directories` | Replace the file (validated; 409 on an id clash) |
 | `GET` | `/api/admin/people-directories/presets` | Presets and their mappings |
 | `POST` | `/api/admin/people-directories/test` | Test a saved (`id`) or unsaved (`directory`) entry, optional `query` |
-| `GET` | `/api/admin/people-directories/certificates` | Trust anchors |
-| `POST` | `/api/admin/people-directories/certificates/preview` | Parse an upload without saving |
-| `POST` | `/api/admin/people-directories/certificates` | Add a trust anchor (`name`, `content`, `encoding`) |
-| `DELETE` | `/api/admin/people-directories/certificates/:name` | Remove an unused trust anchor |
 
 ## Troubleshooting
 
 | Test result | What to do |
 | --- | --- |
-| *issuer "…" is not trusted* | Get the named root from its publisher, compare the fingerprint, upload it under Certificates and add it to the directory's trust anchors. |
+| *issuer "…" is not trusted* | Get the named root from its publisher and compare the fingerprint. Install it in the server's operating system certificate store, or put it into `contents/config/certs/<name>.pem` and add `<name>` to the directory's trusted certificates. |
 | *resolves to the private address …* | Add the host to the directory's allowed hosts or to `ssrf.allowedHosts`, or reuse the sign-in provider that connects to it. |
 | *did not answer in time* | The iHub server has no route to the directory on that port; LDAP does not use the HTTP proxy. |
 | *rejected an anonymous bind* / no results from Active Directory | Configure a service account; Active Directory does not allow anonymous search. |

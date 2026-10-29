@@ -10,14 +10,9 @@
  *     omitted field takes the sign-in provider's or the preset's value);
  *   - "Use for people search" prefills a new entry that reuses the provider;
  *   - validation, the mapping of server issues onto inputs, and the helpers of
- *     the list page and the certificate upload.
+ *     the list page.
  */
-import { TextDecoder as NodeTextDecoder } from 'util';
 import {
-  certificateExpiryState,
-  certificateNameFromFileName,
-  certificatePayloadFromBytes,
-  commonNameOf,
   createDirectoryForm,
   describeSaveError,
   directoryToForm,
@@ -36,9 +31,6 @@ import {
   withDirectoryEnabled,
   withoutDirectory
 } from '../../../client/src/features/admin/utils/peopleDirectories';
-
-// jsdom does not provide TextDecoder; the browser does.
-if (typeof globalThis.TextDecoder === 'undefined') globalThis.TextDecoder = NodeTextDecoder;
 
 /** The shipped x500.bund.de entry (server/defaults/config/peopleDirectories.json). */
 const X500 = {
@@ -379,33 +371,21 @@ describe('text helpers', () => {
   });
 });
 
-describe('certificates', () => {
-  test('the name comes from the file name', () => {
-    expect(certificateNameFromFileName('PCA-1-Verwaltung-23.pem')).toBe('pca-1-verwaltung-23');
-    expect(certificateNameFromFileName('Corp Root CA (2024).CRT')).toBe('corp-root-ca-2024');
-    expect(certificateNameFromFileName('.der')).toBe('certificate');
-  });
-
-  test('PEM content is sent as text, anything else as base64', () => {
-    const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
-    expect(certificatePayloadFromBytes(new TextEncoder().encode(pem))).toEqual({
-      content: pem,
-      encoding: 'pem'
-    });
-    expect(certificatePayloadFromBytes(new Uint8Array([0x30, 0x82, 0x01, 0xff]))).toEqual({
-      content: 'MIIB/w==',
-      encoding: 'base64'
-    });
-  });
-
-  test('expiry state and common name', () => {
-    expect(certificateExpiryState({ expired: true, expiringSoon: true })).toBe('expired');
-    expect(certificateExpiryState({ expiringSoon: true })).toBe('expiringSoon');
-    expect(certificateExpiryState({})).toBe('valid');
-    expect(commonNameOf('C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23')).toBe(
-      'PCA-1-Verwaltung-23'
-    );
-    expect(commonNameOf('CN=x500.bund.de, O=Bund')).toBe('x500.bund.de');
-    expect(commonNameOf('O=No common name')).toBe('O=No common name');
+describe('trusted certificates', () => {
+  test('are edited one name per line and checked against the store name pattern', () => {
+    const form = directoryToForm(X500);
+    expect(form.tlsCa).toBe('pca-1-verwaltung-23');
+    form.tlsCa = 'pca-1-verwaltung-23\ncorp-root\n';
+    expect(formToDirectory(form).tlsCa).toEqual(['pca-1-verwaltung-23', 'corp-root']);
+    form.tlsCa = 'corp-root.pem';
+    expect(validateDirectoryForm(form)).toEqual([
+      {
+        field: 'tlsCa',
+        message: expect.objectContaining({
+          key: 'admin.peopleDirectories.errors.tlsCaPattern',
+          values: { name: 'corp-root.pem' }
+        })
+      }
+    ]);
   });
 });

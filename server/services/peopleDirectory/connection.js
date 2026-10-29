@@ -197,27 +197,26 @@ export function buildDirectoryTlsOptions(resolved, anchors = []) {
 }
 
 /**
- * The certificates a TLS socket was presented, leaf first.
+ * The issuer a client must trust for the chain a TLS socket was presented:
+ * the topmost certificate the server sent is a root when it is self-issued,
+ * otherwise its issuer is the one missing here.
+ *
  * @param {tls.TLSSocket} socket
- * @returns {Array<Object>}
+ * @returns {string|null}
  */
-function readPresentedChain(socket) {
-  const chain = [];
+export function missingIssuerOf(socket) {
   const seen = new Set();
   let cert = socket.getPeerCertificate?.(true);
+  let top = null;
   while (cert && cert.raw && !seen.has(cert.fingerprint256)) {
     seen.add(cert.fingerprint256);
-    chain.push({
-      subject: cert.subject?.CN || formatName(cert.subject),
-      issuer: cert.issuer?.CN || formatName(cert.issuer),
-      validFrom: cert.valid_from,
-      validTo: cert.valid_to,
-      fingerprint256: cert.fingerprint256,
-      raw: cert.raw
-    });
+    top = cert;
     cert = cert.issuerCertificate;
   }
-  return chain;
+  if (!top) return null;
+  const subject = top.subject?.CN || formatName(top.subject);
+  const issuer = top.issuer?.CN || formatName(top.issuer);
+  return subject === issuer ? subject : issuer;
 }
 
 function formatName(name) {
@@ -226,24 +225,6 @@ function formatName(name) {
         .map(([key, value]) => `${key}=${value}`)
         .join(', ')
     : '';
-}
-
-/**
- * Explain a certificate verification failure from the chain the server sent:
- * which issuer this server does not trust.
- *
- * @param {Array<Object>} chain - From the connection, leaf first
- * @returns {{certificateChain: Array<Object>, missingIssuer: string|null}}
- */
-export function explainCertificateFailure(chain) {
-  // eslint-disable-next-line no-unused-vars
-  const presented = chain.map(({ raw, ...rest }) => rest);
-  if (chain.length === 0) return { certificateChain: presented, missingIssuer: null };
-  const last = chain[chain.length - 1];
-  // The chain ends with the topmost certificate the server sent: a root when
-  // it is self-issued, otherwise its issuer is the one missing here.
-  const missingIssuer = last.subject === last.issuer ? last.subject : last.issuer;
-  return { certificateChain: presented, missingIssuer };
 }
 
 const CERTIFICATE_ERROR_CODES = new Set([
@@ -277,28 +258,24 @@ function classifyConnectionError(error, { step, hostname, port, state }) {
   if (error instanceof DirectoryConnectionError) return error;
   const code = error?.code;
   if (CERTIFICATE_ERROR_CODES.has(code)) {
-    const explained = explainCertificateFailure(state.chain);
-    const { certificateChain } = explained;
-    const missingIssuer = UNTRUSTED_ISSUER_CODES.has(code) ? explained.missingIssuer : null;
+    const missingIssuer = UNTRUSTED_ISSUER_CODES.has(code) ? state.missingIssuer : null;
     const hostnameMismatch = code === 'ERR_TLS_CERT_ALTNAME_INVALID';
     const message = hostnameMismatch
       ? `The certificate of ${hostname} does not name that host: ${error.message}`
       : missingIssuer
-        ? `The certificate of ${hostname} is not trusted: issuer "${missingIssuer}" is not trusted (${code}). Add it to the certificate store and to this directory's trust anchors (tlsCa).`
+        ? `The certificate of ${hostname} is not trusted: issuer "${missingIssuer}" is not trusted (${code}).`
         : `The certificate of ${hostname} was rejected (${code}): ${error.message}`;
     return new DirectoryConnectionError(message, {
       code: hostnameMismatch ? 'tls_hostname' : 'tls_untrusted',
       step,
       cause: error,
-      details: { host: hostname, port, errorCode: code, missingIssuer, certificateChain },
+      details: { host: hostname, port, errorCode: code, missingIssuer },
       hints: hostnameMismatch
         ? ['Use the host name the certificate was issued for in the directory URL.']
         : !missingIssuer
-          ? [
-              'Check the validity dates of the certificates below, and the clock of the iHub server.'
-            ]
+          ? ['Check the validity of the server certificate and the clock of the iHub server.']
           : [
-              'iHub never fetches or trusts a root by itself. Download the issuing root from its publisher, compare the fingerprint with the published one, upload it under Certificates and select it as a trust anchor of this directory.'
+              `Install "${missingIssuer}" in the operating system's certificate store of the iHub server (or point NODE_EXTRA_CA_CERTS at it), or put it into contents/config/certs/<name>.pem and add <name> to this directory's trusted certificates (tlsCa). Compare its fingerprint with the one its publisher states first.`
             ]
     });
   }
@@ -377,13 +354,13 @@ export async function openDirectoryConnection(
   const tlsOptions = buildDirectoryTlsOptions(resolved, anchors);
   const pinned = target.pinnedAddress;
   const pinnedHost = net.isIP(pinned) === 6 ? `[${pinned}]` : pinned;
-  const state = { socketConnected: false, chain: [], tls: null };
+  const state = { socketConnected: false, missingIssuer: null, tls: null };
 
   const watchTls = socket => {
     // Runs before Node's own verification step, so the presented chain is
     // known even when verification then fails — without ever turning it off.
     socket.prependOnceListener('secure', () => {
-      state.chain = readPresentedChain(socket);
+      state.missingIssuer = missingIssuerOf(socket);
     });
     socket.once('secureConnect', () => {
       state.tls = {
@@ -454,10 +431,7 @@ export async function openDirectoryConnection(
     onStep({
       id: 'starttls',
       message: `StartTLS ${state.tls?.protocol || ''} ${state.tls?.cipher || ''}`.trim(),
-      details: {
-        ...state.tls,
-        certificateChain: explainCertificateFailure(state.chain).certificateChain
-      }
+      details: state.tls
     });
   }
 
@@ -522,10 +496,7 @@ export async function openDirectoryConnection(
       message: `Connected to ${hostname}:${port} (${pinned})${secure ? ` over ${state.tls?.protocol || 'TLS'}` : ', not encrypted'}`,
       details: {
         ...info,
-        ...(secure && {
-          tls: state.tls,
-          certificateChain: explainCertificateFailure(state.chain).certificateChain
-        })
+        ...(secure && { tls: state.tls })
       }
     });
   }

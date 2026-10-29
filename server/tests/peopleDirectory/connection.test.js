@@ -182,11 +182,7 @@ describe('people directory connections', { skip }, () => {
           assert.equal(error.step, 'connect');
           assert.equal(error.details.missingIssuer, 'Test Root CA');
           assert.match(error.message, /issuer "Test Root CA" is not trusted/);
-          assert.deepEqual(
-            error.details.certificateChain.map(cert => cert.subject),
-            ['ldap.test', 'Test Intermediate CA']
-          );
-          assert.match(error.details.certificateChain[0].fingerprint256, /^[0-9A-F:]+$/);
+          assert.match(error.hints[0], /contents\/config\/certs/);
           return true;
         }
       );

@@ -3,16 +3,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
-import AdminTabs from '../components/AdminTabs';
 import DirectoryList from '../components/people-directories/DirectoryList';
-import CertificatesTab from '../components/people-directories/CertificatesTab';
 import EnablePeopleSearchAppOffer from '../components/people-directories/EnablePeopleSearchAppOffer';
 import { CALLOUT_CLASS, PRIMARY_BUTTON_CLASS } from '../components/people-directories/formStyles';
 import {
@@ -28,16 +26,12 @@ import {
   withoutDirectory
 } from '../utils/peopleDirectories';
 
-const TAB_IDS = ['directories', 'certificates'];
-
 /**
  * Admin → Integrations → People directories
  * (`/admin/integrations/people-directories`).
  *
- * Tab "Directories" lists every directory of `peopleDirectories.json` with an
- * enabled switch that saves at once; tab "Certificates" manages the trust
- * anchors directories can name in `tlsCa`. The tab is kept in `?tab=`, so
- * the editor can link straight to the certificate store.
+ * Lists every directory of `peopleDirectories.json` with an enabled switch
+ * that saves at once.
  *
  * Switching a directory on while the shipped "People search" app is still
  * disabled offers to enable the app too. The editor hands the same offer over
@@ -47,10 +41,6 @@ function AdminPeopleDirectoriesPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = TAB_IDS.includes(searchParams.get('tab'))
-    ? searchParams.get('tab')
-    : 'directories';
 
   const [data, setData] = useState(null);
   const [presets, setPresets] = useState([]);
@@ -202,22 +192,6 @@ function AdminPeopleDirectoriesPage() {
       isEnabled: true
     });
 
-  const tabs = [
-    {
-      id: 'directories',
-      label: t('admin.peopleDirectories.tabs.directories', 'Directories'),
-      count: data ? data.directories.length : undefined
-    },
-    { id: 'certificates', label: t('admin.peopleDirectories.tabs.certificates', 'Certificates') }
-  ];
-
-  const changeTab = id => {
-    const next = new URLSearchParams(searchParams);
-    if (id === 'directories') next.delete('tab');
-    else next.set('tab', id);
-    setSearchParams(next, { replace: true });
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <AdminBreadcrumb
@@ -275,61 +249,38 @@ function AdminPeopleDirectoriesPage() {
         />
       )}
 
-      <AdminTabs
-        tabs={tabs}
-        activeId={activeTab}
-        onChange={changeTab}
-        ariaLabel={t('admin.peopleDirectories.tabs.aria', 'People directory sections')}
-      />
-
-      <div
-        role="tabpanel"
-        id="tabpanel-directories"
-        aria-labelledby="tab-directories"
-        hidden={activeTab !== 'directories'}
-      >
-        {activeTab === 'directories' &&
-          (loading ? (
-            <AdminPageSkeleton rows={2} hasHeader={false} />
-          ) : loadError ? (
-            <AdminLoadError
-              framed={false}
-              title={t(
-                'admin.peopleDirectories.list.loadError',
-                'The people directories could not be loaded'
+      {loading ? (
+        <AdminPageSkeleton rows={2} hasHeader={false} />
+      ) : loadError ? (
+        <AdminLoadError
+          framed={false}
+          title={t(
+            'admin.peopleDirectories.list.loadError',
+            'The people directories could not be loaded'
+          )}
+          message={loadError}
+          action={{ label: t('common.retry', 'Retry'), onClick: load }}
+        />
+      ) : (
+        <>
+          {data.directories.some(d => d.enabled !== false) ? null : (
+            <p className={`${CALLOUT_CLASS.info} mb-4`}>
+              {t(
+                'admin.peopleDirectories.list.allOff',
+                'All directories are off, so no search term leaves iHub. Switch one on to offer it to apps.'
               )}
-              message={loadError}
-              action={{ label: t('common.retry', 'Retry'), onClick: load }}
-            />
-          ) : (
-            <>
-              {data.directories.some(d => d.enabled !== false) ? null : (
-                <p className={`${CALLOUT_CLASS.info} mb-4`}>
-                  {t(
-                    'admin.peopleDirectories.list.allOff',
-                    'All directories are off, so no search term leaves iHub. Switch one on to offer it to apps.'
-                  )}
-                </p>
-              )}
-              <DirectoryList
-                directories={data.directories}
-                effective={data.effective}
-                presetLabel={presetLabel}
-                togglingId={togglingId}
-                onToggle={toggle}
-                onDelete={setDeleteTarget}
-              />
-            </>
-          ))}
-      </div>
-      <div
-        role="tabpanel"
-        id="tabpanel-certificates"
-        aria-labelledby="tab-certificates"
-        hidden={activeTab !== 'certificates'}
-      >
-        {activeTab === 'certificates' && <CertificatesTab />}
-      </div>
+            </p>
+          )}
+          <DirectoryList
+            directories={data.directories}
+            effective={data.effective}
+            presetLabel={presetLabel}
+            togglingId={togglingId}
+            onToggle={toggle}
+            onDelete={setDeleteTarget}
+          />
+        </>
+      )}
 
       <ConfirmDialog
         isOpen={deleteTarget !== null}

@@ -30,7 +30,6 @@ import {
   SECONDARY_BUTTON_CLASS
 } from '../components/people-directories/formStyles';
 import {
-  fetchDirectoryCertificates,
   fetchPeopleDirectories,
   fetchPeopleDirectoryPresets,
   savePeopleDirectories
@@ -79,8 +78,6 @@ function AdminPeopleDirectoryEditPage() {
   const [notFound, setNotFound] = useState(false);
   const [data, setData] = useState(null);
   const [presetsData, setPresetsData] = useState(null);
-  const [certificates, setCertificates] = useState([]);
-  const [certificatesError, setCertificatesError] = useState(null);
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState(null);
   const [initialForm, setInitialForm] = useState(null);
@@ -99,15 +96,6 @@ function AdminPeopleDirectoryEditPage() {
   useEffect(() => {
     if (errors.length > 0 || saveError) problemsRef.current?.focus();
   }, [errors, saveError]);
-
-  const loadCertificates = useCallback(async () => {
-    try {
-      setCertificates(await fetchDirectoryCertificates());
-      setCertificatesError(null);
-    } catch (err) {
-      setCertificatesError(getAdminApiErrorMessage(err));
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +137,6 @@ function AdminPeopleDirectoryEditPage() {
       }
     };
     void load();
-    void loadCertificates();
     fetchAdminGroups()
       .then(response => {
         if (cancelled) return;
@@ -483,14 +470,7 @@ function AdminPeopleDirectoryEditPage() {
           presets={presets}
         />
         <AccessSection form={form} update={update} provider={provider} transport={transport} />
-        <NetworkSection
-          form={form}
-          update={update}
-          transport={transport}
-          certificates={certificates}
-          certificatesError={certificatesError}
-          onReloadCertificates={loadCertificates}
-        />
+        <NetworkSection form={form} update={update} transport={transport} />
         <VisibilitySection form={form} update={update} availableGroups={groups} />
         <ModelFacingSection form={form} update={update} />
         <LimitsSection

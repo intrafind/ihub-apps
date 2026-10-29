@@ -39,7 +39,7 @@ export const RESERVED_DIRECTORY_IDS = [
   'a2a'
 ];
 
-/** Name of a trust anchor in the certificate store. */
+/** Name of a trust anchor: `contents/config/certs/<name>.pem` on the server. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
 /** The shipped "People search" app, offered for enabling with the first directory. */
@@ -284,7 +284,7 @@ export function directoryToForm(directory = {}) {
     attributeMapping: mapping,
     units: directory.units === true,
     allowPlaintext: directory.allowPlaintext === true,
-    tlsCa: [...asList(directory.tlsCa)],
+    tlsCa: asList(directory.tlsCa).join('\n'),
     allowedHosts: asList(directory.allowedHosts).join('\n'),
     maxResults: numberText(directory.maxResults),
     timeoutMs: numberText(directory.timeoutMs),
@@ -350,7 +350,7 @@ export function formToDirectory(form) {
 
   if (form.units) directory.units = true;
   if (form.allowPlaintext) directory.allowPlaintext = true;
-  const tlsCa = parseList((form.tlsCa || []).join(','));
+  const tlsCa = parseList(form.tlsCa);
   if (tlsCa.length > 0) directory.tlsCa = tlsCa;
   const allowedHosts = parseList(form.allowedHosts);
   if (allowedHosts.length > 0) directory.allowedHosts = allowedHosts;
@@ -444,6 +444,16 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
         'Choose the credential that holds the password.'
       );
     }
+  }
+
+  const badCa = parseList(form.tlsCa).find(name => !CERTIFICATE_NAME_PATTERN.test(name));
+  if (badCa) {
+    add(
+      'tlsCa',
+      'admin.peopleDirectories.errors.tlsCaPattern',
+      '"{{name}}" is not a certificate name: use lower-case letters, digits and "-", without ".pem".',
+      { name: badCa }
+    );
   }
 
   const filter = trimmed(form.personFilter);
@@ -645,108 +655,4 @@ export function toolIdsFor(id, units) {
   const ids = [`${prefix}__search_people`, `${prefix}__get_person`];
   if (units) ids.push(`${prefix}__list_units`);
   return ids;
-}
-
-/**
- * A certificate name from an uploaded file name: lower-cased, extension
- * dropped, every other character than a-z, 0-9 and "-" turned into "-".
- *
- * @param {string} fileName - e.g. "PCA-1-Verwaltung-23.pem"
- * @returns {string} e.g. "pca-1-verwaltung-23"
- */
-export function certificateNameFromFileName(fileName) {
-  const name = String(fileName ?? '')
-    .replace(/\.(pem|crt|cer|der)$/i, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64)
-    .replace(/-+$/, '');
-  return name || 'certificate';
-}
-
-/**
- * Base64 of raw bytes, in chunks so a large file does not overflow the
- * argument list of `String.fromCharCode`.
- *
- * @param {Uint8Array} bytes
- * @returns {string}
- */
-export function bytesToBase64(bytes) {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
-/**
- * The request payload for an uploaded certificate file: PEM text as it is, any
- * other content (DER) as base64. The extension does not decide it, because
- * `.crt` and `.cer` files come in both encodings.
- *
- * @param {Uint8Array} bytes - File content
- * @returns {{content: string, encoding: 'pem'|'base64'}}
- */
-export function certificatePayloadFromBytes(bytes) {
-  const text = new TextDecoder('utf-8').decode(bytes);
-  if (text.includes('-----BEGIN')) return { content: text, encoding: 'pem' };
-  return { content: bytesToBase64(bytes), encoding: 'base64' };
-}
-
-/**
- * Read an uploaded certificate file into the request payload.
- *
- * @param {File} file
- * @returns {Promise<{content: string, encoding: 'pem'|'base64'}>}
- */
-export async function readCertificateFile(file) {
-  const buffer = await file.arrayBuffer();
-  return certificatePayloadFromBytes(new Uint8Array(buffer));
-}
-
-/**
- * The expiry state of a certificate from the store.
- *
- * @param {{expired?: boolean, expiringSoon?: boolean}} certificate
- * @returns {'expired'|'expiringSoon'|'valid'}
- */
-export function certificateExpiryState(certificate) {
-  if (certificate?.expired) return 'expired';
-  if (certificate?.expiringSoon) return 'expiringSoon';
-  return 'valid';
-}
-
-/**
- * The common name (CN) of a distinguished name as the server prints it —
- * one "type=value" per line ("C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23")
- * or comma-separated — or the whole text when it has no CN.
- *
- * @param {string} subject
- * @returns {string} e.g. "PCA-1-Verwaltung-23"
- */
-export function commonNameOf(subject) {
-  const text = String(subject ?? '').trim();
-  const match = /(?:^|[\n,+])\s*CN=([^\n,+]+)/i.exec(text);
-  return match ? match[1].trim() : text;
-}
-
-/**
- * A date from the server as a local date, or the raw text when it does not parse.
- *
- * @param {string} value - e.g. "Dec 31 23:59:59 2032 GMT" or an ISO date
- * @param {string} language - UI language
- * @returns {string}
- */
-export function formatCertificateDate(value, language) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(language || undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
 }

@@ -9,8 +9,8 @@
  *   - "Use for people search" (?authProvider=…&name=…) prefills a new entry that
  *     reuses the sign-in provider, and saving appends it to the list;
  *   - a new entry without id, URL or base DN is not sent;
- *   - the test panel posts the unsaved form and shows steps, the certificate
- *     chain and the mapped people.
+ *   - the test panel posts the unsaved form and shows steps, the untrusted
+ *     issuer and the mapped people.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -20,21 +20,13 @@ const mockApi = {
   fetchPeopleDirectories: jest.fn(),
   savePeopleDirectories: jest.fn(),
   fetchPeopleDirectoryPresets: jest.fn(),
-  testPeopleDirectory: jest.fn(),
-  fetchDirectoryCertificates: jest.fn(),
-  previewDirectoryCertificate: jest.fn(),
-  uploadDirectoryCertificate: jest.fn(),
-  deleteDirectoryCertificate: jest.fn()
+  testPeopleDirectory: jest.fn()
 };
 jest.mock('../../../client/src/api/peopleDirectoriesAdminApi', () => ({
   fetchPeopleDirectories: (...args) => mockApi.fetchPeopleDirectories(...args),
   savePeopleDirectories: (...args) => mockApi.savePeopleDirectories(...args),
   fetchPeopleDirectoryPresets: (...args) => mockApi.fetchPeopleDirectoryPresets(...args),
-  testPeopleDirectory: (...args) => mockApi.testPeopleDirectory(...args),
-  fetchDirectoryCertificates: (...args) => mockApi.fetchDirectoryCertificates(...args),
-  previewDirectoryCertificate: (...args) => mockApi.previewDirectoryCertificate(...args),
-  uploadDirectoryCertificate: (...args) => mockApi.uploadDirectoryCertificate(...args),
-  deleteDirectoryCertificate: (...args) => mockApi.deleteDirectoryCertificate(...args)
+  testPeopleDirectory: (...args) => mockApi.testPeopleDirectory(...args)
 }));
 
 const mockToggleApps = jest.fn();
@@ -176,7 +168,6 @@ beforeEach(() => {
   mockToggleApps.mockReset();
   mockApi.fetchPeopleDirectories.mockResolvedValue(LISTING);
   mockApi.fetchPeopleDirectoryPresets.mockResolvedValue(PRESETS);
-  mockApi.fetchDirectoryCertificates.mockResolvedValue([]);
   mockApi.savePeopleDirectories.mockImplementation(async directories => ({
     success: true,
     directories
@@ -420,7 +411,7 @@ describe('people directory editor', () => {
     ).toBeInTheDocument();
   });
 
-  test('the test panel posts the unsaved form and shows steps, chain and people', async () => {
+  test('the test panel posts the unsaved form and shows steps, issuer and people', async () => {
     mockApi.testPeopleDirectory.mockResolvedValue({
       success: false,
       message: 'Connect failed',
@@ -432,18 +423,8 @@ describe('people directory editor', () => {
           label: 'Connect',
           status: 'fail',
           message: 'certificate not trusted',
-          details: {
-            missingIssuer: 'C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23',
-            certificateChain: [
-              {
-                subject: 'CN=x500.bund.de',
-                issuer: 'CN=CA IVBB Deutsche Telekom AG 23',
-                validFrom: '2025-12-03T00:00:00Z',
-                validTo: '2026-12-03T00:00:00Z',
-                fingerprint256: 'AA:BB'
-              }
-            ]
-          }
+          details: { errorCode: 'UNABLE_TO_GET_ISSUER_CERT', missingIssuer: 'PCA-1-Verwaltung-23' },
+          hints: ['Install "PCA-1-Verwaltung-23" in the operating system\'s certificate store']
         }
       ],
       results: [
@@ -475,8 +456,7 @@ describe('people directory editor', () => {
     expect(target.directory).toMatchObject({ id: 'x500bund', baseDn: 'ou=MRI,o=Bund,c=DE' });
 
     expect(await screen.findByText('certificate not trusted')).toBeInTheDocument();
-    expect(screen.getByText(/The issuer "PCA-1-Verwaltung-23" is not trusted/)).toBeInTheDocument();
-    expect(screen.getByText('AA:BB')).toBeInTheDocument();
+    expect(screen.getByText(/Install "PCA-1-Verwaltung-23"/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Mapped results (1)' });
     expect(within(table).getByText('Vertreterin des Präsidenten')).toBeInTheDocument();
     // Fields without a value in any result get no column.
