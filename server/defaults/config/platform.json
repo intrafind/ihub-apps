@@ -539,5 +539,10 @@
       "dataDir": "data",
       "flushIntervalMs": 2000
     }
+  },
+  "update": {
+    "allowUnsigned": false,
+    "trustedPublicKeys": [],
+    "maxUploadSizeMB": 1024
   }
 }

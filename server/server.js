@@ -17,6 +17,12 @@ import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+import {
+  RESTART_MESSAGE_KEY,
+  getShutdownExitCode,
+  setShutdownExitCode
+} from './utils/processRestart.js';
+import { confirmUpdateOnStartup } from './services/updateService.js';
 import { applySystemCaDefault } from './utils/systemCa.js';
 // Modules whose cluster-wide state the primary holds and answers for over the
 // bus. Imported here so the primary always registers them; a worker asking a
@@ -291,7 +297,10 @@ if (cluster.isPrimary && workerCount > 1) {
           component: 'Server',
           message: 'All workers exited, primary shutting down'
         });
-        process.exit(0);
+        // 75 when an update or rollback asked for a restart: the launcher
+        // restarts the server only when the process it started — this
+        // primary — exits with that code.
+        process.exit(getShutdownExitCode());
       }
       return;
     }
@@ -348,6 +357,7 @@ if (cluster.isPrimary && workerCount > 1) {
         });
         logStickyRoutingCaveat(workerCount);
         logAccessUrls();
+        confirmUpdateOnStartup();
       }
     });
   } else {
@@ -362,6 +372,9 @@ if (cluster.isPrimary && workerCount > 1) {
       workerCount
     });
     logAccessUrls();
+    // The first worker answering on the port confirms an update that was
+    // just applied (the launcher restores the previous version otherwise).
+    cluster.once('listening', () => confirmUpdateOnStartup());
   }
 
   const handlePrimaryShutdown = signal => {
@@ -381,10 +394,23 @@ if (cluster.isPrimary && workerCount > 1) {
       }
     }
     // Give workers a moment to exit cleanly, then force-exit the primary.
-    setTimeout(() => process.exit(0), 5000).unref();
+    setTimeout(() => process.exit(getShutdownExitCode()), 5000).unref();
   };
   process.on('SIGTERM', () => handlePrimaryShutdown('SIGTERM'));
   process.on('SIGINT', () => handlePrimaryShutdown('SIGINT'));
+  // A worker that applied an update asks the primary to restart the whole
+  // cluster (utils/processRestart.js); exiting only that worker left the
+  // others running the old code.
+  cluster.on('message', (worker, message) => {
+    if (!message || typeof message !== 'object' || !(RESTART_MESSAGE_KEY in message)) return;
+    logger.info({
+      component: 'Server',
+      message: 'Worker requested a server restart (update), shutting down the cluster',
+      workerPid: worker.process.pid
+    });
+    setShutdownExitCode(Number(message[RESTART_MESSAGE_KEY]) || 75);
+    handlePrimaryShutdown('SIGTERM');
+  });
 } else {
   // Join the cross-worker bus before anything can register per-chat state, so
   // no SSE stream is ever invisible to the rest of the cluster. No-op when this
@@ -956,6 +982,8 @@ if (cluster.isPrimary && workerCount > 1) {
           url: `${protocol}://${HOST}:${PORT}`
         });
       }
+      // Single-process mode only; under clustering the primary confirms.
+      if (!cluster.isWorker) confirmUpdateOnStartup();
     });
   }
 
@@ -1187,7 +1215,7 @@ if (cluster.isPrimary && workerCount > 1) {
     // release the provider's handles before the process goes away.
     await shutdownStorageBootstrap();
     await shutdownTelemetry();
-    process.exit(0);
+    process.exit(getShutdownExitCode());
   };
 
   process.on('SIGTERM', handleShutdownSignal);

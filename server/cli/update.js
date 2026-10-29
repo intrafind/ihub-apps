@@ -3,17 +3,28 @@
 
 /**
  * CLI Update Command
- * Handles in-place updates from the command line.
+ * Handles in-place updates from the command line. Run it with the server
+ * stopped: `apply`, `install` and `rollback` swap the files immediately, and
+ * the next start of the launcher completes (or, if the new version does not
+ * start, undoes) the update.
  *
  * Usage:
- *   ./ihub-apps-v{version}-{platform} --update           # Check and apply latest update
- *   ./ihub-apps-v{version}-{platform} --update=check     # Only check for updates
- *   ./ihub-apps-v{version}-{platform} --update=download  # Download but don't apply
- *   ./ihub-apps-v{version}-{platform} --update=apply     # Apply a previously downloaded update
- *   ./ihub-apps-v{version}-{platform} --update=rollback  # Rollback to previous version
- *   --force                                               # Skip confirmation prompt
+ *   ./ihub-apps-v{version}-{platform} --update                         # Check GitHub, download and apply the latest release
+ *   ./ihub-apps-v{version}-{platform} --update=check                   # Only check for updates
+ *   ./ihub-apps-v{version}-{platform} --update=download                # Download and stage, don't apply
+ *   ./ihub-apps-v{version}-{platform} --update=stage --file=<archive>   # Verify and stage a local archive (air-gapped)
+ *   ./ihub-apps-v{version}-{platform} --update=install --file=<archive> # Stage a local archive and apply it
+ *   ./ihub-apps-v{version}-{platform} --update=apply                   # Apply the staged update
+ *   ./ihub-apps-v{version}-{platform} --update=status                  # Show the staged update, backups, last result
+ *   ./ihub-apps-v{version}-{platform} --update=discard                 # Remove the staged update
+ *   ./ihub-apps-v{version}-{platform} --update=rollback [--restore-config]  # Rollback to the previous version
+ *   --force                         Skip confirmation prompts (not the typed one for unsigned archives)
+ *   --confirm-unsigned=<version>    Install an archive that is not signed by a trusted key
+ *                                   (requires update.allowUnsigned in platform.json)
+ *   --skip-config-snapshot          Apply even if the configuration snapshot cannot be written
  */
 import readline from 'node:readline';
+import os from 'node:os';
 import {
   checkForUpdate,
   downloadUpdate,
@@ -23,7 +34,9 @@ import {
   isBinaryInstallation,
   isContainerInstallation,
   checkDiskSpace,
-  checkWritePermissions
+  checkWritePermissions,
+  stageLocalFile,
+  discardStaged
 } from '../services/updateService.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 
@@ -48,14 +61,52 @@ function error(msg) {
   console.error(`${RED}error:${NC} ${msg}`);
 }
 
-async function confirm(question) {
+function ask(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => {
-    rl.question(`${question} [y/N] `, answer => {
+    rl.question(question, answer => {
       rl.close();
-      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+      resolve(answer.trim());
     });
   });
+}
+
+async function confirm(question) {
+  const answer = (await ask(`${question} [y/N] `)).toLowerCase();
+  return answer === 'y' || answer === 'yes';
+}
+
+function option(argv, name) {
+  const found = argv.find(a => a.startsWith(`--${name}=`));
+  return found ? found.slice(name.length + 3) : undefined;
+}
+
+/**
+ * Best effort: record the operation in the audit log like the admin UI does.
+ * The CLI has no request, so the actor is the operating-system user.
+ */
+async function audit(action, resourceId, summary, result = 'success') {
+  try {
+    const { logAudit, flushAuditLog } = await import('../services/AuditLogService.js');
+    let username = 'unknown';
+    try {
+      username = os.userInfo().username;
+    } catch {
+      // ignore
+    }
+    logAudit({
+      action,
+      resource: 'update',
+      resourceId,
+      summary: `${summary} (CLI)`,
+      result,
+      source: 'admin',
+      actor: { id: `cli:${username}`, username, groups: [], authenticated: true }
+    });
+    await flushAuditLog();
+  } catch {
+    // The audit log is not available without a configured server; the console output stands.
+  }
 }
 
 async function handleCheck() {
@@ -66,6 +117,7 @@ async function handleCheck() {
 
   if (result.versionCheckDisabled) {
     warn('Version checks are disabled (NO_VERSION_CHECK is set).');
+    warn('To update without network access use --update=install --file=<archive>.');
     console.log('');
     return null;
   }
@@ -78,11 +130,12 @@ async function handleCheck() {
     }
     if (result.assetUrl) {
       console.log(`  Platform:        ${result.platform}`);
+      console.log(`  Archive:         ${result.archiveName}`);
       if (result.assetSize) {
         console.log(`  Download size:   ${(result.assetSize / 1024 / 1024).toFixed(1)} MB`);
       }
     } else {
-      warn(`No binary available for platform: ${result.platform}`);
+      warn(`No ${result.archiveName} in the release for platform: ${result.platform}`);
     }
     console.log('');
     return result;
@@ -96,67 +149,196 @@ async function handleCheck() {
   }
 }
 
+async function preflight() {
+  if (!(await checkWritePermissions())) {
+    error('Cannot write to the installation directory. Run with appropriate permissions.');
+    process.exit(1);
+  }
+  const disk = checkDiskSpace();
+  if (!disk.sufficient) {
+    error(
+      `Insufficient disk space: about ${Math.round(disk.required / 1024 / 1024)} MB are needed.`
+    );
+    process.exit(1);
+  }
+}
+
+/** Print a staging summary; returns whether the archive was accepted. */
+function printSummary(summary) {
+  console.log('');
+  console.log(`  Archive:      ${summary.fileName} (${summary.source})`);
+  console.log(`  SHA-256:      ${summary.archiveSha256}`);
+  console.log(
+    `  Version:      ${BOLD}${summary.version || 'unknown'}${NC} (${summary.comparison}, running ${summary.currentVersion})`
+  );
+  console.log(`  Platform:     ${summary.platform}${summary.arch ? ` / ${summary.arch}` : ''}`);
+  const sig = summary.signature;
+  console.log(
+    `  Signature:    ${sig.status === 'valid' ? `${GREEN}valid${NC} (${sig.via}, key ${sig.keyId})` : `${YELLOW}${sig.status}${NC}`}`
+  );
+  console.log(`  Checksum:     ${summary.checksum}`);
+  console.log(`  Apply mode:   ${summary.applyMode}`);
+  for (const w of summary.warnings) warn(w.message);
+  for (const p of summary.problems) error(p.message);
+  console.log('');
+  return summary.accepted;
+}
+
 async function handleDownload(updateInfo) {
   if (!updateInfo) {
     updateInfo = await handleCheck();
     if (!updateInfo) {
-      return false;
+      return null;
+    }
+  }
+  await preflight();
+  info(`Downloading version ${updateInfo.latestVersion}...`);
+  const summary = await downloadUpdate(updateInfo);
+  const accepted = printSummary(summary);
+  await audit(
+    'import',
+    summary.version || 'github',
+    `Staged ${summary.fileName} from GitHub`,
+    accepted ? 'success' : 'failure'
+  );
+  if (!accepted) {
+    error('The downloaded archive was rejected; nothing was changed.');
+    process.exit(1);
+  }
+  success(`Version ${summary.version} downloaded, verified and staged.`);
+  return summary;
+}
+
+async function handleStage(argv) {
+  const file = option(argv, 'file');
+  if (!file) {
+    error('--file=<path to the release archive> is required.');
+    process.exit(1);
+  }
+  await preflight();
+  info(`Verifying ${file}...`);
+  const summary = await stageLocalFile(file);
+  const accepted = printSummary(summary);
+  await audit(
+    'import',
+    summary.version || 'local',
+    `Staged ${summary.sourcePath}, sha256 ${summary.archiveSha256}`,
+    accepted ? 'success' : 'failure'
+  );
+  if (!accepted) {
+    error('The archive was rejected; nothing was changed.');
+    process.exit(1);
+  }
+  success(`Version ${summary.version} verified and staged.`);
+  return summary;
+}
+
+async function handleApply(argv, force) {
+  const status = getUpdateStatus();
+  if (!status.hasStaged || !status.staged) {
+    error(
+      'No staged update found. Run --update=stage --file=<archive> or --update=download first.'
+    );
+    process.exit(1);
+  }
+  const staged = status.staged;
+
+  let confirmDowngrade = false;
+  if (staged.requiresConfirmation?.downgrade) {
+    warn(`Version ${staged.version} is not newer than the running ${staged.currentVersion}.`);
+    confirmDowngrade = force || (await confirm('Install it anyway?'));
+    if (!confirmDowngrade) {
+      info('Cancelled.');
+      process.exit(0);
     }
   }
 
-  // Pre-flight checks
-  const hasPermissions = await checkWritePermissions();
-  if (!hasPermissions) {
-    error('Cannot write to the installation directory. Run with appropriate permissions.');
-    process.exit(1);
+  let confirmUnsigned = option(argv, 'confirm-unsigned');
+  if (staged.requiresConfirmation?.unsigned && !confirmUnsigned) {
+    warn('The archive is NOT signed by a trusted key; its origin cannot be verified.');
+    confirmUnsigned = await ask(`Type the version (${staged.version}) to install it anyway: `);
   }
 
-  const diskSpace = await checkDiskSpace();
-  if (!diskSpace.sufficient) {
-    error('Insufficient disk space. At least 500MB is required for the update.');
-    process.exit(1);
-  }
-
-  info(`Downloading version ${updateInfo.latestVersion}...`);
-  await downloadUpdate(updateInfo);
-  success(`Version ${updateInfo.latestVersion} downloaded and staged.`);
-  return true;
-}
-
-async function handleApply() {
-  const status = getUpdateStatus();
-  if (!status.hasStaged) {
-    error('No staged update found. Run --update=download first.');
-    process.exit(1);
-  }
-
-  info('Applying staged update...');
-  const result = await applyUpdate();
+  info(`Applying ${staged.version}...`);
+  const result = await applyUpdate({
+    confirmDowngrade,
+    confirmUnsigned,
+    skipConfigSnapshot: argv.includes('--skip-config-snapshot'),
+    inProcess: true
+  });
+  await audit(
+    'execute',
+    result.newVersion,
+    `Applied update ${result.previousVersion} → ${result.newVersion}` +
+      (result.configSnapshot ? '' : ', NO configuration snapshot')
+  );
   success(`Update applied: ${result.previousVersion} -> ${result.newVersion}`);
-  info('Restart required to complete the update.');
+  info('Start the server to complete the update. If the new version does not start,');
+  info('the launcher restores the previous one automatically.');
   return result;
 }
 
-async function handleRollback() {
+async function handleRollback(argv) {
   const status = getUpdateStatus();
   if (!status.hasBackup) {
     error('No backup available for rollback.');
     process.exit(1);
   }
-
+  const restoreConfig = argv.includes('--restore-config');
   info(`Rolling back to version ${status.backupVersion}...`);
-  const result = await rollback();
+  if (restoreConfig) {
+    warn(
+      'The configuration snapshot taken before the update is restored; later configuration changes are lost.'
+    );
+  }
+  const result = await rollback({ restoreConfig, inProcess: true });
+  await audit(
+    'execute',
+    result.restoredVersion || 'rollback',
+    `Rolled back to ${result.restoredVersion}${restoreConfig ? ' and restored the configuration snapshot' : ''}`
+  );
   success(`Rolled back to version ${result.restoredVersion}`);
   info('Restart required to complete the rollback.');
   return result;
 }
 
+function handleStatus() {
+  const status = getUpdateStatus();
+  console.log(
+    `  Installed version:   ${BOLD}${status.currentVersion}${NC} (${status.platform}/${status.arch})`
+  );
+  console.log(`  Archive for this server: ${status.archiveNameExample}`);
+  console.log(`  Drop-in folder:      ${status.localUpdateDir}`);
+  console.log(
+    `  Trusted signing keys: ${status.signing.trustedKeys}${status.signing.allowUnsigned ? ' (unsigned archives allowed)' : ''}`
+  );
+  if (status.staged) {
+    console.log(`  Staged:              ${status.staged.version} from ${status.staged.fileName}`);
+  } else {
+    console.log('  Staged:              none');
+  }
+  if (status.pendingRestart)
+    console.log('  Pending:             an update is applied on the next start');
+  console.log(
+    `  Backup:              ${status.hasBackup ? `${status.backupVersion}${status.backupHasConfigSnapshot ? ' (with configuration snapshot)' : ''}` : 'none'}`
+  );
+  if (status.lastResult) {
+    console.log(
+      `  Last result:         ${status.lastResult.status} (${status.lastResult.previousVersion} -> ${status.lastResult.targetVersion})` +
+        (status.lastResult.reason ? `\n                       ${status.lastResult.reason}` : '')
+    );
+  }
+  console.log('');
+}
+
 /**
  * Main CLI entry point
- * @param {string} subcommand - The update subcommand (check, download, apply, rollback, or empty for full update)
+ * @param {string} subcommand - The update subcommand (check, download, stage, install, apply,
+ *   status, discard, rollback, or empty for a full online update)
  * @param {boolean} force - Skip confirmation prompts
+ * @param {string[]} [argv] - The command line, for --file and the other options
  */
-export async function runUpdateCLI(subcommand, force = false) {
+export async function runUpdateCLI(subcommand, force = false, argv = process.argv) {
   const currentVersion = getAppVersion();
   console.log(`\n${BOLD}iHub Apps Updater${NC} (current: v${currentVersion})\n`);
 
@@ -184,11 +366,42 @@ export async function runUpdateCLI(subcommand, force = false) {
         break;
       }
 
+      case 'stage': {
+        await handleStage(argv);
+        process.exit(0);
+        break;
+      }
+
+      case 'install': {
+        const summary = await handleStage(argv);
+        if (!force && !summary.requiresConfirmation?.downgrade) {
+          const confirmed = await confirm(`Install ${summary.version} over ${currentVersion}?`);
+          if (!confirmed) {
+            info('Cancelled. The update stays staged; apply it with --update=apply.');
+            process.exit(0);
+          }
+        }
+        await handleApply(argv, force);
+        process.exit(0);
+        break;
+      }
+
       case 'apply': {
-        await handleApply();
+        await handleApply(argv, force);
         // Exit 0 for CLI-invoked apply; the shell launcher wrapper handles restart
         // (exit code 75 is for the server process itself, not the one-shot CLI)
         process.exit(0);
+        break;
+      }
+
+      case 'status': {
+        handleStatus();
+        break;
+      }
+
+      case 'discard': {
+        await discardStaged();
+        success('Staged update removed.');
         break;
       }
 
@@ -202,7 +415,7 @@ export async function runUpdateCLI(subcommand, force = false) {
             process.exit(0);
           }
         }
-        await handleRollback();
+        await handleRollback(argv);
         // Exit 0 for CLI-invoked rollback; same reasoning as apply above
         process.exit(0);
         break;
@@ -226,7 +439,7 @@ export async function runUpdateCLI(subcommand, force = false) {
         }
 
         await handleDownload(updateInfo);
-        await handleApply();
+        await handleApply(argv, force);
         // Exit 0 for CLI full-update; user can re-run the launcher manually
         process.exit(0);
       }
