@@ -173,7 +173,7 @@ POST /api/inference/v1/responses
   rendered text; history replay uses the rendered text, so the model sees exactly what it saw
   before.
 - The **system prompt** is rebuilt on every call, and apps use variables there too
-  (`ifinder-document-actions` needs `{{document-id}}` on every follow-up). It is rendered with
+  (an app whose system prompt uses `{{document-id}}` needs it on every follow-up). It is rendered with
   the variables of the most recent turn that set them — stored on the conversation — then the
   defaults. A follow-up without `prompt.variables` keeps the system prompt stable; one with
   `prompt.variables` updates it.

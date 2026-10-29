@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V185 — Settings for in-place updates of binary installations (#2971)
+ * Migration V186 — Settings for in-place updates of binary installations (#2971)
  *
  * Updates are now verified against an Ed25519 signature, and an admin can
  * install a release archive from a file (air-gapped installations). This
@@ -16,7 +16,7 @@
  *  - `maxUploadSizeMB: 1024` — largest archive the browser upload accepts
  */
 
-export const version = '185';
+export const version = '186';
 export const description = 'update_settings';
 
 export async function precondition(ctx) {

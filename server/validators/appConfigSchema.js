@@ -13,6 +13,7 @@ import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { zHttpUrl } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
+import { INTEGRATION_IDS } from '../integrationRegistry.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -514,6 +515,9 @@ const baseAppConfigSchema = z.object({
   // Feature ids (Admin → Features) the app needs; while one is off, users do
   // not get the app at all, as if it were disabled.
   requiredFeatures: z.array(z.enum(FEATURE_IDS)).optional(),
+  // Integrations (Admin → Integrations, e.g. `ifinder`) the app needs; while one
+  // is off, users do not get the app at all, as if it were disabled.
+  requiredIntegrations: z.array(z.enum(INTEGRATION_IDS)).optional(),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

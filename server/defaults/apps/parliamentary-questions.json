@@ -23,7 +23,7 @@
   "customResponseRenderer": "parliamentary-questions-results",
   "rendererConfig": {
     "iFinderUrlTemplate": "https://ifinder.example.com/?q={query}",
-    "iAssistantAppId": "ifinder-document-actions",
+    "iAssistantAppId": "ifinder-search",
     "iAssistantUrlTemplate": "https://iassistant.example.com/?q={query}"
   },
   "messagePlaceholder": {

@@ -3,62 +3,62 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-/**
- * Migration V185 specs — the `update` settings get their defaults, and values
- * an admin already set are kept.
- */
-import { describe, it } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setDefault } from '../migrations/utils.js';
-import { up, precondition, version, description } from '../migrations/V185__update_settings.js';
+import { up, precondition, version } from '../migrations/V185__apps_require_integration.js';
 
-function makeCtx(files) {
-  const logs = [];
+function fakeCtx(files) {
   return {
-    logs,
     files,
-    fileExists: async rel => rel in files,
-    readJson: async rel => structuredClone(files[rel]),
-    writeJson: async (rel, data) => {
-      files[rel] = data;
+    listFiles: async () => Object.keys(files).map(p => p.replace('apps/', '')),
+    readJson: async p => JSON.parse(JSON.stringify(files[p])),
+    writeJson: async (p, d) => {
+      files[p] = d;
     },
-    setDefault,
-    log: m => logs.push(m),
-    warn: m => logs.push(m)
+    deleteFile: async p => {
+      delete files[p];
+    },
+    log: () => {},
+    warn: () => {}
   };
 }
 
-describe('V185 update settings', () => {
-  it('has a version and description', () => {
-    assert.equal(version, '185');
-    assert.ok(description);
-  });
+test('version', () => assert.equal(version, '185'));
 
-  it('only runs when platform.json exists', async () => {
-    assert.equal(await precondition(makeCtx({})), false);
-    assert.equal(await precondition(makeCtx({ 'config/platform.json': {} })), true);
+test('removes the old app and gates the iFinder apps, keeping their enabled flag', async () => {
+  const ctx = fakeCtx({
+    'apps/ifinder-document-actions.json': { id: 'ifinder-document-actions' },
+    'apps/iassistant.json': { id: 'iassistant', enabled: false },
+    'apps/ifinder-search.json': { id: 'ifinder-search', enabled: true },
+    'apps/people-directory.json': { id: 'people-directory', enabled: false },
+    'apps/chat.json': { id: 'chat' },
+    'apps/parliamentary-questions.json': {
+      id: 'parliamentary-questions',
+      rendererConfig: { iAssistantAppId: 'ifinder-document-actions' }
+    }
   });
+  assert.equal(await precondition(ctx), true);
+  await up(ctx);
+  assert.equal('apps/ifinder-document-actions.json' in ctx.files, false);
+  assert.deepEqual(ctx.files['apps/iassistant.json'].requiredIntegrations, ['ifinder']);
+  assert.equal(ctx.files['apps/iassistant.json'].enabled, false);
+  assert.deepEqual(ctx.files['apps/ifinder-search.json'].requiredIntegrations, ['ifinder']);
+  assert.deepEqual(ctx.files['apps/people-directory.json'].requiredIntegrations, [
+    'peopleDirectories'
+  ]);
+  assert.equal(ctx.files['apps/people-directory.json'].enabled, false);
+  assert.equal('requiredIntegrations' in ctx.files['apps/chat.json'], false);
+  assert.equal(
+    ctx.files['apps/parliamentary-questions.json'].rendererConfig.iAssistantAppId,
+    'ifinder-search'
+  );
+});
 
-  it('adds the defaults', async () => {
-    const ctx = makeCtx({ 'config/platform.json': { auth: { mode: 'local' } } });
-    await up(ctx);
-    assert.deepEqual(ctx.files['config/platform.json'].update, {
-      allowUnsigned: false,
-      trustedPublicKeys: [],
-      maxUploadSizeMB: 1024
-    });
-    assert.deepEqual(ctx.files['config/platform.json'].auth, { mode: 'local' });
+test('is idempotent', async () => {
+  const ctx = fakeCtx({
+    'apps/iassistant.json': { id: 'iassistant', requiredIntegrations: ['ifinder'] }
   });
-
-  it('keeps what an admin set', async () => {
-    const ctx = makeCtx({
-      'config/platform.json': { update: { allowUnsigned: true, maxUploadSizeMB: 2048 } }
-    });
-    await up(ctx);
-    assert.deepEqual(ctx.files['config/platform.json'].update, {
-      allowUnsigned: true,
-      maxUploadSizeMB: 2048,
-      trustedPublicKeys: []
-    });
-  });
+  await up(ctx);
+  await up(ctx);
+  assert.deepEqual(ctx.files['apps/iassistant.json'].requiredIntegrations, ['ifinder']);
 });

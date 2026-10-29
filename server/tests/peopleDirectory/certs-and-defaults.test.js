@@ -266,11 +266,13 @@ describe('schema', () => {
 describe('shipped People search app', () => {
   const appFile = path.join(defaultsDir, 'apps', 'people-directory.json');
 
-  it('passes the app schema, ships disabled and selects every directory', () => {
+  it('passes the app schema, waits for a directory and selects every directory', () => {
     const app = JSON.parse(fs.readFileSync(appFile, 'utf8'));
     const parsed = appConfigSchema.safeParse(app);
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
-    assert.equal(app.enabled, false);
+    // Shipped on, but users get it only once a directory is configured
+    assert.equal(app.enabled, true);
+    assert.deepEqual(app.requiredIntegrations, ['peopleDirectories']);
     assert.deepEqual(app.tools, ['peopleDirectories']);
     assert.ok(app.system.en && app.system.de);
   });

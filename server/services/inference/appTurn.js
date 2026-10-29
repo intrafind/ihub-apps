@@ -41,8 +41,8 @@ import {
  * history already carry them, and the new input goes to the model as it is.
  *
  * The system prompt is rebuilt on every call from the app config, and apps
- * reference variables there too (`ifinder-document-actions` needs its
- * `{{document-id}}` on every follow-up), so it gets the variables of the most
+ * reference variables there too (an app whose system prompt uses
+ * `{{document-id}}` needs it on every follow-up), so it gets the variables of the most
  * recent turn that set them.
  *
  * @param {Object} options
