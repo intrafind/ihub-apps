@@ -142,6 +142,26 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     const { project } = entry;
     const name = projectName(project, ctx?.language);
     const description = projectDescription(project, ctx?.language);
+    // A project that could not be loaded at all (iFinder down): no provider is
+    // asked, and the model and the chat are told it is missing.
+    if (entry.unavailable) {
+      projects.push({
+        id: project.id,
+        name,
+        description: '',
+        ownership: project.ownership,
+        origin: entry.origin,
+        mode: 'unavailable',
+        reason: entry.unavailable,
+        documents: 0,
+        tokens: 0,
+        pinned: 0,
+        injected: [],
+        cut: [],
+        unavailable: []
+      });
+      continue;
+    }
     let provider;
     try {
       provider = providerFor(project);
@@ -311,6 +331,14 @@ export function renderProjectsBlock(plan) {
     if (project.mode === 'searched') {
       attrs.push(`documents="${project.documents}"`, 'tool="knowledge_search"');
     }
+    // Said to the model in so many words: a project it was told about, that the
+    // user attached, and whose documents are not in this answer. Without it the
+    // model answers as if it had searched them.
+    if (project.mode === 'unavailable' && project.reason === 'IFINDER_UNAVAILABLE') {
+      attrs.push(
+        'reason="iFinder could not be reached. The documents of this project are missing from this answer: say so to the user instead of answering as if you had searched them."'
+      );
+    }
     if (project.mode !== 'loaded' && !project.injected.length) {
       lines.push(`  <project ${attrs.join(' ')}/>`);
       continue;
@@ -371,6 +399,7 @@ export function scopeSummary(plan) {
       documents: project.documents,
       tokens: project.tokens,
       pinned: project.pinned,
+      ...(project.mode === 'unavailable' && project.reason ? { reason: project.reason } : {}),
       ...(project.overBudget ? { overBudget: true } : {}),
       ...(project.cut?.length ? { cut: project.cut.length } : {}),
       ...(project.unavailable?.length ? { unavailable: project.unavailable.length } : {})

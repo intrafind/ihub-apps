@@ -172,6 +172,10 @@ function scopeModeText(project, t) {
 
 /** A scope entry's name; a project the viewer may not see by name stays anonymous. */
 function scopeProjectName(project, t) {
+  // An iFinder collection that could not be asked has no name the server remembers.
+  if (!project.name && project.id?.startsWith('ifc_')) {
+    return t('chatMessage.knowledgeScope.ifinderCollection', 'iFinder collection');
+  }
   return (
     project.name || project.id || t('chatMessage.knowledgeScope.privateProject', 'Private project')
   );
@@ -182,13 +186,28 @@ const isUserProject = project => typeof project?.id === 'string' && project.id.s
 
 /**
  * Which projects the turn reached, and whether each was loaded in full or
- * searched (#1036, `knowledge/scope`). One project is named (and, for a user
- * project, links to its page); several are counted: *3 projects · 2 loaded in
- * full · 1 searched*.
+ * searched (#1036, `knowledge/scope`), and which it could not reach: a project
+ * the user attached whose documents are missing from this answer (an iFinder
+ * collection while iFinder is unreachable) gets its own amber notice, so the
+ * answer is not mistaken for one that used it.
  */
 function KnowledgeScopeBadge({ scope, t }) {
-  const projects = Array.isArray(scope?.projects) ? scope.projects : [];
-  if (projects.length === 0) return null;
+  const all = Array.isArray(scope?.projects) ? scope.projects : [];
+  const projects = all.filter(project => project.mode !== 'unavailable');
+  const missing = all.filter(project => project.mode === 'unavailable');
+  return (
+    <>
+      {projects.length > 0 && <ReachedScopeBadge projects={projects} t={t} />}
+      {missing.length > 0 && <MissingScopeNotice projects={missing} t={t} />}
+    </>
+  );
+}
+
+/**
+ * One project is named (and, for a user project, links to its page); several
+ * are counted: *3 projects · 2 loaded in full · 1 searched*.
+ */
+function ReachedScopeBadge({ projects, t }) {
   const loaded = projects.filter(project => project.mode === 'loaded');
   const searched = projects.filter(project => project.mode === 'searched');
   const parts = [];
@@ -231,6 +250,36 @@ function KnowledgeScopeBadge({ scope, t }) {
   return (
     <div className={className} title={tooltip}>
       {content}
+    </div>
+  );
+}
+
+/**
+ * The projects the turn was told about and could not read: said once, in amber.
+ * The tooltip names them and, for iFinder, says why.
+ */
+function MissingScopeNotice({ projects, t }) {
+  const names = projects.map(project => scopeProjectName(project, t));
+  const ifinderDown = projects.some(project => project.reason === 'IFINDER_UNAVAILABLE');
+  const label =
+    projects.length === 1
+      ? t('chatMessage.knowledgeScope.missingOne', '{{name}} · not available', { name: names[0] })
+      : t('chatMessage.knowledgeScope.missing', { count: projects.length });
+  const why = ifinderDown
+    ? t(
+        'chatMessage.knowledgeScope.missingIFinder',
+        'iFinder could not be reached, so this answer did not use it.'
+      )
+    : t('chatMessage.knowledgeScope.missingOther', 'This answer did not use it.');
+  return (
+    <div
+      role="status"
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+      title={`${names.join(', ')}: ${why}`}
+      data-testid="knowledge-scope-missing"
+    >
+      <Icon name="exclamation-triangle" className="w-3 h-3" />
+      <span>{label}</span>
     </div>
   );
 }

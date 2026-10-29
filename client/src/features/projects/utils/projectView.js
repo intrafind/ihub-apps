@@ -50,6 +50,25 @@ export const ATTACH_PROJECT_QUERY_PARAM = 'attachProject';
 /** Share of a quota from which the usage bar turns amber. */
 const QUOTA_WARN_RATIO = 0.8;
 
+/** Prefix of the id of an iFinder smart collection shown as a project (`ifc_` + its UUID). */
+export const IFINDER_PROJECT_ID_PREFIX = 'ifc_';
+
+/**
+ * Whether a project is a smart collection of the iFinder tier: read-only in
+ * iHub, never edited, shared, deleted or held chats in. The id decides (the
+ * server never gives that prefix to a stored project), the `tier` says the same.
+ *
+ * @param {{id?: string, tier?: string}|null|undefined} project
+ * @returns {boolean}
+ */
+export function isIFinderProject(project) {
+  return (
+    typeof project?.id === 'string' &&
+    project.id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
+    project.tier === 'ifinder'
+  );
+}
+
 /**
  * Whether an id names a user project.
  *

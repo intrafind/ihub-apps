@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { MAX_ATTACHED_PROJECTS } from '../hooks/useChatAttachedProjects';
 import { useMyProjects, useProjectsAvailability } from '../hooks/useProjects';
-import { isInMyProjects } from '../utils/projectView';
+import { isIFinderProject, isInMyProjects } from '../utils/projectView';
 import ProjectPicker from './ProjectPicker';
 
 /**
@@ -59,6 +59,11 @@ function ChatProjectPicker({ projectContext, offered }) {
       selectedIds={value}
       onPick={id => void toggle(id)}
       isDisabled={project => saving || (full && !value.includes(project.id))}
+      describe={project =>
+        isIFinderProject(project)
+          ? t('projects.tier.ifinderDetail', 'Smart collection from iFinder')
+          : ''
+      }
       disabled={disabled}
       label={label}
       hint={t(

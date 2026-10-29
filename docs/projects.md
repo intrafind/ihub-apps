@@ -11,7 +11,7 @@ Projects come in two kinds behind one model:
 | Created by          | Content admins, under **Admin → Projects**                        | Users, under **Projects** in the sidebar                         |
 | Used by             | Everyone who may use an app, workflow or agent that links them; with **Everyone signed in**, every signed-in user | The owner and the members it is shared with                      |
 | Stored as           | Configuration, `contents/projects/<id>.json`                      | Runtime data in the storage provider                             |
-| Id                  | Chosen by the admin (`faq`, at most 50 characters, not `prj_…`)   | Minted, `prj_` followed by 22 characters                         |
+| Id                  | Chosen by the admin (`faq`, at most 50 characters, not `prj_…` or `ifc_…`) | Minted, `prj_` followed by 22 characters                |
 | Name, description   | Localized (`{ "en": "…", "de": "…" }`)                            | Plain text                                                       |
 | Chats               | None                                                              | Chats started in the project                                     |
 | Feature flag        | `projects` (on by default)                                        | `projects` and `userProjects` (preview, off by default)          |
@@ -631,7 +631,8 @@ and those you added from the catalog, in sections (**My projects**, **Shared wit
 administrators**); however many there are, the list keeps one height. Tick one and the
 answers of that chat can use its documents (the project is loaded or searched like one the chat
 runs in); its instructions do not apply, only those of the project the chat runs in and of the
-app's own links. A chip beside the message box names each attached project and links to it; its
+app's own links. Your iFinder smart collections are listed here too, under **My projects**, marked
+**Smart collection from iFinder**. A chip beside the message box names each attached project and links to it; its
 **×** takes the project away again. Up to 10
 projects can be attached. Once the chat has its first message, the change is saved at once and is still there when the
 chat is opened later; before that, the choice is kept and saved with the chat. Projects picked on
@@ -639,6 +640,97 @@ the start page ride along to the chat that opens. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
 see it. When the chat runs in a shared project, its members read the answers, including what was
 drawn from an attached private project.
+
+### The iFinder tier: smart collections
+
+With `platform.projects.tierPolicy` set to `both` or `ifinder`, **iFinder** configured
+(**Admin → Integrations → iFinder**) and **User Projects** switched on, the user's iFinder
+smart collections are listed under **Projects** as **read-only projects** marked **iFinder ·
+read-only**. In this version the tier is read-only: nothing can be created, renamed, added to,
+removed from, shared or deleted from iHub, and nothing is uploaded. Do that in iFinder.
+
+| | Smart collection (iFinder tier) | User project |
+| --- | --- | --- |
+| Id | `ifc_` plus the collection's UUID | `prj_…` |
+| Documents | `ifinder-document` items, one per document id of the collection | Any kind |
+| Read with the rights of | The reading user, every time | Depends on the kind |
+| Changed from iHub | Never | By the owner and editors |
+| Chats | Attached to a chat (the **Project** picker, or **New chat** on its page); never held inside | Held inside, or attached |
+| In the prompt | Searched (`knowledge_search`), never loaded in full | Loaded in full when it fits, else searched |
+
+**When the tier is offered.** All of these must hold for a user, otherwise they see no iFinder
+projects and nothing is sent to iFinder:
+
+- `tierPolicy` is `both` or `ifinder`. `ihub` (the default) leaves everything as before. Under
+  `ifinder` the local tier stays usable too: its projects keep working and can still be created
+  until creating projects in iFinder arrives.
+- iFinder is configured and the user can be signed for it: they have a value in the **JWT Subject
+  Field** (default `email`). Anonymous users, OAuth clients, agents and users without such a value
+  (local accounts without an e-mail address) get nothing.
+- iFinder answers the Smart Collections public API (v1, iFinder 6.8 and later). iHub asks with
+  `size=0` and remembers an answer for 5 minutes (for 10 minutes when the API is missing); an
+  older iFinder never shows the tier.
+- The user has the `fi_smartcollections` role in iFinder. iHub requests that scope explicitly in
+  the user's token; the default scope of the iFinder token (`defaultScope`) is not enough.
+
+`GET /api/projects/_config` answers `ifinder: { available, readOnly: true }` for the caller (with a
+`reason` when it is not available).
+
+**Whose collection.** The owner of a collection is the name iHub signs into the iFinder token
+(`sub`, taken from **JWT Subject Field**). A collection lines up with the same person in the
+iFinder UI only if both sides produce the same string.
+
+- iFinder's *list* call matches the owner **case-sensitively**; its per-collection checks do not.
+  A collection whose owner differs only in case from the user's token name (for example created
+  in iFinder as `ada@example.com` while iHub signs `Ada@Example.com`) is **missing from the
+  list, but still opens by its id**. iHub does not work around this. Set the **JWT Subject Field** so it yields the iFinder login exactly, and
+  test with a user whose login has capitals.
+- Caches use the name exactly as signed, so `Ada@…` and `ada@…` never share an entry.
+
+**The list.** `GET /api/projects` (scope `all` or `mine`) merges the user's collections with the
+local list. Each shows its document count only; the documents are fetched when the project is
+opened. The collections are asked for beside the local list with a 5 second timeout and cached
+for 60 seconds per iFinder installation and user (a collection for 30 seconds, titles for 10
+minutes). Nothing is shared between users, and every response is built for the user who asks.
+If iFinder is slow or down, the local projects still come back with
+`warnings: [{ "code": "IFINDER_UNAVAILABLE", "tier": "ifinder" }]` and the page says the
+collections are missing; a failure is not asked again for 15 seconds.
+
+**Opening one.** The project page lists the documents of the collection, named by their iFinder
+titles. Titles are looked up with the user's rights in batches of 100 documents (a collection
+holds up to 200, so two searches), and a document the user may not see keeps its id as its name
+and is named as unavailable when read, like an iFinder document in a project. Reading a document
+fetches its text (10,000 characters by default, as for any iFinder document item) and its
+metadata with the user's own token.
+
+**Limits.**
+
+- A collection holds up to 200 documents (iFinder's `max-document-count`). The count includes
+  documents the user may not see.
+- A document is read with its own requests (its text, and a search by its id for the metadata), so
+  no read carries more than one id. Only the title lookup sends several ids in one search, at most
+  100, which is also the page size iHub asks iFinder for. The 100-document limit of the iFinder
+  retrieval scope (`document_ids`) does not come into play, because iHub does not use that scope.
+  The first search in a collection of 200 documents makes up to 400 requests, six at a time; the
+  texts are then cached for two hours per user.
+- A user lists at most 300 collections.
+
+**When iFinder cannot be reached in a chat.** A chat that has a collection attached still answers
+when iFinder is slow or down, but without that collection. The system prompt names it with
+`mode="unavailable"` and tells the model that its documents are missing from this answer and to
+say so to the user, and the answer's badge shows an amber notice (**Contracts · not available**,
+with the reason in its tooltip) next to the badge of the projects that were used. The knowledge
+tools and workflow steps only see what can be read, so a search never reaches it. The notice is
+named as the user last saw the collection (an iFinder collection never seen shows as **iFinder
+collection**). A collection that was deleted in iFinder, or that is no longer the user's, is not
+reported this way: it leaves the chat's knowledge without a notice.
+
+**Not part of this version.** Creating, renaming, adding to and removing from collections, upload,
+sharing, deleting a collection and a chat held inside a collection, and a notice for a collection
+deleted in iFinder.
+
+Every route of `/api/projects/ifc_…` that is not a read answers `403` with the code
+`PROJECT_READ_ONLY`, before anything is looked up. Admin project IDs may not start with `ifc_`.
 
 ### Retention
 
@@ -716,7 +808,7 @@ sharing audiences changed under **Admin → Projects → Sharing of user project
 | `scan.onError`              | `reject`            | What a scanner error does to the file: `reject` fails it, `allow` lets it through.                       |
 | `ingest.concurrency`        | `2`                 | Extraction jobs per server process, at most 8.                                                           |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
-| `tierPolicy`                | `ihub`              | Accepts `ihub`, `both`, `ifinder`; this version implements `ihub` only and treats every value as `ihub`. |
+| `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: the user's iFinder smart collections are also listed, read-only (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Creating projects in iFinder is not part of this version, so the local tier stays usable under every value. |
 | `encryption.keyProvider`    | `local-file`        | The key provider for document keys; `local-file` is the only one in this version.                        |
 
 A scanner configuration, for example with ClamAV:
@@ -822,7 +914,8 @@ All paths are relative to the server's base path. Project errors carry their cod
 
 The codes are the ones named on this page plus `PROJECT_NOT_FOUND` (also "no access"),
 `PERMISSION_DENIED`, `USER_PROJECTS_DISABLED`, `QUOTA_*`, `KIND_DISABLED`, `INVALID_REF`,
-`SHARE_TARGET_INVALID`, `PROJECT_MISMATCH` and `STORAGE_UNAVAILABLE`. Generic errors (a plain
+`SHARE_TARGET_INVALID`, `PROJECT_MISMATCH`, `STORAGE_UNAVAILABLE`, `PROJECT_READ_ONLY` (a write to an
+iFinder smart collection) and `IFINDER_UNAVAILABLE` (an iFinder collection could not be loaded). Generic errors (a plain
 "not found", a validation failure, an unexpected server error) may come without `details` or
 without a code.
 
@@ -846,7 +939,7 @@ changing it takes a content admin.
 | -------- | --------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
 | `GET`    | `/api/projects/_config`                       | —         | Flags, limits, sharing audiences, enabled kinds, accepted upload types, your project count.      |
 | `GET`    | `/api/projects/_catalog`                      | —         | The catalog: published user projects and admin projects for everyone signed in; `?q=` filters. `{ enabled: false, items: [] }` while the catalog is off. |
-| `GET`    | `/api/projects`                               | —         | Your projects; `?scope=all` (default), `mine`, `shared` or `admin`.                               |
+| `GET`    | `/api/projects`                               | —         | Your projects; `?scope=all` (default), `mine`, `shared` or `admin`. `all` and `mine` also hold your iFinder smart collections (`tier: "ifinder"`, `readOnly: true`, ids `ifc_…`) when the tier is offered; `warnings` says when iFinder could not be asked.                               |
 | `POST`   | `/api/projects`                               | `projects` permission | Create a project `{ name, description?, instructions?, defaultAppId? }`.                                        |
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
 | `GET`    | `/api/projects/:projectId`                    | member    | The project with its items and your `permissions`.                                               |

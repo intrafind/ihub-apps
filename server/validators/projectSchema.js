@@ -12,6 +12,7 @@ import {
   MAX_MEMBERS,
   MEMBER_ROLES,
   MEMBER_TARGET_TYPES,
+  IFINDER_PROJECT_ID_PREFIX,
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
 
@@ -85,9 +86,14 @@ export const RESERVED_ADMIN_PROJECT_IDS = Object.freeze([
   'share-targets'
 ]);
 
-/** Whether an id is one of {@link RESERVED_ADMIN_PROJECT_IDS}, whatever its case. */
+/**
+ * Whether an id is one of {@link RESERVED_ADMIN_PROJECT_IDS} or starts with the
+ * prefix of an iFinder collection's project id (`ifc_`), whatever its case: the
+ * two namespaces must never collide.
+ */
 export function isReservedAdminProjectId(id) {
-  return RESERVED_ADMIN_PROJECT_IDS.includes(String(id).toLowerCase());
+  const lower = String(id).toLowerCase();
+  return RESERVED_ADMIN_PROJECT_IDS.includes(lower) || lower.startsWith(IFINDER_PROJECT_ID_PREFIX);
 }
 
 /**

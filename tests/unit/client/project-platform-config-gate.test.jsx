@@ -23,6 +23,7 @@ jest.mock('../../../client/src/api', () => ({
   invalidateUIConfigCache: () => {},
   fetchProject: jest.fn(),
   fetchProjects: jest.fn(),
+  fetchProjectList: jest.fn(),
   fetchProjectsConfig: jest.fn()
 }));
 jest.mock('../../../client/src/shared/contexts/authContextValue', () => ({

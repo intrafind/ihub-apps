@@ -176,7 +176,9 @@ describe('AdminProjectEditPage – create', () => {
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Mine' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
     expect(
-      await screen.findByText('IDs starting with "prj_" are reserved for user projects.')
+      await screen.findByText(
+        'IDs starting with "prj_" or "ifc_" are reserved for user projects and iFinder collections.'
+      )
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Project ID *'), { target: { value: 'has space' } });
