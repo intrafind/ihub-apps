@@ -57,7 +57,7 @@ describe('directory ↔ form', () => {
     expect(roundTrip).toEqual(X500);
   });
 
-  test('keeps overrides, service bind, mapping and tlsOptions', () => {
+  test('keeps overrides, service bind, mapping, tlsOptions and the LDAP browser', () => {
     const corp = {
       id: 'corp',
       enabled: true,
@@ -75,7 +75,9 @@ describe('directory ↔ form', () => {
       concurrency: 3,
       requestDelayMs: 100,
       groups: ['*'],
-      dataFlow: 'internal'
+      dataFlow: 'internal',
+      // Not edited on the page; a save must not drop it.
+      browse: { enabled: true, groups: ['admins'], denyAttributes: ['info'] }
     };
     expect(formToDirectory(directoryToForm(corp))).toEqual(corp);
   });

@@ -4426,6 +4426,8 @@
       "list": {
         "add": "Verzeichnis hinzufügen",
         "allOff": "Alle Verzeichnisse sind aus, daher verlässt kein Suchbegriff iHub. Schalten Sie eines ein, um es den Apps anzubieten.",
+        "browse": "LDAP-Browser",
+        "browseHint": "Administratoren in den Browse-Gruppen können mit dem LDAP-Browser rohe Einträge lesen. Eingestellt in peopleDirectories.json (browse).",
         "delete": "Löschen",
         "deleteConfirm": "„{{name}}“ löschen? Apps verlieren seine Tools sofort.",
         "deleteLabel": "{{name}} löschen",

@@ -8,6 +8,13 @@ const A2A_TOOL_PREFIX = 'a2a__';
 export const PEOPLE_DIRECTORIES_REFERENCE = 'peopleDirectories';
 
 /**
+ * Reference that selects the admin LDAP browser tools of every directory
+ * (`<directoryId>__browse_search`, …). Nothing else selects them: not the
+ * directory id and not `peopleDirectories`.
+ */
+export const LDAP_BROWSE_REFERENCE = 'ldapBrowse';
+
+/**
  * Whether a tool is an interactive clarification channel — `ask_user`, or any
  * tool flagged `requiresUserInput`. The agent loop drives these to pause a turn
  * and ask the user a question (see `services/loop/seams/questionSeam.js`); they
@@ -58,9 +65,12 @@ export function a2aAgentReference(agentId) {
  *   agent and none of the others;
  * - for a tool of a people directory (`<directoryId>__search_people`, …), the
  *   directory's id, or `peopleDirectories` for every directory — including
- *   ones added later. `peopleDirectories` selects no other tool.
+ *   ones added later. `peopleDirectories` selects no other tool;
+ * - for a directory's LDAP browser tool (`<directoryId>__browse_search`, …),
+ *   only `ldapBrowse` (or its exact id): raw LDAP access is never part of
+ *   what selects a directory's people search.
  *
- * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string, idConflict?: boolean}, _peopleDirectory?: {id?: string}}} tool - Tool definition
+ * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string, idConflict?: boolean}, _peopleDirectory?: {id?: string, browse?: boolean}}} tool - Tool definition
  * @param {string[]|Set<string>} refs - Tool references
  * @returns {boolean}
  */
@@ -69,6 +79,7 @@ export function isToolSelected(tool, refs) {
   const has = refs instanceof Set ? id => refs.has(id) : id => refs.includes(id);
   if (has(tool.id)) return true;
   if (tool._peopleDirectory?.id) {
+    if (tool._peopleDirectory.browse) return has(LDAP_BROWSE_REFERENCE);
     return has(tool._peopleDirectory.id) || has(PEOPLE_DIRECTORIES_REFERENCE);
   }
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
@@ -78,5 +89,5 @@ export function isToolSelected(tool, refs) {
   }
   if (tool._a2a || tool.id.startsWith(A2A_TOOL_PREFIX)) return false;
   const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
-  return baseId !== PEOPLE_DIRECTORIES_REFERENCE && has(baseId);
+  return baseId !== PEOPLE_DIRECTORIES_REFERENCE && baseId !== LDAP_BROWSE_REFERENCE && has(baseId);
 }

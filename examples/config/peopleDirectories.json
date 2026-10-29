@@ -10,7 +10,17 @@
         "en": "Employees of our company: name, e-mail, phone, department, manager.",
         "de": "Mitarbeitende unseres Unternehmens: Name, E-Mail, Telefon, Abteilung, Vorgesetzte."
       },
-      "groups": ["authenticated"]
+      "groups": ["authenticated"],
+      "browse": {
+        "enabled": true,
+        "groups": ["admins"],
+        "bind": {
+          "mode": "service",
+          "dn": "cn=ldap-reader,ou=service,dc=corp,dc=example",
+          "passwordRef": "ldap-reader"
+        },
+        "denyAttributes": ["info"]
+      }
     },
     {
       "id": "x500bund",

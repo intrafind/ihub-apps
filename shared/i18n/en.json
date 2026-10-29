@@ -4136,6 +4136,8 @@
       "list": {
         "add": "Add directory",
         "allOff": "All directories are off, so no search term leaves iHub. Switch one on to offer it to apps.",
+        "browse": "LDAP browser",
+        "browseHint": "Admins in the browse groups can read raw entries with the LDAP browser. Set in peopleDirectories.json (browse).",
         "delete": "Delete",
         "deleteConfirm": "Delete \"{{name}}\"? Apps lose its tools at once.",
         "deleteLabel": "Delete {{name}}",

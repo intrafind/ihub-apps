@@ -16,8 +16,8 @@ import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolC
 import { getVisibleToolIds } from '../services/mcp/permissions.js';
 import { isToolSelected } from '../utils/toolSelection.js';
 import {
-  directoryOfToolId,
-  mayUseDirectory
+  directoryToolOfId,
+  mayUseDirectoryTool
 } from '../services/peopleDirectory/PeopleDirectoryService.js';
 
 /**
@@ -47,7 +47,8 @@ function resolveCaller(req, platformConfig) {
  * MCP server id, A2A agent reference, people directory (see
  * `isToolSelected`). An admin, who can grant themselves any tool, runs every
  * tool (testing a tool this way is how tool authors check it) — except a
- * people directory's tool, whose own `groups` hold for every caller.
+ * people directory's tool, whose own `groups` (`browse.groups` for the LDAP
+ * browser) hold for every caller.
  *
  * @param {Object} user
  * @param {Object} platformConfig
@@ -55,10 +56,11 @@ function resolveCaller(req, platformConfig) {
  * @returns {Promise<boolean>}
  */
 export async function mayRunTool(user, platformConfig, toolId) {
-  // A directory's tool id names the directory, so its groups are checked
-  // without waiting for the full tool list (MCP and A2A discovery).
-  const directoryId = directoryOfToolId(toolId);
-  if (directoryId && !mayUseDirectory(user, directoryId)) return false;
+  // A directory's tool id names the directory, so its groups (or, for the LDAP
+  // browser, `browse.groups`) are checked without waiting for the full tool
+  // list (MCP and A2A discovery).
+  const directoryTool = directoryToolOfId(toolId);
+  if (directoryTool && !mayUseDirectoryTool(user, directoryTool)) return false;
   if (user.permissions?.adminAccess === true) return true;
   const visible = await getVisibleToolIds(user, platformConfig);
   if (visible.has('*')) return true;

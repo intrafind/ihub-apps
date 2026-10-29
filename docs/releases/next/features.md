@@ -225,7 +225,13 @@ several in one answer; every hit names the directory it came from.
   appears for users as soon as one directory is switched on under **Admin → Integrations →
   People directories**; until then users do not get it (`requiredIntegrations`).
 - Each directory has its own groups, on top of the tool permissions. Plain-text LDAP, private
-  addresses and untrusted certificates are refused unless allowed explicitly.
+  addresses and untrusted certificates are refused unless allowed explicitly. A private CA is
+  trusted through the server's certificate store, or per directory by naming a PEM file in
+  `contents/config/certs/`.
+- **LDAP browser for admins:** with `browse` switched on for a directory in
+  `peopleDirectories.json`, admins ask in plain words and see the raw entries — attributes, branch
+  layout, group members. Passwords and other secrets are withheld and cannot be used in a filter,
+  and every call goes to the audit log. The **LDAP browser** app ships disabled.
 
 See [People Directory Search](../../people-directory-search.md).
 

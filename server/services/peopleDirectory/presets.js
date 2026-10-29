@@ -81,7 +81,18 @@ export const FORBIDDEN_ATTRIBUTES = new Set([
   'certificaterevocationlist',
   'authorityrevocationlist',
   'objectsid',
-  'objectguid'
+  'objectguid',
+  // Readable by some directory accounts in Active Directory: LAPS, BitLocker
+  // recovery and gMSA passwords.
+  'ms-mcs-admpwd',
+  'mslaps-password',
+  'mslaps-encryptedpassword',
+  'mslaps-encryptedpasswordhistory',
+  'mslaps-encrypteddsrmpassword',
+  'mslaps-encrypteddsrmpasswordhistory',
+  'msfve-recoverypassword',
+  'msds-managedpassword',
+  'unixuserpassword'
 ]);
 
 export const SEARCH_PRESETS = {

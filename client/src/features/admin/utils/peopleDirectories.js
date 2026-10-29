@@ -26,11 +26,13 @@ export const DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 /**
  * Ids a directory cannot take (as on the server): `peopledirectories` selects
- * every directory, `new` is this editor's create route, and the others are
+ * every directory, `ldapbrowse` every LDAP browser, `new` is this editor's
+ * create route, and the others are
  * tool id prefixes the server routes elsewhere.
  */
 export const RESERVED_DIRECTORY_IDS = [
   'peopledirectories',
+  'ldapbrowse',
   'new',
   'app',
   'workflow',
@@ -273,8 +275,9 @@ export function directoryToForm(directory = {}) {
     starttls: directory.starttls === true ? 'on' : directory.starttls === false ? 'off' : 'inherit',
     baseDn: directory.baseDn ?? '',
     preset: directory.preset ?? '',
-    // Not edited on this page, but kept so a save does not drop it.
+    // Not edited on this page, but kept so a save does not drop them.
     tlsOptions: directory.tlsOptions,
+    browse: directory.browse,
     bindMode: !bind ? 'default' : bind.mode === 'service' ? 'service' : 'anonymous',
     bindDn: bind?.dn ?? '',
     bindPasswordRef: bind?.passwordRef ?? '',
@@ -362,6 +365,7 @@ export function formToDirectory(form) {
 
   directory.groups = [...(form.groups || [])];
   directory.dataFlow = form.dataFlow === 'external' ? 'external' : 'internal';
+  if (form.browse) directory.browse = JSON.parse(JSON.stringify(form.browse));
 
   const name = withoutEmptyTexts(form.name);
   if (name) directory.name = name;

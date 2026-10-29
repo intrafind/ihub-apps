@@ -53,6 +53,19 @@ describe('isToolSelected', () => {
       expect(isToolSelected({ id: 'peopleDirectories_list' }, ['peopleDirectories'])).toBe(false);
       expect(isToolSelected({ id: 'jira_searchTickets' }, ['x500bund'])).toBe(false);
     });
+
+    test('an LDAP browser tool is selected only by ldapBrowse or its exact id', () => {
+      const browse = {
+        id: 'corp__browse_search',
+        _peopleDirectory: { id: 'corp', action: 'browse_search', browse: true }
+      };
+      expect(isToolSelected(browse, ['ldapBrowse'])).toBe(true);
+      expect(isToolSelected(browse, ['corp__browse_search'])).toBe(true);
+      expect(isToolSelected(browse, ['corp'])).toBe(false);
+      expect(isToolSelected(browse, ['peopleDirectories'])).toBe(false);
+      expect(isToolSelected(corp, ['ldapBrowse'])).toBe(false);
+      expect(isToolSelected({ id: 'ldapBrowse_x' }, ['ldapBrowse'])).toBe(false);
+    });
   });
 });
 
