@@ -32,7 +32,7 @@ const { discoverPeopleDirectoryTools, mayBrowseDirectory, resolveDirectory } =
   await import('../../services/peopleDirectory/PeopleDirectoryService.js');
 const { runPeopleDirectoryTool } =
   await import('../../services/peopleDirectory/peopleDirectoryRunner.js');
-const { MAX_VALUE_LENGTH, parseBrowseFilter } =
+const { MAX_RESPONSE_LENGTH, MAX_VALUE_LENGTH, MAX_VALUES_PER_ATTRIBUTE, parseBrowseFilter } =
   await import('../../services/peopleDirectory/LdapBrowser.js');
 
 const BASE = 'dc=corp,dc=example';
@@ -457,6 +457,54 @@ describe('LDAP browser', () => {
       );
       assert.ok(bySize.entries.length < 3);
       assert.equal(bySize.truncated, true);
+    });
+
+    it('keeps one entry within the response limit, however many values an attribute has', async () => {
+      const group = {
+        dn: `cn=All,ou=groups,${BASE}`,
+        cn: 'All',
+        member: Array.from({ length: 5000 }, (_, i) => `cn=user${i},ou=people,${BASE}`)
+      };
+      const read = await run(
+        'browse_read',
+        { dn: group.dn },
+        fakeConnect(() => [group])
+      );
+      assert.equal(read.truncated, true);
+      assert.deepEqual(read.entry.cut, ['member']);
+      assert.equal(read.entry.attributes.member.length, MAX_VALUES_PER_ATTRIBUTE + 1);
+      assert.match(read.entry.attributes.member.at(-1), /^… \(4900 more values\)$/);
+      assert.match(read.hint, /memberOf=/);
+      assert.ok(JSON.stringify(read).length < MAX_RESPONSE_LENGTH + 2000);
+
+      // Long values exhaust the entry's budget before the value count does.
+      const wide = {
+        dn: group.dn,
+        member: Array.from({ length: 100 }, () => 'x'.repeat(MAX_VALUE_LENGTH))
+      };
+      const search = await run(
+        'browse_search',
+        { filter: '(cn=All)' },
+        fakeConnect(() => [wide])
+      );
+      const [entry] = search.entries;
+      assert.ok(entry.attributes.member.length < 100);
+      assert.ok(JSON.stringify(entry).length <= MAX_RESPONSE_LENGTH + 200);
+      assert.equal(search.truncated, true);
+    });
+
+    it('bounds the arguments written to the audit record', async () => {
+      const longFilter = `(cn=${'a'.repeat(5000)})`;
+      await run(
+        'browse_search',
+        { filter: longFilter, attributes: Array.from({ length: 500 }, (_, i) => `a${i}`) },
+        fakeConnect(() => [])
+      );
+      const record = (await auditEntries()).find(entry => entry.summary.includes('(cn=aaaa'));
+      const summary = JSON.parse(record.summary);
+      assert.equal(summary.filter.length, 1000);
+      assert.equal(summary.attributes.length, 50);
+      assert.equal(record.result, 'failure');
     });
 
     it('reads one entry and lists children without attributes', async () => {

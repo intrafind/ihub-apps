@@ -189,7 +189,7 @@ The shipped **LDAP browser** app (`ldap-browser`) selects the browse tools of ev
 | `<id>__browse_read` | `dn` (required), `attributes` | `{ directory, entry: { dn, attributes, omitted? } }` |
 | `<id>__browse_children` | `dn` (default: the browse base) | `{ directory, dn, children: [{ dn, rdn, objectClass }], truncated }` |
 
-- Values come back as the server returns them, every attribute as a list. Binary values are shown as `[binary, N bytes]`; values over 500 characters are cut with their length. One response holds about 30,000 characters; beyond that, or beyond `maxResults` or the server's own size limit, `truncated` is `true`.
+- Values come back as the server returns them, every attribute as a list. Binary values are shown as `[binary, N bytes]`; values over 500 characters are cut with their length. An attribute returns at most 100 values (a large group's `member`, for example); a cut attribute ends with `… (N more values)` and is named in the entry's `cut` list. One response holds about 30,000 characters, and so does a single entry; beyond that, or beyond `maxResults` or the server's own size limit, `truncated` is `true`.
 - Operational attributes (`memberOf`, `createTimestamp`, …) come only when named in `attributes`.
 - Every DN — the search base, the entry read, the parent listed, and every entry returned — must lie in the browse base. The check works on parsed DNs, like `get_person`'s.
 - The browse tools are reachable only through `ldapBrowse` or their exact ids: not through a directory id, `peopleDirectories` or `requiredIntegrations`, so the People search app never gets them. They are never offered over iHub's MCP gateway.
@@ -204,7 +204,7 @@ These attributes never leave a directory — not in people search, not in the br
 
 ### Audit
 
-Every browse call — answered, refused for a bad argument, or refused for lack of access — writes an audit record (**Admin → Audit log**, resource `ldapBrowse`, the directory id as resource id). It holds the user, the tool, the filter, base, scope, DN and attributes asked for, how many entries came back and whether the result was truncated. Entry values are never written. Filters are recorded as sent and can contain names or e-mail addresses; they follow the audit log's retention.
+Every browse call — answered, refused for a bad argument, or refused for lack of access — writes an audit record (**Admin → Audit log**, resource `ldapBrowse`, the directory id as resource id). It holds the user, the tool, the filter, base, scope, DN and attributes asked for (text cut at 1,000 characters, at most 50 attribute names), how many entries came back and whether the result was truncated. Entry values are never written. Filters are recorded as sent and can contain names or e-mail addresses; they follow the audit log's retention.
 
 ## Presets and mapping
 

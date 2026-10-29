@@ -14,7 +14,7 @@ import {
   searchPeople,
   searchResult
 } from './LdapDirectory.js';
-import { browseChildren, browseRead, browseSearch } from './LdapBrowser.js';
+import { MAX_FILTER_LENGTH, browseChildren, browseRead, browseSearch } from './LdapBrowser.js';
 import { mapEntryToPerson } from './mapping.js';
 import { ToolArgumentError } from './query.js';
 import {
@@ -78,20 +78,32 @@ function resultCount(result) {
   return result?.error ? 0 : 1;
 }
 
+/** Most requested attribute names written to one audit record. */
+const MAX_AUDITED_ATTRIBUTES = 50;
+
+/**
+ * A model-supplied argument as the audit record holds it: text cut at the
+ * filter limit, lists cut at {@link MAX_AUDITED_ATTRIBUTES}. Refused calls are
+ * audited before their arguments are checked, so nothing here is trusted.
+ */
+function auditable(value) {
+  if (Array.isArray(value)) return value.slice(0, MAX_AUDITED_ATTRIBUTES).map(auditable);
+  if (typeof value === 'string') return value.slice(0, MAX_FILTER_LENGTH);
+  return typeof value === 'number' || typeof value === 'boolean' || value === null
+    ? value
+    : String(value).slice(0, MAX_FILTER_LENGTH);
+}
+
 /**
  * The audit record of an LDAP browser call: who asked what of which directory,
  * and how many entries came back — never the values. Filters are written as
- * sent; they can hold names or e-mail addresses.
+ * sent (up to the filter limit); they can hold names or e-mail addresses.
  */
 function auditBrowse(user, directoryId, action, params, outcome) {
-  const asked = {
-    tool: action,
-    ...(params.filter !== undefined && { filter: params.filter }),
-    ...(params.base !== undefined && { base: params.base }),
-    ...(params.scope !== undefined && { scope: params.scope }),
-    ...(params.dn !== undefined && { dn: params.dn }),
-    ...(params.attributes !== undefined && { attributes: params.attributes })
-  };
+  const asked = { tool: action };
+  for (const key of ['filter', 'base', 'scope', 'dn', 'attributes']) {
+    if (params[key] !== undefined) asked[key] = auditable(params[key]);
+  }
   logAudit({
     action: 'read',
     resource: 'ldapBrowse',

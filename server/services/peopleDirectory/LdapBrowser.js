@@ -28,6 +28,8 @@ export const MAX_FILTER_LENGTH = 1000;
 export const MAX_VALUE_LENGTH = 500;
 /** Rough ceiling of one response, in characters of JSON. */
 export const MAX_RESPONSE_LENGTH = 30000;
+/** Most values of one attribute returned (group members, …). */
+export const MAX_VALUES_PER_ATTRIBUTE = 100;
 /** Most children listed at once. */
 export const MAX_CHILDREN = 200;
 const MAX_ATTRIBUTES = 50;
@@ -170,8 +172,14 @@ function presentValue(value) {
 }
 
 /**
- * An entry as the model sees it: `{ dn, attributes, omitted? }`, every value a
- * list, denied attributes left out and named.
+ * An entry as the model sees it: `{ dn, attributes, omitted?, cut? }`, every
+ * value a list, denied attributes left out and named in `omitted`.
+ *
+ * One entry stays within {@link MAX_RESPONSE_LENGTH} on its own: an attribute
+ * keeps at most {@link MAX_VALUES_PER_ATTRIBUTE} values, and values stop once
+ * the entry would pass the response limit. A cut attribute ends with a
+ * `… (N more values)` marker and is named in `cut`.
+ *
  * @param {Object} entry - ldapts search entry
  * @param {Set<string>} deny
  * @returns {Object}
@@ -179,15 +187,36 @@ function presentValue(value) {
 export function presentEntry(entry, deny = new Set()) {
   const attributes = {};
   const omitted = [];
+  const cut = [];
+  let budget = MAX_RESPONSE_LENGTH;
   for (const [name, raw] of Object.entries(entry || {})) {
     if (name === 'dn') continue;
     if (isDeniedAttribute(name, deny)) {
       omitted.push(name);
       continue;
     }
-    attributes[name] = (Array.isArray(raw) ? raw : [raw]).map(presentValue);
+    const values = Array.isArray(raw) ? raw : [raw];
+    const kept = [];
+    for (const value of values.slice(0, MAX_VALUES_PER_ATTRIBUTE)) {
+      const presented = presentValue(value);
+      // The value, its quotes and a comma.
+      const cost = presented.length + 3;
+      if (cost > budget) break;
+      budget -= cost;
+      kept.push(presented);
+    }
+    if (kept.length < values.length) {
+      kept.push(`… (${values.length - kept.length} more values)`);
+      cut.push(name);
+    }
+    attributes[name] = kept;
   }
-  return { dn: entry.dn, attributes, ...(omitted.length > 0 && { omitted }) };
+  return {
+    dn: entry.dn,
+    attributes,
+    ...(omitted.length > 0 && { omitted }),
+    ...(cut.length > 0 && { cut })
+  };
 }
 
 /**
@@ -204,6 +233,9 @@ function withinResponseSize(items) {
   }
   return { kept, cut: false };
 }
+
+const VALUES_CUT_HINT =
+  'Some attributes have more values than were returned (named in "cut"). Ask for the attributes you need by name; for the members of a large group, search for them instead, e.g. (memberOf=<group DN>).';
 
 /** Run `work` connected with the browser's bind (the directory's by default). */
 function withBrowseConnection(resolved, deps, work) {
@@ -254,16 +286,22 @@ export async function browseSearch(resolved, args = {}, deps = {}) {
       truncated = true;
     }
     const { kept, cut } = withinResponseSize(entries.map(entry => presentEntry(entry, deny)));
+    const valuesCut = kept.some(entry => entry.cut);
+    const hints = [];
+    if (truncated || cut) {
+      hints.push(
+        'More entries match than were returned. Narrow the filter or the base, or request fewer attributes.'
+      );
+    }
+    if (valuesCut) hints.push(VALUES_CUT_HINT);
+    if (kept.length === 0 && !truncated) hints.push('No entry matches.');
     return {
       directory: resolved.id,
       base,
       scope,
       entries: kept,
-      truncated: truncated || cut,
-      ...((truncated || cut) && {
-        hint: 'More entries match than were returned. Narrow the filter or the base, or request fewer attributes.'
-      }),
-      ...(kept.length === 0 && !truncated && { hint: 'No entry matches.' })
+      truncated: truncated || cut || valuesCut,
+      ...(hints.length > 0 && { hint: hints.join(' ') })
     };
   });
 }
@@ -296,20 +334,13 @@ export async function browseRead(resolved, args = {}, deps = {}) {
     }
     const entry = entries.find(candidate => inBase(candidate, browse.base));
     if (!entry) return notFound(resolved, `No entry at ${dn}.`);
+    // presentEntry keeps one entry within the response limit.
     const presented = presentEntry(entry, deny);
-    const { kept, cut } = withinResponseSize(
-      Object.entries(presented.attributes).map(([name, values]) => ({ name, values }))
-    );
     return {
       directory: resolved.id,
-      entry: {
-        ...presented,
-        attributes: Object.fromEntries(kept.map(({ name, values }) => [name, values]))
-      },
-      truncated: cut,
-      ...(cut && {
-        hint: 'The entry is too large to return whole. Ask for the attributes you need by name.'
-      })
+      entry: presented,
+      truncated: Boolean(presented.cut),
+      ...(presented.cut && { hint: VALUES_CUT_HINT })
     };
   });
 }
