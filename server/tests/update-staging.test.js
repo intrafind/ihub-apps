@@ -437,6 +437,28 @@ describe('applyUpdate / rollback', () => {
     assert.equal(result.newVersion, '2.0.0');
   });
 
+  it('leaves no backup behind when applying fails', async () => {
+    await service.stageLocalFile(await buildRelease());
+    const original = fs.renameSync;
+    fs.renameSync = (from, to) => {
+      if (from === path.join(root, '.update-staging', 'public')) {
+        const error = new Error('locked');
+        error.code = 'EINVAL';
+        throw error;
+      }
+      return original(from, to);
+    };
+    try {
+      await assert.rejects(service.applyUpdate({ inProcess: true }), /locked/);
+    } finally {
+      fs.renameSync = original;
+    }
+    assert.equal(fs.readFileSync(path.join(root, 'version.txt'), 'utf8'), '1.0.0');
+    const status = service.getUpdateStatus();
+    assert.equal(status.hasBackup, false, 'a failed apply must not offer a rollback');
+    assert.equal(fs.existsSync(path.join(root, '.update-backup', '1.0.0')), false);
+  });
+
   it('refuses to apply without a staged, verified release', async () => {
     await assert.rejects(service.applyUpdate(), /No staged update/);
     fs.mkdirSync(path.join(root, '.update-staging'));

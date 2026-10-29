@@ -265,9 +265,15 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
   const plat = platform || detectPlatform(rootDir);
   if (!fs.existsSync(backupDir)) throw new Error('No backup available for rollback');
 
+  // The configuration snapshot is first copied next to contents/config — a
+  // copy, because contents/ may be on another volume (rename across volumes
+  // fails with EXDEV) — before any code moves, so the step that can run out
+  // of space or permissions fails while nothing has changed yet.
+  const stagedConfig = restoreConfig ? stageConfigRestore(backupDir, contentsDir) : null;
+
   // What is installed now is moved aside, not deleted, until every backed-up
-  // path is back in place; a failed rename undoes all moves, so a rollback
-  // never leaves a mix of versions (or a missing server/).
+  // path (and the configuration) is back in place; a failed rename undoes all
+  // moves, so a rollback never leaves a mix of versions (or a missing server/).
   const displacedDir = path.join(backupDir, '.displaced');
   fs.rmSync(displacedDir, { recursive: true, force: true });
   fs.mkdirSync(displacedDir, { recursive: true });
@@ -295,6 +301,13 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
       move(path.join(backupDir, backupLauncher), path.join(rootDir, backupLauncher));
       if (plat !== 'windows') makeExecutable(path.join(rootDir, backupLauncher));
     }
+
+    // Both renames stay inside contents/, so they are on one volume.
+    if (stagedConfig) {
+      const liveConfig = path.join(contentsDir, 'config');
+      if (fs.existsSync(liveConfig)) move(liveConfig, stagedConfig.displaced);
+      move(stagedConfig.dir, liveConfig);
+    }
   } catch (error) {
     for (const [from, to] of moves.reverse()) {
       try {
@@ -303,12 +316,17 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
         error.message += `; undoing the move of ${path.basename(from)} failed: ${undoError.message}`;
       }
     }
+    if (stagedConfig) fs.rmSync(stagedConfig.dir, { recursive: true, force: true });
     throw error;
   }
 
   let configRestored = false;
-  if (restoreConfig) {
-    configRestored = restoreConfigSnapshot(backupDir, contentsDir);
+  if (stagedConfig) {
+    fs.rmSync(stagedConfig.displaced, { recursive: true, force: true });
+    if (stagedConfig.history) {
+      fs.copyFileSync(stagedConfig.history, path.join(contentsDir, '.migration-history.json'));
+    }
+    configRestored = true;
   }
 
   fs.rmSync(backupDir, { recursive: true, force: true });
@@ -332,39 +350,66 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
  * @returns {{ bytes: number }}
  */
 function writeConfigSnapshot(backupDir, contentsDir) {
+  // Written under a temporary name and renamed when complete: a snapshot cut
+  // short (full disk) must never look like one a rollback can restore.
   const snapshot = path.join(backupDir, CONFIG_SNAPSHOT_DIR);
+  const partial = `${snapshot}.partial`;
   fs.rmSync(snapshot, { recursive: true, force: true });
-  fs.mkdirSync(snapshot, { recursive: true, mode: 0o700 });
-  fs.chmodSync(snapshot, 0o700);
-  const configDir = path.join(contentsDir, 'config');
-  if (fs.existsSync(configDir)) {
-    fs.cpSync(configDir, path.join(snapshot, 'config'), { recursive: true });
-  }
-  const history = path.join(contentsDir, '.migration-history.json');
-  if (fs.existsSync(history)) {
-    fs.copyFileSync(history, path.join(snapshot, '.migration-history.json'));
+  fs.rmSync(partial, { recursive: true, force: true });
+  fs.mkdirSync(partial, { recursive: true, mode: 0o700 });
+  fs.chmodSync(partial, 0o700);
+  try {
+    const configDir = path.join(contentsDir, 'config');
+    if (fs.existsSync(configDir)) {
+      fs.cpSync(configDir, path.join(partial, 'config'), { recursive: true });
+    }
+    const history = path.join(contentsDir, '.migration-history.json');
+    if (fs.existsSync(history)) {
+      fs.copyFileSync(history, path.join(partial, '.migration-history.json'));
+    }
+    renameWithRetry(partial, snapshot);
+  } catch (error) {
+    fs.rmSync(partial, { recursive: true, force: true });
+    throw error;
   }
   return { bytes: directorySize(snapshot) };
 }
 
-function restoreConfigSnapshot(backupDir, contentsDir) {
+/**
+ * Copy the snapshot's config next to the live one, so putting it in place is
+ * a rename within contents/.
+ * @returns {{ dir: string, displaced: string, history: string|null } | null}
+ */
+function stageConfigRestore(backupDir, contentsDir) {
   const snapshot = path.join(backupDir, CONFIG_SNAPSHOT_DIR);
-  if (!contentsDir || !fs.existsSync(path.join(snapshot, 'config'))) return false;
-  const liveConfig = path.join(contentsDir, 'config');
-  const displaced = `${liveConfig}.before-rollback-${Date.now()}`;
-  if (fs.existsSync(liveConfig)) renameWithRetry(liveConfig, displaced);
+  if (!contentsDir || !fs.existsSync(path.join(snapshot, 'config'))) return null;
+  const stamp = Date.now();
+  const dir = path.join(contentsDir, `config.rollback-${stamp}`);
   try {
-    renameWithRetry(path.join(snapshot, 'config'), liveConfig);
+    fs.cpSync(path.join(snapshot, 'config'), dir, { recursive: true });
   } catch (error) {
-    if (fs.existsSync(displaced)) renameWithRetry(displaced, liveConfig);
-    throw error;
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw new Error(`Copying the configuration snapshot back failed: ${error.message}`);
   }
-  fs.rmSync(displaced, { recursive: true, force: true });
   const history = path.join(snapshot, '.migration-history.json');
-  if (fs.existsSync(history)) {
-    fs.copyFileSync(history, path.join(contentsDir, '.migration-history.json'));
-  }
-  return true;
+  return {
+    dir,
+    displaced: path.join(contentsDir, `config.before-rollback-${stamp}`),
+    history: fs.existsSync(history) ? history : null
+  };
+}
+
+/**
+ * Remove a backup directory that holds no code — what a failed apply leaves
+ * behind (metadata, maybe a snapshot). One that still holds code (an undo that
+ * itself failed) is kept: it may be the only copy.
+ */
+function discardIncompleteBackup(backupDir, platform) {
+  if (!backupDir || !fs.existsSync(backupDir)) return;
+  const holdsCode = getReplacePaths(platform || 'linux')
+    .concat(['node.exe'])
+    .some(rel => fs.existsSync(path.join(backupDir, rel)));
+  if (!holdsCode) fs.rmSync(backupDir, { recursive: true, force: true });
 }
 
 function directorySize(dir) {
@@ -396,6 +441,9 @@ function listBackups(rootDir) {
   for (const entry of names) {
     if (!entry.isDirectory()) continue;
     const dir = path.join(base, entry.name);
+    // Only a backup with the code in it can be rolled back to; a directory
+    // prepared for an update that failed or has not been applied yet cannot.
+    if (!fs.existsSync(path.join(dir, 'server'))) continue;
     const meta = readJson(path.join(dir, BACKUP_META_FILE)) || {};
     let createdAt = Date.parse(meta.createdAt || '') || 0;
     if (!createdAt) {
@@ -545,6 +593,7 @@ function applyPendingUpdate(rootDir, { log = () => {}, contentsDir } = {}) {
   try {
     swapInStaged(rootDir, { backupDir });
   } catch (error) {
+    discardIncompleteBackup(backupDir);
     const reason = `Applying the update failed, the previous version stays installed: ${error.message}`;
     writeResult(rootDir, {
       status: 'failed',
@@ -665,6 +714,7 @@ module.exports = {
   safeVersionDir,
   readVersion,
   swapInStaged,
+  discardIncompleteBackup,
   restoreBackup,
   writeConfigSnapshot,
   listBackups,

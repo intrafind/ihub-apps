@@ -10,6 +10,7 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import AdminLoadError from '../components/AdminLoadError';
 import StagedUpdatePanel from '../components/updates/StagedUpdatePanel';
 import InstallFromFileCard from '../components/updates/InstallFromFileCard';
+import { isRestartedServer } from '../components/updates/restartDetection';
 
 /** A restart with migrations under a Windows service can take minutes. */
 const RESTART_TIMEOUT_MS = 10 * 60 * 1000;
@@ -157,9 +158,10 @@ function AdminUpdatesPage() {
    * start of the server (a new boot id), not merely an answer: the old process
    * keeps answering for a moment after it scheduled the restart.
    */
-  const watchRestart = (kind, previousBootId) => {
+  const watchRestart = (kind, before) => {
     stopPolling();
     const startedAt = Date.now();
+    let sawDown = false;
     setRestart({ kind, phase: 'waiting' });
     setMessage({
       tone: 'info',
@@ -195,7 +197,7 @@ function AdminUpdatesPage() {
           timeout: 5000
         });
         const status = response.data;
-        if (!status?.bootId || status.bootId === previousBootId || status.pendingRestart) return;
+        if (!isRestartedServer(status, before, sawDown)) return;
         stopPolling();
         setUpdateStatus(status);
         setSummary(null);
@@ -205,8 +207,9 @@ function AdminUpdatesPage() {
           prev ? { ...prev, updateAvailable: prev.latestVersion !== status.currentVersion } : prev
         );
         void fetchVersionInfo();
-      } catch {
-        /* Server not ready yet */
+      } catch (error) {
+        // Server not ready yet. A poll this page aborted itself proves nothing.
+        if (error?.code !== 'ERR_CANCELED') sawDown = true;
       } finally {
         if (pollAbortRef.current === controller) pollAbortRef.current = null;
       }
@@ -263,14 +266,14 @@ function AdminUpdatesPage() {
 
   const handleApply = async options => {
     setBusy(true);
-    const previousBootId = updateStatus?.bootId;
+    const before = { bootId: updateStatus?.bootId, version: updateStatus?.currentVersion };
     try {
       await makeAdminApiCall('/admin/update/apply', {
         method: 'POST',
         body: options,
         timeout: 0
       });
-      watchRestart('update', previousBootId);
+      watchRestart('update', before);
     } catch (error) {
       setMessage({
         tone: 'error',
@@ -306,7 +309,7 @@ function AdminUpdatesPage() {
 
   const doRollback = async withConfig => {
     setBusy(true);
-    const previousBootId = updateStatus?.bootId;
+    const before = { bootId: updateStatus?.bootId, version: updateStatus?.currentVersion };
     setMessage({ tone: 'info', text: t('admin.system.rollbackApplying', 'Rolling back...') });
     try {
       await makeAdminApiCall('/admin/update/rollback', {
@@ -314,7 +317,7 @@ function AdminUpdatesPage() {
         body: { restoreConfig: withConfig },
         timeout: 0
       });
-      watchRestart('rollback', previousBootId);
+      watchRestart('rollback', before);
     } catch (error) {
       setMessage({
         tone: 'error',

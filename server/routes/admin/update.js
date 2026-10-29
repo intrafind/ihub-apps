@@ -16,6 +16,7 @@ import {
 import {
   UpdateRequestError,
   applyUpdate,
+  assertDiskSpaceFor,
   checkForUpdate,
   checkWritePermissions,
   createWorkDir,
@@ -203,6 +204,18 @@ export default function registerAdminUpdateRoutes(app) {
     buildServerPath('/api/admin/update/stage-upload'),
     adminAuth,
     requireUpdatableInstallation,
+    async (req, res, next) => {
+      // Refuse before multer writes anything when the declared size cannot fit.
+      const declared = Number.parseInt(req.headers['content-length'] || '', 10);
+      if (Number.isFinite(declared) && declared > 0) {
+        try {
+          await assertDiskSpaceFor(declared);
+        } catch (error) {
+          return sendUpdateError(res, error, 'stage uploaded update');
+        }
+      }
+      next();
+    },
     (req, res, next) => {
       uploadFields(req, res, error => {
         if (!error) return next();

@@ -337,14 +337,13 @@ async function startServer() {
       detached: false // Ensure the child process is terminated when parent exits
     });
     
-    // Handle server process events
-    nodeProcess.on('error', (err) => {
-      console.error(\`Failed to start server process: \${err}\`);
-      process.exit(1);
-    });
-    
-    nodeProcess.on('close', (code) => {
-      console.log(\`Server process exited with code \${code}\`);
+    // Handle server process events. A child that cannot even be spawned (the
+    // node binary of an update does not run) emits 'error', possibly followed
+    // by 'close'; both end up here, once.
+    let serverGone = false;
+    const onServerGone = (code) => {
+      if (serverGone) return;
+      serverGone = true;
       if (shuttingDown) return;
       // An update that has not come up yet: try again, and after repeated
       // failures restore the previous version and start that instead.
@@ -364,6 +363,16 @@ async function startServer() {
         }
       }
       process.exit(code);
+    };
+
+    nodeProcess.on('error', (err) => {
+      console.error(\`Failed to start server process: \${err}\`);
+      onServerGone(1);
+    });
+    
+    nodeProcess.on('close', (code) => {
+      console.log(\`Server process exited with code \${code}\`);
+      onServerGone(code);
     });
     
     // Platform-specific graceful shutdown handling
@@ -495,6 +504,12 @@ try {
   execSync('npm install --omit=dev', {
     cwd: path.join(outputDir, 'server'),
     stdio: 'inherit'
+  });
+  // npm's node_modules/.bin holds symlinks (Linux, macOS). The updater refuses
+  // archives with links, and the server never runs those executables.
+  execSync(`node scripts/update-signing.js strip-bin-links "${path.join(outputDir, 'server')}"`, {
+    stdio: 'inherit',
+    cwd: __dirname
   });
 
   // Copy supporting files

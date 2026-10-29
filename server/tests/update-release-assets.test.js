@@ -67,6 +67,31 @@ describe('release archive names', () => {
   });
 });
 
+describe('npm .bin links', () => {
+  it('are stripped from a build, so the manifest and the archive have no links', async t => {
+    if (process.platform === 'win32') return t.skip('symlinks need privileges on Windows');
+    const { stripBinLinks, writeManifest } = await import('../../scripts/update-signing.js');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-binlinks-'));
+    const modules = path.join(dir, 'server', 'node_modules');
+    fs.mkdirSync(path.join(modules, 'pkg', 'node_modules', '.bin'), { recursive: true });
+    fs.mkdirSync(path.join(modules, '.bin'), { recursive: true });
+    fs.writeFileSync(path.join(modules, 'pkg', 'cli.js'), 'x');
+    fs.symlinkSync('../pkg/cli.js', path.join(modules, '.bin', 'pkg'));
+    fs.symlinkSync('../../cli.js', path.join(modules, 'pkg', 'node_modules', '.bin', 'nested'));
+    fs.writeFileSync(path.join(dir, 'version.txt'), '1.0.0');
+
+    await assert.rejects(writeManifest(dir), /symbolic link/, 'links make the build fail');
+    assert.equal(await stripBinLinks(dir), 2);
+    const manifest = await writeManifest(dir, { platform: 'linux' });
+    assert.ok(manifest.files['server/node_modules/pkg/cli.js']);
+    assert.match(
+      fs.readFileSync(path.join(repo, 'build-sea.cjs'), 'utf8'),
+      /update-signing\.js strip-bin-links/,
+      'build-sea strips the links right after npm install'
+    );
+  });
+});
+
 describe('generated launcher', () => {
   it('compiles and applies pending updates before it starts the server', () => {
     const source = fs.readFileSync(path.join(repo, 'build-sea.cjs'), 'utf8');

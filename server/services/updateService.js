@@ -477,6 +477,9 @@ export async function downloadUpdate(updateInfo) {
       `No download available for this platform (${updateInfo?.archiveName || 'unknown archive'})`
     );
   }
+  // Before the download, not after: a release fetched onto a nearly full
+  // volume would fill it and fail with a bare ENOSPC.
+  if (updateInfo.assetSize) await assertDiskSpaceFor(updateInfo.assetSize);
   const workDir = await createWorkDir('github');
   try {
     setState({ status: 'downloading', progress: 0, message: 'Downloading update...', error: null });
@@ -858,7 +861,7 @@ async function readOptional(file, maxBytes) {
   }
 }
 
-async function assertDiskSpaceFor(archiveBytes) {
+export async function assertDiskSpaceFor(archiveBytes) {
   const disk = checkDiskSpace({ archiveBytes });
   if (!disk.sufficient) {
     throw new UpdateRequestError(
@@ -1464,8 +1467,9 @@ export async function applyUpdate({
   const contentsDir = getContentsPath();
   const swapOnStart = !inProcess && getLauncherProtocol() >= swap.LAUNCHER_PROTOCOL;
 
+  let backupDir = null;
   try {
-    const backupDir = swap.prepareBackupDir(rootDir, { version: currentVersion, targetVersion });
+    backupDir = swap.prepareBackupDir(rootDir, { version: currentVersion, targetVersion });
 
     setState({ progress: 30, message: 'Saving a snapshot of the configuration...' });
     let configSnapshot = false;
@@ -1533,8 +1537,11 @@ export async function applyUpdate({
       restartCode: UPDATE_RESTART_CODE
     };
   } catch (error) {
-    // swapInStaged undoes its own moves; nothing else has touched the installation.
+    // swapInStaged undoes its own moves; nothing else has touched the
+    // installation. The backup directory prepared for this apply holds no code
+    // and maybe a partial snapshot: remove it, or Rollback would offer it.
     swap.clearPending(rootDir);
+    swap.discardIncompleteBackup(backupDir, detectPlatform());
     logger.error('Applying the update failed', { component: 'UpdateService', error });
     setState({
       status: 'error',
@@ -1620,6 +1627,18 @@ export async function rollback({ restoreConfig = false, inProcess = false } = {}
     throw error;
   } finally {
     await releaseLock(lock);
+  }
+}
+
+/**
+ * Whether an applied update has not yet been confirmed by a server answering
+ * requests (`.update-attempt.json` exists).
+ */
+export function isUpdateAwaitingConfirmation() {
+  try {
+    return isBinaryInstallation() && Boolean(swap.readAttempt(getRootDir()));
+  } catch {
+    return false;
   }
 }
 

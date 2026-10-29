@@ -251,6 +251,17 @@ describe('extractArchive (tar.gz)', () => {
     );
   });
 
+  it('counts each decompressed byte once', async () => {
+    const data = Buffer.alloc(1024 * 1024, 7);
+    const file = writeTarGz('count.tar.gz', [{ name: 'server/blob', data }]);
+    const result = await extractArchive(file, path.join(tmp, 'out-count'), {
+      format: 'tar.gz',
+      classifyTopLevel: extractAll
+    });
+    // The file plus its header, padding and the end-of-archive blocks.
+    assert.ok(result.totalBytes < data.length + 4096, `${result.totalBytes} bytes counted`);
+  });
+
   it('caps the entry count and the expanded size (archive bombs)', async () => {
     const many = writeTarGz(
       'many.tar.gz',

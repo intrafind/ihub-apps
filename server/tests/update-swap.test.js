@@ -182,10 +182,107 @@ describe('swapInStaged / restoreBackup', () => {
       path.join(newer, 'backup-meta.json'),
       JSON.stringify({ version: '5.10.0', createdAt: '2026-02-01T00:00:00Z' })
     );
+    // A directory without code (prepared for an apply that failed or is still
+    // pending) is not a backup anyone can roll back to.
+    swap.prepareBackupDir(root, { version: '6.0.0' });
+    fs.mkdirSync(path.join(older, 'server'));
+    fs.mkdirSync(path.join(newer, 'server'));
     assert.deepEqual(
       swap.listBackups(root).map(b => b.version),
       ['5.10.0', '5.9.0']
     );
+  });
+
+  it('never keeps a partial configuration snapshot', () => {
+    const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
+    const original = fs.copyFileSync;
+    fs.copyFileSync = () => {
+      const error = new Error('no space left on device');
+      error.code = 'ENOSPC';
+      throw error;
+    };
+    try {
+      assert.throws(() => swap.writeConfigSnapshot(backupDir, contents), /no space/);
+    } finally {
+      fs.copyFileSync = original;
+    }
+    assert.deepEqual(fs.readdirSync(backupDir), ['backup-meta.json']);
+    swap.discardIncompleteBackup(backupDir, 'linux');
+    assert.equal(fs.existsSync(backupDir), false, 'a backup without code is removed');
+  });
+
+  it('keeps a backup that still holds code when discarding', () => {
+    const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
+    fs.mkdirSync(path.join(backupDir, 'server'));
+    swap.discardIncompleteBackup(backupDir, 'linux');
+    assert.equal(fs.existsSync(backupDir), true);
+  });
+
+  it('restores the configuration when contents/ is on another volume (no rename across)', () => {
+    const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
+    swap.writeConfigSnapshot(backupDir, contents);
+    swap.swapInStaged(root, { backupDir, platform: 'linux' });
+    write('contents/config/platform.json', '{"v":2}');
+
+    // Simulate contents/ on another filesystem: renames between the backup and
+    // contents/ fail like they do across volumes.
+    const original = fs.renameSync;
+    const side = p => (p.startsWith(contents + path.sep) || p === contents ? 'contents' : 'root');
+    fs.renameSync = (from, to) => {
+      if (side(from) !== side(to)) {
+        const error = new Error('cross-device link not permitted');
+        error.code = 'EXDEV';
+        throw error;
+      }
+      return original(from, to);
+    };
+    try {
+      const result = swap.restoreBackup(root, backupDir, {
+        platform: 'linux',
+        contentsDir: contents,
+        restoreConfig: true
+      });
+      assert.equal(result.configRestored, true);
+    } finally {
+      fs.renameSync = original;
+    }
+    assert.equal(read('version.txt'), '1.0.0');
+    assert.equal(read('contents/config/platform.json'), '{"v":1}');
+    assert.deepEqual(
+      fs.readdirSync(contents).filter(f => f.startsWith('config.')),
+      [],
+      'no staging or displaced copies left behind'
+    );
+  });
+
+  it('changes nothing when the configuration cannot be restored', () => {
+    const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
+    swap.writeConfigSnapshot(backupDir, contents);
+    swap.swapInStaged(root, { backupDir, platform: 'linux' });
+    write('contents/config/platform.json', '{"v":2}');
+
+    const original = fs.cpSync;
+    fs.cpSync = () => {
+      const error = new Error('no space left on device');
+      error.code = 'ENOSPC';
+      throw error;
+    };
+    try {
+      assert.throws(
+        () =>
+          swap.restoreBackup(root, backupDir, {
+            platform: 'linux',
+            contentsDir: contents,
+            restoreConfig: true
+          }),
+        /configuration snapshot/
+      );
+    } finally {
+      fs.cpSync = original;
+    }
+    assert.equal(read('version.txt'), '2.0.0', 'code untouched');
+    assert.equal(read('contents/config/platform.json'), '{"v":2}', 'config untouched');
+    assert.equal(fs.existsSync(path.join(backupDir, 'server')), true, 'backup intact for a retry');
   });
 });
 

@@ -12,6 +12,9 @@
  *   node scripts/update-signing.js manifest <dir> [--platform=linux|macos|windows] [--arch=x64]
  *       Write <dir>/update-manifest.json: version, platform, arch, bundled Node
  *       version, highest config migration and the SHA-256 of every file.
+ *   node scripts/update-signing.js strip-bin-links <dir>
+ *       Remove the node_modules/.bin directories npm creates. They hold
+ *       symlinks, which the updater refuses in an archive; nothing runs them.
  *   node scripts/update-signing.js checksums <dir> [--out=<file>]
  *       Write checksums.sha256 (sha256sum format) for every archive below <dir>.
  *   node scripts/update-signing.js sign <file> [--require]
@@ -80,6 +83,27 @@ function highestMigration(dir) {
     .filter(Boolean)
     .map(Number);
   return versions.length ? Math.max(...versions) : null;
+}
+
+/**
+ * Remove every `node_modules/.bin` below `dir`. npm links package executables
+ * there as symlinks on Linux and macOS; a release archive must not contain
+ * links (the updater rejects them), and the server never runs those
+ * executables.
+ * @returns {Promise<number>} Directories removed
+ */
+export async function stripBinLinks(dir) {
+  let removed = 0;
+  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.name === '.bin' && path.basename(dir) === 'node_modules') {
+      await fs.rm(full, { recursive: true, force: true });
+      removed++;
+    } else if (entry.isDirectory()) {
+      removed += await stripBinLinks(full);
+    }
+  }
+  return removed;
 }
 
 export async function writeManifest(dir, { platform, arch } = {}) {
@@ -182,6 +206,10 @@ async function main(argv) {
       );
       return;
     }
+    case 'strip-bin-links': {
+      console.log(`Removed ${await stripBinLinks(target)} node_modules/.bin directories`);
+      return;
+    }
     case 'checksums': {
       const out = option(rest, 'out') || path.join(target, 'checksums.sha256');
       const lines = await writeChecksums(target, out);
@@ -206,7 +234,7 @@ async function main(argv) {
     }
     default:
       console.error(
-        'Usage: node scripts/update-signing.js keygen|manifest|checksums|sign|verify …'
+        'Usage: node scripts/update-signing.js keygen|manifest|strip-bin-links|checksums|sign|verify …'
       );
       process.exitCode = 1;
   }

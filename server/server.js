@@ -22,7 +22,7 @@ import {
   getShutdownExitCode,
   setShutdownExitCode
 } from './utils/processRestart.js';
-import { confirmUpdateOnStartup } from './services/updateService.js';
+import { confirmUpdateOnStartup, isUpdateAwaitingConfirmation } from './services/updateService.js';
 import { applySystemCaDefault } from './utils/systemCa.js';
 // Modules whose cluster-wide state the primary holds and answers for over the
 // bus. Imported here so the primary always registers them; a worker asking a
@@ -281,6 +281,12 @@ if (cluster.isPrimary && workerCount > 1) {
     workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
   }
 
+  // Workers that die while a just-applied update is still unconfirmed. If the
+  // new version crashes every worker before any serves, respawning forever
+  // would hide it from the launcher, which counts failed starts (and rolls
+  // back) only when this primary exits.
+  let unconfirmedUpdateWorkerDeaths = 0;
+
   cluster.on('exit', (worker, code, signal) => {
     const slot = workers.findIndex(w => w === worker);
     if (shuttingDown) {
@@ -303,6 +309,18 @@ if (cluster.isPrimary && workerCount > 1) {
         process.exit(getShutdownExitCode());
       }
       return;
+    }
+    if (isUpdateAwaitingConfirmation()) {
+      unconfirmedUpdateWorkerDeaths++;
+      if (unconfirmedUpdateWorkerDeaths >= Math.max(3, workerCount * 2)) {
+        logger.error({
+          component: 'Server',
+          message:
+            'Workers keep failing right after an update; exiting so the launcher can restore the previous version',
+          deaths: unconfirmedUpdateWorkerDeaths
+        });
+        process.exit(1);
+      }
     }
     logger.warn({
       component: 'Server',

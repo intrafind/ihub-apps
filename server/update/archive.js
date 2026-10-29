@@ -166,7 +166,11 @@ class ExtractionGuard {
     return { action: kind, relPath, target };
   }
 
-  async writeFile(admitted, source, mode, size) {
+  /**
+   * @param {boolean} [countTowardsTotal=true] - false where the bytes were
+   *   already counted upstream (tar: the gunzip stream counts every byte)
+   */
+  async writeFile(admitted, source, mode, size, countTowardsTotal = true) {
     await fs.mkdir(path.dirname(admitted.target), { recursive: true });
     const hash = createHash('sha256');
     let written = 0;
@@ -175,11 +179,13 @@ class ExtractionGuard {
       transform(chunk, _encoding, callback) {
         written += chunk.length;
         hash.update(chunk);
-        try {
-          guard.countBytes(chunk.length);
-        } catch (error) {
-          callback(error);
-          return;
+        if (countTowardsTotal) {
+          try {
+            guard.countBytes(chunk.length);
+          } catch (error) {
+            callback(error);
+            return;
+          }
         }
         callback(null, chunk);
       }
@@ -381,7 +387,7 @@ async function extractTarGz(archivePath, guard) {
       if (admitted.action === 'dir') {
         await fs.mkdir(admitted.target, { recursive: true });
       } else if (admitted.action === 'file') {
-        await guard.writeFile(admitted, reader.chunks(size), fileMode(mode), size);
+        await guard.writeFile(admitted, reader.chunks(size), fileMode(mode), size, false);
       } else if (size > 0) {
         await reader.skip(size);
       }
