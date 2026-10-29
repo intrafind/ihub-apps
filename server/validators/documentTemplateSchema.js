@@ -14,6 +14,12 @@ import { HEX_COLOR_PATTERN, LANGUAGE_CODE_PATTERN } from '../../shared/validatio
 
 export const TEMPLATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
+/**
+ * Ids a template cannot have: the built-in PDF designs share the export's
+ * `template` field, and `default` means "the default template" to the tools.
+ */
+export const RESERVED_TEMPLATE_IDS = Object.freeze(['default', 'professional', 'minimal', 'new']);
+
 /** File name of an asset inside a template directory. */
 export const ASSET_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,120}$/;
 
@@ -143,7 +149,12 @@ const pptxSchema = z
 
 export const documentTemplateSchema = z
   .object({
-    id: z.string().regex(TEMPLATE_ID_PATTERN, 'Template ids use a-z, 0-9 and "-"'),
+    id: z
+      .string()
+      .regex(TEMPLATE_ID_PATTERN, 'Template ids use a-z, 0-9 and "-"')
+      .refine(id => !RESERVED_TEMPLATE_IDS.includes(id), {
+        message: 'This id is reserved; choose another one'
+      }),
     name: localizedString.refine(value => Object.values(value).some(v => v.trim()), {
       message: 'A template needs a name'
     }),

@@ -16,6 +16,22 @@ function formatBytes(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Icon and colours of a card, by file type. */
+const FILE_LOOKS = {
+  'application/pdf': {
+    icon: 'document-text',
+    className: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+  },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+    icon: 'document-text',
+    className: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+  },
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
+    icon: 'presentation-chart-bar',
+    className: 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+  }
+};
+
 function blobOfBase64(data, mimeType) {
   const binary = atob(data);
   const bytes = new Uint8Array(binary.length);
@@ -53,9 +69,13 @@ function GeneratedFileCard({ file, chatId }) {
     }
   };
 
+  const look = FILE_LOOKS[file.mimeType] || FILE_LOOKS['application/pdf'];
   const details = [
     file.pages
       ? t('chatMessage.generatedFiles.pages', '{{count}} pages', { count: file.pages })
+      : null,
+    file.slides
+      ? t('chatMessage.generatedFiles.slides', '{{count}} slides', { count: file.slides })
       : null,
     formatBytes(file.bytes)
   ]
@@ -64,8 +84,10 @@ function GeneratedFileCard({ file, chatId }) {
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 max-w-md">
-      <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400">
-        <Icon name="document-text" size="md" />
+      <div
+        className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md ${look.className}`}
+      >
+        <Icon name={look.icon} size="md" />
       </div>
       <div className="min-w-0 flex-1">
         <div

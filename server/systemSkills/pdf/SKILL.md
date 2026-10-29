@@ -3,7 +3,7 @@ name: pdf
 description: Create PDF documents on demand — reports, summaries, briefs, letters, invoices, handouts, checklists, meeting minutes — with headings, tables, lists, callouts, SVG charts, a cover page, a table of contents, headers/footers and watermarks. Use whenever the user asks for a PDF, a printable or downloadable document, or to save or export content as PDF.
 metadata:
   author: IntraFind
-  version: '1.0'
+  version: '1.1'
 allowed-tools: create_pdf preview_pdf
 ---
 
@@ -26,6 +26,14 @@ You create PDFs with the `create_pdf` tool. The server lays the document out and
 5. **Answer briefly.** Name the file, give its page count and a one-line summary. Do not paste the document into the chat, and do not add a download link: the card is already there.
 
 If `create_pdf` returns `warnings`, read them. They name content that was skipped (for example an unsupported image) or truncated. Fix what matters and create the file again.
+
+## The company template
+
+If the app uses a **document template**, the server applies it automatically: the company's colours, fonts, logo, header, footer, page setup and letterhead. Then:
+
+- Do not set `theme`, `primaryColor` or `font`, and do not imitate the corporate design with layout blocks.
+- Do not repeat the company name, logo text or a confidentiality line in the content: the header and footer have them.
+- If `create_pdf` offers a `template` parameter, use `default` unless the user asks for a specific template.
 
 ## Document settings
 
@@ -52,6 +60,7 @@ If `create_pdf` returns `warnings`, read them. They name content that was skippe
 - **Symbols:** ✓ ✗ → ← • ★ ⚠ ☐ ☑ € and similar are available. Colour emoji are not: they are replaced where possible and otherwise left out, so do not rely on them.
 - **Links** become clickable when they start with `http(s)://` or `mailto:`.
 - **Code** goes in fenced blocks. Long lines wrap.
+- **Callouts** without layout blocks: GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` on the first line of a quote) become coloured boxes, as in Word documents.
 - **Not supported:** Mermaid diagrams, LaTeX math and HTML layout. Draw diagrams as SVG blocks and write formulas in plain text with `<sub>`/`<sup>`.
 
 ## Layout blocks: when Markdown is not enough

@@ -460,6 +460,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
     contentHeight: setup.contentHeight,
     tocDepth,
     breaks: Boolean(spec.markdownBreaks),
+    language: spec.language,
     warnings,
     nodeCount: 0,
     imageBytes: 0

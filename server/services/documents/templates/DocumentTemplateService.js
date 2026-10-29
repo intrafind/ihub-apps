@@ -254,12 +254,18 @@ async function optionalAsset(template, name, label) {
 /**
  * A template with the files one output format needs.
  *
- * @param {string} id
+ * @param {string|Object} idOrTemplate - An enabled template's id, or a
+ *   template itself (the admin's sample of a disabled one).
  * @param {'pdf'|'docx'|'pptx'} format
  * @returns {Promise<{ template: Object, assets: Object } | null>}
  */
-export async function loadTemplateBundle(id, format) {
-  const template = id ? await getTemplate(id) : null;
+export async function loadTemplateBundle(idOrTemplate, format) {
+  const template =
+    typeof idOrTemplate === 'object' && idOrTemplate
+      ? idOrTemplate
+      : idOrTemplate
+        ? await getTemplate(idOrTemplate)
+        : null;
   if (!template) return null;
   const assets = { logo: await optionalAsset(template, template.brand.logo, 'logo') };
   if (format === 'pdf') {

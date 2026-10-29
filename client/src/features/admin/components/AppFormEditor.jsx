@@ -19,6 +19,7 @@ import WebSearchSection from './app-form/WebSearchSection';
 import IAssistantSection from './app-form/IAssistantSection';
 import MagicPromptSection from './app-form/MagicPromptSection';
 import ExportConfigSection from './app-form/ExportConfigSection';
+import DocumentTemplateSection from './app-form/DocumentTemplateSection';
 import CompareModeSection from './app-form/CompareModeSection';
 import FeedbackSection from './app-form/FeedbackSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
@@ -298,6 +299,9 @@ function AppFormEditor({
 
             {/* Export Configuration */}
             <ExportConfigSection app={app} onChange={onChange} />
+
+            {/* Document template (generated PDF, Word, PowerPoint files) */}
+            <DocumentTemplateSection app={app} onChange={onChange} />
 
             {/* Compare Mode Configuration */}
             <CompareModeSection app={app} onChange={onChange} />

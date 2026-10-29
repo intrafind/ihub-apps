@@ -15,6 +15,8 @@ import { checkImageDataUri, fitWithin, imagePixelSize, safeLink, LIMITS } from '
  * - `<sub>`/`<sup>` (H<sub>2</sub>O), `<u>`, `<mark>`, `<br>` inline HTML
  * - a page break: a line with `\pagebreak`, `\newpage` or `<!-- pagebreak -->`
  * - images as `data:image/png|jpeg;base64,…` URIs (others become their alt text)
+ * - GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`,
+ *   `[!CAUTION]`) as coloured callouts, as in Word documents
  */
 
 export const PAGE_BREAK_MARKERS = new Set([
@@ -340,7 +342,70 @@ function listNode(ctx, token, depth) {
   return node;
 }
 
+/** GitHub alerts (`> [!NOTE]` …): a callout of the alert's colour. */
+const ALERTS = {
+  note: { fill: '#eff6ff', border: '#3b82f6', label: { en: 'Note', de: 'Hinweis' } },
+  tip: { fill: '#f0fdf4', border: '#22c55e', label: { en: 'Tip', de: 'Tipp' } },
+  important: { fill: '#f5f3ff', border: '#7c3aed', label: { en: 'Important', de: 'Wichtig' } },
+  warning: { fill: '#fffbeb', border: '#f59e0b', label: { en: 'Warning', de: 'Warnung' } },
+  caution: { fill: '#fef2f2', border: '#ef4444', label: { en: 'Caution', de: 'Vorsicht' } }
+};
+const ALERT_MARKER = /^\s*\[!(note|tip|important|warning|caution)\]\s*/i;
+
+function alertNode(ctx, token, depth) {
+  const first = token.tokens?.[0];
+  const match = first?.type === 'paragraph' ? ALERT_MARKER.exec(first.raw || '') : null;
+  if (!match) return null;
+  const alert = ALERTS[match[1].toLowerCase()];
+  const rest = new Lexer({ gfm: true, breaks: Boolean(ctx.breaks) }).lex(
+    (first.raw || '').replace(ALERT_MARKER, '')
+  );
+  ctx.containerDepth = (ctx.containerDepth || 0) + 1;
+  let content;
+  try {
+    content = blockNodes([...rest, ...token.tokens.slice(1)], ctx, depth + 1, { tight: true });
+  } finally {
+    ctx.containerDepth -= 1;
+  }
+  const language = typeof ctx.language === 'string' ? ctx.language.slice(0, 2) : 'en';
+  return {
+    table: {
+      widths: ['*'],
+      body: [
+        [
+          {
+            stack: [
+              {
+                text: alert.label[language] || alert.label.en,
+                bold: true,
+                color: alert.border,
+                margin: [0, 0, 0, 3]
+              },
+              ...content
+            ]
+          }
+        ]
+      ]
+    },
+    layout: {
+      declarative: {
+        boxFill: alert.fill,
+        boxBorder: alert.border,
+        boxBorderWidth: 3,
+        boxFullBorder: false,
+        paddingLeft: 10,
+        paddingRight: 10,
+        paddingTop: 8,
+        paddingBottom: 8
+      }
+    },
+    margin: [0, 4, 0, 10]
+  };
+}
+
 function quoteNode(ctx, token, depth) {
+  const alert = alertNode(ctx, token, depth);
+  if (alert) return alert;
   const content = blockNodes(token.tokens, ctx, depth + 1, { tight: true });
   return {
     table: { widths: ['*'], body: [[{ stack: content, style: 'quote' }]] },

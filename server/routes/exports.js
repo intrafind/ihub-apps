@@ -19,6 +19,7 @@ import {
   applyTemplateToPdfSpec,
   templateBundleFor
 } from '../services/documents/templates/applyTemplate.js';
+import { templateChoices } from '../services/documents/templates/DocumentTemplateService.js';
 import { DocumentGenerationError } from '../services/documents/renderService.js';
 
 /**
@@ -79,6 +80,25 @@ async function exportLook(body, pdfDefaults) {
 }
 
 export default function registerExportRoutes(app) {
+  // The document templates a user can pick in the export dialog. Names and
+  // descriptions only: the templates' files stay on the server.
+  // With `appId`, also the template that app pins (its exports always use it).
+  app.get(buildServerPath('/api/document-templates'), authRequired, async (req, res) => {
+    try {
+      const language = typeof req.query.lang === 'string' ? req.query.lang.slice(0, 10) : 'en';
+      const templates = await templateChoices(language);
+      const pinned = appOf(req.query.appId)?.documentTemplate;
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({
+        templates,
+        pinned: templates.some(template => template.id === pinned) ? pinned : null
+      });
+    } catch (error) {
+      logger.error('Listing document templates failed', { component: 'Exports', error });
+      sendErrorResponse(res, 500, 'The document templates could not be loaded.');
+    }
+  });
+
   app.post(buildServerPath('/api/exports/pdf'), authRequired, exportLimiter, async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if (body.kind === 'chat' && !chatExportAllowed(body.appId)) {

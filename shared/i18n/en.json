@@ -371,7 +371,9 @@
           "html": "HTML document",
           "json": "JSON format with metadata",
           "jsonl": "JSON Lines format"
-        }
+        },
+        "companyTemplates": "Company templates",
+        "templatePinned": "This app exports in the \"{{name}}\" template."
       },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
@@ -2380,7 +2382,8 @@
       "scheduledTasks": "Scheduled Tasks",
       "projects": "Projects",
       "overview": "Overview",
-      "integrations": "Integrations"
+      "integrations": "Integrations",
+      "documentTemplates": "Document templates"
     },
     "mcp": {
       "common": {
@@ -3059,7 +3062,15 @@
         "projectsEnabled": "Use projects in this app",
         "projectsEnabledNote": "When off, the app uses no project: neither the linked ones below nor chats started in a project or projects attached in the chat.",
         "userProjectsEnabled": "Allow personal projects",
-        "userProjectsEnabledNote": "Users can start chats of this app in their own projects and attach them in the chat. The platform-level personal projects feature must also be enabled."
+        "userProjectsEnabledNote": "Users can start chats of this app in their own projects and attach them in the chat. The platform-level personal projects feature must also be enabled.",
+        "documentTemplate": "Document template",
+        "documentTemplateDesc": "The corporate design of the PDF, Word and PowerPoint files this app creates (skills \"pdf\", \"docx\", \"pptx\") and of its PDF export.",
+        "documentTemplateDefault": "Default template ({{name}})",
+        "documentTemplateNone": "Built-in design (no default template)",
+        "documentTemplatePinned": "Every document of this app uses this template; the model cannot choose another one.",
+        "documentTemplateFree": "The default template applies; the model may use another template when the user asks for it.",
+        "documentTemplatesLink": "Manage document templates",
+        "documentTemplateMissing": "The template \"{{id}}\" does not exist; the default template applies."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -4415,6 +4426,142 @@
         "legacy-launcher": "The running launcher predates swap-on-start; this update is applied by the running server (later updates are applied by the launcher before the server starts).",
         "node-does-not-start": "The bundled Node.js binary does not start on this server ({{error}}); check antivirus quarantine or macOS Gatekeeper."
       }
+    },
+    "documentTemplates": {
+      "edit": {
+        "fixErrors": "Fix the marked fields first.",
+        "saved": "Template saved.",
+        "loadError": "The template could not be loaded",
+        "new": "New template",
+        "general": "General",
+        "id": "ID",
+        "idHelp": "Lower-case letters, digits and \"-\". Apps refer to the template by it; it cannot be changed later.",
+        "name": "Name",
+        "description": "Description",
+        "enabled": "Enabled",
+        "default": "Default template — used by every app that does not name one of its own",
+        "createFirst": "Create the template first; then you can set its colours and fonts and upload your logo, letterhead and Office templates.",
+        "brand": "Brand",
+        "brandHelp": "Colours, fonts and logo for every format. A Word or PowerPoint template below takes precedence for its own format.",
+        "primaryColor": "Primary colour",
+        "accentColor": "Accent colour",
+        "textColor": "Text colour",
+        "headingFont": "Heading font",
+        "fontHelp": "\"sans\", \"serif\", an uploaded font, or a font installed on your computers (Word, PowerPoint).",
+        "bodyFont": "Body font",
+        "fontSize": "Body size (pt)",
+        "companyName": "Company name",
+        "companyHelp": "Author of documents without one, and {company} in headers and footers.",
+        "fonts": "Fonts for PDFs",
+        "fontsHelp": "PDFs embed their fonts. Upload your brand fonts as .ttf or .otf (one file per style) and use their family name above. Word and PowerPoint files name the font; it must be installed on the computers that open them. Check that your font licence allows embedding.",
+        "page": "Page, header and footer",
+        "pageHelp": "For PDF and Word documents without a Word template. Placeholders: {title}, {date}, {page}, {pages}, {company}. An empty header or footer means none.",
+        "pageSize": "Page size",
+        "notSet": "Not set",
+        "orientation": "Orientation",
+        "portrait": "Portrait",
+        "landscape": "Landscape",
+        "margins": "Margins (pt)",
+        "marginsHelp": "Left, top, right, bottom. With a letterhead, keep the text clear of its logo and address block.",
+        "marginLeft": "Left",
+        "marginTop": "Top",
+        "marginRight": "Right",
+        "marginBottom": "Bottom",
+        "header": "Header",
+        "footer": "Footer",
+        "logoPosition": "Logo in the header",
+        "logoRight": "Right",
+        "logoLeft": "Left",
+        "logoNone": "None",
+        "logoWidth": "Logo width (pt)",
+        "pageNumbers": "Page numbers",
+        "coverLogo": "Logo on cover pages",
+        "pdf": "PDF",
+        "pdfHelp": "A letterhead PDF is printed under every page: its first page under the first page of a document, the \"following pages\" letterhead (or its second page) under the rest.",
+        "theme": "Base design",
+        "word": "Word",
+        "wordHelp": "Upload your Word template (.dotx or .docx). Its styles, headers, footers and page setup are used; the content is placed at a paragraph that holds only {{content}}, else after the template's text. {{fields}} are filled in.",
+        "powerpoint": "PowerPoint",
+        "powerpointHelp": "Upload your slide template (.potx or .pptx). Slides use its layouts, so titles, text, fonts, colours and logos come from it; sample slides in the file are not copied. Without a template, slides are made from the brand above.",
+        "aspectRatio": "Slide format",
+        "aspectRatioHelp": "Without a PowerPoint template.",
+        "slideFooter": "Slide footer",
+        "slideNumbers": "Slide numbers",
+        "preview": "Preview",
+        "previewHelp": "Sample documents with the saved template. Pending changes are saved first."
+      },
+      "files": {
+        "uploaded": "\"{{name}}\" uploaded.",
+        "logo": "Logo",
+        "logoHelp": "PNG (with transparency) or JPEG, at least 600 pixels wide.",
+        "logoPreview": "Logo preview",
+        "letterhead": "Letterhead (first page)",
+        "letterheadFollowing": "Letterhead (following pages)",
+        "wordTemplate": "Word template",
+        "powerpointTemplate": "PowerPoint template",
+        "none": "No file",
+        "replace": "Replace",
+        "upload": "Upload",
+        "removeNamed": "Remove {{name}}"
+      },
+      "title": "Document templates",
+      "fonts": {
+        "newFamily": "New font family",
+        "normal": "Regular",
+        "bold": "Bold",
+        "italics": "Italic",
+        "bolditalics": "Bold italic"
+      },
+      "word": {
+        "placeholders": "Placeholders: {{list}}",
+        "noPlaceholders": "No placeholders.",
+        "noHeadings": "The template does not define Heading 1–3; headings use its theme fonts and colours."
+      },
+      "pptx": {
+        "layouts": "Layouts for each kind of slide",
+        "layoutsHelp": "Chosen from the layout types; change a choice if it does not fit. Slide size: {{size}}.",
+        "automatic": "Automatic ({{name}})",
+        "kinds": {
+          "title": "Title slide",
+          "section": "Section",
+          "content": "Content",
+          "twoColumn": "Two columns",
+          "titleOnly": "Title only",
+          "blank": "Blank"
+        }
+      },
+      "preview": {
+        "show": "Show PDF page",
+        "pdf": "Sample PDF",
+        "docx": "Sample Word document",
+        "pptx": "Sample presentation",
+        "alt": "First page of a sample PDF"
+      },
+      "parts": {
+        "logo": "Logo",
+        "fonts": "Fonts",
+        "letterhead": "Letterhead",
+        "word": "Word template",
+        "powerpoint": "PowerPoint template"
+      },
+      "list": {
+        "deleted": "\"{{name}}\" deleted.",
+        "add": "Add template",
+        "loadError": "The document templates could not be loaded",
+        "empty": "No templates yet. Documents use the built-in design until you add one.",
+        "default": "Default",
+        "disabled": "Disabled",
+        "deleteNamed": "Delete {{name}}",
+        "deleteTitle": "Delete template",
+        "deleteConfirm": "Delete \"{{name}}\" and its files? Apps that use it fall back to the default template."
+      },
+      "subtitle": "Your corporate design for the PDF, Word and PowerPoint files iHub creates: colours, fonts, logo, letterhead, and your own Word and PowerPoint templates. The default template applies everywhere; an app can use a template of its own.",
+      "errors": {
+        "id": "Use 1–64 lower-case letters, digits and \"-\", starting with a letter or digit.",
+        "reservedId": "This id is reserved; choose another one.",
+        "name": "Give the template a name.",
+        "color": "Use a hex colour like #e30613."
+      }
     }
   },
   "cloudStorage": {
@@ -4723,7 +4870,8 @@
       "downloadNamed": "Download {{name}}",
       "expired": "This file is no longer available",
       "failed": "Download failed. Please try again.",
-      "notKept": "This file was not kept with the chat"
+      "notKept": "This file was not kept with the chat",
+      "slides": "{{count}} slides"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",

@@ -256,6 +256,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: showAdminPage('pages')
         },
         {
+          key: 'document-templates',
+          label: t('admin.nav.documentTemplates', 'Document templates'),
+          href: '/admin/document-templates',
+          icon: DocumentTextIcon,
+          visible: showAdminPage('ui')
+        },
+        {
           key: 'shortlinks',
           label: t('admin.nav.shortlinks', 'Short Links'),
           href: '/admin/shortlinks',
