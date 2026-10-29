@@ -5446,7 +5446,8 @@
       "answer": "Antwort",
       "search": "Suche",
       "doc_lookup": "Dokumentensuche",
-      "context": "Kontext"
+      "context": "Kontext",
+      "task": "Aufgabe"
     },
     "assess": {
       "started": "Analyse des aktuellen Wissens",
@@ -5493,6 +5494,9 @@
     "finalize": {
       "started": "Antwort wird fertiggestellt...",
       "completed": "Antwort fertig"
+    },
+    "task": {
+      "created": "Hintergrundaufgabe gestartet. Ihr Ergebnis erscheint im iFinder Workspace, sobald sie fertig ist"
     }
   },
   "setup": {

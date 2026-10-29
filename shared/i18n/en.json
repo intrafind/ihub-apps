@@ -5481,7 +5481,8 @@
       "answer": "Answer",
       "search": "Search",
       "doc_lookup": "Document Lookup",
-      "context": "Context"
+      "context": "Context",
+      "task": "Task"
     },
     "assess": {
       "started": "Analyzing current knowledge",
@@ -5528,6 +5529,9 @@
     "finalize": {
       "started": "Finalizing answer...",
       "completed": "Answer ready"
+    },
+    "task": {
+      "created": "Started a background task. Its result appears in the iFinder Workspace when it is done"
     }
   },
   "setup": {

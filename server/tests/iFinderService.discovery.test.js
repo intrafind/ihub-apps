@@ -11,6 +11,7 @@
  * `metadata` and `results` were facet names.
  */
 import iFinderService from '../services/integrations/iFinderService.js';
+import iFinderSearchProfiles from '../services/integrations/iFinderSearchProfiles.js';
 
 const USER = { id: 'u1', email: 'u@example.com', name: 'Tester' };
 const CHAT = 'c1';
@@ -65,14 +66,17 @@ const FACETS_RESPONSE = {
 
 describe('iFinderService discovery surface', () => {
   let originalApiRequest;
+  let originalGetUserSearchProfiles;
 
   beforeEach(() => {
     originalApiRequest = iFinderService._apiRequest.bind(iFinderService);
+    originalGetUserSearchProfiles = iFinderSearchProfiles.getUserSearchProfiles;
     iFinderService.resetConfig();
   });
 
   afterEach(() => {
     iFinderService._apiRequest = originalApiRequest;
+    iFinderSearchProfiles.getUserSearchProfiles = originalGetUserSearchProfiles;
     iFinderService.resetConfig();
   });
 
@@ -195,53 +199,63 @@ describe('iFinderService discovery surface', () => {
   });
 
   describe('listProfiles', () => {
-    test('derives profiles from the iAssistants the user can reach', async () => {
-      const calls = stubApi(() => ({
-        assistants: [
-          {
-            id: 'legal-advisor',
-            name: 'Legal Advisor',
-            description: 'Legal questions',
-            search_profile_id: 'searchprofile-legal'
-          },
-          {
-            id: 'hr-helper',
-            name: 'HR Helper',
-            search_profile_id: 'searchprofile-legal'
-          }
-        ],
-        next_cursor: null
-      }));
+    function stubProfiles(responder) {
+      const calls = [];
+      iFinderSearchProfiles.getUserSearchProfiles = async args => {
+        calls.push(args);
+        return responder(args);
+      };
+      return calls;
+    }
+
+    test('lists the search profiles iFinder offers the user', async () => {
+      const calls = stubProfiles(() => [
+        { id: 'searchprofile-standard', name: 'Standard', isDefault: true },
+        { id: 'searchprofile-legal', name: 'Legal', isDefault: false }
+      ]);
 
       const result = await iFinderService.listProfiles({ user: USER, chatId: CHAT });
 
-      expect(calls[0].path).toBe('/public-api/v0/assistants?size=100');
-      expect(result.source).toBe('assistants');
+      expect(calls[0].user).toBe(USER);
+      expect(result.source).toBe('ifinder');
       expect(result.defaultSearchProfile).toBe('searchprofile-standard');
-
-      const ids = result.profiles.map(p => p.id).sort();
-      expect(ids).toEqual(['searchprofile-legal', 'searchprofile-standard']);
-
-      const legal = result.profiles.find(p => p.id === 'searchprofile-legal');
-      expect(legal.isDefault).toBe(false);
-      expect(legal.assistants.map(a => a.id)).toEqual(['legal-advisor', 'hr-helper']);
-
-      const standard = result.profiles.find(p => p.id === 'searchprofile-standard');
-      expect(standard.isDefault).toBe(true);
+      expect(result.profiles).toEqual([
+        { id: 'searchprofile-standard', name: 'Standard', isDefault: true, isUserDefault: true },
+        { id: 'searchprofile-legal', name: 'Legal', isDefault: false, isUserDefault: false }
+      ]);
     });
 
-    test('degrades to the configured default when the assistants API is unavailable', async () => {
-      stubApi(() => {
-        throw new Error('iFinderAssistants failed with status 404: not found');
+    test('flags a configured default the user does not have', async () => {
+      stubProfiles(() => [{ id: 'searchprofile-legal', name: 'Legal', isDefault: true }]);
+
+      const result = await iFinderService.listProfiles({ user: USER, chatId: CHAT });
+
+      expect(result.profiles[0]).toEqual({
+        id: 'searchprofile-standard',
+        name: 'searchprofile-standard',
+        isDefault: true,
+        isUserDefault: false,
+        available: false
+      });
+      expect(result.profiles[1].isUserDefault).toBe(true);
+    });
+
+    test('degrades to the configured default when iFinder cannot be asked', async () => {
+      stubProfiles(() => {
+        throw new Error('Reading the iFinder search profiles failed (403)');
       });
 
       const result = await iFinderService.listProfiles({ user: USER, chatId: CHAT });
 
       expect(result.source).toBe('configured-default');
       expect(result.profiles).toEqual([
-        { id: 'searchprofile-standard', isDefault: true, assistants: [] }
+        {
+          id: 'searchprofile-standard',
+          name: 'searchprofile-standard',
+          isDefault: true,
+          isUserDefault: false
+        }
       ]);
-      expect(result.assistants).toEqual([]);
     });
   });
 

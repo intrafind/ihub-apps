@@ -1134,19 +1134,19 @@ Configures the global connection to an IntraFind iAssistant service. Individual 
   "iAssistant": {
     "defaultProfileId": "iassistant-workspace",
     "defaultSearchProfile": "searchprofile-standard",
-    "resolveSearchProfileFromProfile": true,
+    "verifySearchProfileAccess": true,
     "groundedOnly": false
   }
 }
 ```
 
-| Field                             | Type    | Default                   | Description                                                                                                                        |
-| --------------------------------- | ------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `defaultProfileId`                | String  | `""`                      | Conversation profile used when an app does not set its own `iassistant.profileId`                                                  |
-| `defaultSearchProfile`            | String  | `"searchprofile-standard"` | iFinder search profile used when neither the app, the model, nor the conversation profile names one                                |
-| `resolveSearchProfileFromProfile` | Boolean | `true`                    | Ask the conversation profile for its search profile before falling back to `defaultSearchProfile`                                  |
-| `profileCacheTtlMs`               | Number  | `300000`                  | How long a resolved conversation profile is cached                                                                                 |
-| `groundedOnly`                    | Boolean | `false`                   | Installation-wide default for grounded-only answering; an app's `iassistant.groundedOnly` overrides it in either direction         |
+| Field                       | Type    | Default                    | Description                                                                                                                         |
+| --------------------------- | ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultProfileId`          | String  | `""`                       | Conversation profile used when an app does not set its own `iassistant.profileId`                                                   |
+| `defaultSearchProfile`      | String  | `"searchprofile-standard"` | iFinder search profile used when neither the app nor the model names one                                                            |
+| `verifySearchProfileAccess` | Boolean | `true`                     | Check the configured search profile against the user's search profiles in iFinder, and use the user's default when they do not have it |
+| `searchProfileCacheTtlMs`   | Number  | `300000`                   | How long a user's search profile list is cached                                                                                     |
+| `groundedOnly`              | Boolean | `false`                    | Installation-wide default for grounded-only answering; an app's `iassistant.groundedOnly` overrides it in either direction          |
 
 The base URL is not configured here — iAssistant reuses `iFinder.baseUrl`.
 
@@ -1157,7 +1157,13 @@ These are two different things, and both matter:
 - the **conversation profile** (`defaultProfileId`, e.g. `iassistant-workspace`) selects the iAssistant workflow and its tuning — how many reasoning steps, how long a turn may take, which model writes the answer;
 - the **search profile** (`defaultSearchProfile`, e.g. `searchprofile-standard`) selects which documents retrieval is allowed to see.
 
-With `resolveSearchProfileFromProfile` on, iHub reads the conversation profile before creating a conversation and uses a search profile published there, so a profile built for one corpus does not have to be paired by hand in every app. iFinder does not currently publish one, so in practice the configured fallback applies — the lookup is there so the profile takes over by itself once it does. A failed lookup is never fatal: it falls back and logs at debug level.
+Search profiles are assigned per user in iFinder, while the configured one applies to every user. With `verifySearchProfileAccess` on, iHub reads the search profiles of the user before creating a conversation — as the user, from the configuration action of iFinder's internal search API (`GET /internal-api/v2/search?action=getconfiguration`), the same list the iFinder searchbar offers them — and:
+
+- keeps the configured search profile when the user has it;
+- otherwise uses the user's default search profile in iFinder, as iFinder's own searchbar does for a profile the user does not have;
+- keeps the configured search profile when the list cannot be read (for example iFinder 6.9 answers 403 to a user without the feature `fi_ifinder_allow`) or is empty. The check never turns a working setup into a broken one; it logs at debug level.
+
+The conversation profile does not name a search profile: it selects a workflow and its tuning, not a corpus. iFinder pairs the two in an *iAssistant* (`/public-api/v0/assistants`), which is a separate entity.
 
 The search profile is fixed for the life of a conversation. Changing this configuration affects new conversations, not ones already under way.
 

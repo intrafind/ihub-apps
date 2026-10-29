@@ -724,6 +724,9 @@ class RequestBuilder {
         imageConfig,
         user,
         chatId,
+        // The UI language, for providers that write in it when the request
+        // itself has no text to take a language from (iAssistant skills).
+        language,
         appConfig: documentIds ? { ...turnApp, documentIds } : turnApp
       };
 

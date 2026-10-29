@@ -40,8 +40,8 @@ function resolveBaseUrl(app) {
 
 /**
  * The search profile an app's conversations search, resolved the way the
- * adapter does when it creates one: the iAssistant profile's own search
- * profile first, then the configured one (app → model → service defaults).
+ * adapter does when it creates one: the configured one (app → model → service
+ * defaults), or the user's default when the user does not have it.
  * Never throws — without a profile the history is returned as iFinder sent it.
  */
 async function resolveConversationSearchProfile(app, { user, baseUrl }) {
@@ -49,8 +49,6 @@ async function resolveConversationSearchProfile(app, { user, baseUrl }) {
     const modelConfig = preferredModelConfig(app);
     const serviceConfig = iAssistantService.getConfig();
     const { searchProfile } = await iAssistantProfileResolver.resolveSearchProfile({
-      profileId:
-        app?.iassistant?.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
       configuredSearchProfile:
         app?.iassistant?.searchProfile ||
         modelConfig.searchProfile ||

@@ -1157,7 +1157,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
-| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). Only a fallback — the conversation profile is asked first, see below |
+| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). A user who does not have it in iFinder searches their own default profile instead, see below |
 | `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
 | `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
 | `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
@@ -1186,7 +1186,7 @@ This is carried as a prompt instruction prepended to `extraContext`, because the
 
 `profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
 
-To keep them from drifting apart, iHub asks the conversation profile for its search profile before creating a conversation and only falls back to `searchProfile` (then the model's, then `iAssistant.defaultSearchProfile`) when the profile does not name one. iFinder does not currently publish a search profile on a profile, so today the fallback is what applies in practice. The resolved profile is pinned for the life of the conversation.
+The search profile comes from `searchProfile`, then the model's, then `iAssistant.defaultSearchProfile`. Because search profiles are assigned per user in iFinder, iHub checks it against the search profiles of the requesting user before creating a conversation and uses the user's default profile when they do not have it (`iAssistant.verifySearchProfileAccess`, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The resolved profile is pinned for the life of the conversation.
 
 **Prompt variables in `extraContext` and `systemPromptPreamble`:**
 

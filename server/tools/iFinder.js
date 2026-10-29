@@ -74,11 +74,11 @@ export async function getFacetValues(params) {
 }
 
 /**
- * List the search profiles the calling user can reach, derived from the
- * iAssistants the public API exposes plus the configured default.
+ * List the search profiles the calling user may search with, as iFinder's
+ * searchbar offers them, plus the configured default.
  *
  * @param {Object} params
- * @returns {Promise<Object>} Profiles and the iAssistants that reference them
+ * @returns {Promise<Object>} The profiles and the configured default
  */
 export async function listProfiles(params) {
   return iFinderService.listProfiles(params);

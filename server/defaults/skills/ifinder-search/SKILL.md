@@ -183,10 +183,10 @@ explicitly.
 
 Do not guess at an index you have not looked at.
 
-1. **`iFinder_listProfiles()`** — which search profiles exist. A profile scopes
-   the corpus; the wrong one is the difference between 4 hits and 4,000. A
-   deployment with no iAssistants configured reports only the default, which is
-   a limitation of the upstream API rather than an error.
+1. **`iFinder_listProfiles()`** — which search profiles the user may search
+   with, and which one is their default. A profile scopes the corpus; the wrong
+   one is the difference between 4 hits and 4,000. A profile marked
+   `available: false` is configured but not assigned to this user.
 2. **`iFinder_discover({ searchProfile })`** — one probe returning total
    document count, top facet values, sample titles and the field catalog. This
    is the fastest way to see what a profile actually contains.

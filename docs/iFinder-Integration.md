@@ -757,19 +757,28 @@ Use it before filtering on a value: casing and spelling are deployment data, so
 
 ### iFinder.listProfiles
 
-Lists the search profiles the calling user can reach.
+Lists the search profiles the calling user may search with:
 
-The iFinder public API has no "list search profiles" endpoint — profile listing
-lives on the administration API, which an end-user token cannot reach. What the
-public API does expose is `GET /public-api/v0/assistants`, and every iAssistant
-names the search profile it is composed with, already filtered to the ones the
-caller may use. This function derives the profile list from there and always
-includes the configured default.
+```javascript
+iFinder.listProfiles();
+// → { defaultSearchProfile: 'searchprofile-standard', source: 'ifinder',
+//     profiles: [{ id: 'searchprofile-standard', name: 'Standard', isDefault: true, isUserDefault: true },
+//                { id: 'searchprofile-legal', name: 'Legal', isDefault: false, isUserDefault: false }] }
+```
 
-A deployment with no iAssistants configured therefore reports only the
-configured default. That is a limit of the upstream API, not an error; the call
-degrades to the default rather than failing when the assistants endpoint is
-unavailable.
+The iFinder public API has no "list my search profiles" endpoint — profile
+listing lives on the administration API, which an end-user token cannot reach.
+The list is read, as the user, from the configuration action of iFinder's
+internal search API (`GET /internal-api/v2/search?action=getconfiguration`),
+which is where the iFinder searchbar gets the profiles it offers. It is cached
+per user for five minutes.
+
+- `isDefault` marks the configured `iFinder.defaultSearchProfile`. It is always
+  listed; `available: false` means the user does not have it.
+- `isUserDefault` marks the user's own default profile in iFinder.
+- When iFinder cannot be asked (`source: 'configured-default'`), only the
+  configured default is reported. iFinder 6.9 answers 403 to a user without the
+  feature `fi_ifinder_allow`.
 
 ### iFinder.discover
 

@@ -336,7 +336,7 @@
   "iAssistant": {
     "defaultProfileId": "",
     "defaultSearchProfile": "searchprofile-standard",
-    "resolveSearchProfileFromProfile": true,
+    "verifySearchProfileAccess": true,
     "groundedOnly": false
   },
   "copilotAgent": {
