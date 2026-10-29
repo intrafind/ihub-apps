@@ -173,7 +173,7 @@ Switch it on per directory in the directory editor, section **LDAP browser** (**
 | Field | Meaning |
 | --- | --- |
 | `enabled` | The browse tools exist only while this is `true` and the directory itself is enabled and usable. |
-| `groups` | Who may browse. Separate from the directory's `groups`: neither grants the other. Only signed-in users; `"*"` is refused. A directory with `"groups": []` is browse-only. |
+| `groups` | Who may browse. Separate from the directory's `groups`: neither grants the other. Only signed-in users; `"*"` is refused. Personal API keys, OAuth clients and tokens and agents never browse, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API. A directory with `"groups": []` is browse-only. |
 | `maxResults` | The most entries one search returns. |
 | `base` | The DN the browser is confined to. Defaults to the directory's base DN — the whole directory, not just the people search base — so groups and other branches are in reach. Set a narrower branch to limit what admins can see. |
 | `bind` | A separate account for browsing, same shape as the directory's `bind`. **Without it, the browser reads whatever the directory's bind account can read**, minus the deny list. Use a read-only account with the reach you want. |
@@ -196,7 +196,7 @@ The shipped **LDAP browser** app (`ldap-browser`) selects the browse tools of ev
 
 ### Secrets
 
-These attributes never leave a directory — not in people search, not in the browser: `userPassword`, `unicodePwd`, `ntPassword`, `lmPassword`, `sambaNTPassword`, `sambaLMPassword`, `krbPrincipalKey`, `supplementalCredentials`, `dBCSPwd`, `unixUserPassword`, the LAPS passwords (`ms-Mcs-AdmPwd`, `msLAPS-Password`, `msLAPS-EncryptedPassword` and their history and DSRM variants), `msFVE-RecoveryPassword`, `msDS-ManagedPassword`, certificates (`userCertificate`, `userSMIMECertificate`, `userPKCS12`, `cACertificate`, revocation lists), photos (`jpegPhoto`, `thumbnailPhoto`), `objectSid` and `objectGUID`. Names are compared case-insensitively and without options (`userPassword;binary`).
+These attributes never leave a directory — not in people search, not in the browser: `userPassword`, `unicodePwd`, `ntPassword`, `lmPassword`, `sambaNTPassword`, `sambaLMPassword`, `krbPrincipalKey`, `supplementalCredentials`, `dBCSPwd`, `unixUserPassword`, the password histories `pwdHistory` and `sambaPasswordHistory`, FreeIPA's `ipaNTHash`, the LAPS passwords (`ms-Mcs-AdmPwd`, `msLAPS-Password`, `msLAPS-EncryptedPassword` and their history and DSRM variants), `msFVE-RecoveryPassword`, `msDS-ManagedPassword`, certificates (`userCertificate`, `userSMIMECertificate`, `userPKCS12`, `cACertificate`, revocation lists), photos (`jpegPhoto`, `thumbnailPhoto`), `objectSid` and `objectGUID`. Names are compared case-insensitively and without options (`userPassword;binary`).
 
 - In results, a withheld attribute is left out and named in the entry's `omitted` list.
 - A filter that names one, anywhere — nested, negated, in an extensible match — is refused before anything is sent, so a value cannot be guessed one character at a time with `(userPassword=a*)`. An extensible match without an attribute type (`(:caseExactMatch:=x)`) is refused for the same reason, and so is a filter that does not parse.

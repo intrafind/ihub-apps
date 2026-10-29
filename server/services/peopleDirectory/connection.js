@@ -254,12 +254,18 @@ const UNTRUSTED_ISSUER_CODES = new Set([
  * Turn a socket/TLS/LDAP error from the connection phase into a
  * {@link DirectoryConnectionError}.
  */
-function classifyConnectionError(error, { step, hostname, port, state }) {
+function classifyConnectionError(error, { step, hostname, port, state, tlsCa = [] }) {
   if (error instanceof DirectoryConnectionError) return error;
   const code = error?.code;
   if (CERTIFICATE_ERROR_CODES.has(code)) {
     const missingIssuer = UNTRUSTED_ISSUER_CODES.has(code) ? state.missingIssuer : null;
     const hostnameMismatch = code === 'ERR_TLS_CERT_ALTNAME_INVALID';
+    // With tlsCa, `ca` replaces the default roots, so the operating system
+    // store and NODE_EXTRA_CA_CERTS do not count for this directory.
+    const trustHint =
+      tlsCa.length > 0
+        ? `This directory trusts only its own certificates (${tlsCa.join(', ')}). Put "${missingIssuer}" into contents/config/certs/<name>.pem and add <name> to its trusted certificates (tlsCa).`
+        : `Install "${missingIssuer}" in the operating system's certificate store of the iHub server (or point NODE_EXTRA_CA_CERTS at it), or put it into contents/config/certs/<name>.pem and add <name> to this directory's trusted certificates (tlsCa).`;
     const message = hostnameMismatch
       ? `The certificate of ${hostname} does not name that host: ${error.message}`
       : missingIssuer
@@ -274,9 +280,7 @@ function classifyConnectionError(error, { step, hostname, port, state }) {
         ? ['Use the host name the certificate was issued for in the directory URL.']
         : !missingIssuer
           ? ['Check the validity of the server certificate and the clock of the iHub server.']
-          : [
-              `Install "${missingIssuer}" in the operating system's certificate store of the iHub server (or point NODE_EXTRA_CA_CERTS at it), or put it into contents/config/certs/<name>.pem and add <name> to this directory's trusted certificates (tlsCa). Compare its fingerprint with the one its publisher states first.`
-            ]
+          : [`${trustHint} Compare its fingerprint with the one its publisher states first.`]
     });
   }
   if (code === 'ECONNREFUSED') {
@@ -412,7 +416,7 @@ export async function openDirectoryConnection(
 
   const fail = (error, step) => {
     void client.unbind().catch(() => {});
-    return classifyConnectionError(error, { step, hostname, port, state });
+    return classifyConnectionError(error, { step, hostname, port, state, tlsCa: resolved.tlsCa });
   };
 
   if (transport === 'starttls') {

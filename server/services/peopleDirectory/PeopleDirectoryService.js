@@ -3,6 +3,7 @@
 
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import {
   ALLOWED_TLS_OPTION_KEYS,
@@ -362,6 +363,11 @@ export function mayUseDirectory(user, directoryId) {
  * `browse.groups` (default `admins`). The directory's own `groups` neither
  * grant nor deny it. Fails closed.
  *
+ * Delegated and machine principals — personal API keys, OAuth clients and
+ * tokens, agents — never browse, whatever their groups: they could otherwise
+ * reach the browser through an app (`app__ldap-browser` over MCP, A2A or the
+ * chat API), and raw entries would leave iHub (REVIEW.md, A01).
+ *
  * @param {Object|null} user
  * @param {string} directoryId
  * @returns {boolean}
@@ -373,6 +379,7 @@ export function mayBrowseDirectory(user, directoryId) {
       return false;
     }
     if (!user?.id || user.id === 'anonymous') return false;
+    if (!isAdminEligiblePrincipal(user)) return false;
     const groups = Array.isArray(directory.browse.groups) ? directory.browse.groups : ['admins'];
     const userGroups = expandUserGroups(user.groups);
     return groups.some(group => group !== '*' && userGroups.has(group));

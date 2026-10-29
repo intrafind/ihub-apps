@@ -183,8 +183,15 @@ describe('LDAP browser', () => {
       );
     });
 
-    it('refuses a mapping onto the new AD secrets, like the old ones', () => {
-      for (const attribute of ['ms-Mcs-AdmPwd', 'msLAPS-Password', 'msFVE-RecoveryPassword']) {
+    it('refuses a mapping onto the new AD secrets and password histories, like the old ones', () => {
+      for (const attribute of [
+        'ms-Mcs-AdmPwd',
+        'msLAPS-Password',
+        'msFVE-RecoveryPassword',
+        'pwdHistory',
+        'sambaPasswordHistory',
+        'ipaNTHash'
+      ]) {
         assert.equal(
           peopleDirectorySchema.safeParse({ ...base, attributeMapping: { email: attribute } })
             .success,
@@ -221,6 +228,17 @@ describe('LDAP browser', () => {
       assert.equal(mayBrowseDirectory(operator, 'infra'), true);
       assert.equal(mayBrowseDirectory(admin, 'infra'), false);
       assert.equal(mayBrowseDirectory({ id: 'anonymous', groups: ['admins'] }, 'corp'), false);
+      // Delegated and machine principals never browse, whatever their groups:
+      // through an app they would reach it over MCP, A2A or the chat API.
+      for (const delegated of [
+        { ...admin, authMode: 'oauth_personal_key' },
+        { ...admin, authMode: 'oauth_authorization_code' },
+        { ...admin, authMode: 'oauth_client_credentials' },
+        { ...admin, isOAuthClient: true },
+        { ...admin, isAgent: true }
+      ]) {
+        assert.equal(mayBrowseDirectory(delegated, 'corp'), false, JSON.stringify(delegated));
+      }
       assert.equal(mayBrowseDirectory(admin, 'x500bund'), false);
     });
 
@@ -308,6 +326,7 @@ describe('LDAP browser', () => {
         '(|(cn=x)(!(ms-Mcs-AdmPwd=1*)))',
         '(info=secret*)',
         '(USERPASSWORD>=a)',
+        '(pwdHistory=*)',
         '(userPassword:caseExactMatch:=a)'
       ]) {
         assert.throws(() => parseBrowseFilter(filter, deny), /never leaves the directory/, filter);

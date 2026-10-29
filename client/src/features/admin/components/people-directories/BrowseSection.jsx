@@ -23,7 +23,8 @@ import {
  * (`browse` in `peopleDirectories.json`). Off by default.
  *
  * It has its own groups, separate from the directory's: neither grants the
- * other, and "Everyone" is not offered. Without an account of its own, the
+ * other, and "Everyone" is not offered. Switched off, a directory that had the
+ * browser keeps (and shows) its settings. Without an account of its own, the
  * browser reads whatever the directory's bind account can read, minus the
  * attributes that never leave a directory.
  *
@@ -87,7 +88,18 @@ function BrowseSection({ form, update, availableGroups, baseDnHint, transport })
         )}
       />
 
-      {form.browseEnabled && (
+      {/* Kept settings stay visible while the browser is off: they are saved
+          and checked, so an error must be able to point at them. */}
+      {!form.browseEnabled && form.hasBrowse && (
+        <p className={CALLOUT_CLASS.info}>
+          {t(
+            'admin.peopleDirectories.browse.offKept',
+            'The LDAP browser is off. Its settings below are kept for when you switch it on again.'
+          )}
+        </p>
+      )}
+
+      {(form.browseEnabled || form.hasBrowse) && (
         <>
           <GroupMultiSelect
             id="pd-browse-groups"

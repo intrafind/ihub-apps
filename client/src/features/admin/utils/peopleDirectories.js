@@ -556,14 +556,16 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
     }
   }
 
-  if (form.browseEnabled) {
-    if ((form.browseGroups || []).length === 0) {
-      add(
-        'browse.groups',
-        'admin.peopleDirectories.errors.browseGroupsRequired',
-        'Choose who may use the LDAP browser.'
-      );
-    }
+  // The browse block is saved while the browser is on, and kept while it is
+  // off (formToBrowse), so its fields are checked whenever it is sent.
+  if (form.browseEnabled && (form.browseGroups || []).length === 0) {
+    add(
+      'browse.groups',
+      'admin.peopleDirectories.errors.browseGroupsRequired',
+      'Choose who may use the LDAP browser.'
+    );
+  }
+  if (form.browseEnabled || form.hasBrowse) {
     const maxResults = trimmed(form.browseMaxResults);
     if (maxResults !== '') {
       const value = Number(maxResults);
@@ -592,17 +594,17 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
         );
       }
     }
-  }
-  const badAttribute = parseList(form.browseDenyAttributes).find(
-    name => !ATTRIBUTE_NAME_PATTERN.test(name)
-  );
-  if (badAttribute) {
-    add(
-      'browse.denyAttributes',
-      'admin.peopleDirectories.errors.attributeName',
-      '"{{name}}" is not an LDAP attribute name.',
-      { name: badAttribute }
+    const badAttribute = parseList(form.browseDenyAttributes).find(
+      name => !ATTRIBUTE_NAME_PATTERN.test(name)
     );
+    if (badAttribute) {
+      add(
+        'browse.denyAttributes',
+        'admin.peopleDirectories.errors.attributeName',
+        '"{{name}}" is not an LDAP attribute name.',
+        { name: badAttribute }
+      );
+    }
   }
   return errors;
 }

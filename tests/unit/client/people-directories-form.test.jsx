@@ -419,6 +419,28 @@ describe('LDAP browser fields', () => {
   });
 });
 
+describe('LDAP browser fields while off', () => {
+  test('a kept browse block is still checked, and a new one that is off is not', () => {
+    // The kept block is saved with the browser off, so the server would refuse
+    // an own account without DN or a limit over 200.
+    const form = directoryToForm({ ...X500, browse: { enabled: true, groups: ['admins'] } });
+    form.browseBindMode = 'service';
+    form.browseMaxResults = '500';
+    form.browseEnabled = false;
+    expect(validateDirectoryForm(form).map(error => error.field)).toEqual([
+      'browse.maxResults',
+      'browse.bind.dn',
+      'browse.bind.passwordRef'
+    ]);
+
+    const fresh = directoryToForm(X500);
+    fresh.browseBindMode = 'service';
+    fresh.browseDenyAttributes = 'not an attribute';
+    expect(validateDirectoryForm(fresh)).toEqual([]);
+    expect(formToDirectory(fresh).browse).toBeUndefined();
+  });
+});
+
 describe('trusted certificates', () => {
   test('are edited one name per line and checked against the store name pattern', () => {
     const form = directoryToForm(X500);

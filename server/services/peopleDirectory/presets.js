@@ -92,7 +92,11 @@ export const FORBIDDEN_ATTRIBUTES = new Set([
   'mslaps-encrypteddsrmpasswordhistory',
   'msfve-recoverypassword',
   'msds-managedpassword',
-  'unixuserpassword'
+  'unixuserpassword',
+  // Old password hashes: OpenLDAP ppolicy, Samba, and the NT hash in FreeIPA.
+  'pwdhistory',
+  'sambapasswordhistory',
+  'ipanthash'
 ]);
 
 export const SEARCH_PRESETS = {

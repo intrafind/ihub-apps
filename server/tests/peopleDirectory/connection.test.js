@@ -188,6 +188,24 @@ describe('people directory connections', { skip }, () => {
       );
     });
 
+    it('points only to tlsCa when the directory trusts its own certificates', async () => {
+      // With tlsCa, `ca` replaces the default roots: installing the issuer in
+      // the operating system store would change nothing.
+      const other = generateCertificates('other.test');
+      await assert.rejects(
+        openDirectoryConnection(
+          ldapsDirectory({ tlsCa: ['other-root'] }),
+          connectOptions({ loadAnchors: async () => [other.rootPem] })
+        ),
+        error => {
+          assert.equal(error.code, 'tls_untrusted');
+          assert.match(error.hints[0], /trusts only its own certificates \(other-root\)/);
+          assert.doesNotMatch(error.hints[0], /operating system/);
+          return true;
+        }
+      );
+    });
+
     it('refuses a certificate issued for another host name', async () => {
       await assert.rejects(
         openDirectoryConnection(
