@@ -955,7 +955,7 @@ describe('Office packages, part names', () => {
       relsPath,
       rels.replace(
         media.split('/').pop(),
-        renamed.split('/').pop().replace(' ', '%20').toUpperCase()
+        renamed.split('/').pop().replaceAll(' ', '%20').toUpperCase()
       )
     );
     const template = await zip.generateAsync({ type: 'nodebuffer' });
