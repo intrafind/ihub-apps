@@ -206,6 +206,7 @@ function AdminMarketplacePage() {
                   className="flex-1 min-w-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 />
                 <select
+                  aria-label={t('admin.marketplace.filterRegistry', 'Filter by registry')}
                   value={selectedRegistry}
                   onChange={e => {
                     setSelectedRegistry(e.target.value);
@@ -221,6 +222,7 @@ function AdminMarketplacePage() {
                   ))}
                 </select>
                 <select
+                  aria-label={t('admin.marketplace.filterStatus', 'Filter by status')}
                   value={statusFilter}
                   onChange={e => {
                     setStatusFilter(e.target.value);

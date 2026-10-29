@@ -699,7 +699,7 @@ export default function ChatHistoryPage() {
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                     grouping === g
                       ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
                   {groupingLabels[g]}
