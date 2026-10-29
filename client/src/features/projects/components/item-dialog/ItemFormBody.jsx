@@ -150,6 +150,8 @@ async function addAllUrls(api, projectId, pages, { pinned }) {
  * @param {() => void} props.onClose
  * @param {(busy: boolean) => void} [props.onBusyChange] - Items are being added:
  *   the dialog must not close.
+ * @param {boolean} [props.hideItemOptions=false] - Leave out the name and the pinned
+ *   flag (a smart collection from iFinder stores neither: it holds document ids).
  * @returns {JSX.Element}
  */
 function ItemFormBody({
@@ -162,7 +164,8 @@ function ItemFormBody({
   existingUrls,
   onAdded,
   onClose,
-  onBusyChange
+  onBusyChange,
+  hideItemOptions = false
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(EMPTY_DRAFT);
@@ -240,7 +243,10 @@ function ItemFormBody({
     if (requestError) return setError(validationMessage(t, requestError, config));
     markSubmitting(true);
     try {
-      onAdded(await api.addItem(projectId, body));
+      // A smart collection stores neither a name nor a pin: send the reference only.
+      onAdded(
+        await api.addItem(projectId, hideItemOptions ? { kind: body.kind, ref: body.ref } : body)
+      );
       onClose();
     } catch (err) {
       setError(api.errorMessage(err));
@@ -312,7 +318,7 @@ function ItemFormBody({
       <div className="px-6 py-4 space-y-4 overflow-y-auto">
         {renderPicker()}
 
-        {tab.enabled && (
+        {tab.enabled && !hideItemOptions && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
             {showName ? (
               <div className="sm:col-span-2">

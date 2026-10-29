@@ -147,6 +147,14 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, metho
     url: '/'
   };
   const res = makeResponse();
+  // Express sets these: the part of the URL below `/api/projects/:projectId` (for
+  // the guard) and the route template that matched (for the gate).
+  const registered = projects.routes.find(entry => entry.handlers === handlers);
+  if (registered) {
+    req.route = { path: registered.routePath };
+    const below = registered.routePath.split(':projectId')[1] || '';
+    req.path = below.replace(':itemId', params.itemId ?? 'itm_x') || '/';
+  }
   // The path guards of `/api/projects/:projectId` run before the route's own handlers.
   const guards =
     params.projectId === undefined ? [] : projects.guards.flatMap(guard => guard.handlers);
@@ -283,11 +291,15 @@ describe('the tier policy and the capability call', () => {
     assert.deepEqual(configured.tiers, ['ihub', 'ifinder']);
 
     const available = await drive(route.config, { user: ADA });
-    assert.deepEqual(available.body.ifinder, { available: true, readOnly: true });
+    assert.deepEqual(available.body.ifinder, {
+      available: true,
+      writable: true,
+      maxDocuments: 200
+    });
 
     setPlatform({ tierPolicy: 'ihub' });
     const off = await drive(route.config, { user: ADA });
-    assert.deepEqual(off.body.ifinder, { available: false, readOnly: true });
+    assert.deepEqual(off.body.ifinder, { available: false, writable: false, maxDocuments: 200 });
   });
 
   it('never shows the tier of an iFinder without the API, and remembers it', async () => {
@@ -299,7 +311,8 @@ describe('the tier policy and the capability call', () => {
     const config = await drive(route.config, { user: GRACE });
     assert.deepEqual(config.body.ifinder, {
       available: false,
-      readOnly: true,
+      writable: false,
+      maxDocuments: 200,
       reason: 'UNSUPPORTED'
     });
     assert.equal(ifinder.calls('collections').length, 1, 'for every user of the installation');
@@ -346,7 +359,7 @@ describe('the tier policy and the capability call', () => {
 });
 
 describe('the project list', () => {
-  it('merges the collections of the caller as read-only projects, with counts only', async () => {
+  it('merges the collections of the caller as projects, with counts only', async () => {
     collection(1, ADA.email, {
       name: 'Contracts',
       documents: ['doc-a', 'doc-b'],
@@ -368,16 +381,17 @@ describe('the project list', () => {
     );
     const [policies] = mine;
     assert.equal(policies.name, 'Policies');
-    assert.equal(policies.readOnly, true);
+    assert.equal(policies.readOnly, false, 'the owner may change it');
     assert.equal(policies.usage.items, 1);
     assert.equal(policies.items, undefined, 'the list sends no documents');
     assert.deepEqual(policies.source, { type: 'smart-collection', collectionId: ID(2) });
     assert.equal(policies.role, 'owner');
     assert.equal(policies.permissions.canUse, true);
-    for (const flag of ['canEdit', 'canShare', 'canDelete', 'canTransfer', 'canHoldChats']) {
+    assert.equal(policies.permissions.canEdit, true, 'the owner renames and manages documents');
+    for (const flag of ['canShare', 'canDelete', 'canTransfer', 'canHoldChats']) {
       assert.equal(policies.permissions[flag], false, flag);
     }
-    assert.equal(policies.permissions.readOnly, true);
+    assert.equal(policies.permissions.readOnly, false);
     assert.equal(JSON.stringify(res.body).includes('doc-'), false, 'no document id is listed');
     assert.deepEqual(res.body.warnings, []);
   });
@@ -510,8 +524,8 @@ describe('opening a collection', () => {
     const res = await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
     assert.equal(res.body.tier, 'ifinder');
-    assert.equal(res.body.readOnly, true);
-    assert.equal(res.body.permissions.canEdit, false);
+    assert.equal(res.body.readOnly, false);
+    assert.equal(res.body.permissions.canEdit, true);
     assert.deepEqual(
       res.body.items.map(item => [
         item.kind,
@@ -615,17 +629,36 @@ describe('opening a collection', () => {
   });
 });
 
-describe('the read-only guarantee', () => {
-  it('refuses every write route for an iFinder project, before anything is looked up', async () => {
-    collection(1, ADA.email, { documents: ['doc-a'] });
-    const writes = projects.routes.filter(
+/** The writes a collection takes, by the route they are registered on. */
+const ALLOWED_WRITES = [
+  'patch /api/projects/:projectId',
+  'post /api/projects/:projectId/items',
+  'delete /api/projects/:projectId/items/:itemId'
+];
+
+describe('the write allow-list', () => {
+  const writeRoutes = () =>
+    projects.routes.filter(
       entry => entry.method !== 'get' && entry.routePath.includes(':projectId')
     );
+  const keyOf = entry => `${entry.method} ${entry.routePath}`;
+
+  it('refuses every write route that is not on the list, before anything is looked up', async () => {
+    collection(1, ADA.email, { documents: ['doc-a'] });
+    const writes = writeRoutes();
     assert.ok(writes.length >= 10, 'the project routes with a write are found');
+    for (const key of ALLOWED_WRITES) {
+      assert.ok(
+        writes.some(entry => keyOf(entry) === key),
+        `${key} is registered`
+      );
+    }
+    const refused = writes.filter(entry => !ALLOWED_WRITES.includes(keyOf(entry)));
+    assert.ok(refused.length >= 8, 'most write routes stay closed');
     const repository = getProjectRepository();
     const before = (await repository.listOwned(ADA.id)).length;
     ifinder.reset();
-    for (const entry of writes) {
+    for (const entry of refused) {
       const res = await drive(entry.handlers, {
         user: ADA,
         method: entry.method.toUpperCase(),
@@ -638,11 +671,7 @@ describe('the read-only guarantee', () => {
           members: []
         }
       });
-      assert.equal(
-        res.statusCode,
-        403,
-        `${entry.method} ${entry.routePath}: ${JSON.stringify(res.body)}`
-      );
+      assert.equal(res.statusCode, 403, `${keyOf(entry)}: ${JSON.stringify(res.body)}`);
       assert.equal(res.body.details?.code, 'PROJECT_READ_ONLY', entry.routePath);
     }
     assert.equal(ifinder.requests.length, 0, 'the refusal comes before any lookup');
@@ -650,50 +679,141 @@ describe('the read-only guarantee', () => {
     assert.equal(await repository.get(pid(1)), null, 'nothing was stored under the id');
   });
 
-  it('gives the same answer for an id that does not exist, so a write reveals nothing', async () => {
+  it('names the allowed writes in the guard by method and path, and nothing near them', async () => {
+    const { refuseIFinderWrite, refuseIFinderWriteRoute, IFINDER_WRITE_ROUTES } =
+      await import('../middleware/projectAccess.js');
+    assert.deepEqual(
+      IFINDER_WRITE_ROUTES.map(
+        entry => `${entry.method.toLowerCase()} /api/projects${entry.route}`
+      ),
+      ALLOWED_WRITES
+    );
+    const refusedBy = (guard, request) => {
+      const res = makeResponse();
+      const refused = guard(request, res, pid(1));
+      return refused ? res.statusCode : null;
+    };
+    const byPath = (method, pathBelow) =>
+      refusedBy(refuseIFinderWrite, { method, path: pathBelow });
+    // On the list.
+    assert.equal(byPath('PATCH', '/'), null);
+    assert.equal(byPath('POST', '/items'), null);
+    assert.equal(byPath('DELETE', '/items/itm_abc'), null);
+    // Reads are not the guard's business.
+    assert.equal(byPath('GET', '/anything'), null);
+    // Near misses.
+    for (const [method, below] of [
+      ['PUT', '/'],
+      ['DELETE', '/'],
+      ['POST', '/'],
+      ['PATCH', '/items'],
+      ['PATCH', '/items/itm_abc'],
+      ['POST', '/items/itm_abc'],
+      ['POST', '/items/itm_abc/refresh'],
+      ['PUT', '/items/itm_abc/text'],
+      ['DELETE', '/items'],
+      ['DELETE', '/items/itm_abc/text'],
+      ['DELETE', '/items/a/b'],
+      ['POST', '/estimate'],
+      ['POST', '/transfer'],
+      ['PUT', '/members'],
+      ['POST', '/publish'],
+      ['DELETE', '/subscription'],
+      ['POST', '/subscription'],
+      ['POST', undefined]
+    ]) {
+      assert.equal(byPath(method, below), 403, `${method} ${below}`);
+    }
+    const byRoute = (method, template) =>
+      refusedBy(refuseIFinderWriteRoute, { method, route: template && { path: template } });
+    assert.equal(byRoute('PATCH', '/api/projects/:projectId'), null);
+    assert.equal(byRoute('POST', '/api/projects/:projectId/items'), null);
+    assert.equal(byRoute('DELETE', '/api/projects/:projectId/items/:itemId'), null);
+    for (const [method, template] of [
+      ['DELETE', '/api/projects/:projectId'],
+      ['PUT', '/api/projects/:projectId/items/:itemId/text'],
+      ['POST', '/api/projects/:projectId/items/:itemId/refresh'],
+      ['PATCH', '/api/projects/:projectId/items/:itemId'],
+      ['POST', '/api/projects/:projectId/estimate'],
+      ['POST', undefined]
+    ]) {
+      assert.equal(byRoute(method, template), 403, `${method} ${template}`);
+    }
+  });
+
+  it('gives the same refusal for a closed route whether or not the collection exists', async () => {
     const entry = projects.routes.find(
-      route => route.method === 'patch' && route.routePath.endsWith('/api/projects/:projectId')
+      route =>
+        route.method === 'post' && route.routePath.endsWith(':projectId/items/:itemId/refresh')
     );
     const res = await drive(entry.handlers, {
       user: GRACE,
-      method: 'PATCH',
-      params: { projectId: pid(77) },
-      body: { name: 'x' }
+      method: 'POST',
+      params: { projectId: pid(77), itemId: 'itm_x' }
     });
     assert.equal(res.statusCode, 403);
     assert.equal(res.body.details.code, 'PROJECT_READ_ONLY');
+    assert.equal(ifinder.requests.length, 0);
   });
+});
 
-  it('keeps the permission block fixed whoever asks, an admin included', async () => {
+describe('the permission block of a collection', () => {
+  it('lets the owner change it and gives nobody else anything, an admin included', async () => {
     const { projectPermissions } = await import('../services/projects/projectAccess.js');
     const project = { id: pid(1), ownership: 'user', tier: 'ifinder', owner: { id: ADA.id } };
     const admin = {
-      ...ADA,
+      ...GRACE,
       id: 'user-root',
       groups: ['admins'],
       permissions: { adminAccess: true }
     };
+    const owner = projectPermissions(project, ADA, {});
+    assert.equal(owner.canEdit, true);
+    assert.equal(owner.readOnly, false);
+    assert.equal(owner.isOwner, true);
     for (const user of [ADA, GRACE, admin]) {
+      const permissions = projectPermissions(project, user, {
+        isAdmin: true,
+        isContentAdmin: true,
+        catalog: true,
+        linked: true
+      });
+      assert.equal(permissions.canShare, false);
+      assert.equal(permissions.canDelete, false);
+      assert.equal(permissions.canTransfer, false);
+      assert.equal(permissions.canHoldChats, false);
+      assert.equal(permissions.readsAllChats, false);
+    }
+    for (const user of [GRACE, admin]) {
       const permissions = projectPermissions(project, user, {
         isAdmin: true,
         isContentAdmin: true
       });
-      assert.equal(permissions.canEdit, false);
-      assert.equal(permissions.canShare, false);
-      assert.equal(permissions.canDelete, false);
-      assert.equal(permissions.canTransfer, false);
+      assert.equal(permissions.canEdit, false, `${user.id} is not the owner`);
+      assert.equal(permissions.isOwner, false);
       assert.equal(permissions.readOnly, true);
     }
+    // A full admin who owns the collection is its owner, nothing more.
+    const adminsOwn = projectPermissions({ ...project, owner: { id: admin.id } }, admin, {
+      isAdmin: true
+    });
+    assert.equal(adminsOwn.canEdit, true);
+    assert.equal(adminsOwn.canDelete, false);
+    assert.equal(adminsOwn.canShare, false);
+    // Where no lock reaches every instance nobody changes it.
+    const frozen = projectPermissions(project, ADA, { ifinderWritable: false });
+    assert.equal(frozen.canEdit, false);
+    assert.equal(frozen.readOnly, true);
+    assert.equal(frozen.canUse, true);
     assert.equal(projectPermissions(project, { id: 'anonymous' }, {}).canView, false);
     // The id decides, not a stored tier: a stored project cannot opt in or out.
-    assert.equal(
-      projectPermissions(
-        { id: 'prj_x', ownership: 'user', tier: 'ifinder', owner: { id: ADA.id } },
-        ADA,
-        {}
-      ).canEdit,
-      true
+    const stored = projectPermissions(
+      { id: 'prj_x', ownership: 'user', tier: 'ifinder', owner: { id: ADA.id } },
+      ADA,
+      {}
     );
+    assert.equal(stored.canEdit, true);
+    assert.equal(stored.canShare, true, 'a stored project keeps its own rules');
   });
 
   it('does not let a chat move into a collection, but lets it attach one', async () => {

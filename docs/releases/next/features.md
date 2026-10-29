@@ -264,19 +264,41 @@ warnings — before anything is changed; you confirm, and the server restarts in
   `--update=rollback --restore-config`.
 - See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).
 
-## Projects: Your iFinder Smart Collections as Read-Only Projects
+## Projects: Your iFinder Smart Collections as Projects
 
 With the tier policy set to `both` or `ifinder` (**platform.json → projects.tierPolicy**, until now
 accepted but ignored), iFinder 6.8 or later configured and **User Projects** switched on (**Admin →
-Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to their own projects, marked **iFinder · read-only**. Opening
-one lists its documents. A chat can use the collection as knowledge: tick it in the **Project**
-picker of the chat input, or start a chat from its page. Nothing is copied: the documents stay in
-iFinder and are read, searched and cited with the rights of the person asking, like any iFinder
-document in a project. A document the reader may not open is named as unavailable.
+Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to
+their own projects, marked **iFinder**. Opening one lists its documents. A chat can use the
+collection as knowledge: tick it in the **Project** picker of the chat input, or start a chat from
+its page. Nothing is copied: the documents stay in iFinder and are read, searched and cited with
+the rights of the person asking, like any iFinder document in a project. A document the reader may
+not open is named as unavailable.
 
-- **Read-only:** the page offers no edit, rename, share, delete, instructions, pins, upload or token
-  estimate, and the API refuses every write to such a project. Create, rename, add and remove
-  arrive later.
+Owners can also manage their collections from iHub:
+
+- **Create** a collection from **New project** by choosing **As an iFinder smart collection**
+  (name and description). The owner is the signed-in user; the collection also shows up in iFinder.
+- **Rename** it, and change its description.
+- **Add documents** with the iFinder document picker. iHub first checks that the user can read each
+  document, because iFinder checks nothing on add; if one is not readable, nothing is added. A
+  collection holds at most 200 documents, shown as a bar on the page; going over is refused with a
+  clear message.
+- **Remove documents.** Only the membership is removed, never the document.
+- Not part of iHub: sharing, deleting a collection, and any other kind of item (files, web pages,
+  text). Instructions, pins, members and the token estimate do not apply to a collection.
+- **Writes are serialized across all iHub instances.** iFinder changes a collection with an
+  unversioned read-and-write, so two overlapping changes would lose one. iHub takes a lock from the
+  storage layer for each collection. Where the storage is multi-instance and has no cluster-wide
+  lock (today: every installation that runs several instances on the filesystem provider), changing
+  collections is switched off, collections stay readable, and `GET /api/projects/_config` reports
+  `ifinder.writable: false` with the reason. Changes made in iFinder itself are not covered by that
+  lock.
+- **iFinder can fail in the middle of a change.** The call is not atomic. iHub reads the collection
+  again and tells the user which documents did and did not make it; repeating the call is safe.
+
+Also:
+
 - **Only where iFinder can serve it:** the tier is offered when iFinder is configured, the policy
   allows it and the Smart Collections API answers; an older iFinder never shows it. The user needs
   the `fi_smartcollections` role in iFinder and a login name iHub can sign for iFinder (the
@@ -284,12 +306,15 @@ document in a project. A document the reader may not open is named as unavailabl
 - **Same identity on both sides:** a collection belongs to the name iHub signs into the iFinder
   token. iFinder's list matches that name exactly, upper and lower case included, so a collection
   whose owner differs only in case is missing from the list (it still opens by id). Set the
-  **JWT Subject Field** so it produces the user's iFinder login exactly.
+  **JWT Subject Field** so it produces the user's iFinder login exactly. A new or renamed
+  collection can take up to about ten seconds to appear in iFinder's own list; iHub shows it at
+  once.
 - **If iFinder is slow or down,** the project list still loads, with a note that the collections
   are missing. A chat that has a collection attached still answers; the model is told the
   collection is unavailable and says so, and the answer shows a **not available** notice.
 - **Searched, never loaded in full:** a collection holds up to 200 documents, so a chat searches it
   instead of putting every document into the prompt.
+- **Local projects stay creatable under every policy**, including `ifinder`.
 - Admin project IDs starting with `ifc_` are now reserved for collections, as `prj_` is for user
   projects.
 

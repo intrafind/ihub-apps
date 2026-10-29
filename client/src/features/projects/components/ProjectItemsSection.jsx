@@ -24,6 +24,10 @@ import { useProjectEstimate } from '../hooks/useProjectEstimate';
 import { useProjectItemActions } from '../hooks/useProjectItemActions';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { canAddItem, isIFinderProject } from '../utils/projectView';
+
+/** The one item kind a smart collection from iFinder takes. */
+const IFINDER_DOCUMENT_KIND = 'ifinder-document';
+const IFINDER_ALLOWED_KINDS = [IFINDER_DOCUMENT_KIND];
 import AddProjectItemDialog from './AddProjectItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
@@ -79,17 +83,23 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
  * @param {Object} props
  * @param {Object} props.project
  * @param {Object|null} props.config - `_config` (kinds, upload settings, limits).
- * @param {boolean} props.editable
+ * @param {boolean} props.editable - The caller may add and remove items. For a smart
+ *   collection from iFinder the page derives it from `permissions.canEdit` and the
+ *   `_config.ifinder.writable` capability.
  * @param {(updater: Function|Object) => void} props.setProject
  * @param {() => Promise<Object|null>} props.reload
  * @returns {JSX.Element}
  */
 function ProjectItemsSection({ project, config, editable, setProject, reload }) {
   const { t } = useTranslation();
-  // A smart collection from iFinder: its documents are listed and can be read,
-  // nothing else. The local limits, pins and the token estimate (a request the
-  // server does not take for it) do not apply.
+  // A smart collection from iFinder: its documents are listed and read, and its
+  // owner adds and removes them (`editable`, which the page derives from the
+  // permissions and the capability). The local limits, pins, renaming and
+  // refreshing a document, and the token estimate (a request the server does not
+  // take for it) do not apply.
   const isIFinder = isIFinderProject(project);
+  const canAddDocuments =
+    !isIFinder || (config?.kinds || []).some(kind => kind.id === IFINDER_DOCUMENT_KIND);
   const [adding, setAdding] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [renaming, setRenaming] = useState(null);
@@ -126,7 +136,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           {!isIFinder && (project.items || []).length > 0 && (
             <EstimateTokensButton loading={estimating} onClick={runEstimate} />
           )}
-          {editable && (
+          {editable && canAddDocuments && (
             <button
               type="button"
               onClick={() => setAdding(true)}
@@ -134,7 +144,12 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
               title={
                 roomForMore
                   ? undefined
-                  : t('projects.items.full', 'This project holds as many items as it may.')
+                  : isIFinder
+                    ? t(
+                        'projects.items.collectionFull',
+                        'A smart collection holds as many documents as iFinder allows.'
+                      )
+                    : t('projects.items.full', 'This project holds as many items as it may.')
               }
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
             >
@@ -156,7 +171,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
       {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
       {estimate && <div className="mb-4" />}
 
-      {config?.limits && !isIFinder && (
+      {(isIFinder ? config?.ifinder?.maxDocuments : config?.limits) && (
         <ProjectUsageBar project={project} config={config} className="mb-4" />
       )}
 
@@ -194,12 +209,16 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           hidePinned={isIFinder}
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
-          onTogglePinned={actions.togglePinned}
-          onRefresh={item => {
-            clearEstimate();
-            return actions.refresh(item);
-          }}
-          onRename={setRenaming}
+          onTogglePinned={isIFinder ? undefined : actions.togglePinned}
+          onRefresh={
+            isIFinder
+              ? undefined
+              : item => {
+                  clearEstimate();
+                  return actions.refresh(item);
+                }
+          }
+          onRename={isIFinder ? undefined : setRenaming}
           onRemove={setRemoving}
         />
       </div>
@@ -212,10 +231,11 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           kinds={config?.kinds || []}
           config={config}
           api={itemApi}
-          cloud
-          projectLinks
+          cloud={!isIFinder}
+          projectLinks={!isIFinder}
           hideUnavailable
-          multipleUploads
+          multipleUploads={!isIFinder}
+          allowedKinds={isIFinder ? IFINDER_ALLOWED_KINDS : null}
           project={project}
           onAdded={() => {
             clearEstimate();
@@ -229,7 +249,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         onClose={() => setPreviewItem(null)}
         fetchText={fetchItemText}
         onSave={
-          editable
+          editable && !isIFinder
             ? text => {
                 clearEstimate();
                 return actions.editText(previewItem, text);
@@ -248,9 +268,17 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
       <ConfirmDialog
         isOpen={Boolean(removing)}
         title={t('projects.items.removeTitle', 'Remove item')}
-        message={t('projects.items.removeConfirm', 'Remove "{{name}}" from the project?', {
-          name: removing?.name ?? ''
-        })}
+        message={
+          isIFinder
+            ? t(
+                'projects.items.removeFromCollectionConfirm',
+                'Remove "{{name}}" from the collection? The document stays in iFinder.',
+                { name: removing?.name ?? '' }
+              )
+            : t('projects.items.removeConfirm', 'Remove "{{name}}" from the project?', {
+                name: removing?.name ?? ''
+              })
+        }
         confirmLabel={t('projects.items.actions.remove', 'Remove item')}
         danger
         onConfirm={() => {
