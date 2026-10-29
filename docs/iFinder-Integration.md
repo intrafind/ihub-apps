@@ -772,8 +772,10 @@ The iFinder public API has no "list my search profiles" endpoint — profile
 listing lives on the administration API, which an end-user token cannot reach.
 The list is read, as the user, from the configuration action of iFinder's
 internal search API (`GET /internal-api/v2/search?action=getconfiguration`),
-which is where the iFinder searchbar gets the profiles it offers. It is cached
-per user for five minutes.
+which is where the iFinder searchbar gets the profiles it offers. iFinder
+assigns profiles per application; the list is read for
+`iFinder.searchProfileApplication` (default `ifinder`, the searchbar's). It is
+cached per user for five minutes.
 
 - `isDefault` marks the configured `iFinder.defaultSearchProfile`. It is always
   listed; `available: false` means the user does not have it.

@@ -131,6 +131,9 @@ class IFinderService {
           iFinderConfig.defaultSearchProfile ||
           process.env.IFINDER_SEARCH_PROFILE ||
           'searchprofile-standard',
+        // The iFinder application whose search profile assignments
+        // listProfiles reads (`searchprofile.applications`).
+        searchProfileApplication: iFinderConfig.searchProfileApplication || 'ifinder',
         downloadDir:
           iFinderConfig.downloadDir || config.IFINDER_DOWNLOAD_DIR || '/tmp/ifinder-downloads',
         timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
@@ -986,6 +989,7 @@ class IFinderService {
       userProfiles = await iFinderSearchProfiles.getUserSearchProfiles({
         user,
         baseUrl: cfg.baseUrl,
+        application: cfg.searchProfileApplication,
         timeout: cfg.timeout,
         signal
       });

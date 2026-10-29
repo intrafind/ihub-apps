@@ -20,6 +20,11 @@
  *    (the value is kept: an admin who switched the extra request off keeps it off)
  *  - `iAssistant.profileCacheTtlMs` → `iAssistant.searchProfileCacheTtlMs`
  *
+ * iFinder assigns search profiles per application, and the per-user list is
+ * read for one of them. `iFinder.searchProfileApplication` is written out with
+ * the searchbar's application, `ifinder`, so an installation that assigns its
+ * iAssistant profiles under another application sees where to say so.
+ *
  * The `iFinder_listProfiles` tool reads the same per-user list now instead of
  * deriving profiles from the iAssistants. Its description told the model that
  * a deployment without iAssistants reports only the default; that text is
@@ -53,10 +58,22 @@ export async function up(ctx) {
  */
 async function renamePlatformKeys(ctx) {
   const platform = await ctx.readJson('config/platform.json');
-  const iAssistant = platform.iAssistant;
-  if (!iAssistant || typeof iAssistant !== 'object') return;
-
   let changed = false;
+
+  if (
+    platform.iFinder &&
+    typeof platform.iFinder === 'object' &&
+    platform.iFinder.searchProfileApplication === undefined
+  ) {
+    ctx.setDefault(platform, 'iFinder.searchProfileApplication', 'ifinder');
+    changed = true;
+  }
+
+  const iAssistant = platform.iAssistant;
+  if (!iAssistant || typeof iAssistant !== 'object') {
+    if (changed) await ctx.writeJson('config/platform.json', platform);
+    return;
+  }
 
   if (iAssistant.verifySearchProfileAccess === undefined) {
     changed =

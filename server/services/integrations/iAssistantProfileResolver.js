@@ -128,7 +128,8 @@ class IAssistantProfileResolver {
     const configured = configuredSearchProfile || undefined;
     const unverified = { searchProfile: configured, source: configured ? 'unverified' : 'none' };
 
-    const { verifySearchProfileAccess, searchProfileCacheTtlMs } = iAssistantService.getConfig();
+    const { verifySearchProfileAccess, searchProfileCacheTtlMs, searchProfileApplication } =
+      iAssistantService.getConfig();
     if (!verifySearchProfileAccess || !baseUrl) return unverified;
 
     let profiles;
@@ -136,6 +137,7 @@ class IAssistantProfileResolver {
       profiles = await iFinderSearchProfiles.getUserSearchProfiles({
         user,
         baseUrl,
+        application: searchProfileApplication,
         ttlMs: searchProfileCacheTtlMs,
         signal
       });
@@ -162,10 +164,14 @@ class IAssistantProfileResolver {
       return unverified;
     }
 
-    logger.info('Configured search profile is not available to the user; using their default', {
+    // A warning, not an info line: the conversation searches another corpus
+    // than the app names, and the cause may be an assignment under another
+    // iFinder application rather than a missing one.
+    logger.warn('Configured search profile is not assigned to the user; using their default', {
       component: 'IAssistantProfileResolver',
       configuredSearchProfile: configured || '(none)',
-      searchProfile: userDefault.id
+      searchProfile: userDefault.id,
+      application: searchProfileApplication
     });
     return { searchProfile: userDefault.id, source: 'user-default' };
   }

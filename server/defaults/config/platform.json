@@ -331,7 +331,8 @@
     "audience": "ifinder-api",
     "tokenExpirationSeconds": 3600,
     "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email"
+    "jwtSubjectField": "email",
+    "searchProfileApplication": "ifinder"
   },
   "iAssistant": {
     "defaultProfileId": "",

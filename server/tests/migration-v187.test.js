@@ -150,4 +150,21 @@ describe('V187 iAssistant search profile access', () => {
     await up(ctx);
     assert.deepEqual(ctx.files[TOOL], tool);
   });
+
+  it('writes out the iFinder application whose profile list is read', async () => {
+    const ctx = makeCtx({ [PLATFORM]: { iFinder: { enabled: true } } });
+    await up(ctx);
+    assert.deepEqual(ctx.files[PLATFORM].iFinder, {
+      enabled: true,
+      searchProfileApplication: 'ifinder'
+    });
+  });
+
+  it('keeps an iFinder application an admin chose', async () => {
+    const ctx = makeCtx({
+      [PLATFORM]: { iFinder: { searchProfileApplication: 'rag' }, iAssistant: {} }
+    });
+    await up(ctx);
+    assert.equal(ctx.files[PLATFORM].iFinder.searchProfileApplication, 'rag');
+  });
 });

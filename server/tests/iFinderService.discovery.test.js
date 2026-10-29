@@ -217,6 +217,7 @@ describe('iFinderService discovery surface', () => {
       const result = await iFinderService.listProfiles({ user: USER, chatId: CHAT });
 
       expect(calls[0].user).toBe(USER);
+      expect(calls[0].application).toBe('ifinder');
       expect(result.source).toBe('ifinder');
       expect(result.defaultSearchProfile).toBe('searchprofile-standard');
       expect(result.profiles).toEqual([

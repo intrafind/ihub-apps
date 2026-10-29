@@ -273,7 +273,10 @@ test('the search profiles are read as the user from the internal API and cached'
     await iFinderSearchProfiles.getUserSearchProfiles(args);
 
     assert.equal(calls.length, 1, 'concurrent and later callers share one read');
-    assert.equal(calls[0].url, `${BASE_URL}${CONFIGURATION_PATH}?action=getconfiguration`);
+    assert.equal(
+      calls[0].url,
+      `${BASE_URL}${CONFIGURATION_PATH}?action=getconfiguration&searchprofile.applications=ifinder`
+    );
     assert.match(calls[0].options.headers.Authorization, /^Bearer /);
     assert.deepEqual(first, [
       { id: 'searchprofile-standard', name: 'SEARCHPROFILE-STANDARD', isDefault: true },
@@ -283,6 +286,11 @@ test('the search profiles are read as the user from the internal API and cached'
     // Another user is another read.
     await iFinderSearchProfiles.getUserSearchProfiles({ ...args, user: { ...user, id: 'other' } });
     assert.equal(calls.length, 2);
+
+    // So is another iFinder application, whose assignments differ.
+    await iFinderSearchProfiles.getUserSearchProfiles({ ...args, application: 'rag' });
+    assert.equal(calls.length, 3);
+    assert.match(calls[2].url, /searchprofile\.applications=rag$/);
   } finally {
     iFinderSearchProfiles.fetch = originalFetch;
     iFinderSearchProfiles.reset();

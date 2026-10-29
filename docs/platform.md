@@ -1107,6 +1107,7 @@ plaintext in `platform.json`. See
 | `tokenExpirationSeconds` | Number  | `3600`            | Lifetime of generated JWT tokens in seconds                                             |
 | `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
 | `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
+| `searchProfileApplication` | String | `"ifinder"`     | iFinder application whose search profile assignments iHub reads for a user (`searchprofile.applications`); see [iAssistant Integration](#iassistant-integration) |
 
 ### `jwtSubjectField` supported values
 
@@ -1162,6 +1163,8 @@ Search profiles are assigned per user in iFinder, while the configured one appli
 - keeps the configured search profile when the user has it;
 - otherwise uses the user's default search profile in iFinder, as iFinder's own searchbar does for a profile the user does not have;
 - keeps the configured search profile when the list cannot be read (for example iFinder 6.9 answers 403 to a user without the feature `fi_ifinder_allow`) or is empty. The check never turns a working setup into a broken one; it logs at debug level.
+
+iFinder assigns search profiles per *application*, and the list is read for one of them: `iFinder.searchProfileApplication`, by default `ifinder`, the application of the iFinder searchbar (and of its own iAssistant). If your installation assigns the profiles of its iAssistant apps under another application, set it to that application. Otherwise a profile assigned only there counts as missing, and the conversation searches the user's default profile instead. Ragtime itself does not check the assignment of a profile it is given — only the user's document permissions — so switching is a choice of corpus, not a security boundary. A switch is logged as a warning naming both profiles; turn the check off with `verifySearchProfileAccess: false` to always send the configured profile.
 
 The conversation profile does not name a search profile: it selects a workflow and its tuning, not a corpus. iFinder pairs the two in an *iAssistant* (`/public-api/v0/assistants`), which is a separate entity.
 

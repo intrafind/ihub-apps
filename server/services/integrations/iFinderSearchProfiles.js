@@ -23,6 +23,15 @@
  * checks the profile on every search; this list decides which profile iHub asks
  * for, not what the user may see.
  *
+ * The list is per *application*: iFinder assigns search profiles to a user per
+ * application (`searchProfilesApplication.<app>`), and the configuration
+ * action answers for the one named in `searchprofile.applications`, `ifinder`
+ * (the searchbar) unless told otherwise. A profile assigned to the user only
+ * under another application is not in the list. Ragtime itself does not check
+ * the assignment of a named profile, so the application asked here must be the
+ * one the installation assigns its iAssistant profiles under
+ * (`iFinder.searchProfileApplication`).
+ *
  * The configuration action requires the feature `fi_ifinder_allow` (iFinder
  * 6.9, TCC-1868): a user without it is answered with 403. The caller treats
  * that, like any other failure, as "unknown" rather than "no profiles".
@@ -35,6 +44,9 @@ export const CONFIGURATION_PATH = '/internal-api/v2/search';
 
 /** How long a user's profile list is kept when the caller passes no TTL. */
 export const DEFAULT_CACHE_TTL_MS = 300000;
+
+/** The iFinder application whose profile list is read: the searchbar's. */
+export const DEFAULT_APPLICATION = 'ifinder';
 
 /**
  * Decode a Base64 profile id, or null for a value that is not one.
@@ -104,26 +116,34 @@ class IFinderSearchProfiles {
    * @param {Object} params
    * @param {Object} params.user - authenticated user; the request is made as them
    * @param {string} params.baseUrl - iFinder base URL
+   * @param {string} [params.application] - iFinder application whose assignments are read
    * @param {number} [params.ttlMs] - how long the list is cached
    * @param {number} [params.timeout] - request timeout in ms
    * @param {AbortSignal} [params.signal]
    * @returns {Promise<Array<{id: string, name: string, isDefault: boolean}>>}
    * @throws when iFinder cannot be asked or answers with something unreadable
    */
-  getUserSearchProfiles({ user, baseUrl, ttlMs = DEFAULT_CACHE_TTL_MS, timeout, signal }) {
+  getUserSearchProfiles({
+    user,
+    baseUrl,
+    application = DEFAULT_APPLICATION,
+    ttlMs = DEFAULT_CACHE_TTL_MS,
+    timeout,
+    signal
+  }) {
     if (!user?.id || user.id === 'anonymous') {
       return Promise.reject(new Error('Search profiles can only be listed for a signed-in user'));
     }
     if (!baseUrl) return Promise.reject(new Error('No iFinder base URL configured'));
 
-    const key = `${baseUrl}::${user.id}`;
+    const key = `${baseUrl}::${application}::${user.id}`;
     const cached = this.cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
 
     const pending = this.inFlight.get(key);
     if (pending) return pending;
 
-    const lookup = this.fetchSearchProfiles({ user, baseUrl, timeout, signal })
+    const lookup = this.fetchSearchProfiles({ user, baseUrl, application, timeout, signal })
       .then(profiles => {
         this.cache.set(key, { value: profiles, expiresAt: Date.now() + ttlMs });
         return profiles;
@@ -140,10 +160,13 @@ class IFinderSearchProfiles {
    * One uncached read of the user's profiles.
    * @private
    */
-  async fetchSearchProfiles({ user, baseUrl, timeout, signal }) {
+  async fetchSearchProfiles({ user, baseUrl, application, timeout, signal }) {
     const url =
       `${baseUrl.replace(/\/+$/, '')}${CONFIGURATION_PATH}?` +
-      new URLSearchParams({ action: 'getconfiguration' });
+      new URLSearchParams({
+        action: 'getconfiguration',
+        'searchprofile.applications': application || DEFAULT_APPLICATION
+      });
 
     const response = await this.fetch('iFinderSearchProfiles', url, {
       method: 'GET',

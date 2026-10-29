@@ -212,9 +212,7 @@ function IAssistantSection({ app, onChange }) {
                   type="checkbox"
                   checked={allSearchProfiles}
                   disabled={usesAssistant}
-                  onChange={e =>
-                    handleIAssistantChange({ allSearchProfiles: e.target.checked || undefined })
-                  }
+                  onChange={e => handleIAssistantChange({ allSearchProfiles: e.target.checked })}
                   className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-60"
                 />
                 <div>

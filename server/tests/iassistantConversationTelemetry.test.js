@@ -200,7 +200,8 @@ async function withProfiles(responder, body, { verifySearchProfileAccess = true 
   iAssistantService.config = {
     ...iAssistantService.getConfig(),
     verifySearchProfileAccess,
-    searchProfileCacheTtlMs: 1000
+    searchProfileCacheTtlMs: 1000,
+    searchProfileApplication: 'rag'
   };
   try {
     await body(calls);
@@ -262,6 +263,7 @@ test('a configured search profile the user has is kept', async () => {
       assert.deepEqual(result, { searchProfile: 'searchprofile-legal', source: 'configured' });
       assert.equal(calls[0].user, user);
       assert.equal(calls[0].ttlMs, 1000);
+      assert.equal(calls[0].application, 'rag');
     }
   );
 });

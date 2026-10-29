@@ -51,6 +51,11 @@ class IAssistantService {
         searchProfileCacheTtlMs: Number.isFinite(iAssistantConfig.searchProfileCacheTtlMs)
           ? iAssistantConfig.searchProfileCacheTtlMs
           : 300000,
+        // The iFinder application whose search profile assignments that check
+        // reads. Ragtime does not check the assignment of a named profile, so
+        // a profile assigned only under another application would otherwise
+        // count as missing.
+        searchProfileApplication: this.platform.iFinder?.searchProfileApplication || 'ifinder',
         // Installation-wide default for grounded-only answering. An app's own
         // `iassistant.groundedOnly` wins over it in either direction.
         groundedOnly: iAssistantConfig.groundedOnly === true

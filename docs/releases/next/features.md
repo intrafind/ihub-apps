@@ -307,6 +307,9 @@ could not find anything.
   replaces `resolveSearchProfileFromProfile`, which read the conversation profile for a search
   profile that iFinder never publishes there; the update renames the key and keeps its value.
   `profileCacheTtlMs` becomes `searchProfileCacheTtlMs`.
+- The list is read for one iFinder application, `iFinder.searchProfileApplication` (default
+  `ifinder`, the searchbar's). Set it if your iAssistant profiles are assigned under another
+  application.
 - If iFinder cannot be asked, the configured profile is used as before. iFinder 6.9 refuses the
   request for users without the feature `fi_ifinder_allow`.
 - **iFinder iAssistants in apps:** an app can name an iFinder iAssistant
