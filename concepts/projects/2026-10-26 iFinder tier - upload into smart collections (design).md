@@ -1,32 +1,35 @@
 # iFinder tier: upload into smart collections (phase 2 of #1036)
 
-Status: design proposal, nothing implemented. Replaces the "push indexer" wording of decision 7 in #1036
-and the scope of spec 5 (#2907). Read it with spec 4 (#2906), spec 5 (#2907) and spec 6 (#2908).
+Status: design proposal, nothing implemented. Cut into three iterations (read-only collections, manage
+membership, upload); see section 1. Replaces the "push indexer" wording of decision 7 in #1036 and the
+scope of spec 5 (#2907). Read it with spec 4 (#2906), spec 5 (#2907) and spec 6 (#2908).
 
 The iFinder findings below come from reading `intrafind/ifinder` at `main` (6.9.0-SNAPSHOT, commit
 `1f20761`). Section 12 lists what was read and what stayed inferred.
 
 ## 1. Goal and scope
 
-An iHub project can be backed by an iFinder **smart collection**. A user creates the collection from
-iHub, uploads files into it, and chats against it. The uploaded file is a first-class iFinder document:
-stored encrypted, extracted and indexed asynchronously, visible only to its uploader, and previewable
-and downloadable through the access service.
+An iHub project can be backed by an iFinder **smart collection**. The work is cut into three
+iterations, each shippable on its own. Sections 4 to 7 and 9 describe iteration 3 only. Section 8
+(smart collections) is needed from iteration 2, and section 10 is split by iteration.
 
-In scope for this phase:
+| Iteration | What users get | What changes in iFinder |
+|---|---|---|
+| **1. Read-only** | The user's smart collections appear in the projects list as read-only projects. The documents of a collection are `ifinder-document` items and behave exactly like an iFinder document added to a project today (search, read, citations, "unavailable for you"). | Nothing. |
+| **2. Manage membership** | iHub creates collections, adds iFinder documents to a collection (through the existing iFinder document picker) and removes them again. Removing only removes the membership, never the document. | Hardening of the utilities service (section 8). |
+| **3. Upload** | Upload files into a collection. The original is stored encrypted, so preview and download work through the access service. | Upload endpoint, key wrapping, storage handler, processor changes (sections 4 to 9). |
 
-- Create, list, rename and delete smart collections from iHub.
-- Upload files into a collection and show their processing status.
-- Add existing iFinder documents (the `ifinder-document` kind) to a collection.
-- Encryption of every uploaded file with its own data key.
+Decided on 2026-10-26 and 2026-10-29, for every iteration:
 
-Out of scope, decided on 2026-10-26:
+- **No sharing.** Collections stay private to their owner. Uploaded documents carry ACLs that name one
+  user. Viewers stay unenforced in iFinder (TCC-1832) and iHub never sets them.
+- **No deleting a collection from iHub.** Creating, renaming, adding and removing documents are allowed.
+- **Items are iFinder documents only** in an iFinder-tier project: no url, page, picked cloud files or
+  written text.
+- Promotion between tiers is out of scope.
 
-- **Sharing.** Collections stay private to their owner. Uploaded documents carry ACLs that name one user.
-  Viewers stay unenforced in iFinder (TCC-1832) and iHub never sets them.
-- **Other item kinds** in an iFinder-tier project: no url, page, picked cloud files or written text. Only
-  uploads and iFinder documents.
-- Promotion between tiers, and the S3 adapter on the iHub side (see option A in section 4).
+The upload variant without any storage (iHub extracts the text and writes it straight into the index) was
+considered and dropped: preview and download need the original, so upload waits for iteration 3.
 
 ## 2. What the iFinder code gives us, and what it does not
 
@@ -55,6 +58,9 @@ Decisions the product owner has taken, and the proposals this document adds:
 | D6 | iHub creates collections, and `GET /api/projects` also lists the user's collections. | Taken |
 | D7 | Upload path: iFinder owns storage, wrapping, ACL and status behind one upload endpoint (option A). | **Proposed**, to confirm |
 | D8 | The data key is wrapped inside iFinder, with a key version stored, not through the open `/encrypt` endpoint. | **Proposed**, to confirm |
+| D9 | Three iterations: read-only collections, then membership management, then upload (section 1). | Taken |
+| D10 | iHub creates collections, adds iFinder documents to them and removes them from them. It never deletes a collection and never shares one. | Taken |
+| D11 | No upload without storage: preview and download need the encrypted original, so upload is iteration 3. | Taken |
 
 D7 supersedes decision 7 of #1036 ("a push indexer with its own API"): the processor and the existing
 `accessInfo` mechanism do the indexing, and the new endpoint only creates the document safely. D8
@@ -273,30 +279,62 @@ status resource shows `deleting`. Deleting a collection runs this for each of it
 
 ## 10. iHub side
 
+Per iteration. The collection calls use the public Smart Collections API (v1 OpenAPI paths, not the stale
+v0 paths in the 6.8 docs) with the per-user RS256 JWT (`server/utils/iFinderJwt.js`). Its default scope is
+`fi_index_read`, so the calls request `fi_smartcollections` explicitly, and the user needs that role.
+All outbound calls use `httpFetch()`, so the SSL whitelist and the proxy config apply, with a whitelisted
+and a non-whitelisted host test (CLAUDE.md).
+
+### Iteration 1: read-only collections
+
 - `tierPolicy` accepts `both` and `ifinder` for real. Today every value acts as `ihub`
   (`projectSettings.js`, `docs/projects.md`). The tier is read from a capability call to iFinder
-  (version, upload authority, handler configured), so an older iFinder never shows the tier.
-- New services next to `iFinderService`: a collections client, an upload client and a status poller.
-  Calls use the per-user RS256 JWT (`server/utils/iFinderJwt.js`) with `fi_smartcollections`,
-  `fi_iassistant` and the upload authority. All outbound calls use `httpFetch()`, so the SSL whitelist and the proxy config apply, with a
-  whitelisted and a non-whitelisted host test (CLAUDE.md).
+  (version with the Smart Collections public API, GA since 6.8), so an older iFinder never shows the tier.
+- A collections client next to `iFinderService`: list and get.
+- **Project list:** `GET /api/projects` merges the local list with the user's collections as projects
+  with `tier: 'ifinder'`, a namespaced id and a read-only flag, with a short timeout and a cache. The
+  cache key contains the tenant and the principal, an entry is never shared between users, and the
+  response is built for the requesting principal on every call, including cache hits (no collection id or
+  name from another user's entry). If iFinder is slow or down, the local list still returns, with a
+  warning. Collections created in iFinder appear too. The list shows document counts only. The documents
+  are fetched when the project is opened, with their titles cached per user.
+- **Items:** every document id of the collection becomes an `ifinder-document` item, resolved by the
+  existing link-kind fetch with the reading user's rights. A document the user cannot open is named as
+  unavailable, as today. No new knowledge provider is needed: the scope is the collection's id list, so
+  there is no dependency on the 6.9 retrieval scope. How the existing iFinder document search treats
+  more than 100 ids still has to be checked.
+- **Read-only UI:** no edit, rename, share, delete, instructions, pins or upload. A chat can use the
+  collection as knowledge. Instructions and chat membership have no place in a smart collection, so
+  chats in a collection need a small local reference record keyed by the collection id (created on first
+  use), or they stay outside iteration 1.
+- Anonymous users are blocked. A user without a stable principal (local auth without an email) cannot use
+  the tier.
+
+### Iteration 2: manage membership
+
+- **Create** a collection from iHub (name, description). The owner is the JWT identity.
+- **Add** iFinder documents through the existing iFinder document picker. iHub checks first that the user
+  can read each document, because iFinder does not validate ids. The 200-document cap is shown against
+  the project limits and an overflow is a clear error.
+- **Remove** documents from a collection. This only removes the membership, never the document.
+- **Rename** a collection. There is no delete and no share in iHub.
+- Collection writes in iFinder are an unversioned read-modify-write, so iHub serializes the writes per
+  collection until utilities gains `if_seq_no` (section 8).
+- iHub does not delete collections. What happens to a user's collections when the user leaves is a
+  question for iFinder.
+
+### Iteration 3: upload
+
+- New services next to `iFinderService`: an upload client and a status poller, with the upload authority
+  added to the token scope.
 - **Kind registry** gets a `tiers` property. An iFinder project offers `upload` and `ifinder-document`
   only. "Edit text" and the cloud kinds are hidden. The project page shows the tier and the fact that
   the original is kept (and downloadable by the owner).
-- **Project list:** `GET /api/projects` merges the local list with the user's collections, with a short
-  timeout and a cache. The cache key contains the tenant and the principal, an entry is never shared
-  between users, and the response is built for the requesting principal on every call, including cache
-  hits (no collection id or name from another user's entry). If iFinder is slow or down, the local list
-  still returns, with a warning. Collections created
-  elsewhere appear as projects. Instructions, pins and chats have no place in a smart collection, so
-  iHub keeps a reference record keyed by the collection id (created on first open).
-- **Knowledge provider** for the tier: search through the retrieval scope `ifinder_smart_collection`
-  (6.9, RAG-892), read through `getContent` (`document.content`), list through the collection.
-  Load-all is out for this tier.
-- **User deletion** also deletes the user's collections and uploads in iFinder.
-- Anonymous users are blocked. A user without a stable principal (local auth without an email) cannot
-  use the tier.
-- Release note and a doc update under `docs/projects.md` when it ships, per CLAUDE.md.
+- **Knowledge provider** for uploads: read through `getContent` (`document.content`), search through the
+  collection's id list or the 6.9 retrieval scope `ifinder_smart_collection` (RAG-892). Load-all is out
+  for this tier.
+- **User deletion** also deletes the user's uploads in iFinder.
+- Release note and a doc update under `docs/projects.md` when each iteration ships, per CLAUDE.md.
 
 ## 11. Risks that remain
 
@@ -327,19 +365,26 @@ without `prerequisites`. The file launcher module was not read.
 
 ## 13. Work split
 
-| Team | Work |
-|---|---|
-| iFinder Core / webapp | Upload endpoint, wrap component, status resource, collection hardening, capability call |
-| iFinder access | Storage handler plugin, evict endpoint, cache policy |
-| iFinder document processor | Job enablement, optimistic concurrency, missing-blob handling, retry |
-| iFinder search / RAG | `sourceName` handling in profiles, retrieval scope check, optional collection-id field |
-| iHub | Tier policy, collections and upload clients, poller, project list merge, kind `tiers`, UI states, docs |
+| Team | Iteration 1 | Iteration 2 | Iteration 3 |
+|---|---|---|---|
+| iHub | Capability call, collections client, project list merge, read-only project view, tier policy, docs | Create, rename, add and remove, picker reuse, per-collection write serialization | Upload and status clients, kind `tiers`, UI states |
+| iFinder Core / webapp | None | Utilities hardening (owner checks, `if_seq_no`, 4xx for the cap, case rule) | Upload endpoint, wrap component, status resource, capability call |
+| iFinder access | None | None | Storage handler plugin, evict endpoint, cache policy |
+| iFinder document processor | None | None | Job enablement, optimistic concurrency, missing-blob handling, retry |
+| iFinder search / RAG | None | None | `sourceName` handling in profiles, retrieval scope check, optional collection-id field |
 
 ## 14. Open questions
 
-1. Option A or B for the upload path (section 4)?
-2. Which component wraps keys, and who may call it (section 6)?
-3. Name and scope of the upload authority.
-4. Is `GET /docs/{id}` real time, and what does the status resource read from?
-5. Which storage provider do iFinder and iHub share in production, and who owns its credentials?
-6. Does the collection delete remove uploads silently, or ask first?
+1. Identity: how does utilities map the JWT claim to the owner (`sub`, email or `preferred_username`), and
+   does a collection created in the iFinder UI show up for the same user in iHub (case)? This blocks
+   iteration 1.
+2. Over 100 ids: how does the existing iFinder document search by id behave for a collection with more
+   than 100 documents?
+3. Option A or B for the upload path (section 4)? Iteration 3.
+4. Which component wraps keys, and who may call it (section 6)? Iteration 3.
+5. Name and scope of the upload authority. Iteration 3.
+6. Is `GET /docs/{id}` real time, and what does the status resource read from? Iteration 3.
+7. Which storage provider do iFinder and iHub share in production, and who owns its credentials?
+   Iteration 3.
+8. What happens to a user's collections and uploads when the user leaves? iFinder decides; iHub never
+   deletes a collection.
