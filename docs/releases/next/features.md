@@ -263,3 +263,26 @@ warnings — before anything is changed; you confirm, and the server restarts in
 - On the command line: `--update=install --file=<archive>`, `--update=status`,
   `--update=rollback --restore-config`.
 - See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).
+
+## iFinder: Tokens From a Shared OIDC Provider (Token Exchange)
+
+When iHub and iFinder sign users in through the same OIDC provider (Zitadel, Keycloak, Entra ID),
+iFinder no longer has to trust iHub as a second token issuer. Set **Token issuer** under
+**Admin → Integrations → iFinder** to *Shared OIDC provider (token exchange)*, and iHub exchanges
+each user's sign-in token at that provider for an iFinder token. The default, iHub-signed tokens,
+is unchanged.
+
+- Grant types: RFC 8693 token exchange (Zitadel, Keycloak) and On-Behalf-Of (Entra ID), with an
+  optional separate exchange client, audience and a scope map from `fa_*` scopes to provider
+  scopes.
+- Scheduled tasks, personal API keys and workflows keep working while the user is signed out:
+  iHub keeps the provider's refresh token, encrypted. Add `offline_access` to the provider's
+  scopes.
+- Users see the stored authorization under **Integrations** in their profile and can revoke it.
+  It is deleted when the user is deleted or deactivated, and when the provider rejects it; the
+  user then signs in again.
+- Users who sign in another way (local, LDAP, NTLM, another provider) get an error naming the
+  required provider.
+- The connection test runs the exchange for the admin and shows `iss`, `aud`, `sub`, the scopes
+  and which `fa_*` claims the token carries.
+- See [Shared OIDC Provider (Token Exchange)](../../ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange).
