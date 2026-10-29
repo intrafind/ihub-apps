@@ -10,11 +10,11 @@ maintenance.
 
 ## Enabling
 
-The marketplace is a **preview** feature and is off by default. Switch it on under
+The marketplace is on by default. Switch it off under
 **Admin → Platform → Features → Marketplace** (`features.marketplace` in `contents/config/features.json`).
-The **Marketplace** entry then appears in the admin sidebar under **AI Workspace**.
+While it is on, the **Marketplace** entry appears in the admin sidebar under **AI Workspace**.
 
-![Admin features page with the preview features Marketplace, User Projects, Chat History and Scheduled Tasks](assets/screenshots/admin-features.png)
+![Admin features page with the Marketplace, Chat History and Scheduled Tasks features and the User Projects preview](assets/screenshots/admin-features.png)
 
 ## Shipped registries
 
