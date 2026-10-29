@@ -559,7 +559,13 @@
       "unavailableOne": "nicht verfügbar",
       "overBudget": "über dem Budget",
       "openProject": "Projekt öffnen",
-      "privateProject": "Privates Projekt"
+      "privateProject": "Privates Projekt",
+      "ifinderCollection": "iFinder-Collection",
+      "missingOne": "{{name}} · nicht verfügbar",
+      "missing_one": "{{count}} Projekt nicht verfügbar",
+      "missing_other": "{{count}} Projekte nicht verfügbar",
+      "missingIFinder": "iFinder war nicht erreichbar, daher hat diese Antwort es nicht verwendet.",
+      "missingOther": "Diese Antwort hat es nicht verwendet."
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",

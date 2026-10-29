@@ -18,8 +18,9 @@ import { isIFinderProjectId } from './projectConstants.js';
 import { loadCollectionProject } from './ifinder/IFinderTier.js';
 
 /**
- * @typedef {{status: 'ok', project: Object}|{status: 'not-found'}|{status: 'unavailable'}} LoadedProject
- *   `unavailable`: the iFinder tier could not be asked. A stored project is `ok` or `not-found`.
+ * @typedef {{status: 'ok', project: Object}|{status: 'not-found'}|{status: 'unavailable', name: string}} LoadedProject
+ *   `unavailable`: the iFinder tier could not be asked; `name` is what the user last saw the
+ *   collection called, or ''. A stored project is `ok` or `not-found`.
  */
 
 /**
@@ -32,7 +33,8 @@ export async function loadProjectFor(user, projectId, { repository, signal } = {
   if (isIFinderProjectId(projectId)) {
     const loaded = await loadCollectionProject(user, projectId, { signal });
     if (loaded.status === 'ok') return loaded;
-    return { status: loaded.status === 'unavailable' ? 'unavailable' : 'not-found' };
+    if (loaded.status === 'unavailable') return { status: 'unavailable', name: loaded.name || '' };
+    return { status: 'not-found' };
   }
   const project = await (repository || getProjectRepository()).get(projectId);
   return project ? { status: 'ok', project } : { status: 'not-found' };

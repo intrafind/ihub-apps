@@ -4690,7 +4690,13 @@
       "unavailableOne": "unavailable",
       "overBudget": "over budget",
       "openProject": "Open the project",
-      "privateProject": "Private project"
+      "privateProject": "Private project",
+      "ifinderCollection": "iFinder collection",
+      "missingOne": "{{name}} · not available",
+      "missing_one": "{{count}} project not available",
+      "missing_other": "{{count}} projects not available",
+      "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
+      "missingOther": "This answer did not use it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

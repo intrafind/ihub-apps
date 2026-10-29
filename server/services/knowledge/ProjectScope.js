@@ -37,6 +37,8 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @property {boolean} write
  * @property {'container'|'app'|'attached'|'workflow'} origin
  * @property {boolean} instructions - Whether its instructions apply to the prompt.
+ * @property {string} [unavailable] - Set on an entry that stands in for a project that could
+ *   not be loaded (`IFINDER_UNAVAILABLE`); its `project` holds no items.
  */
 
 /**
@@ -45,9 +47,14 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @param {Object} options
  * @param {Object} options.appConfig - The app (or node config) with its link fields.
  * @param {Object} options.user - The requesting user with resolved permissions.
+ * @param {boolean} [options.includeUnavailable=false] - Keep a smart collection of the
+ *   iFinder tier that iFinder could not be asked about as an entry flagged `unavailable`
+ *   (an empty stand-in, named as the user last saw it), instead of leaving it out. The
+ *   chat prompt asks for it so the answer can say which collection is missing; the
+ *   tools and workflow nodes work on what can be read and do not.
  * @returns {Promise<ScopeEntry[]>} In order: container, app links, attachments, workflow links.
  */
-export async function resolveProjectScope({ appConfig, user }) {
+export async function resolveProjectScope({ appConfig, user, includeUnavailable = false }) {
   if (!appConfig || !user) return [];
   // The master switch darkens every project, admin ones included: a chat
   // must not inject or search knowledge the Projects API itself refuses.
@@ -102,12 +109,31 @@ export async function resolveProjectScope({ appConfig, user }) {
     const loaded = loads[index];
     if (loaded.status === 'unavailable') {
       logger.warn(
-        'A project of the iFinder tier was left out of the scope: iFinder is unavailable',
+        'A project of the iFinder tier could not be loaded for a chat: iFinder is unavailable',
         {
           component: 'ProjectScope',
           projectId: entry.id
         }
       );
+      // An iFinder collection is a user project: it stays dark while those are off.
+      if (includeUnavailable && userProjectsOn) {
+        scope.push({
+          project: {
+            id: entry.id,
+            ownership: 'user',
+            tier: 'ifinder',
+            name: loaded.name || '',
+            description: '',
+            instructions: '',
+            items: []
+          },
+          mode: entry.mode,
+          write: false,
+          origin: entry.origin,
+          instructions: false,
+          unavailable: 'IFINDER_UNAVAILABLE'
+        });
+      }
       continue;
     }
     const project = loaded.project;

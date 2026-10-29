@@ -286,7 +286,8 @@ document in a project. A document the reader may not open is named as unavailabl
   whose owner differs only in case is missing from the list (it still opens by id). Set the
   **JWT Subject Field** so it produces the user's iFinder login exactly.
 - **If iFinder is slow or down,** the project list still loads, with a note that the collections
-  are missing.
+  are missing. A chat that has a collection attached still answers; the model is told the
+  collection is unavailable and says so, and the answer shows a **not available** notice.
 - **Searched, never loaded in full:** a collection holds up to 200 documents, so a chat searches it
   instead of putting every document into the prompt.
 - Admin project IDs starting with `ifc_` are now reserved for collections, as `prj_` is for user

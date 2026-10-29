@@ -63,7 +63,12 @@ export const TTL = Object.freeze({
   /** The user lacks the `fi_smartcollections` role. */
   forbidden: 5 * 60_000,
   /** iFinder did not answer. Short, so a down iFinder is not asked on every request. */
-  unavailable: 15_000
+  unavailable: 15_000,
+  /**
+   * The last name a collection was seen with. Only used to name a collection
+   * iFinder cannot be asked about right now, so it outlives every other entry.
+   */
+  name: 24 * 60 * 60_000
 });
 
 /** Documents per title lookup. iFinder search pages are capped at 100 hits. */
@@ -116,11 +121,12 @@ const capabilities = new TtlCache(16); // per tenant
 const lists = new TtlCache(1000); // per tenant and principal
 const collections = new TtlCache(4000); // per tenant, principal and collection
 const titles = new TtlCache(40_000); // per tenant, principal and document
+const names = new TtlCache(4000); // per tenant, principal and collection
 const inflight = new Map();
 
 /** Test hook: forget everything cached. */
 export function resetIFinderTier() {
-  for (const cache of [capabilities, lists, collections, titles]) cache.clear();
+  for (const cache of [capabilities, lists, collections, titles, names]) cache.clear();
   inflight.clear();
 }
 
@@ -309,6 +315,9 @@ export async function listCollectionProjects(user, { signal } = {}) {
     }
   }
   if (entry.forbidden) return none(false);
+  for (const summary of entry.collections) {
+    names.set(keyFor(tenant, principal, 'name', summary.id), summary.name || summary.id, TTL.name);
+  }
   return {
     offered: true,
     // Built for this user now, from what iFinder said: never stored.
@@ -459,6 +468,11 @@ async function titlesFor(user, principal, tenant, collectionId, documentIds, sig
   return found;
 }
 
+/** The name a collection was last seen with by this principal, or '' when it never was. */
+function lastKnownName(tenant, principal, collectionId) {
+  return names.get(keyFor(tenant, principal, 'name', collectionId)) || '';
+}
+
 /**
  * One collection as a read-only project with its documents as items.
  *
@@ -466,13 +480,14 @@ async function titlesFor(user, principal, tenant, collectionId, documentIds, sig
  *  - `ok`: the project (`items` named with the titles the user may see);
  *  - `hidden`: the tier is not offered to this user, or the id is no collection;
  *  - `not-found`: no such collection, or not theirs (iFinder answers 404 for both);
- *  - `unavailable`: iFinder could not be asked.
+ *  - `unavailable`: iFinder could not be asked; `name` is what this user last saw
+ *    the collection called ('' if never), so a chat can say which one is missing.
  *
  * @param {Object} user
  * @param {string} projectId - `ifc_<uuid>`.
  * @param {{signal?: AbortSignal, titles?: boolean}} [options] - `titles: false`
  *   names the items by their ids and sends no search.
- * @returns {Promise<{status: 'ok', project: Object}|{status: 'hidden'|'not-found'|'unavailable'}>}
+ * @returns {Promise<{status: 'ok', project: Object}|{status: 'hidden'|'not-found'}|{status: 'unavailable', name: string}>}
  */
 export async function loadCollectionProject(
   user,
@@ -492,7 +507,10 @@ export async function loadCollectionProject(
   let collection = collections.get(key);
   if (!collection) {
     const remembered = rememberedAvailability(tenant);
-    if (remembered) return { status: remembered.unavailable ? 'unavailable' : 'hidden' };
+    if (remembered?.unavailable) {
+      return { status: 'unavailable', name: lastKnownName(tenant, principal, collectionId) };
+    }
+    if (remembered) return { status: 'hidden' };
     try {
       collection = await singleFlight(key, async () => {
         const loaded = await smartCollections.get({ user, id: collectionId, signal });
@@ -516,9 +534,14 @@ export async function loadCollectionProject(
         collectionId,
         code: reason
       });
-      return { status: 'unavailable' };
+      return { status: 'unavailable', name: lastKnownName(tenant, principal, collectionId) };
     }
   }
+  names.set(
+    keyFor(tenant, principal, 'name', collectionId),
+    collection.name || collection.id,
+    TTL.name
+  );
   const named = withTitles
     ? await titlesFor(user, principal, tenant, collectionId, collection.documentIds, signal)
     : new Map();

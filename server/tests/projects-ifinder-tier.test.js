@@ -53,7 +53,9 @@ const { isIFinderProjectId, ifinderProjectIdOf } =
 const { adminProjectCreateSchema } = await import('../validators/projectSchema.js');
 const { resolveChatProjects } = await import('../services/knowledge/chatProjects.js');
 const { resolveProjectScope } = await import('../services/knowledge/ProjectScope.js');
-const { planKnowledgeScope } = await import('../services/knowledge/KnowledgeScopePlanner.js');
+const { planKnowledgeScope, renderProjectsBlock, scopeSummary } =
+  await import('../services/knowledge/KnowledgeScopePlanner.js');
+const { default: promptService } = await import('../services/PromptService.js');
 const { providerFor } = await import('../services/knowledge/registry.js');
 const { content: projectSourceContent } = await import('../services/sources/providers/project.js');
 const { projectsClientConfig } = await import('../services/projects/projectSettings.js');
@@ -853,5 +855,146 @@ describe('a chat that uses a collection as knowledge', () => {
       projectSourceContent({ ref, user: { ...GRACE, groups: [...group] }, format: 'text' }),
       error => error.status === 404 || /not found/i.test(error.message)
     );
+  });
+});
+
+describe('an attached collection iFinder cannot deliver', () => {
+  const asUser = user => ({ ...user, groups: [...group], permissions: { projects: true } });
+  const appOf = ids => ({ id: 'chat', _attachedProjectIds: ids });
+
+  /** Load a collection once, so its name is known, then let every cache expire and take iFinder down. */
+  async function takeIFinderDown() {
+    mock.timers.enable({ apis: ['Date'], now: Date.now() + TTL.collection + TTL.list + 1000 });
+    ifinder.state.collectionsStatus = 503;
+  }
+
+  it('leaves it out of the scope the tools and workflow nodes see', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a'] });
+    ifinder.addDocument('doc-a', { title: 'Lease', content: 'x' });
+    await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
+    await takeIFinderDown();
+    const scope = await resolveProjectScope({ appConfig: appOf([pid(1)]), user: asUser(ADA) });
+    assert.deepEqual(scope, []);
+  });
+
+  it('keeps a stand-in for the chat prompt, named as the user last saw the collection', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a'] });
+    ifinder.addDocument('doc-a', { title: 'Lease', content: 'x' });
+    await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
+    await takeIFinderDown();
+    const scope = await resolveProjectScope({
+      appConfig: appOf([pid(1)]),
+      user: asUser(ADA),
+      includeUnavailable: true
+    });
+    assert.equal(scope.length, 1);
+    assert.equal(scope[0].unavailable, 'IFINDER_UNAVAILABLE');
+    assert.equal(scope[0].project.id, pid(1));
+    assert.equal(scope[0].project.name, 'Contracts');
+    assert.deepEqual(scope[0].project.items, []);
+    assert.equal(scope[0].write, false);
+    assert.equal(scope[0].instructions, false);
+  });
+
+  it("names nobody else's collection: the stand-in carries only what this user saw", async () => {
+    collection(1, GRACE.email, { name: 'Graces private notes', documents: ['doc-g'] });
+    await drive(route.get, { user: GRACE, params: { projectId: pid(1) } });
+    await takeIFinderDown();
+    const scope = await resolveProjectScope({
+      appConfig: appOf([pid(1)]),
+      user: asUser(ADA),
+      includeUnavailable: true
+    });
+    assert.equal(scope.length, 1);
+    assert.equal(scope[0].project.name, '', 'a name only another principal saw is not used');
+    assert.equal(JSON.stringify(scope).includes('Graces'), false);
+  });
+
+  it('is dark while user projects are off, like every collection', async () => {
+    collection(1, ADA.email);
+    await takeIFinderDown();
+    configCache.setCacheEntry('config/features.json', { projects: true, userProjects: false });
+    try {
+      const scope = await resolveProjectScope({
+        appConfig: appOf([pid(1)]),
+        user: asUser(ADA),
+        includeUnavailable: true
+      });
+      assert.deepEqual(scope, []);
+    } finally {
+      configCache.setCacheEntry('config/features.json', {
+        projects: true,
+        userProjects: true,
+        chatPersistence: true
+      });
+    }
+  });
+
+  it('is planned as unavailable, said to the model and reported to the chat', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a'] });
+    ifinder.addDocument('doc-a', { title: 'Lease', content: 'x' });
+    await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
+    await takeIFinderDown();
+    const user = asUser(ADA);
+    const scope = await resolveProjectScope({
+      appConfig: appOf([pid(1)]),
+      user,
+      includeUnavailable: true
+    });
+    const plan = await planKnowledgeScope(scope, {
+      model: { contextWindow: 200000 },
+      settings: { loadAllMaxTokens: 50000 },
+      ctx: { user, chatId: 'chat-1', language: 'en' }
+    });
+    assert.equal(plan.projects[0].mode, 'unavailable');
+    assert.equal(plan.projects[0].reason, 'IFINDER_UNAVAILABLE');
+    assert.equal(ifinder.calls('docs').length, 0, 'no document is read for it');
+
+    const block = renderProjectsBlock(plan);
+    assert.match(block, /<project id="ifc_[^"]+" name="Contracts" mode="unavailable"/);
+    assert.match(block, /iFinder could not be reached/);
+    assert.match(block, /say so to the user/);
+
+    const summary = scopeSummary(plan).projects[0];
+    assert.equal(summary.mode, 'unavailable');
+    assert.equal(summary.reason, 'IFINDER_UNAVAILABLE');
+    assert.equal(summary.name, 'Contracts');
+  });
+
+  it('reaches the chat through the prompt: the block names it and the turn reports it', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a'] });
+    ifinder.addDocument('doc-a', { title: 'Lease', content: 'x' });
+    await drive(route.get, { user: ADA, params: { projectId: pid(1) } });
+    await takeIFinderDown();
+    const out = await promptService._applyProjects(
+      'You are helpful. {{projects}}',
+      appOf([pid(1)]),
+      {
+        user: asUser(ADA),
+        chatId: 'chat-unavailable',
+        lang: 'en',
+        modelName: null,
+        scopeKey: 'prep-unavailable'
+      }
+    );
+    assert.match(out, /mode="unavailable"/);
+    assert.match(out, /iFinder could not be reached/);
+    const reported = promptService.takeKnowledgeScope('prep-unavailable');
+    assert.equal(reported.projects.length, 1);
+    assert.equal(reported.projects[0].mode, 'unavailable');
+    assert.equal(reported.projects[0].name, 'Contracts');
+  });
+
+  it('does not touch a collection that loads', async () => {
+    collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a'] });
+    ifinder.addDocument('doc-a', { title: 'Lease', content: 'x' });
+    const scope = await resolveProjectScope({
+      appConfig: appOf([pid(1)]),
+      user: asUser(ADA),
+      includeUnavailable: true
+    });
+    assert.equal(scope.length, 1);
+    assert.equal(scope[0].unavailable, undefined);
+    assert.equal(scope[0].project.items.length, 1);
   });
 });

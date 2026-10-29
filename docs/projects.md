@@ -715,9 +715,19 @@ metadata with the user's own token.
   texts are then cached for two hours per user.
 - A user lists at most 300 collections.
 
+**When iFinder cannot be reached in a chat.** A chat that has a collection attached still answers
+when iFinder is slow or down, but without that collection. The system prompt names it with
+`mode="unavailable"` and tells the model that its documents are missing from this answer and to
+say so to the user, and the answer's badge shows an amber notice (**Contracts · not available**,
+with the reason in its tooltip) next to the badge of the projects that were used. The knowledge
+tools and workflow steps only see what can be read, so a search never reaches it. The notice is
+named as the user last saw the collection (an iFinder collection never seen shows as **iFinder
+collection**). A collection that was deleted in iFinder, or that is no longer the user's, is not
+reported this way: it leaves the chat's knowledge without a notice.
+
 **Not part of this version.** Creating, renaming, adding to and removing from collections, upload,
-sharing, deleting a collection and a chat held inside a collection. A collection deleted in iFinder
-disappears from the list; a chat that still has it attached then uses nothing from it.
+sharing, deleting a collection and a chat held inside a collection, and a notice for a collection
+deleted in iFinder.
 
 Every route of `/api/projects/ifc_…` that is not a read answers `403` with the code
 `PROJECT_READ_ONLY`, before anything is looked up. Admin project IDs may not start with `ifc_`.

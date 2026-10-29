@@ -89,6 +89,8 @@ const {
   invalidateProjectsList
 } = require('../../../client/src/features/projects/hooks/useProjects');
 const { isIFinderProject } = require('../../../client/src/features/projects/utils/projectView');
+const AnswerSourceBadge =
+  require('../../../client/src/features/chat/components/AnswerSourceBadge').default;
 
 const COLLECTION_ID = 'ifc_00000000-0000-4000-8000-000000000001';
 
@@ -333,5 +335,63 @@ describe('a smart collection opened as a project', () => {
     );
     // No edit is offered in the preview of a read-only project.
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('the chat badge for a collection iFinder could not deliver', () => {
+  const renderBadge = projects =>
+    render(
+      <MemoryRouter>
+        <AnswerSourceBadge answerSource={{ sources: [] }} knowledgeScope={{ projects }} />
+      </MemoryRouter>
+    );
+
+  it('says in amber which collection was not available, and why', () => {
+    renderBadge([
+      { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
+    ]);
+    const notice = screen.getByTestId('knowledge-scope-missing');
+    expect(notice).toHaveTextContent('Contracts · not available');
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice.getAttribute('title')).toMatch(/Contracts: iFinder could not be reached/);
+    // Nothing is claimed as used: no "unavailable" inside a purple badge, no link to a page.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('keeps the reached projects as they were and adds the notice beside them', () => {
+    renderBadge([
+      { id: 'prj_case', name: 'Case 2026-114', mode: 'loaded' },
+      { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
+    ]);
+    expect(screen.getByRole('link', { name: 'Case 2026-114 · loaded in full' })).toHaveAttribute(
+      'href',
+      '/projects/prj_case'
+    );
+    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
+      'Contracts · not available'
+    );
+  });
+
+  it('names an unnamed iFinder collection generically, and counts several', () => {
+    const { unmount } = renderBadge([
+      { id: COLLECTION_ID, name: '', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
+    ]);
+    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
+      'iFinder collection · not available'
+    );
+    unmount();
+    renderBadge([
+      { id: COLLECTION_ID, name: 'A', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' },
+      { id: 'ifc_00000000-0000-4000-8000-000000000002', name: 'B', mode: 'unavailable' }
+    ]);
+    // The mock translator returns the key for a counted phrase.
+    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
+      'chatMessage.knowledgeScope.missing'
+    );
+  });
+
+  it('shows no notice when every project was reached', () => {
+    renderBadge([{ id: 'faq', name: 'FAQ', mode: 'searched' }]);
+    expect(screen.queryByTestId('knowledge-scope-missing')).not.toBeInTheDocument();
   });
 });
