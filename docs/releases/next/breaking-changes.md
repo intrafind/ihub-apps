@@ -58,7 +58,7 @@ away.
 What changes:
 
 - **Durable Chats is now called Chat History.** It decides whether chats are *kept* in a history.
-  With it off (the default), every chat is temporary.
+  With it off, every chat is temporary.
 - **Incognito:** switching it on in a saved chat starts a new temporary chat; switching it off in a
   temporary chat saves that chat to the history. The toggle only appears where the history is on.
 - **New setting:** **Admin → Observability → Chat History → Temporary chats (hours)**
@@ -104,3 +104,26 @@ scheduled-run chats once they reach that age.
 
 **Before upgrading:** if you want to keep run history and its chats longer, raise
 `runRetentionDays` under **Admin → Scheduled Tasks**, or set it to `0` to keep them indefinitely.
+
+## Chat History, Run Ledger, Marketplace and Scheduled Tasks Are On by Default
+
+Chat History, the Run Ledger, the Marketplace and Scheduled Tasks are no longer preview features
+and are switched on out of the box. They no longer appear under **Preview** in **Admin → Platform →
+Features**: Chat History, Marketplace and Scheduled Tasks are listed under **Content**, the Run
+Ledger under **Platform**.
+
+What changes on upgrade:
+
+- **An installation that never set one of these flags gets the feature.** Signed-in users now have
+  a chat history, so their conversations are kept for 90 days (`platform.chats.retentionDays`) and
+  at most 200 chats per user (`platform.chats.maxChatsPerUser`) instead of being temporary. The
+  **Marketplace** appears in the admin sidebar, and users in the built-in `admins`, `users` and
+  `authenticated` groups can create scheduled tasks.
+- **A flag that was saved is kept.** If an admin switched a feature off or on, that choice still
+  applies.
+- **Chat Sharing stays off** until an admin turns it on.
+
+**Before upgrading:** if you do not want one of these features, switch it off under **Admin →
+Platform → Features** (or set `chatPersistence`, `runLog`, `marketplace` or `scheduledTasks` to
+`false` in `contents/config/features.json`) before the first start. Scheduled Tasks needs Chat
+History, so switching Chat History off also hides Scheduled Tasks.

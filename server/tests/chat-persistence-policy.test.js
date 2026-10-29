@@ -120,9 +120,9 @@ describe('chat persistence policy: the truth table', () => {
       expected: false
     },
     {
-      name: 'no flags saved at all — a preview feature defaults off',
+      name: 'no flags saved at all — chat history defaults on',
       input: { features: undefined, platformConfig: {}, user: USER, storageReady: STORAGE_UP },
-      expected: false
+      expected: true
     },
     {
       name: 'platform.chats.enabled is false',
@@ -235,19 +235,29 @@ describe('chat persistence policy: the truth table', () => {
     );
   });
 
-  it('the feature is registered, so an unknown-id default cannot switch it on', () => {
-    // `isFeatureEnabled` answers true for ids it does not know; a registry that
-    // shipped without this entry would turn durable chats on everywhere.
+  it('chat history is registered, on by default and no longer a preview', () => {
     const entry = featureRegistry.find(feature => feature.id === 'chatPersistence');
     assert.ok(entry, 'chatPersistence must exist in the feature registry');
-    assert.equal(entry.default, false);
-    assert.equal(entry.preview, true);
-    assert.equal(entry.category, 'preview');
+    assert.equal(entry.default, true);
+    assert.ok(!entry.preview, 'chatPersistence is no longer a preview feature');
+    assert.notEqual(entry.category, 'preview');
   });
 
-  it('the run ledger has left preview, because chat persistence implies it', () => {
+  it('marketplace and scheduled tasks are on by default and no longer previews', () => {
+    for (const id of ['marketplace', 'scheduledTasks']) {
+      const entry = featureRegistry.find(feature => feature.id === id);
+      assert.ok(entry, `${id} must exist in the feature registry`);
+      assert.equal(entry.default, true, `${id} is on by default`);
+      assert.ok(!entry.preview, `${id} is no longer a preview feature`);
+      assert.notEqual(entry.category, 'preview');
+      assert.ok(Object.prototype.hasOwnProperty.call(featureCategories, entry.category));
+    }
+  });
+
+  it('the run ledger is on by default and not a preview, because chat persistence implies it', () => {
     const entry = featureRegistry.find(feature => feature.id === 'runLog');
     assert.ok(entry, 'runLog must exist in the feature registry');
+    assert.equal(entry.default, true);
     assert.ok(!entry.preview, 'runLog is no longer a preview feature');
     // And is not filed under Preview either. Dropping the badge while leaving
     // the category renders it under the Preview heading as the only row
@@ -800,7 +810,9 @@ describe('the ledger coupling (D4)', () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-runlog-'));
     const log = new RunLog({
       baseDir: path.join(baseDir, 'run-log'),
-      getFeatures: () => FLAG_ON,
+      // `runLog` is pinned off: it is on by default now, and these tests are
+      // about the ledger following chat persistence rather than its own flag.
+      getFeatures: () => ({ ...FLAG_ON, runLog: false }),
       getPlatformConfig: () => ({}),
       ...options
     });
@@ -843,13 +855,16 @@ describe('the ledger coupling (D4)', () => {
   });
 
   it('stays on with the chat history off: temporary chats are stored too', async () => {
-    await withRunLog({ getFeatures: () => FLAG_OFF }, async ({ log, baseDir }) => {
-      assert.equal(log.isEnabled(), false, 'no provider, no ledger');
-      await bootstrapStorage({
-        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
-      });
-      assert.equal(log.isEnabled(), true);
-    });
+    await withRunLog(
+      { getFeatures: () => ({ ...FLAG_OFF, runLog: false }) },
+      async ({ log, baseDir }) => {
+        assert.equal(log.isEnabled(), false, 'no provider, no ledger');
+        await bootstrapStorage({
+          storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+        });
+        assert.equal(log.isEnabled(), true);
+      }
+    );
   });
 
   it('forceEnabled still wins over the coupling in both directions', async () => {

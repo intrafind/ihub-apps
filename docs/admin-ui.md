@@ -276,7 +276,7 @@ See [Projects](projects.md).
 
 ## Marketplace
 
-**AI Workspace → Marketplace** installs apps, models, prompts, skills and workflows from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is a preview feature — switch it on under **Platform → Features**.
+**AI Workspace → Marketplace** installs apps, models, prompts, skills and workflows from registries with one click, and keeps track of what it installed so it can be updated, uninstalled or detached later. The **iHub Official Marketplace** and **iHub Examples** registries are preconfigured; **Manage Registries** adds your own. The marketplace is on by default — switch it off under **Platform → Features**.
 
 ![Admin marketplace](assets/screenshots/admin-marketplace.png)
 
@@ -286,7 +286,7 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 
 ## Features
 
-**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows, Marketplace, Integrations, Chat History (keeping chats in a history; every chat is stored either way) and Scheduled Tasks, plus Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+**Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows and Integrations, plus Marketplace, Chat History (keeping chats in a history; every chat is stored either way), Scheduled Tasks, Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 

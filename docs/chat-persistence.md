@@ -21,7 +21,7 @@ What varies is whether a chat is **kept** or **temporary**:
   turn it replaces.
 
 The **Chat History** feature (`chatPersistence`) decides whether chats can be
-kept at all. It ships **off**: without it every chat is temporary.
+kept at all. It ships **on**: switch it off and every chat is temporary.
 
 > **One protocol.** Every surface — the web app, the Outlook pane, the browser
 > extension, Nextcloud, an integration on the chat route — posts the new
@@ -37,7 +37,7 @@ when all of these hold, and temporary otherwise:
 
 | Condition                              | Where it comes from                                           |
 | -------------------------------------- | ------------------------------------------------------------- |
-| `features.chatPersistence` is on       | Admin → Platform → Features ("Chat History"), off by default  |
+| `features.chatPersistence` is on       | Admin → Platform → Features ("Chat History"), on by default   |
 | `platform.chats.enabled !== false`     | `contents/config/platform.json`                                |
 | a storage provider came up             | `platform.storage` — see [Storage Providers](storage.md)       |
 | the caller is signed in                | an anonymous visitor's chats are always temporary (see below)  |
@@ -430,8 +430,8 @@ where a run's user message, assistant message and usage are recorded. So
 `RunLog.isEnabled()` returns true whenever a storage provider is up — every
 chat is stored, kept or temporary — **regardless of the `runLog` feature flag
 and even when `platform.runLog.enabled` is `false`**. The ledger then records
-every run, not only chat turns. The `runLog` flag has correspondingly lost its
-"preview" marking.
+every run, not only chat turns. The `runLog` flag is on by default and is no
+longer a preview.
 
 Every installation therefore accepts everything in the
 [Run Ledger](run-ledger.md) doc:

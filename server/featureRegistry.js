@@ -41,9 +41,8 @@ export const featureRegistry = [
       en: 'Registry-based content discovery and one-click installation of apps, models, prompts, skills, and workflows',
       de: 'Registry-basierte Inhaltserkennung und Ein-Klick-Installation von Apps, Modellen, Prompts, Skills und Workflows'
     },
-    category: 'preview',
-    default: false,
-    preview: true
+    category: 'content',
+    default: true
   },
   {
     id: 'integrations',
@@ -130,9 +129,8 @@ export const featureRegistry = [
       en: 'Keep chats in a history signed-in users can reopen on any device — a run keeps going when the browser closes and its answer is waiting in the chat. Every chat is stored on the server either way; without this, each one is temporary: never listed, and deleted after the temporary-chat retention period (24 hours by default)',
       de: 'Chats in einem Verlauf behalten, den angemeldete Benutzer auf jedem Gerät wieder öffnen können — ein Lauf geht weiter, wenn der Browser geschlossen wird, und seine Antwort wartet im Chat. Gespeichert wird jeder Chat ohnehin auf dem Server; ohne diese Funktion ist jeder temporär: nie aufgelistet und nach der Aufbewahrungsdauer für temporäre Chats gelöscht (standardmäßig 24 Stunden)'
     },
-    category: 'preview',
-    default: false,
-    preview: true
+    category: 'content',
+    default: true
   },
   {
     id: 'chatSharing',
@@ -151,9 +149,8 @@ export const featureRegistry = [
       en: 'Let users save a prompt as a task that runs by itself — once, on an interval, daily, weekly, monthly, by cron or on demand — as the user, with the app’s tools and integrations. Every run is its own chat. Requires Chat History. Who may create tasks is a group permission; limits are set under Admin → Scheduled Tasks',
       de: 'Nutzer speichern einen Prompt als Aufgabe, die von selbst läuft — einmalig, im Intervall, täglich, wöchentlich, monatlich, per Cron oder auf Abruf — als der Nutzer, mit den Tools und Integrationen der App. Jeder Lauf ist ein eigener Chat. Erfordert den Chatverlauf. Wer Aufgaben anlegen darf, ist eine Gruppenberechtigung; Grenzen werden unter Admin → Geplante Aufgaben festgelegt'
     },
-    category: 'preview',
-    default: false,
-    preview: true
+    category: 'content',
+    default: true
   },
   {
     id: 'shortLinks',
@@ -246,12 +243,12 @@ export const featureRegistry = [
       en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
       de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
     },
-    // Not `preview`: the ledger left preview when durable chats came to depend
-    // on it. Leaving the category behind after dropping `preview: true` put it
-    // under the Preview heading as the only row there without the badge, which
-    // reads as an oversight in the one place an admin decides what to trust.
+    // On by default and not `preview`: durable chats depend on the ledger. A
+    // feature that leaves preview also leaves the Preview category — a row
+    // under that heading without the badge reads as an oversight in the one
+    // place an admin decides what to trust.
     category: 'platform',
-    default: false
+    default: true
   }
 ];
 
