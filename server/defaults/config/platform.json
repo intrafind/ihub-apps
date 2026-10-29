@@ -341,7 +341,8 @@
       "audience": "",
       "scopeMap": {
         "fa_index_read": "",
-        "fa_iassistant": ""
+        "fa_iassistant": "",
+        "fi_smartcollections": ""
       },
       "extraScopes": []
     }

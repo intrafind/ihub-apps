@@ -470,7 +470,7 @@ provider (token exchange)*, then:
 | Grant type | `iFinder.tokenExchange.grantType` | `tokenExchange` (RFC 8693: Zitadel, Keycloak) or `entraObo` (Entra On-Behalf-Of) |
 | Exchange client ID / secret | `iFinder.tokenExchange.clientId`, `clientSecretRef` | Optional. Empty uses the provider's sign-in client. The secret is a credential store reference |
 | Audience | `iFinder.tokenExchange.audience` | iFinder's client or project id at the provider (RFC 8693 only) |
-| Scope map | `iFinder.tokenExchange.scopeMap` | Maps the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `iFinder.defaultScope` otherwise) to provider scopes. An empty value sends the scope unchanged |
+| Scope map | `iFinder.tokenExchange.scopeMap` | Maps the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `fi_smartcollections` for Smart Collections, `iFinder.defaultScope` otherwise) to provider scopes. An empty value sends the scope unchanged |
 | Additional scopes | `iFinder.tokenExchange.extraScopes` | Sent with every exchange |
 
 ```json
@@ -485,7 +485,7 @@ provider (token exchange)*, then:
     "clientId": "",
     "clientSecretRef": "",
     "audience": "312345678901234567",
-    "scopeMap": { "fa_index_read": "", "fa_iassistant": "" },
+    "scopeMap": { "fa_index_read": "", "fa_iassistant": "", "fi_smartcollections": "" },
     "extraScopes": []
   }
 }

@@ -20,7 +20,7 @@ const DEFAULT_TOKEN_EXCHANGE = {
   clientId: '',
   clientSecretRef: '',
   audience: '',
-  scopeMap: { fa_index_read: '', fa_iassistant: '' },
+  scopeMap: { fa_index_read: '', fa_iassistant: '', fi_smartcollections: '' },
   extraScopes: []
 };
 

@@ -38,7 +38,8 @@ export async function up(ctx) {
   ctx.setDefault(platform, 'iFinder.tokenExchange.audience', '');
   ctx.setDefault(platform, 'iFinder.tokenExchange.scopeMap', {
     fa_index_read: '',
-    fa_iassistant: ''
+    fa_iassistant: '',
+    fi_smartcollections: ''
   });
   ctx.setDefault(platform, 'iFinder.tokenExchange.extraScopes', []);
   await ctx.writeJson('config/platform.json', platform);
