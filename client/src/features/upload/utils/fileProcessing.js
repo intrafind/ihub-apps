@@ -74,7 +74,8 @@ const buildDefaultConfig = () => {
           'text/vtt',
           'application/json',
           'application/pdf',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-outlook'
         ]
       }
     },
@@ -92,6 +93,11 @@ const buildDefaultConfig = () => {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
         extensions: ['.docx'],
         displayName: 'DOCX',
+        category: 'documents'
+      },
+      'application/vnd.ms-outlook': {
+        extensions: ['.msg'],
+        displayName: 'MSG',
         category: 'documents'
       },
       'text/plain': { extensions: ['.txt'], displayName: 'TXT', category: 'documents' },

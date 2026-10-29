@@ -47,6 +47,10 @@ export function contentTypeFromExtension(name) {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case 'pptx':
       return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'msg':
+      return 'application/vnd.ms-outlook';
+    case 'eml':
+      return 'message/rfc822';
     case 'json':
       return 'application/json';
     case 'html':

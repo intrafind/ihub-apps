@@ -46,6 +46,7 @@ import {
   validateMetadata
 } from '../services/inference/conversations.js';
 import { structuredOutputSeam } from '../services/loop/seams/structuredOutputSeam.js';
+import { makeMsg } from './helpers/msgFile.js';
 
 const MODELS = [
   { id: 'gpt', provider: 'openai', supportsTools: 'auto' },
@@ -627,6 +628,49 @@ describe('request input', () => {
     const file = await documentFromInlineFile({ data, filename: 'nda.pdf' }, 'input[0]');
     assert.equal(file.fileType, 'application/pdf');
     assert.match(file.content, /Confidential NDA between A and B/);
+  });
+
+  it('reads an Outlook message, whatever type it is sent with', async () => {
+    const bytes = makeMsg({ subject: 'Rent review', body: 'The rent is due monthly.' });
+    for (const type of [
+      'application/vnd.ms-outlook',
+      'application/octet-stream',
+      'application/x-msg'
+    ]) {
+      const file = await documentFromInlineFile(
+        { data: `data:${type};base64,${bytes.toString('base64')}`, filename: 'review.msg' },
+        'input[0]'
+      );
+      assert.equal(file.fileType, 'application/vnd.ms-outlook');
+      assert.match(file.content, /^Subject: Rent review/);
+      assert.match(file.content, /The rent is due monthly\./);
+    }
+    await throwsApi(
+      () =>
+        documentFromInlineFile(
+          { data: Buffer.from('not a compound file').toString('base64'), filename: 'broken.msg' },
+          'input[0]'
+        ),
+      { status: 400, code: 'invalid_file' }
+    );
+  });
+
+  it('reads an .eml file', async () => {
+    const eml = [
+      'Subject: =?UTF-8?B?WsO8cmljaCBvZmZpY2U=?=',
+      'From: Anna <anna@example.com>',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      'See you on Monday.'
+    ].join('\r\n');
+    const file = await documentFromInlineFile(
+      { data: Buffer.from(eml).toString('base64'), filename: 'note.eml' },
+      'input[0]'
+    );
+    assert.equal(file.fileType, 'message/rfc822');
+    assert.match(file.content, /^Subject: Zürich office/);
+    assert.match(file.content, /From: Anna <anna@example\.com>/);
+    assert.match(file.content, /See you on Monday\./);
   });
 
   it('turns Chat Completions content parts into chat messages', async () => {
