@@ -1334,3 +1334,4 @@ These `platform.json` sections are documented with their feature:
 | `runLog`         | The run ledger: identity mode, retention, flush interval, spill threshold          | [Run Ledger](run-ledger.md)                           |
 | `projects`       | Project limits, sharing audiences (`sharing.*`), item kinds, retention             | [Projects](projects.md#platform-settings)             |
 | `scheduledTasks` | Scheduled task limits, run retention (`runRetentionDays`, `maxRunsPerTask`), memory | [Scheduled Tasks](scheduled-tasks.md)                 |
+| `update`         | In-place updates of binary installations: `allowUnsigned` (default `false`), `trustedPublicKeys` (extra Ed25519 keys), `maxUploadSizeMB` (default `1024`) | [Binary Installation Updates](INSTALLATION.md#signatures), [Update Signing](update-signing.md) |

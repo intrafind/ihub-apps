@@ -82,12 +82,40 @@ Get-Service "iHub Apps"
 
 ## Updating iHub Apps
 
-The in-place auto-update (Admin → System → Check for Updates) works normally when running as a service. After an update is applied the server exits with code 75, which causes WinSW to restart it — the new version loads automatically.
+**Admin → Updates** works when iHub runs as a service, online (*Download and
+verify*) and offline (*Install from file*: upload the `ihub-apps-v<version>-win.zip`
+or enter its path on the server). See
+[Binary Installation Updates](INSTALLATION.md#binary-installation-updates).
+
+How it works under WinSW: after you confirm the update the server exits with
+code 75 and WinSW starts `node.exe launcher.cjs` again (after the 10-second
+delay configured in `ihub-apps-service.xml`). The launcher replaces `server\`,
+`public\`, `node.exe` and the other application files **before** it starts the
+server — a running server cannot rename its own directory on Windows while
+files below it are open. If the new version fails to start three times, the
+launcher restores the previous one; the Updates page shows the reason.
+
+Notes for Windows:
+
+- The service account needs write access to the installation directory. Avoid
+  installing below `C:\Program Files` unless the account has it.
+- Mapped drive letters are not visible to the service account. To install
+  from a file share, use a UNC path (`\\fileserver\share\ihub-apps-v5.7.0-win.zip`)
+  or copy the file into the `updates\` folder of the installation.
+- Antivirus software that quarantines the new `node.exe` makes the update fail
+  before anything is replaced ("The bundled Node.js binary does not start").
+  Exclude the installation directory, or release the file, and try again.
+- The service wrapper (`ihub-apps-service.exe`) and `ihub-apps-service.xml` are
+  not replaced by an update, so your service settings stay as they are.
 
 To update manually:
 
 1. Stop the service: `sc stop "iHub Apps"`
-2. Replace `node.exe`, `launcher.cjs`, `server\`, and `public\` with files from the new zip.
+2. From a command prompt in the installation directory, run
+   `node.exe launcher.cjs --update=install --file=C:\path\to\ihub-apps-v<version>-win.zip`
+   (or replace `node.exe`, `launcher.cjs`, `server\`, `shared\`, `public\`,
+   `docs\`, `version.txt` and the `ihub-apps-v*-win.bat` by hand with the
+   files from the new zip).
 3. Start the service: `sc start "iHub Apps"`
 
 Alternatively, uninstall the service first, extract the new zip over the old directory, then run `install-service.cmd` again — this preserves `contents\` (your configuration).

@@ -34,6 +34,9 @@ const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' });
 const publicPem = publicKey.export({ type: 'spki', format: 'pem' });
 const otherKey = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' });
+const next = generateKeyPairSync('ed25519');
+const nextPrivatePem = next.privateKey.export({ type: 'pkcs8', format: 'pem' });
+const nextPublicPem = next.publicKey.export({ type: 'spki', format: 'pem' });
 
 let settings;
 service.setUpdateSettingsProvider(() => settings);
@@ -63,6 +66,7 @@ async function buildRelease({
   arch = process.arch,
   manifest = true,
   signWith = privatePem,
+  alsoSignWith,
   tamper,
   extra,
   checksums = false,
@@ -85,8 +89,10 @@ async function buildRelease({
     await writeManifest(src, { platform, arch });
     if (signWith) {
       process.env.UPDATE_SIGNING_PRIVATE_KEY = signWith;
+      if (alsoSignWith) process.env.UPDATE_SIGNING_PRIVATE_KEY_NEXT = alsoSignWith;
       await signFile(path.join(src, 'update-manifest.json'), { require: true });
       delete process.env.UPDATE_SIGNING_PRIVATE_KEY;
+      delete process.env.UPDATE_SIGNING_PRIVATE_KEY_NEXT;
     }
   }
   tamper?.(src);
@@ -172,6 +178,25 @@ describe('stageLocalFile', () => {
     assert.equal(allowed.accepted, true);
     assert.equal(allowed.requiresConfirmation.unsigned, true);
     assert.ok(codes(allowed.warnings).includes('unsigned'));
+  });
+
+  it('verifies a release signed with the "next" key, and one signed with both during a rotation', async () => {
+    settings = { trustedPublicKeys: [publicPem, nextPublicPem], allowUnsigned: false };
+    const nextOnly = await service.stageLocalFile(await buildRelease({ signWith: nextPrivatePem }));
+    assert.equal(nextOnly.trusted, true, JSON.stringify(nextOnly.problems));
+
+    // An installation that only knows the old key accepts a dual-signed release...
+    settings = { trustedPublicKeys: [publicPem], allowUnsigned: false };
+    const both = await service.stageLocalFile(
+      await buildRelease({ signWith: nextPrivatePem, alsoSignWith: privatePem })
+    );
+    assert.equal(both.trusted, true, JSON.stringify(both.problems));
+
+    // ...but not one signed with the new key alone.
+    const strandedRelease = await service.stageLocalFile(
+      await buildRelease({ signWith: nextPrivatePem })
+    );
+    assert.equal(strandedRelease.accepted, false);
   });
 
   it('refuses everything unsigned when no key is configured', async () => {

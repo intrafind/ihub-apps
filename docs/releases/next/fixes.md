@@ -77,3 +77,16 @@ Selecting an Outlook message (`.msg`) in a chat failed, and the browser console 
 
 The library that reads `.msg` files needs a component the web app did not ship. It is now included,
 so the subject, sender, recipients and body of the message reach the model again.
+
+## Updates: Windows Installations and Multi-Worker Servers Update Reliably
+
+The in-place update could not work on Windows — it looked for a `-windows.tar.gz` archive that is
+never published (Windows releases are `-win.zip`), and a running Windows server cannot rename its
+own folders. On every platform with the default four workers, *Update Now* restarted only one
+worker, leaving the others on the old version while the page reported success. The published
+checksum was also never checked, because releases did not include `checksums.sha256`.
+
+- Windows updates use the `.zip` release and are applied by the launcher before the server starts,
+  also under the Windows service.
+- An update now restarts the whole server, and the Updates page waits for the new version to be up.
+- Releases publish a signed `checksums.sha256`, and a mismatch stops the update.
