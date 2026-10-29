@@ -143,6 +143,17 @@ export async function signFile(file, { require: required = false } = {}) {
     keyId: keyIdOf(createPublicKey(key)),
     signature: sign(null, data, key).toString('base64')
   }));
+  // A release signed with a key iHub does not ship is refused by every
+  // installation that has not added that key to update.trustedPublicKeys.
+  const embedded = new Set(loadTrustedKeys([]).keys.map(k => k.keyId));
+  for (const { keyId } of signatures) {
+    if (!embedded.has(keyId)) {
+      console.log(
+        `::warning::Signing key ${keyId} is not in server/update/trustedKeys.js; ` +
+          'installations will not trust this release unless they add the key themselves.'
+      );
+    }
+  }
   const sigFile = file + SIGNATURE_SUFFIX;
   await fs.writeFile(sigFile, `${JSON.stringify({ algorithm: 'ed25519', signatures }, null, 2)}\n`);
   console.log(`Signed ${path.basename(file)} with ${signatures.map(s => s.keyId).join(', ')}`);

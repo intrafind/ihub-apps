@@ -358,26 +358,33 @@ export async function getUpdateStatusAnywhere() {
  */
 async function acquireLock() {
   const lockPath = join(getRootDir(), UPDATE_LOCK_FILE);
-  if (existsSync(lockPath)) {
+  const lockContent = () => JSON.stringify({ timestamp: Date.now(), pid: process.pid });
+  // Exclusive create ('wx'): two workers, or a worker and the CLI, can never
+  // both get it. A lock without a heartbeat for 10 minutes is taken over once.
+  for (let attempt = 0; ; attempt++) {
     try {
-      const lockData = JSON.parse(await fs.readFile(lockPath, 'utf8'));
-      const lockAge = Date.now() - lockData.timestamp;
-      // Stale lock after 10 minutes without a heartbeat
+      await fs.writeFile(lockPath, lockContent(), { flag: 'wx' });
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST' || attempt > 0) {
+        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
+      }
+      let lockAge = Infinity;
+      try {
+        lockAge = Date.now() - JSON.parse(await fs.readFile(lockPath, 'utf8')).timestamp;
+      } catch {
+        // unreadable lock file: treat as stale
+      }
       if (lockAge < 10 * 60 * 1000) {
         throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
       }
       logger.warn('Removing stale update lock', { component: 'UpdateService' });
-    } catch (error) {
-      if (error instanceof UpdateRequestError) throw error;
-      // Invalid lock file, remove it
+      await fs.rm(lockPath, { force: true });
     }
   }
-  await fs.writeFile(lockPath, JSON.stringify({ timestamp: Date.now(), pid: process.pid }));
   // Long operations (a slow upload being staged, a large extraction) keep it fresh.
   const heartbeat = setInterval(() => {
-    fs.writeFile(lockPath, JSON.stringify({ timestamp: Date.now(), pid: process.pid })).catch(
-      () => {}
-    );
+    fs.writeFile(lockPath, lockContent()).catch(() => {});
   }, 60 * 1000);
   heartbeat.unref();
   return heartbeat;
@@ -890,6 +897,16 @@ export async function stageArchive({
   }
 
   const lock = await acquireLock();
+  // Once an apply is scheduled, the launcher installs whatever is in
+  // .update-staging on the next start: replacing it now would install an
+  // archive nobody confirmed.
+  if (swap.readPending(rootDir)) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'An update is already scheduled to be applied on restart; restart the server first',
+      { status: 409, code: 'update-pending' }
+    );
+  }
   const scratch = await createWorkDir('stage');
   try {
     setState({ status: 'extracting', progress: 65, message: 'Verifying archive...', error: null });
@@ -1267,7 +1284,9 @@ export async function evaluateStaged({
 
   // --- does the bundled Node start at all (quarantine, antivirus, wrong binary)
   let nodeVersion = manifest?.nodeVersion || null;
-  if (problems.length === 0) {
+  // Only for a trusted archive: an unsigned one must not run any of its code
+  // before the admin has typed the confirmation.
+  if (problems.length === 0 && trusted) {
     const nodeBinary = join(stagingDir, swap.nodeBinaryName(currentPlatform));
     if (existsSync(nodeBinary)) {
       if (currentPlatform !== 'windows') await fs.chmod(nodeBinary, 0o755).catch(() => {});
@@ -1410,6 +1429,21 @@ export async function applyUpdate({
   }
 
   const lock = await acquireLock();
+  // What was confirmed must still be what is staged: another admin may have
+  // staged a different archive between the check above and taking the lock.
+  const stagedNow = readStagedInfo();
+  if (
+    !stagedNow?.accepted ||
+    stagedNow.archiveSha256 !== staged.archiveSha256 ||
+    stagedNow.stagedAt !== staged.stagedAt ||
+    swap.readPending(rootDir)
+  ) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'The staged update changed or is already scheduled; review it again before installing',
+      { status: 409, code: 'staged-changed' }
+    );
+  }
   setState({ status: 'applying', progress: 10, message: 'Preparing update...', error: null });
 
   const currentVersion = getAppVersion();
@@ -1519,6 +1553,13 @@ export async function rollback({ restoreConfig = false, inProcess = false } = {}
   }
 
   const lock = await acquireLock();
+  if (swap.readPending(rootDir)) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'An update or rollback is already scheduled to be applied on restart',
+      { status: 409, code: 'update-pending' }
+    );
+  }
   setState({ status: 'applying', progress: 0, message: 'Rolling back...', error: null });
   const currentVersion = getAppVersion();
   const contentsDir = getContentsPath();

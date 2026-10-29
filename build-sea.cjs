@@ -268,6 +268,8 @@ let signalHandlersInstalled = false;
 
 // Start the server
 async function startServer() {
+  // A shutdown signal can arrive while a retry after a failed update start is pending.
+  if (shuttingDown) return;
   try {
     // Apply an update the admin confirmed before restarting: nothing runs from
     // server/ yet, so no file of it is held open (Windows refuses to rename a
@@ -368,6 +370,10 @@ async function startServer() {
     function gracefulShutdown(signal) {
       if (shuttingDown) return;
       shuttingDown = true;
+      // Between a failed start and its retry there is no server to stop.
+      if (!nodeProcess || nodeProcess.exitCode !== null || nodeProcess.signalCode !== null) {
+        process.exit(0);
+      }
       
       console.log(\`Received \${signal}. Shutting down server gracefully...\`);
       

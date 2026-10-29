@@ -259,6 +259,56 @@ describe('stageLocalFile', () => {
     assert.equal(summary.accepted, false);
   });
 
+  it('does not run the bundled node of an unsigned archive while staging', async t => {
+    if (process.platform === 'win32') return t.skip('shell script stands in for node');
+    const marker = path.join(tmp, `node-ran-${counter}`);
+    const withNode = extra => src => {
+      write(path.join(src, 'node'), `#!/bin/sh\ntouch "${marker}"\necho v99.0.0\n`);
+      fs.chmodSync(path.join(src, 'node'), 0o755);
+      extra?.(src);
+    };
+    settings = { trustedPublicKeys: [publicPem], allowUnsigned: true };
+    const unsigned = await service.stageLocalFile(
+      await buildRelease({ signWith: null, extra: withNode() })
+    );
+    assert.equal(unsigned.accepted, true);
+    assert.equal(fs.existsSync(marker), false, 'unsigned code ran before the confirmation');
+
+    const signed = await service.stageLocalFile(await buildRelease({ extra: withNode() }));
+    assert.equal(signed.trusted, true);
+    assert.equal(signed.nodeVersion, 'v99.0.0');
+    assert.equal(fs.existsSync(marker), true);
+  });
+
+  it('refuses to stage while an update is scheduled for the next start', async () => {
+    process.env.IHUB_LAUNCHER_PROTOCOL = String(swap.LAUNCHER_PROTOCOL);
+    await service.stageLocalFile(await buildRelease());
+    await service.applyUpdate();
+    await assert.rejects(
+      service.stageLocalFile(await buildRelease({ version: '3.0.0' })),
+      error => error.code === 'update-pending'
+    );
+    await assert.rejects(service.rollback(), /No backup|already scheduled/);
+    assert.equal(
+      fs.readFileSync(path.join(root, '.update-staging', 'version.txt'), 'utf8'),
+      '2.0.0'
+    );
+  });
+
+  it('serialises operations with an exclusive lock and takes over a stale one', async () => {
+    const lockFile = path.join(root, '.update-lock');
+    fs.writeFileSync(lockFile, JSON.stringify({ timestamp: Date.now(), pid: 1 }));
+    await assert.rejects(
+      service.stageLocalFile(await buildRelease()),
+      error => error.status === 409
+    );
+
+    fs.writeFileSync(lockFile, JSON.stringify({ timestamp: Date.now() - 11 * 60 * 1000, pid: 1 }));
+    const summary = await service.stageLocalFile(await buildRelease());
+    assert.equal(summary.accepted, true);
+    assert.equal(fs.existsSync(lockFile), false, 'released afterwards');
+  });
+
   it('rejects bad paths without echoing file contents', async () => {
     const secret = path.join(tmp, 'secret.txt');
     write(secret, 'TOP-SECRET-CONTENT');

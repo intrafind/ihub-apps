@@ -255,20 +255,45 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
   const plat = platform || detectPlatform(rootDir);
   if (!fs.existsSync(backupDir)) throw new Error('No backup available for rollback');
 
-  for (const rel of getReplacePaths(plat)) {
-    const backup = path.join(backupDir, rel);
-    if (!fs.existsSync(backup)) continue;
-    const current = path.join(rootDir, rel);
-    fs.rmSync(current, { recursive: true, force: true });
-    renameWithRetry(backup, current);
-  }
+  // What is installed now is moved aside, not deleted, until every backed-up
+  // path is back in place; a failed rename undoes all moves, so a rollback
+  // never leaves a mix of versions (or a missing server/).
+  const displacedDir = path.join(backupDir, '.displaced');
+  fs.rmSync(displacedDir, { recursive: true, force: true });
+  fs.mkdirSync(displacedDir, { recursive: true });
+  const moves = [];
+  const move = (from, to) => {
+    renameWithRetry(from, to);
+    moves.push([from, to]);
+  };
 
-  const backupLauncher = fs.readdirSync(backupDir).find(f => LAUNCHER_SCRIPT_PATTERN.test(f));
-  if (backupLauncher) {
-    const currentLauncher = fs.readdirSync(rootDir).find(f => LAUNCHER_SCRIPT_PATTERN.test(f));
-    if (currentLauncher) fs.rmSync(path.join(rootDir, currentLauncher), { force: true });
-    renameWithRetry(path.join(backupDir, backupLauncher), path.join(rootDir, backupLauncher));
-    if (plat !== 'windows') fs.chmodSync(path.join(rootDir, backupLauncher), 0o755);
+  try {
+    for (const rel of getReplacePaths(plat)) {
+      const backup = path.join(backupDir, rel);
+      if (!fs.existsSync(backup)) continue;
+      const current = path.join(rootDir, rel);
+      if (fs.existsSync(current)) move(current, path.join(displacedDir, rel));
+      move(backup, current);
+    }
+
+    const backupLauncher = fs.readdirSync(backupDir).find(f => LAUNCHER_SCRIPT_PATTERN.test(f));
+    if (backupLauncher) {
+      const currentLauncher = fs.readdirSync(rootDir).find(f => LAUNCHER_SCRIPT_PATTERN.test(f));
+      if (currentLauncher) {
+        move(path.join(rootDir, currentLauncher), path.join(displacedDir, currentLauncher));
+      }
+      move(path.join(backupDir, backupLauncher), path.join(rootDir, backupLauncher));
+      if (plat !== 'windows') fs.chmodSync(path.join(rootDir, backupLauncher), 0o755);
+    }
+  } catch (error) {
+    for (const [from, to] of moves.reverse()) {
+      try {
+        renameWithRetry(to, from);
+      } catch (undoError) {
+        error.message += `; undoing the move of ${path.basename(from)} failed: ${undoError.message}`;
+      }
+    }
+    throw error;
   }
 
   let configRestored = false;

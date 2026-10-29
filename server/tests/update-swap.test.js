@@ -109,6 +109,37 @@ describe('swapInStaged / restoreBackup', () => {
     );
   });
 
+  it('undoes a rollback that fails part-way, keeping the installed version whole', () => {
+    const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
+    swap.swapInStaged(root, { backupDir, platform: 'linux' });
+    const original = fs.renameSync;
+    fs.renameSync = (from, to) => {
+      if (from === path.join(backupDir, 'public')) {
+        const error = new Error('disk full');
+        error.code = 'ENOSPC';
+        throw error;
+      }
+      return original(from, to);
+    };
+    try {
+      assert.throws(() => swap.restoreBackup(root, backupDir, { platform: 'linux' }), /disk full/);
+    } finally {
+      fs.renameSync = original;
+    }
+    assert.equal(read('version.txt'), '2.0.0');
+    assert.equal(read('server/server.js'), 'new server');
+    assert.equal(read('public/index.html'), 'new ui');
+    assert.equal(
+      fs.readFileSync(path.join(backupDir, 'server', 'server.js'), 'utf8'),
+      'old server'
+    );
+
+    // The backup is intact: a second attempt succeeds.
+    swap.restoreBackup(root, backupDir, { platform: 'linux' });
+    assert.equal(read('server/server.js'), 'old server');
+    assert.equal(read('public/index.html'), 'old ui');
+  });
+
   it('snapshots contents/config without the encryption key and restores it on request', () => {
     const backupDir = swap.prepareBackupDir(root, { version: '1.0.0' });
     swap.writeConfigSnapshot(backupDir, contents);

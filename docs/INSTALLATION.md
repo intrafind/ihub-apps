@@ -871,9 +871,10 @@ docker run -d \
 
 **Binary automated updates via cron:**
 ```bash
-# Install the latest release daily at 2am without prompts. Restart the service
-# afterwards (or stop it before) so the new version is started.
-0 2 * * * /path/to/ihub-apps-v*-linux --update --force && systemctl restart ihub-apps
+# Install the latest release daily at 2am without prompts, and restart the service
+# only when a new version was installed (version.txt changed). Unsigned archives
+# are never installed this way: they need a typed confirmation.
+0 2 * * * cd /opt/ihub-apps && before=$(cat version.txt) && ./ihub-apps-v*-linux --update --force && [ "$(cat version.txt)" != "$before" ] && systemctl restart ihub-apps
 ```
 
 ## Troubleshooting

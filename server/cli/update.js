@@ -64,9 +64,11 @@ function error(msg) {
 function ask(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => {
+    // No terminal or stdin closed (cron, </dev/null): an empty answer, i.e. "no".
+    rl.once('close', () => resolve(''));
     rl.question(question, answer => {
-      rl.close();
       resolve(answer.trim());
+      rl.close();
     });
   });
 }
