@@ -101,6 +101,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Only run on release or workflow_dispatch events
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Holds UPDATE_SIGNING_PRIVATE_KEY(_NEXT); protect it with a required
+    # reviewer (Settings → Environments). See docs/update-signing.md.
+    environment: release-signing
     permissions:
       contents: read
     strategy:
@@ -235,6 +238,20 @@ jobs:
           chmod +x dist-bin/windows-check.bat
         shell: bash
 
+      # After the last file has been added to dist-bin: the updater rejects an
+      # archive whose files differ from its manifest in any way.
+      - name: Write and sign the update manifest
+        env:
+          # Only this step sees the signing keys.
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+          UPDATE_SIGNING_PRIVATE_KEY_NEXT: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_NEXT }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+        run: |
+          if [ "$MATRIX_PLATFORM" == "win" ]; then PLATFORM=windows; else PLATFORM="$MATRIX_PLATFORM"; fi
+          node scripts/update-signing.js manifest dist-bin --platform="$PLATFORM"
+          node scripts/update-signing.js sign dist-bin/update-manifest.json
+        shell: bash
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -245,16 +262,20 @@ jobs:
             dist-bin/ihub-apps-v*-${{ matrix.platform }}
 
       - name: Create platform-specific archive
+        env:
+          MATRIX_PLATFORM: ${{ matrix.platform }}
         run: |
+          # The same name the in-app updater looks for (server/update/archiveNames.js):
+          # .zip for Windows, .tar.gz for Linux and macOS.
+          ARCHIVE_FILE=$(node scripts/update-archive-name.js "$VERSION" "$MATRIX_PLATFORM")
           cd dist-bin
-          # Create versioned archive name
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-win"
-            7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
+          if [[ "$ARCHIVE_FILE" == *.zip ]]; then
+            7z a -tzip "../$ARCHIVE_FILE" .
           else
-            VERSIONED_ARCHIVE_NAME="ihub-apps-${VERSION}-${{ matrix.platform }}"
-            tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
+            tar -czf "../$ARCHIVE_FILE" .
           fi
+          VERSIONED_ARCHIVE_NAME="${ARCHIVE_FILE%.zip}"
+          VERSIONED_ARCHIVE_NAME="${VERSIONED_ARCHIVE_NAME%.tar.gz}"
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
           cd ..
         shell: bash
@@ -409,6 +430,8 @@ jobs:
     if: |
       always() && needs.build.result == 'success' &&
       (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    # Signs checksums.sha256 with the update signing key (see the build job).
+    environment: release-signing
     permissions:
       contents: write
       # Sign build-provenance attestations for the release assets.
@@ -476,6 +499,19 @@ jobs:
           package-manager-cache: false
           node-version: '24'
           check-latest: true # runner tool-cache can lag a patch release; force the real latest 24.x
+
+      # The updater verifies the downloaded archive against checksums.sha256 and
+      # trusts it when the signature on that file verifies (offline installs
+      # also accept the signed manifest inside the archive).
+      - name: Publish checksums.sha256 and its signature
+        env:
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+          UPDATE_SIGNING_PRIVATE_KEY_NEXT: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_NEXT }}
+        run: |
+          node scripts/update-signing.js checksums ./artifacts --out=./artifacts/checksums.sha256
+          cat ./artifacts/checksums.sha256
+          node scripts/update-signing.js sign ./artifacts/checksums.sha256
+        shell: bash
 
       - name: Generate SBOMs (CycloneDX)
         # The production dependencies the binaries ship: the server's runtime

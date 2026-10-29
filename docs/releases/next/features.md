@@ -242,3 +242,24 @@ A model an admin disables afterwards stays disabled.
 
 Installations that are already configured keep the model as it is; the upgrade adds the
 requirement to the two apps and leaves their enabled state alone.
+
+## Updates: Install From File for Servers Without Internet Access
+
+Binary installations can now be updated without any outbound connection. Download the release
+archive on another machine and hand it to iHub under **Admin → Updates → Install from file**:
+upload it, or copy it to the server and enter its path (or drop it into the `updates/` folder of
+the installation). iHub verifies it and shows a summary — version, platform, signature, checksum,
+warnings — before anything is changed; you confirm, and the server restarts into the new version.
+
+- The page names the exact file the server needs, e.g. `ihub-apps-v5.7.0-linux.tar.gz`.
+- Every update, online or from a file, is now checked against an Ed25519 signature and file by file
+  against the archive's signed manifest; archives for the wrong platform or CPU architecture,
+  tampered or truncated archives and archives with unsafe paths are refused before anything is
+  touched. Downgrades need an extra confirmation.
+- The files are replaced by the launcher before the server starts. If the new version fails to
+  start three times, the previous version and its configuration are restored automatically, and
+  the Updates page says why.
+- A snapshot of the configuration is taken before every update; rolling back can restore it.
+- On the command line: `--update=install --file=<archive>`, `--update=status`,
+  `--update=rollback --restore-config`.
+- See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).

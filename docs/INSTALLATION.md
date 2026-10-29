@@ -604,47 +604,153 @@ For detailed configuration documentation, see the main README.md Configuration s
 
 ### Binary Installation Updates
 
-**In-place updates** (recommended): Binary installations support automatic in-place updates via the Admin UI or CLI. Updates are downloaded from GitHub Releases, verified with checksums, and applied without manual file management. A backup of the previous version is kept for rollback.
+Binary installations update in place, from **Admin → Updates** or the command
+line. Every update — downloaded from GitHub or handed over as a file — goes
+through the same steps:
 
-**Via Admin UI:**
-1. Navigate to **Admin > System**
-2. Click **Check for Updates**
-3. If an update is available, click **Download** then **Apply**
-4. The server restarts automatically with the new version
+1. **Verify.** The archive is extracted into `.update-staging/` (nothing of the
+   installation is touched yet) and checked: every file against the signed
+   `update-manifest.json` inside the archive, the published
+   `checksums.sha256` when one is available, platform, CPU architecture and
+   version. Archives containing links, device files, paths outside the archive,
+   or names that only differ by case are refused. The admin sees a summary and
+   confirms it.
+2. **Snapshot.** `contents/config/` and the migration history are copied to
+   `.update-backup/<version>/config-snapshot/` (private to the service user;
+   `contents/.encryption-key` is not copied).
+3. **Restart and swap.** The server restarts. The launcher moves the old
+   `server/`, `shared/`, `public/`, `docs/`, `browser-extension/`, `node`
+   (`node.exe`), `launcher.cjs`, `version.txt` and launcher script into
+   `.update-backup/<version>/` and the new ones into place *before* it starts
+   the server, so no file is in use (Windows refuses to rename a directory
+   while a file below it is open).
+4. **Confirm or roll back.** Once the new version answers requests, the
+   update is confirmed. If it fails to start three times in a row, the
+   launcher restores the previous version and its configuration snapshot and
+   starts that instead; the Updates page shows why.
 
-**Via CLI:**
+`config.env`, `contents/`, `logs/` and the Windows service definition are never
+replaced. Updating *from* a release older than this mechanism, the running
+server still swaps the files itself (the Updates page says so); from then on
+the launcher does it.
+
+#### Online (GitHub)
+
+**Admin UI:** **Admin → Updates** → *Download and verify* in the "Update
+available" banner → review the summary → *Install and restart*.
+
+**CLI** (with the server stopped):
+
 ```bash
-# Full update (check, download, apply)
-./ihub-apps-v*-<platform> --update
-
-# Step-by-step
-./ihub-apps-v*-<platform> --update=check      # Check for available updates
-./ihub-apps-v*-<platform> --update=download   # Download and stage
-./ihub-apps-v*-<platform> --update=apply      # Apply staged update
-
-# Rollback to previous version
-./ihub-apps-v*-<platform> --update=rollback
-
-# Skip confirmation prompts
-./ihub-apps-v*-<platform> --update --force
+./ihub-apps-v*-<platform> --update            # check, download, verify, apply
+./ihub-apps-v*-<platform> --update=check      # only check
+./ihub-apps-v*-<platform> --update=download   # download and stage
+./ihub-apps-v*-<platform> --update=apply      # apply what is staged
+./ihub-apps-v*-<platform> --update --force    # no confirmation prompts
 ```
 
-**What happens during an update:**
-1. New version is downloaded from GitHub Releases and checksum-verified
-2. Current `server/`, `shared/`, `public/`, `node`, and launcher script are backed up to `.update-backup/<version>/`
-3. Staged files replace the current installation
-4. Server restarts automatically (exit code 75 triggers the launcher to re-exec)
+#### Air-gapped servers ("Install from file")
 
-**Rollback:**
-- Backups are organized by version under `.update-backup/` and preserved across updates
-- Rollback always restores the most recent backup
-- Available via Admin UI (**Admin > System > Rollback**) or CLI (`--update=rollback`)
+No outbound connection is needed; set `NO_VERSION_CHECK=true` so the server
+does not try to reach GitHub at all.
+
+1. **Find out which file this server needs.** *Admin → Updates → Install from
+   file* shows it, e.g. `ihub-apps-v5.7.0-linux.tar.gz` (linux, x64). Archives
+   are named `ihub-apps-v<version>-linux.tar.gz`, `…-macos.tar.gz` (Apple
+   silicon) and `…-win.zip`. `--update=status` prints the same on the command
+   line.
+2. **Download it on a machine with internet access** from the
+   [releases page](https://github.com/intrafind/ihub-apps/releases), together
+   with `checksums.sha256` and `checksums.sha256.sig` if you want the
+   published checksum checked as well (the archive's own signed manifest is
+   enough). Where a download filter blocks archives, the
+   `….tar.gz.base64.txt` / `….zip.base64.txt` variant is accepted too.
+3. **Hand it to iHub**, either way:
+   - **Upload** it on the *Upload* tab. Reverse proxies limit request bodies
+     (nginx `client_max_body_size` defaults to 1 MB, IIS to about 30 MB) and
+     Node.js gives up on a request after 5 minutes; if the upload fails, use
+     the next option.
+   - **Copy it to the server** and enter its absolute path on the *File on the
+     server* tab, or drop it into the `updates/` folder of the installation,
+     which the tab lists. `checksums.sha256` and `.sig` in the same folder are
+     picked up. On Windows, mapped drive letters are not visible to the service
+     account; use a UNC path (`\\server\share\…`).
+4. **Review the summary and click *Install and restart*.** A downgrade or
+   reinstall needs an extra tick; an unsigned archive (only if allowed, see
+   below) needs its version typed.
+
+**CLI** (with the server stopped):
+
+```bash
+./ihub-apps-v*-<platform> --update=install --file=/tmp/ihub-apps-v5.7.0-linux.tar.gz
+# or in two steps
+./ihub-apps-v*-<platform> --update=stage --file=/tmp/ihub-apps-v5.7.0-linux.tar.gz
+./ihub-apps-v*-<platform> --update=apply
+./ihub-apps-v*-<platform> --update=status     # staged update, backups, last result
+./ihub-apps-v*-<platform> --update=discard    # throw away what is staged
+```
+
+#### Signatures
+
+Release archives carry an Ed25519 signature (over `update-manifest.json`
+inside the archive and over `checksums.sha256`). iHub ships the public keys
+and refuses archives that are not signed by one of them. Settings in
+`platform.json` (server restart required):
+
+```json
+"update": {
+  "allowUnsigned": false,
+  "trustedPublicKeys": [],
+  "maxUploadSizeMB": 1024
+}
+```
+
+- `trustedPublicKeys` — additional Ed25519 public keys (PEM) for installations
+  that build and sign their own binaries (`node scripts/update-signing.js
+  keygen` creates a pair; see [Update signing](update-signing.md)).
+- `allowUnsigned` — lets an admin install an archive that no trusted key
+  signed, after typing its version. Every such installation is recorded in the
+  audit log.
+
+> **Updating from a release without signature support:** the update *into* the
+> first release that verifies signatures is performed by the old updater,
+> which cannot check them. Verify that one download yourself on a connected
+> machine: `gh attestation verify ihub-apps-v<version>-<platform>.<ext> --repo
+> intrafind/ihub-apps`. Every later update is signature-checked by iHub.
+
+#### Rollback
+
+The most recent backup is restored with **Admin → Updates → Rollback to
+<version>** or `--update=rollback`. Optionally (*Also restore the
+configuration…* in the UI, `--update=rollback --restore-config` on the CLI) the
+configuration snapshot taken before the update is put back: configuration
+migrations only run forward, so an older version may not understand
+configuration a newer one migrated. Configuration changes made after the
+update are lost when you do that.
+
+#### Recovery
+
+If the server does not come back at all:
+
+1. Stop the service / launcher.
+2. `./ihub-apps-v*-<platform> --update=status` shows the last result and the
+   backup; `--update=rollback --restore-config` restores it without the server.
+3. By hand: the previous files are complete in `.update-backup/<version>/`;
+   move them back over the installation directory (and
+   `config-snapshot/config` over `contents/config`).
+4. Logs: the launcher prints `[update] …` lines (the service log on Windows,
+   `journalctl -u <service>` with systemd); `.update-result.json` in the
+   installation directory holds the outcome of the last attempt.
 
 **Requirements:**
-- Write permissions on the installation directory
-- At least 500 MB free disk space
+- Write permissions on the installation directory (the service user's, not
+  only the installer's)
+- Free disk space for about five times the archive size (archive, extracted
+  copy, configuration snapshot); the code backup is a rename and costs nothing
 - Only available for binary installations (not Docker or npm)
 - Disabled automatically when running in a container (Docker, Podman, Kubernetes)
+- Not for several servers sharing one `contents/` directory: update them as a
+  rolling infrastructure change instead
 
 **Behaviour when GitHub is unreachable:**
 
@@ -748,7 +854,7 @@ curl http://localhost:3000/api/health | jq '.version'
 ```
 
 **Rollback procedures:**
-- **Binary**: Use the Admin UI or `--update=rollback` CLI command
+- **Binary**: Use **Admin → Updates** or the `--update=rollback` CLI command (see [Rollback](#rollback))
 - **Docker**: Use specific version tag: `ghcr.io/intrafind/ihub-apps:v3.2.0`
 - **npm**: `git checkout v3.2.0` (or specific commit)
 
@@ -765,8 +871,10 @@ docker run -d \
 
 **Binary automated updates via cron:**
 ```bash
-# Run unattended update daily at 2am (skips prompt, restarts if update available)
-0 2 * * * /path/to/ihub-apps-v*-linux --update --force
+# Install the latest release daily at 2am without prompts, and restart the service
+# only when a new version was installed (version.txt changed). Unsigned archives
+# are never installed this way: they need a typed confirmation.
+0 2 * * * cd /opt/ihub-apps && before=$(cat version.txt) && ./ihub-apps-v*-linux --update --force && [ "$(cat version.txt)" != "$before" ] && systemctl restart ihub-apps
 ```
 
 ## Troubleshooting

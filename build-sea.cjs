@@ -135,12 +135,27 @@ if (updateArg) {
   const force = process.argv.includes('--force');
   // Dynamic import of the ESM CLI module
   import('./server/cli/update.js').then(mod => {
-    mod.runUpdateCLI(subcommand, force);
+    mod.runUpdateCLI(subcommand, force, process.argv);
   }).catch(err => {
     console.error('Failed to load update module:', err.message);
     process.exit(1);
   });
 } else {
+
+// In-place updates (server/update/swap.cjs). Loaded once, before any update
+// is applied: if the updated version is broken, the code that restores the
+// previous one is the known-good copy already in memory.
+let updateSwap = null;
+try {
+  updateSwap = require('./server/update/swap.cjs');
+} catch (err) {
+  console.error('Update support unavailable: ' + err.message);
+}
+const contentsDirForUpdates = path.resolve(binDir, process.env.CONTENTS_DIR || 'contents');
+const logUpdate = message => console.log('[update] ' + message);
+// Tells the server that this launcher applies staged updates before it starts
+// the server, instead of the server swapping its own files while running.
+process.env.IHUB_LAUNCHER_PROTOCOL = String(updateSwap ? updateSwap.LAUNCHER_PROTOCOL : 1);
 
 // Set default values
 process.env.HOST = process.env.HOST || '0.0.0.0';
@@ -244,9 +259,29 @@ function createTemporaryServer(port, host) {
   });
 }
 
+// The running server process, replaced when an update's first start fails
+// and the launcher tries again.
+let nodeProcess = null;
+// Keep track of whether we're in shutdown mode
+let shuttingDown = false;
+let signalHandlersInstalled = false;
+
 // Start the server
 async function startServer() {
+  // A shutdown signal can arrive while a retry after a failed update start is pending.
+  if (shuttingDown) return;
   try {
+    // Apply an update the admin confirmed before restarting: nothing runs from
+    // server/ yet, so no file of it is held open (Windows refuses to rename a
+    // directory with an open file below it).
+    if (updateSwap) {
+      try {
+        updateSwap.applyPendingUpdate(binDir, { log: logUpdate, contentsDir: contentsDirForUpdates });
+      } catch (err) {
+        logUpdate('Applying the pending update failed: ' + err.message);
+      }
+    }
+
     // Check if port is in use before starting
     const portInUse = await isPortInUse(PORT, HOST);
     
@@ -292,33 +327,62 @@ async function startServer() {
     
     console.log(\`Server path: \${serverPath}\`);
     
-    // Start the server as a child process
-    const nodeProcess = spawn(process.execPath, [serverPath], {
+    // Start the server as a child process. The node binary is resolved from
+    // the installation directory, not process.execPath, so a restart after an
+    // update runs the updated Node.js.
+    const nodeBinary = path.join(binDir, process.platform === 'win32' ? 'node.exe' : 'node');
+    nodeProcess = spawn(fs.existsSync(nodeBinary) ? nodeBinary : process.execPath, [serverPath], {
       stdio: 'inherit',
       env: process.env,
       detached: false // Ensure the child process is terminated when parent exits
     });
     
-    // Keep track of whether we're in shutdown mode
-    let shuttingDown = false;
-    
-    // Handle server process events
+    // Handle server process events. A child that cannot even be spawned (the
+    // node binary of an update does not run) emits 'error', possibly followed
+    // by 'close'; both end up here, once.
+    let serverGone = false;
+    const onServerGone = (code) => {
+      if (serverGone) return;
+      serverGone = true;
+      if (shuttingDown) return;
+      // An update that has not come up yet: try again, and after repeated
+      // failures restore the previous version and start that instead.
+      if (updateSwap) {
+        let outcome = 'none';
+        try {
+          outcome = updateSwap.recordServerExit(binDir, code, {
+            log: logUpdate,
+            contentsDir: contentsDirForUpdates
+          });
+        } catch (err) {
+          logUpdate('Could not record the failed start: ' + err.message);
+        }
+        if (outcome !== 'none') {
+          setTimeout(startServer, 2000);
+          return;
+        }
+      }
+      process.exit(code);
+    };
+
     nodeProcess.on('error', (err) => {
       console.error(\`Failed to start server process: \${err}\`);
-      process.exit(1);
+      onServerGone(1);
     });
     
     nodeProcess.on('close', (code) => {
       console.log(\`Server process exited with code \${code}\`);
-      if (!shuttingDown) {
-        process.exit(code);
-      }
+      onServerGone(code);
     });
     
     // Platform-specific graceful shutdown handling
     function gracefulShutdown(signal) {
       if (shuttingDown) return;
       shuttingDown = true;
+      // Between a failed start and its retry there is no server to stop.
+      if (!nodeProcess || nodeProcess.exitCode !== null || nodeProcess.signalCode !== null) {
+        process.exit(0);
+      }
       
       console.log(\`Received \${signal}. Shutting down server gracefully...\`);
       
@@ -368,16 +432,19 @@ async function startServer() {
       });
     }
     
-    // Set up signal handlers
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
-    
-    // Handle uncaught exceptions
-    process.on('uncaughtException', (err) => {
-      console.error('Uncaught exception:', err);
-      gracefulShutdown('SIGTERM');
-    });
+    // Set up signal handlers (once: startServer runs again after a failed update start)
+    if (!signalHandlersInstalled) {
+      signalHandlersInstalled = true;
+      process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+      process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+      process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
+      // Handle uncaught exceptions
+      process.on('uncaughtException', (err) => {
+        console.error('Uncaught exception:', err);
+        gracefulShutdown('SIGTERM');
+      });
+    }
     
   } catch (err) {
     console.error('Error starting server:', err);
@@ -437,6 +504,12 @@ try {
   execSync('npm install --omit=dev', {
     cwd: path.join(outputDir, 'server'),
     stdio: 'inherit'
+  });
+  // npm's node_modules/.bin holds symlinks (Linux, macOS). The updater refuses
+  // archives with links, and the server never runs those executables.
+  execSync(`node scripts/update-signing.js strip-bin-links "${path.join(outputDir, 'server')}"`, {
+    stdio: 'inherit',
+    cwd: __dirname
   });
 
   // Copy supporting files
@@ -737,6 +810,15 @@ exit /b 1
     fs.copyFileSync(process.execPath, path.join(outputDir, 'node'));
     fs.chmodSync(path.join(outputDir, 'node'), 0o755);
   }
+
+  // The manifest the updater verifies every file of an update against (and
+  // whose signature it checks). The release workflow rewrites and signs it
+  // right before packing, after the last file has been added to dist-bin.
+  console.log('Writing update manifest...');
+  execSync(
+    `node scripts/update-signing.js manifest "${outputDir}" --platform=${currentPlatform.platform} --arch=${process.arch}`,
+    { stdio: 'inherit', cwd: __dirname }
+  );
 
   console.log('Standalone application build completed successfully.');
 } catch (err) {

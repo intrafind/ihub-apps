@@ -3,75 +3,164 @@
 
 /**
  * Update Service
- * Handles in-place updates for binary/standalone installations.
- * Downloads new versions from GitHub Releases, verifies checksums,
- * creates backups, swaps application files, and supports rollback.
+ *
+ * In-place updates for binary (single-server) installations. One pipeline,
+ * three sources:
+ *
+ *   source (GitHub release | browser upload | file on the server)
+ *     → acquire the archive into .update-tmp/
+ *     → extract it into .update-staging/ (update/archive.js: hardened,
+ *       nothing outside the staging directory is touched)
+ *     → verify: Ed25519 signature on the manifest or checksum file, the
+ *       manifest against every extracted file, published checksum, platform,
+ *       architecture, version, minimum version to update from
+ *     → the admin reviews the summary and confirms
+ *     → apply: snapshot contents/config, then either hand the swap to the
+ *       launcher for the next start (update/swap.cjs, "swap on start") or,
+ *       under a launcher too old for that, swap in-process; restart the
+ *       whole server (utils/processRestart.js)
+ *
+ * The online path (GitHub) is just one source; it shares every check with
+ * the offline ones, which is what makes "install from file" for air-gapped
+ * installations as trustworthy as the button.
  */
-import {
-  promises as fs,
-  createWriteStream,
-  existsSync,
-  createReadStream,
-  readdirSync,
-  readFileSync,
-  statSync
-} from 'node:fs';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { promises as fs, existsSync, readFileSync, statfsSync } from 'node:fs';
+import { createWriteStream } from 'node:fs';
+import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 import {
   buildUpdateInfo,
+  compareVersions,
   isVersionCheckDisabled,
   refreshVersionCheck
 } from './versionCheckService.js';
 import logger from '../utils/logger.js';
 import config from '../config.js';
 import { gather, isClusterBusActive, respond } from '../clusterBus.js';
+import { BOOT_ID, UPDATE_RESTART_CODE } from '../utils/processRestart.js';
+import swap from '../update/swap.cjs';
+import {
+  ARCHIVE_EXTENSIONS,
+  detectArchiveFormat,
+  getUpdateArchiveName,
+  parseUpdateArchiveName
+} from '../update/archiveNames.js';
+import {
+  ArchiveRejectedError,
+  decodeBase64File,
+  extractArchive,
+  sha256File
+} from '../update/archive.js';
+import { loadTrustedKeys, verifyDetachedSignature } from '../update/signature.js';
 
-const execAsync = promisify(execFile);
+const execFileAsync = promisify(execFile);
 
 const UPDATE_TMP_DIR = '.update-tmp';
-const UPDATE_STAGING_DIR = '.update-staging';
-const UPDATE_BACKUP_DIR = '.update-backup';
+const UPDATE_STAGING_DIR = swap.STAGING_DIR;
 const UPDATE_LOCK_FILE = '.update-lock';
-const UPDATE_RESTART_CODE = 75;
+/** A lock whose heartbeat stopped this long ago belongs to a crashed operation. */
+const LOCK_STALE_MS = 10 * 60 * 1000;
+/** Summary of the staged release, so every worker and a restarted server can show it. */
+const STAGED_INFO_FILE = '.update-staged.json';
+/** Drop-in folder an admin can copy release archives into. */
+const LOCAL_UPDATE_DIR = 'updates';
+const MANIFEST_FILE = 'update-manifest.json';
+const SIGNATURE_SUFFIX = '.sig';
+const CHECKSUMS_FILE = 'checksums.sha256';
+/** A checksum or signature file is a few lines; anything bigger is not one. */
+const MAX_SIDE_FILE_BYTES = 1024 * 1024;
+const MAX_MANIFEST_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_UPLOAD_MB = 1024;
 
 /**
- * Returns the list of files/directories that should be replaced during updates.
- * The Node binary name is platform-specific (node.exe on Windows, node elsewhere).
+ * Top-level entries a release archive may contain that are NOT installed by an
+ * update: install-time files (an admin may have customised the Windows service
+ * definition or config.env) and build diagnostics.
  */
-function getReplacePaths() {
-  const platform = detectPlatform();
-  const nodeBinary = platform === 'windows' ? 'node.exe' : 'node';
-  return ['server', 'shared', 'public', 'docs', 'launcher.cjs', nodeBinary, 'version.txt'];
+const IGNORED_TOP_LEVEL = new Set([
+  'config.env',
+  'ihub-apps-service.xml',
+  'ihub-apps-service.exe',
+  'install-service.cmd',
+  'uninstall-service.cmd',
+  'windows-check.bat'
+]);
+
+export { UPDATE_RESTART_CODE };
+
+/** An update request the admin has to correct (bad input, missing confirmation). */
+export class UpdateRequestError extends Error {
+  constructor(message, { status = 400, code } = {}) {
+    super(message);
+    this.name = 'UpdateRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+// ------------------------------------------------------------ settings ----
+
+/**
+ * Reads `platform.json` → `update`. The server registers the config cache
+ * (routes/admin/update.js); the CLI, which runs without one, reads the file.
+ */
+let updateSettingsProvider = null;
+
+/** @param {() => (Object|undefined)} provider - Returns platform.json's `update` section */
+export function setUpdateSettingsProvider(provider) {
+  updateSettingsProvider = provider;
+}
+
+export function getUpdateSettings() {
+  let section;
+  if (updateSettingsProvider) {
+    try {
+      section = updateSettingsProvider();
+    } catch {
+      section = undefined;
+    }
+  } else {
+    try {
+      section = JSON.parse(
+        readFileSync(getContentsPath('config', 'platform.json'), 'utf8')
+      )?.update;
+    } catch {
+      section = undefined;
+    }
+  }
+  const update = section && typeof section === 'object' ? section : {};
+  const maxUploadSizeMB = Number(update.maxUploadSizeMB);
+  return {
+    allowUnsigned: update.allowUnsigned === true,
+    trustedPublicKeys: Array.isArray(update.trustedPublicKeys) ? update.trustedPublicKeys : [],
+    maxUploadSizeMB:
+      Number.isFinite(maxUploadSizeMB) && maxUploadSizeMB > 0
+        ? maxUploadSizeMB
+        : DEFAULT_MAX_UPLOAD_MB
+  };
+}
+
+// --------------------------------------------------------- environment ----
+
+/** The installation's platform: `linux`, `macos` or `windows`. */
+export function detectPlatform() {
+  return swap.detectPlatform(getRootDir());
 }
 
 /**
- * Detect the current platform from the launcher script filename
+ * Update protocol of the launcher that started this server. A launcher from
+ * before swap-on-start sets nothing.
  */
-function detectPlatform() {
-  const rootDir = getRootDir();
-  try {
-    const files = readdirSync(rootDir);
-    const launcher = files.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
-    if (launcher) {
-      if (launcher.endsWith('-linux')) return 'linux';
-      if (launcher.endsWith('-macos')) return 'macos';
-      if (launcher.endsWith('-win.bat')) return 'windows';
-    }
-  } catch {
-    // Fallback to OS detection
-  }
-
-  const platform = process.platform;
-  if (platform === 'darwin') return 'macos';
-  if (platform === 'win32') return 'windows';
-  return 'linux';
+export function getLauncherProtocol() {
+  const value = Number.parseInt(process.env.IHUB_LAUNCHER_PROTOCOL || '', 10);
+  return Number.isFinite(value) ? value : 1;
 }
 
 /**
@@ -135,6 +224,8 @@ export function isContainerInstallation() {
   return false;
 }
 
+// --------------------------------------------------------------- state ----
+
 // In-memory update state
 let updateState = {
   status: 'idle', // idle | checking | downloading | extracting | staging | applying | restarting | error
@@ -145,56 +236,62 @@ let updateState = {
   backupVersion: null
 };
 
+function setState(updates) {
+  updateState = { ...updateState, ...updates, updatedAt: Date.now() };
+}
+
+function readStagedInfo() {
+  const rootDir = getRootDir();
+  if (!existsSync(join(rootDir, UPDATE_STAGING_DIR))) return null;
+  try {
+    return JSON.parse(readFileSync(join(rootDir, STAGED_INFO_FILE), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get current update status
  */
 export function getUpdateStatus() {
   const rootDir = getRootDir();
-  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
-  const hasBackup = existsSync(backupBaseDir);
-  let backupVersion = null;
-
-  if (hasBackup) {
-    try {
-      const versions = readdirSync(backupBaseDir).filter(d => {
-        try {
-          return statSync(join(backupBaseDir, d)).isDirectory();
-        } catch {
-          return false;
-        }
-      });
-      if (versions.length > 0) {
-        versions.sort().reverse();
-        const bvPath = join(backupBaseDir, versions[0], 'version.txt');
-        if (existsSync(bvPath)) {
-          backupVersion = readFileSync(bvPath, 'utf8').trim();
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  const hasStaged = existsSync(join(rootDir, UPDATE_STAGING_DIR));
-
+  const platform = detectPlatform();
+  const backups = swap.listBackups(rootDir);
+  const latestBackup = backups[0] || null;
+  const staged = readStagedInfo();
   const isContainer = isContainerInstallation();
-  const versionCheckDisabled = isVersionCheckDisabled();
+  const isBinary = isBinaryInstallation();
+  const settings = getUpdateSettings();
+  const { keys } = loadTrustedKeys(settings.trustedPublicKeys);
 
   return {
     ...updateState,
-    isBinary: isBinaryInstallation(),
+    isBinary,
     isContainer,
     updatesEnabled: !isContainer,
-    versionCheckEnabled: !versionCheckDisabled,
-    hasBackup,
-    backupVersion,
-    hasStaged,
-    currentVersion: getAppVersion()
+    versionCheckEnabled: !isVersionCheckDisabled(),
+    hasBackup: Boolean(latestBackup),
+    backupVersion: latestBackup?.version || null,
+    backupHasConfigSnapshot: Boolean(latestBackup?.hasConfigSnapshot),
+    hasStaged: Boolean(staged) || existsSync(join(rootDir, UPDATE_STAGING_DIR)),
+    staged,
+    pendingRestart: Boolean(swap.readPending(rootDir)),
+    lastResult: swap.readResult(rootDir),
+    currentVersion: getAppVersion(),
+    bootId: BOOT_ID,
+    platform,
+    arch: process.arch,
+    archiveNameExample: getUpdateArchiveName('<version>', platform),
+    localUpdateDir: join(rootDir, LOCAL_UPDATE_DIR),
+    canInstallFromFile: isBinary && !isContainer,
+    launcherProtocol: getLauncherProtocol(),
+    swapOnStart: getLauncherProtocol() >= swap.LAUNCHER_PROTOCOL,
+    signing: {
+      trustedKeys: keys.length,
+      allowUnsigned: settings.allowUnsigned
+    },
+    maxUploadSizeMB: settings.maxUploadSizeMB
   };
-}
-
-function setState(updates) {
-  updateState = { ...updateState, ...updates, updatedAt: Date.now() };
 }
 
 /**
@@ -254,36 +351,62 @@ export async function getUpdateStatusAnywhere() {
   return shown === updateState ? local : { ...local, ...shown };
 }
 
+// ---------------------------------------------------------------- lock ----
+
 /**
- * Acquire update lock to prevent concurrent operations
+ * Acquire update lock to prevent concurrent operations. The lock is a file in
+ * the installation root, so it also holds across cluster workers and against
+ * the CLI.
  */
 async function acquireLock() {
   const lockPath = join(getRootDir(), UPDATE_LOCK_FILE);
-  if (existsSync(lockPath)) {
+  const lockContent = () => JSON.stringify({ timestamp: Date.now(), pid: process.pid });
+  // Exclusive create ('wx'): two workers, or a worker and the CLI, can never
+  // both get it. Staleness is the file's mtime, which the heartbeat touches:
+  // reading the content raced with a rewrite in progress (an empty file
+  // parsed as "stale"), and a rewrite could recreate a just-released lock.
+  for (let attempt = 0; ; attempt++) {
     try {
-      const lockData = JSON.parse(await fs.readFile(lockPath, 'utf8'));
-      const lockAge = Date.now() - lockData.timestamp;
-      // Stale lock after 10 minutes
-      if (lockAge < 10 * 60 * 1000) {
-        throw new Error('Another update operation is in progress');
+      await fs.writeFile(lockPath, lockContent(), { flag: 'wx' });
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST' || attempt > 0) {
+        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
+      }
+      let stat;
+      try {
+        stat = await fs.stat(lockPath);
+      } catch (statError) {
+        if (statError.code === 'ENOENT') continue; // released meanwhile: try once more
+        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
+      }
+      if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
+        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
       }
       logger.warn('Removing stale update lock', { component: 'UpdateService' });
-    } catch (error) {
-      if (error.message === 'Another update operation is in progress') throw error;
-      // Invalid lock file, remove it
+      await fs.rm(lockPath, { force: true });
     }
   }
-  await fs.writeFile(lockPath, JSON.stringify({ timestamp: Date.now(), pid: process.pid }));
+  // Long operations (a slow upload being staged, a large extraction) keep it
+  // fresh. utimes never creates the file, so a late tick cannot revive it.
+  const heartbeat = setInterval(() => {
+    const now = new Date();
+    fs.utimes(lockPath, now, now).catch(() => {});
+  }, 60 * 1000);
+  heartbeat.unref();
+  return heartbeat;
 }
 
-async function releaseLock() {
-  const lockPath = join(getRootDir(), UPDATE_LOCK_FILE);
+async function releaseLock(heartbeat) {
+  if (heartbeat) clearInterval(heartbeat);
   try {
-    await fs.unlink(lockPath);
+    await fs.unlink(join(getRootDir(), UPDATE_LOCK_FILE));
   } catch {
     // ignore
   }
 }
+
+// ------------------------------------------------------- GitHub source ----
 
 /**
  * Check for available updates from GitHub Releases, resolving the download
@@ -326,405 +449,75 @@ export async function checkForUpdate({ force = false } = {}) {
   // Find the matching asset for this platform
   const platform = detectPlatform();
   const tagName = entry.release.tag_name;
-  const archiveName = `ihub-apps-${tagName}-${platform}.tar.gz`;
-  const asset = entry.release.assets?.find(a => a.name === archiveName);
-  const checksumsAsset = entry.release.assets?.find(a => a.name === 'checksums.sha256');
+  const archiveName = getUpdateArchiveName(tagName, platform);
+  const findAsset = name => entry.release.assets?.find(a => a.name === name);
+  const asset = findAsset(archiveName);
 
   return {
     ...info,
     platform,
+    archiveName,
     assetUrl: asset?.browser_download_url || null,
     assetSize: asset?.size || null,
-    checksumsUrl: checksumsAsset?.browser_download_url || null,
+    checksumsUrl: findAsset(CHECKSUMS_FILE)?.browser_download_url || null,
+    checksumsSigUrl: findAsset(CHECKSUMS_FILE + SIGNATURE_SUFFIX)?.browser_download_url || null,
     tagName
   };
 }
 
 /**
- * Download and stage an update
+ * Download the release for this platform from GitHub and stage it.
+ *
+ * @param {Object} updateInfo - From {@link checkForUpdate}, fetched server-side
+ * @returns {Promise<Object>} The staging summary
  */
 export async function downloadUpdate(updateInfo) {
-  const rootDir = getRootDir();
-
   if (!updateInfo?.assetUrl) {
-    throw new Error('No download URL available for this platform');
+    throw new UpdateRequestError(
+      `No download available for this platform (${updateInfo?.archiveName || 'unknown archive'})`
+    );
   }
-
-  await acquireLock();
-
-  const tmpDir = join(rootDir, UPDATE_TMP_DIR);
-  const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
-
+  // Before the download, not after: a release fetched onto a nearly full
+  // volume would fill it and fail with a bare ENOSPC.
+  if (updateInfo.assetSize) await assertDiskSpaceFor(updateInfo.assetSize);
+  const workDir = await createWorkDir('github');
   try {
     setState({ status: 'downloading', progress: 0, message: 'Downloading update...', error: null });
-
-    // Sanitize version string to prevent path traversal
-    const safeVersion = updateInfo.latestVersion.replace(/[^a-zA-Z0-9._-]/g, '');
-    if (!safeVersion) {
-      throw new Error('Invalid version string in update info');
-    }
-
-    // Clean up any previous staging/tmp
-    await fs.rm(tmpDir, { recursive: true, force: true });
-    await fs.rm(stagingDir, { recursive: true, force: true });
-    await fs.mkdir(tmpDir, { recursive: true });
-
-    // Download the archive
-    const archivePath = join(tmpDir, `update-${safeVersion}.tar.gz`);
+    const archivePath = join(workDir, workCopyName(updateInfo.archiveName));
     await downloadFile(updateInfo.assetUrl, archivePath, updateInfo.assetSize);
 
-    // Download and verify checksum
+    let checksumsPath = null;
+    let checksumsSigPath = null;
     if (updateInfo.checksumsUrl) {
-      setState({ status: 'extracting', progress: 90, message: 'Verifying checksum...' });
-      const checksumsPath = join(tmpDir, 'checksums.sha256');
-      await downloadFile(updateInfo.checksumsUrl, checksumsPath);
-      await verifyChecksum(archivePath, checksumsPath, updateInfo);
-    } else {
-      logger.warn('No checksums file available, skipping verification', {
-        component: 'UpdateService'
-      });
+      checksumsPath = join(workDir, CHECKSUMS_FILE);
+      await downloadFile(updateInfo.checksumsUrl, checksumsPath, null, { progress: false });
+    }
+    if (updateInfo.checksumsSigUrl) {
+      checksumsSigPath = join(workDir, CHECKSUMS_FILE + SIGNATURE_SUFFIX);
+      await downloadFile(updateInfo.checksumsSigUrl, checksumsSigPath, null, { progress: false });
     }
 
-    // Validate archive contents before extraction to prevent path traversal
-    setState({ status: 'extracting', progress: 93, message: 'Validating archive...' });
-    const { stdout: tarList } = await execAsync('tar', ['-tzf', archivePath], {
-      maxBuffer: 50 * 1024 * 1024
+    return await stageArchive({
+      archivePath,
+      originalName: updateInfo.archiveName,
+      source: 'github',
+      checksumsPath,
+      checksumsSigPath
     });
-    const archiveEntries = tarList.split('\n').filter(Boolean);
-    for (const entry of archiveEntries) {
-      if (entry.startsWith('/') || entry.includes('../')) {
-        throw new Error(`Archive contains unsafe path: ${entry}`);
-      }
-    }
-
-    // Extract the archive
-    setState({ status: 'extracting', progress: 95, message: 'Extracting update...' });
-    await fs.mkdir(stagingDir, { recursive: true });
-    await execAsync('tar', ['-xzf', archivePath, '-C', stagingDir]);
-
-    // Find the extracted content (may be in a subdirectory)
-    const entries = await fs.readdir(stagingDir);
-    let extractedRoot = stagingDir;
-    if (entries.length === 1) {
-      const subPath = join(stagingDir, entries[0]);
-      const stat = await fs.stat(subPath);
-      if (stat.isDirectory()) {
-        extractedRoot = subPath;
-      }
-    }
-
-    // Verify the extracted content has expected files
-    const hasServer = existsSync(join(extractedRoot, 'server'));
-    const hasPublic = existsSync(join(extractedRoot, 'public'));
-    if (!hasServer || !hasPublic) {
-      throw new Error('Downloaded archive does not contain expected application files');
-    }
-
-    // If extracted into a subdirectory, move files up to staging root
-    if (extractedRoot !== stagingDir) {
-      const subEntries = await fs.readdir(extractedRoot);
-      for (const entry of subEntries) {
-        await fs.rename(join(extractedRoot, entry), join(stagingDir, entry));
-      }
-      await fs.rm(extractedRoot, { recursive: true, force: true });
-    }
-
-    // Clean up the archive
-    await fs.rm(tmpDir, { recursive: true, force: true });
-
-    setState({
-      status: 'idle',
-      progress: 100,
-      message: 'Update downloaded and staged',
-      stagedVersion: updateInfo.latestVersion
-    });
-
-    logger.info('Update downloaded and staged successfully', {
-      component: 'UpdateService',
-      version: updateInfo.latestVersion
-    });
-
-    return { success: true, stagedVersion: updateInfo.latestVersion };
   } catch (error) {
-    setState({ status: 'error', error: error.message, message: 'Download failed' });
-    // Clean up on failure
-    await fs.rm(tmpDir, { recursive: true, force: true });
-    await fs.rm(stagingDir, { recursive: true, force: true });
+    if (updateState.status !== 'error') {
+      setState({ status: 'error', error: error.message, message: 'Download failed' });
+    }
     throw error;
   } finally {
-    await releaseLock();
-  }
-}
-
-/**
- * Apply a staged update — swap files and prepare for restart
- */
-export async function applyUpdate() {
-  const rootDir = getRootDir();
-  const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
-
-  if (!existsSync(stagingDir)) {
-    throw new Error('No staged update found. Download an update first.');
-  }
-
-  await acquireLock();
-  setState({ status: 'applying', progress: 0, message: 'Applying update...', error: null });
-
-  const currentVersion = getAppVersion();
-  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
-  const backupDir = join(backupBaseDir, currentVersion);
-
-  try {
-    // Remove any stale backup for THIS version only (e.g. from a failed attempt)
-    await fs.rm(backupDir, { recursive: true, force: true });
-    await fs.mkdir(backupDir, { recursive: true });
-
-    // Save current version to backup
-    await fs.writeFile(join(backupDir, 'version.txt'), currentVersion);
-
-    // Backup and replace each path
-    const replacePaths = getReplacePaths();
-    let replacedCount = 0;
-    for (const relPath of replacePaths) {
-      const currentPath = join(rootDir, relPath);
-      const stagedPath = join(stagingDir, relPath);
-      const backupPath = join(backupDir, relPath);
-
-      if (!existsSync(stagedPath)) {
-        logger.debug('Staged path does not exist, skipping', {
-          component: 'UpdateService',
-          relPath
-        });
-        continue;
-      }
-
-      // Backup current file/directory
-      if (existsSync(currentPath)) {
-        await fs.rename(currentPath, backupPath);
-      }
-
-      // Move staged file/directory into place
-      await fs.rename(stagedPath, currentPath);
-      replacedCount++;
-      setState({ progress: Math.round((replacedCount / replacePaths.length) * 70) });
-    }
-
-    // Handle launcher script (versioned filename)
-    setState({ progress: 75, message: 'Updating launcher...' });
-    await updateLauncherScript(rootDir, stagingDir, backupDir);
-
-    // Ensure permissions on node binary and launcher (Unix only; Windows doesn't use chmod)
-    setState({ progress: 85, message: 'Setting permissions...' });
-    const platform = detectPlatform();
-    if (platform !== 'windows') {
-      const nodePath = join(rootDir, 'node');
-      if (existsSync(nodePath)) {
-        await fs.chmod(nodePath, 0o755);
-      }
-    }
-
-    // Make any launcher scripts executable
-    const rootFiles = await fs.readdir(rootDir);
-    for (const f of rootFiles) {
-      if (f.startsWith('ihub-apps-') && !f.endsWith('.bat')) {
-        await fs.chmod(join(rootDir, f), 0o755);
-      }
-    }
-
-    // Clean up staging directory
-    setState({ progress: 90, message: 'Cleaning up...' });
-    await fs.rm(stagingDir, { recursive: true, force: true });
-
-    const newVersion = getAppVersion();
-    setState({
-      status: 'restarting',
-      progress: 100,
-      message: `Update applied. Restarting... (${currentVersion} → ${newVersion})`,
-      stagedVersion: null,
-      backupVersion: currentVersion
-    });
-
-    logger.info('Update applied successfully', {
-      component: 'UpdateService',
-      currentVersion,
-      newVersion
-    });
-
-    return {
-      success: true,
-      previousVersion: currentVersion,
-      newVersion,
-      restartCode: UPDATE_RESTART_CODE
-    };
-  } catch (error) {
-    logger.error('Update apply failed, attempting rollback', { component: 'UpdateService', error });
-    setState({ status: 'error', error: error.message, message: 'Apply failed, rolling back...' });
-
-    // Attempt automatic rollback
-    try {
-      await performRollback(rootDir, backupDir);
-      setState({
-        status: 'error',
-        error: `Update failed and was rolled back: ${error.message}`,
-        message: 'Update rolled back'
-      });
-    } catch (rollbackError) {
-      logger.error('Rollback also failed', { component: 'UpdateService', error: rollbackError });
-      setState({
-        status: 'error',
-        error: `Update AND rollback failed: ${error.message}. Rollback error: ${rollbackError.message}`,
-        message: 'CRITICAL: Rollback failed'
-      });
-    }
-
-    throw error;
-  } finally {
-    await releaseLock();
-  }
-}
-
-/**
- * Manually rollback to the previous version
- */
-export async function rollback() {
-  const rootDir = getRootDir();
-  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
-
-  if (!existsSync(backupBaseDir)) {
-    throw new Error('No backup available for rollback');
-  }
-
-  const versions = (await fs.readdir(backupBaseDir)).filter(d => {
-    try {
-      return statSync(join(backupBaseDir, d)).isDirectory();
-    } catch {
-      return false;
-    }
-  });
-
-  if (versions.length === 0) {
-    throw new Error('No backup available for rollback');
-  }
-
-  versions.sort().reverse();
-  const backupDir = join(backupBaseDir, versions[0]);
-
-  await acquireLock();
-  setState({ status: 'applying', progress: 0, message: 'Rolling back...', error: null });
-
-  try {
-    await performRollback(rootDir, backupDir);
-    await releaseLock();
-
-    const restoredVersion = getAppVersion();
-    setState({
-      status: 'restarting',
-      progress: 100,
-      message: `Rolled back to ${restoredVersion}. Restarting...`,
-      backupVersion: null
-    });
-
-    logger.info('Rollback completed', { component: 'UpdateService', restoredVersion });
-
-    return { success: true, restoredVersion, restartCode: UPDATE_RESTART_CODE };
-  } catch (error) {
-    setState({ status: 'error', error: error.message, message: 'Rollback failed' });
-    await releaseLock();
-    throw error;
-  }
-}
-
-/**
- * Internal rollback implementation
- */
-async function performRollback(rootDir, backupDir) {
-  for (const relPath of getReplacePaths()) {
-    const currentPath = join(rootDir, relPath);
-    const backupPath = join(backupDir, relPath);
-
-    if (!existsSync(backupPath)) continue;
-
-    // Remove current (potentially partial) file
-    await fs.rm(currentPath, { recursive: true, force: true });
-    // Restore from backup
-    await fs.rename(backupPath, currentPath);
-  }
-
-  // Restore launcher script
-  await restoreLauncherScript(rootDir, backupDir);
-
-  // Clean up the restored backup subdirectory (not the whole .update-backup/)
-  await fs.rm(backupDir, { recursive: true, force: true });
-
-  // If no more backups remain, clean up the parent directory too
-  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
-  try {
-    const remaining = await fs.readdir(backupBaseDir);
-    if (remaining.length === 0) {
-      await fs.rm(backupBaseDir, { recursive: true, force: true });
-    }
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * Update the versioned launcher script
- */
-async function updateLauncherScript(rootDir, stagingDir, backupDir) {
-  const rootFiles = await fs.readdir(rootDir);
-  const stagingFiles = await fs.readdir(stagingDir);
-
-  // Find current launcher script
-  const currentLauncher = rootFiles.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
-  // Find new launcher script in staging
-  const newLauncher = stagingFiles.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
-
-  if (currentLauncher) {
-    // Backup current launcher
-    await fs.rename(join(rootDir, currentLauncher), join(backupDir, currentLauncher));
-  }
-
-  if (newLauncher) {
-    // Move new launcher into place
-    await fs.rename(join(stagingDir, newLauncher), join(rootDir, newLauncher));
-    if (!newLauncher.endsWith('.bat')) {
-      await fs.chmod(join(rootDir, newLauncher), 0o755);
-    }
-  }
-}
-
-/**
- * Restore launcher script from backup
- */
-async function restoreLauncherScript(rootDir, backupDir) {
-  try {
-    const backupFiles = await fs.readdir(backupDir);
-    const rootFiles = await fs.readdir(rootDir);
-
-    // Remove any current launcher
-    const currentLauncher = rootFiles.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
-    if (currentLauncher) {
-      await fs.unlink(join(rootDir, currentLauncher));
-    }
-
-    // Restore backed up launcher
-    const backupLauncher = backupFiles.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
-    if (backupLauncher) {
-      await fs.rename(join(backupDir, backupLauncher), join(rootDir, backupLauncher));
-      if (!backupLauncher.endsWith('.bat')) {
-        await fs.chmod(join(rootDir, backupLauncher), 0o755);
-      }
-    }
-  } catch (error) {
-    logger.warn('Error restoring launcher script', { component: 'UpdateService', error });
+    await fs.rm(workDir, { recursive: true, force: true });
   }
 }
 
 /**
  * Download a file with progress tracking
  */
-async function downloadFile(url, destPath, expectedSize = null) {
+async function downloadFile(url, destPath, expectedSize = null, { progress = true } = {}) {
   const maxRetries = 3;
   let lastError;
 
@@ -749,11 +542,10 @@ async function downloadFile(url, destPath, expectedSize = null) {
       const fileStream = createWriteStream(destPath);
       const body = response.body;
 
-      if (body && totalSize > 0) {
+      if (progress && body && totalSize > 0) {
         body.on('data', chunk => {
           downloadedSize += chunk.length;
-          const progress = Math.round((downloadedSize / totalSize) * 85);
-          setState({ progress });
+          setState({ progress: Math.round((downloadedSize / totalSize) * 60) });
         });
       }
 
@@ -777,68 +569,1122 @@ async function downloadFile(url, destPath, expectedSize = null) {
   throw new Error(`Download failed after ${maxRetries} attempts: ${lastError.message}`);
 }
 
+// --------------------------------------------------------- file sources ----
+
+/** A private scratch directory below .update-tmp/ for one acquisition. */
+export async function createWorkDir(prefix) {
+  const dir = join(getRootDir(), UPDATE_TMP_DIR, `${prefix}-${randomBytes(6).toString('hex')}`);
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}
+
+/** Remove a directory made by {@link createWorkDir}; anything else is left alone. */
+export function removeWorkDir(dir) {
+  const tmpRoot = join(getRootDir(), UPDATE_TMP_DIR);
+  if (typeof dir !== 'string' || !resolve(dir).startsWith(tmpRoot + sep)) return;
+  fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+}
+
 /**
- * Verify file checksum against checksums file
+ * Name of the private working copy of an archive: fixed, so nothing a client
+ * or a release lists ends up in a path. The original name travels as metadata.
  */
-async function verifyChecksum(filePath, checksumsPath, updateInfo) {
+function workCopyName(originalName) {
+  const format = detectArchiveFormat(originalName);
+  if (!format) throw new UpdateRequestError('Not a release archive');
+  return `archive.${format.format}${format.base64 ? '.base64.txt' : ''}`;
+}
+
+function isAllowedArchiveName(name) {
+  const lower = String(name || '').toLowerCase();
+  return ARCHIVE_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
+/**
+ * Archives in the `updates/` drop-in folder of the installation, newest first.
+ * A convenience: any absolute path works too (see {@link stageLocalFile}).
+ */
+export async function listLocalCandidates() {
+  const dir = join(getRootDir(), LOCAL_UPDATE_DIR);
+  let entries;
   try {
-    const checksumsContent = await fs.readFile(checksumsPath, 'utf8');
-    const fileName = `ihub-apps-${updateInfo.tagName}-${updateInfo.platform}.tar.gz`;
-
-    const expectedLine = checksumsContent.split('\n').find(line => line.includes(fileName));
-
-    if (!expectedLine) {
-      logger.warn('No checksum found, skipping verification', {
-        component: 'UpdateService',
-        fileName
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return { directory: dir, exists: false, files: [] };
+  }
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !isAllowedArchiveName(entry.name)) continue;
+    try {
+      const stat = await fs.stat(join(dir, entry.name));
+      const parsed = parseUpdateArchiveName(entry.name);
+      files.push({
+        name: entry.name,
+        path: join(dir, entry.name),
+        size: stat.size,
+        modifiedAt: stat.mtime.toISOString(),
+        version: parsed?.version || null,
+        platform: parsed?.platform || null
       });
-      return;
+    } catch {
+      // vanished between readdir and stat
     }
+  }
+  files.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  return { directory: dir, exists: true, files };
+}
 
-    const expectedHash = expectedLine.trim().split(/\s+/)[0];
-
-    const hash = createHash('sha256');
-    const stream = createReadStream(filePath);
-    for await (const chunk of stream) {
-      hash.update(chunk);
-    }
-    const actualHash = hash.digest('hex');
-
-    if (actualHash !== expectedHash) {
-      throw new Error(`Checksum mismatch: expected ${expectedHash}, got ${actualHash}`);
-    }
-
-    logger.info('Checksum verification passed', { component: 'UpdateService' });
-  } catch (error) {
-    if (error.message.startsWith('Checksum mismatch')) {
-      throw error;
-    }
-    logger.warn('Checksum verification skipped', { component: 'UpdateService', error });
+/**
+ * Read a small side file (checksums, signature) next to an archive, if present.
+ * @returns {Promise<string|null>} Path of a private copy, or null
+ */
+async function copySideFile(sourcePath, workDir, name) {
+  let handle;
+  try {
+    handle = await fs.open(sourcePath, 'r');
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > MAX_SIDE_FILE_BYTES) return null;
+    const dest = join(workDir, name);
+    await fs.writeFile(dest, await handle.readFile());
+    return dest;
+  } catch {
+    return null;
+  } finally {
+    await handle?.close();
   }
 }
 
 /**
- * Check available disk space (best-effort)
+ * Stage an archive that already is on the server (an air-gapped admin copied
+ * it there, or a browser upload would exceed a reverse proxy's body limit).
+ *
+ * Any absolute path an admin names is accepted (UNC paths included); it is
+ * resolved with `realpath`, must be a regular file with an archive extension,
+ * and is opened once and copied from that handle, so it cannot be swapped
+ * between the check and the read. Errors never echo the file's content.
+ * `checksums.sha256` and its `.sig` next to it are used when present.
+ *
+ * @param {string} requestedPath
  */
-export async function checkDiskSpace() {
-  const rootDir = getRootDir();
-  try {
-    const { stdout } = await execAsync('df', ['-k', rootDir]);
-    const lines = stdout.trim().split('\n');
-    if (lines.length < 2) return { available: null, sufficient: true };
-    // df output: Filesystem 1K-blocks Used Available Use% Mounted on
-    const columns = lines[lines.length - 1].trim().split(/\s+/);
-    const availableKB = Number.parseInt(columns[3], 10);
-    if (Number.isNaN(availableKB)) return { available: null, sufficient: true };
+export async function stageLocalFile(requestedPath) {
+  if (typeof requestedPath !== 'string' || requestedPath.trim() === '') {
+    throw new UpdateRequestError('A file path is required');
+  }
+  const trimmed = requestedPath.trim();
+  if (trimmed.includes('\0')) throw new UpdateRequestError('Invalid file path');
+  if (!isAbsolute(trimmed)) {
+    throw new UpdateRequestError(
+      'The path must be absolute (e.g. /opt/updates/… or C:\\updates\\…)'
+    );
+  }
 
-    // Need at least 500MB for backup + new version
-    const requiredKB = 500 * 1024;
-    return {
-      available: availableKB * 1024,
-      sufficient: availableKB >= requiredKB
-    };
+  let realPath;
+  try {
+    realPath = await fs.realpath(trimmed);
+  } catch (error) {
+    throw new UpdateRequestError(
+      error.code === 'EACCES' || error.code === 'EPERM'
+        ? 'The server is not allowed to read this path'
+        : 'File not found'
+    );
+  }
+  const name = basename(realPath);
+  if (!isAllowedArchiveName(name)) {
+    throw new UpdateRequestError(
+      `Not a release archive: expected a file ending in ${ARCHIVE_EXTENSIONS.join(', ')}`
+    );
+  }
+
+  const workDir = await createWorkDir('local');
+  let handle;
+  try {
+    try {
+      handle = await fs.open(realPath, 'r');
+    } catch (error) {
+      throw new UpdateRequestError(
+        error.code === 'EACCES' || error.code === 'EPERM'
+          ? 'The server is not allowed to read this file'
+          : 'The file could not be opened'
+      );
+    }
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new UpdateRequestError('The path is not a regular file');
+    const maxBytes = getUpdateSettings().maxUploadSizeMB * 1024 * 1024 * 2;
+    if (stat.size > maxBytes)
+      throw new UpdateRequestError('The file is too large to be a release archive');
+    await assertDiskSpaceFor(stat.size);
+
+    setState({ status: 'staging', progress: 5, message: 'Reading archive...', error: null });
+    const copy = join(workDir, workCopyName(name));
+    await pipeline(
+      handle.createReadStream({ start: 0, autoClose: false }),
+      createWriteStream(copy)
+    );
+
+    const dir = resolve(realPath, '..');
+    const checksumsPath = await copySideFile(join(dir, CHECKSUMS_FILE), workDir, CHECKSUMS_FILE);
+    const checksumsSigPath = await copySideFile(
+      join(dir, CHECKSUMS_FILE + SIGNATURE_SUFFIX),
+      workDir,
+      CHECKSUMS_FILE + SIGNATURE_SUFFIX
+    );
+
+    return await stageArchive({
+      archivePath: copy,
+      originalName: name,
+      source: 'local',
+      sourcePath: realPath,
+      checksumsPath,
+      checksumsSigPath
+    });
+  } finally {
+    await handle?.close();
+    await fs.rm(workDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Stage an archive uploaded through the browser. The route's multer storage
+ * has streamed the parts into `uploadDir` (made by {@link createWorkDir}),
+ * each under its form field's name; the paths are built here from that
+ * directory, never from what the client sent.
+ *
+ * @param {string} uploadDir
+ * @param {{ archiveName: string, hasChecksums?: boolean, hasChecksumsSig?: boolean }} upload
+ *   `archiveName` is the file name the browser reported (metadata only)
+ */
+export async function stageUploadedFile(uploadDir, { archiveName, hasChecksums, hasChecksumsSig }) {
+  const tmpRoot = join(getRootDir(), UPDATE_TMP_DIR);
+  if (typeof uploadDir !== 'string' || !resolve(uploadDir).startsWith(tmpRoot + sep)) {
+    throw new UpdateRequestError('No archive was uploaded');
+  }
+  const name = basename(String(archiveName || ''));
+  if (!isAllowedArchiveName(name)) {
+    throw new UpdateRequestError(
+      `Not a release archive: expected a file ending in ${ARCHIVE_EXTENSIONS.join(', ')}`
+    );
+  }
+  const part = field => join(resolve(uploadDir), field);
+  const small = async file => {
+    try {
+      const { size } = await fs.stat(file);
+      return size <= MAX_SIDE_FILE_BYTES ? file : null;
+    } catch {
+      return null;
+    }
+  };
+  return stageArchive({
+    archivePath: part('archive'),
+    originalName: name,
+    source: 'upload',
+    checksumsPath: hasChecksums ? await small(part('checksums')) : null,
+    checksumsSigPath: hasChecksumsSig ? await small(part('checksumsSig')) : null
+  });
+}
+
+// ------------------------------------------------------------- staging ----
+
+/** How a top-level archive entry is treated. */
+function classifyTopLevel(name) {
+  if (IGNORED_TOP_LEVEL.has(name)) return 'ignore';
+  if (swap.LAUNCHER_SCRIPT_PATTERN.test(name)) return 'extract';
+  const extractable = new Set([
+    ...swap.getReplacePaths('linux'),
+    ...swap.getReplacePaths('windows')
+  ]);
+  return extractable.has(name) ? 'extract' : 'reject';
+}
+
+function issue(code, message, params) {
+  return params ? { code, message, params } : { code, message };
+}
+
+/**
+ * Parse a `sha256sum`-format file (`<hex>  <name>` or `<hex> *<name>`, LF or CRLF).
+ * @returns {Array<{ hash: string, name: string }>}
+ */
+export function parseChecksums(text) {
+  const entries = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const match = /^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/.exec(raw.trim());
+    if (match) entries.push({ hash: match[1].toLowerCase(), name: basename(match[2]) });
+  }
+  return entries;
+}
+
+/**
+ * What a published checksum file says about an archive. Matching is on the
+ * exact file name, or on the hash when the file was renamed.
+ *
+ * @param {string|null} checksumsText
+ * @param {string} fileName
+ * @param {string[]} hashes - The archive's SHA-256, plus the decoded archive's for a .base64.txt
+ * @returns {'match'|'mismatch'|'not-listed'|'missing'}
+ */
+export function evaluateChecksum(checksumsText, fileName, hashes) {
+  if (typeof checksumsText !== 'string') return 'missing';
+  const entries = parseChecksums(checksumsText);
+  if (entries.some(entry => hashes.includes(entry.hash))) return 'match';
+  if (entries.some(entry => entry.name === fileName)) return 'mismatch';
+  return 'not-listed';
+}
+
+/**
+ * Compare the extracted files with the manifest. Files under ignored top-level
+ * entries were not extracted and are not compared.
+ */
+function compareWithManifest(manifestFiles, extracted) {
+  const missing = [];
+  const changed = [];
+  const unlisted = [];
+  for (const [rel, hash] of Object.entries(manifestFiles)) {
+    if (classifyTopLevel(rel.split('/')[0]) !== 'extract') continue;
+    const file = extracted.get(rel);
+    if (!file) missing.push(rel);
+    else if (file.sha256 !== String(hash).toLowerCase()) changed.push(rel);
+  }
+  for (const rel of extracted.keys()) {
+    if (rel === MANIFEST_FILE || rel === MANIFEST_FILE + SIGNATURE_SUFFIX) continue;
+    if (!Object.prototype.hasOwnProperty.call(manifestFiles, rel)) unlisted.push(rel);
+  }
+  return { missing, changed, unlisted, ok: !missing.length && !changed.length && !unlisted.length };
+}
+
+async function readOptional(file, maxBytes) {
+  if (!file) return null;
+  try {
+    const stat = await fs.stat(file);
+    if (!stat.isFile() || stat.size > maxBytes) return null;
+    return await fs.readFile(file);
   } catch {
-    return { available: null, sufficient: true };
+    return null;
+  }
+}
+
+export async function assertDiskSpaceFor(archiveBytes) {
+  const disk = checkDiskSpace({ archiveBytes });
+  if (!disk.sufficient) {
+    throw new UpdateRequestError(
+      `Not enough free disk space in the installation directory: ` +
+        `${Math.round(disk.required / 1024 ** 2)} MB needed, ${Math.round(disk.available / 1024 ** 2)} MB free`,
+      { status: 507, code: 'disk-space' }
+    );
+  }
+}
+
+/**
+ * Verify, extract and stage a release archive from any source.
+ *
+ * On success the release sits in `.update-staging/` and its summary in
+ * `.update-staged.json`; nothing of the installation has changed yet. An
+ * archive with problems is removed again and the summary (with `accepted:
+ * false` and the problems) is returned so the admin can see why.
+ *
+ * @param {Object} options
+ * @param {string} options.archivePath
+ * @param {string} options.originalName - File name the archive arrived with
+ * @param {'github'|'upload'|'local'} options.source
+ * @param {string} [options.sourcePath] - For `local`: the resolved path
+ * @param {string|null} [options.checksumsPath]
+ * @param {string|null} [options.checksumsSigPath]
+ * @returns {Promise<Object>} Summary
+ */
+export async function stageArchive({
+  archivePath,
+  originalName,
+  source,
+  sourcePath,
+  checksumsPath = null,
+  checksumsSigPath = null
+}) {
+  const rootDir = getRootDir();
+  const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
+  const format = detectArchiveFormat(originalName);
+  if (!format) {
+    throw new UpdateRequestError(
+      `Not a release archive: expected a file ending in ${ARCHIVE_EXTENSIONS.join(', ')}`
+    );
+  }
+
+  const lock = await acquireLock();
+  // Once an apply is scheduled, the launcher installs whatever is in
+  // .update-staging on the next start: replacing it now would install an
+  // archive nobody confirmed.
+  if (swap.readPending(rootDir)) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'An update is already scheduled to be applied on restart; restart the server first',
+      { status: 409, code: 'update-pending' }
+    );
+  }
+  const scratch = await createWorkDir('stage');
+  try {
+    setState({ status: 'extracting', progress: 65, message: 'Verifying archive...', error: null });
+    await fs.rm(join(rootDir, STAGED_INFO_FILE), { force: true });
+
+    const { size: fileSize } = await fs.stat(archivePath);
+    await assertDiskSpaceFor(fileSize);
+    const fileSha256 = await sha256File(archivePath);
+    let archiveToExtract = archivePath;
+    let archiveSha256 = fileSha256;
+    if (format.base64) {
+      archiveToExtract = join(scratch, `archive.${format.format}`);
+      await decodeBase64File(archivePath, archiveToExtract);
+      archiveSha256 = await sha256File(archiveToExtract);
+    }
+    const { size: archiveSize } = await fs.stat(archiveToExtract);
+
+    setState({ progress: 70, message: 'Extracting archive...' });
+    const extracted = await extractArchive(archiveToExtract, stagingDir, {
+      format: format.format,
+      classifyTopLevel
+    });
+
+    setState({ progress: 90, message: 'Checking signature and compatibility...' });
+    const summary = await evaluateStaged({
+      stagingDir,
+      extracted,
+      originalName,
+      source,
+      sourcePath,
+      fileSha256,
+      archiveSha256,
+      archiveSize,
+      checksumsText:
+        (await readOptional(checksumsPath, MAX_SIDE_FILE_BYTES))?.toString('utf8') ?? null,
+      checksumsSig: await readOptional(checksumsSigPath, MAX_SIDE_FILE_BYTES),
+      checksumsBytes: await readOptional(checksumsPath, MAX_SIDE_FILE_BYTES)
+    });
+
+    if (!summary.accepted) {
+      await fs.rm(stagingDir, { recursive: true, force: true });
+      setState({
+        status: 'error',
+        progress: 0,
+        message: 'Archive rejected',
+        error: summary.problems.map(p => p.message).join('; '),
+        stagedVersion: null
+      });
+      logger.warn('Update archive rejected', {
+        component: 'UpdateService',
+        source,
+        fileName: originalName,
+        sha256: archiveSha256,
+        problems: summary.problems.map(p => p.code)
+      });
+      return summary;
+    }
+
+    await fs.writeFile(join(rootDir, STAGED_INFO_FILE), JSON.stringify(summary, null, 2), {
+      mode: 0o600
+    });
+    setState({
+      status: 'idle',
+      progress: 100,
+      message: 'Update verified and staged',
+      error: null,
+      stagedVersion: summary.version
+    });
+    logger.info('Update staged', {
+      component: 'UpdateService',
+      source,
+      fileName: originalName,
+      version: summary.version,
+      sha256: archiveSha256,
+      signature: summary.signature.status,
+      checksum: summary.checksum
+    });
+    return summary;
+  } catch (error) {
+    await fs.rm(stagingDir, { recursive: true, force: true });
+    const message =
+      error instanceof ArchiveRejectedError ? `Archive rejected: ${error.message}` : error.message;
+    setState({ status: 'error', progress: 0, error: message, message: 'Staging failed' });
+    if (error instanceof ArchiveRejectedError) {
+      throw new UpdateRequestError(message, { status: 422, code: 'archive-rejected' });
+    }
+    throw error;
+  } finally {
+    await fs.rm(scratch, { recursive: true, force: true });
+    await releaseLock(lock);
+  }
+}
+
+async function readStagedText(stagingDir, rel, maxBytes) {
+  try {
+    const file = join(stagingDir, rel);
+    const stat = await fs.stat(file);
+    if (stat.size > maxBytes) return null;
+    return await fs.readFile(file);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Work out what the staged release is and whether it may be installed.
+ * Exported for tests.
+ */
+export async function evaluateStaged({
+  stagingDir,
+  extracted,
+  originalName,
+  source,
+  sourcePath,
+  fileSha256,
+  archiveSha256,
+  archiveSize,
+  checksumsText,
+  checksumsBytes,
+  checksumsSig
+}) {
+  const problems = [];
+  const warnings = [];
+  const settings = getUpdateSettings();
+  const { keys, invalid: invalidKeys } = loadTrustedKeys(settings.trustedPublicKeys);
+  for (const message of invalidKeys) {
+    warnings.push(
+      issue('invalid-trusted-key', `A configured update key is not usable: ${message}`, {
+        error: message
+      })
+    );
+  }
+
+  const currentVersion = getAppVersion();
+  const currentPlatform = detectPlatform();
+
+  // --- manifest
+  const manifestBytes = await readStagedText(stagingDir, MANIFEST_FILE, MAX_MANIFEST_BYTES);
+  const manifestSigBytes = await readStagedText(
+    stagingDir,
+    MANIFEST_FILE + SIGNATURE_SUFFIX,
+    MAX_SIDE_FILE_BYTES
+  );
+  let manifest = null;
+  let manifestCheck = null;
+  if (manifestBytes) {
+    try {
+      manifest = JSON.parse(manifestBytes.toString('utf8'));
+      if (!manifest || typeof manifest !== 'object' || typeof manifest.files !== 'object') {
+        throw new Error('no file list');
+      }
+    } catch (error) {
+      manifest = null;
+      problems.push(
+        issue('manifest-invalid', `The update manifest is not valid: ${error.message}`, {
+          error: error.message
+        })
+      );
+    }
+  } else {
+    warnings.push(
+      issue(
+        'legacy-archive',
+        'The archive has no update manifest (built before manifests were introduced); ' +
+          'its contents cannot be checked file by file'
+      )
+    );
+  }
+  if (manifest) {
+    manifestCheck = compareWithManifest(manifest.files, extracted.files);
+    if (!manifestCheck.ok) {
+      const sample = [...manifestCheck.changed, ...manifestCheck.missing, ...manifestCheck.unlisted]
+        .slice(0, 5)
+        .join(', ');
+      problems.push(
+        issue(
+          'manifest-mismatch',
+          `The archive's files do not match its manifest (${manifestCheck.changed.length} changed, ` +
+            `${manifestCheck.missing.length} missing, ${manifestCheck.unlisted.length} unlisted: ${sample})`,
+          {
+            changed: manifestCheck.changed.length,
+            missing: manifestCheck.missing.length,
+            unlisted: manifestCheck.unlisted.length,
+            sample
+          }
+        )
+      );
+    }
+    if (manifest.product && manifest.product !== 'ihub-apps') {
+      problems.push(
+        issue('wrong-product', `The archive is not an iHub Apps release (${manifest.product})`, {
+          product: String(manifest.product)
+        })
+      );
+    }
+  }
+
+  // --- version
+  const versionTxt = (await readStagedText(stagingDir, 'version.txt', 1024))
+    ?.toString('utf8')
+    .trim();
+  const version = manifest?.version || versionTxt || null;
+  if (
+    !versionTxt ||
+    !existsSync(join(stagingDir, 'server', 'server.js')) ||
+    !existsSync(join(stagingDir, 'public'))
+  ) {
+    problems.push(
+      issue(
+        'incomplete',
+        'The archive does not contain the application files (server/, public/, version.txt)'
+      )
+    );
+  } else if (manifest?.version && manifest.version !== versionTxt) {
+    problems.push(
+      issue(
+        'version-conflict',
+        `The manifest says ${manifest.version}, version.txt says ${versionTxt}`,
+        { manifest: manifest.version, versionTxt }
+      )
+    );
+  }
+
+  // --- signatures and checksums
+  const manifestSignature = manifestBytes
+    ? verifyDetachedSignature(manifestBytes, manifestSigBytes, keys)
+    : { status: 'missing' };
+  const checksumsSignature = checksumsBytes
+    ? verifyDetachedSignature(checksumsBytes, checksumsSig, keys)
+    : { status: 'missing' };
+  const checksum = evaluateChecksum(checksumsText, originalName, [fileSha256, archiveSha256]);
+
+  if (manifestSignature.status === 'invalid') {
+    problems.push(
+      issue(
+        'signature-invalid',
+        'The manifest signature does not match: the archive was modified after signing'
+      )
+    );
+  }
+  if (checksumsSignature.status === 'invalid') {
+    problems.push(
+      issue(
+        'checksums-signature-invalid',
+        'The signature on checksums.sha256 does not match the file'
+      )
+    );
+  }
+  if (checksum === 'mismatch') {
+    problems.push(
+      issue(
+        'checksum-mismatch',
+        `The archive does not match the published checksum for ${originalName}`,
+        { file: originalName }
+      )
+    );
+  } else if (checksum === 'not-listed') {
+    warnings.push(
+      issue('checksum-not-listed', 'The provided checksums.sha256 does not list this archive')
+    );
+  } else if (checksum === 'missing') {
+    warnings.push(issue('checksum-missing', 'No checksums.sha256 was provided for this archive'));
+  }
+
+  let signedVia = null;
+  if (manifestSignature.status === 'valid' && manifestCheck?.ok) signedVia = 'manifest';
+  else if (checksumsSignature.status === 'valid' && checksum === 'match') signedVia = 'checksums';
+  const signature =
+    signedVia === 'manifest'
+      ? manifestSignature
+      : signedVia === 'checksums'
+        ? checksumsSignature
+        : manifestSignature.status !== 'missing'
+          ? manifestSignature
+          : checksumsSignature;
+  const trusted = signedVia !== null;
+  if (!trusted) {
+    // `variant` picks the translation in the admin UI.
+    const [variant, why] =
+      keys.length === 0
+        ? ['noKeys', 'no update signing key is configured on this server']
+        : signature.status === 'unknown-key'
+          ? [
+              'unknownKey',
+              `it is signed with a key this server does not trust (${signature.keyId || 'unknown'})`
+            ]
+          : ['notSigned', 'it is not signed'];
+    const params = { variant, keyId: signature.keyId || '' };
+    if (settings.allowUnsigned) {
+      warnings.push(
+        issue(
+          'unsigned',
+          `The archive's origin cannot be verified: ${why}. Installing it needs a typed confirmation.`,
+          params
+        )
+      );
+    } else {
+      problems.push(
+        issue(
+          'untrusted',
+          `The archive's origin cannot be verified: ${why}. Unsigned archives are refused ` +
+            '(platform setting update.allowUnsigned).',
+          params
+        )
+      );
+    }
+  }
+
+  // --- compatibility gates
+  const layoutPlatform = existsSync(join(stagingDir, 'node.exe'))
+    ? 'windows'
+    : swap.detectPlatform(stagingDir);
+  const archivePlatform =
+    manifest?.platform || parseUpdateArchiveName(originalName)?.platform || layoutPlatform;
+  if (archivePlatform !== currentPlatform) {
+    problems.push(
+      issue(
+        'wrong-platform',
+        `The archive is for ${archivePlatform}, this server runs on ${currentPlatform}`,
+        { archive: archivePlatform, server: currentPlatform }
+      )
+    );
+  }
+  const arch = manifest?.arch || null;
+  if (arch && arch !== process.arch) {
+    problems.push(
+      issue('wrong-arch', `The archive is built for ${arch}, this server is ${process.arch}`, {
+        archive: arch,
+        server: process.arch
+      })
+    );
+  } else if (!arch) {
+    warnings.push(
+      issue('arch-unknown', 'The archive does not say which CPU architecture it is built for')
+    );
+  }
+
+  let comparison = 'unknown';
+  if (version) {
+    const order = compareVersions(version, currentVersion);
+    comparison = order > 0 ? 'upgrade' : order === 0 ? 'same' : 'downgrade';
+    if (comparison === 'downgrade') {
+      warnings.push(
+        issue('downgrade', `Version ${version} is older than the running ${currentVersion}`, {
+          version,
+          current: currentVersion
+        })
+      );
+    } else if (comparison === 'same') {
+      warnings.push(issue('same-version', `Version ${version} is already installed`, { version }));
+    }
+  }
+  if (manifest?.minUpdateFrom && compareVersions(currentVersion, manifest.minUpdateFrom) < 0) {
+    problems.push(
+      issue(
+        'min-update-from',
+        `Version ${version} can only be installed over ${manifest.minUpdateFrom} or later; ` +
+          `update to that version first`,
+        { version, minimum: manifest.minUpdateFrom }
+      )
+    );
+  }
+
+  const launcherProtocol = getLauncherProtocol();
+  const swapOnStart = launcherProtocol >= swap.LAUNCHER_PROTOCOL;
+  if (!swapOnStart) {
+    warnings.push(
+      issue(
+        'legacy-launcher',
+        'The running launcher predates swap-on-start; this update is applied by the running server ' +
+          '(subsequent updates are applied by the launcher before the server starts)'
+      )
+    );
+  }
+
+  // --- does the bundled Node start at all (quarantine, antivirus, wrong binary)
+  let nodeVersion = manifest?.nodeVersion || null;
+  // Only for a trusted archive: an unsigned one must not run any of its code
+  // before the admin has typed the confirmation.
+  if (problems.length === 0 && trusted) {
+    const nodeBinary = join(stagingDir, swap.nodeBinaryName(currentPlatform));
+    if (existsSync(nodeBinary)) {
+      if (currentPlatform !== 'windows') {
+        try {
+          swap.makeExecutable(nodeBinary);
+        } catch {
+          // the probe below reports a binary that cannot run
+        }
+      }
+      try {
+        const { stdout } = await execFileAsync(nodeBinary, ['--version'], { timeout: 20_000 });
+        nodeVersion = stdout.trim() || nodeVersion;
+      } catch (error) {
+        problems.push(
+          issue(
+            'node-does-not-start',
+            `The bundled Node.js binary does not start on this server (${error.code || error.message}); ` +
+              'check antivirus quarantine or macOS Gatekeeper',
+            { error: String(error.code || error.message) }
+          )
+        );
+      }
+    }
+  }
+
+  return {
+    accepted: problems.length === 0,
+    version,
+    currentVersion,
+    comparison,
+    platform: archivePlatform,
+    arch,
+    nodeVersion,
+    maxMigrationVersion: manifest?.maxMigrationVersion ?? null,
+    source,
+    fileName: originalName,
+    sourcePath: sourcePath || null,
+    archiveSha256,
+    ...(fileSha256 !== archiveSha256 && { fileSha256 }),
+    archiveSize,
+    files: extracted.files.size,
+    ignoredEntries: extracted.ignored,
+    manifest: manifest ? 'present' : 'missing',
+    signature: {
+      status: trusted ? 'valid' : signature.status,
+      via: signedVia,
+      keyId: signature.keyId || null,
+      label: signature.label || null
+    },
+    checksum,
+    trusted,
+    applyMode: swapOnStart ? 'swap-on-start' : 'in-process',
+    requiresConfirmation: {
+      downgrade: comparison === 'downgrade' || comparison === 'same',
+      unsigned: !trusted
+    },
+    warnings,
+    problems,
+    stagedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Throw away the staged release.
+ */
+export async function discardStaged() {
+  const rootDir = getRootDir();
+  const lock = await acquireLock();
+  try {
+    if (swap.readPending(rootDir)) {
+      throw new UpdateRequestError(
+        'The staged update is already scheduled to be applied on restart',
+        { status: 409 }
+      );
+    }
+    await fs.rm(join(rootDir, UPDATE_STAGING_DIR), { recursive: true, force: true });
+    await fs.rm(join(rootDir, STAGED_INFO_FILE), { force: true });
+    await fs.rm(join(rootDir, UPDATE_TMP_DIR), { recursive: true, force: true });
+    setState({
+      status: 'idle',
+      progress: 0,
+      message: 'Staged update discarded',
+      error: null,
+      stagedVersion: null
+    });
+  } finally {
+    await releaseLock(lock);
+  }
+}
+
+// --------------------------------------------------------------- apply ----
+
+/**
+ * Apply the staged release.
+ *
+ * With a current launcher this only prepares: it snapshots the configuration,
+ * writes the backup metadata and `.update-pending.json`, and the launcher
+ * swaps the files on the restart that follows — no file of the running server
+ * is moved while it runs. Under an older launcher the swap happens here.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.confirmDowngrade] - Required for a downgrade or the same version
+ * @param {string} [options.confirmUnsigned] - The version number, typed, for an unsigned archive
+ * @param {boolean} [options.skipConfigSnapshot] - Apply even if the configuration snapshot fails
+ * @param {boolean} [options.inProcess] - Swap now instead of on the next start (the CLI, server stopped)
+ * @returns {Promise<Object>}
+ */
+export async function applyUpdate({
+  confirmDowngrade = false,
+  confirmUnsigned,
+  skipConfigSnapshot = false,
+  inProcess = false
+} = {}) {
+  const rootDir = getRootDir();
+  const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
+
+  if (!existsSync(stagingDir)) {
+    throw new UpdateRequestError('No staged update found. Stage an update first.', { status: 409 });
+  }
+  const staged = readStagedInfo();
+  if (!staged?.accepted) {
+    throw new UpdateRequestError(
+      'The staged files have no verification record. Discard them and stage the archive again.',
+      { status: 409 }
+    );
+  }
+  if (staged.requiresConfirmation?.downgrade && confirmDowngrade !== true) {
+    throw new UpdateRequestError(
+      `Version ${staged.version} is not newer than the running ${staged.currentVersion}; confirm the downgrade`,
+      { status: 409, code: 'confirm-downgrade' }
+    );
+  }
+  if (staged.requiresConfirmation?.unsigned) {
+    if (!getUpdateSettings().allowUnsigned) {
+      throw new UpdateRequestError('Unsigned archives are not allowed on this server', {
+        status: 403,
+        code: 'unsigned-not-allowed'
+      });
+    }
+    if (String(confirmUnsigned || '').trim() !== String(staged.version)) {
+      throw new UpdateRequestError(
+        `The archive is not signed by a trusted key. Type the version (${staged.version}) to install it anyway`,
+        { status: 409, code: 'confirm-unsigned' }
+      );
+    }
+  }
+
+  const lock = await acquireLock();
+  // What was confirmed must still be what is staged: another admin may have
+  // staged a different archive between the check above and taking the lock.
+  const stagedNow = readStagedInfo();
+  if (
+    !stagedNow?.accepted ||
+    stagedNow.archiveSha256 !== staged.archiveSha256 ||
+    stagedNow.stagedAt !== staged.stagedAt ||
+    swap.readPending(rootDir)
+  ) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'The staged update changed or is already scheduled; review it again before installing',
+      { status: 409, code: 'staged-changed' }
+    );
+  }
+  setState({ status: 'applying', progress: 10, message: 'Preparing update...', error: null });
+
+  const currentVersion = getAppVersion();
+  const targetVersion = staged.version;
+  const contentsDir = getContentsPath();
+  const swapOnStart = !inProcess && getLauncherProtocol() >= swap.LAUNCHER_PROTOCOL;
+
+  let backupDir = null;
+  try {
+    backupDir = swap.prepareBackupDir(rootDir, { version: currentVersion, targetVersion });
+
+    setState({ progress: 30, message: 'Saving a snapshot of the configuration...' });
+    let configSnapshot = false;
+    try {
+      swap.writeConfigSnapshot(backupDir, contentsDir);
+      configSnapshot = true;
+    } catch (error) {
+      if (!skipConfigSnapshot) {
+        throw new UpdateRequestError(
+          `The configuration snapshot could not be written (${error.message}). ` +
+            'Free disk space, or apply without a snapshot.',
+          { status: 507, code: 'config-snapshot-failed' }
+        );
+      }
+      logger.warn('Applying update without a configuration snapshot', {
+        component: 'UpdateService',
+        error: error.message
+      });
+    }
+
+    if (swapOnStart) {
+      swap.writePending(rootDir, {
+        action: 'update',
+        targetVersion,
+        previousVersion: currentVersion,
+        backupDir,
+        contentsDir
+      });
+    } else {
+      setState({ progress: 50, message: 'Replacing application files...' });
+      swap.swapInStaged(rootDir, { backupDir });
+      swap.writeAttempt(rootDir, {
+        targetVersion,
+        previousVersion: currentVersion,
+        backupDir,
+        contentsDir,
+        failedStarts: 0,
+        appliedAt: new Date().toISOString()
+      });
+    }
+    await fs.rm(join(rootDir, STAGED_INFO_FILE), { force: true });
+    await fs.rm(join(rootDir, swap.RESULT_FILE), { force: true });
+
+    setState({
+      status: 'restarting',
+      progress: 100,
+      message: `Restarting to apply ${currentVersion} → ${targetVersion}...`,
+      stagedVersion: null,
+      backupVersion: currentVersion
+    });
+    logger.info('Update ready, restarting', {
+      component: 'UpdateService',
+      currentVersion,
+      targetVersion,
+      applyMode: swapOnStart ? 'swap-on-start' : 'in-process',
+      configSnapshot
+    });
+
+    return {
+      success: true,
+      previousVersion: currentVersion,
+      newVersion: targetVersion,
+      applyMode: swapOnStart ? 'swap-on-start' : 'in-process',
+      configSnapshot,
+      restartCode: UPDATE_RESTART_CODE
+    };
+  } catch (error) {
+    // swapInStaged undoes its own moves; nothing else has touched the
+    // installation. The backup directory prepared for this apply holds no code
+    // and maybe a partial snapshot: remove it, or Rollback would offer it.
+    swap.clearPending(rootDir);
+    swap.discardIncompleteBackup(backupDir, detectPlatform());
+    logger.error('Applying the update failed', { component: 'UpdateService', error });
+    setState({
+      status: 'error',
+      error: error.message,
+      message: 'Update failed; nothing was changed'
+    });
+    throw error;
+  } finally {
+    await releaseLock(lock);
+  }
+}
+
+/**
+ * Roll back to the version in the newest backup.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.restoreConfig] - Also restore the configuration
+ *   snapshot taken before the update (configuration changes since are lost)
+ * @param {boolean} [options.inProcess] - Restore now (the CLI, server stopped)
+ */
+export async function rollback({ restoreConfig = false, inProcess = false } = {}) {
+  const rootDir = getRootDir();
+  const backup = swap.listBackups(rootDir)[0];
+  if (!backup) {
+    throw new UpdateRequestError('No backup available for rollback', { status: 409 });
+  }
+  if (restoreConfig && !backup.hasConfigSnapshot) {
+    throw new UpdateRequestError('This backup has no configuration snapshot', { status: 409 });
+  }
+
+  const lock = await acquireLock();
+  if (swap.readPending(rootDir)) {
+    await releaseLock(lock);
+    throw new UpdateRequestError(
+      'An update or rollback is already scheduled to be applied on restart',
+      { status: 409, code: 'update-pending' }
+    );
+  }
+  setState({ status: 'applying', progress: 0, message: 'Rolling back...', error: null });
+  const currentVersion = getAppVersion();
+  const contentsDir = getContentsPath();
+  const swapOnStart = !inProcess && getLauncherProtocol() >= swap.LAUNCHER_PROTOCOL;
+
+  try {
+    let restoredVersion = backup.version;
+    if (swapOnStart) {
+      swap.writePending(rootDir, {
+        action: 'rollback',
+        backupDir: backup.dir,
+        targetVersion: backup.version,
+        previousVersion: currentVersion,
+        restoreConfig,
+        contentsDir
+      });
+    } else {
+      const result = swap.restoreBackup(rootDir, backup.dir, { contentsDir, restoreConfig });
+      restoredVersion = result.restoredVersion;
+      swap.writeResult(rootDir, {
+        status: 'rolled-back',
+        manual: true,
+        targetVersion: restoredVersion,
+        previousVersion: currentVersion,
+        configRestored: result.configRestored
+      });
+    }
+
+    setState({
+      status: 'restarting',
+      progress: 100,
+      message: `Rolling back to ${restoredVersion}. Restarting...`,
+      backupVersion: null
+    });
+    logger.info('Rollback ready, restarting', {
+      component: 'UpdateService',
+      restoredVersion,
+      restoreConfig,
+      applyMode: swapOnStart ? 'swap-on-start' : 'in-process'
+    });
+    return { success: true, restoredVersion, restoreConfig, restartCode: UPDATE_RESTART_CODE };
+  } catch (error) {
+    swap.clearPending(rootDir);
+    setState({ status: 'error', error: error.message, message: 'Rollback failed' });
+    throw error;
+  } finally {
+    await releaseLock(lock);
+  }
+}
+
+/**
+ * Whether an applied update has not yet been confirmed by a server answering
+ * requests (`.update-attempt.json` exists).
+ */
+export function isUpdateAwaitingConfirmation() {
+  try {
+    return isBinaryInstallation() && Boolean(swap.readAttempt(getRootDir()));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Called once the server is answering requests: confirms an update the
+ * launcher (or the in-process swap) just applied, so the launcher stops
+ * counting failed starts, and records the outcome for the admin UI.
+ */
+export function confirmUpdateOnStartup() {
+  try {
+    if (!isBinaryInstallation()) return;
+    const rootDir = getRootDir();
+    const result = swap.confirmUpdateAttempt(rootDir, getAppVersion());
+    if (result) {
+      logger.info('Update confirmed after restart', {
+        component: 'UpdateService',
+        status: result.status,
+        version: result.runningVersion,
+        previousVersion: result.previousVersion
+      });
+    }
+    // Leftovers of an interrupted acquisition.
+    fs.rm(join(rootDir, UPDATE_TMP_DIR), { recursive: true, force: true }).catch(() => {});
+  } catch (error) {
+    logger.warn('Could not confirm the update result', { component: 'UpdateService', error });
+  }
+}
+
+// ----------------------------------------------------------- preflight ----
+
+/**
+ * Free disk space in the installation directory against what an update needs:
+ * the archive, its extracted copy (about three times its size) and the
+ * configuration snapshot. The code backup is made by renaming within the same
+ * directory and costs nothing. Uses `fs.statfs` (no `df`, which Windows lacks).
+ *
+ * @param {{ archiveBytes?: number }} [options]
+ */
+export function checkDiskSpace({ archiveBytes = 200 * 1024 * 1024 } = {}) {
+  const required = archiveBytes * 5 + 50 * 1024 * 1024;
+  try {
+    const stats = statfsSync(getRootDir());
+    const available = Number(stats.bavail) * Number(stats.bsize);
+    return { available, required, sufficient: available >= required };
+  } catch {
+    return { available: null, required, sufficient: true };
   }
 }
 
@@ -857,4 +1703,9 @@ export async function checkWritePermissions() {
   }
 }
 
-export { UPDATE_RESTART_CODE };
+/** For the route's upload handling: an uploaded file's extension is acceptable. */
+export function isAcceptedUploadName(name) {
+  return (
+    isAllowedArchiveName(name) || name === CHECKSUMS_FILE || extname(name) === SIGNATURE_SUFFIX
+  );
+}

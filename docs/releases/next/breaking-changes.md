@@ -136,3 +136,16 @@ hands its questions to iFinder Search (`rendererConfig.iAssistantAppId`).
 
 Groups that list `ifinder-document-actions` in their app permissions, and links or bookmarks to
 `/apps/ifinder-document-actions`, have to be changed by hand.
+
+## Updates: Unsigned Update Archives Are Refused
+
+In-place updates of binary installations (Admin → Updates and `--update`) now install only release
+archives signed by a key iHub trusts. Official releases are signed. Archives you build yourself, or
+older archives without a signed manifest or checksum file, are refused with "The archive's origin
+cannot be verified".
+
+**Before upgrading:** if you install self-built binaries, sign them and add your public key to
+`update.trustedPublicKeys` in `platform.json` (see [Update Signing](../../update-signing.md)), or
+set `update.allowUnsigned: true` to allow unsigned archives after a typed confirmation. The update
+*into* this release is still performed by your current version and is not signature-checked; verify
+that download with `gh attestation verify <archive> --repo intrafind/ihub-apps`.

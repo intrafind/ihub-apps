@@ -98,6 +98,7 @@
     - [Running with SSL/HTTPS](ssl-https-setup.md)
     - [Production Reverse Proxy Guide](production-reverse-proxy-guide.md)
     - [Windows Service](windows-service.md)
+    - [Update Signing](update-signing.md)
     - [Rate Limiting](rate-limiting.md)
     - [Scaling with Multiple Workers](scaling.md)
     - [Multi-Server Deployment](multi-server-deployment.md)

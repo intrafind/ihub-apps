@@ -706,6 +706,25 @@ export const platformConfigSchema = z
     // and TTS endpoints and keys live on their models (Admin → Models); this
     // block only picks which ones are used. Record/upload transcription uses
     // the transcription model selected in the chat.
+    // In-place updates of binary installations (Admin → Updates). Archives must
+    // carry a signature from a trusted key: the release keys built into iHub
+    // (server/update/trustedKeys.js) or one listed here. `allowUnsigned`
+    // lets an admin install an unsigned archive after typing its version.
+    update: z
+      .object({
+        allowUnsigned: z.boolean().prefault(false),
+        trustedPublicKeys: z
+          .array(
+            z.union([
+              z.string(),
+              z.object({ label: z.string().optional(), publicKey: z.string() }).passthrough()
+            ])
+          )
+          .prefault([]),
+        maxUploadSizeMB: z.number().int().positive().max(10240).prefault(1024)
+      })
+      .passthrough()
+      .prefault({}),
     speech: z
       .object({
         // Dictation service for every app whose settings.speechRecognition.service

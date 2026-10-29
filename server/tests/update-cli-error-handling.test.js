@@ -28,7 +28,9 @@ jest.unstable_mockModule('../services/updateService.js', () => ({
   isBinaryInstallation: () => true,
   isContainerInstallation: () => false,
   checkDiskSpace: jest.fn(),
-  checkWritePermissions: jest.fn()
+  checkWritePermissions: jest.fn(),
+  stageLocalFile: jest.fn(),
+  discardStaged: jest.fn()
 }));
 
 const { runUpdateCLI } = await import('../cli/update.js');

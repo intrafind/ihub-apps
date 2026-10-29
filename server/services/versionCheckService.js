@@ -78,25 +78,37 @@ export function getVersionCheckTimeoutMs() {
 }
 
 /**
- * Compare two semantic versions
+ * Compare two semantic versions, pre-releases included.
+ *
+ * `5.6.0-RC3` is older than `5.6.0` (dropping the suffix made them equal, so a
+ * release candidate was never offered the final release), and pre-release
+ * identifiers compare naturally (`RC10` after `RC9`). A leading `v` and build
+ * metadata (`+…`) are ignored.
+ *
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 export function compareVersions(v1, v2) {
   if (!v1 || !v2) return 0;
 
-  const cleanV1 = v1.split('-')[0];
-  const cleanV2 = v2.split('-')[0];
+  const parse = version => {
+    const [core, ...pre] = String(version).trim().replace(/^v/i, '').split('+')[0].split('-');
+    return { parts: core.split('.').map(p => Number.parseInt(p, 10) || 0), pre: pre.join('-') };
+  };
+  const a = parse(v1);
+  const b = parse(v2);
 
-  const parts1 = cleanV1.split('.').map(p => Number.parseInt(p, 10) || 0);
-  const parts2 = cleanV2.split('.').map(p => Number.parseInt(p, 10) || 0);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
+  for (let i = 0; i < Math.max(a.parts.length, b.parts.length); i++) {
+    const p1 = a.parts[i] || 0;
+    const p2 = b.parts[i] || 0;
     if (p1 > p2) return 1;
     if (p1 < p2) return -1;
   }
-  return 0;
+
+  if (a.pre === b.pre) return 0;
+  if (!a.pre) return 1;
+  if (!b.pre) return -1;
+  const order = a.pre.localeCompare(b.pre, 'en', { numeric: true, sensitivity: 'base' });
+  return Math.sign(order);
 }
 
 /**
