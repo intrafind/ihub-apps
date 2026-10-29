@@ -27,18 +27,88 @@
  * about the corpus. iFinder's own pairing of the two is the iAssistant
  * (`/public-api/v0/assistants`), which is a separate entity.
  *
- * Every failure here is soft. A conversation that cannot be created is a
- * broken chat; a profile list that could not be read is just the configured
- * value.
+ * Two settings take the search profile out of this check (`resolveScope`):
+ *
+ *   - `assistantId` names an iFinder iAssistant. iFinder offers a user only
+ *     the iAssistants whose search profile they have, so the iAssistant's
+ *     conversation profile and search profile are used as they are, and an
+ *     iAssistant iFinder does not offer the user is an error rather than a
+ *     silent fallback to another corpus.
+ *   - `allSearchProfiles` sends no search profile at all, which iFinder 6.9
+ *     answers by retrieving across every search profile the user has.
+ *
+ * Every failure of the check itself is soft. A conversation that cannot be
+ * created is a broken chat; a profile list that could not be read is just the
+ * configured value.
  */
 import iAssistantService from './iAssistantService.js';
 import iFinderSearchProfiles from './iFinderSearchProfiles.js';
+import iFinderAssistants from './iFinderAssistants.js';
 import logger from '../../utils/logger.js';
 
 class IAssistantProfileResolver {
-  /** Drop every cached profile list. Called from the config reload hooks. */
+  /** Drop every cached profile list and iAssistant. Called from the config reload hooks. */
   reset() {
     iFinderSearchProfiles.reset();
+    iFinderAssistants.reset();
+  }
+
+  /**
+   * The conversation profile and search profile a conversation is created with.
+   *
+   * @param {Object} params
+   * @param {string} [params.assistantId] - iFinder iAssistant the app names
+   * @param {boolean} [params.allSearchProfiles] - search every profile of the user
+   * @param {string} [params.configuredProfileId] - app/model/platform conversation profile
+   * @param {string} [params.configuredSearchProfile] - app/model/platform search profile
+   * @param {Object} params.user
+   * @param {string} params.baseUrl
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<{ profileId: string|undefined, searchProfile: string|undefined,
+   *   source: string, assistantId?: string }>} where `source` is `assistant`,
+   *   `all-search-profiles`, or one of resolveSearchProfile's sources
+   * @throws {import('./iFinderAssistants.js').AssistantNotAvailableError} when the
+   *   iAssistant is not offered to the user
+   */
+  async resolveScope({
+    assistantId,
+    allSearchProfiles,
+    configuredProfileId,
+    configuredSearchProfile,
+    user,
+    baseUrl,
+    signal
+  }) {
+    const profileId = configuredProfileId || undefined;
+
+    if (assistantId) {
+      const { searchProfileCacheTtlMs } = iAssistantService.getConfig();
+      const assistant = await iFinderAssistants.getAssistant({
+        assistantId,
+        user,
+        baseUrl,
+        ttlMs: searchProfileCacheTtlMs,
+        signal
+      });
+      return {
+        profileId: assistant.conversationProfileId || profileId,
+        searchProfile: assistant.searchProfileId || undefined,
+        source: 'assistant',
+        assistantId: assistant.id
+      };
+    }
+
+    if (allSearchProfiles) {
+      return { profileId, searchProfile: undefined, source: 'all-search-profiles' };
+    }
+
+    const resolved = await this.resolveSearchProfile({
+      configuredSearchProfile,
+      user,
+      baseUrl,
+      signal
+    });
+    return { profileId, ...resolved };
   }
 
   /**

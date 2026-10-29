@@ -14,6 +14,7 @@ import conversationApiService from '../services/integrations/ConversationApiServ
 import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
 import iAssistantProfileResolver from '../services/integrations/iAssistantProfileResolver.js';
+import { AssistantNotAvailableError } from '../services/integrations/iFinderAssistants.js';
 import { composeExtraContext } from '../services/integrations/iAssistantGrounding.js';
 import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
@@ -143,6 +144,13 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
 
     return {
       baseUrl: appConfig.baseUrl || modelConfig.baseUrl || serviceConfig.baseUrl,
+      // An iFinder iAssistant supplies both the conversation profile and the
+      // search profile; when one is named, the two below are only fallbacks.
+      assistantId: appConfig.assistantId || modelConfig.assistantId || undefined,
+      // Send no search profile, so iFinder (6.9+) retrieves across every
+      // search profile the user has. `??` so an app can turn a model's
+      // setting off.
+      allSearchProfiles: appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false,
       profileId: appConfig.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
       // What the app/model/platform configured. The iAssistant profile gets
       // asked first at conversation-creation time and wins when it answers —
@@ -192,7 +200,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       logger.info('Creating new conversation', {
         component: 'IAssistantConversationAdapter',
         chatId,
-        profileId: config.profileId
+        profileId: config.profileId,
+        assistantId: config.assistantId
       });
 
       // Build labels array - include "ihub" and app ID
@@ -209,20 +218,37 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         }
       }
 
-      // Check the configured search profile against the ones the user has in
-      // iFinder, and use their default when they lack it. Done here rather
-      // than in resolveConfig because it is a network read, and because the
-      // answer is only needed when a conversation is actually created: later
-      // turns read it back off the state, so a profile assignment changed
-      // mid-conversation cannot silently move an existing conversation to a
+      // Which profiles the conversation uses: the named iFinder iAssistant's,
+      // no search profile at all, or the configured search profile checked
+      // against the ones the user has in iFinder. Done here rather than in
+      // resolveConfig because it is a network read, and because the answer is
+      // only needed when a conversation is actually created: later turns read
+      // it back off the state, so a profile assignment changed mid-
+      // conversation cannot silently move an existing conversation to a
       // different corpus.
-      const { searchProfile, source: searchProfileSource } =
-        await iAssistantProfileResolver.resolveSearchProfile({
+      let scope;
+      try {
+        scope = await iAssistantProfileResolver.resolveScope({
+          assistantId: config.assistantId,
+          allSearchProfiles: config.allSearchProfiles,
+          configuredProfileId: config.profileId,
           configuredSearchProfile: config.configuredSearchProfile,
           user,
           baseUrl: config.baseUrl,
           signal
         });
+      } catch (error) {
+        if (error instanceof AssistantNotAvailableError) {
+          // A user-facing refusal, not a technical failure: iFinder offers
+          // an iAssistant only to users who have its search profile.
+          throw new Error(
+            `The iAssistant "${config.assistantId}" is not available to you in iFinder. ` +
+              'Ask your administrator for access to its search profile.'
+          );
+        }
+        throw error;
+      }
+      const { searchProfile, source: searchProfileSource } = scope;
 
       const createParams = {
         user,
@@ -258,12 +284,18 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         lastParentId: null,
         title: conversation.title || null,
         baseUrl: config.baseUrl,
-        profileId: config.profileId,
+        profileId: scope.profileId || null,
+        // Set when an iFinder iAssistant supplied the profiles. Its
+        // conversation profile is then pinned like the search profile.
+        assistantId: scope.assistantId || null,
         // Pinned for the life of the conversation. The remote conversation
         // was created with this scope; later turns must report the same one
         // when they build document access links, or the links point into a
         // profile the conversation never searched.
         searchProfile: searchProfile || null,
+        // `all`: the conversation searches every profile of the user, so no
+        // one profile is the right default for its document links.
+        searchScope: searchProfileSource === 'all-search-profiles' ? 'all' : 'profile',
         // Whose conversation this is. A chat id is a URL path segment, so
         // without an owner on the state a user holding someone else's id
         // would thread their turn onto that user's remote conversation.
@@ -275,13 +307,17 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         component: 'IAssistantConversationAdapter',
         chatId,
         conversationId: conversation.id,
+        profileId: scope.profileId || '(none)',
         searchProfile: searchProfile || '(none)',
         searchProfileSource
       });
     }
 
-    // Build the message send request — conversation API expects plain-text profileId
-    const profileId = config.profileId;
+    // Build the message send request — conversation API expects plain-text
+    // profileId. An iAssistant's conversation profile is pinned on the state
+    // with its search profile; otherwise the configured one applies, so an
+    // admin's profile change reaches running conversations.
+    const profileId = state.assistantId ? state.profileId : config.profileId;
     const authHeader = getIFinderAuthorizationHeader(user, { scope: config.scope });
 
     const url = `${config.baseUrl.replace(/\/+$/, '')}/public-api/rag/api/v0/conversations/${state.conversationId}/messages`;
@@ -317,7 +353,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       // From the state, so every turn of a conversation reports the profile it
       // was created with. `configuredSearchProfile` is the fallback for state
       // written before this field existed.
-      _searchProfile: state.searchProfile || config.configuredSearchProfile
+      _searchProfile:
+        state.searchScope === 'all'
+          ? undefined
+          : state.searchProfile || config.configuredSearchProfile
     };
   }
 

@@ -407,6 +407,22 @@ const iAssistantConfigSchema = z
       .optional()
       .or(z.literal('')),
     searchProfile: z.string().min(1, 'Search profile cannot be empty').optional().or(z.literal('')),
+    // An iFinder iAssistant (`/public-api/v0/assistants`, iFinder 6.8+): it
+    // supplies the conversation profile and the search profile, so it wins
+    // over `profileId`, `searchProfile` and `allSearchProfiles`. Same pattern
+    // as iFinder's AssistantId.
+    assistantId: z
+      .string()
+      .max(256, 'iAssistant ID cannot exceed 256 characters')
+      .regex(
+        /^[a-zA-Z0-9]+(?:[._-][a-zA-Z0-9]+)*$/,
+        'iAssistant ID may contain letters and digits separated by single dots, underscores or hyphens'
+      )
+      .optional()
+      .or(z.literal('')),
+    // Send no search profile, so iFinder (6.9+) retrieves across every search
+    // profile the user has. Tri-state: undefined defers to the model.
+    allSearchProfiles: z.boolean().optional(),
     extraContext: z.string().optional(),
     systemPromptPreamble: z.string().optional(),
 

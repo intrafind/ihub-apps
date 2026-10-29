@@ -264,7 +264,7 @@ warnings — before anything is changed; you confirm, and the server restarts in
   `--update=rollback --restore-config`.
 - See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).
 
-## iAssistant: Each User Searches a Search Profile They Have, and Support for iFinder 6.9
+## iAssistant: Search Profiles per User, iFinder iAssistants in Apps, and iFinder 6.9
 
 Search profiles are assigned per user in iFinder, but an iAssistant app names one search profile
 for everyone. iHub now reads the search profiles of the user before it starts an iAssistant
@@ -278,6 +278,12 @@ could not find anything.
   `profileCacheTtlMs` becomes `searchProfileCacheTtlMs`.
 - If iFinder cannot be asked, the configured profile is used as before. iFinder 6.9 refuses the
   request for users without the feature `fi_ifinder_allow`.
+- **iFinder iAssistants in apps:** an app can name an iFinder iAssistant
+  (`iassistant.assistantId`), which brings its conversation profile and search profile with it.
+  **Admin → Apps → Edit → iAssistant** lists the iAssistants iFinder shows you. Users without
+  the iAssistant's search profile are told it is not available to them.
+- **All search profiles:** with `iassistant.allSearchProfiles`, an app sends no search profile and
+  iFinder 6.9 searches everything the user may see through any of their profiles.
 - **iFinder search tool:** `iFinder_listProfiles` lists the search profiles the user has, with
   their names and the user's default, instead of only the profiles some iAssistant uses.
 - **iFinder 6.9:** iHub sends each question as an append to the conversation and passes the user's

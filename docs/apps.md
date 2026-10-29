@@ -1158,6 +1158,8 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
 | `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). A user who does not have it in iFinder searches their own default profile instead, see below |
+| `iassistant.assistantId`    | String | An iFinder iAssistant (iFinder 6.8+), e.g. `"legal-advisor"`. It sets the conversation profile and the search profile and wins over `profileId`, `searchProfile` and `allSearchProfiles`. Only users who have its search profile can use the app, see below |
+| `iassistant.allSearchProfiles` | Boolean | Send no search profile, so iFinder searches across every search profile the user has (iFinder 6.9+). Default: `false` |
 | `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
 | `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
 | `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
@@ -1187,6 +1189,10 @@ This is carried as a prompt instruction prepended to `extraContext`, because the
 `profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
 
 The search profile comes from `searchProfile`, then the model's, then `iAssistant.defaultSearchProfile`. Because search profiles are assigned per user in iFinder, iHub checks it against the search profiles of the requesting user before creating a conversation and uses the user's default profile when they do not have it (`iAssistant.verifySearchProfileAccess`, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The resolved profile is pinned for the life of the conversation.
+
+**An iFinder iAssistant (`assistantId`):** iFinder pairs a conversation profile with a search profile in an *iAssistant* (Admin UI of iFinder → iAssistants). Naming one takes both profiles from iFinder, so the pairing is maintained in one place. iFinder offers a user only the iAssistants whose search profile they have; a user without it gets the message that the iAssistant is not available to them instead of an answer from another corpus. In **Admin → Apps → Edit → iAssistant**, **Load from iFinder** lists the iAssistants iFinder shows *you*; others can be entered by ID. Both profiles are pinned for the life of a conversation.
+
+**All search profiles (`allSearchProfiles`):** iFinder 6.9 accepts a conversation without a search profile and then searches everything the user may see through any of their search profiles — the content filters of all their profiles combined, without profile-specific boosting. Use it for an assistant over "everything I can find in iFinder". iFinder 6.8 rejects such a conversation.
 
 **Prompt variables in `extraContext` and `systemPromptPreamble`:**
 

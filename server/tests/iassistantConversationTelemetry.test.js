@@ -27,6 +27,10 @@ import iAssistantService from '../services/integrations/iAssistantService.js';
 import iFinderSearchProfiles, {
   parseSearchProfiles
 } from '../services/integrations/iFinderSearchProfiles.js';
+import iFinderAssistants, {
+  AssistantNotAvailableError
+} from '../services/integrations/iFinderAssistants.js';
+import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import { GROUNDED_ONLY_INSTRUCTION } from '../services/integrations/iAssistantGrounding.js';
 
 const user = { id: 'user_tim', name: 'Tim Vossen', email: 'tim.vossen@intrafind.com' };
@@ -363,6 +367,211 @@ test('the conversation is created with the user default profile and pins it', as
     assert.ok(captured, 'createConversation was not called');
     assert.equal(captured.searchProfile, 'searchprofile-hr');
     assert.equal(captured.fallbackLanguage, 'de');
+  } finally {
+    conversationApiService.createConversation = originalCreate;
+  }
+});
+
+// ── iFinder iAssistants and all search profiles ─────────────────────────────
+
+/** Run `body` with iFinderAssistants.getAssistant stubbed, restoring it afterwards. */
+async function withAssistant(responder, body) {
+  const original = iFinderAssistants.getAssistant;
+  const calls = [];
+  iFinderAssistants.getAssistant = async args => {
+    calls.push(args);
+    return responder(args);
+  };
+  try {
+    await body(calls);
+  } finally {
+    iFinderAssistants.getAssistant = original;
+  }
+}
+
+test('an iAssistant supplies both profiles and skips the profile check', async () => {
+  await withProfiles(
+    () => {
+      throw new Error('the profile list must not be read');
+    },
+    () =>
+      withAssistant(
+        () => ({
+          id: 'legal-advisor',
+          name: 'Legal',
+          conversationProfileId: 'iassistant-legal',
+          searchProfileId: 'searchprofile-legal'
+        }),
+        async calls => {
+          const scope = await iAssistantProfileResolver.resolveScope({
+            ...RESOLVE,
+            assistantId: 'legal-advisor',
+            allSearchProfiles: true,
+            configuredProfileId: 'iassistant-workspace',
+            configuredSearchProfile: 'searchprofile-standard'
+          });
+
+          assert.deepEqual(scope, {
+            profileId: 'iassistant-legal',
+            searchProfile: 'searchprofile-legal',
+            source: 'assistant',
+            assistantId: 'legal-advisor'
+          });
+          assert.equal(calls[0].assistantId, 'legal-advisor');
+          assert.equal(calls[0].user, user);
+        }
+      )
+  );
+});
+
+test('an iAssistant the user cannot see is an error, not another corpus', async () => {
+  await withAssistant(
+    ({ assistantId }) => {
+      throw new AssistantNotAvailableError(assistantId);
+    },
+    async () => {
+      await assert.rejects(
+        iAssistantProfileResolver.resolveScope({ ...RESOLVE, assistantId: 'legal-advisor' }),
+        AssistantNotAvailableError
+      );
+    }
+  );
+});
+
+test('all search profiles sends none and keeps the conversation profile', async () => {
+  await withProfiles(
+    () => {
+      throw new Error('the profile list must not be read');
+    },
+    async () => {
+      const scope = await iAssistantProfileResolver.resolveScope({
+        ...RESOLVE,
+        allSearchProfiles: true,
+        configuredProfileId: 'iassistant-workspace',
+        configuredSearchProfile: 'searchprofile-standard'
+      });
+
+      assert.deepEqual(scope, {
+        profileId: 'iassistant-workspace',
+        searchProfile: undefined,
+        source: 'all-search-profiles'
+      });
+    }
+  );
+});
+
+test('without either, the configured search profile is checked as before', async () => {
+  await withProfiles(
+    () => PROFILES,
+    async () => {
+      const scope = await iAssistantProfileResolver.resolveScope({
+        ...RESOLVE,
+        configuredProfileId: 'iassistant-workspace',
+        configuredSearchProfile: 'searchprofile-legal'
+      });
+
+      assert.deepEqual(scope, {
+        profileId: 'iassistant-workspace',
+        searchProfile: 'searchprofile-legal',
+        source: 'configured'
+      });
+    }
+  );
+});
+
+test('a conversation for an iAssistant is created with its profiles and pins them', async () => {
+  const originalCreate = conversationApiService.createConversation;
+  let captured = null;
+  conversationApiService.createConversation = async params => {
+    captured = params;
+    return { id: 'conv-assistant-1', title: null };
+  };
+  const options = optionsWith({
+    baseUrl: 'https://ifinder.example.com',
+    assistantId: 'legal-advisor',
+    profileId: 'iassistant-workspace',
+    searchProfile: 'searchprofile-standard'
+  });
+
+  try {
+    await withAssistant(
+      () => ({
+        id: 'legal-advisor',
+        name: 'Legal',
+        conversationProfileId: 'iassistant-legal',
+        searchProfileId: 'searchprofile-legal'
+      }),
+      async () => {
+        await adapter
+          .createCompletionRequest(model, [{ role: 'user', content: 'Frist?' }], null, options)
+          .catch(() => {});
+      }
+    );
+
+    assert.equal(captured.searchProfile, 'searchprofile-legal');
+    const state = conversationStateManager.getState(options.chatId);
+    assert.equal(state.profileId, 'iassistant-legal');
+    assert.equal(state.assistantId, 'legal-advisor');
+    assert.equal(state.searchScope, 'profile');
+  } finally {
+    conversationApiService.createConversation = originalCreate;
+  }
+});
+
+test('an unavailable iAssistant stops the turn with a message for the user', async () => {
+  const originalCreate = conversationApiService.createConversation;
+  let created = false;
+  conversationApiService.createConversation = async () => {
+    created = true;
+    return { id: 'never' };
+  };
+
+  try {
+    await withAssistant(
+      ({ assistantId }) => {
+        throw new AssistantNotAvailableError(assistantId);
+      },
+      async () => {
+        await assert.rejects(
+          adapter.createCompletionRequest(
+            model,
+            [{ role: 'user', content: 'Frist?' }],
+            null,
+            optionsWith({ baseUrl: 'https://ifinder.example.com', assistantId: 'legal-advisor' })
+          ),
+          /not available to you/
+        );
+      }
+    );
+    assert.equal(created, false);
+  } finally {
+    conversationApiService.createConversation = originalCreate;
+  }
+});
+
+test('a conversation over all search profiles is created without one', async () => {
+  const originalCreate = conversationApiService.createConversation;
+  let captured = null;
+  conversationApiService.createConversation = async params => {
+    captured = params;
+    return { id: 'conv-all-1', title: null };
+  };
+  const options = optionsWith({
+    baseUrl: 'https://ifinder.example.com',
+    allSearchProfiles: true,
+    searchProfile: 'searchprofile-standard'
+  });
+
+  try {
+    await adapter
+      .createCompletionRequest(model, [{ role: 'user', content: 'Frist?' }], null, options)
+      .catch(() => {});
+
+    assert.ok(captured, 'createConversation was not called');
+    assert.equal(captured.searchProfile, undefined);
+    const state = conversationStateManager.getState(options.chatId);
+    assert.equal(state.searchProfile, null);
+    assert.equal(state.searchScope, 'all');
   } finally {
     conversationApiService.createConversation = originalCreate;
   }

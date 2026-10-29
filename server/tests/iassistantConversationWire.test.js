@@ -30,6 +30,11 @@ const { default: conversationStateManager } =
 const { default: iFinderSearchProfiles, CONFIGURATION_PATH } =
   await import('../services/integrations/iFinderSearchProfiles.js');
 const { LLMClient } = await import('../services/loop/LLMClient.js');
+const {
+  default: iFinderAssistants,
+  ASSISTANTS_PATH,
+  AssistantNotAvailableError
+} = await import('../services/integrations/iFinderAssistants.js');
 
 const user = { id: 'user_wire', name: 'Wire Test', email: 'wire@example.com' };
 const model = {
@@ -309,4 +314,154 @@ test('the profiles of an anonymous user are never read', async () => {
     iFinderSearchProfiles.getUserSearchProfiles({ user: { id: 'anonymous' }, baseUrl: BASE_URL }),
     /signed-in user/
   );
+});
+
+// ── later turns of pinned conversations ────────────────────────────────────
+
+test('a later turn of an iAssistant conversation keeps its conversation profile', async () => {
+  conversationStateManager.setState('chat-wire-assistant', {
+    conversationId: 'conv-5',
+    lastParentId: 'msg-1',
+    profileId: 'iassistant-legal',
+    assistantId: 'legal-advisor',
+    searchProfile: 'searchprofile-legal',
+    searchScope: 'profile',
+    ownerId: user.id
+  });
+
+  const request = await adapter.createCompletionRequest(
+    model,
+    [{ role: 'user', content: 'Und weiter?' }],
+    null,
+    {
+      ...chatOptions('chat-wire-assistant'),
+      appConfig: {
+        id: 'iassistant',
+        iassistant: { baseUrl: BASE_URL, assistantId: 'legal-advisor', profileId: 'other' }
+      }
+    }
+  );
+
+  assert.equal(request.body.message.profile_id, 'iassistant-legal');
+  assert.equal(request._searchProfile, 'searchprofile-legal');
+});
+
+test('a conversation over all search profiles links documents without a default profile', async () => {
+  conversationStateManager.setState('chat-wire-all', {
+    conversationId: 'conv-6',
+    lastParentId: 'msg-1',
+    profileId: 'iassistant-workspace',
+    searchProfile: null,
+    searchScope: 'all',
+    ownerId: user.id
+  });
+
+  const request = await adapter.createCompletionRequest(
+    model,
+    [{ role: 'user', content: 'Und weiter?' }],
+    null,
+    {
+      ...chatOptions('chat-wire-all'),
+      appConfig: {
+        id: 'iassistant',
+        iassistant: { baseUrl: BASE_URL, profileId: 'iassistant-workspace', searchProfile: 'x' }
+      }
+    }
+  );
+
+  assert.equal(request.body.message.profile_id, 'iassistant-workspace');
+  assert.equal(request._searchProfile, undefined);
+});
+
+// ── iFinder iAssistants ─────────────────────────────────────────────────────
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+test('an iAssistant is read as the user and cached', async () => {
+  const originalFetch = iFinderAssistants.fetch;
+  iFinderAssistants.reset();
+  const calls = [];
+  iFinderAssistants.fetch = async (label, url, options) => {
+    calls.push({ url, options });
+    return json({
+      id: 'legal-advisor',
+      name: 'Rechtsberater',
+      description: null,
+      conversation_profile_id: 'iassistant-legal',
+      search_profile_id: 'searchprofile-legal'
+    });
+  };
+
+  try {
+    const args = { assistantId: 'legal-advisor', user, baseUrl: BASE_URL };
+    const assistant = await iFinderAssistants.getAssistant(args);
+    await iFinderAssistants.getAssistant(args);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, `${BASE_URL}${ASSISTANTS_PATH}/legal-advisor`);
+    assert.match(calls[0].options.headers.Authorization, /^Bearer /);
+    assert.deepEqual(assistant, {
+      id: 'legal-advisor',
+      name: 'Rechtsberater',
+      description: null,
+      conversationProfileId: 'iassistant-legal',
+      searchProfileId: 'searchprofile-legal'
+    });
+  } finally {
+    iFinderAssistants.fetch = originalFetch;
+    iFinderAssistants.reset();
+  }
+});
+
+test('an iAssistant iFinder hides from the user is reported as not available', async () => {
+  const originalFetch = iFinderAssistants.fetch;
+  iFinderAssistants.reset();
+  iFinderAssistants.fetch = async () => json({ title: 'Not Found' }, 404);
+
+  try {
+    await assert.rejects(
+      iFinderAssistants.getAssistant({ assistantId: 'secret', user, baseUrl: BASE_URL }),
+      AssistantNotAvailableError
+    );
+  } finally {
+    iFinderAssistants.fetch = originalFetch;
+    iFinderAssistants.reset();
+  }
+});
+
+test('the iAssistants list is read page by page in the requested language', async () => {
+  const originalFetch = iFinderAssistants.fetch;
+  const calls = [];
+  const pages = [
+    { assistants: [{ id: 'a', name: 'A', search_profile_id: 'p1' }], next_cursor: 'c2' },
+    { assistants: [{ id: 'b', name: 'B', search_profile_id: 'p2' }, { name: 'no id' }] }
+  ];
+  iFinderAssistants.fetch = async (label, url, options) => {
+    calls.push({ url, options });
+    return json(pages.shift());
+  };
+
+  try {
+    const assistants = await iFinderAssistants.listAssistants({
+      user,
+      baseUrl: BASE_URL,
+      language: 'de'
+    });
+
+    assert.deepEqual(
+      assistants.map(assistant => assistant.id),
+      ['a', 'b']
+    );
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, `${BASE_URL}${ASSISTANTS_PATH}?size=100`);
+    assert.equal(calls[1].url, `${BASE_URL}${ASSISTANTS_PATH}?size=100&next_cursor=c2`);
+    assert.equal(calls[0].options.headers['Accept-Language'], 'de');
+  } finally {
+    iFinderAssistants.fetch = originalFetch;
+  }
 });
