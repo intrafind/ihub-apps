@@ -1,13 +1,98 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import AdminLoadError from '../components/AdminLoadError';
+import StagedUpdatePanel from '../components/updates/StagedUpdatePanel';
+import InstallFromFileCard from '../components/updates/InstallFromFileCard';
+
+/** A restart with migrations under a Windows service can take minutes. */
+const RESTART_TIMEOUT_MS = 10 * 60 * 1000;
+const RESTART_POLL_MS = 3000;
+
+function Spinner({ className = 'h-3 w-3' }) {
+  return (
+    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
+
+const MESSAGE_TONES = {
+  success:
+    'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
+  warning:
+    'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200',
+  error:
+    'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+  info: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+};
+
+/**
+ * What the last apply or rollback came to, as recorded by the launcher or the
+ * restarted server (`.update-result.json`).
+ */
+function describeResult(result, runningVersion, t) {
+  if (!result) {
+    return {
+      tone: 'success',
+      text: t(
+        'admin.updates.resultRunning',
+        'The server is back. Now running version {{version}}.',
+        {
+          version: runningVersion
+        }
+      )
+    };
+  }
+  if (result.status === 'success') {
+    return {
+      tone: 'success',
+      text: t('admin.system.updateSuccess', 'Update complete! Now running version {{version}}.', {
+        version: result.runningVersion || runningVersion
+      })
+    };
+  }
+  if (result.status === 'rolled-back' && result.manual) {
+    return {
+      tone: 'success',
+      text: t(
+        'admin.system.rollbackSuccess',
+        'Rollback complete! Now running version {{version}}.',
+        {
+          version: runningVersion
+        }
+      )
+    };
+  }
+  if (result.status === 'rolled-back') {
+    return {
+      tone: 'warning',
+      text: t(
+        'admin.updates.resultRolledBack',
+        'The update to {{target}} was rolled back automatically: {{reason}}',
+        { target: result.targetVersion, reason: result.reason }
+      )
+    };
+  }
+  return {
+    tone: 'error',
+    text: t('admin.updates.resultFailed', 'The update to {{target}} failed: {{reason}}', {
+      target: result.targetVersion,
+      reason: result.reason
+    })
+  };
+}
 
 function AdminUpdatesPage() {
   const { t } = useTranslation();
@@ -18,223 +103,244 @@ function AdminUpdatesPage() {
   // GitHub check never answers (issue #2150).
   const { updateInfo, setUpdateInfo } = useUpdateCheck();
   const [updateStatus, setUpdateStatus] = useState(null);
-  const [updateActionLoading, setUpdateActionLoading] = useState(false);
-  const [updateActionMessage, setUpdateActionMessage] = useState('');
-  const [updateActionMessageType, setUpdateActionMessageType] = useState('success');
-  const updatePollIntervalRef = useRef(null);
-  const rollbackPollIntervalRef = useRef(null);
-  const updatePollAbortRef = useRef(null);
-  const rollbackPollAbortRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  /** Summary of an archive just verified (accepted or rejected); falls back to the staged one. */
+  const [summary, setSummary] = useState(null);
+  /** { tone, text } shown below the version information. */
+  const [message, setMessage] = useState(null);
+  /** { kind: 'update'|'rollback', phase: 'waiting'|'done'|'timeout' } while the server restarts. */
+  const [restart, setRestart] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [restoreConfig, setRestoreConfig] = useState(false);
+  const pollRef = useRef(null);
+  const pollAbortRef = useRef(null);
 
-  useEffect(() => {
-    const fetchVersionInfo = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
-        setVersionInfo(response.data);
-        setVersionError('');
-      } catch (error) {
-        setVersionError(error.message || 'Failed to load version information');
-      } finally {
-        setVersionLoading(false);
-      }
-    };
-    void fetchVersionInfo();
-  }, []);
-
-  useEffect(() => {
-    const fetchUpdateStatus = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/update/status', { method: 'GET' });
-        setUpdateStatus(response.data);
-      } catch {
-        // Update status not available (not a binary installation)
-      }
-    };
-    void fetchUpdateStatus();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (updatePollIntervalRef.current) clearInterval(updatePollIntervalRef.current);
-      if (rollbackPollIntervalRef.current) clearInterval(rollbackPollIntervalRef.current);
-      if (updatePollAbortRef.current) {
-        updatePollAbortRef.current.abort();
-        updatePollAbortRef.current = null;
-      }
-      if (rollbackPollAbortRef.current) {
-        rollbackPollAbortRef.current.abort();
-        rollbackPollAbortRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleUpdateNow = async () => {
-    setUpdateActionLoading(true);
-    setUpdateActionMessage('');
-    setUpdateActionMessageType('success');
-
+  const fetchVersionInfo = useCallback(async () => {
     try {
-      setUpdateActionMessage(t('admin.system.updateDownloading', 'Downloading update...'));
-      await makeAdminApiCall('/admin/update/download', { method: 'POST' });
-
-      setUpdateActionMessage(t('admin.system.updateApplying', 'Applying update...'));
-      await makeAdminApiCall('/admin/update/apply', { method: 'POST' });
-
-      setUpdateActionMessage(
-        t('admin.system.updateRestarting', 'Update applied. Server is restarting...')
-      );
-
-      updatePollIntervalRef.current = setInterval(async () => {
-        if (updatePollAbortRef.current) updatePollAbortRef.current.abort();
-        const controller = new AbortController();
-        updatePollAbortRef.current = controller;
-        try {
-          const response = await makeAdminApiCall('/admin/version', {
-            method: 'GET',
-            signal: controller.signal
-          });
-          if (response.data) {
-            clearInterval(updatePollIntervalRef.current);
-            updatePollIntervalRef.current = null;
-            updatePollAbortRef.current = null;
-            setUpdateActionMessage(
-              t('admin.system.updateSuccess', 'Update complete! Now running version {{version}}.', {
-                version: response.data.app
-              })
-            );
-            setUpdateActionMessageType('success');
-            setUpdateActionLoading(false);
-            setVersionInfo(response.data);
-            setUpdateInfo(prev => (prev ? { ...prev, updateAvailable: false } : prev));
-            try {
-              const statusRes = await makeAdminApiCall('/admin/update/status', { method: 'GET' });
-              setUpdateStatus(statusRes.data);
-            } catch {
-              /* ignore */
-            }
-          }
-        } catch {
-          /* Server not ready yet */
-        } finally {
-          if (updatePollAbortRef.current === controller) updatePollAbortRef.current = null;
-        }
-      }, 3000);
-
-      setTimeout(() => {
-        if (updatePollIntervalRef.current) {
-          clearInterval(updatePollIntervalRef.current);
-          updatePollIntervalRef.current = null;
-          setUpdateActionMessage(
-            t(
-              'admin.system.updateTimeout',
-              'Update is taking longer than expected. Please check the server status and try again.'
-            )
-          );
-          setUpdateActionMessageType('error');
-          setUpdateActionLoading(false);
-        }
-      }, 120000);
+      const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
+      setVersionInfo(response.data);
+      setVersionError('');
     } catch (error) {
-      setUpdateActionMessage(
-        t('admin.system.updateFailed', 'Update failed: {{error}}', {
-          error: error.response?.data?.error || error.message
+      setVersionError(error.message || 'Failed to load version information');
+    } finally {
+      setVersionLoading(false);
+    }
+  }, []);
+
+  const fetchUpdateStatus = useCallback(async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/update/status', { method: 'GET' });
+      setUpdateStatus(response.data);
+      return response.data;
+    } catch {
+      // Update status not available (not a binary installation)
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchVersionInfo();
+    void fetchUpdateStatus();
+  }, [fetchVersionInfo, fetchUpdateStatus]);
+
+  const stopPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
+    pollAbortRef.current?.abort();
+    pollAbortRef.current = null;
+  };
+
+  useEffect(() => stopPolling, []);
+
+  /**
+   * Wait for the server to come back from the restart. "Back" means another
+   * start of the server (a new boot id), not merely an answer: the old process
+   * keeps answering for a moment after it scheduled the restart.
+   */
+  const watchRestart = (kind, previousBootId) => {
+    stopPolling();
+    const startedAt = Date.now();
+    setRestart({ kind, phase: 'waiting' });
+    setMessage({
+      tone: 'info',
+      text:
+        kind === 'rollback'
+          ? t('admin.system.rollbackRestarting', 'Rollback applied. Server is restarting...')
+          : t(
+              'admin.updates.restarting',
+              'The server is restarting to install the update. This page updates when it is back.'
+            )
+    });
+
+    pollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > RESTART_TIMEOUT_MS) {
+        stopPolling();
+        setRestart({ kind, phase: 'timeout' });
+        setMessage({
+          tone: 'error',
+          text: t(
+            'admin.updates.restartTimeout',
+            'The server has not come back after 10 minutes. Check the server log (and the service manager), or run the launcher with --update=status.'
+          )
+        });
+        return;
+      }
+      pollAbortRef.current?.abort();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      try {
+        const response = await makeAdminApiCall('/admin/update/status', {
+          method: 'GET',
+          signal: controller.signal,
+          timeout: 5000
+        });
+        const status = response.data;
+        if (!status?.bootId || status.bootId === previousBootId || status.pendingRestart) return;
+        stopPolling();
+        setUpdateStatus(status);
+        setSummary(null);
+        setRestart({ kind, phase: 'done' });
+        setMessage(describeResult(status.lastResult, status.currentVersion, t));
+        setUpdateInfo(prev =>
+          prev ? { ...prev, updateAvailable: prev.latestVersion !== status.currentVersion } : prev
+        );
+        void fetchVersionInfo();
+      } catch {
+        /* Server not ready yet */
+      } finally {
+        if (pollAbortRef.current === controller) pollAbortRef.current = null;
+      }
+    }, RESTART_POLL_MS);
+  };
+
+  const errorText = error => error.response?.data?.error || error.message;
+
+  /** Online: download the release from GitHub; it is verified like any other archive. */
+  const handleDownload = async () => {
+    setBusy(true);
+    setMessage({
+      tone: 'info',
+      text: t('admin.system.updateDownloading', 'Downloading update...')
+    });
+    try {
+      const response = await makeAdminApiCall('/admin/update/download', {
+        method: 'POST',
+        timeout: 0
+      });
+      if (response.data?.success === false) {
+        setMessage({ tone: 'info', text: response.data.message });
+      } else {
+        setSummary(response.data);
+        setMessage(null);
+      }
+    } catch (error) {
+      if (error.response?.status === 422 && error.response.data?.summary) {
+        setSummary(error.response.data.summary);
+        setMessage(null);
+      } else {
+        setMessage({
+          tone: 'error',
+          text: t('admin.system.updateFailed', 'Update failed: {{error}}', {
+            error: errorText(error)
+          })
+        });
+      }
+    } finally {
+      setBusy(false);
+      void fetchUpdateStatus();
+    }
+  };
+
+  const handleStaged = ({ summary: staged, error }) => {
+    if (staged) {
+      setSummary(staged);
+      setMessage(null);
+    } else if (error) {
+      setMessage({ tone: 'error', text: error });
+    }
+    void fetchUpdateStatus();
+  };
+
+  const handleApply = async options => {
+    setBusy(true);
+    const previousBootId = updateStatus?.bootId;
+    try {
+      await makeAdminApiCall('/admin/update/apply', {
+        method: 'POST',
+        body: options,
+        timeout: 0
+      });
+      watchRestart('update', previousBootId);
+    } catch (error) {
+      setMessage({
+        tone: 'error',
+        text: t('admin.system.updateFailed', 'Update failed: {{error}}', {
+          error: errorText(error)
         })
-      );
-      setUpdateActionMessageType('error');
-      setUpdateActionLoading(false);
+      });
+      void fetchUpdateStatus();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDiscard = async () => {
+    const current = summary ?? updateStatus?.staged;
+    if (current && !current.accepted) {
+      // A rejected archive was never staged; there is nothing to delete.
+      setSummary(null);
+      return;
+    }
+    setBusy(true);
+    try {
+      await makeAdminApiCall('/admin/update/staged', { method: 'DELETE' });
+      setSummary(null);
+      setMessage(null);
+    } catch (error) {
+      setMessage({ tone: 'error', text: errorText(error) });
+    } finally {
+      setBusy(false);
+      void fetchUpdateStatus();
+    }
+  };
+
+  const doRollback = async withConfig => {
+    setBusy(true);
+    const previousBootId = updateStatus?.bootId;
+    setMessage({ tone: 'info', text: t('admin.system.rollbackApplying', 'Rolling back...') });
+    try {
+      await makeAdminApiCall('/admin/update/rollback', {
+        method: 'POST',
+        body: { restoreConfig: withConfig },
+        timeout: 0
+      });
+      watchRestart('rollback', previousBootId);
+    } catch (error) {
+      setMessage({
+        tone: 'error',
+        text: t('admin.system.rollbackFailed', 'Rollback failed: {{error}}', {
+          error: errorText(error)
+        })
+      });
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleRollback = () => {
-    setConfirmDialog({
-      title: t('admin.system.rollbackTitle', 'Rollback Update'),
-      message: t(
-        'admin.system.rollbackConfirm',
-        'Are you sure you want to rollback to the previous version?'
-      ),
-      danger: true,
-      onConfirm: async () => {
-        setConfirmDialog(null);
-        void doRollback();
-      }
-    });
+    setRestoreConfig(false);
+    setConfirmDialog(true);
   };
 
-  const doRollback = async () => {
-    setUpdateActionLoading(true);
-    setUpdateActionMessage(t('admin.system.rollbackApplying', 'Rolling back...'));
-    setUpdateActionMessageType('success');
-
-    try {
-      await makeAdminApiCall('/admin/update/rollback', { method: 'POST' });
-      setUpdateActionMessage(
-        t('admin.system.rollbackRestarting', 'Rollback applied. Server is restarting...')
-      );
-
-      rollbackPollIntervalRef.current = setInterval(async () => {
-        if (rollbackPollAbortRef.current) rollbackPollAbortRef.current.abort();
-        const controller = new AbortController();
-        rollbackPollAbortRef.current = controller;
-        try {
-          const response = await makeAdminApiCall('/admin/version', {
-            method: 'GET',
-            signal: controller.signal
-          });
-          if (response.data) {
-            clearInterval(rollbackPollIntervalRef.current);
-            rollbackPollIntervalRef.current = null;
-            rollbackPollAbortRef.current = null;
-            setUpdateActionMessage(
-              t(
-                'admin.system.rollbackSuccess',
-                'Rollback complete! Now running version {{version}}.',
-                {
-                  version: response.data.app
-                }
-              )
-            );
-            setUpdateActionMessageType('success');
-            setUpdateActionLoading(false);
-            setVersionInfo(response.data);
-            try {
-              const statusRes = await makeAdminApiCall('/admin/update/status', { method: 'GET' });
-              setUpdateStatus(statusRes.data);
-            } catch {
-              /* ignore */
-            }
-          }
-        } catch {
-          /* Server not ready yet */
-        } finally {
-          if (rollbackPollAbortRef.current === controller) rollbackPollAbortRef.current = null;
-        }
-      }, 3000);
-
-      setTimeout(() => {
-        if (rollbackPollIntervalRef.current) {
-          clearInterval(rollbackPollIntervalRef.current);
-          rollbackPollIntervalRef.current = null;
-          setUpdateActionMessage(
-            t(
-              'admin.system.rollbackTimeout',
-              'Rollback is taking longer than expected. Please check the server status and logs.'
-            )
-          );
-          setUpdateActionMessageType('error');
-          setUpdateActionLoading(false);
-        }
-      }, 120000);
-    } catch (error) {
-      setUpdateActionMessage(
-        t('admin.system.rollbackFailed', 'Rollback failed: {{error}}', {
-          error: error.response?.data?.error || error.message
-        })
-      );
-      setUpdateActionMessageType('error');
-      setUpdateActionLoading(false);
-    }
-  };
+  const restarting = restart?.phase === 'waiting';
+  const canUpdateInPlace = updateStatus?.isBinary && !updateStatus?.isContainer;
+  const shownSummary = summary ?? updateStatus?.staged ?? null;
+  const lastResult = updateStatus?.lastResult;
+  const showLastResult =
+    !restart &&
+    !message &&
+    lastResult &&
+    (lastResult.status === 'failed' || (lastResult.status === 'rolled-back' && !lastResult.manual));
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -259,7 +365,7 @@ function AdminUpdatesPage() {
                 />
               </div>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.system.versionTitle', 'Version Information')}
               </h3>
@@ -270,8 +376,27 @@ function AdminUpdatesPage() {
                 )}
               </p>
 
+              <div aria-live="polite">
+                {message && (
+                  <div
+                    className={`mb-4 flex items-start gap-2 rounded-md border p-4 text-sm ${MESSAGE_TONES[message.tone]}`}
+                    role={message.tone === 'error' ? 'alert' : 'status'}
+                  >
+                    {restarting && <Spinner className="h-4 w-4 mt-0.5 shrink-0" />}
+                    <span>{message.text}</span>
+                  </div>
+                )}
+                {showLastResult && (
+                  <div
+                    className={`mb-4 rounded-md border p-4 text-sm ${MESSAGE_TONES[describeResult(lastResult, updateStatus.currentVersion, t).tone]}`}
+                  >
+                    {describeResult(lastResult, updateStatus.currentVersion, t).text}
+                  </div>
+                )}
+              </div>
+
               {/* Update Available Banner */}
-              {updateInfo && updateInfo.updateAvailable && !updateInfo.error && (
+              {updateInfo && updateInfo.updateAvailable && !updateInfo.error && !restarting && (
                 <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
                   <div className="flex items-start">
                     <div className="shrink-0">
@@ -288,7 +413,7 @@ function AdminUpdatesPage() {
                             'A new version of iHub Apps is available!'
                           )}
                         </p>
-                        <div className="mt-2 flex items-center space-x-4">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                           <span>
                             <strong>{t('admin.system.currentVersion', 'Current Version')}:</strong>{' '}
                             {updateInfo.currentVersion}
@@ -312,37 +437,20 @@ function AdminUpdatesPage() {
                           )}
                         </div>
                       )}
-                      <div className="mt-3 flex items-center space-x-3">
-                        {updateStatus?.isBinary && !updateStatus?.isContainer && (
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        {canUpdateInPlace && (
                           <button
-                            onClick={handleUpdateNow}
-                            disabled={updateActionLoading}
+                            type="button"
+                            onClick={handleDownload}
+                            disabled={busy}
                             className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-700 hover:bg-green-800 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {updateActionLoading ? (
-                              <svg
-                                className="animate-spin -ml-0.5 mr-1.5 h-3 w-3"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                />
-                              </svg>
+                            {busy ? (
+                              <Spinner className="-ml-0.5 mr-1.5 h-3 w-3" />
                             ) : (
                               <Icon name="download" size="sm" className="mr-1.5" />
                             )}
-                            {t('admin.system.updateNow', 'Update Now')}
+                            {t('admin.updates.downloadAndVerify', 'Download and verify')}
                           </button>
                         )}
                         <a
@@ -355,20 +463,13 @@ function AdminUpdatesPage() {
                           {t('admin.system.viewRelease', 'View Release on GitHub')}
                         </a>
                       </div>
-                      {updateActionMessage && (
-                        <div
-                          className={`mt-2 text-sm ${updateActionMessageType === 'error' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}
-                        >
-                          {updateActionMessage}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Rollback Banner */}
-              {updateStatus?.hasBackup && !updateStatus?.isContainer && !updateActionLoading && (
+              {updateStatus?.hasBackup && !updateStatus?.isContainer && !restarting && (
                 <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
                   <div className="flex items-start">
                     <div className="shrink-0">
@@ -389,8 +490,10 @@ function AdminUpdatesPage() {
                       </p>
                       <div className="mt-2">
                         <button
+                          type="button"
                           onClick={handleRollback}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                          disabled={busy}
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
                         >
                           <Icon name="refresh" size="sm" className="mr-1.5" />
                           {t('admin.system.rollbackButton', 'Rollback to {{version}}', {
@@ -405,26 +508,7 @@ function AdminUpdatesPage() {
 
               {versionLoading ? (
                 <div className="flex items-center text-gray-600 dark:text-gray-400">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <Spinner className="-ml-1 mr-3 h-5 w-5 text-blue-600" />
                   {t('admin.system.versionLoading', 'Loading version information...')}
                 </div>
               ) : versionError ? (
@@ -436,58 +520,86 @@ function AdminUpdatesPage() {
                 />
               ) : versionInfo ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.system.versionApp', 'Application Version')}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {versionInfo.app}
-                      </span>
+                  {[
+                    ['admin.system.versionApp', 'Application Version', versionInfo.app],
+                    ['admin.system.versionClient', 'Frontend Version', versionInfo.client],
+                    ['admin.system.versionServer', 'Backend Version', versionInfo.server],
+                    ['admin.system.versionNode', 'Node.js Version', versionInfo.node]
+                  ].map(([key, fallback, value]) => (
+                    <div
+                      key={key}
+                      className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t(key, fallback)}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {value}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.system.versionClient', 'Frontend Version')}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {versionInfo.client}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.system.versionServer', 'Backend Version')}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {versionInfo.server}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.system.versionNode', 'Node.js Version')}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {versionInfo.node}
-                      </span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               ) : null}
             </div>
           </div>
         </div>
+
+        {canUpdateInPlace && shownSummary && !restarting && (
+          <StagedUpdatePanel
+            key={`${shownSummary.archiveSha256}-${shownSummary.stagedAt}`}
+            summary={shownSummary}
+            busy={busy}
+            onApply={handleApply}
+            onDiscard={handleDiscard}
+          />
+        )}
+
+        {updateStatus?.canInstallFromFile && !restarting && (
+          <InstallFromFileCard
+            status={updateStatus}
+            latestVersion={updateInfo?.updateAvailable ? updateInfo.latestVersion : null}
+            busy={busy}
+            setBusy={setBusy}
+            onStaged={handleStaged}
+          />
+        )}
       </div>
       <ConfirmDialog
         isOpen={!!confirmDialog}
-        title={confirmDialog?.title ?? ''}
-        message={confirmDialog?.message ?? ''}
-        danger={confirmDialog?.danger}
-        onConfirm={() => confirmDialog?.onConfirm()}
+        title={t('admin.system.rollbackTitle', 'Rollback Update')}
+        message={
+          <div className="space-y-3">
+            <p>
+              {t(
+                'admin.system.rollbackConfirm',
+                'Are you sure you want to rollback to the previous version?'
+              )}
+            </p>
+            {updateStatus?.backupHasConfigSnapshot && (
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  checked={restoreConfig}
+                  onChange={event => setRestoreConfig(event.target.checked)}
+                />
+                <span>
+                  {t(
+                    'admin.updates.restoreConfig',
+                    'Also restore the configuration as it was before the update. Configuration changes made since then are lost.'
+                  )}
+                </span>
+              </label>
+            )}
+          </div>
+        }
+        danger
+        onConfirm={() => {
+          setConfirmDialog(null);
+          void doRollback(restoreConfig);
+        }}
         onDeny={() => setConfirmDialog(null)}
       />
     </div>

@@ -16,8 +16,19 @@
  * @module utils/processRestart
  */
 import cluster from 'node:cluster';
+import { randomUUID } from 'node:crypto';
 
 export const UPDATE_RESTART_CODE = 75;
+
+/**
+ * Identifies one start of the server. Set in the primary (or the single
+ * process) when this module loads, before any worker is forked, so every
+ * worker inherits the same value. The admin UI compares it before and after
+ * an update to know the server really restarted — the clocks of browser and
+ * server need not agree, and each worker has its own start time.
+ */
+if (!process.env.IHUB_BOOT_ID) process.env.IHUB_BOOT_ID = randomUUID();
+export const BOOT_ID = process.env.IHUB_BOOT_ID;
 
 /** Key of the worker → primary IPC message asking for a restart. */
 export const RESTART_MESSAGE_KEY = '__ihubRestartRequest';

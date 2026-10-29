@@ -44,7 +44,7 @@ import {
 import logger from '../utils/logger.js';
 import config from '../config.js';
 import { gather, isClusterBusActive, respond } from '../clusterBus.js';
-import { UPDATE_RESTART_CODE } from '../utils/processRestart.js';
+import { BOOT_ID, UPDATE_RESTART_CODE } from '../utils/processRestart.js';
 import swap from '../update/swap.cjs';
 import {
   ARCHIVE_EXTENSIONS,
@@ -276,6 +276,7 @@ export function getUpdateStatus() {
     pendingRestart: Boolean(swap.readPending(rootDir)),
     lastResult: swap.readResult(rootDir),
     currentVersion: getAppVersion(),
+    bootId: BOOT_ID,
     platform,
     arch: process.arch,
     archiveNameExample: getUpdateArchiveName('<version>', platform),
@@ -997,7 +998,9 @@ export async function evaluateStaged({
   const { keys, invalid: invalidKeys } = loadTrustedKeys(settings.trustedPublicKeys);
   for (const message of invalidKeys) {
     warnings.push(
-      issue('invalid-trusted-key', `A configured update key is not usable: ${message}`)
+      issue('invalid-trusted-key', `A configured update key is not usable: ${message}`, {
+        error: message
+      })
     );
   }
 
@@ -1022,7 +1025,9 @@ export async function evaluateStaged({
     } catch (error) {
       manifest = null;
       problems.push(
-        issue('manifest-invalid', `The update manifest is not valid: ${error.message}`)
+        issue('manifest-invalid', `The update manifest is not valid: ${error.message}`, {
+          error: error.message
+        })
       );
     }
   } else {
@@ -1044,13 +1049,21 @@ export async function evaluateStaged({
         issue(
           'manifest-mismatch',
           `The archive's files do not match its manifest (${manifestCheck.changed.length} changed, ` +
-            `${manifestCheck.missing.length} missing, ${manifestCheck.unlisted.length} unlisted: ${sample})`
+            `${manifestCheck.missing.length} missing, ${manifestCheck.unlisted.length} unlisted: ${sample})`,
+          {
+            changed: manifestCheck.changed.length,
+            missing: manifestCheck.missing.length,
+            unlisted: manifestCheck.unlisted.length,
+            sample
+          }
         )
       );
     }
     if (manifest.product && manifest.product !== 'ihub-apps') {
       problems.push(
-        issue('wrong-product', `The archive is not an iHub Apps release (${manifest.product})`)
+        issue('wrong-product', `The archive is not an iHub Apps release (${manifest.product})`, {
+          product: String(manifest.product)
+        })
       );
     }
   }
@@ -1075,7 +1088,8 @@ export async function evaluateStaged({
     problems.push(
       issue(
         'version-conflict',
-        `The manifest says ${manifest.version}, version.txt says ${versionTxt}`
+        `The manifest says ${manifest.version}, version.txt says ${versionTxt}`,
+        { manifest: manifest.version, versionTxt }
       )
     );
   }
@@ -1109,7 +1123,8 @@ export async function evaluateStaged({
     problems.push(
       issue(
         'checksum-mismatch',
-        `The archive does not match the published checksum for ${originalName}`
+        `The archive does not match the published checksum for ${originalName}`,
+        { file: originalName }
       )
     );
   } else if (checksum === 'not-listed') {
@@ -1133,17 +1148,23 @@ export async function evaluateStaged({
           : checksumsSignature;
   const trusted = signedVia !== null;
   if (!trusted) {
-    const why =
+    // `variant` picks the translation in the admin UI.
+    const [variant, why] =
       keys.length === 0
-        ? 'no update signing key is configured on this server'
+        ? ['noKeys', 'no update signing key is configured on this server']
         : signature.status === 'unknown-key'
-          ? `it is signed with a key this server does not trust (${signature.keyId || 'unknown'})`
-          : 'it is not signed';
+          ? [
+              'unknownKey',
+              `it is signed with a key this server does not trust (${signature.keyId || 'unknown'})`
+            ]
+          : ['notSigned', 'it is not signed'];
+    const params = { variant, keyId: signature.keyId || '' };
     if (settings.allowUnsigned) {
       warnings.push(
         issue(
           'unsigned',
-          `The archive's origin cannot be verified: ${why}. Installing it needs a typed confirmation.`
+          `The archive's origin cannot be verified: ${why}. Installing it needs a typed confirmation.`,
+          params
         )
       );
     } else {
@@ -1151,7 +1172,8 @@ export async function evaluateStaged({
         issue(
           'untrusted',
           `The archive's origin cannot be verified: ${why}. Unsigned archives are refused ` +
-            '(platform setting update.allowUnsigned).'
+            '(platform setting update.allowUnsigned).',
+          params
         )
       );
     }
@@ -1207,7 +1229,7 @@ export async function evaluateStaged({
         'min-update-from',
         `Version ${version} can only be installed over ${manifest.minUpdateFrom} or later; ` +
           `update to that version first`,
-        { minimum: manifest.minUpdateFrom }
+        { version, minimum: manifest.minUpdateFrom }
       )
     );
   }
@@ -1238,7 +1260,8 @@ export async function evaluateStaged({
           issue(
             'node-does-not-start',
             `The bundled Node.js binary does not start on this server (${error.code || error.message}); ` +
-              'check antivirus quarantine or macOS Gatekeeper'
+              'check antivirus quarantine or macOS Gatekeeper',
+            { error: String(error.code || error.message) }
           )
         );
       }
