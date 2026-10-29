@@ -22,9 +22,10 @@ switched off while chats are stored: neither the `runLog` feature flag nor
 The flag and the switch only matter on an installation where no storage provider
 came up.
 
-1. The `runLog` feature flag (Admin → Platform → Features, or
-   `features.runLog: true` in `contents/config/features.json`) turns the
-   ledger on even without a storage provider.
+1. The `runLog` feature flag is on by default (Admin → Platform → Features, or
+   `features.runLog` in `contents/config/features.json`) and keeps the
+   ledger on even without a storage provider. Set it to `false` to opt out
+   where no storage provider is up.
 2. Optionally tune `platform.json → runLog` (also editable under Admin →
    Observability → Chat History):
 

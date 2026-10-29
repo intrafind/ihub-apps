@@ -3090,6 +3090,8 @@
       "uninstall": "Deinstallieren",
       "detach": "Trennen",
       "allRegistries": "Alle Registries",
+      "filterRegistry": "Nach Registry filtern",
+      "filterStatus": "Nach Status filtern",
       "statusAll": "Alle Status",
       "statusAvailable": "Verfügbar",
       "statusInstalled": "Installiert",

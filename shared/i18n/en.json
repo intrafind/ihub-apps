@@ -2806,6 +2806,8 @@
       "uninstall": "Uninstall",
       "detach": "Detach",
       "allRegistries": "All Registries",
+      "filterRegistry": "Filter by registry",
+      "filterStatus": "Filter by status",
       "statusAll": "All Status",
       "statusAvailable": "Available",
       "statusInstalled": "Installed",

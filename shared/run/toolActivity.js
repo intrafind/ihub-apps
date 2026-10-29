@@ -31,13 +31,16 @@ const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
 /**
  * Same heuristic as the server's `isCitationProducingTool`: search tools,
  * the page extractor and configured source lookups; reading an iFinder
- * document is a fetch too.
+ * document is a fetch too. A people-directory search finds no pages or
+ * documents (and the server never counts it as a web search), so it is a plain
+ * tool call.
  * @param {string} toolId
  * @returns {'search'|'fetch'|'tool'}
  */
 export function toolKind(toolId) {
   const id = String(toolId || '').toLowerCase();
   if (id === 'read_url' || id === 'ifinder_getcontent' || id === 'knowledge_read') return 'fetch';
+  if (id.includes('people')) return 'tool';
   if (id.includes('search') || id.startsWith('source_') || id === 'knowledge_list') return 'search';
   return 'tool';
 }

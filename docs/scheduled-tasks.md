@@ -10,7 +10,7 @@ also **remember between runs**: it keeps notes, reads them and its earlier runs
 at the start of a run, and tells you only what is new
 ([Memory and earlier runs](#memory-and-earlier-runs)).
 
-The feature ships as a **preview** and is off by default.
+The feature is on by default; an admin can switch it off under Admin → Platform → Features.
 
 ![The Scheduled tasks page with three tasks, their schedules, next and last runs](assets/screenshots/scheduled-tasks.png)
 
@@ -20,7 +20,7 @@ All of these have to hold before anyone sees the feature:
 
 | Condition                                  | Where it comes from                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------ |
-| `features.scheduledTasks` is on            | Admin → Platform → Features → **Scheduled Tasks** (preview, off by default) |
+| `features.scheduledTasks` is on            | Admin → Platform → Features → **Scheduled Tasks** (on by default) |
 | Chat History works                         | `features.chatPersistence` on and storage up — see [Chat Persistence](chat-persistence.md) |
 | `platform.scheduledTasks.enabled !== false` | `contents/config/platform.json`, or Admin → Scheduled Tasks → Settings    |
 | The user's groups grant `scheduledTasks`   | Admin → Groups → permissions                                             |

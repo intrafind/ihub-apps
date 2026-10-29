@@ -119,6 +119,11 @@ describe('toolKind', () => {
     expect(toolKind('read_url')).toBe('fetch');
     expect(toolKind('jira')).toBe('tool');
   });
+
+  test('a people search is a plain tool call, not a web search', () => {
+    expect(toolKind('entraPeopleSearch')).toBe('tool');
+    expect(toolKind('x500bund__search_people')).toBe('tool');
+  });
 });
 
 describe('searchScope', () => {
