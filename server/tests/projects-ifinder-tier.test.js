@@ -754,6 +754,24 @@ describe('a chat that uses a collection as knowledge', () => {
     assert.deepEqual(await scopeOf(GRACE, [pid(1)]), []);
   });
 
+  it('loads the attached projects at once and keeps the order they were asked in', async () => {
+    collection(1, ADA.email, { documents: ['doc-a'] });
+    collection(2, ADA.email, { documents: ['doc-b'] });
+    ifinder.state.delays.set(ID(1), 300);
+    ifinder.state.delays.set(ID(2), 300);
+    const scope = await scopeOf(ADA, [pid(1), pid(2)]);
+    assert.deepEqual(
+      scope.map(entry => entry.project.id),
+      [pid(1), pid(2)]
+    );
+    const reads = ifinder
+      .calls('collections')
+      .filter(request => request.path.endsWith(ID(1)) || request.path.endsWith(ID(2)));
+    assert.equal(reads.length, 2);
+    // The second read was sent long before the first one answered (one after the other it would wait 300 ms).
+    assert.ok(Math.abs(reads[1].at - reads[0].at) < 150, 'both reads are on their way together');
+  });
+
   it('searches the collection and never loads it in full', async () => {
     collection(1, ADA.email, { name: 'Contracts', documents: ['doc-a', 'doc-b'] });
     ifinder.addDocument('doc-a', {

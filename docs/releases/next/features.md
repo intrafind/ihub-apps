@@ -267,8 +267,8 @@ warnings — before anything is changed; you confirm, and the server restarts in
 ## Projects: Your iFinder Smart Collections as Read-Only Projects
 
 With the tier policy set to `both` or `ifinder` (**platform.json → projects.tierPolicy**, until now
-accepted but ignored) and iFinder 6.8 or later configured, a user's iFinder smart collections
-appear on the **Projects** page next to their own projects, marked **iFinder · read-only**. Opening
+accepted but ignored), iFinder 6.8 or later configured and **User Projects** switched on (**Admin →
+Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to their own projects, marked **iFinder · read-only**. Opening
 one lists its documents. A chat can use the collection as knowledge: tick it in the **Project**
 picker of the chat input, or start a chat from its page. Nothing is copied: the documents stay in
 iFinder and are read, searched and cited with the rights of the person asking, like any iFinder

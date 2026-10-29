@@ -91,11 +91,15 @@ export async function resolveProjectScope({ appConfig, user }) {
   // the feature returns. Admin projects linked to apps keep working as long
   // as the master switch is on.
   const userProjectsOn = isUserProjectsConfigured(features) && appAllowsUserProjects(appConfig);
+  // Every project is loaded at once: a smart collection of the iFinder tier is a
+  // round trip to iFinder (with the user's own rights), a stored project a read
+  // of the repository. The scope keeps the order of `wanted`.
+  const loads = await Promise.all(
+    wanted.map(entry => loadProjectFor(user, entry.id, { repository }))
+  );
   const scope = [];
-  for (const entry of wanted) {
-    // A smart collection of the iFinder tier is read from iFinder with the
-    // user's own rights; a stored project from the repository.
-    const loaded = await loadProjectFor(user, entry.id, { repository });
+  for (const [index, entry] of wanted.entries()) {
+    const loaded = loads[index];
     if (loaded.status === 'unavailable') {
       logger.warn(
         'A project of the iFinder tier was left out of the scope: iFinder is unavailable',

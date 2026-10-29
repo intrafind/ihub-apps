@@ -109,6 +109,8 @@ export async function startMockIFinder({ tls } = {}) {
     collectionsStatus: null,
     /** Never answer a Smart Collections call. */
     hang: false,
+    /** collection id → milliseconds a read of that single collection takes to answer */
+    delays: new Map(),
     requests: []
   };
 
@@ -132,7 +134,8 @@ export async function startMockIFinder({ tls } = {}) {
       path: url.pathname,
       query: Object.fromEntries(url.searchParams),
       sub,
-      scope: claims.scope
+      scope: claims.scope,
+      at: Date.now()
     };
     let raw = '';
     req.on('data', chunk => (raw += chunk));
@@ -172,7 +175,10 @@ export async function startMockIFinder({ tls } = {}) {
         if (!collection || collection.owner.toLowerCase() !== String(sub).toLowerCase()) {
           return send(res, 404);
         }
-        return send(res, 200, collection);
+        const delay = state.delays.get(collection.id) || 0;
+        return delay
+          ? setTimeout(() => send(res, 200, collection), delay)
+          : send(res, 200, collection);
       }
 
       if (url.pathname.startsWith(RETRIEVAL)) {
@@ -227,6 +233,7 @@ export async function startMockIFinder({ tls } = {}) {
       state.requests.length = 0;
       state.collectionsStatus = null;
       state.hang = false;
+      state.delays.clear();
     },
     addCollection(collection) {
       state.collections.set(collection.id, collection);
