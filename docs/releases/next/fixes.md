@@ -68,3 +68,12 @@ Node.js 24.22.1 fixes a flaw where a hostname containing a NUL byte was checked 
 looked up as another. The built-in protection against requests to internal addresses now also
 rejects hostnames with control characters. Rebuild the Docker image without cache to get the patched
 Node.js runtime.
+
+## Outlook `.msg` Files Can Be Uploaded Again
+
+Selecting an Outlook message (`.msg`) in a chat failed, and the browser console showed:
+
+> Error processing file: TypeError: Cannot read properties of undefined (reading 'prototype')
+
+The library that reads `.msg` files needs a component the web app did not ship. It is now included,
+so the subject, sender, recipients and body of the message reach the model again.
