@@ -295,6 +295,42 @@ describe('stageLocalFile', () => {
   });
 });
 
+describe('stageUploadedFile', () => {
+  it('stages the parts multer stored in the upload directory, by field name', async () => {
+    const archive = await buildRelease({ checksums: true, signChecksumsWith: privatePem });
+    const uploadDir = await service.createWorkDir('upload');
+    fs.copyFileSync(archive, path.join(uploadDir, 'archive'));
+    fs.copyFileSync(
+      path.join(path.dirname(archive), 'checksums.sha256'),
+      path.join(uploadDir, 'checksums')
+    );
+    fs.copyFileSync(
+      path.join(path.dirname(archive), 'checksums.sha256.sig'),
+      path.join(uploadDir, 'checksumsSig')
+    );
+    const summary = await service.stageUploadedFile(uploadDir, {
+      archiveName: path.basename(archive),
+      hasChecksums: true,
+      hasChecksumsSig: true
+    });
+    assert.equal(summary.accepted, true, JSON.stringify(summary.problems));
+    assert.equal(summary.source, 'upload');
+    assert.equal(summary.checksum, 'match');
+  });
+
+  it('refuses a directory outside .update-tmp and a name that is not an archive', async () => {
+    await assert.rejects(
+      service.stageUploadedFile(tmp, { archiveName: 'ihub-apps-v2.0.0-linux.tar.gz' }),
+      /No archive was uploaded/
+    );
+    const uploadDir = await service.createWorkDir('upload');
+    await assert.rejects(
+      service.stageUploadedFile(uploadDir, { archiveName: 'notes.txt' }),
+      /Not a release archive/
+    );
+  });
+});
+
 describe('applyUpdate / rollback', () => {
   it('hands the swap to a current launcher and swaps nothing while running', async () => {
     process.env.IHUB_LAUNCHER_PROTOCOL = String(swap.LAUNCHER_PROTOCOL);

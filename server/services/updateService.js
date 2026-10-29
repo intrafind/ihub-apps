@@ -727,32 +727,41 @@ export async function stageLocalFile(requestedPath) {
 }
 
 /**
- * Stage an archive uploaded through the browser (already streamed to disk by
- * the route's multer storage).
+ * Stage an archive uploaded through the browser. The route's multer storage
+ * has streamed the parts into `uploadDir` (made by {@link createWorkDir}),
+ * each under its form field's name; the paths are built here from that
+ * directory, never from what the client sent.
  *
- * @param {{ path: string, originalname: string }} archiveFile
- * @param {{ path: string }|undefined} checksumsFile
- * @param {{ path: string }|undefined} checksumsSigFile
+ * @param {string} uploadDir
+ * @param {{ archiveName: string, hasChecksums?: boolean, hasChecksumsSig?: boolean }} upload
+ *   `archiveName` is the file name the browser reported (metadata only)
  */
-export async function stageUploadedFile(archiveFile, checksumsFile, checksumsSigFile) {
-  if (!archiveFile?.path) throw new UpdateRequestError('No archive was uploaded');
-  const name = basename(String(archiveFile.originalname || ''));
+export async function stageUploadedFile(uploadDir, { archiveName, hasChecksums, hasChecksumsSig }) {
+  const tmpRoot = join(getRootDir(), UPDATE_TMP_DIR);
+  if (typeof uploadDir !== 'string' || !resolve(uploadDir).startsWith(tmpRoot + sep)) {
+    throw new UpdateRequestError('No archive was uploaded');
+  }
+  const name = basename(String(archiveName || ''));
   if (!isAllowedArchiveName(name)) {
     throw new UpdateRequestError(
       `Not a release archive: expected a file ending in ${ARCHIVE_EXTENSIONS.join(', ')}`
     );
   }
+  const part = field => join(resolve(uploadDir), field);
   const small = async file => {
-    if (!file?.path) return null;
-    const { size } = await fs.stat(file.path);
-    return size <= MAX_SIDE_FILE_BYTES ? file.path : null;
+    try {
+      const { size } = await fs.stat(file);
+      return size <= MAX_SIDE_FILE_BYTES ? file : null;
+    } catch {
+      return null;
+    }
   };
   return stageArchive({
-    archivePath: archiveFile.path,
+    archivePath: part('archive'),
     originalName: name,
     source: 'upload',
-    checksumsPath: await small(checksumsFile),
-    checksumsSigPath: await small(checksumsSigFile)
+    checksumsPath: hasChecksums ? await small(part('checksums')) : null,
+    checksumsSigPath: hasChecksumsSig ? await small(part('checksumsSig')) : null
   });
 }
 

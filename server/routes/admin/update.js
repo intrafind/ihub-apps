@@ -222,11 +222,12 @@ export default function registerAdminUpdateRoutes(app) {
     async (req, res) => {
       try {
         const files = req.files || {};
-        const summary = await stageUploadedFile(
-          files.archive?.[0],
-          files.checksums?.[0],
-          files.checksumsSig?.[0]
-        );
+        if (!files.archive?.[0]) throw new UpdateRequestError('No archive was uploaded');
+        const summary = await stageUploadedFile(req.updateUploadDir, {
+          archiveName: files.archive[0].originalname,
+          hasChecksums: Boolean(files.checksums?.[0]),
+          hasChecksumsSig: Boolean(files.checksumsSig?.[0])
+        });
         auditStage(req, summary);
         return sendStageResult(res, summary);
       } catch (error) {
