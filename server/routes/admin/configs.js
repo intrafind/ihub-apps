@@ -422,8 +422,12 @@ export default function registerAdminConfigRoutes(app) {
             await import('../../services/integrations/iAssistantService.js');
           const { default: iFinderService } =
             await import('../../services/integrations/iFinderService.js');
+          const { clearExchangedTokenCache } =
+            await import('../../services/integrations/iFinderTokenProvider.js');
           iAssistantService.resetConfig();
           iFinderService.resetConfig();
+          // Exchanged tokens were issued for the old audience, scopes or provider.
+          clearExchangedTokenCache();
           logger.info('iFinder/iAssistant service caches reset after config change', {
             component: 'AdminConfigs'
           });

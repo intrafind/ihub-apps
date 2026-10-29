@@ -10,7 +10,7 @@
  *
  * @module services/sources/providers/ifinder
  */
-import { getIFinderAuthorizationHeader } from '../../../utils/iFinderJwt.js';
+import iFinderTokenProvider from '../../integrations/iFinderTokenProvider.js';
 import { httpFetch } from '../../../utils/httpConfig.js';
 import logger from '../../../utils/logger.js';
 import iFinderService from '../../integrations/iFinderService.js';
@@ -79,7 +79,7 @@ async function content({ ref, user, format = 'original' }) {
     documentId: ref.id
   });
   const response = await httpFetch(fullUrl, {
-    headers: { Authorization: getIFinderAuthorizationHeader(user) }
+    headers: { Authorization: await iFinderTokenProvider.getAuthorizationHeader(user) }
   });
   if (!response.ok) {
     logger.warn('iFinder document proxy returned non-OK status', {

@@ -9,7 +9,7 @@
  * Base path: /public-api/rag/api/v0
  */
 import { throttledFetch } from '../../requestThrottler.js';
-import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider from './iFinderTokenProvider.js';
 import logger from '../../utils/logger.js';
 
 const BASE_PATH = '/public-api/rag/api/v0';
@@ -25,8 +25,10 @@ class ConversationApiService {
   /**
    * Build standard request headers with JWT auth
    */
-  buildHeaders(user, options = {}) {
-    const authHeader = getIFinderAuthorizationHeader(user, { scope: options.scope });
+  async buildHeaders(user, options = {}) {
+    const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user, {
+      scope: options.scope
+    });
     return {
       'Content-Type': 'application/json',
       Accept: options.accept || 'application/json',
@@ -58,7 +60,7 @@ class ConversationApiService {
     signal
   }) {
     const url = this.buildUrl(baseUrl, '/conversations');
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const conversation = {};
     if (labels) conversation.labels = labels;
@@ -108,7 +110,7 @@ class ConversationApiService {
    */
   async sendMessage(conversationId, { content, parentId, profileId, tools, user, baseUrl }) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}/messages`);
-    const headers = this.buildHeaders(user, { accept: 'text/event-stream' });
+    const headers = await this.buildHeaders(user, { accept: 'text/event-stream' });
 
     const message = { content };
     if (profileId) message.profile_id = profileId;
@@ -144,7 +146,7 @@ class ConversationApiService {
    */
   async getConversation(conversationId, { user, baseUrl }) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}`);
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'GET',
@@ -172,7 +174,7 @@ class ConversationApiService {
     if (nextCursor) path += `&next_cursor=${encodeURIComponent(nextCursor)}`;
 
     const url = this.buildUrl(baseUrl, path);
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'GET',
@@ -192,7 +194,7 @@ class ConversationApiService {
    */
   async deleteConversation(conversationId, { user, baseUrl }) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}`);
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'DELETE',
@@ -212,7 +214,7 @@ class ConversationApiService {
    */
   async deleteMessage(conversationId, messageId, { user, baseUrl }) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}/messages/${messageId}`);
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'DELETE',
@@ -240,7 +242,7 @@ class ConversationApiService {
       baseUrl,
       `/conversations/${conversationId}/messages/${messageId}/feedback`
     );
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const body = { rating };
     if (comment) body.comment = comment;
@@ -267,7 +269,7 @@ class ConversationApiService {
       baseUrl,
       `/conversations/${conversationId}/messages/${messageId}/feedback`
     );
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'DELETE',
@@ -298,7 +300,7 @@ class ConversationApiService {
    */
   async getProfile(profileId, { user, baseUrl, signal }) {
     const url = this.buildUrl(baseUrl, `/profiles/${encodeURIComponent(profileId)}`);
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'GET',
@@ -319,7 +321,7 @@ class ConversationApiService {
    */
   async listProfiles({ user, baseUrl }) {
     const url = this.buildUrl(baseUrl, '/profiles');
-    const headers = this.buildHeaders(user);
+    const headers = await this.buildHeaders(user);
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'GET',

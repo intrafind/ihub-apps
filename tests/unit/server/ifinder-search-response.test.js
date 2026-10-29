@@ -14,9 +14,9 @@ jest.mock('../../../server/requestThrottler.js', () => ({
   throttledFetch: (...args) => mockFetch(...args)
 }));
 
-jest.mock('../../../server/utils/iFinderJwt.js', () => ({
+jest.mock('../../../server/services/integrations/iFinderTokenProvider.js', () => ({
   __esModule: true,
-  getIFinderAuthorizationHeader: jest.fn(() => 'Bearer test-token')
+  default: { getAuthorizationHeader: jest.fn(async () => 'Bearer test-token') }
 }));
 
 jest.mock('../../../server/configCache.js', () => ({
