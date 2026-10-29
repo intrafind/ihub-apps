@@ -617,6 +617,31 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // iFinder / iAssistant. Only the token settings are typed; the rest of the
+    // section passes through. `authMode` picks who issues the iFinder token:
+    // iHub itself (`ihubSigned`, the default) or the OIDC provider iHub shares
+    // with iFinder, by exchanging the user's sign-in token (`oidcTokenExchange`,
+    // services/integrations/iFinderTokenProvider.js). `scopeMap` maps the
+    // iHub-side scopes (`fa_index_read`, `fa_iassistant`, ...) to the provider's
+    // scope strings; an empty value passes the scope through unchanged.
+    iFinder: z
+      .object({
+        authMode: z.enum(['ihubSigned', 'oidcTokenExchange']).prefault('ihubSigned'),
+        tokenExchange: z
+          .object({
+            oidcProvider: z.string().prefault(''),
+            grantType: z.enum(['tokenExchange', 'entraObo']).prefault('tokenExchange'),
+            clientId: z.string().prefault(''),
+            clientSecretRef: z.string().prefault(''),
+            audience: z.string().prefault(''),
+            scopeMap: z.record(z.string(), z.string()).prefault({}),
+            extraScopes: z.array(z.string()).prefault([])
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .optional(),
     // Projects (#1036): the one container for documents, instructions and
     // chats. `tierPolicy` is validated and shown but only `ihub` is active in
     // this version. `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`

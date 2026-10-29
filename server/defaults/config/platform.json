@@ -331,7 +331,20 @@
     "audience": "ifinder-api",
     "tokenExpirationSeconds": 3600,
     "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email"
+    "jwtSubjectField": "email",
+    "authMode": "ihubSigned",
+    "tokenExchange": {
+      "oidcProvider": "",
+      "grantType": "tokenExchange",
+      "clientId": "",
+      "clientSecretRef": "",
+      "audience": "",
+      "scopeMap": {
+        "fa_index_read": "",
+        "fa_iassistant": ""
+      },
+      "extraScopes": []
+    }
   },
   "iAssistant": {
     "defaultProfileId": "",
