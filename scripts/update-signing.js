@@ -84,7 +84,8 @@ function highestMigration(dir) {
 
 export async function writeManifest(dir, { platform, arch } = {}) {
   const files = {};
-  for (const rel of (await listFiles(dir)).sort()) {
+  // Code-point order, independent of locale: the manifest must be byte-identical on every runner.
+  for (const rel of (await listFiles(dir)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (rel === MANIFEST_FILE || rel === MANIFEST_FILE + SIGNATURE_SUFFIX) continue;
     files[rel] = await sha256(path.join(dir, rel));
   }

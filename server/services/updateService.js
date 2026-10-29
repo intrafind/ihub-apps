@@ -812,7 +812,7 @@ export function parseChecksums(text) {
  * @returns {'match'|'mismatch'|'not-listed'|'missing'}
  */
 export function evaluateChecksum(checksumsText, fileName, hashes) {
-  if (checksumsText === null || checksumsText === undefined) return 'missing';
+  if (typeof checksumsText !== 'string') return 'missing';
   const entries = parseChecksums(checksumsText);
   if (entries.some(entry => hashes.includes(entry.hash))) return 'match';
   if (entries.some(entry => entry.name === fileName)) return 'mismatch';
@@ -1289,7 +1289,13 @@ export async function evaluateStaged({
   if (problems.length === 0 && trusted) {
     const nodeBinary = join(stagingDir, swap.nodeBinaryName(currentPlatform));
     if (existsSync(nodeBinary)) {
-      if (currentPlatform !== 'windows') await fs.chmod(nodeBinary, 0o755).catch(() => {});
+      if (currentPlatform !== 'windows') {
+        try {
+          swap.makeExecutable(nodeBinary);
+        } catch {
+          // the probe below reports a binary that cannot run
+        }
+      }
       try {
         const { stdout } = await execFileAsync(nodeBinary, ['--version'], { timeout: 20_000 });
         nodeVersion = stdout.trim() || nodeVersion;

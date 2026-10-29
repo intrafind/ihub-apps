@@ -189,6 +189,23 @@ describe('swapInStaged / restoreBackup', () => {
   });
 });
 
+describe('makeExecutable', () => {
+  it('adds the execute bit only where the file is readable', t => {
+    if (process.platform === 'win32') return t.skip('no POSIX modes');
+    const file = path.join(root, 'bin');
+    for (const [before, after] of [
+      [0o644, 0o755],
+      [0o640, 0o750],
+      [0o600, 0o700]
+    ]) {
+      fs.writeFileSync(file, 'x');
+      fs.chmodSync(file, before);
+      swap.makeExecutable(file);
+      assert.equal(fs.statSync(file).mode & 0o777, after);
+    }
+  });
+});
+
 describe('swap on start (launcher)', () => {
   function requestUpdate() {
     const backupDir = swap.prepareBackupDir(root, { version: '1.0.0', targetVersion: '2.0.0' });

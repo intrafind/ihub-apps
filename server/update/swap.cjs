@@ -125,6 +125,16 @@ function renameWithRetry(from, to, attempts = 6) {
   }
 }
 
+/**
+ * Add the execute bit wherever the file is readable (`chmod +X` for a file),
+ * so the update never grants more than the file's owner, group and others
+ * could already read.
+ */
+function makeExecutable(file) {
+  const { mode } = fs.statSync(file);
+  fs.chmodSync(file, (mode & 0o7777) | ((mode & 0o444) >> 2));
+}
+
 function readJson(file) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -220,7 +230,7 @@ function swapInStaged(rootDir, { backupDir, stagingDir, platform } = {}) {
       for (const executable of [nodeBinaryName(plat), newLauncher]) {
         if (!executable) continue;
         const file = path.join(rootDir, executable);
-        if (fs.existsSync(file)) fs.chmodSync(file, 0o755);
+        if (fs.existsSync(file)) makeExecutable(file);
       }
     }
 
@@ -283,7 +293,7 @@ function restoreBackup(rootDir, backupDir, { platform, contentsDir, restoreConfi
         move(path.join(rootDir, currentLauncher), path.join(displacedDir, currentLauncher));
       }
       move(path.join(backupDir, backupLauncher), path.join(rootDir, backupLauncher));
-      if (plat !== 'windows') fs.chmodSync(path.join(rootDir, backupLauncher), 0o755);
+      if (plat !== 'windows') makeExecutable(path.join(rootDir, backupLauncher));
     }
   } catch (error) {
     for (const [from, to] of moves.reverse()) {
@@ -650,6 +660,7 @@ module.exports = {
   LAUNCHER_SCRIPT_PATTERN,
   getReplacePaths,
   detectPlatform,
+  makeExecutable,
   nodeBinaryName,
   safeVersionDir,
   readVersion,
