@@ -165,6 +165,13 @@ describe('what iFinder answers, as the capability call reads it', () => {
     }
   });
 
+  it('reads a 204 without a body as no collections, not as a failure', async () => {
+    // The webapp answers 204 when the utilities service sent no body.
+    mock.state.collectionsStatus = 204;
+    await service.probe({ user: ADA });
+    assert.deepEqual(await service.list({ user: ADA }), { collections: [], truncated: false });
+  });
+
   it('reads 403 as a missing role and 401 as a token iFinder refuses', async () => {
     mock.state.collectionsStatus = 403;
     await assert.rejects(

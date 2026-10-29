@@ -157,7 +157,7 @@ class SmartCollectionsService {
    * @param {Object} [params.query] - Query parameters.
    * @param {AbortSignal} [params.signal]
    * @param {number} [params.timeoutMs]
-   * @returns {Promise<Object>} The parsed JSON body.
+   * @returns {Promise<Object|null>} The parsed JSON body, null for a 204.
    * @throws {SmartCollectionsError}
    */
   async _get({ user, suffix = '', query = {}, signal, timeoutMs = GET_TIMEOUT_MS }) {
@@ -215,6 +215,9 @@ class SmartCollectionsService {
                 : SMART_COLLECTIONS_ERRORS.UNAVAILABLE;
       throw new SmartCollectionsError(code, `iFinder answered ${status}`, { status });
     }
+    // 204 is how the webapp answers when the utilities service sent no body:
+    // nothing to read, not a failure.
+    if (response.status === 204) return null;
     try {
       return await response.json();
     } catch (error) {
