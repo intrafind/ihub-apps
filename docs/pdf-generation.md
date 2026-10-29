@@ -1,9 +1,11 @@
-# PDF Generation and System Skills
+# Document Generation (PDF, Word, PowerPoint) and System Skills
 
-iHub generates PDF files on the server, without Python and without a browser. The same engine serves two purposes:
+iHub generates PDF files, Word documents and PowerPoint presentations on the server, without Python, Office or a browser. The engines serve two purposes:
 
-1. **On demand by the model.** The **`pdf` system skill** lets the model create a PDF document in a chat — a report, an invoice, a letter, a one-pager. The user gets a download card below the answer.
+1. **On demand by the model.** The **`pdf`**, **`docx`** and **`pptx` system skills** let the model create a document in a chat — a report, an invoice, a letter, a proposal, a slide deck. The user gets a download card below the answer.
 2. **Exports.** Chat export, the Markdown download menus (workflow output) and agent artifacts produce a real `.pdf` file. They used to open the browser's print dialog, which printed blank pages in the Outlook task pane, the browser extension and some browsers.
+
+All three formats follow the company's **[document template](document-templates.md)**: colours, fonts, logo, letterhead, and the company's own Word and PowerPoint templates.
 
 ## System skills
 
@@ -31,12 +33,22 @@ The shipped system skills:
 | Skill | Tools | Purpose |
 |---|---|---|
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
+| `docx` | `create_docx` | Create editable Word documents on request |
+| `pptx` | `create_pptx` | Create PowerPoint presentations on request |
 
-Further system skills for Word, PowerPoint and Excel documents are planned on the same infrastructure.
+A system skill for Excel workbooks is planned on the same infrastructure.
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`) are offered under the same condition.
+
+### Document templates and the tools
+
+The document tools follow the app's [document template](document-templates.md):
+
+- When the app **pins** a template, the tools do not offer the colour, theme and font parameters, and their description tells the model that the corporate design is applied automatically.
+- Otherwise, when templates exist, the tools offer a `template` parameter: `default` (the default template, or the built-in design) or one of the enabled templates. The skills tell the model to keep `default` unless the user asks for another one.
+- Where a template sets something, it wins over the model's arguments.
 
 ## The `pdf` skill
 
@@ -69,6 +81,8 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 - `references/layout-blocks.md`: the full block grammar.
 - `references/examples.md`: complete report, invoice, letter and one-pager.
 
+- **GitHub alerts** (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) become coloured callouts, as in Word documents.
+
 ### What it cannot do (yet)
 
 - **Edit, merge, split, fill in or extract from PDFs the user uploaded.** Uploaded documents are converted to text in the browser, so the server never has the original file. The skill tells the user so and offers to create a new document instead.
@@ -77,7 +91,43 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
   - Anything the fonts cannot draw is left out, and the tool reports it as a warning.
 - **Remote images.** Images must be inline `data:` URIs. The renderer never fetches URLs.
 
-### Generated files
+## The `docx` skill
+
+`create_docx` turns **Markdown** into an editable Word document:
+
+- Markdown headings become Word headings (Heading 1–6), so the navigation pane and the table of contents work and the user can restyle the document.
+- Bulleted, numbered (each list restarts at 1) and task lists, GFM tables with column alignment and a repeated header row, code blocks, quotes, GitHub alerts as shaded callouts, horizontal rules, page breaks (`\pagebreak`), links, `<sub>`/`<sup>`, and PNG/JPEG images as `data:` URIs.
+- Document settings: title, subtitle, author, language, cover page, table of contents (updated by Word when the file is opened), header, footer, page numbers, page size and orientation; without a document template also a primary colour and body font.
+- With a document template, the brand's styles, logo, header and footer — or the company's Word template, which the content is merged into (see [Document templates](document-templates.md#word)).
+
+Not supported: footnotes, comments, tracked changes and charts (the skill suggests a table, a PDF or a presentation instead).
+
+Enable it like the `pdf` skill: add `docx` to the app's skills.
+
+## The `pptx` skill
+
+`create_pptx` builds a presentation from a list of slides, passed as JSON text (`slides`):
+
+| Field | Use |
+|---|---|
+| `layout` | `title`, `section`, `content` (default), `two-column`, `title-only`, `blank` |
+| `title`, `subtitle` | Slide title; subtitle on title and section slides |
+| `text` | Markdown: bullets, sub-bullets, numbered steps, short paragraphs, bold and italic |
+| `table` | `{ "header": […], "rows": [[…]], "align": ["left", "right"] }` |
+| `chart` | `{ "type": "column" \| "bar" \| "line" \| "area" \| "pie" \| "doughnut", "categories": […], "series": [{ "name", "values" }], "stacked", "showValues", "numberFormat", "title" }` |
+| `image` | `{ "data": "data:image/png;base64,…", "caption" }` |
+| `left`, `right` | Two-column slides: each `{ heading, text, table, chart, image }` |
+| `notes` | Speaker notes |
+
+- Slides are placed on the template's **layouts and placeholders** — the company's PowerPoint template, or iHub's built-in master made from the brand (see [Document templates](document-templates.md#powerpoint)).
+- Text with a table, chart or picture on one slide is placed side by side.
+- **Charts are native PowerPoint charts** with their data in an embedded workbook, so users can edit them; they use the theme's accent colours.
+- Text that would overflow is shrunk (as PowerPoint's "shrink text on overflow"), and the tool warns the model when a slide is overloaded, a table was cut or an image was skipped.
+- Limits: 60 slides, 30 table rows and 12 columns per slide, 12 chart series with 60 categories, 15 MB of images.
+
+There is no slide preview for the model: rendering slides would need Office or LibreOffice on the server.
+
+## Generated files
 
 A file the model created takes the path a generated picture takes. There is no download route of its own:
 
@@ -88,6 +138,7 @@ A file the model created takes the path a generated picture takes. There is no d
   - 25 MB per file.
   - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
 - **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
+- **Types:** PDF, Word (`.docx`) and PowerPoint (`.pptx`). The card shows the page or slide count while the answer is on screen.
 
 ## Server-side PDF export
 
@@ -98,7 +149,7 @@ A file the model created takes the path a generated picture takes. There is no d
 | `chat` | `messages` (`role`, `content`, `timestamp`), `settings`, `title`, `appName`, `appId`, `template`, `watermark`, `language`, `timeZone`, `filename` | Chat export dialog, single-message download |
 | `markdown` | `markdown`, `title`, `template`, `language`, `filename` | Workflow output download menu, agent artifact downloads |
 
-- **Templates:** `default`, `professional` and `minimal`, the same names the export dialog has always offered.
+- **Templates:** the [document templates](document-templates.md) (listed in the dialog as **Company templates**, the default one preselected), and the built-in `default`, `professional` and `minimal` designs. An app that pins a document template always exports with it.
 - **Watermark:** a small label at the bottom left, centre or right of every page, with the chosen opacity.
 - **Defaults:** [`platform.pdfExport`](platform.md#pdfexport) supplies the export dialog's default template and watermark, and the server's default when a request sends none.
 - **Access:**
@@ -120,10 +171,11 @@ The PDF export is the base the planned signed exports build on (EU AI Act conten
   - A first heading that only repeats the printed title is left out, so the title is not printed twice. With a cover page or a table of contents the title is not above the body, and the heading stays.
   - Horizontal rules (`---`) at the start or end of the body, doubled rules, and rules next to a heading that draws its own rule are left out.
   - A heading never ends a page. It moves to the next page when fewer than two lines of what follows it would stay with it. Every such move lays the document out again, so a very long document gets fewer of them.
-- **Isolation:** each document is laid out and rendered in its own **worker thread**:
+- **Word and PowerPoint:** the [docx](https://docx.js.org/) library writes Word documents; presentations are written as PresentationML into the template package, with [pptxgenjs](https://gitbrent.github.io/PptxGenJS/) creating the chart parts. Every result is unpacked and every XML part parsed again before it is handed out.
+- **Isolation:** each document (PDF, Word or PowerPoint) is laid out and rendered in its own **worker thread**:
   - 45-second time budget (90 seconds for exports)
   - 512 MB memory cap
-  - at most two documents at once per server process, and up to 20 waiting
+  - at most two documents at once per server process (all formats together), and up to 20 waiting
   - A pathological layout fails with an error; it never blocks the server.
 - **Untrusted layouts:** model-authored layout blocks pass an allowlist sanitiser.
   - Every node type and property is checked; unknown ones are dropped with a warning.
@@ -136,5 +188,6 @@ The PDF export is the base the planned signed exports build on (EU AI Act conten
 ## Adding a system skill (developers)
 
 1. Create `server/systemSkills/<name>/SKILL.md` (frontmatter `name`, `description`, `allowed-tools`), plus `references/` as needed.
-2. Define the tools as plain data (compare `server/services/documents/pdf/pdfToolDefinitions.js`) and register them in `server/services/systemSkillTools.js`, with a handler that is loaded when the tool runs.
-3. A tool that produces a file holds it with `holdGeneratedFile()` (`server/services/documents/generatedFiles.js`) and returns the descriptor in `files`. The chat streams the bytes to the download card and stores the file as a `document` artifact with the answer. Add the file's media type to `GENERATED_FILE_TYPES`, to `shared/generatedFiles.js` and, if it is new, to the `document` kind in `server/services/artifacts/artifactPolicy.js`.
+2. Define the tools as plain data (compare `server/services/documents/pdf/pdfToolDefinitions.js`) and register them in `server/services/systemSkillTools.js`, with a handler that is loaded when the tool runs. A tool that renders in a document template sets `usesDocumentTemplate: true` and lists its `brandParameters`, which are dropped when an app pins a template.
+3. Render in the worker: add the format to `server/services/documents/documentWorker.js` and call `renderInWorker(format, { spec, assets })` (`server/services/documents/renderService.js`).
+4. A tool that produces a file holds it with `holdGeneratedFile()` (`server/services/documents/generatedFiles.js`) and returns the descriptor in `files`. The chat streams the bytes to the download card and stores the file as a `document` artifact with the answer. Add the file's media type to `GENERATED_FILE_TYPES`, to `shared/generatedFiles.js` and, if it is new, to the `document` kind in `server/services/artifacts/artifactPolicy.js`.

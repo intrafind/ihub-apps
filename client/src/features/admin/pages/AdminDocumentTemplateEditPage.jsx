@@ -71,7 +71,7 @@ function Field({ label, help, error, children }) {
   );
 }
 
-function ColorField({ label, value, onChange, error }) {
+function ColorField({ label, value, onChange, error, placeholder }) {
   return (
     <Field label={label} error={error}>
       {id => (
@@ -87,7 +87,7 @@ function ColorField({ label, value, onChange, error }) {
             id={id}
             className={`${INPUT_CLASS} font-mono`}
             value={value || ''}
-            placeholder="#e30613"
+            placeholder={placeholder}
             onChange={event => onChange(event.target.value)}
           />
         </div>
@@ -436,18 +436,21 @@ export default function AdminDocumentTemplateEditPage() {
                   label={t('admin.documentTemplates.edit.primaryColor', 'Primary colour')}
                   value={draft.brand.primaryColor}
                   onChange={value => update('brand', 'primaryColor', value)}
+                  placeholder="#e30613"
                   error={errors.primaryColor}
                 />
                 <ColorField
                   label={t('admin.documentTemplates.edit.accentColor', 'Accent colour')}
                   value={draft.brand.accentColor}
                   onChange={value => update('brand', 'accentColor', value)}
+                  placeholder="#374151"
                   error={errors.accentColor}
                 />
                 <ColorField
                   label={t('admin.documentTemplates.edit.textColor', 'Text colour')}
                   value={draft.brand.textColor}
                   onChange={value => update('brand', 'textColor', value)}
+                  placeholder="#1f2937"
                   error={errors.textColor}
                 />
               </div>

@@ -547,6 +547,7 @@ Each app is defined with the following essential properties:
 | `customResponseRenderer`| String  | Optional. Name of a custom renderer component used to display the AI response instead of the default markdown renderer  |
 | `skills`                | Array   | Optional. Array of skill identifiers (strings) that are available for this app. Skills extend app capabilities with reusable AI behaviors |
 | `skillSettings`         | Object  | Optional. Controls how skills behave. See [Skill Settings](#skill-settings) below                                        |
+| `documentTemplate`      | String  | Optional. Id of the [document template](document-templates.md) (corporate design) every PDF, Word and PowerPoint file of this app uses — documents the `pdf`, `docx` and `pptx` skills create and the chat's PDF export. Without it, the default template applies |
 | `iassistant`            | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below |
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
@@ -1083,6 +1084,14 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
 | `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out |
 | `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Applies only when `skillSettings.enabled` is `true`. Set `false` to allow only the global skills listed in `skills` |
+
+**Documents in the corporate design:** the system skills `pdf`, `docx` and `pptx` create PDF, Word and PowerPoint files. Set `documentTemplate` to fix the [document template](document-templates.md) they use in this app:
+
+```json
+"skills": ["pdf", "docx", "pptx"],
+"skillSettings": { "enabled": true },
+"documentTemplate": "acme"
+```
 
 A skill is only ever loaded for an app that sets `skillSettings.enabled: true`. A global skill is loaded then when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; an app with skills enabled offers them unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
 

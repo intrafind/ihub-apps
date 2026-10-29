@@ -349,7 +349,7 @@ For backward compatibility, configurations without the `variables` field will co
 ### **pdfExport**
 Defaults for PDF exports. PDFs are rendered on the server (see [PDF Generation & System Skills](pdf-generation.md#server-side-pdf-export)); chat PDF export requires the `export` feature flag.
 
-- **defaultTemplate** (string) – Template the export dialog starts with: `"default"`, `"professional"` or `"minimal"`. Default: `"default"`
+- **defaultTemplate** (string) – Built-in design the export dialog starts with: `"default"`, `"professional"` or `"minimal"`. Default: `"default"`. A [document template](document-templates.md) marked as default, or the one an app pins, takes precedence
 - **watermark** (object) – The export dialog's default watermark, also applied when a request sends none
   - **enabled** (boolean) – Start with a watermark (`false` starts with an empty text)
   - **text** (string) – Watermark text
