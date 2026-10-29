@@ -61,22 +61,31 @@ function getDelay(id = 'default') {
  * used by the OpenAPI tool runner — while still honoring per-tool
  * concurrency/requestDelayMs limits.
  *
+ * Limits come from the model or tool config of that id. A caller whose limits
+ * live elsewhere (a people directory's `concurrency` and `requestDelayMs`)
+ * passes them explicitly; they then apply instead of the config lookup.
+ *
  * @param {string} id - Resource identifier (model id, tool id, or 'default')
  * @param {() => Promise<any>} fn - Work to run inside the throttle slot
+ * @param {{concurrency?: number, delayMs?: number}} [limits] - Explicit limits for this id
  * @returns {Promise<any>} Resolves/rejects with fn's result
  */
-export function throttledRun(id = 'default', fn) {
-  const limit = getConcurrency(id);
-  const delayMs = getDelay(id);
+export function throttledRun(id = 'default', fn, limits = null) {
+  const concurrencyOf = limits ? () => normalizeLimit(limits.concurrency) : getConcurrency;
+  const delayOf = limits
+    ? () => (typeof limits.delayMs === 'number' && limits.delayMs > 0 ? limits.delayMs : 0)
+    : getDelay;
+  const limit = concurrencyOf(id);
+  const delayMs = delayOf(id);
   // Nothing to enforce: no queue, no bookkeeping, no round trip.
   if (limit === Infinity && !(delayMs > 0)) return Promise.resolve().then(fn);
   if (isClusterBusActive() && !cluster.isPrimary) {
-    return clusterThrottledRun(id, limit, delayMs, fn);
+    return clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayOf);
   }
-  return localThrottledRun(id, fn);
+  return localThrottledRun(id, fn, concurrencyOf, delayOf);
 }
 
-function localThrottledRun(id, fn) {
+function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = getDelay) {
   if (!queues.has(id)) {
     queues.set(id, []);
     actives.set(id, 0);
@@ -88,7 +97,7 @@ function localThrottledRun(id, fn) {
     const execute = async () => {
       actives.set(id, actives.get(id) + 1);
       try {
-        const delay = getDelay(id);
+        const delay = delayOf(id);
         const lastTime = lastCompleted.get(id) || 0;
         const wait = Math.max(0, delay - (Date.now() - lastTime));
         if (wait > 0) {
@@ -109,7 +118,7 @@ function localThrottledRun(id, fn) {
       }
     };
 
-    if (actives.get(id) < getConcurrency(id)) {
+    if (actives.get(id) < concurrencyOf(id)) {
       void execute();
     } else {
       // The request had to wait for a slot - that's a throttler hit. We use
@@ -138,7 +147,7 @@ const RELEASE_TIMEOUT_MS = 1500;
 
 let nextTicket = 1;
 
-async function clusterThrottledRun(id, limit, delayMs, fn) {
+async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayOf) {
   const ticket = `${process.pid}:${nextTicket++}`;
   const grant = await request(
     ACQUIRE_CHANNEL,
@@ -153,7 +162,7 @@ async function clusterThrottledRun(id, limit, delayMs, fn) {
       component: 'RequestThrottler',
       id
     });
-    return localThrottledRun(id, fn);
+    return localThrottledRun(id, fn, concurrencyOf, delayOf);
   }
   if (grant.queued) recordRateLimitHit('llm', id);
   try {

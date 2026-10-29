@@ -737,6 +737,38 @@ export class ConfigStore {
   }
 
   /**
+   * The names of the text files with one extension in a directory under
+   * `contents/` (the certificate store's `config/certs/*.pem`), on the
+   * contained path like {@link ConfigStore#readText}. Names that are not
+   * usable ids are left out, so every name returned can be read back.
+   *
+   * @param {string} dir - Directory relative to `contents/`
+   * @param {string} extension - File extension including the dot, e.g. `.pem`
+   * @returns {Promise<string[]>} Names without the extension, ascending; empty
+   *   when the directory does not exist
+   */
+  async listTextFiles(dir, extension) {
+    let entries;
+    try {
+      entries = await fs.readdir(await resolveConfigPath(dir), { withFileTypes: true });
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+        logger.error('Unable to list configuration directory', {
+          component: COMPONENT,
+          dir,
+          error: error.message
+        });
+      }
+      return [];
+    }
+    return entries
+      .filter(entry => entry.isFile() && entry.name.endsWith(extension))
+      .map(entry => entry.name.slice(0, -extension.length))
+      .filter(name => isValidId(name))
+      .sort();
+  }
+
+  /**
    * Delete a configuration file.
    *
    * @param {string} relPath - Path relative to `contents/`

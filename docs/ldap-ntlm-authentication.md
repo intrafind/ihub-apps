@@ -170,6 +170,13 @@ curl -X POST https://ihub.example.com/api/admin/auth/ldap/_test \
   -d '{"providerName": "corporate-ldap", "username": "jdoe"}'
 ```
 
+### Searching the Directory in Chat
+
+A configured provider can also serve **people search** in the chat: **Use for
+people search** on the provider creates a people directory that reuses its URL,
+base DN, preset and bind account. Searching needs a bind account, since iHub
+never keeps users' passwords. See [People Directory Search](people-directory-search.md).
+
 ### Configuration Options
 
 | Option                     | Description                                          | Required | Default                                              |

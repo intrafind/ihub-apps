@@ -29,6 +29,7 @@ import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
+import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
 
 // Re-exported under the name it has always had here: `telemetry.js` and the
@@ -384,6 +385,10 @@ const CONFIG_LOADERS = {
   'config/a2aAgents.json': {
     label: 'A2A agents',
     count: data => (data.agents || []).length
+  },
+  'config/peopleDirectories.json': {
+    label: 'people directories',
+    count: data => (data.directories || []).length
   }
 };
 
@@ -460,6 +465,7 @@ class ConfigCache {
       'config/installations.json',
       'config/mcpServers.json',
       'config/a2aAgents.json',
+      'config/peopleDirectories.json',
       'config/credentials.json',
       'config/agents.json',
       // Alongside users.json, and for the same reason: `loadOAuthClients` is a
@@ -1542,6 +1548,21 @@ class ConfigCache {
   }
 
   /**
+   * Get the people directories (`contents/config/peopleDirectories.json`).
+   * The file is validated when an admin saves it; a hand-edited entry is
+   * checked again when its tools are built (see
+   * services/peopleDirectory/PeopleDirectoryService.js).
+   * @returns {{ data: { directories: Array }, etag: string|null }}
+   */
+  getPeopleDirectories() {
+    const cached = this.get('config/peopleDirectories.json');
+    if (!cached || !cached.data) {
+      return { data: { directories: [] }, etag: null };
+    }
+    return cached;
+  }
+
+  /**
    * Refresh registries cache from disk.
    * Should be called when registries are added, updated, or removed.
    * @returns {Promise<boolean>} True on success, false on failure
@@ -1774,6 +1795,17 @@ class ConfigCache {
 
     const originalToolsCount = tools.length;
     let userSpecificEtag = toolsEtag || 'no-etag';
+    // People directory tools come from peopleDirectories.json, which the tools
+    // ETag does not cover: a renamed or re-enabled directory must not be
+    // answered with a 304 for the old list.
+    const { etag: directoriesEtag } = this.getPeopleDirectories();
+    if (directoriesEtag) {
+      const directoriesHash = createHash('md5')
+        .update(String(directoriesEtag))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = etagWithSuffix(userSpecificEtag, `d${directoriesHash}`);
+    }
 
     // Apply filtering based on user permissions
     let allowedTools = null;
@@ -1804,6 +1836,9 @@ class ConfigCache {
       tools = tools.filter(tool => granted.has(tool) || isToolSelected(tool, appToolRefs));
     }
 
+    // A people directory's own `groups` hold on top of every grant, `*` included.
+    tools = filterDirectoryToolsForUser(tools, user);
+
     // Generate user-specific ETag if tools were filtered
     if (tools.length < originalToolsCount) {
       const toolIds = tools.map(tool => tool.id).sort();
@@ -1811,7 +1846,7 @@ class ConfigCache {
         .update(JSON.stringify(toolIds))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = `${toolsEtag}-${contentHash}`;
+      userSpecificEtag = etagWithSuffix(userSpecificEtag, contentHash);
     }
 
     return { data: tools, etag: userSpecificEtag };

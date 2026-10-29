@@ -9,6 +9,11 @@ import {
 import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadConfiguredTools, runTool } from '../../toolLoader.js';
+import {
+  discoverPeopleDirectoryTools,
+  filterDirectoryToolsForUser,
+  mayUseDirectory
+} from '../peopleDirectory/PeopleDirectoryService.js';
 import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
@@ -228,7 +233,7 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   // Likewise for skills of remote A2A agents (#2546): iHub is their client,
   // not a proxy that hands its agent credentials to inbound callers.
   if (tool._a2a) return false;
-  return toolVisibleInSet(tool.id, visibleToolIds);
+  return toolVisibleInSet(tool.id, visibleToolIds, undefined, undefined, tool._peopleDirectory?.id);
 }
 
 function isAppAllowed(app, user, expose) {
@@ -290,7 +295,17 @@ export async function buildMcpServer({ user, platform }) {
   // never re-proxies another server's tools to inbound callers.
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
     const visibleToolIds = await getVisibleToolIds(user, platform);
-    const tools = await loadConfiguredTools(platform?.defaultLanguage || 'en');
+    const language = platform?.defaultLanguage || 'en';
+    const configuredTools = await loadConfiguredTools(language);
+    // People directory tools are iHub's own (its connection, not a proxied
+    // server's), offered to callers in the directory's groups.
+    const tools = [
+      ...configuredTools,
+      ...filterDirectoryToolsForUser(
+        discoverPeopleDirectoryTools({ language, otherTools: configuredTools }),
+        user
+      )
+    ];
     for (const tool of tools) {
       if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
       registerTool(
@@ -305,7 +320,16 @@ export async function buildMcpServer({ user, platform }) {
           }
           // Re-check visibility at call time so a permission change between
           // list and call can't be exploited.
-          if (!toolVisibleInSet(tool.id, visibleToolIds)) {
+          if (
+            !toolVisibleInSet(
+              tool.id,
+              visibleToolIds,
+              undefined,
+              undefined,
+              tool._peopleDirectory?.id
+            ) ||
+            (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id))
+          ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
           try {

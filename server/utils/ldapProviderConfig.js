@@ -46,6 +46,26 @@ export const LDAP_PRESETS = {
       id: ['uid', 'sAMAccountName', 'cn'],
       name: ['displayName', 'cn', 'name'],
       email: ['mail', 'email']
+    },
+    // People directory search (`services/peopleDirectory/presets.js`). Mapping
+    // sources: an attribute, `dn:<type>` for a component of the entry's DN, or
+    // space-joined attributes whose values are joined with a space.
+    search: {
+      personFilter: '(objectClass=inetOrgPerson)',
+      searchAttributes: ['cn', 'sn', 'givenName', 'displayName', 'mail', 'uid'],
+      attributeMapping: {
+        name: ['displayName', 'givenName sn', 'cn'],
+        firstName: ['givenName'],
+        lastName: ['sn'],
+        jobTitle: ['title'],
+        department: ['ou', 'departmentNumber'],
+        organization: ['o'],
+        location: ['l', 'physicalDeliveryOfficeName'],
+        email: ['mail'],
+        phone: ['telephoneNumber'],
+        fax: ['facsimileTelephoneNumber'],
+        mobile: ['mobile']
+      }
     }
   },
   activeDirectory: {
@@ -59,6 +79,27 @@ export const LDAP_PRESETS = {
       id: ['sAMAccountName', 'uid', 'cn'],
       name: ['displayName', 'cn', 'name'],
       email: ['mail', 'userPrincipalName']
+    },
+    search: {
+      // Enabled user accounts only: bit 2 of userAccountControl marks a
+      // disabled account.
+      personFilter:
+        '(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
+      searchAttributes: ['cn', 'sn', 'givenName', 'displayName', 'mail', 'sAMAccountName'],
+      attributeMapping: {
+        name: ['displayName', 'givenName sn', 'cn'],
+        firstName: ['givenName'],
+        lastName: ['sn'],
+        jobTitle: ['title'],
+        department: ['department'],
+        organization: ['company'],
+        location: ['physicalDeliveryOfficeName', 'l'],
+        email: ['mail'],
+        phone: ['telephoneNumber'],
+        fax: ['facsimileTelephoneNumber'],
+        mobile: ['mobile'],
+        managerId: ['manager']
+      }
     }
   }
 };
@@ -113,7 +154,7 @@ export function usesStartTls(provider = {}) {
  * @param {Object} [tlsOptions] - Provider `tlsOptions`
  * @returns {Object} TLS options for `startTLS()`
  */
-function buildStartTlsOptions(url, tlsOptions = {}) {
+export function buildStartTlsOptions(url, tlsOptions = {}) {
   let hostname = '';
   try {
     hostname = new URL(trimmed(url)).hostname.replace(/^\[|\]$/g, '');
