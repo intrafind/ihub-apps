@@ -27,6 +27,7 @@ import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
+import { areAppIntegrationsEnabled } from './integrationRegistry.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
@@ -1024,17 +1025,21 @@ class ConfigCache {
       return apps;
     }
 
-    // Only enabled apps whose required features are all on. The ETag changes
-    // with the apps a feature hides: features.json has its own ETag, and a
-    // client holding the old list must not get a 304 once the feature flips.
+    // Only enabled apps whose required features and integrations are all on.
+    // The ETag changes with the apps they hide: features.json and platform.json
+    // have their own ETags, and a client holding the old list must not get a
+    // 304 once a feature or an integration flips.
     const features = this.getFeatures();
+    const platform = this.get('config/platform.json')?.data || {};
+    const isAvailable = app =>
+      areAppFeaturesEnabled(app, features) && areAppIntegrationsEnabled(app, platform);
     const enabled = apps.data.filter(app => app.enabled !== false);
-    const available = enabled.filter(app => areAppFeaturesEnabled(app, features));
+    const available = enabled.filter(isAvailable);
     if (available.length === enabled.length) {
       return { data: available, etag: apps.etag };
     }
     const hiddenIds = enabled
-      .filter(app => !areAppFeaturesEnabled(app, features))
+      .filter(app => !isAvailable(app))
       .map(app => app.id)
       .sort();
     const hiddenHash = createHash('md5')

@@ -476,6 +476,7 @@ These optional fields work for all app types:
 | `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
 | `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
+| `requiredIntegrations` | Array | - | Integrations (Admin → Integrations) the app needs. Currently `["ifinder"]`: while the iFinder integration is off, users do not get the app, exactly like `requiredFeatures`. The shipped `iassistant` and `ifinder-search` apps use it |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -531,6 +532,7 @@ Each app is defined with the following essential properties:
 | `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `requiredFeatures`      | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled |
+| `requiredIntegrations`  | Array   | Optional. Integrations the app needs (`["ifinder"]`). While one is off, users do not get the app, as if it were disabled |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
 | `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |

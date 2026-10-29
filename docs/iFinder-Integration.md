@@ -429,7 +429,7 @@ Here are the 3 most recent contracts:
 
 ### iFinder Search App
 
-The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships disabled — enable it under **Admin > Apps** once iFinder is configured.
+The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled but requires the iFinder integration (`requiredIntegrations: ["ifinder"]`): users see the app only while **Admin > Integrations > iFinder** is switched on.
 
 It handles two kinds of requests:
 

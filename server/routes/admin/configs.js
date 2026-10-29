@@ -13,6 +13,7 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { enableAssistantModelOnIFinderSetup } from '../../services/integrations/iAssistantModelActivation.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
@@ -428,6 +429,25 @@ export default function registerAdminConfigRoutes(app) {
           });
         } catch (error) {
           logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error });
+        }
+
+        try {
+          if (
+            await enableAssistantModelOnIFinderSetup(existingConfig.iFinder, mergedConfig.iFinder)
+          ) {
+            await logAudit({
+              req,
+              action: 'toggle',
+              resource: 'model',
+              resourceId: 'iassistant-conversation',
+              summary: 'Enabled model iassistant-conversation after iFinder setup'
+            });
+          }
+        } catch (error) {
+          logger.warn('Could not enable the iAssistant conversation model', {
+            component: 'AdminConfigs',
+            error: error.message
+          });
         }
       }
 

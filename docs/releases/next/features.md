@@ -227,3 +227,17 @@ several in one answer; every hit names the directory it came from.
   addresses and untrusted certificates are refused unless allowed explicitly.
 
 See [People Directory Search](../../people-directory-search.md).
+
+## iFinder Apps Appear With the iFinder Integration
+
+The **iFinder Search** and **iAssistant** apps now ship enabled and show up for users as soon as
+the iFinder integration is switched on under **Admin → Integrations → iFinder**; while it is off,
+users do not get them. Apps declare this with the new `requiredIntegrations` field (currently
+`["ifinder"]`); Admin → Apps still lists them, marked as hidden.
+
+Saving a complete iFinder setup (integration on, base URL set) also switches on the
+**iAssistant Conversation** model, so the iAssistant app works without a visit to Admin → Models.
+A model an admin disables afterwards stays disabled.
+
+Installations that are already configured keep the model as it is; the upgrade adds the
+requirement to the two apps and leaves their enabled state alone.

@@ -39,6 +39,9 @@ const SHIPPED_APP_IDS = [
   'translator'
 ];
 
+/** V185 retired `ifinder-document-actions`: the migration still lists it, the server no longer ships it. */
+const STILL_SHIPPED_APP_IDS = SHIPPED_APP_IDS.filter(id => id !== 'ifinder-document-actions');
+
 let baseDir = null;
 
 /** A migration context over a real `contents/` directory, like the runner's. */
@@ -310,7 +313,7 @@ describe('V165 and the default apps that ship with the server', () => {
 
   it('every shipped app of the list is now shipped with 20 MB', async () => {
     const apps = await readDefaultApps();
-    for (const id of SHIPPED_APP_IDS) {
+    for (const id of STILL_SHIPPED_APP_IDS) {
       const app = apps.find(candidate => candidate.id === id);
       assert.ok(app, `server/defaults/apps has the app ${id}`);
       assert.equal(app.upload?.fileUpload?.maxFileSizeMB, 20, id);
@@ -326,7 +329,7 @@ describe('V165 and the default apps that ship with the server', () => {
   it('what the migration leaves behind is what a new install gets', async () => {
     // An installed app at the old shipped value ends up like its default today
     const apps = await readDefaultApps();
-    for (const id of SHIPPED_APP_IDS) {
+    for (const id of STILL_SHIPPED_APP_IDS) {
       const shipped = apps.find(candidate => candidate.id === id);
       const installed = structuredClone(shipped);
       installed.upload.fileUpload.maxFileSizeMB = 5;

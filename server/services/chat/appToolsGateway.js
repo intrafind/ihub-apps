@@ -33,6 +33,7 @@
 
 import configCache from '../../configCache.js';
 import { areAppFeaturesEnabled, isFeatureEnabled } from '../../featureRegistry.js';
+import { areAppIntegrationsEnabled } from '../../integrationRegistry.js';
 import logger from '../../utils/logger.js';
 import ChatService from './ChatService.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -109,6 +110,20 @@ export function isAppInvocationAllowed(user, appId) {
 }
 
 /**
+ * Whether users get the app: enabled, and every feature and integration it
+ * requires is on.
+ *
+ * @param {Object} app
+ * @returns {boolean}
+ */
+function isAppAvailable(app) {
+  if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) {
+    return false;
+  }
+  return areAppIntegrationsEnabled(app, configCache.get('config/platform.json')?.data || {});
+}
+
+/**
  * Build the synthetic tool descriptors for a list of app IDs.
  *
  * @param {string[]} appIds
@@ -127,7 +142,7 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
       logger.warn('App-as-tool: app not found', { component: 'AppToolsGateway', appId });
       continue;
     }
-    if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) continue;
+    if (!isAppAvailable(app)) continue;
     if (user && !isAppInvocationAllowed(user, app.id)) {
       logger.info('App-as-tool: app filtered by user permissions', {
         component: 'AppToolsGateway',
@@ -222,7 +237,7 @@ export async function invokeAppTool({
   if (!app) {
     return { error: true, message: `App ${appId} not found` };
   }
-  if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) {
+  if (!isAppAvailable(app)) {
     return { error: true, message: `App ${appId} is disabled` };
   }
 
