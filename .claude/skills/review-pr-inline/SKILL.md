@@ -74,9 +74,43 @@ Write a 2-3 sentence summary of what the change does and why. For each changed h
 enclosing function, the callers and callees of changed symbols, the contracts involved and the tests
 that exercise it. Do not judge a hunk you do not understand: open more files.
 
+### Premortem
+
+Once the summary is written, run a premortem before the lens hunt. The lenses ask "what is wrong
+with this code"; the premortem asks "what did nobody think of". Assume the change in your summary
+has shipped and, three months later, caused an incident or had to be rolled back. Write 3-5
+one-line failure stories, most likely first, each concrete: who or what triggers it, and what
+breaks. Prompt yourself with what the diff cannot show:
+
+- **First contact:** who or what runs this for the first time, and where has it never run? The
+  release pipeline, the first upgrade from the previous version, another OS or deployment mode, a
+  cluster with several workers, a subpath deployment, a job that CI skips on pull requests.
+- **Existing state:** what it meets in the field that fresh test data never has: existing config
+  and data, a half-finished earlier run, a full disk, two admins at once, the old version still
+  running during a rollout.
+- **Missing from the diff:** what must change with it but does not: callers, docs, a migration, a
+  release note, translations in every language, another copy of a list, a test of the risky path.
+  Use the project rules from Phase 1 as a checklist here.
+- **Undo and detection:** how it would be rolled back, whether that path works from the new state,
+  and how anyone would notice that it broke.
+
+Then check each story against the code, not against the diff alone: name the file and path it
+would go through, read it, and sort the story:
+
+- covered by a lens or by something you already found: drop it;
+- refuted by the code: drop it, and note the line that refutes it;
+- a new candidate: add it to the Phase 3 candidate list. It is a lead, not a finding: it must pass
+  Phase 4 like any other candidate, and the story itself is never posted;
+- plausible but not verifiable from here (needs another OS, a real cluster, production data): keep
+  it for **Residual risk** in the summary, not as a finding.
+
+Keep it short. It is not a second review. For a large PR, give each Phase 3 sub-agent the stories
+that touch its area as extra leads.
+
 ## Phase 3 — Hunt (recall pass)
 
-Lenses; skip the ones that do not apply:
+Start from the candidates the premortem produced, then run the lenses; skip the ones that do not
+apply:
 
 - **Correctness** — wrong conditions, off-by-one, null/empty/zero inputs, unhandled error paths,
   partial failure, wrong defaults.
@@ -235,10 +269,10 @@ Replying to a thread that already exists (the same point was raised earlier): us
 Findings: <P1 x1, P2 x2, P3 x1 — all inline>  (or "No issues found.")
 
 ### Checked
-<one line: lenses applied, files and areas read beyond the diff, what CI does not cover>
+<one line: lenses applied, premortem stories checked and how many became findings, files and areas read beyond the diff, what CI does not cover>
 
 ### Residual risk
-<only if real; at most 3 bullets: untested paths, things you could not verify, assumptions>
+<only if real; at most 3 bullets: untested paths, premortem stories you could not verify, assumptions>
 ```
 
 For a review that is not posted, print the same summary followed by the findings in order P0 to P3,
