@@ -141,9 +141,12 @@ are separate from the storage quota, which only limits retained bytes.
 
 **Order of operations**, so a failure never leaves a visible half state:
 
-1. Check rate limit, quota, size and type, and claim the idempotency key. Persist an **upload intent**
-   (document id, object key with a version id so re-uploads never overwrite, collection id, owner,
-   state `reserved`). The intent is the recovery record for every later step.
+1. Check rate limit, size and type. Then, in **one atomic step**, claim the idempotency key and reserve
+   the upload's bytes against the retained-byte quota, so concurrent uploads cannot all pass the same
+   quota check. Persist an **upload intent** (document id, object key with a version id so re-uploads
+   never overwrite, collection id, owner, the reserved byte count, state `reserved`). The intent is the
+   recovery record for every later step. The reservation is released when the intent expires, is
+   compensated, or the reconciler removes its objects.
 2. Encrypt and write the blob to a `pending/` prefix, then the sidecar. State `stored`.
 3. Create the document with status `pending`, scan status `pending`. State `indexed`.
 4. Add the id to the collection (no existence check, so this works before indexing). State `complete`.
@@ -153,9 +156,12 @@ are separate from the storage quota, which only limits retained bytes.
 
 A reconciler works through the intents: it deletes `pending/` objects and sidecars of intents that
 never got past `reserved` or `stored` after a day, retries step 4 for `indexed` intents, and after the
-retry limit deletes the document, blob and sidecar together (compensation) and marks the intent
-`failed`. It also removes documents whose blob is gone. A document without a collection membership
-therefore never survives unnoticed.
+retry limit compensates: it removes the document id from the collection (idempotent, because the add
+may have succeeded although its response or the state update was lost, and a dangling member would use
+a slot of the 200-document cap), then deletes the document, blob and sidecar, releases the reserved
+bytes, and only then marks the intent `failed`. Each compensation step persists its completion on the
+intent, so a crash resumes where it stopped. The reconciler also removes documents whose blob is gone.
+A document without a collection membership therefore never survives unnoticed.
 
 ## 6. Encryption
 
@@ -169,14 +175,16 @@ therefore never survives unnoticed.
   `/encrypt` endpoint lacks: authenticated callers, associated-data binding, a stored key id, and an
   integrity tag. The wrapped key, key id, format id and associated-data inputs go into the **sidecar
   object**. A copy in the index is allowed for speed, never the only copy.
-- **The sidecar is also the manifest.** A reindex rebuilds the index from sources, and here the blob
-  and sidecar are the source, so the sidecar carries every field a rebuild needs: the owner and the ACL
-  principal, the collection id, the original file name, size and media type, `sourceName`, the upload
-  time, the scan result and the last known processing state. The ACL and the collection id are written
-  once at step 3 of the upload and never change (collections are private and not transferable). A
-  rebuild reads the manifest, re-creates the document with those fields and status `pending`, and the
-  processor extracts again. Anything the manifest does not hold (for example ranking signals) is not
-  promised by a rebuild.
+- **The sidecar is also the manifest, and it holds immutable fields only.** A reindex rebuilds the index
+  from sources, and here the blob and sidecar are the source, so the sidecar carries every field a
+  rebuild needs: the owner and the ACL principal, the collection id, the original file name, size and
+  media type, `sourceName` and the upload time. These are written once, before the document exists
+  (step 2 of the upload), and never change (collections are private and not transferable), so the
+  sidecar is never updated by a scan, an extraction or a reprocessing. Scan and processing state live in
+  the index document only. A rebuild reads the manifest, re-creates the document with those fields,
+  scan status `pending` and extraction status `pending`, so every rebuilt document is **scanned again
+  before it is extracted**. Anything the manifest does not hold (processing state, scan result, ranking
+  signals) is not promised by a rebuild.
 - **Unwrap:** document processor and access service, through the same component. Today they can only
   decrypt `{cipher}` strings with a local copy of `encrypt.key`. A cached unwrapped key lives for a
   short TTL.
@@ -203,9 +211,12 @@ The wrap output has no integrity tag and no associated data.
 - The **PDF and thumbnail caches** hold decrypted content for ten hours, per instance, with no ACL
   check. Either skip the cache for encrypted sources or add an evict on delete (section 9).
 - **Malware scan is a gate.** Every upload carries a scan status (`pending`, `passed`, `failed`,
-  `error`). A scan step in the processor runs first. `contentExtractionJob` is enabled with the query
-  `processing.contentExtraction.status.keyword:pending AND processing.scan.status.keyword:passed`, with
-  `prerequisites` so the embedding job waits for the text. OCR, conversion, preview, thumbnails and
+  `error`). A **separate scan job** in the document processor runs first: its query selects uploads with
+  `processing.scan.status.keyword:pending` (and the retryable `error`), and it writes `passed`,
+  `failed` or `error`. `contentExtractionJob` is enabled with the query
+  `processing.contentExtraction.status.keyword:pending AND processing.scan.status.keyword:passed`, so it
+  only ever sees scanned documents, and `prerequisites` make the embedding job wait for the text.
+  OCR, conversion, preview, thumbnails and
   download do not run before `passed`: the storage handler refuses to open a source whose scan status
   is not `passed`. A `failed` scan quarantines the document (blob and sidecar stay for audit, no
   access) and sets the status resource to `failed` with reason `scan`. An `error` is retried, then
@@ -262,6 +273,7 @@ The wrap output has no integrity tag and no associated data.
 | `processing` | extraction, OCR or embedding running |
 | `searchable` | text extracted, passages and embeddings present, visible to retrieval |
 | `failed` | with a reason: unsupported type, empty text, too large, scan, blob missing |
+| `deleting` | deletion in progress (tombstone written); `404` only once it is finished |
 
 - iHub keeps its own item record with the document id, the state and the time it asked, so a new
   upload shows up immediately even though search sees it only after about 10 s plus the cron tick.
@@ -275,7 +287,8 @@ The wrap output has no integrity tag and no associated data.
 **Deletion** is a resumable operation with a persisted state, not a sequence that can stop halfway:
 
 1. Write a **tombstone** for the document id (state `deleting`). From this point the status resource
-   answers `404`, the access service refuses preview and download, and the processor must not write
+   answers `deleting` (and `404` only once the tombstone is `deleted`, step 5), the access service
+   refuses preview and download, and the processor must not write
    the document: its write checks the tombstone, and uses `primary_term`/`seq_no` (section 7).
 2. Evict the access-service caches. The access service needs an evict endpoint that finds keys by
    source and item id (the cache key also holds `lastModified` and the sub-item path) and reaches
@@ -330,7 +343,10 @@ and a non-whitelisted host test (CLAUDE.md).
   the project limits and an overflow is a clear error.
 - **Remove** documents from a collection. This only removes the membership, never the document.
 - **Rename** a collection. There is no delete and no share in iHub.
-- Collection writes in iFinder are an unversioned read-modify-write, so iHub serializes the writes per
+- Collection writes in iFinder are an unversioned read-modify-write. The serialization described next
+  must hold **across all iHub instances**: a lock or queue inside one instance does not stop two
+  instances from losing each other's updates. Until utilities gains `if_seq_no`, multi-instance writes
+  stay disabled unless a cluster-wide lock or queue is in place. iHub serializes the writes per
   collection until utilities gains `if_seq_no` (section 8).
 - iHub does not delete collections. What happens to a user's collections when the user leaves is a
   question for iFinder.
