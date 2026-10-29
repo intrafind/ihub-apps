@@ -44,7 +44,10 @@ const { buildBaseTemplate } = await import('../services/documents/pptx/baseTempl
 const { analyzePowerpointTemplate, chooseLayouts, loadPresentationTemplate } =
   await import('../services/documents/pptx/pptxTemplate.js');
 const { sanitizeSlides } = await import('../services/documents/pptx/buildPptx.js');
-const { pptxSpecFromToolArgs } = await import('../services/documents/pptx/pptxTools.js');
+const { pptxSpecFromToolArgs, runCreatePptx } =
+  await import('../services/documents/pptx/pptxTools.js');
+const { runCreateDocx } = await import('../services/documents/docx/docxTools.js');
+const { heldGeneratedFile } = await import('../services/documents/generatedFiles.js');
 const { systemSkillToolsFor, usesDocumentTemplates } =
   await import('../services/systemSkillTools.js');
 const { renderTemplateSample } = await import('../services/documents/templates/templateSamples.js');
@@ -663,5 +666,40 @@ describe('document tools and templates', () => {
       const { buffer } = await renderTemplateSample(template, format, 'de');
       assert.ok(buffer.length > 1000, format);
     }
+  });
+
+  it('create_docx and create_pptx render in the worker and hold the file for the chat', async () => {
+    const user = { id: 'u1' };
+    const docxResult = await runCreateDocx({
+      filename: 'Proposal',
+      title: 'Proposal',
+      markdown: '# Scope\n\n- One\n- Two',
+      user,
+      chatId: 'chat-1',
+      appConfig: { id: 'writer' }
+    });
+    assert.equal(docxResult.success, true, docxResult.error);
+    assert.equal(docxResult.files[0].name, 'Proposal.docx');
+    assert.equal(
+      heldGeneratedFile(user, docxResult.file.id, { chatId: 'chat-1' }).mimeType,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+
+    const pptxResult = await runCreatePptx({
+      filename: 'Deck',
+      title: 'Deck',
+      slides: JSON.stringify(SLIDES.slice(0, 2)),
+      user,
+      chatId: 'chat-1'
+    });
+    assert.equal(pptxResult.success, true, pptxResult.error);
+    assert.equal(pptxResult.files[0].slides, 2);
+    assert.equal(pptxResult.files[0].name, 'Deck.pptx');
+    // The model's result names the file but never carries its bytes.
+    assert.equal(JSON.stringify(pptxResult).includes('UEsDB'), false);
+
+    const failure = await runCreatePptx({ title: 'x', slides: '{"not":"a list"}', user });
+    assert.equal(failure.success, false);
+    assert.match(failure.error, /non-empty JSON array/);
   });
 });
