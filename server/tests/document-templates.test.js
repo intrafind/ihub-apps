@@ -176,6 +176,11 @@ async function assertPackageIntegrity(buffer) {
   return zip;
 }
 
+/** The text of a WordprocessingML part: its `w:t` elements, joined. */
+function wordText(xml) {
+  return [...xml.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map(m => m[1]).join('');
+}
+
 const VALID = {
   id: 'acme',
   name: { en: 'ACME' },
@@ -517,7 +522,7 @@ describe('Word documents', () => {
     assert.ok(text.indexOf('Quarterly report') < text.indexOf('Overview'));
     assert.ok(text.indexOf('Overview') < text.indexOf('Ende des Dokuments'));
     const footer = await zip.file('word/footer1.xml').async('string');
-    assert.match(footer.replaceAll(/<[^>]+>/g, ''), /ACME GmbH – Vertraulich/);
+    assert.match(wordText(footer), /ACME GmbH – Vertraulich/);
     // Styles the template lacks were copied over; the header logo stays.
     const styles = await zip.file('word/styles.xml').async('string');
     assert.match(styles, /w:styleId="IhubCode"/);
@@ -767,7 +772,7 @@ describe('Word template merge, edge cases', () => {
     });
     assert.ok(Date.now() - started < 5000);
     const xml = await (await JSZip.loadAsync(merged)).file('word/document.xml').async('string');
-    const text = xml.replaceAll(/<[^>]+>/g, '');
+    const text = wordText(xml);
     assert.match(text, /Using \{\{title\}\} placeholders/);
     // The model's own "{{author}}" stays as written; "{{ content }}" was the marker.
     assert.match(text, /Write \{\{author\}\} here\./);
