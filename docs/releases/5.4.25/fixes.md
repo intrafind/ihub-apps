@@ -21,3 +21,12 @@ subscription key is not configured".
 - A "no speech detected" error no longer leaves the microphone in the listening state.
 - Stopping dictation in automatic mode releases the microphone right away instead of waiting for
   Azure to finish.
+
+## Outlook `.msg` Files Can Be Uploaded Again
+
+Selecting an Outlook message (`.msg`) in a chat failed, and the browser console showed:
+
+> Error processing file: TypeError: Cannot read properties of undefined (reading 'prototype')
+
+The library that reads `.msg` files needs a component the web app did not ship. It is now included,
+so the subject, sender, recipients and body of the message reach the model again.
