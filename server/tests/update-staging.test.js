@@ -297,13 +297,16 @@ describe('stageLocalFile', () => {
 
   it('serialises operations with an exclusive lock and takes over a stale one', async () => {
     const lockFile = path.join(root, '.update-lock');
-    fs.writeFileSync(lockFile, JSON.stringify({ timestamp: Date.now(), pid: 1 }));
+    // An empty file is a lock caught mid-write: fresh by mtime, so it is held.
+    fs.writeFileSync(lockFile, '');
     await assert.rejects(
       service.stageLocalFile(await buildRelease()),
       error => error.status === 409
     );
 
-    fs.writeFileSync(lockFile, JSON.stringify({ timestamp: Date.now() - 11 * 60 * 1000, pid: 1 }));
+    // Staleness is the lock's mtime (the heartbeat touches it), not its content.
+    const elevenMinutesAgo = new Date(Date.now() - 11 * 60 * 1000);
+    fs.utimesSync(lockFile, elevenMinutesAgo, elevenMinutesAgo);
     const summary = await service.stageLocalFile(await buildRelease());
     assert.equal(summary.accepted, true);
     assert.equal(fs.existsSync(lockFile), false, 'released afterwards');

@@ -65,6 +65,8 @@ const execFileAsync = promisify(execFile);
 const UPDATE_TMP_DIR = '.update-tmp';
 const UPDATE_STAGING_DIR = swap.STAGING_DIR;
 const UPDATE_LOCK_FILE = '.update-lock';
+/** A lock whose heartbeat stopped this long ago belongs to a crashed operation. */
+const LOCK_STALE_MS = 10 * 60 * 1000;
 /** Summary of the staged release, so every worker and a restarted server can show it. */
 const STAGED_INFO_FILE = '.update-staged.json';
 /** Drop-in folder an admin can copy release archives into. */
@@ -360,7 +362,9 @@ async function acquireLock() {
   const lockPath = join(getRootDir(), UPDATE_LOCK_FILE);
   const lockContent = () => JSON.stringify({ timestamp: Date.now(), pid: process.pid });
   // Exclusive create ('wx'): two workers, or a worker and the CLI, can never
-  // both get it. A lock without a heartbeat for 10 minutes is taken over once.
+  // both get it. Staleness is the file's mtime, which the heartbeat touches:
+  // reading the content raced with a rewrite in progress (an empty file
+  // parsed as "stale"), and a rewrite could recreate a just-released lock.
   for (let attempt = 0; ; attempt++) {
     try {
       await fs.writeFile(lockPath, lockContent(), { flag: 'wx' });
@@ -369,22 +373,25 @@ async function acquireLock() {
       if (error.code !== 'EEXIST' || attempt > 0) {
         throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
       }
-      let lockAge = Infinity;
+      let stat;
       try {
-        lockAge = Date.now() - JSON.parse(await fs.readFile(lockPath, 'utf8')).timestamp;
-      } catch {
-        // unreadable lock file: treat as stale
+        stat = await fs.stat(lockPath);
+      } catch (statError) {
+        if (statError.code === 'ENOENT') continue; // released meanwhile: try once more
+        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
       }
-      if (lockAge < 10 * 60 * 1000) {
+      if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
         throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
       }
       logger.warn('Removing stale update lock', { component: 'UpdateService' });
       await fs.rm(lockPath, { force: true });
     }
   }
-  // Long operations (a slow upload being staged, a large extraction) keep it fresh.
+  // Long operations (a slow upload being staged, a large extraction) keep it
+  // fresh. utimes never creates the file, so a late tick cannot revive it.
   const heartbeat = setInterval(() => {
-    fs.writeFile(lockPath, lockContent()).catch(() => {});
+    const now = new Date();
+    fs.utimes(lockPath, now, now).catch(() => {});
   }, 60 * 1000);
   heartbeat.unref();
   return heartbeat;
