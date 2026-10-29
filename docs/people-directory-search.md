@@ -152,7 +152,7 @@ A directory's `groups` hold on top of that: an app that lists `x500bund`, or a `
 
 Admins sometimes need to see what is really in a directory: which attributes an entry has, how a branch is built, who is in a group. The LDAP browser answers that in plain words: the admin asks, the model writes the LDAP filter, and the raw entries come back. It is separate from people search, which only ever returns mapped fields and is safe to give to every user.
 
-Switch it on per directory in `peopleDirectories.json` (there is no editor for it on the admin page yet; the directory list shows an **LDAP browser** badge):
+Switch it on per directory in the directory editor, section **LDAP browser** (**Admin → Integrations → People directories**), or in `peopleDirectories.json`. The directory list marks such directories with an **LDAP browser** badge.
 
 ```jsonc
 {
@@ -271,7 +271,7 @@ It is trusted only by directories that name it in `tlsCa`.
 **Admin → Integrations → People directories** (`/admin/integrations/people-directories`):
 
 - **Directories:** one row per directory with source, preset, groups and an on/off switch; badges for plain-text transport and external data flow.
-- **Editor:** source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), network, visibility, the model-facing name and description, limits and the mapping with the preset's value next to each field.
+- **Editor:** source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), network, visibility, the model-facing name and description, limits, the mapping with the preset's value next to each field, and the [LDAP browser](#ldap-browser-for-admins).
 - **Test panel:** runs the connection test on the form as it stands — configuration, address check, connect, StartTLS, bind, a sample search, and the mapped people next to the attributes they came from. Nothing is saved.
 
 The admin API, all behind `adminAuth` (personal API keys, OAuth clients and agents get a 403):

@@ -536,5 +536,9 @@ What the builder chose for the open points:
   entry count, truncated, error code). Refused calls are audited as failures.
 - **Admin test:** not exercised; the configuration step shows the browse
   settings and their problems.
+- **Admin UI:** added after all, at the user's request: an "LDAP browser"
+  section in the directory editor (on/off, groups without "Everyone", base,
+  result limit, account, extra denied attributes). Switching it off keeps
+  the settings.
 - **Order:** built before part 1, which still applies on top.
 

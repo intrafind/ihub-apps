@@ -20,6 +20,7 @@ import VisibilitySection from '../components/people-directories/VisibilitySectio
 import ModelFacingSection from '../components/people-directories/ModelFacingSection';
 import LimitsSection from '../components/people-directories/LimitsSection';
 import MappingSection from '../components/people-directories/MappingSection';
+import BrowseSection from '../components/people-directories/BrowseSection';
 import DirectoryTestPanel from '../components/people-directories/DirectoryTestPanel';
 import {
   CALLOUT_CLASS,
@@ -204,6 +205,17 @@ function AdminPeopleDirectoryEditPage() {
         'Delay between requests (ms)'
       ),
       groups: t('admin.peopleDirectories.visibility.groups', 'Groups'),
+      browse:
+        {
+          groups: t('admin.peopleDirectories.browse.groups', 'Who may browse'),
+          maxResults: t('admin.peopleDirectories.browse.maxResults', 'Maximum entries per search'),
+          base: t('admin.peopleDirectories.browse.base', 'Browse base'),
+          bind: t('admin.peopleDirectories.browse.bind', 'Account for browsing'),
+          denyAttributes: t(
+            'admin.peopleDirectories.browse.denyAttributes',
+            'Further attributes to withhold'
+          )
+        }[tail] ?? t('admin.peopleDirectories.browse.title', 'LDAP browser'),
       dataFlow: t('admin.peopleDirectories.visibility.dataFlow', 'Data flow'),
       name: `${t('admin.peopleDirectories.model.name', 'Name')}${tail ? ` (${tail.toUpperCase()})` : ''}`,
       description: `${t('admin.peopleDirectories.model.descriptionLabel', 'Description')}${
@@ -486,6 +498,13 @@ function AdminPeopleDirectoryEditPage() {
           presetLabel={presetLabel}
           fields={fields}
           baseDnHint={baseDnHint}
+        />
+        <BrowseSection
+          form={form}
+          update={update}
+          availableGroups={groups}
+          baseDnHint={form.baseDn || provider?.baseDn || ''}
+          transport={transport}
         />
       </form>
 

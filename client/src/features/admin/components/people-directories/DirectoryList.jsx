@@ -104,7 +104,7 @@ function DirectoryList({ directories, effective, presetLabel, togglingId, onTogg
                       icon="server"
                       title={t(
                         'admin.peopleDirectories.list.browseHint',
-                        'Admins in the browse groups can read raw entries with the LDAP browser. Set in peopleDirectories.json (browse).'
+                        'Admins in the browse groups can read raw entries with the LDAP browser.'
                       )}
                     >
                       {t('admin.peopleDirectories.list.browse', 'LDAP browser')}

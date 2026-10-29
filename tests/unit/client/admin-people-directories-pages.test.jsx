@@ -399,6 +399,44 @@ describe('people directory editor', () => {
     expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
   });
 
+  test('the LDAP browser section switches the browser on with its own groups and account', async () => {
+    renderAt('/admin/integrations/people-directories/x500bund');
+    await screen.findByLabelText('ID');
+    expect(screen.queryByLabelText('Browse base')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Offer the LDAP browser'));
+    expect(screen.getByText(/x500bund__browse_search/)).toBeInTheDocument();
+    // The default: the directory's account, with a warning about its reach.
+    expect(document.getElementById('pd-browse-bind-mode-directory')).toBeChecked();
+    expect(screen.getByText(/full reach of the people search account/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Browse base')).toHaveAttribute('placeholder', 'o=Bund,c=DE');
+
+    // An account of its own needs a DN and a credential.
+    fireEvent.click(document.getElementById('pd-browse-bind-mode-service'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+    expect(await screen.findByText('Please check these fields')).toBeInTheDocument();
+    expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
+
+    fireEvent.click(document.getElementById('pd-browse-bind-mode-anonymous'));
+    fireEvent.change(screen.getByLabelText('Browse base'), {
+      target: { value: 'ou=MRI,o=Bund,c=DE' }
+    });
+    fireEvent.change(screen.getByLabelText('Further attributes to withhold'), {
+      target: { value: 'info\nsecretNote' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+    const saved = mockApi.savePeopleDirectories.mock.calls[0][0].find(d => d.id === 'x500bund');
+    expect(saved.browse).toEqual({
+      enabled: true,
+      groups: ['admins'],
+      base: 'ou=MRI,o=Bund,c=DE',
+      bind: { mode: 'anonymous' },
+      denyAttributes: ['info', 'secretNote']
+    });
+  });
+
   test('editing a plain-text directory warns until plain text is allowed', async () => {
     renderAt('/admin/integrations/people-directories/legacy');
     expect(await screen.findByLabelText('ID')).toHaveAttribute('readonly');

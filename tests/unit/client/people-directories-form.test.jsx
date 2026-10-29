@@ -373,6 +373,52 @@ describe('text helpers', () => {
   });
 });
 
+describe('LDAP browser fields', () => {
+  test('a directory without a browse block stays without one', () => {
+    expect(formToDirectory(directoryToForm(X500)).browse).toBeUndefined();
+    const form = directoryToForm(X500);
+    expect(form.browseEnabled).toBe(false);
+    expect(form.browseGroups).toEqual(['admins']);
+    expect(form.browseBindMode).toBe('directory');
+  });
+
+  test('switching the browser off keeps its settings', () => {
+    const stored = {
+      ...X500,
+      browse: {
+        enabled: true,
+        groups: ['ops'],
+        maxResults: 20,
+        base: 'ou=MRI,o=Bund,c=DE',
+        bind: { mode: 'service', dn: 'cn=reader', passwordRef: 'reader' },
+        denyAttributes: ['info']
+      }
+    };
+    const form = directoryToForm(stored);
+    expect(formToDirectory(form)).toEqual(stored);
+    form.browseEnabled = false;
+    expect(formToDirectory(form).browse).toEqual({ ...stored.browse, enabled: false });
+  });
+
+  test('checks groups, the limit, the own account and attribute names while on', () => {
+    const form = directoryToForm(X500);
+    form.browseEnabled = true;
+    form.browseGroups = [];
+    form.browseMaxResults = '500';
+    form.browseBindMode = 'service';
+    form.browseDenyAttributes = 'info\nnot an attribute';
+    expect(validateDirectoryForm(form).map(error => error.field)).toEqual([
+      'browse.groups',
+      'browse.maxResults',
+      'browse.bind.dn',
+      'browse.bind.passwordRef',
+      'browse.denyAttributes'
+    ]);
+    expect(inputIdForField('browse.bind.passwordRef')).toBe('pd-browse-bind-password-ref');
+    expect(inputIdForField('browse.groups.0')).toBe('pd-browse-groups');
+  });
+});
+
 describe('trusted certificates', () => {
   test('are edited one name per line and checked against the store name pattern', () => {
     const form = directoryToForm(X500);

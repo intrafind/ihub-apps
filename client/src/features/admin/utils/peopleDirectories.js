@@ -44,6 +44,13 @@ export const RESERVED_DIRECTORY_IDS = [
 /** Name of a trust anchor: `contents/config/certs/<name>.pem` on the server. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
+/** The admin LDAP browser's result limit: default and upper bound, as on the server. */
+export const BROWSE_MAX_RESULTS_DEFAULT = 50;
+export const BROWSE_MAX_RESULTS_LIMIT = 200;
+
+/** An LDAP attribute name, as the server schema checks it. */
+const ATTRIBUTE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
+
 /** The shipped "People search" app, offered for enabling with the first directory. */
 export const PEOPLE_SEARCH_APP_ID = 'people-directory';
 
@@ -128,6 +135,15 @@ export const FIELD_INPUT_IDS = {
   requestDelayMs: 'pd-request-delay-ms',
   groups: 'pd-groups',
   dataFlow: 'pd-data-flow-internal',
+  browse: 'pd-browse-enabled',
+  'browse.groups': 'pd-browse-groups',
+  'browse.maxResults': 'pd-browse-max-results',
+  'browse.base': 'pd-browse-base',
+  // Error links go to a control that is always rendered while browse is on.
+  'browse.bind': 'pd-browse-bind-mode-directory',
+  'browse.bind.dn': 'pd-browse-bind-dn',
+  'browse.bind.passwordRef': 'pd-browse-bind-password-ref',
+  'browse.denyAttributes': 'pd-browse-deny-attributes',
   name: 'pd-name',
   description: 'pd-description'
 };
@@ -275,9 +291,8 @@ export function directoryToForm(directory = {}) {
     starttls: directory.starttls === true ? 'on' : directory.starttls === false ? 'off' : 'inherit',
     baseDn: directory.baseDn ?? '',
     preset: directory.preset ?? '',
-    // Not edited on this page, but kept so a save does not drop them.
+    // Not edited on this page, but kept so a save does not drop it.
     tlsOptions: directory.tlsOptions,
-    browse: directory.browse,
     bindMode: !bind ? 'default' : bind.mode === 'service' ? 'service' : 'anonymous',
     bindDn: bind?.dn ?? '',
     bindPasswordRef: bind?.passwordRef ?? '',
@@ -296,8 +311,63 @@ export function directoryToForm(directory = {}) {
     groups: Array.isArray(directory.groups) ? [...directory.groups] : ['authenticated'],
     dataFlow: directory.dataFlow === 'external' ? 'external' : 'internal',
     name: withFormLanguages(directory.name),
-    description: withFormLanguages(directory.description)
+    description: withFormLanguages(directory.description),
+    ...browseToForm(directory.browse)
   };
+}
+
+/**
+ * The LDAP browser fields of the form. `hasBrowse` remembers that the
+ * directory had a `browse` block, so switching the browser off keeps its
+ * settings instead of dropping them.
+ *
+ * @param {Object|undefined} browse - Stored `browse` block
+ * @returns {Object} Form fields
+ */
+function browseToForm(browse) {
+  const bind = browse?.bind;
+  return {
+    hasBrowse: Boolean(browse),
+    browseEnabled: browse?.enabled === true,
+    browseGroups: Array.isArray(browse?.groups) ? [...browse.groups] : ['admins'],
+    browseMaxResults: numberText(browse?.maxResults),
+    browseBase: browse?.base ?? '',
+    browseBindMode: !bind ? 'directory' : bind.mode === 'service' ? 'service' : 'anonymous',
+    browseBindDn: bind?.dn ?? '',
+    browseBindPasswordRef: bind?.passwordRef ?? '',
+    browseDenyAttributes: asList(browse?.denyAttributes).join('\n')
+  };
+}
+
+/**
+ * The stored `browse` block of a form, or undefined when the directory never
+ * had one and the browser stays off.
+ *
+ * @param {Object} form
+ * @returns {Object|undefined}
+ */
+function formToBrowse(form) {
+  if (!form.browseEnabled && !form.hasBrowse) return undefined;
+  const browse = {
+    enabled: Boolean(form.browseEnabled),
+    groups: [...(form.browseGroups || [])]
+  };
+  const maxResults = trimmed(form.browseMaxResults);
+  if (maxResults !== '') browse.maxResults = Number(maxResults);
+  const base = trimmed(form.browseBase);
+  if (base) browse.base = base;
+  if (form.browseBindMode === 'anonymous') {
+    browse.bind = { mode: 'anonymous' };
+  } else if (form.browseBindMode === 'service') {
+    browse.bind = {
+      mode: 'service',
+      dn: trimmed(form.browseBindDn),
+      passwordRef: trimmed(form.browseBindPasswordRef)
+    };
+  }
+  const denyAttributes = parseList(form.browseDenyAttributes);
+  if (denyAttributes.length > 0) browse.denyAttributes = denyAttributes;
+  return browse;
 }
 
 /**
@@ -365,7 +435,8 @@ export function formToDirectory(form) {
 
   directory.groups = [...(form.groups || [])];
   directory.dataFlow = form.dataFlow === 'external' ? 'external' : 'internal';
-  if (form.browse) directory.browse = JSON.parse(JSON.stringify(form.browse));
+  const browse = formToBrowse(form);
+  if (browse) directory.browse = browse;
 
   const name = withoutEmptyTexts(form.name);
   if (name) directory.name = name;
@@ -483,6 +554,55 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
         { min, max }
       );
     }
+  }
+
+  if (form.browseEnabled) {
+    if ((form.browseGroups || []).length === 0) {
+      add(
+        'browse.groups',
+        'admin.peopleDirectories.errors.browseGroupsRequired',
+        'Choose who may use the LDAP browser.'
+      );
+    }
+    const maxResults = trimmed(form.browseMaxResults);
+    if (maxResults !== '') {
+      const value = Number(maxResults);
+      if (!Number.isInteger(value) || value < 1 || value > BROWSE_MAX_RESULTS_LIMIT) {
+        add(
+          'browse.maxResults',
+          'admin.peopleDirectories.errors.limitRange',
+          'Enter a whole number from {{min}} to {{max}}.',
+          { min: 1, max: BROWSE_MAX_RESULTS_LIMIT }
+        );
+      }
+    }
+    if (form.browseBindMode === 'service') {
+      if (!trimmed(form.browseBindDn)) {
+        add(
+          'browse.bind.dn',
+          'admin.peopleDirectories.errors.bindDnRequired',
+          'Enter the bind DN.'
+        );
+      }
+      if (!trimmed(form.browseBindPasswordRef)) {
+        add(
+          'browse.bind.passwordRef',
+          'admin.peopleDirectories.errors.passwordRefRequired',
+          'Choose the credential that holds the password.'
+        );
+      }
+    }
+  }
+  const badAttribute = parseList(form.browseDenyAttributes).find(
+    name => !ATTRIBUTE_NAME_PATTERN.test(name)
+  );
+  if (badAttribute) {
+    add(
+      'browse.denyAttributes',
+      'admin.peopleDirectories.errors.attributeName',
+      '"{{name}}" is not an LDAP attribute name.',
+      { name: badAttribute }
+    );
   }
   return errors;
 }

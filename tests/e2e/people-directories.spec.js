@@ -508,5 +508,10 @@ test.describe('Admin people directories', () => {
     await open(page, `${LIST}/x500bund`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Federal directory (IVBB)');
     await expectNoBlockingViolations(page, 'People directory editor (direct)');
+
+    await page.getByLabel('Offer the LDAP browser').check();
+    await page.locator('#pd-browse-bind-mode-service').check();
+    await expect(page.getByLabel('Browse base')).toBeVisible();
+    await expectNoBlockingViolations(page, 'People directory editor (LDAP browser)');
   });
 });
