@@ -1,5 +1,11 @@
 # Fixes — Unreleased
 
+## Chat: People Searches Are No Longer Shown as Web Searches
+
+Answers from apps that search a people directory, such as the People Search app, said "Searched the
+web · 1 search" above the answer, although the directory lookup never left the organisation. The
+tool activity now lists a people search as a tool call ("1 tool call") instead.
+
 ## Voice Transcription, MCP Servers and Gemini Batch Transcription Honor the SSL Whitelist
 
 Connecting the microphone to a realtime speech-to-text endpoint over `wss://`, such as vLLM
