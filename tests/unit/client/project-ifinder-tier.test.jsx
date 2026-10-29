@@ -1,0 +1,337 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * The iFinder tier of projects, iteration 1 (#3024): a smart collection is
+ * listed and opened as a read-only project. The page shows the tier badge, the
+ * documents and a way to chat with them, and none of the controls that change
+ * a project: edit, rename, share, delete, instructions, pins, adding, removing
+ * and the token estimate. A list that could not include the collections says so.
+ */
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+const mockApi = {
+  fetchProject: jest.fn(),
+  fetchProjects: jest.fn(),
+  fetchProjectWarnings: jest.fn(),
+  fetchProjectsConfig: jest.fn(),
+  fetchProjectCatalog: jest.fn(),
+  fetchProjectItemText: jest.fn()
+};
+jest.mock('../../../client/src/api', () => ({
+  fetchProject: (...args) => mockApi.fetchProject(...args),
+  fetchProjects: (...args) => mockApi.fetchProjects(...args),
+  fetchProjectList: async (...args) => ({
+    items: await mockApi.fetchProjects(...args),
+    warnings: mockApi.fetchProjectWarnings() || []
+  }),
+  fetchProjectsConfig: (...args) => mockApi.fetchProjectsConfig(...args),
+  fetchProjectCatalog: (...args) => mockApi.fetchProjectCatalog(...args),
+  fetchProjectItemText: (...args) => mockApi.fetchProjectItemText(...args),
+  fetchProjectChats: () => Promise.resolve({ items: [], nextCursor: null, total: 0 }),
+  fetchPickerPages: () => Promise.resolve([]),
+  searchPickerIFinder: () => Promise.resolve([]),
+  checkPickerUrl: () => Promise.resolve({}),
+  previewPickerUrl: () => Promise.resolve({}),
+  crawlPickerUrl: () => Promise.resolve({}),
+  fetchPickerCloudProviders: () => Promise.resolve([]),
+  estimateProjectTokens: jest.fn(),
+  addProjectItem: jest.fn(),
+  uploadProjectItem: jest.fn(),
+  updateProject: jest.fn(),
+  deleteProject: jest.fn()
+}));
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => ({
+    platformConfig: { projects: { enabled: true, userProjects: true } },
+    isLoading: false
+  })
+}));
+jest.mock('../../../client/src/shared/contexts/authContextValue', () => ({
+  useOptionalAuth: () => ({
+    isAuthenticated: true,
+    isLoading: false,
+    user: { id: 'u_42', name: 'Ann' }
+  })
+}));
+jest.mock('../../../client/src/shared/hooks/useApps', () => ({
+  __esModule: true,
+  default: () => ({ apps: [{ id: 'chat', name: { en: 'Chat' } }], loading: false, error: null })
+}));
+jest.mock('../../../client/src/shared/components/Icon', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/features/chat/components/AppChatStarter', () => ({
+  __esModule: true,
+  default: ({ app }) => <textarea aria-label={`Message ${app?.id}`} />
+}));
+
+const mockT = (key, defaultOrOptions, maybeOptions) => {
+  const options = typeof defaultOrOptions === 'object' ? defaultOrOptions : maybeOptions || {};
+  const text = typeof defaultOrOptions === 'string' ? defaultOrOptions : key;
+  return Object.entries(options).reduce(
+    (out, [name, value]) => out.replaceAll(`{{${name}}}`, value),
+    text
+  );
+};
+const mockI18n = { t: mockT, i18n: { language: 'en' } };
+jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
+
+const ProjectPage = require('../../../client/src/features/projects/pages/ProjectPage').default;
+const ProjectsPage = require('../../../client/src/features/projects/pages/ProjectsPage').default;
+const ProjectTierBadge =
+  require('../../../client/src/features/projects/components/ProjectTierBadge').default;
+const {
+  invalidateProjectsConfig,
+  invalidateProjectsList
+} = require('../../../client/src/features/projects/hooks/useProjects');
+const { isIFinderProject } = require('../../../client/src/features/projects/utils/projectView');
+
+const COLLECTION_ID = 'ifc_00000000-0000-4000-8000-000000000001';
+
+const CONFIG = {
+  enabled: true,
+  userProjects: { enabled: true, canCreate: true, canShare: true, maxProjects: 20, used: 1 },
+  limits: { maxFiles: 25, maxFileBytes: 20971520, maxProjectBytes: 209715200 },
+  sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: true },
+  kinds: [{ id: 'url', name: { en: 'Web page (URL)' }, picker: { type: 'url' } }],
+  upload: { available: true, accept: ['.pdf'], summary: 'PDF' },
+  ifinder: { available: true, readOnly: true }
+};
+
+const READ_ONLY_PERMISSIONS = {
+  canUse: true,
+  canEdit: false,
+  canShare: false,
+  canDelete: false,
+  canTransfer: false,
+  readsAllChats: false,
+  canHoldChats: false,
+  isOwner: true,
+  readOnly: true
+};
+
+const COLLECTION = {
+  id: COLLECTION_ID,
+  ownership: 'user',
+  tier: 'ifinder',
+  readOnly: true,
+  source: { type: 'smart-collection', collectionId: COLLECTION_ID.slice(4) },
+  name: 'Contracts',
+  description: 'Lease and NDA',
+  instructions: '',
+  owner: { id: 'u_42', name: 'Ann', active: true },
+  memberCount: 0,
+  usage: { items: 2, bytes: 0 },
+  role: 'owner',
+  permissions: READ_ONLY_PERMISSIONS,
+  items: [
+    {
+      id: 'itm_a',
+      kind: 'ifinder-document',
+      name: 'Lease 2026',
+      ref: { documentId: 'doc-a' },
+      status: 'ready',
+      pinned: false,
+      provenance: { origin: 'linked', source: { site: 'iFinder' } }
+    },
+    {
+      id: 'itm_b',
+      kind: 'ifinder-document',
+      name: 'doc-b',
+      ref: { documentId: 'doc-b' },
+      status: 'ready',
+      pinned: false,
+      provenance: { origin: 'linked', source: { site: 'iFinder' } }
+    }
+  ]
+};
+
+const LOCAL = {
+  id: 'prj_mine',
+  ownership: 'user',
+  tier: 'ihub',
+  name: 'Case 2026-114',
+  usage: { items: 3, bytes: 1000 },
+  memberCount: 2,
+  members: [{ type: 'user', id: 'u_1', role: 'user' }],
+  role: 'owner',
+  permissions: { canUse: true, canEdit: true, canDelete: true, isOwner: true }
+};
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={[`/projects/${COLLECTION_ID}`]}>
+      <Routes>
+        <Route path="/projects/:projectId" element={<ProjectPage />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+function renderList() {
+  return render(
+    <MemoryRouter initialEntries={['/projects']}>
+      <Routes>
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:projectId" element={<div>project page</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+beforeEach(() => {
+  Object.values(mockApi).forEach(fn => fn.mockReset());
+  mockApi.fetchProjectsConfig.mockResolvedValue(CONFIG);
+  mockApi.fetchProjects.mockResolvedValue([]);
+  mockApi.fetchProjectWarnings.mockReturnValue([]);
+  mockApi.fetchProjectCatalog.mockResolvedValue({ enabled: false, items: [] });
+  mockApi.fetchProject.mockResolvedValue(COLLECTION);
+  invalidateProjectsList();
+  invalidateProjectsConfig();
+});
+
+describe('isIFinderProject', () => {
+  it('is decided by the namespaced id together with the tier', () => {
+    expect(isIFinderProject(COLLECTION)).toBe(true);
+    expect(isIFinderProject(LOCAL)).toBe(false);
+    // A stored project cannot opt in by its tier, nor can an id alone.
+    expect(isIFinderProject({ id: 'prj_x', tier: 'ifinder' })).toBe(false);
+    expect(isIFinderProject({ id: COLLECTION_ID, tier: 'ihub' })).toBe(false);
+    expect(isIFinderProject(null)).toBe(false);
+    expect(isIFinderProject({})).toBe(false);
+  });
+
+  it('shows a badge for the iFinder tier only', () => {
+    const { container, rerender } = render(<ProjectTierBadge project={LOCAL} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<ProjectTierBadge project={COLLECTION} />);
+    expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('iFinder');
+    expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('read-only');
+  });
+});
+
+describe('the project list', () => {
+  it('marks a smart collection with the tier badge and a local project with its role', async () => {
+    mockApi.fetchProjects.mockResolvedValue([COLLECTION, LOCAL]);
+    renderList();
+    const collection = (await screen.findByRole('link', { name: 'Contracts' })).closest('li');
+    expect(within(collection).getByTestId('project-tier-badge')).toBeInTheDocument();
+    expect(within(collection).queryByText('Owner')).not.toBeInTheDocument();
+    expect(within(collection).queryByText(/members/)).not.toBeInTheDocument();
+    expect(within(collection).getByText('2 items')).toBeInTheDocument();
+    const local = screen.getByRole('link', { name: 'Case 2026-114' }).closest('li');
+    expect(within(local).queryByTestId('project-tier-badge')).not.toBeInTheDocument();
+    expect(within(local).getByText('Owner')).toBeInTheDocument();
+    expect(screen.queryByTestId('projects-ifinder-warning')).not.toBeInTheDocument();
+  });
+
+  it('counts a collection under "Mine"', async () => {
+    mockApi.fetchProjects.mockResolvedValue([COLLECTION, LOCAL]);
+    renderList();
+    await screen.findByRole('link', { name: 'Contracts' });
+    expect(screen.getByRole('tab', { name: /Mine/ })).toHaveTextContent('(2)');
+    fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
+    expect(screen.getByRole('link', { name: 'Contracts' })).toBeInTheDocument();
+  });
+
+  it('says so when iFinder could not be asked, and still lists the local projects', async () => {
+    mockApi.fetchProjects.mockResolvedValue([LOCAL]);
+    mockApi.fetchProjectWarnings.mockReturnValue([
+      { code: 'IFINDER_UNAVAILABLE', tier: 'ifinder' }
+    ]);
+    renderList();
+    expect(await screen.findByRole('link', { name: 'Case 2026-114' })).toBeInTheDocument();
+    const warning = screen.getByTestId('projects-ifinder-warning');
+    expect(warning).toHaveTextContent(/iFinder smart collections could not be loaded/);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('a smart collection opened as a project', () => {
+  it('shows the tier, the read-only note, its documents and a way to chat with them', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'Contracts' })).toBeInTheDocument();
+    expect(screen.getByTestId('project-tier-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('project-ifinder-banner')).toHaveTextContent(
+      /smart collection from iFinder/
+    );
+    // The documents, read-only: the name shown is the title (or the id when the user has none).
+    expect(screen.getByText('Lease 2026')).toBeInTheDocument();
+    expect(screen.getByText('doc-b')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Preview text' })).toHaveLength(2);
+    // Its side panel says where it lives; the chat starts outside it, with it attached.
+    expect(screen.getByTestId('project-ifinder-source')).toHaveTextContent(/stay in iFinder/);
+    expect(screen.getByRole('textbox', { name: 'Message chat' })).toBeInTheDocument();
+  });
+
+  it('offers no control that changes the project', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    for (const name of [
+      /delete/i,
+      /add documents/i,
+      /edit/i,
+      /rename/i,
+      /share/i,
+      /publish/i,
+      /transfer/i,
+      /remove/i,
+      /refresh/i,
+      /retry/i,
+      /estimate/i,
+      /upload/i,
+      /leave/i,
+      /catalog/i
+    ]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    // No pins, no selection, no instructions, no members, no usage against local limits.
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pinned')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /instructions/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /members/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/chats in this project/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-read-only')).not.toBeInTheDocument();
+  });
+
+  it('sends no request that changes anything', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    const {
+      estimateProjectTokens,
+      addProjectItem,
+      uploadProjectItem,
+      updateProject,
+      deleteProject
+    } = require('../../../client/src/api');
+    for (const call of [
+      estimateProjectTokens,
+      addProjectItem,
+      uploadProjectItem,
+      updateProject,
+      deleteProject
+    ]) {
+      expect(call).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reads a document through the preview', async () => {
+    mockApi.fetchProjectItemText.mockResolvedValue({ text: 'The deposit is returned.' });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Preview text' })[0]);
+    await waitFor(() =>
+      expect(mockApi.fetchProjectItemText).toHaveBeenCalledWith(
+        COLLECTION_ID,
+        'itm_a',
+        expect.anything()
+      )
+    );
+    // No edit is offered in the preview of a read-only project.
+    expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+  });
+});

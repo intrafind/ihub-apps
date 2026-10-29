@@ -246,9 +246,27 @@ describe('local provider', () => {
   it('serves the ihub tier', () => {
     assert.ok(providerFor({ tier: 'ihub' }) instanceof LocalKnowledgeProvider);
     assert.throws(
-      () => providerFor({ tier: 'ifinder' }),
+      () => providerFor({ tier: 'opensearch' }),
       error => error.code === 'NOT_SUPPORTED'
     );
+  });
+
+  it('serves the ifinder tier with the same provider, read-only and never loaded in full', async () => {
+    const provider = providerFor({ tier: 'ifinder' });
+    assert.ok(provider instanceof LocalKnowledgeProvider);
+    const capabilities = provider.capabilities({});
+    assert.equal(capabilities.write, false);
+    assert.equal(capabilities.loadAll, false);
+    assert.equal(capabilities.search, true);
+    // The ihub tier is untouched.
+    assert.equal(providerFor({ tier: 'ihub' }).capabilities({}).write, true);
+    assert.equal(providerFor({ tier: 'ihub' }).capabilities({}).loadAll, true);
+    for (const call of [
+      () => provider.put({ id: 'ifc_x' }, { user: ADA }, { name: 'n', text: 't' }),
+      () => provider.remove({ id: 'ifc_x' }, { user: ADA }, { itemId: 'itm_a' })
+    ]) {
+      await assert.rejects(call(), error => error.code === 'NOT_SUPPORTED');
+    }
   });
 
   it('lists, searches, reads and loads a project', async () => {

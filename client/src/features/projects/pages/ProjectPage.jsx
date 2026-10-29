@@ -11,7 +11,9 @@ import ProjectChatComposer from '../components/ProjectChatComposer';
 import ProjectChatsSection from '../components/ProjectChatsSection';
 import ProjectItemsSection from '../components/ProjectItemsSection';
 import ProjectMembersSection from '../components/ProjectMembersSection';
+import IFinderProjectCard from '../components/IFinderProjectCard';
 import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
+import ProjectTierBadge from '../components/ProjectTierBadge';
 import ProjectCatalogCard from '../components/ProjectCatalogCard';
 import ProjectSettingsCard from '../components/ProjectSettingsCard';
 import { PANEL_CARD } from '../components/ProjectPanelRow';
@@ -24,7 +26,7 @@ import {
 } from '../hooks/useProjects';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
-import { projectDisplayName } from '../utils/projectView';
+import { isIFinderProject, projectDisplayName } from '../utils/projectView';
 
 /**
  * The banner of a project whose owner is gone (spec 1 §7.1): members keep
@@ -45,6 +47,31 @@ function ReadOnlyBanner() {
         {t(
           'projects.page.readOnly',
           'The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it.'
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The banner of a smart collection from iFinder: iHub shows it and lets a chat
+ * use it, and nothing here changes it.
+ *
+ * @returns {JSX.Element}
+ */
+function IFinderBanner() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      className="mt-4 flex items-start gap-2 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/20 dark:border-teal-800 px-4 py-3 text-sm text-teal-900 dark:text-teal-100"
+      data-testid="project-ifinder-banner"
+    >
+      <Icon name="lock" size="sm" className="mt-0.5 flex-none" />
+      <p>
+        {t(
+          'projects.page.ifinderReadOnly',
+          'This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.'
         )}
       </p>
     </div>
@@ -149,7 +176,10 @@ function ProjectPageContent({ projectId }) {
   }
 
   const permissions = project.permissions || {};
-  const isUserProject = project.ownership === 'user';
+  // A smart collection from iFinder is read-only whoever looks, and none of the
+  // pieces of a stored user project (members, catalog, instructions, chats) apply.
+  const isIFinder = isIFinderProject(project);
+  const isUserProject = project.ownership === 'user' && !isIFinder;
   const editable = isUserProject && permissions.canEdit === true && !permissions.readOnly;
   const readOnlyOwnerGone =
     isUserProject && (permissions.readOnly === true || project.owner?.active === false);
@@ -173,7 +203,11 @@ function ProjectPageContent({ projectId }) {
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 break-words">
                 {projectDisplayName(project, language)}
               </h1>
-              <ProjectRoleBadge project={project} />
+              {isIFinder ? (
+                <ProjectTierBadge project={project} />
+              ) : (
+                <ProjectRoleBadge project={project} />
+              )}
               <ProjectAudienceBadges project={project} />
             </div>
             {description && (
@@ -195,6 +229,7 @@ function ProjectPageContent({ projectId }) {
         </div>
 
         {readOnlyOwnerGone && <ReadOnlyBanner />}
+        {isIFinder && <IFinderBanner />}
         {project.ownership === 'admin' && (
           <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             {project.role === 'catalog'
@@ -222,7 +257,7 @@ function ProjectPageContent({ projectId }) {
             {/* The main thing to do with a project: chat with its documents. Someone
                 who took it from the catalog starts a chat outside it, with it attached;
                 so does everyone with an admin project made available to everyone. */}
-            {(isUserProject ? !readOnlyOwnerGone : usableAdminProject) && (
+            {(isIFinder || (isUserProject ? !readOnlyOwnerGone : usableAdminProject)) && (
               <ProjectChatComposer
                 project={project}
                 projectName={projectDisplayName(project, language)}
@@ -241,40 +276,44 @@ function ProjectPageContent({ projectId }) {
             />
           </div>
           {/* The side panel: one card of compact rows; editing opens a dialog. */}
-          <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
-            <ProjectSettingsCard
-              project={project}
-              editable={editable}
-              onSaved={saved => {
-                setProject(saved);
-                // The list and the chats' project labels show the name too.
-                invalidateProjectsList();
-              }}
-            />
-            {isUserProject && (
-              <ProjectMembersSection
+          {isIFinder ? (
+            <IFinderProjectCard project={project} />
+          ) : (
+            <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
+              <ProjectSettingsCard
                 project={project}
-                userId={userId}
-                onChanged={saved => {
+                editable={editable}
+                onSaved={saved => {
                   setProject(saved);
-                  invalidateProjectsList();
-                }}
-                onTransferred={handleTransferred}
-                onLeft={backToList}
-              />
-            )}
-            {(isUserProject || usableAdminProject) && (
-              <ProjectCatalogCard
-                project={project}
-                config={config}
-                onChanged={() => {
-                  // Read again: the answer carries no link states of the documents.
-                  void reload();
+                  // The list and the chats' project labels show the name too.
                   invalidateProjectsList();
                 }}
               />
-            )}
-          </div>
+              {isUserProject && (
+                <ProjectMembersSection
+                  project={project}
+                  userId={userId}
+                  onChanged={saved => {
+                    setProject(saved);
+                    invalidateProjectsList();
+                  }}
+                  onTransferred={handleTransferred}
+                  onLeft={backToList}
+                />
+              )}
+              {(isUserProject || usableAdminProject) && (
+                <ProjectCatalogCard
+                  project={project}
+                  config={config}
+                  onChanged={() => {
+                    // Read again: the answer carries no link states of the documents.
+                    void reload();
+                    invalidateProjectsList();
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

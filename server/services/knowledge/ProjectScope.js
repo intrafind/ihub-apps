@@ -19,6 +19,8 @@
 import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository } from '../projects/ProjectRepository.js';
+import { loadProjectFor } from '../projects/projectLoader.js';
+import logger from '../../utils/logger.js';
 import {
   appAllowsUserProjects,
   appUsesProjects,
@@ -91,7 +93,20 @@ export async function resolveProjectScope({ appConfig, user }) {
   const userProjectsOn = isUserProjectsConfigured(features) && appAllowsUserProjects(appConfig);
   const scope = [];
   for (const entry of wanted) {
-    const project = await repository.get(entry.id);
+    // A smart collection of the iFinder tier is read from iFinder with the
+    // user's own rights; a stored project from the repository.
+    const loaded = await loadProjectFor(user, entry.id, { repository });
+    if (loaded.status === 'unavailable') {
+      logger.warn(
+        'A project of the iFinder tier was left out of the scope: iFinder is unavailable',
+        {
+          component: 'ProjectScope',
+          projectId: entry.id
+        }
+      );
+      continue;
+    }
+    const project = loaded.project;
     if (!project) continue;
     if (project.ownership === 'user' && !userProjectsOn) continue;
     const permissions = permissionsFor(project, user, context);

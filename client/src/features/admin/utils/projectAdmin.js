@@ -32,6 +32,9 @@ export const DEFAULT_PROJECT_LINK_MODE = 'auto';
 /** Prefix of user project ids; admin project ids may not use it. */
 export const USER_PROJECT_ID_PREFIX = 'prj_';
 
+/** Prefix of the ids of iFinder smart collections shown as projects; reserved the same way. */
+export const IFINDER_PROJECT_ID_PREFIX = 'ifc_';
+
 /** Longest admin project id the server accepts. */
 export const MAX_PROJECT_ID_LENGTH = 50;
 
@@ -236,7 +239,13 @@ export function validateProjectId(id) {
   if (value.length > MAX_PROJECT_ID_LENGTH) return 'tooLong';
   if (!PROJECT_ID_PATTERN.test(value)) return 'invalid';
   // `new` is the route of the create form.
-  if (value.startsWith(USER_PROJECT_ID_PREFIX) || value.toLowerCase() === 'new') return 'reserved';
+  if (
+    value.startsWith(USER_PROJECT_ID_PREFIX) ||
+    value.toLowerCase().startsWith(IFINDER_PROJECT_ID_PREFIX) ||
+    value.toLowerCase() === 'new'
+  ) {
+    return 'reserved';
+  }
   return null;
 }
 

@@ -213,12 +213,14 @@ async function setChatAttachedProjects(req, res, repository, chat) {
   const [
     { attachedProjectsSchema, describeIssues },
     { getProjectRepository },
+    { loadProjectFor },
     access,
     { isUserProjectsConfigured },
     { MAX_ATTACHED }
   ] = await Promise.all([
     import('../validators/projectSchema.js'),
     import('../services/projects/ProjectRepository.js'),
+    import('../services/projects/projectLoader.js'),
     import('../middleware/projectAccess.js'),
     import('../services/projects/projectSettings.js'),
     import('../services/knowledge/chatProjects.js')
@@ -255,7 +257,7 @@ async function setChatAttachedProjects(req, res, repository, chat) {
     const projects = getProjectRepository();
     const context = access.callerContext(req.user);
     for (const id of added) {
-      const project = await projects.get(id);
+      const { project } = await loadProjectFor(req.user, id, { repository: projects });
       if (!project || !access.permissionsFor(project, req.user, context).canUse) {
         sendNotFound(res, 'Project');
         return null;

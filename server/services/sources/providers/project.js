@@ -23,6 +23,7 @@ import { projectName } from '../../projects/projectView.js';
 import { getItemText } from '../../knowledge/ItemTextService.js';
 import { KnowledgeError, docOf } from '../../knowledge/types.js';
 import { getProjectRepository } from '../../projects/ProjectRepository.js';
+import { loadProjectFor } from '../../projects/projectLoader.js';
 import { PROJECT_ITEM_KIND } from '../../projects/projectItemLinks.js';
 import { isProjectsConfigured, isUserProjectsConfigured } from '../../projects/projectSettings.js';
 import { getSourceProvider, hasSourceProvider, sourceProviderError } from '../providers.js';
@@ -32,7 +33,11 @@ async function load({ ref, user }) {
   const itemId = ref?.id;
   if (!projectId || !itemId)
     throw sourceProviderError(400, 'A project item reference needs id and scope');
-  const project = await getProjectRepository().get(projectId);
+  // A citation of a smart collection (iFinder tier) is resolved from iFinder
+  // with the reader's own rights, like any other project of theirs.
+  const { project } = await loadProjectFor(user, projectId, {
+    repository: getProjectRepository()
+  });
   const permissions = permissionsFor(project, user, callerContext(user));
   if (!project || !permissions.canUse) throw sourceProviderError(404, 'Document not found');
   // Every project's documents are dark while the master switch is off, and
