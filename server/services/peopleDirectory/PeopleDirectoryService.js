@@ -281,7 +281,7 @@ export function resolveDirectory(raw, platform = configCache.getPlatform() || {}
  * @returns {Object|null}
  */
 function resolveBrowse(browse, resolved) {
-  if (!browse || browse.enabled !== true) return null;
+  if (browse?.enabled !== true) return null;
   const problems = [];
   const base = trimmed(browse.base) || resolved.baseDn;
   if (!base) {
@@ -765,21 +765,33 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
       );
       continue;
     }
-    tools.push(...buildDirectoryTools(resolved, language));
-    if (resolved.browse) {
-      if (resolved.browse.problems.length > 0) {
-        reportOnce(
-          `browse:${raw.id}`,
-          resolved.browse.problems.join('|'),
-          'LDAP browser of a people directory is not usable; its tools are not offered',
-          { directoryId: raw.id, problems: resolved.browse.problems }
-        );
-      } else {
-        tools.push(...buildBrowseTools(resolved, language));
-      }
-    }
+    tools.push(
+      ...buildDirectoryTools(resolved, language),
+      ...usableBrowseTools(resolved, language)
+    );
   }
   return tools;
+}
+
+/**
+ * The LDAP browser tools of a usable directory: none while the browser is off,
+ * or when its own settings cannot work (reported once).
+ * @param {Object} resolved
+ * @param {string} language
+ * @returns {Object[]}
+ */
+function usableBrowseTools(resolved, language) {
+  if (!resolved.browse) return [];
+  if (resolved.browse.problems.length > 0) {
+    reportOnce(
+      `browse:${resolved.id}`,
+      resolved.browse.problems.join('|'),
+      'LDAP browser of a people directory is not usable; its tools are not offered',
+      { directoryId: resolved.id, problems: resolved.browse.problems }
+    );
+    return [];
+  }
+  return buildBrowseTools(resolved, language);
 }
 
 /**

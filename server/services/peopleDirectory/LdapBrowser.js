@@ -33,7 +33,7 @@ export const MAX_CHILDREN = 200;
 const MAX_ATTRIBUTES = 50;
 
 const ATTRIBUTE_NAME = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
-const SCOPES = ['base', 'one', 'sub'];
+const SCOPES = new Set(['base', 'one', 'sub']);
 
 /** OIDs of denied attributes, for servers that return a type by OID. */
 const FORBIDDEN_OIDS = new Set([
@@ -225,7 +225,7 @@ export async function browseSearch(resolved, args = {}, deps = {}) {
   const filter = parseBrowseFilter(args.filter, deny);
   const base = dnInBase(args.base, browse.base, 'base');
   const scope = args.scope ?? 'sub';
-  if (!SCOPES.includes(scope)) {
+  if (!SCOPES.has(scope)) {
     throw new ToolArgumentError('"scope" is one of base, one or sub.');
   }
   const attributes = requestedAttributes(args.attributes, deny);
