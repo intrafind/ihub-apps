@@ -79,7 +79,8 @@ export function applyTemplateToPdfSpec(spec, bundle) {
   const { template, assets } = bundle;
   const { brand, document, pdf } = template;
   const page = spec.page || {};
-  const hasLetterhead = Boolean(assets.letterhead || assets.letterheadFollowing);
+  const letterhead = assets.letterhead || assets.letterheadFollowing;
+  const hasLetterhead = Boolean(letterhead);
   const themeOptions = spec.themeOptions || {};
   return {
     templateId: template.id,
@@ -96,11 +97,14 @@ export function applyTemplateToPdfSpec(spec, bundle) {
         fontSize: pick(brand.fontSize, themeOptions.fontSize)
       },
       page: {
-        size: pick(document.pageSize, page.size),
-        // A letterhead is drawn for one orientation; without one the request
-        // may turn the page for a wide table.
+        // A letterhead is drawn for one page format: the template's, else the
+        // letterhead's own. Without one the request may choose the size and
+        // turn the page for a wide table.
+        size: hasLetterhead
+          ? document.pageSize || letterhead.pageFormat?.size || page.size
+          : pick(document.pageSize, page.size),
         orientation: hasLetterhead
-          ? document.orientation || 'portrait'
+          ? document.orientation || letterhead.pageFormat?.orientation || 'portrait'
           : pick(page.orientation, document.orientation),
         margins: pick(document.margins, page.margins)
       },

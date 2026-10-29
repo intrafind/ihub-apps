@@ -44,6 +44,12 @@ const { buildBaseTemplate } = await import('../services/documents/pptx/baseTempl
 const { analyzePowerpointTemplate, chooseLayouts, loadPresentationTemplate } =
   await import('../services/documents/pptx/pptxTemplate.js');
 const { sanitizeSlides } = await import('../services/documents/pptx/buildPptx.js');
+const { sanitizeChart } = await import('../services/documents/pptx/charts.js');
+const { mergeIntoWordTemplate } = await import('../services/documents/docx/wordTemplate.js');
+const { buildDocx } = await import('../services/documents/docx/buildDocx.js');
+const { openPackage, PACKAGE_LIMITS } = await import('../services/documents/ooxml/opcPackage.js');
+const { applyLetterhead, letterheadPageFormat } =
+  await import('../services/documents/pdf/letterhead.js');
 const { pptxSpecFromToolArgs, runCreatePptx } =
   await import('../services/documents/pptx/pptxTools.js');
 const { runCreateDocx } = await import('../services/documents/docx/docxTools.js');
@@ -206,6 +212,18 @@ describe('document template schema', () => {
       documentTemplateSchema.safeParse({ ...VALID, brand: { logo: '../../etc/passwd' } }).success,
       false
     );
+    // A file must be of the kind its slot takes.
+    assert.equal(
+      documentTemplateSchema.safeParse({ ...VALID, docx: { template: 'letterhead.pdf' } }).success,
+      false
+    );
+    assert.equal(
+      documentTemplateSchema.safeParse({
+        ...VALID,
+        fonts: [{ family: 'A', normal: 'logo.png' }]
+      }).success,
+      false
+    );
   });
 });
 
@@ -275,11 +293,28 @@ describe('template store', () => {
       }),
       /regular style/
     );
-    // A setting naming a file that was never uploaded is refused.
-    await assert.rejects(
-      templates.saveTemplate('acme', { ...VALID, pdf: { letterhead: 'letterhead.pdf' } }),
-      /not uploaded/
-    );
+    // Files are set by uploads only: a settings save (an editor opened
+    // before the upload) neither drops the logo nor names another file.
+    const saved = await templates.saveTemplate('acme', {
+      ...VALID,
+      default: true,
+      brand: { ...VALID.brand, logo: undefined },
+      pdf: { letterhead: 'letterhead.pdf' }
+    });
+    assert.equal(saved.brand.logo, 'logo.png');
+    assert.equal(saved.pdf.letterhead, undefined);
+    assert.equal(saved.fonts[0].family, 'Brand Serif');
+
+    // Families whose names slug alike get files of their own.
+    await templates.saveTemplateAsset('acme', {
+      slot: 'font',
+      data: serifFont(),
+      originalName: 'x.ttf',
+      family: 'Brand_Serif',
+      face: 'normal'
+    });
+    const both = (await templates.getTemplate('acme')).fonts.map(font => font.normal);
+    assert.equal(new Set(both).size, 2, both.join());
 
     // Resolution: the app's pinned template, else the request, else the default.
     assert.deepEqual(await templates.resolveTemplateId({}), { id: 'acme', pinned: false });
@@ -312,6 +347,7 @@ describe('template store', () => {
     const bundle = await templates.loadTemplateBundle('acme', 'pdf');
     assert.equal(bundle.assets.logo.extension, 'png');
     assert.equal(bundle.assets.fonts[0].family, 'Brand Serif');
+    assert.equal(bundle.assets.fonts.length, 2);
 
     // Removing the logo removes its file.
     await templates.removeTemplateAsset('acme', { slot: 'logo' });
@@ -701,5 +737,243 @@ describe('document tools and templates', () => {
     const failure = await runCreatePptx({ title: 'x', slides: '{"not":"a list"}', user });
     assert.equal(failure.success, false);
     assert.match(failure.error, /non-empty JSON array/);
+  });
+});
+
+// --- Review fixes ---------------------------------------------------------------------
+
+/** A minimal Word template whose body is given as WordprocessingML. */
+async function wordTemplateWithBody(bodyXml) {
+  const zip = await JSZip.loadAsync(await germanWordTemplate());
+  const xml = await zip.file('word/document.xml').async('string');
+  const start = xml.indexOf('<w:body>') + '<w:body>'.length;
+  const sectStart = xml.lastIndexOf('<w:sectPr');
+  zip.file('word/document.xml', xml.slice(0, start) + bodyXml + xml.slice(sectStart));
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+const para = text => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
+describe('Word template merge, edge cases', () => {
+  it('does not loop on a value that holds its own placeholder, nor touch the content', async () => {
+    const template = await wordTemplateWithBody(para('{{title}}') + para('{{ content }}'));
+    const { buffer: generated } = await buildDocx(
+      { title: 'Using {{title}} placeholders', markdown: 'Write {{author}} here.' },
+      { forTemplate: true }
+    );
+    const started = Date.now();
+    const merged = await mergeIntoWordTemplate(generated, template, {
+      values: { title: 'Using {{title}} placeholders', author: 'Alice' }
+    });
+    assert.ok(Date.now() - started < 5000);
+    const xml = await (await JSZip.loadAsync(merged)).file('word/document.xml').async('string');
+    const text = xml.replaceAll(/<[^>]+>/g, '');
+    assert.match(text, /Using \{\{title\}\} placeholders/);
+    // The model's own "{{author}}" stays as written; "{{ content }}" was the marker.
+    assert.match(text, /Write \{\{author\}\} here\./);
+    assert.doesNotMatch(text, /\{\{ content \}\}/);
+  });
+
+  it('keeps a section break stored in the content marker paragraph', async () => {
+    const landscapeBreak =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>{{content}}</w:t></w:r></w:p>';
+    const template = await wordTemplateWithBody(landscapeBreak + para('Appendix'));
+    const { buffer: generated } = await buildDocx({ markdown: 'Body' }, { forTemplate: true });
+    const merged = await mergeIntoWordTemplate(generated, template, { values: {} });
+    const xml = await (await JSZip.loadAsync(merged)).file('word/document.xml').async('string');
+    assert.equal([...xml.matchAll(/<w:sectPr/g)].length, 2);
+    assert.match(xml, /w:orient="landscape"/);
+    assert.ok(xml.indexOf('Body') < xml.indexOf('w:orient="landscape"'));
+  });
+
+  it('refuses a Word template it cannot read with a message', async () => {
+    const zip = await JSZip.loadAsync(await germanWordTemplate());
+    zip.file('word/document.xml', '<w:document><w:body>');
+    const broken = await zip.generateAsync({ type: 'nodebuffer' });
+    await assert.rejects(checkTemplateAsset('wordTemplate', broken, 'docx'), TemplateAssetError);
+  });
+
+  it('accepts three-digit colours', async () => {
+    const { buffer } = await renderDocx({ markdown: '# A', colors: { primary: '#fa0' } });
+    const styles = await (await JSZip.loadAsync(buffer)).file('word/styles.xml').async('string');
+    assert.match(styles, /FFAA00/);
+  });
+});
+
+describe('Office packages', () => {
+  it('stop inflating a part beyond the limit, whatever the archive declares', async () => {
+    const zip = new JSZip();
+    zip.file('word/document.xml', '<a/>');
+    zip.file('word/big.xml', Buffer.alloc(8 * 1024 * 1024, 65));
+    const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    await assert.rejects(
+      openPackage(bytes, { ...PACKAGE_LIMITS, maxPartBytes: 1024 * 1024 }),
+      /too large when unpacked/
+    );
+    await assert.rejects(
+      openPackage(bytes, { ...PACKAGE_LIMITS, maxUncompressedBytes: 2 * 1024 * 1024 }),
+      /too large/
+    );
+    assert.ok((await openPackage(bytes)).file('word/big.xml'));
+  });
+});
+
+describe('letterheads, edge cases', () => {
+  it('use the trim box wherever its origin is, and report their page format', async () => {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([612, 792]);
+    page.setMediaBox(100, 100, 612, 792);
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    page.drawText('OFFSET LETTERHEAD', { x: 150, y: 150, size: 10, font });
+    const letterhead = Buffer.from(await doc.save());
+    assert.deepEqual(await letterheadPageFormat(letterhead), {
+      size: 'LETTER',
+      orientation: 'portrait'
+    });
+    const { buffer } = await renderPdfSpec({ title: 'T', markdown: 'Body' });
+    const printed = await applyLetterhead(buffer, { first: letterhead });
+    const [text] = await pageTexts(printed);
+    assert.match(text, /OFFSET LETTERHEAD/);
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(printed) }).promise;
+    const items = (await (await pdf.getPage(1)).getTextContent()).items;
+    const item = items.find(i => i.str.includes('OFFSET'));
+    // 50 pt in from the box origin, scaled from Letter to A4 width.
+    assert.ok(item.transform[4] > 30 && item.transform[4] < 70, `x = ${item.transform[4]}`);
+  });
+
+  it("give templates without a page size the letterhead's format", async () => {
+    const { spec } = applyTemplateToPdfSpec(
+      { title: 'T', markdown: 'x', page: { size: 'A4', orientation: 'landscape' } },
+      {
+        template: documentTemplateSchema.parse(VALID),
+        assets: {
+          letterhead: {
+            data: Buffer.alloc(1),
+            pageFormat: { size: 'LETTER', orientation: 'portrait' }
+          }
+        }
+      }
+    );
+    assert.equal(spec.page.size, 'LETTER');
+    assert.equal(spec.page.orientation, 'portrait');
+  });
+});
+
+describe('presentations, edge cases', () => {
+  it('keep Markdown tables in slide text within the table limits', async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => `| ${i} | x |`).join('\n');
+    const { buffer, warnings } = await renderPptx({
+      title: 'T',
+      slides: [{ title: 'Big', text: `| A | B |\n|---|---|\n${rows}` }]
+    });
+    assert.ok(warnings.some(w => /table was cut/.test(w)));
+    const xml = await (await JSZip.loadAsync(buffer)).file('ppt/slides/slide1.xml').async('string');
+    assert.equal([...xml.matchAll(/<a:tr /g)].length, 31);
+  });
+
+  it('strip characters XML cannot hold from charts, and keep pie labels in percent', () => {
+    const chart = sanitizeChart(
+      {
+        type: 'pie',
+        title: 'T\u0001',
+        categories: ['a\u0002', 'b'],
+        series: [{ name: 'S\u0003', values: [1, 2] }],
+        numberFormat: '#,##0'
+      },
+      []
+    );
+    assert.equal(chart.title, 'T');
+    assert.deepEqual(chart.categories, ['a', 'b']);
+    assert.equal(chart.series[0].name, 'S');
+  });
+
+  it('put two columns side by side in a comparison layout', async () => {
+    // A layout with a heading box stacked over a content box on each side.
+    const base = await buildBaseTemplate();
+    const zip = await JSZip.loadAsync(base);
+    const layoutPath = 'ppt/slideLayouts/slideLayout4.xml';
+    let layout = await zip.file(layoutPath).async('string');
+    const box = (id, idx, x, y, cx, cy, type = '') =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="P${id}"/><p:cNvSpPr/><p:nvPr><p:ph ${type}idx="${idx}"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></p:spPr></p:sp>`;
+    layout = layout
+      .replace(
+        /<p:sp><p:nvSpPr><p:cNvPr id="3"[\s\S]*?<\/p:sp><p:sp><p:nvSpPr><p:cNvPr id="4"[\s\S]*?<\/p:sp>/,
+        ''
+      )
+      .replace(
+        '</p:spTree>',
+        box(5, 1, 457200, 1400000, 5000000, 400000, 'type="body" ') +
+          box(6, 2, 457200, 1900000, 5000000, 3500000) +
+          box(7, 3, 6400000, 1400000, 5000000, 400000, 'type="body" ') +
+          box(8, 4, 6400000, 1900000, 5000000, 3500000) +
+          '</p:spTree>'
+      );
+    zip.file(layoutPath, layout);
+    const template = await zip.generateAsync({ type: 'nodebuffer' });
+    const { buffer } = await renderPptx(
+      {
+        title: 'T',
+        slides: [
+          {
+            layout: 'two-column',
+            title: 'Compare',
+            left: { text: 'LEFT SIDE' },
+            right: { text: 'RIGHT SIDE' }
+          }
+        ]
+      },
+      { powerpointTemplate: template }
+    );
+    const xml = await (await JSZip.loadAsync(buffer)).file('ppt/slides/slide1.xml').async('string');
+    assert.match(xml, /<p:ph idx="2"\/>[\s\S]*LEFT SIDE/);
+    assert.match(xml, /<p:ph idx="4"\/>[\s\S]*RIGHT SIDE/);
+  });
+});
+
+describe('Office packages, part names', () => {
+  it('keep a part its relationship names percent-encoded or in another case', async () => {
+    const { buffer } = await renderPptx({
+      title: 'T',
+      slides: [
+        { title: 'Pic', image: `data:image/png;base64,${pngBytes(20, 10).toString('base64')}` }
+      ]
+    });
+    const zip = await JSZip.loadAsync(buffer);
+    const relsPath = 'ppt/slides/_rels/slide1.xml.rels';
+    const rels = await zip.file(relsPath).async('string');
+    const media = Object.keys(zip.files).find(name => name.startsWith('ppt/media/ihub-image'));
+    const renamed = media.replace('ihub-image', 'ihub image');
+    zip.file(renamed, await zip.file(media).async('nodebuffer'));
+    zip.remove(media);
+    zip.file(
+      relsPath,
+      rels.replace(
+        media.split('/').pop(),
+        renamed.split('/').pop().replace(' ', '%20').toUpperCase()
+      )
+    );
+    const template = await zip.generateAsync({ type: 'nodebuffer' });
+    // Filling it removes the old slides, but not by mistake a part still used.
+    const opened = await openPackage(template);
+    const { removeUnreachableParts, ContentTypes } =
+      await import('../services/documents/ooxml/opcPackage.js');
+    const removed = await removeUnreachableParts(opened, await ContentTypes.read(opened));
+    assert.ok(!removed.includes(renamed), removed.join());
+  });
+
+  it('read table alignments only from their own names', async () => {
+    const { buffer } = await renderPptx({
+      title: 'T',
+      slides: [
+        {
+          title: 'Tab',
+          table: { header: ['a', 'b'], rows: [['1', '2']], align: ['constructor', 'right'] }
+        }
+      ]
+    });
+    const xml = await (await JSZip.loadAsync(buffer)).file('ppt/slides/slide1.xml').async('string');
+    assert.doesNotMatch(xml, /function/);
+    assert.match(xml, /algn="r"/);
   });
 });

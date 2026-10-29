@@ -60,6 +60,7 @@ const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDr
 
 export const TEXT_PLACEHOLDERS = Object.freeze(['title', 'subtitle', 'author', 'date', 'company']);
 const PLACEHOLDER = /\{\{\s*([a-z]+)\s*\}\}/gi;
+const CONTENT_MARKER = /^\{\{\s*content\s*\}\}$/i;
 
 /** Settings elements that come after `w:updateFields` (schema order). */
 const AFTER_UPDATE_FIELDS = new Set([
@@ -116,10 +117,13 @@ function replaceInParagraph(paragraph, values) {
   const texts = descendants(paragraph, 't').filter(t => t.namespaceURI === NS.w);
   if (!texts.length) return false;
   let changed = false;
+  // Search on after each inserted value, so a value that itself holds a
+  // placeholder ("Using {{title}}") is never replaced again.
+  let searchFrom = 0;
   for (;;) {
     const full = texts.map(t => t.textContent).join('');
-    const match = [...full.matchAll(PLACEHOLDER)].find(m =>
-      Object.hasOwn(values, m[1].toLowerCase())
+    const match = [...full.matchAll(PLACEHOLDER)].find(
+      m => m.index >= searchFrom && Object.hasOwn(values, m[1].toLowerCase())
     );
     if (!match) return changed;
     const start = match.index;
@@ -139,6 +143,7 @@ function replaceInParagraph(paragraph, values) {
       t.setAttributeNS(XML_NS, 'xml:space', 'preserve');
       first = false;
     }
+    searchFrom = start + value.length;
     changed = true;
   }
 }
@@ -256,7 +261,7 @@ export async function inspectWordTemplate(buffer) {
   const has = name => index.byName.has(`paragraph:${name}`);
   const setup = pageSetupOf(doc);
   return {
-    placeholders: [...placeholders].sort(),
+    placeholders: [...placeholders].sort((a, b) => a.localeCompare(b)),
     contentPlaceholder: placeholders.has('content'),
     bodyHasContent: hasContent(bodyOf(doc)),
     headerFooterParts: (await headerFooterParts(zip, mainPart)).length,
@@ -573,18 +578,33 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
     }
   }
 
+  // Fill the template's own placeholders first: the content is the model's
+  // text and keeps any "{{…}}" it holds.
+  const values = options.values || {};
+  replacePlaceholders(tplBody, values);
+
   // Place the content.
   const marker = descendants(tplBody, 'p').find(
-    p => p.namespaceURI === NS.w && paragraphText(p).trim().toLowerCase() === '{{content}}'
+    p => p.namespaceURI === NS.w && CONTENT_MARKER.test(paragraphText(p).trim())
   );
   const sectPr = lastSectPr(tplBody);
   if (marker) {
     for (const node of nodes) marker.parentNode.insertBefore(node, marker);
-    marker.parentNode.removeChild(marker);
+    // A section break after the marker is stored in the marker's own
+    // properties (`w:pPr/w:sectPr`): keep it as an empty paragraph.
+    const markerPr = firstChild(marker, 'pPr');
+    if (firstChild(markerPr, 'sectPr')) {
+      for (const child of childElements(marker)) {
+        if (child !== markerPr) marker.removeChild(child);
+      }
+    } else marker.parentNode.removeChild(marker);
   } else {
     if (!hasContent(tplBody)) {
+      // An empty body: drop its empty paragraphs, but not the ones that end
+      // a section (their page setup and headers would be lost).
       for (const child of childElements(tplBody)) {
-        if (child !== sectPr) tplBody.removeChild(child);
+        if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
+        tplBody.removeChild(child);
       }
     }
     for (const node of nodes) {
@@ -592,9 +612,6 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
       else tplBody.appendChild(node);
     }
   }
-
-  const values = options.values || {};
-  replacePlaceholders(tplBody, values);
   writeXmlPart(tpl, tplMain, tplDoc);
   for (const part of await headerFooterParts(tpl, tplMain)) {
     const partDoc = await readXmlPart(tpl, part);

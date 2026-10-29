@@ -12,6 +12,7 @@ import {
   nextRelId,
   readRels,
   relativeTarget,
+  relsPathOf,
   removeUnreachableParts,
   resolveTarget,
   setCoreProperties,
@@ -434,7 +435,8 @@ class SlideBuilder {
   block(block, rect, { ph } = {}) {
     if (!block) return;
     const { paragraphs, table: markdownTable } = markdownToSlideText(block.text);
-    const table = block.table || markdownTable;
+    // A GFM table in the text gets the same limits as a `table` field.
+    const table = block.table || sanitizeTable(markdownTable, this.ctx.warnings, this.number);
     const visual = block.chart ? 'chart' : table ? 'table' : block.image ? 'image' : null;
     if (block.heading) {
       paragraphs.unshift({ runs: [{ text: block.heading, bold: true }], heading: true });
@@ -536,9 +538,17 @@ function buildSlide(slide, number, ctx, spec) {
     const right = slide.right;
     let rects;
     let phs = [null, null];
-    if (textPlaceholders.length >= 2) {
-      rects = [textPlaceholders[0].rect, textPlaceholders[1].rect];
-      phs = [textPlaceholders[0], textPlaceholders[1]];
+    // The two largest text placeholders, left to right — not a heading box
+    // stacked over a content box (as in "Comparison" layouts).
+    const columns = [...textPlaceholders]
+      .sort((a, b) => b.rect.cx * b.rect.cy - a.rect.cx * a.rect.cy)
+      .slice(0, 2)
+      .sort((a, b) => a.rect.x - b.rect.x);
+    const sideBySide =
+      columns.length === 2 && columns[0].rect.x + columns[0].rect.cx <= columns[1].rect.x;
+    if (sideBySide) {
+      rects = [columns[0].rect, columns[1].rect];
+      phs = columns;
     } else {
       // Both columns as text boxes, so they look alike.
       rects = splitHorizontally(
@@ -593,11 +603,11 @@ async function removeTemplateSlides(template) {
         if (slideRel.type === REL_TYPES.notesSlide) {
           const notesPath = resolveTarget(path, slideRel.target);
           zip.remove(notesPath);
-          zip.remove(notesPath.replace(/([^/]+)$/, '_rels/$1.rels'));
+          zip.remove(relsPathOf(notesPath));
         }
       }
       zip.remove(path);
-      zip.remove(path.replace(/([^/]+)$/, '_rels/$1.rels'));
+      zip.remove(relsPathOf(path));
       removed.add(relId);
     }
   }

@@ -48,6 +48,7 @@ const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships
 
 function hex(value, fallback) {
   const clean = String(value || '').replace('#', '');
+  if (/^[0-9a-f]{3}$/i.test(clean)) return [...clean.toUpperCase()].map(d => d + d).join('');
   return /^[0-9a-f]{6}$/i.test(clean) ? clean.toUpperCase() : fallback;
 }
 

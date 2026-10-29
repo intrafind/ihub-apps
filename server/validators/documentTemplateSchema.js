@@ -170,6 +170,24 @@ export const documentTemplateSchema = z
   })
   .strict()
   .superRefine((template, ctx) => {
+    // A file named in a slot must be of the kind that slot takes.
+    const slotFiles = [
+      ['logo', ['brand', 'logo'], template.brand?.logo],
+      ['letterhead', ['pdf', 'letterhead'], template.pdf?.letterhead],
+      ['letterheadFollowing', ['pdf', 'letterheadFollowing'], template.pdf?.letterheadFollowing],
+      ['wordTemplate', ['docx', 'template'], template.docx?.template],
+      ['powerpointTemplate', ['pptx', 'template'], template.pptx?.template],
+      ...template.fonts.flatMap((font, index) =>
+        FONT_FACES.map(face => ['font', ['fonts', index, face], font[face]])
+      )
+    ];
+    for (const [slot, path, name] of slotFiles) {
+      if (!name) continue;
+      const extension = name.split('.').pop();
+      if (!ASSET_SLOTS[slot].extensions.includes(extension)) {
+        ctx.addIssue({ code: 'custom', path, message: `Not a ${slot} file: ${name}` });
+      }
+    }
     const families = new Set();
     for (const [index, font] of template.fonts.entries()) {
       const key = font.family.toLowerCase();

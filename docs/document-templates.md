@@ -36,7 +36,7 @@ Where a template says something, it wins over what the model asks for: colours, 
 - **Base design:** `default`, `professional` or `minimal`, plus the brand colours and fonts.
 - **Logo** in the header, left or right, at the configured width (scaled down to fit the top margin), and larger on cover pages.
 - **Fonts:** upload the brand fonts and use their family names as heading and body font. Without an upload, a font name such as `Arial` maps to the closest bundled font (DejaVu Sans, Serif, Mono). Characters a brand font lacks are drawn in DejaVu Sans.
-- **Letterhead:** a PDF with your stationery (logo, address block, footer lines). Its first page is printed under the first page of the document; the **following pages** letterhead — or, without one, the letterhead's second page, or else its first page again — under the others. A cover page gets no letterhead. The letterhead is drawn *beneath* the text, and scaled to the page if the sizes differ. Set the margins so the text stays clear of the letterhead's logo and address block; with a letterhead, the page orientation is the template's.
+- **Letterhead:** a PDF with your stationery (logo, address block, footer lines). Its first page is printed under the first page of the document; the **following pages** letterhead — or, without one, the letterhead's second page, or else its first page again — under the others. A cover page gets no letterhead. The letterhead is drawn *beneath* the text, from its trim box (so a file exported with bleed is not shrunk), and scaled evenly and centred if the sizes differ. Set the margins so the text stays clear of the letterhead's logo and address block. With a letterhead, page size and orientation are the template's — or, when the template sets none, the letterhead's own format.
 
 ## Word
 
@@ -73,13 +73,13 @@ The editor's **Preview** renders sample documents with the saved template: the f
 
 ## Storage and API
 
-Templates live in `contents/document-templates/<id>/`: `template.json` and the files it names (`logo.png`, `letterhead.pdf`, `letterhead-following.pdf`, `word-template.dotx`, `powerpoint-template.potx`, `font-<family>-<style>.ttf`). Files are checked when they are uploaded — images, fonts and PDFs are parsed; Word and PowerPoint files are unpacked with size limits, and refused when they contain macros.
+Templates live in `contents/document-templates/<id>/`: `template.json` and the files it names (`logo.png`, `letterhead.pdf`, `letterhead-following.pdf`, `word-template.dotx`, `powerpoint-template.potx`, `font-<family>-<style>.ttf`). Files are checked when they are uploaded — images, fonts and PDFs are parsed; Word and PowerPoint files are unpacked with limits on the unpacked size (enforced while unpacking, not taken from what the archive declares), and refused when they contain macros.
 
 | Endpoint | |
 |---|---|
 | `GET /api/admin/document-templates` | Every template |
 | `POST /api/admin/document-templates` | Create one (`id`, `name`, …) |
-| `GET/PUT/DELETE /api/admin/document-templates/:id` | Read (with what its Office templates hold), save, delete |
+| `GET/PUT/DELETE /api/admin/document-templates/:id` | Read (with what its Office templates hold), save the settings, delete. A save keeps the stored files: files are only added or removed through the file endpoints |
 | `POST/DELETE /api/admin/document-templates/:id/files/:slot` | Upload (multipart `file`) or remove a file. Slots: `logo`, `font` (with `family` and `face`), `letterhead`, `letterheadFollowing`, `wordTemplate`, `powerpointTemplate` |
 | `POST /api/admin/document-templates/:id/sample/:format` | A sample `pdf`, `png`, `docx` or `pptx` |
 | `GET /api/document-templates` | Enabled templates for the export dialog (signed-in users); with `appId`, also the template that app pins |

@@ -3,6 +3,7 @@
 
 import { createRequire } from 'node:module';
 import JSZip from 'jszip';
+import { INVALID_XML_CHARS, REL_TYPES, readRels, resolveTarget } from '../ooxml/opcPackage.js';
 import { EMU_PER_INCH } from './pptxXml.js';
 
 /**
@@ -40,7 +41,10 @@ export const CHART_LIMITS = Object.freeze({
 export function sanitizeChart(chart, warnings) {
   if (!chart || typeof chart !== 'object') return null;
   const type = CHART_TYPES.includes(chart.type) ? chart.type : 'column';
-  const label = value => String(value ?? '').slice(0, CHART_LIMITS.maxLabelChars);
+  // pptxgenjs escapes markup but passes control characters through, which
+  // XML (the chart part, its workbook) cannot hold.
+  const clean = value => String(value ?? '').replace(INVALID_XML_CHARS, '');
+  const label = value => clean(value).slice(0, CHART_LIMITS.maxLabelChars);
   const categories = Array.isArray(chart.categories)
     ? chart.categories.slice(0, CHART_LIMITS.maxCategories).map(label)
     : [];
@@ -60,7 +64,7 @@ export function sanitizeChart(chart, warnings) {
   }
   return {
     type,
-    title: typeof chart.title === 'string' ? chart.title.slice(0, 200) : undefined,
+    title: typeof chart.title === 'string' ? clean(chart.title).slice(0, 200) : undefined,
     categories,
     series: type === 'pie' || type === 'doughnut' ? series.slice(0, 1) : series,
     stacked: chart.stacked === true && ['bar', 'column', 'area'].includes(type),
@@ -88,7 +92,12 @@ function chartOptions(chart, rect, { colors, font }) {
     showValue: chart.showValues,
     dataLabelFontFace: font,
     dataLabelFontSize: 11,
-    dataLabelFormatCode: chart.numberFormat || 'General'
+    // Pie and doughnut labels show percentages: keep a percent format there.
+    dataLabelFormatCode: pie
+      ? chart.numberFormat?.includes('%')
+        ? chart.numberFormat
+        : '0%'
+      : chart.numberFormat || 'General'
   };
   if (pie) {
     options.showPercent = chart.showValues;
@@ -156,31 +165,24 @@ export async function renderCharts(requests, { slideSize, colors, font }) {
   const zip = await JSZip.loadAsync(await pptx.write({ outputType: 'nodebuffer' }));
   const out = [];
   for (let i = 1; i <= requests.length; i += 1) {
-    const slideXml = await zip.file(`ppt/slides/slide${i}.xml`).async('string');
-    const relsXml = await zip.file(`ppt/slides/_rels/slide${i}.xml.rels`).async('string');
-    const chartTarget =
-      /Type="[^"]*\/chart"\s+Target="([^"]+)"|Target="([^"]+)"\s+Type="[^"]*\/chart"/.exec(relsXml);
-    const chartPath = (chartTarget?.[1] || chartTarget?.[2] || '')
-      .replace(/^\//, '')
-      .replace(/^\.\.\//, 'ppt/');
-    const frame = /<p:graphicFrame>[\s\S]*?<\/p:graphicFrame>/.exec(slideXml)?.[0];
+    const slidePath = `ppt/slides/slide${i}.xml`;
+    const slideXml = await zip.file(slidePath).async('string');
+    const chartRel = (await readRels(zip, slidePath)).find(r => r.type === REL_TYPES.chart);
+    const chartPath = chartRel ? resolveTarget(slidePath, chartRel.target) : null;
+    const frameStart = slideXml.indexOf('<p:graphicFrame>');
+    const frameEnd = slideXml.indexOf('</p:graphicFrame>', frameStart);
     const chartFile = chartPath ? zip.file(chartPath) : null;
-    if (!frame || !chartFile) throw new Error('A chart could not be created.');
-    const chartRelsPath = chartPath.replace(/([^/]+)$/, '_rels/$1.rels');
-    const chartRels = zip.file(chartRelsPath) ? await zip.file(chartRelsPath).async('string') : '';
-    const workbookTarget = /Target="([^"]+\.xlsx)"/.exec(chartRels)?.[1];
-    const workbookPath = workbookTarget
-      ? workbookTarget.startsWith('/')
-        ? workbookTarget.slice(1)
-        : `ppt/${workbookTarget.replace(/^\.\.\//, '')}`
+    if (frameStart < 0 || frameEnd < 0 || !chartFile) {
+      throw new Error('A chart could not be created.');
+    }
+    const workbookRel = (await readRels(zip, chartPath)).find(r => r.type === REL_TYPES.package);
+    const workbookFile = workbookRel
+      ? zip.file(resolveTarget(chartPath, workbookRel.target))
       : null;
     out.push({
       chartXml: await chartFile.async('string'),
-      workbook:
-        workbookPath && zip.file(workbookPath)
-          ? await zip.file(workbookPath).async('nodebuffer')
-          : null,
-      frameXml: frame
+      workbook: workbookFile ? await workbookFile.async('nodebuffer') : null,
+      frameXml: slideXml.slice(frameStart, frameEnd + '</p:graphicFrame>'.length)
     });
   }
   return out;

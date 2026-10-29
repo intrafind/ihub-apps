@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import path from 'node:path';
+import zlib from 'node:zlib';
 import JSZip from 'jszip';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
@@ -45,7 +46,7 @@ export const REL_TYPES = Object.freeze({
 /** Limits for a package read from an upload. */
 export const PACKAGE_LIMITS = Object.freeze({
   maxEntries: 5000,
-  maxUncompressedBytes: 300 * 1024 * 1024,
+  maxUncompressedBytes: 200 * 1024 * 1024,
   maxPartBytes: 100 * 1024 * 1024
 });
 
@@ -56,39 +57,71 @@ export class PackageError extends Error {
   }
 }
 
+const DEFLATE = '\u0008\u0000';
+const STORE = '\u0000\u0000';
+
+/**
+ * The bytes of one part, inflated with a hard ceiling: the archive's declared
+ * sizes can lie, so the limit applies to the output itself.
+ */
+function inflatePart(entry, maxBytes) {
+  const data = entry._data;
+  const magic = data?.compression?.magic;
+  const raw = data?.compressedContent;
+  if (!raw || (magic !== DEFLATE && magic !== STORE)) {
+    throw new PackageError('The Office document uses an unsupported compression.');
+  }
+  if (magic === STORE) {
+    if (raw.length > maxBytes)
+      throw new PackageError('A part of the Office document is too large.');
+    return Buffer.from(raw);
+  }
+  try {
+    return zlib.inflateRawSync(raw, { maxOutputLength: Math.max(1, maxBytes) });
+  } catch (error) {
+    throw new PackageError(
+      error?.code === 'ERR_BUFFER_TOO_LARGE'
+        ? 'A part of the Office document is too large when unpacked.'
+        : 'A part of the Office document is damaged.'
+    );
+  }
+}
+
 /**
  * Open a ZIP package, refusing archives that would inflate beyond the limits
- * (a "zip bomb") before anything is decompressed.
+ * (a "zip bomb"). Every part is inflated here, against a ceiling per part
+ * and for the whole package — the sizes an archive declares are not trusted
+ * — and kept inflated, so reading it later costs nothing more.
  *
  * @param {Buffer|Uint8Array} bytes
  * @param {Object} [limits]
  * @returns {Promise<JSZip>}
  */
 export async function openPackage(bytes, limits = PACKAGE_LIMITS) {
-  let zip;
+  let source;
   try {
-    zip = await JSZip.loadAsync(bytes, { checkCRC32: false });
+    source = await JSZip.loadAsync(bytes, { checkCRC32: false });
   } catch {
     throw new PackageError('The file is not a valid Office document (not a ZIP archive).');
   }
-  const entries = Object.values(zip.files);
+  const entries = Object.values(source.files);
   if (entries.length > limits.maxEntries) {
     throw new PackageError('The Office document has too many parts.');
   }
+  const zip = new JSZip();
   let total = 0;
   for (const entry of entries) {
-    // JSZip reads the sizes from the central directory without inflating.
-    const size = Number(entry._data?.uncompressedSize) || 0;
-    if (size > limits.maxPartBytes) {
-      throw new PackageError('A part of the Office document is too large.');
-    }
-    total += size;
-    if (total > limits.maxUncompressedBytes) {
-      throw new PackageError('The Office document is too large when unpacked.');
-    }
     if (entry.name.includes('..') || entry.name.startsWith('/')) {
       throw new PackageError('The Office document contains an invalid part name.');
     }
+    if (entry.dir) continue;
+    const remaining = limits.maxUncompressedBytes - total;
+    const data = inflatePart(entry, Math.min(limits.maxPartBytes, remaining));
+    total += data.length;
+    if (total > limits.maxUncompressedBytes) {
+      throw new PackageError('The Office document is too large when unpacked.');
+    }
+    zip.file(entry.name, data);
   }
   return zip;
 }
@@ -116,7 +149,7 @@ export function writePackage(zip) {
 }
 
 /** Characters XML 1.0 cannot hold (control characters other than tab and newlines). */
-const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
+export const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
 
 /**
  * Escape text for an XML element or attribute.
@@ -252,6 +285,22 @@ export function relsPathOf(partPath) {
 }
 
 /**
+ * The part a relationship file belongs to (`ppt/_rels/presentation.xml.rels`
+ * → `ppt/presentation.xml`), or null when the path is not one.
+ *
+ * @param {string} relsPath
+ * @returns {string|null}
+ */
+export function relsOwnerOf(relsPath) {
+  const dir = path.posix.dirname(relsPath);
+  const base = path.posix.basename(relsPath);
+  if (path.posix.basename(dir) !== '_rels' || !base.endsWith('.rels')) return null;
+  const parent = path.posix.dirname(dir);
+  const owner = base.slice(0, -'.rels'.length);
+  return parent === '.' ? owner : `${parent}/${owner}`;
+}
+
+/**
  * Resolve a relationship target to a part path.
  *
  * @param {string} sourcePart - The part owning the relationship.
@@ -259,7 +308,14 @@ export function relsPathOf(partPath) {
  * @returns {string} Part path without a leading slash.
  */
 export function resolveTarget(sourcePart, target) {
-  const clean = String(target || '').split('#')[0];
+  // Part names in relationships are URIs: `media/image%201.png` names the
+  // part `media/image 1.png`.
+  let clean = String(target || '').split('#')[0];
+  try {
+    clean = decodeURI(clean);
+  } catch {
+    // Not valid percent-encoding: use it as it is.
+  }
   if (clean.startsWith('/')) return path.posix.normalize(clean.slice(1));
   const dir = sourcePart ? path.posix.dirname(sourcePart) : '';
   return path.posix.normalize(path.posix.join(dir === '.' ? '' : dir, clean));
@@ -424,26 +480,32 @@ export const IMAGE_CONTENT_TYPES = Object.freeze({
  * @returns {Promise<string[]>} The removed part paths.
  */
 export async function removeUnreachableParts(zip, contentTypes) {
-  const reachable = new Set(['[Content_Types].xml']);
+  // Part names compare without case (OPC); the archive's entries keep theirs.
+  const byName = new Map(
+    Object.values(zip.files)
+      .filter(entry => !entry.dir)
+      .map(entry => [entry.name.toLowerCase(), entry.name])
+  );
+  const reachable = new Set(['[content_types].xml']);
   const queue = [''];
   while (queue.length) {
     const part = queue.shift();
-    const relsPath = relsPathOf(part);
-    if (zip.file(relsPath)) reachable.add(relsPath);
-    for (const rel of await readRels(zip, part)) {
+    const relsPath = byName.get(relsPathOf(part).toLowerCase());
+    if (relsPath) reachable.add(relsPath.toLowerCase());
+    for (const rel of relsPath ? await readRels(zip, part) : []) {
       if (rel.external) continue;
-      const target = resolveTarget(part, rel.target);
-      if (reachable.has(target) || !zip.file(target)) continue;
-      reachable.add(target);
+      const target = byName.get(resolveTarget(part, rel.target).toLowerCase());
+      if (!target || reachable.has(target.toLowerCase())) continue;
+      reachable.add(target.toLowerCase());
       queue.push(target);
     }
   }
   const removed = [];
   for (const entry of Object.values(zip.files)) {
-    if (entry.dir || reachable.has(entry.name)) continue;
+    if (entry.dir || reachable.has(entry.name.toLowerCase())) continue;
     // A relationship file belongs to its part: kept while the part is.
-    const owner = entry.name.replace(/(^|\/)_rels\/([^/]+)\.rels$/, '$1$2');
-    if (owner !== entry.name && reachable.has(owner)) continue;
+    const owner = relsOwnerOf(entry.name);
+    if (owner !== null && reachable.has(owner.toLowerCase())) continue;
     zip.remove(entry.name);
     removed.push(entry.name);
   }

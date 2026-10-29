@@ -232,13 +232,16 @@ async function readAsset(id, name) {
   const file = assetPath(id, name);
   const stat = await fs.stat(file);
   const cached = assetCache.get(file);
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+  if (cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
     assetCache.delete(file);
     assetCache.set(file, cached);
     return cached.data;
   }
   const data = await fs.readFile(file);
-  if (cached) assetCacheBytes -= cached.size;
+  // Another read of the same file may have cached it meanwhile.
+  const previous = assetCache.get(file);
+  if (previous) assetCacheBytes -= previous.size;
+  assetCache.delete(file);
   assetCache.set(file, { data, mtimeMs: stat.mtimeMs, size: stat.size });
   assetCacheBytes += stat.size;
   for (const [key, entry] of assetCache) {
@@ -293,6 +296,13 @@ export async function loadTemplateBundle(idOrTemplate, format) {
       template.pdf.letterheadFollowing,
       'letterheadFollowing'
     );
+    const letterhead = assets.letterhead || assets.letterheadFollowing;
+    if (letterhead) {
+      // The page format the letterhead was made for, for templates that do
+      // not set one.
+      const { letterheadPageFormat } = await import('../pdf/letterhead.js');
+      letterhead.pageFormat = await letterheadPageFormat(letterhead.data).catch(() => null);
+    }
     assets.fonts = [];
     for (const font of template.fonts) {
       const faces = {};
@@ -337,14 +347,35 @@ async function assetExists(id, name) {
   }
 }
 
+/** Clear `default` on every other template, read from disk under the lock. */
 async function clearOtherDefaults(id) {
-  for (const other of await listTemplates({ includeDisabled: true })) {
-    if (other.id === id || !other.default) continue;
-    await atomicWriteJSON(configPath(other.id), {
-      ...other,
-      default: false
-    });
+  for (const entry of await fs.readdir(templatesDirectory(), { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === id || !TEMPLATE_ID_PATTERN.test(entry.name)) {
+      continue;
+    }
+    const other = await readTemplateFile(entry.name);
+    if (other?.default) await atomicWriteJSON(configPath(other.id), { ...other, default: false });
   }
+}
+
+/**
+ * A template with the file references of the stored one. Files are only
+ * ever set by the upload and remove calls; a settings save — perhaps from an
+ * editor opened before an upload — never adds, drops or swaps them.
+ */
+function withStoredFiles(template, stored) {
+  const next = structuredClone(template);
+  const set = (section, key, value) => {
+    if (value) next[section][key] = value;
+    else delete next[section][key];
+  };
+  set('brand', 'logo', stored?.brand?.logo);
+  set('pdf', 'letterhead', stored?.pdf?.letterhead);
+  set('pdf', 'letterheadFollowing', stored?.pdf?.letterheadFollowing);
+  set('docx', 'template', stored?.docx?.template);
+  set('pptx', 'template', stored?.pptx?.template);
+  next.fonts = stored?.fonts ? structuredClone(stored.fonts) : [];
+  return next;
 }
 
 function validate(input, id) {
@@ -359,8 +390,9 @@ function validate(input, id) {
 }
 
 /**
- * Create or replace a template's settings. Files are uploaded separately
- * (`saveTemplateAsset`); every file the settings name must exist.
+ * Create or replace a template's settings. Files are uploaded and removed
+ * separately (`saveTemplateAsset`, `removeTemplateAsset`); the file
+ * references stay as stored.
  *
  * @param {string} id
  * @param {Object} input
@@ -369,7 +401,7 @@ function validate(input, id) {
  * @returns {Promise<Object>} The saved template.
  */
 export async function saveTemplate(id, input, { create = false } = {}) {
-  const template = validate(input, id);
+  const requested = validate(input, id);
   return locked(async () => {
     const dir = templateDirectory(id);
     const exists = await fs
@@ -380,6 +412,11 @@ export async function saveTemplate(id, input, { create = false } = {}) {
       throw new DocumentTemplateError(`A template "${id}" already exists.`, 409);
     }
     if (!create && !exists) throw new DocumentTemplateError('Template not found.', 404);
+    const stored = exists ? await readTemplateFile(id) : null;
+    // A stored file that does not parse keeps the references sent with the
+    // save (the files are not removed for a typo in template.json).
+    const template =
+      exists && !stored ? requested : validate(withStoredFiles(requested, stored), id);
     for (const name of referencedAssets(template)) {
       if (!(await assetExists(id, name))) {
         throw new DocumentTemplateError(`The file "${name}" is not uploaded.`);
@@ -424,15 +461,27 @@ export async function deleteTemplate(id) {
   });
 }
 
+/**
+ * The file name prefix of a font family's files: the one its regular style
+ * already has, else a new one no other family uses (family names that slug
+ * alike, or that have no Latin letters, get a number).
+ */
+function fontFilePrefix(fonts, entry, family) {
+  if (entry?.normal) return entry.normal.replace(/-normal\.[a-z]+$/, '');
+  const taken = new Set(fonts.map(font => font.normal?.replace(/-normal\.[a-z]+$/, '')));
+  const base = `font-${fontSlug(family)}`;
+  let prefix = base;
+  for (let n = 2; taken.has(prefix); n += 1) prefix = `${base}-${n}`;
+  return prefix;
+}
+
 function fontSlug(family) {
-  return (
-    family
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40) || 'font'
-  );
+  const words = family
+    .toLowerCase()
+    .normalize('NFKD')
+    .split(/[^a-z0-9]/)
+    .filter(Boolean);
+  return words.join('-').slice(0, 40) || 'font';
 }
 
 /**
@@ -465,11 +514,13 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
       const familyName = String(family || info.familyName || '').trim();
       if (!familyName) throw new DocumentTemplateError('Name the font family.');
       if (!FONT_FACES.includes(face)) throw new DocumentTemplateError('Unknown font style.');
-      name = `font-${fontSlug(familyName)}-${face}.${extension}`;
       const entry = next.fonts.find(f => f.family.toLowerCase() === familyName.toLowerCase());
+      if (!entry && face !== 'normal') {
+        throw new DocumentTemplateError('Upload the regular style of a font first.');
+      }
+      name = `${fontFilePrefix(next.fonts, entry, familyName)}-${face}.${extension}`;
       if (entry) entry[face] = name;
-      else if (face === 'normal') next.fonts.push({ family: familyName, normal: name });
-      else throw new DocumentTemplateError('Upload the regular style of a font first.');
+      else next.fonts.push({ family: familyName, normal: name });
     } else {
       name = `${ASSET_SLOTS[slot].baseName}.${extension}`;
       if (slot === 'logo') next.brand.logo = name;

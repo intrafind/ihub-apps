@@ -83,8 +83,11 @@ function str(value, max = 500) {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
 }
 
+/** A `#rgb` or `#rrggbb` colour as the six hex digits Word wants. */
 function colorOr(value, fallback) {
-  return isColor(value) && value.startsWith('#') ? hex(value).toUpperCase() : fallback;
+  if (!isColor(value) || !value.startsWith('#')) return fallback;
+  const digits = hex(value).toUpperCase();
+  return digits.length === 3 ? [...digits].map(d => d + d).join('') : digits;
 }
 
 /**

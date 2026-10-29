@@ -155,7 +155,11 @@ async function checkWordTemplate(buffer) {
     );
   }
   const { inspectWordTemplate } = await import('../docx/wordTemplate.js');
-  return inspectWordTemplate(buffer);
+  try {
+    return await inspectWordTemplate(buffer);
+  } catch (error) {
+    throw new TemplateAssetError(error?.message || 'The Word template could not be read.');
+  }
 }
 
 async function checkPowerpointTemplate(buffer) {

@@ -360,6 +360,12 @@ export function luminance(hex) {
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
 }
 
+/** Column alignments; a `Map`, as the value comes from the model. */
+const TABLE_ALIGN = new Map([
+  ['right', 'r'],
+  ['center', 'ctr']
+]);
+
 /**
  * A table in the template's accent colour: header row filled with accent 1,
  * banded rows in a light tint of it, white rules — "Medium Style 2", written
@@ -382,7 +388,7 @@ export function tableFrame({ id, rect, table, lang, accent, fontSize, columnWidt
     `<a:${side} w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:prstDash val="solid"/></a:${side}>`;
   const borders = ['lnL', 'lnR', 'lnT', 'lnB'].map(line).join('');
   const cell = (text, column, header, band) => {
-    const align = { right: 'r', center: 'ctr' }[table.align?.[column]] || 'l';
+    const align = TABLE_ALIGN.get(table.align?.[column]) || 'l';
     const fill = header
       ? '<a:solidFill><a:schemeClr val="accent1"/></a:solidFill>'
       : band
