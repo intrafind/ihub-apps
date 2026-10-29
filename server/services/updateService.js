@@ -466,7 +466,7 @@ export async function downloadUpdate(updateInfo) {
   const workDir = await createWorkDir('github');
   try {
     setState({ status: 'downloading', progress: 0, message: 'Downloading update...', error: null });
-    const archivePath = join(workDir, updateInfo.archiveName);
+    const archivePath = join(workDir, workCopyName(updateInfo.archiveName));
     await downloadFile(updateInfo.assetUrl, archivePath, updateInfo.assetSize);
 
     let checksumsPath = null;
@@ -566,6 +566,16 @@ export function removeWorkDir(dir) {
   const tmpRoot = join(getRootDir(), UPDATE_TMP_DIR);
   if (typeof dir !== 'string' || !resolve(dir).startsWith(tmpRoot + sep)) return;
   fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * Name of the private working copy of an archive: fixed, so nothing a client
+ * or a release lists ends up in a path. The original name travels as metadata.
+ */
+function workCopyName(originalName) {
+  const format = detectArchiveFormat(originalName);
+  if (!format) throw new UpdateRequestError('Not a release archive');
+  return `archive.${format.format}${format.base64 ? '.base64.txt' : ''}`;
 }
 
 function isAllowedArchiveName(name) {
@@ -688,7 +698,7 @@ export async function stageLocalFile(requestedPath) {
     await assertDiskSpaceFor(stat.size);
 
     setState({ status: 'staging', progress: 5, message: 'Reading archive...', error: null });
-    const copy = join(workDir, name);
+    const copy = join(workDir, workCopyName(name));
     await pipeline(
       handle.createReadStream({ start: 0, autoClose: false }),
       createWriteStream(copy)
@@ -882,7 +892,7 @@ export async function stageArchive({
     let archiveToExtract = archivePath;
     let archiveSha256 = fileSha256;
     if (format.base64) {
-      archiveToExtract = join(scratch, originalName.replace(/\.base64\.txt$/i, ''));
+      archiveToExtract = join(scratch, `archive.${format.format}`);
       await decodeBase64File(archivePath, archiveToExtract);
       archiveSha256 = await sha256File(archiveToExtract);
     }
