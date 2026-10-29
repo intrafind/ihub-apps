@@ -120,7 +120,7 @@ function isAppAvailable(app) {
   if (app.enabled === false || !areAppFeaturesEnabled(app, configCache.getFeatures())) {
     return false;
   }
-  return areAppIntegrationsEnabled(app, configCache.get('config/platform.json')?.data || {});
+  return areAppIntegrationsEnabled(app, configCache.getIntegrationContext());
 }
 
 /**

@@ -19,6 +19,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { describeIssues } from '../../validators/userPromptSchema.js';
+import { getIntegrationStatus } from '../../integrationRegistry.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -361,6 +362,33 @@ export default function registerAdminAppsRoutes(app) {
       res.json(templates);
     } catch (error) {
       sendFailedOperationError(res, 'fetch template apps', error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/apps/integration-status:
+   *   get:
+   *     summary: Which integrations are on
+   *     description: Whether each integration an app can require (`requiredIntegrations`) is set up and switched on. While one is off, users do not get the apps that need it.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     responses:
+   *       200:
+   *         description: Integration ids with their state, e.g. `{"ifinder": true, "peopleDirectories": false}`
+   *       401:
+   *         description: Authentication required
+   *       403:
+   *         description: Admin access required
+   */
+  app.get(buildServerPath('/api/admin/apps/integration-status'), contentAdminAuth, (req, res) => {
+    try {
+      res.json(getIntegrationStatus(configCache.getIntegrationContext()));
+    } catch (error) {
+      sendFailedOperationError(res, 'fetch integration status', error);
     }
   });
 

@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url';
 
 import configCache from '../configCache.js';
 import configStore from '../services/config/ConfigStore.js';
-import { areAppIntegrationsEnabled } from '../integrationRegistry.js';
+import {
+  areAppIntegrationsEnabled,
+  getIntegrationStatus,
+  isIntegrationEnabled
+} from '../integrationRegistry.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import {
   enableAssistantModelOnIFinderSetup,
@@ -24,7 +28,8 @@ const APPS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../def
 
 const APPS = [
   { id: 'chat', enabled: true },
-  { id: 'ifinder-search', enabled: true, requiredIntegrations: ['ifinder'] }
+  { id: 'ifinder-search', enabled: true, requiredIntegrations: ['ifinder'] },
+  { id: 'people-directory', enabled: true, requiredIntegrations: ['peopleDirectories'] }
 ];
 
 describe('areAppIntegrationsEnabled', () => {
@@ -35,9 +40,35 @@ describe('areAppIntegrationsEnabled', () => {
   });
 
   it('follows platform.iFinder.enabled', () => {
-    assert.equal(areAppIntegrationsEnabled(app, { iFinder: { enabled: true } }), true);
-    assert.equal(areAppIntegrationsEnabled(app, { iFinder: { enabled: false } }), false);
+    assert.equal(
+      areAppIntegrationsEnabled(app, { platform: { iFinder: { enabled: true } } }),
+      true
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(app, { platform: { iFinder: { enabled: false } } }),
+      false
+    );
     assert.equal(areAppIntegrationsEnabled(app, {}), false);
+  });
+
+  it('counts people directories as on with one enabled directory', () => {
+    const on = id => isIntegrationEnabled('peopleDirectories', { peopleDirectories: id });
+    assert.equal(on({ directories: [{ id: 'a' }] }), true);
+    assert.equal(on({ directories: [{ id: 'a', enabled: false }, { id: 'b' }] }), true);
+    assert.equal(on({ directories: [{ id: 'a', enabled: false }] }), false);
+    assert.equal(on({ directories: [] }), false);
+    assert.equal(on(undefined), false);
+  });
+
+  it('reports every integration', () => {
+    assert.deepEqual(getIntegrationStatus({}), { ifinder: false, peopleDirectories: false });
+    assert.deepEqual(
+      getIntegrationStatus({
+        platform: { iFinder: { enabled: true } },
+        peopleDirectories: { directories: [{ id: 'a' }] }
+      }),
+      { ifinder: true, peopleDirectories: true }
+    );
   });
 
   it('counts an unknown integration as off', () => {
@@ -45,9 +76,14 @@ describe('areAppIntegrationsEnabled', () => {
   });
 
   it('is validated in the app schema, and the shipped iFinder apps use it', async () => {
-    for (const id of ['iassistant', 'ifinder-search']) {
+    const shipped = {
+      iassistant: 'ifinder',
+      'ifinder-search': 'ifinder',
+      'people-directory': 'peopleDirectories'
+    };
+    for (const [id, integration] of Object.entries(shipped)) {
       const app = JSON.parse(await fs.readFile(path.join(APPS_DIR, `${id}.json`), 'utf8'));
-      assert.deepEqual(app.requiredIntegrations, ['ifinder']);
+      assert.deepEqual(app.requiredIntegrations, [integration]);
       assert.equal(app.enabled, true);
       const parsed = appConfigSchema.safeParse(app);
       assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
@@ -64,10 +100,11 @@ describe('areAppIntegrationsEnabled', () => {
 describe('configCache.getApps with requiredIntegrations', () => {
   beforeEach(() => mock.restoreAll());
 
-  function serve(platform) {
+  function serve(platform, peopleDirectories = { directories: [] }) {
     mock.method(configCache, 'get', key => {
       if (key === 'config/apps.json') return { data: APPS, etag: '"apps-etag"' };
       if (key === 'config/platform.json') return { data: platform };
+      if (key === 'config/peopleDirectories.json') return { data: peopleDirectories };
       return null;
     });
     mock.method(configCache, 'getFeatures', () => ({}));
@@ -91,7 +128,7 @@ describe('configCache.getApps with requiredIntegrations', () => {
 
   it('still lists it for admins', () => {
     serve({ iFinder: { enabled: false } });
-    assert.equal(configCache.getApps(true).data.length, 2);
+    assert.equal(configCache.getApps(true).data.length, APPS.length);
   });
 });
 

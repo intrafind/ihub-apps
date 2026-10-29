@@ -1,6 +1,7 @@
 {
   "id": "people-directory",
-  "enabled": false,
+  "enabled": true,
+  "requiredIntegrations": ["peopleDirectories"],
   "order": 12,
   "category": "utility",
   "type": "chat",

@@ -1030,9 +1030,9 @@ class ConfigCache {
     // have their own ETags, and a client holding the old list must not get a
     // 304 once a feature or an integration flips.
     const features = this.getFeatures();
-    const platform = this.get('config/platform.json')?.data || {};
+    const integrationContext = this.getIntegrationContext();
     const isAvailable = app =>
-      areAppFeaturesEnabled(app, features) && areAppIntegrationsEnabled(app, platform);
+      areAppFeaturesEnabled(app, features) && areAppIntegrationsEnabled(app, integrationContext);
     const enabled = apps.data.filter(app => app.enabled !== false);
     const available = enabled.filter(isAvailable);
     if (available.length === enabled.length) {
@@ -1220,6 +1220,19 @@ class ConfigCache {
       logger.error('Error loading providers', { component: 'ConfigCache', error });
       return { data: [], etag: null };
     }
+  }
+
+  /**
+   * The config an integration check (integrationRegistry) reads: the platform
+   * config and the people directories. Tolerates a cache that is not loaded yet.
+   *
+   * @returns {{platform: Object, peopleDirectories: Object}}
+   */
+  getIntegrationContext() {
+    return {
+      platform: this.get('config/platform.json')?.data || {},
+      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {}
+    };
   }
 
   /**

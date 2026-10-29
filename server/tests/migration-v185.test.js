@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V185__ifinder_apps_require_integration.js';
+import { up, precondition, version } from '../migrations/V185__apps_require_integration.js';
 
 function fakeCtx(files) {
   return {
@@ -30,6 +30,7 @@ test('removes the old app and gates the iFinder apps, keeping their enabled flag
     'apps/ifinder-document-actions.json': { id: 'ifinder-document-actions' },
     'apps/iassistant.json': { id: 'iassistant', enabled: false },
     'apps/ifinder-search.json': { id: 'ifinder-search', enabled: true },
+    'apps/people-directory.json': { id: 'people-directory', enabled: false },
     'apps/chat.json': { id: 'chat' },
     'apps/parliamentary-questions.json': {
       id: 'parliamentary-questions',
@@ -42,6 +43,10 @@ test('removes the old app and gates the iFinder apps, keeping their enabled flag
   assert.deepEqual(ctx.files['apps/iassistant.json'].requiredIntegrations, ['ifinder']);
   assert.equal(ctx.files['apps/iassistant.json'].enabled, false);
   assert.deepEqual(ctx.files['apps/ifinder-search.json'].requiredIntegrations, ['ifinder']);
+  assert.deepEqual(ctx.files['apps/people-directory.json'].requiredIntegrations, [
+    'peopleDirectories'
+  ]);
+  assert.equal(ctx.files['apps/people-directory.json'].enabled, false);
   assert.equal('requiredIntegrations' in ctx.files['apps/chat.json'], false);
   assert.equal(
     ctx.files['apps/parliamentary-questions.json'].rendererConfig.iAssistantAppId,

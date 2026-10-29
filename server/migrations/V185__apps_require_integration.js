@@ -2,22 +2,27 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V185 — iFinder apps follow the iFinder integration
+ * Migration V185 — integration apps follow their integration
  *
  * - Removes the retired `ifinder-document-actions` app, which `ifinder-search`
  *   replaces. The Parliamentary Questions Analyzer hands its questions to
  *   `ifinder-search` instead.
- * - Adds `requiredIntegrations: ["ifinder"]` to `iassistant` and
- *   `ifinder-search`: users get them only while the iFinder integration is on.
- *   An app's `enabled` flag is left as the admin set it.
+ * - Adds `requiredIntegrations` to `iassistant` and `ifinder-search` (iFinder)
+ *   and to `people-directory` (People directories): users get them only while
+ *   that integration is on. An app's `enabled` flag is left as the admin set it.
  */
 
 export const version = '185';
-export const description = 'ifinder_apps_require_integration';
+export const description = 'apps_require_integration';
 
 const REMOVED_APP = 'ifinder-document-actions';
 const REPLACEMENT_APP = 'ifinder-search';
-const INTEGRATION_APPS = ['iassistant', 'ifinder-search'];
+/** App id → the integration it needs. */
+const INTEGRATION_APPS = {
+  iassistant: 'ifinder',
+  'ifinder-search': 'ifinder',
+  'people-directory': 'peopleDirectories'
+};
 
 export async function precondition(ctx) {
   const files = await ctx.listFiles('apps', '*.json');
@@ -32,16 +37,16 @@ export async function up(ctx) {
     ctx.log(`Removed apps/${REMOVED_APP}.json`);
   }
 
-  for (const id of INTEGRATION_APPS) {
+  for (const [id, integration] of Object.entries(INTEGRATION_APPS)) {
     if (!files.includes(`${id}.json`)) continue;
     const path = `apps/${id}.json`;
     const app = await ctx.readJson(path);
     if (!app || typeof app !== 'object') continue;
     const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : [];
-    if (required.includes('ifinder')) continue;
-    app.requiredIntegrations = [...required, 'ifinder'];
+    if (required.includes(integration)) continue;
+    app.requiredIntegrations = [...required, integration];
     await ctx.writeJson(path, app);
-    ctx.log(`${path} now requires the iFinder integration`);
+    ctx.log(`${path} now requires the ${integration} integration`);
   }
 
   const parliamentary = files.includes('parliamentary-questions.json')

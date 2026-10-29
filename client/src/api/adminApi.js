@@ -143,6 +143,15 @@ export const fetchAdminApps = async () => {
   return response.data;
 };
 
+/**
+ * Which integrations an app can require are on, e.g.
+ * `{ ifinder: true, peopleDirectories: false }`.
+ */
+export const fetchAppIntegrationStatus = async () => {
+  const response = await makeAdminApiCall('/admin/apps/integration-status');
+  return response.data;
+};
+
 export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/admin/models');
