@@ -113,5 +113,6 @@
     }
   },
   "allowEmptyContent": false,
-  "enabled": false
+  "requiredIntegrations": ["ifinder"],
+  "enabled": true
 }

@@ -221,9 +221,24 @@ several in one answer; every hit names the directory it came from.
 - x500.bund.de ships as a disabled entry. It connects over LDAPS and trusts the Verwaltungs-PKI
   root `PCA-1-Verwaltung-23`, which iHub ships, checked against the fingerprint the BSI publishes.
   The iHub server needs a direct route to port 636; LDAP does not use the HTTP proxy.
-- The new **People search** app ships disabled and uses every directory a user may use. The
-  admin page offers to switch it on with the first directory.
+- The new **People search** app uses every directory a user may use. It ships enabled and
+  appears for users as soon as one directory is switched on under **Admin → Integrations →
+  People directories**; until then users do not get it (`requiredIntegrations`).
 - Each directory has its own groups, on top of the tool permissions. Plain-text LDAP, private
   addresses and untrusted certificates are refused unless allowed explicitly.
 
 See [People Directory Search](../../people-directory-search.md).
+
+## iFinder Apps Appear With the iFinder Integration
+
+The **iFinder Search** and **iAssistant** apps now ship enabled and show up for users as soon as
+the iFinder integration is switched on under **Admin → Integrations → iFinder**; while it is off,
+users do not get them. Apps declare this with the new `requiredIntegrations` field (currently
+`["ifinder"]`); Admin → Apps still lists them, marked as hidden.
+
+Saving a complete iFinder setup (integration on, base URL set) also switches on the
+**iAssistant Conversation** model, so the iAssistant app works without a visit to Admin → Models.
+A model an admin disables afterwards stays disabled.
+
+Installations that are already configured keep the model as it is; the upgrade adds the
+requirement to the two apps and leaves their enabled state alone.

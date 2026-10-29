@@ -6,7 +6,8 @@
 /**
  * Migration V094 specs — default iAssistant app and extraContext cleanup.
  *
- * Ships the new default `apps/iassistant.json` (disabled, no model selector,
+ * Ships the new default `apps/iassistant.json` (no model selector, hidden until
+ * the iFinder integration is on,
  * templated extraContext) to installs that don't have the app yet, and
  * replaces the known hardcoded test extraContext ("My name is Daniel …") that
  * was configured before extraContext supported prompt variables. Deliberate
@@ -43,13 +44,14 @@ test('version is the next unused number', () => {
   assert.equal(version, '094');
 });
 
-test('the shipped default app is disabled, hides the model selector, and templates the user', async () => {
+test('the shipped default app waits for the iFinder integration, hides the model selector, and templates the user', async () => {
   const ctx = fakeCtx({});
   await up(ctx);
   const app = ctx.files['apps/iassistant.json'];
 
   assert.ok(app, 'default app was not seeded');
-  assert.equal(app.enabled, false);
+  assert.equal(app.enabled, true);
+  assert.deepEqual(app.requiredIntegrations, ['ifinder']);
   assert.equal(app.disallowModelSelection, true);
   assert.equal(app.settings.model.enabled, false);
   assert.match(app.iassistant.extraContext, /\{\{user_name\}\}/);

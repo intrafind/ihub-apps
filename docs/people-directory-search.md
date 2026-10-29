@@ -4,7 +4,7 @@ Users can ask iHub's chat for people: who someone is, their function, their unit
 
 Each enabled directory becomes its own small set of read-only tools, named and described after the directory. The model reads those descriptions, decides which directory fits a question, and calls several when it needs to — for example the company directory and x500.bund.de in one answer. Nothing is merged server-side: every result says which directory it came from.
 
-The shipped **People search** app (`people-directory`) uses every directory a user may use, including ones added later.
+The shipped **People search** app (`people-directory`) uses every directory a user may use, including ones added later. It ships enabled but requires the People directories integration (`requiredIntegrations: ["peopleDirectories"]`): users get it as soon as one directory is enabled, and not before. Admin → Apps marks it as hidden until then.
 
 > Microsoft Entra ID is not a directory type yet. The existing `entraPeopleSearch` tool is unchanged; see [Tool Calling](tool-calling.md#entrapeoplesearch).
 
@@ -15,7 +15,7 @@ The shipped **People search** app (`people-directory`) uses every directory a us
 The directory of the German federal administration is reachable from the public internet and ships as a disabled entry, `x500bund`.
 
 1. Open **Admin → Integrations → People directories**.
-2. Switch on **Federal directory (IVBB)**. The page offers to switch on the **People search** app as well.
+2. Switch on **Federal directory (IVBB)**. The **People search** app appears for users with the first enabled directory. An installation that still has the app disabled gets an offer on the page to switch it on.
 3. Optional: open the entry, type a surname into the test panel and run the test.
 
 The iHub server needs a direct route to `x500.bund.de` on port 636 (LDAP does not use the HTTP proxy). The entry trusts the Verwaltungs-PKI root shipped with iHub (see [Certificates](#certificates)).

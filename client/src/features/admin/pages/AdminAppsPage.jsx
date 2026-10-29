@@ -12,6 +12,7 @@ import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import {
   fetchAdminApps,
+  fetchAppIntegrationStatus,
   getAdminApiErrorMessage,
   makeAdminApiCall,
   reorderApps,
@@ -47,24 +48,43 @@ function AppNameCell({ app, currentLanguage }) {
   );
 }
 
+/** Names of the integrations an app can require, as shown to admins. */
+const INTEGRATION_NAMES = {
+  ifinder: 'iFinder integration',
+  peopleDirectories: 'People directories'
+};
+
 /**
- * The features an app requires (`requiredFeatures`) that are off, by name.
- * While one is off, users do not get the app, even though it is enabled. An
- * id no feature has (a typo) counts as off and is shown as it is.
+ * The features (`requiredFeatures`) and integrations (`requiredIntegrations`)
+ * an app requires that are off, by name. While one is off, users do not get
+ * the app, even though it is enabled. An id nothing defines (a typo) counts as
+ * off and is shown as it is.
  *
  * @param {Object} app - App config.
- * @param {Object[]} [features] - Resolved features from the platform config.
+ * @param {Object} [platformConfig] - Platform config with its resolved `features`.
+ * @param {Object} [integrationStatus] - Integration ids with whether they are on
+ *   (`GET /admin/apps/integration-status`). Unknown until loaded: nothing is flagged then.
  * @param {string} language - Current language.
- * @returns {string[]} Names of the required features that are off.
+ * @returns {string[]} Names of the required features and integrations that are off.
  */
-function missingRequiredFeatures(app, features, language) {
-  if (!Array.isArray(app.requiredFeatures) || !Array.isArray(features)) return [];
-  return app.requiredFeatures.flatMap(id => {
-    const feature = features.find(entry => entry.id === id);
-    if (!feature) return [id];
-    if (feature.enabled !== false) return [];
-    return [getLocalizedContent(feature.name, language) || feature.id];
-  });
+function missingRequirements(app, platformConfig, integrationStatus, language) {
+  const features = platformConfig?.features;
+  const missingFeatures =
+    Array.isArray(app.requiredFeatures) && Array.isArray(features)
+      ? app.requiredFeatures.flatMap(id => {
+          const feature = features.find(entry => entry.id === id);
+          if (!feature) return [id];
+          if (feature.enabled !== false) return [];
+          return [getLocalizedContent(feature.name, language) || feature.id];
+        })
+      : [];
+  const missingIntegrations =
+    Array.isArray(app.requiredIntegrations) && integrationStatus
+      ? app.requiredIntegrations.flatMap(id =>
+          integrationStatus[id] === true ? [] : [INTEGRATION_NAMES[id] || id]
+        )
+      : [];
+  return [...missingFeatures, ...missingIntegrations];
 }
 
 function AdminAppsPage() {
@@ -73,6 +93,7 @@ function AdminAppsPage() {
   const navigate = useNavigate();
   const { platformConfig } = usePlatformConfig();
   const [apps, setApps] = useState([]);
+  const [integrationStatus, setIntegrationStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
@@ -108,8 +129,13 @@ function AdminAppsPage() {
   const loadApps = async () => {
     try {
       setLoading(true);
-      const data = await fetchAdminApps();
+      const [data, status] = await Promise.all([
+        fetchAdminApps(),
+        // The marker is a hint: the list is useful without it
+        fetchAppIntegrationStatus().catch(() => null)
+      ]);
       setApps(data);
+      setIntegrationStatus(status);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     } finally {
@@ -325,7 +351,7 @@ function AdminAppsPage() {
       sortAccessor: app => (app.enabled ? 1 : 0),
       render: app => {
         const missing = app.enabled
-          ? missingRequiredFeatures(app, platformConfig?.features, currentLanguage)
+          ? missingRequirements(app, platformConfig, integrationStatus, currentLanguage)
           : [];
         return (
           <div className="flex flex-col items-start gap-1">
@@ -378,7 +404,12 @@ function AdminAppsPage() {
         if (app.enabled === false) {
           return t('admin.apps.openDisabledHint', 'Enable the app to open it');
         }
-        const missing = missingRequiredFeatures(app, platformConfig?.features, currentLanguage);
+        const missing = missingRequirements(
+          app,
+          platformConfig,
+          integrationStatus,
+          currentLanguage
+        );
         return missing.length > 0
           ? t('admin.apps.openMissingFeaturesHint', {
               defaultValue: 'Turn on {{features}} to open it',
@@ -393,7 +424,7 @@ function AdminAppsPage() {
       // Users (and so the chat UI) do not get an app whose features are off.
       disabled: app =>
         app.enabled === false ||
-        missingRequiredFeatures(app, platformConfig?.features, currentLanguage).length > 0
+        missingRequirements(app, platformConfig, integrationStatus, currentLanguage).length > 0
     },
     {
       id: 'edit',

@@ -127,3 +127,12 @@ What changes on upgrade:
 Platform → Features** (or set `chatPersistence`, `runLog`, `marketplace` or `scheduledTasks` to
 `false` in `contents/config/features.json`) before the first start. Scheduled Tasks needs Chat
 History, so switching Chat History off also hides Scheduled Tasks.
+
+## The iFinder Document Actions App Is Removed
+
+The `ifinder-document-actions` app is gone; **iFinder Search** (`ifinder-search`) replaces it. The
+upgrade deletes the app file from `contents/apps/`, and the Parliamentary Questions Analyzer now
+hands its questions to iFinder Search (`rendererConfig.iAssistantAppId`).
+
+Groups that list `ifinder-document-actions` in their app permissions, and links or bookmarks to
+`/apps/ifinder-document-actions`, have to be changed by hand.
