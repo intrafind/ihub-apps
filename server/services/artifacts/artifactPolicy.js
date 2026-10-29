@@ -69,7 +69,15 @@ export const ARTIFACT_KINDS = new Map([
   ],
   [
     'document',
-    new Set(['text/markdown', 'text/plain', 'text/csv', 'application/json', 'application/pdf'])
+    new Set([
+      'text/markdown',
+      'text/plain',
+      'text/csv',
+      'application/json',
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ])
   ]
 ]);
 

@@ -17,12 +17,12 @@ import { checkImageDataUri, fitWithin, imagePixelSize, safeLink, LIMITS } from '
  * - images as `data:image/png|jpeg;base64,…` URIs (others become their alt text)
  */
 
-const PAGE_BREAK_MARKERS = new Set([
+export const PAGE_BREAK_MARKERS = new Set([
   String.raw`\pagebreak`,
   String.raw`\newpage`,
   '<!-- pagebreak -->'
 ]);
-const PAGE_BREAK_HTML = /^<!--\s*page-?break\s*-->$|page-break-(before|after)\s*:\s*always/i;
+export const PAGE_BREAK_HTML = /^<!--\s*page-?break\s*-->$|page-break-(before|after)\s*:\s*always/i;
 
 /**
  * Record a warning once.
@@ -63,7 +63,7 @@ export function acceptImage(ctx, src, label = 'image') {
   return check.dataUri;
 }
 
-function decodeEntities(text) {
+export function decodeEntities(text) {
   return String(text)
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
@@ -88,7 +88,7 @@ function safeFromCodePoint(n) {
  * interpreted as markup; tags are removed until none are left (a single pass
  * would leave `<scr<b>ipt>` behind as `<script>`), then entities are decoded.
  */
-function stripTags(html) {
+export function stripTags(html) {
   let text = String(html).replaceAll(/<br\s*\/?>/gi, '\n');
   let previous;
   do {
@@ -244,7 +244,7 @@ export function naturalImageSize(dataUri, ctx) {
   return fitWithin(natural, ctx.contentWidth, ctx.contentHeight);
 }
 
-function isPageBreakParagraph(token) {
+export function isPageBreakParagraph(token) {
   const text = String(token.text || '').trim();
   return PAGE_BREAK_MARKERS.has(text);
 }
@@ -490,7 +490,7 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
 }
 
 /** The plain text of inline tokens, without any formatting. */
-function plainText(tokens) {
+export function plainText(tokens) {
   return (tokens || [])
     .map(token => {
       if (token.tokens?.length) return plainText(token.tokens);
@@ -501,7 +501,7 @@ function plainText(tokens) {
 }
 
 /** Text compared without case, punctuation, symbols or extra spaces. */
-function comparable(text) {
+export function comparable(text) {
   return String(text)
     .normalize('NFKC')
     .toLowerCase()

@@ -4,7 +4,8 @@
 import { createRequire } from 'node:module';
 import { PDFDocument } from 'pdf-lib';
 import { buildDocument, MAX_PAGES } from './buildDocument.js';
-import { loadFontBytes, pdfmakeFontDescriptors } from './fonts.js';
+import { loadFontBytes, pdfmakeFontDescriptors, registerTemplateFonts } from './fonts.js';
+import { applyLetterhead } from './letterhead.js';
 import { svgImageCallback } from './validators.js';
 
 /**
@@ -88,13 +89,25 @@ export async function renderDocDefinition(docDefinition, tableLayouts = {}) {
  * Build and render a document spec.
  *
  * @param {import('./buildDocument.js').PdfSpec} spec
+ * @param {Object} [assets] - Files of the document template (trusted, from
+ *   the admin's template): `fonts` (brand fonts, registered before layout),
+ *   `letterhead` and `letterheadFollowing` (PDF bytes printed under the
+ *   pages).
  * @returns {Promise<{ buffer: Buffer, pages: number, warnings: string[] }>}
  */
-export async function renderPdfSpec(spec) {
+export async function renderPdfSpec(spec, assets = {}) {
+  if (assets?.fonts?.length) registerTemplateFonts(assets.fonts);
   const { docDefinition, tableLayouts, warnings, pageInfo } = buildDocument(spec, {
     svgImageCallback
   });
-  const buffer = await renderDocDefinition(docDefinition, tableLayouts);
+  let buffer = await renderDocDefinition(docDefinition, tableLayouts);
+  if (assets?.letterhead || assets?.letterheadFollowing) {
+    buffer = await applyLetterhead(
+      buffer,
+      { first: assets.letterhead, following: assets.letterheadFollowing },
+      { skipPages: spec.coverPage ? 1 : 0 }
+    );
+  }
   // Read the result back: a file that does not parse is an error, not a
   // download (the equivalent of the Python skill's "parser load" gate).
   const parsed = await PDFDocument.load(buffer, { updateMetadata: false });

@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { createPdf, PdfGenerationError, renderPagePreview } from './PdfService.js';
-import { GeneratedFileError, heldGeneratedFile, holdGeneratedFile } from '../generatedFiles.js';
+import { createPdf, renderPagePreview } from './PdfService.js';
+import { DocumentGenerationError } from '../renderService.js';
+import { heldGeneratedFile, holdGeneratedFile } from '../generatedFiles.js';
+import { assertSpecSize, parseStructured, toolFailure } from '../documentToolHelpers.js';
+import { applyTemplateToPdfSpec, templateBundleFor } from '../templates/applyTemplate.js';
 
 /**
  * The tools the `pdf` system skill brings (see `server/systemSkills/pdf`).
@@ -12,24 +15,6 @@ import { GeneratedFileError, heldGeneratedFile, holdGeneratedFile } from '../gen
  * `preview_pdf` shows the model one page of a PDF it created, so it can check
  * the layout.
  */
-
-const MAX_SPEC_CHARS = 4 * 1024 * 1024;
-
-/**
- * A structured argument, given as a value or as its JSON (some providers'
- * schemas cannot declare free-form objects).
- */
-function parseStructured(value, name, what) {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      throw new PdfGenerationError(`"${name}" must be ${what} (or its JSON).`, 'invalid');
-    }
-  }
-  return value;
-}
 
 /**
  * Turn `create_pdf` arguments into a document spec.
@@ -63,19 +48,12 @@ export function specFromToolArgs(args) {
     toc: args.toc,
     watermark: args.watermark || undefined
   };
-  if (JSON.stringify(spec).length > MAX_SPEC_CHARS) {
-    throw new PdfGenerationError('The document is too large (over 4 MB of content).', 'invalid');
-  }
+  assertSpecSize(spec);
   return spec;
 }
 
 function failure(error) {
-  const known = error instanceof PdfGenerationError || error instanceof GeneratedFileError;
-  return {
-    success: false,
-    error: known ? error.message : 'The PDF could not be created.',
-    ...(known && error.code ? { code: error.code } : {})
-  };
+  return toolFailure(error, 'The PDF could not be created.');
 }
 
 /**
@@ -87,13 +65,18 @@ function failure(error) {
 export async function runCreatePdf(params) {
   try {
     if (!params.markdown && !params.blocks) {
-      throw new PdfGenerationError(
+      throw new DocumentGenerationError(
         'Provide the document content in "markdown" and/or "blocks".',
         'invalid'
       );
     }
-    const spec = specFromToolArgs(params);
-    const { buffer, pages, warnings } = await createPdf(spec);
+    const bundle = await templateBundleFor({
+      format: 'pdf',
+      app: params.appConfig,
+      requested: params.template
+    });
+    const { spec, assets } = applyTemplateToPdfSpec(specFromToolArgs(params), bundle);
+    const { buffer, pages, warnings } = await createPdf(spec, { assets });
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
@@ -109,7 +92,8 @@ export async function runCreatePdf(params) {
       // download card. The result itself never carries them.
       files: [file],
       ...(warnings.length ? { warnings } : {}),
-      message: `Created "${file.name}" (${pages} page${pages === 1 ? '' : 's'}). The user sees a download card for it in the chat — do not add a link. Its file_id for preview_pdf is ${file.id}.`
+      ...(bundle ? { template: bundle.template.id } : {}),
+      message: `Created "${file.name}" (${pages} page${pages === 1 ? '' : 's'})${bundle ? ` in the "${bundle.template.id}" document template` : ''}. The user sees a download card for it in the chat — do not add a link. Its file_id for preview_pdf is ${file.id}.`
     };
   } catch (error) {
     return failure(error);

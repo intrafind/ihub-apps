@@ -507,6 +507,13 @@ const baseAppConfigSchema = z.object({
       allowPersonal: z.boolean().optional()
     })
     .optional(),
+  // Document template (Admin → Document templates) every PDF, Word and
+  // PowerPoint file this app's skills create uses; it also preselects the
+  // template of the chat's PDF export.
+  documentTemplate: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+    .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),
   rendererConfig: z.object({}).passthrough().optional(),

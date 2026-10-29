@@ -1,120 +1,22 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Worker } from 'node:worker_threads';
 import { PNG } from 'pngjs';
 import logger from '../../../utils/logger.js';
+import { DEFAULT_TIMEOUT_MS, DocumentGenerationError, renderInWorker } from '../renderService.js';
 
 /**
  * Server-side PDF generation.
  *
  * `createPdf` builds and renders a document spec (see `buildDocument.js`) in
- * a worker thread: layout is CPU-bound and the input may come from a model,
- * so each document gets a fresh worker, a time budget and a memory cap, and a
- * small concurrency limit keeps a burst of documents from starving chat
- * traffic. `renderPagePreview` rasterises one page with pdfium (WASM), so a
- * model can look at what it produced.
+ * a worker thread (`../renderService.js`): layout is CPU-bound and the input
+ * may come from a model. `renderPagePreview` rasterises one page with pdfium
+ * (WASM), so a model can look at what it produced.
  */
 
 const COMPONENT = 'PdfService';
-const WORKER_URL = new URL('./pdfWorker.js', import.meta.url);
 
-export const DEFAULT_TIMEOUT_MS = 45_000;
-const MAX_CONCURRENT = 2;
-const MAX_QUEUED = 20;
-const WORKER_MEMORY_MB = 512;
-
-export class PdfGenerationError extends Error {
-  /**
-   * @param {string} message
-   * @param {string} code - `invalid`, `timeout`, `busy`, `failed`
-   */
-  constructor(message, code = 'failed') {
-    super(message);
-    this.name = 'PdfGenerationError';
-    this.code = code;
-  }
-}
-
-let running = 0;
-const queue = [];
-
-function acquire() {
-  if (running < MAX_CONCURRENT) {
-    running += 1;
-    return Promise.resolve();
-  }
-  if (queue.length >= MAX_QUEUED) {
-    return Promise.reject(
-      new PdfGenerationError('The PDF service is busy. Try again in a moment.', 'busy')
-    );
-  }
-  return new Promise(resolve => queue.push(resolve));
-}
-
-function release() {
-  const next = queue.shift();
-  if (next) next();
-  else running -= 1;
-}
-
-function runWorker(spec, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(WORKER_URL, {
-      resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB }
-    });
-    let settled = false;
-    const finish = (fn, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      worker.terminate().catch(() => {});
-      fn(value);
-    };
-    const timer = setTimeout(() => {
-      finish(
-        reject,
-        new PdfGenerationError(
-          `Rendering the PDF took longer than ${Math.round(timeoutMs / 1000)} s. Simplify or split the document.`,
-          'timeout'
-        )
-      );
-    }, timeoutMs);
-    worker.once('message', message => {
-      if (message?.ok) {
-        finish(resolve, {
-          buffer: Buffer.from(
-            message.bytes.buffer,
-            message.bytes.byteOffset,
-            message.bytes.byteLength
-          ),
-          pages: message.pages,
-          warnings: message.warnings || []
-        });
-      } else {
-        finish(reject, new PdfGenerationError(message?.error || 'PDF rendering failed', 'invalid'));
-      }
-    });
-    worker.once('error', error => {
-      const outOfMemory = error?.code === 'ERR_WORKER_OUT_OF_MEMORY';
-      finish(
-        reject,
-        new PdfGenerationError(
-          outOfMemory
-            ? 'The document needs too much memory to render. Split it into smaller documents.'
-            : `PDF rendering failed: ${error?.message || error}`,
-          outOfMemory ? 'invalid' : 'failed'
-        )
-      );
-    });
-    worker.once('exit', code => {
-      if (!settled) {
-        finish(reject, new PdfGenerationError(`PDF renderer exited (code ${code})`, 'failed'));
-      }
-    });
-    worker.postMessage({ spec });
-  });
-}
+export { DEFAULT_TIMEOUT_MS };
 
 /**
  * Build and render a document spec.
@@ -122,24 +24,25 @@ function runWorker(spec, timeoutMs) {
  * @param {import('./buildDocument.js').PdfSpec} spec - Plain JSON.
  * @param {Object} [options]
  * @param {number} [options.timeoutMs]
+ * @param {Object} [options.assets] - Template files (fonts, letterhead), see
+ *   `../templates/applyTemplate.js`.
  * @returns {Promise<{ buffer: Buffer, pages: number, warnings: string[] }>}
  */
-export async function createPdf(spec, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function createPdf(spec, { timeoutMs = DEFAULT_TIMEOUT_MS, assets } = {}) {
   if (!spec || typeof spec !== 'object') {
-    throw new PdfGenerationError('A document spec is required.', 'invalid');
+    throw new DocumentGenerationError('A document spec is required.', 'invalid');
   }
-  await acquire();
   const started = Date.now();
   try {
-    const result = await runWorker(spec, timeoutMs);
+    const { buffer, meta, warnings } = await renderInWorker('pdf', { spec, assets }, { timeoutMs });
     logger.info('PDF generated', {
       component: COMPONENT,
-      pages: result.pages,
-      bytes: result.buffer.length,
+      pages: meta.pages,
+      bytes: buffer.length,
       durationMs: Date.now() - started,
-      warnings: result.warnings.length
+      warnings: warnings.length
     });
-    return result;
+    return { buffer, pages: meta.pages, warnings };
   } catch (error) {
     logger.warn('PDF generation failed', {
       component: COMPONENT,
@@ -148,8 +51,6 @@ export async function createPdf(spec, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
       durationMs: Date.now() - started
     });
     throw error;
-  } finally {
-    release();
   }
 }
 

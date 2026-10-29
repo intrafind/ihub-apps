@@ -75,23 +75,69 @@ const FONT_ALIASES = Object.freeze({
 export const DEFAULT_FONT = 'Sans';
 
 /**
+ * Brand fonts of a document template (see `registerTemplateFonts`), by
+ * family name. Each render runs in its own worker, so what a document
+ * registers is only seen by that document.
+ */
+const templateFamilies = new Map();
+const templateFontBytes = new Map();
+let templateFontCount = 0;
+
+/** A brand family by name, matched case-insensitively. */
+function templateFamily(name) {
+  for (const family of templateFamilies.keys()) {
+    if (family.toLowerCase() === name.toLowerCase()) return family;
+  }
+  return null;
+}
+
+/**
+ * Register a document template's fonts for this render. A face the template
+ * does not have (bold, italics) uses the regular face.
+ *
+ * @param {Array<{ family: string, faces: { normal: Uint8Array, bold?: Uint8Array,
+ *   italics?: Uint8Array, bolditalics?: Uint8Array } }>} fonts
+ * @returns {string[]} The registered family names.
+ */
+export function registerTemplateFonts(fonts) {
+  const registered = [];
+  for (const font of fonts || []) {
+    const family = typeof font?.family === 'string' ? font.family.trim() : '';
+    if (!family || !font.faces?.normal || Object.hasOwn(FONT_FAMILIES, family)) continue;
+    const files = {};
+    templateFontCount += 1;
+    for (const face of ['normal', 'bold', 'italics', 'bolditalics']) {
+      const bytes = font.faces[face] || font.faces.normal;
+      const file = `template-${templateFontCount}-${face}.ttf`;
+      templateFontBytes.set(file, Buffer.from(bytes));
+      files[face] = file;
+    }
+    templateFamilies.set(family, files);
+    glyphCoverage.delete(family);
+    registered.push(family);
+  }
+  return registered;
+}
+
+/**
  * Resolve a font name a document asked for to a registered family.
  *
  * @param {unknown} name - Requested family (any case, may be an alias).
  * @param {string} [fallback] - Family to use for an unknown name.
- * @returns {string} A key of {@link FONT_FAMILIES}.
+ * @returns {string} A key of {@link FONT_FAMILIES} or a template font family.
  */
 export function resolveFontFamily(name, fallback = DEFAULT_FONT) {
   if (typeof name !== 'string' || !name.trim()) return fallback;
   const trimmed = name.trim();
   if (Object.hasOwn(FONT_FAMILIES, trimmed)) return trimmed;
-  return FONT_ALIASES[trimmed.toLowerCase()] || fallback;
+  return templateFamily(trimmed) || FONT_ALIASES[trimmed.toLowerCase()] || fallback;
 }
 
 let fontBytes = null;
 
 /**
- * All font files, read once per process.
+ * All font files: the bundled ones, read once per process, and the
+ * template fonts registered for this render.
  *
  * @returns {Map<string, Buffer>} File name → bytes.
  */
@@ -104,7 +150,8 @@ export function loadFontBytes() {
       }
     }
   }
-  return fontBytes;
+  if (templateFontBytes.size === 0) return fontBytes;
+  return new Map([...fontBytes, ...templateFontBytes]);
 }
 
 /**
@@ -118,6 +165,7 @@ export function pdfmakeFontDescriptors() {
   for (const [family, files] of Object.entries(FONT_FAMILIES)) {
     descriptors[family] = { ...files };
   }
+  for (const [family, files] of templateFamilies) descriptors[family] = { ...files };
   for (const [alias, family] of Object.entries(FONT_ALIASES)) {
     if (!descriptors[alias]) descriptors[alias] = { ...FONT_FAMILIES[family] };
   }
@@ -129,13 +177,17 @@ const glyphCoverage = new Map();
 /**
  * Whether a family's regular face has a glyph for a code point.
  *
- * @param {string} family - Key of {@link FONT_FAMILIES}.
+ * @param {string} family - Key of {@link FONT_FAMILIES} or a template font family.
  * @returns {(codePoint: number) => boolean}
  */
 export function glyphCheckerFor(family) {
-  const key = Object.hasOwn(FONT_FAMILIES, family) ? family : DEFAULT_FONT;
+  const custom = templateFamilies.get(family);
+  const key = custom || Object.hasOwn(FONT_FAMILIES, family) ? family : DEFAULT_FONT;
   if (!glyphCoverage.has(key)) {
-    const font = fontkit.create(loadFontBytes().get(FONT_FAMILIES[key].normal));
+    const bytes = custom
+      ? templateFontBytes.get(custom.normal)
+      : loadFontBytes().get(FONT_FAMILIES[key].normal);
+    const font = fontkit.create(bytes);
     const cache = new Map();
     glyphCoverage.set(key, codePoint => {
       if (!cache.has(codePoint)) cache.set(codePoint, font.hasGlyphForCodePoint(codePoint));
