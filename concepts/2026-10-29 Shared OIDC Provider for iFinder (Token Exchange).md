@@ -109,27 +109,26 @@ for `fa_index_read`.
 
 ### 3.2 Background (scheduled tasks, API keys, workflows)
 
-The same exchange runs; only the source of the subject token changes:
+The same exchange runs; only the source of the subject token changes. It comes from
+a **stored refresh token**, which works with every provider. At login we ask for
+`offline_access` and keep the refresh token encrypted. It **stays stored after logout**,
+so scheduled tasks keep running while the user is signed out. A background run refreshes
+it to get a fresh login access token, then exchanges that as above. When the refresh
+fails terminally (`invalid_grant`, meaning revoked, expired or user disabled), the stored
+tokens are deleted and the run fails with "sign in again to re-authorize iFinder
+access". That signal is the same one the cloud-storage integrations use.
 
-1. **Stored refresh token (default, works with every provider).** At login we ask for
-   `offline_access` and keep the refresh token encrypted. A background run refreshes it
-   to get a fresh login access token, then exchanges that as above. When the refresh
-   fails terminally (`invalid_grant`, meaning revoked, expired or user disabled), the
-   stored tokens are deleted and the run fails with "sign in again to re-authorize iFinder
-   access". That signal is the same one the cloud-storage integrations use.
-2. **Impersonation through a service user (optional, Zitadel only).** A service user with
-   the `*_IMPERSONATOR` role sends `actor_token=<service user token>` and
-   `subject_token=<user id>` with `subject_token_type=urn:zitadel:params:oauth:token-type:user_id`.
-   No per-user refresh tokens are needed, but the credential can mint a token for **any**
-   user. Offer it only as an explicit opt-in that an admin configures.
+Impersonation through a service user (Zitadel's `actor_token` with the `*_IMPERSONATOR`
+role) is **not** offered: one credential that can mint a token for any user is not worth
+saving the per-user refresh tokens.
 
 ### 3.3 Provider differences
 
 | Provider | Mechanism | Notes |
 |---|---|---|
-| **Zitadel** | RFC 8693 token exchange | Still a beta feature that has to be enabled through the feature API. Confidential client only. Supports impersonation (actor token + `*_IMPERSONATOR` role) and a `user_id` subject token type. Audience and roles are requested through Zitadel's reserved scopes (`urn:zitadel:iam:org:project:id:{id}:aud`, `urn:zitadel:iam:org:projects:roles`). |
-| **Keycloak ≥ 26.2** | RFC 8693, "standard token exchange V2" | Enabled by default. Per client: switch on "Standard token exchange" (confidential client). Internal-to-internal only, and the subject token must be an access token. Impersonation exists only in the deprecated V1 preview, so don't build on it. |
-| **Microsoft Entra ID** | On-Behalf-Of, **not** RFC 8693 | `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`, `assertion=<access token>`, `requested_token_use=on_behalf_of`, `scope=api://<ifinder>/.default`. The login access token must be issued **for iHub's own API** (login scope `api://<ihub-client-id>/<scope>`). The default `openid profile email` gives a Graph token, which OBO rejects. Entra rejects the RFC 8693 grant with `AADSTS70003`. No impersonation. |
+| **Zitadel** | RFC 8693 token exchange | Still a beta feature that has to be enabled through the feature API. Confidential client only. Audience and roles are requested through Zitadel's reserved scopes (`urn:zitadel:iam:org:project:id:{id}:aud`, `urn:zitadel:iam:org:projects:roles`). |
+| **Keycloak ≥ 26.2** | RFC 8693, "standard token exchange V2" | Enabled by default. Per client: switch on "Standard token exchange" (confidential client). Internal-to-internal only, and the subject token must be an access token. |
+| **Microsoft Entra ID** | On-Behalf-Of, **not** RFC 8693 | `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`, `assertion=<access token>`, `requested_token_use=on_behalf_of`, `scope=api://<ifinder>/.default`. The login access token must be issued **for iHub's own API** (login scope `api://<ihub-client-id>/<scope>`). The default `openid profile email` gives a Graph token, which OBO rejects. Entra rejects the RFC 8693 grant with `AADSTS70003`. |
 
 This means the exchange step needs a small `grantType` switch (`tokenExchange` |
 `entraObo`). Everything around it (storage, refresh, cache, errors) is shared.
@@ -142,8 +141,9 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
   and provider-issued tokens are both accepted. This removes the config conflict
   described in the issue on its own and makes migration safe: iHub can flip modes
   without iFinder downtime.
-- Configure the authorities claims for the provider issuer (see §5). The principal claim
-  needs no change: it is the one iFinder already uses for its own logins.
+- No claim mapping changes for the provider issuer (see §5): the principal claim is the
+  one iFinder already uses for its own logins, and the `fa_*` claims are added to the
+  token by the provider.
 - Fail loudly, or at least warn, when `issuer-uri` comes from several sources with
   different values.
 
@@ -181,10 +181,7 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
        "clientSecretRef": "",
        "audience": "",
        "scopeMap": { "fa_index_read": "", "fa_iassistant": "" },
-       "extraScopes": [],
-       "background": "refreshToken",
-       "actorClientId": "",
-       "actorClientSecretRef": ""
+       "extraScopes": []
      }
    }
    ```
@@ -211,11 +208,11 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
 
 - Request `offline_access` (document it; the provider's `scope` array is already
   configurable). Background runs refresh, then exchange (§3.2).
-- Lifecycle: on user deletion, call `userDeletion.js` → `deleteUserTokens(…, 'oidc-login')`.
-  On a terminal refresh failure, delete the tokens and surface "re-authorize" on the
-  task. Decide what logout does (open question 3).
-- Optional: Zitadel impersonation via `actorClientId/actorClientSecretRef`, admin opt-in,
-  audit-logged per exchange.
+- Lifecycle: logout keeps the stored tokens. On user deletion or deactivation, call
+  `userDeletion.js` → `deleteUserTokens(…, 'oidc-login')`. On a terminal refresh failure,
+  delete the tokens and surface "re-authorize" on the task. Show in the user's profile
+  under "connected" that a background authorization exists, with a revoke button (the
+  same pattern as the integrations).
 
 ### Phase 3: provider variants and docs
 
@@ -234,7 +231,7 @@ This means the exchange step needs a small `grantType` switch (`tokenExchange` |
 - Manual: Zitadel with token exchange enabled, two products in one instance, a scheduled
   task that runs after the browser session expired.
 
-## 5. Decisions needed before Phase 1
+## 5. Decisions
 
 **Settled: the user identity.** When iHub and iFinder share the provider, the user
 claim is already the same in both products: iFinder resolves users from the provider's
@@ -243,34 +240,38 @@ subject mapping to design, and `jwtSubjectField` does not apply in exchange mode
 only thing to check, in the spike in §6, is that the exchanged token carries the claim
 iFinder reads, the same way tokens from iFinder's own login do.
 
-1. **Roles to iFinder authorities.** Provider roles arrive in provider-specific claims
-   (Zitadel `urn:zitadel:iam:org:project:roles`, Keycloak `realm_access` / `resource_access`,
-   Entra `roles` / `scp`), not in a flat `scope` claim with `fa_*`. Either iFinder maps
-   those claims to authorities, or the provider gets a claim mapper or Action that emits
-   `scope: "fa_index_read …"`. Prefer the provider-side mapper, so that iFinder's
-   authority logic stays the same in both modes.
-2. **Refresh-token retention.** Should we keep them after logout so scheduled tasks keep
-   working (convenient), or delete them on logout so tasks need a recent login (stricter)?
-   Proposal: keep them, delete on user deletion or deactivation and on terminal refresh
-   failure, and show in the user's profile under "connected" that a background
-   authorization exists, with a revoke button (the same pattern as the integrations).
-3. **Exchange policy on the provider.** Which client may exchange for the iFinder audience,
+**Settled: roles and scopes.** Extra claims in the provider's token are fine; iFinder
+ignores what it does not read. The only requirement is that the exchanged token **also**
+carries the iFinder claims (`fa_index_read`, `fa_iassistant`, …) in the form iFinder
+reads today. Nothing has to be removed or translated on the iFinder side. On the
+provider, that means one of two things: the `fa_*` values are scopes the exchange can
+request (iHub asks for them through `scope`, see `scopeMap` in §4), or a claim mapper or
+Action adds them to tokens issued for the iFinder audience (Zitadel Action, Keycloak
+protocol mapper, Entra app roles or optional claims). The spike in §6 confirms which of
+the two each provider needs.
+
+**Settled: refresh tokens are kept after logout,** so scheduled tasks keep working. They
+are deleted on user deletion or deactivation, on a terminal refresh failure, or when the
+user revokes them (Phase 2).
+
+**Settled: no impersonation.** Background runs use the stored refresh token only (§3.2).
+
+Still open:
+
+1. **Exchange policy on the provider.** Which client may exchange for the iFinder audience,
    and with which scopes. Configured in the provider (Zitadel project grants, Keycloak
    client policies, Entra API permissions plus admin consent). We document it; iHub cannot
    enforce it.
-4. **Impersonation.** Offer the Zitadel service-user path at all? It removes per-user
-   refresh tokens but creates a "mint a token for anyone" credential.
 
 ## 6. Suggested first steps
 
-1. Settle the role mapping (§5.1) with the iFinder team. It decides whether the provider
-   token is usable for iFinder at all, independent of any iHub code.
-2. Spike (half a day, no product code): in a Zitadel test instance, enable token exchange,
+1. Spike (half a day, no product code): in a Zitadel test instance, enable token exchange,
    log in to iHub with `offline_access`, run the exchange with curl against the iFinder
-   project audience, and check that iFinder (multi-issuer) accepts the result and returns
+   project audience, and check that the result carries the user claim and the `fa_*`
+   claims iFinder reads, and that iFinder (multi-issuer) accepts it and returns
    ACL-filtered hits.
-3. Phase 0 in iFinder (multi-issuer) in parallel. It unblocks the workaround in the issue.
-4. Phase 1 in iHub, then Phase 2.
+2. Phase 0 in iFinder (multi-issuer) in parallel. It unblocks the workaround in the issue.
+3. Phase 1 in iHub, then Phase 2.
 
 ## References
 
