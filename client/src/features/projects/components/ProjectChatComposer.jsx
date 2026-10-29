@@ -124,7 +124,12 @@ function ProjectChatComposer({ project, projectName, attach = false }) {
 
       {!noApps && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          {t('projects.composer.hint', 'The app gets the project’s instructions and documents.')}
+          {attach
+            ? t(
+                'projects.composer.hintAttached',
+                'The answers can use the documents of this project. Its instructions do not apply.'
+              )
+            : t('projects.composer.hint', 'The app gets the project’s instructions and documents.')}
         </p>
       )}
     </section>

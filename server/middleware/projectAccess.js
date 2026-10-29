@@ -27,6 +27,8 @@ import { sendErrorResponse, sendNotFound } from '../utils/responseHelpers.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
+import { isIFinderProjectId } from '../services/projects/projectConstants.js';
+import { loadProjectFor } from '../services/projects/projectLoader.js';
 import {
   ACCESS_LEVELS,
   effectiveGroups,
@@ -121,6 +123,27 @@ export function permissionsFor(project, user, context) {
   });
 }
 
+/** The methods that only read. A smart collection of the iFinder tier answers nothing else. */
+const READ_METHODS = new Set(['GET', 'HEAD']);
+
+/**
+ * Refuse a write to a project of the iFinder tier (a smart collection, `ifc_…`)
+ * before anything is looked up: they are read-only for everyone, so the
+ * answer is the same for an id that exists and one that does not.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {string} projectId
+ * @returns {boolean} True when the request was refused.
+ */
+export function refuseIFinderWrite(req, res, projectId) {
+  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return false;
+  sendErrorResponse(res, 403, 'Projects from iFinder are read-only in iHub', {
+    details: { code: 'PROJECT_READ_ONLY' }
+  });
+  return true;
+}
+
 /**
  * The gate.
  *
@@ -135,9 +158,18 @@ export function projectAccessRequired(level) {
     try {
       const { projectId } = req.params;
       if (!validateIdForPath(projectId, 'project', res)) return;
+      if (refuseIFinderWrite(req, res, projectId)) return;
       ensurePrincipal(req);
-      const repository = getProjectRepository();
-      const project = await repository.get(projectId);
+      const loaded = await loadProjectFor(req.user, projectId, {
+        repository: getProjectRepository()
+      });
+      if (loaded.status === 'unavailable') {
+        sendErrorResponse(res, 503, 'iFinder could not be reached', {
+          details: { code: 'IFINDER_UNAVAILABLE' }
+        });
+        return;
+      }
+      const project = loaded.project || null;
       const context = callerContext(req.user);
       const permissions = permissionsFor(project, req.user, context);
       if (!project || !permissions.canView) {
@@ -147,9 +179,11 @@ export function projectAccessRequired(level) {
       // User projects sit behind the `userProjects` flag (spec 1 §7.3): while
       // it is off they stay dark, reads and writes alike, for everyone but a
       // full admin, who still reaches them for compliance.
+      // An iFinder collection stays dark for an admin too: it is the caller's
+      // own, not a project to read for compliance.
       if (
         project.ownership === 'user' &&
-        !context.isAdmin &&
+        (!context.isAdmin || isIFinderProjectId(project.id)) &&
         !isUserProjectsConfigured(configCache.getFeatures())
       ) {
         sendErrorResponse(res, 403, 'User projects are switched off', {

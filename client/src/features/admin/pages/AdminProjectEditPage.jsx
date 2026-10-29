@@ -133,7 +133,7 @@ function AdminProjectEditPageContent({ id }) {
       }),
       reserved: t(
         'admin.projects.validation.idReserved',
-        'IDs starting with "prj_" are reserved for user projects.'
+        'IDs starting with "prj_" or "ifc_" are reserved for user projects and iFinder collections.'
       )
     },
     name: {

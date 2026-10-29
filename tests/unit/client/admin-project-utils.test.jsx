@@ -64,6 +64,8 @@ describe('project form', () => {
     expect(validateProjectId('')).toBe('required');
     expect(validateProjectId('has space')).toBe('invalid');
     expect(validateProjectId('prj_mine')).toBe('reserved');
+    expect(validateProjectId('ifc_00000000-0000-4000-8000-000000000001')).toBe('reserved');
+    expect(validateProjectId('IFC_docs')).toBe('reserved');
     // The route of the create form.
     expect(validateProjectId('new')).toBe('reserved');
     expect(validateProjectId('New')).toBe('reserved');

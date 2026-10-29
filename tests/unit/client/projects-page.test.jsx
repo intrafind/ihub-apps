@@ -26,6 +26,8 @@ jest.mock('../../../client/src/shared/hooks/useApps', () => ({
 }));
 jest.mock('../../../client/src/api', () => ({
   fetchProjects: (...args) => mockApi.fetchProjects(...args),
+  fetchProjectList: (...args) =>
+    Promise.resolve(mockApi.fetchProjects(...args)).then(items => ({ items, warnings: [] })),
   fetchProjectsConfig: (...args) => mockApi.fetchProjectsConfig(...args),
   createProject: (...args) => mockApi.createProject(...args),
   fetchProjectCatalog: (...args) => mockApi.fetchProjectCatalog(...args),

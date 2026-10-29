@@ -40,6 +40,8 @@ function isRetryable(item) {
  * @param {Array<{id: string, name: Object}>} props.kinds - For the kind labels.
  * @param {string|null} [props.busyItemId] - The item an action is running on.
  * @param {boolean} [props.readOnly=false] - Hide every action that changes an item.
+ * @param {boolean} [props.hidePinned=false] - Leave out the pinned column (a project whose
+ *   items cannot be pinned, such as a smart collection from iFinder).
  * @param {(item: Object) => void} [props.onTogglePinned]
  * @param {(item: Object) => void} [props.onPreview]
  * @param {(item: Object) => void} [props.onRefresh] - Retry (failed, not an upload) or
@@ -59,6 +61,7 @@ function ProjectItemsTable({
   kinds,
   busyItemId = null,
   readOnly = false,
+  hidePinned = false,
   onTogglePinned,
   onPreview,
   onRefresh,
@@ -164,25 +167,29 @@ function ProjectItemsTable({
           }
         ]
       : []),
-    {
-      key: 'pinned',
-      header: t('projects.items.columns.pinned', 'Pinned'),
-      width: 'w-20',
-      render: item => (
-        <input
-          type="checkbox"
-          checked={item.pinned === true}
-          disabled={!canChange(onTogglePinned) || busyItemId === item.id}
-          onChange={() => onTogglePinned(item)}
-          aria-label={t('projects.items.pinItem', 'Pin {{name}}', { name: item.name })}
-          title={t(
-            'projects.items.pinnedHint',
-            'Pinned items are always in the prompt, even when the project is searched.'
-          )}
-          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
-        />
-      )
-    }
+    ...(hidePinned
+      ? []
+      : [
+          {
+            key: 'pinned',
+            header: t('projects.items.columns.pinned', 'Pinned'),
+            width: 'w-20',
+            render: item => (
+              <input
+                type="checkbox"
+                checked={item.pinned === true}
+                disabled={!canChange(onTogglePinned) || busyItemId === item.id}
+                onChange={() => onTogglePinned(item)}
+                aria-label={t('projects.items.pinItem', 'Pin {{name}}', { name: item.name })}
+                title={t(
+                  'projects.items.pinnedHint',
+                  'Pinned items are always in the prompt, even when the project is searched.'
+                )}
+                className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
+              />
+            )
+          }
+        ])
   ];
 
   const actions = [
