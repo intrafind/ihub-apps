@@ -219,10 +219,22 @@ The wrap output has no integrity tag and no associated data.
 
 ## 8. Smart collections
 
-- iHub creates a collection with the public API (`fi_smartcollections`). The owner is the JWT identity.
-  The identity string iHub signs must equal the ACL principal and the collection owner. Utilities
-  compares case-sensitively (`owner.keyword`), the webapp and ragtime case-insensitively. Fix one rule
-  (lowercase) in all three places.
+- iHub creates a collection with the public API (`fi_smartcollections`). The owner is the principal of
+  the caller's JWT.
+- **Owner mapping (verified in the iFinder code).** Every service reads the owner name from the JWT claim
+  named by `spring.security.oauth2.resourceserver.jwt.principal-claim-name`, which defaults to `sub`
+  (`AuthenticationUtils`; the webapp converter uses the same property). The iFinder docs say this value
+  must match exactly the user name format the Userinfo service expects. iHub signs `sub` from its
+  admin setting `jwtSubjectField` (default `email`, `server/utils/iFinderJwt.js`). So the owner is
+  whatever iHub puts in `sub`, and a collection lines up with the same person in the iFinder UI only if
+  both sides produce the same string.
+- **Case.** The owner is stored as `owner` with a plain `owner.keyword` subfield, without a normalizer.
+  The list call matches it with an exact term query, so it is case-sensitive. The webapp's per-collection
+  checks (`equalsIgnoreCase`) and ragtime are not. A collection whose owner differs only in case from
+  the caller's `sub` is missing from the list but still opens by id. The fix is on the iFinder side: a
+  lowercase normalizer on `owner.keyword` (needs a reindex) or a lowercased term query. Until then iHub
+  must configure `jwtSubjectField` to match the iFinder login exactly, and test it with a mixed-case
+  user.
 - **Hardening the utilities service** before it holds user uploads: enforce the owner on every read,
   update and delete (today it trusts any caller), add `if_seq_no` to writes (concurrent adds lose
   updates), and return a 4xx for the document cap (an unhandled `IllegalArgumentException` today).
@@ -359,7 +371,7 @@ and the ragtime resolver and `FilterBuilder`. Checked directly: the `permitAll` 
 `denyAll` on `/decrypt`, `fa_index_write`, and `refresh: false`.
 
 Inferred and still to confirm: the cipher details of the config store encryptor (jar not inspected),
-how utilities maps the JWT claim to the owner, whether `s3://` item ids work end-to-end in the filesystem
+whether `s3://` item ids work end-to-end in the filesystem
 handler, whether `GET /docs/{id}` is real time, and whether the embedding job waits for the text
 without `prerequisites`. The file launcher module was not read.
 
@@ -375,8 +387,10 @@ without `prerequisites`. The file launcher module was not read.
 
 ## 14. Open questions
 
-1. Identity: how does utilities map the JWT claim to the owner (`sub`, email or `preferred_username`), and
-   does a collection created in the iFinder UI show up for the same user in iHub (case)? This blocks
+1. Identity (answered, see section 8): the owner is the JWT `sub` (configurable claim), and the list
+   matches it case-sensitively. Still to test with a real installation: a collection created in the
+   iFinder UI by a user whose login differs in case from iHub's `jwtSubjectField` value. Whether iFinder
+   adds a lowercase normalizer on `owner.keyword` is a request to the iFinder team, not a blocker for
    iteration 1.
 2. Over 100 ids: how does the existing iFinder document search by id behave for a collection with more
    than 100 documents?
