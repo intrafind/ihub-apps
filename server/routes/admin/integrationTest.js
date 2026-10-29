@@ -7,7 +7,11 @@ import config from '../../config.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
-import { getIFinderAuthorizationHeader, validateIFinderJWT } from '../../utils/iFinderJwt.js';
+import { validateIFinderJWT } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider, {
+  IFINDER_AUTH_MODES,
+  getAuthMode
+} from '../../services/integrations/iFinderTokenProvider.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
@@ -18,6 +22,7 @@ import {
   buildCurlCommand,
   decodeJwt,
   describeHttpFailure,
+  findExpectedClaims,
   describeNetworkError,
   describeTransport,
   inspectUrl,
@@ -181,6 +186,15 @@ function resolveIssuerUrl(req) {
  * @returns {Object} `{ mode, available, description }`
  */
 function describeSigningKey(iFinderConfig) {
+  if (getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) {
+    const provider = iFinderConfig.tokenExchange?.oidcProvider;
+    return {
+      mode: IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE,
+      // Whether the exchange works is what the exchange step finds out.
+      available: true,
+      description: `token exchange at the OIDC provider "${provider || '(none selected)'}"`
+    };
+  }
   if (iFinderConfig.useOidcKeyPair) {
     const keyPair = tokenStorageService.getRSAKeyPair();
     return {
@@ -378,18 +392,25 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
  * @param {DiagnosticsReport} report
  * @param {Object} params
  * @param {Object} params.user - Test user
+ * @param {Object} params.adminUser - The admin running the test (`req.user`)
  * @param {Object} params.iFinderConfig - platform.iFinder
  * @param {Object} params.userOverride - Explicitly overridden user fields
  * @param {boolean} params.includeToken - Whether the raw JWT may be returned
  * @returns {Promise<Object|null>} `{ authHeader, token, info }` or null on failure
  */
-async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeToken }) {
+async function runJwtSteps(report, { user, adminUser, iFinderConfig, userOverride, includeToken }) {
+  if (getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) {
+    // Never the test user: its id can be overridden, and the exchange would
+    // then run with somebody else's stored sign-in.
+    return runExchangeSteps(report, { user: adminUser, userOverride, includeToken });
+  }
+
   let authHeader;
   let token;
   let info;
 
-  const generation = await report.run('jwt', 'JWT generation', () => {
-    authHeader = getIFinderAuthorizationHeader(user);
+  const generation = await report.run('jwt', 'JWT generation', async () => {
+    authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
     token = authHeader.replace(/^Bearer\s+/i, '');
     info = decodeJwt(token);
 
@@ -470,6 +491,102 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
 }
 
 /**
+ * Run the token exchange for the admin running the test, then decode (not
+ * verify) the result and compare it against what iFinder reads.
+ *
+ * The exchange always runs for the calling admin: it needs their stored login
+ * token, so the user overrides of the signed mode cannot apply.
+ *
+ * @param {DiagnosticsReport} report
+ * @param {Object} params
+ * @param {Object} params.user - The admin running the test (`req.user`)
+ * @param {Object} params.userOverride - Overrides the admin asked for (ignored, reported)
+ * @param {boolean} params.includeToken - Whether the raw token may be returned
+ * @returns {Promise<Object|null>} `{ authHeader, token, info }` or null on failure
+ */
+async function runExchangeSteps(report, { user, userOverride, includeToken }) {
+  let exchanged;
+  const step = await report.run('jwt', 'Token exchange', async () => {
+    exchanged = await iFinderTokenProvider.exchangeForDiagnostics(user);
+    const { settings } = exchanged;
+    const info = decodeJwt(exchanged.token);
+    const payload = info.decoded ? info.payload : {};
+    const expected = exchanged.requestedScope.split(/\s+/).filter(scope => scope.startsWith('fa_'));
+    const claims = findExpectedClaims(payload, expected);
+    const hints = [];
+
+    if (!info.decoded) {
+      hints.push(
+        'The provider returned an opaque (non-JWT) access token. iFinder validates JWTs, so configure the provider to issue JWT access tokens for the iFinder audience.'
+      );
+    }
+    if (claims.missing.length > 0) {
+      hints.push(
+        `The token does not carry ${claims.missing.join(', ')}. iFinder reads these claims; request them through the scope map, or add them with a claim mapper on the provider (Zitadel Action, Keycloak protocol mapper, Entra app roles).`
+      );
+    }
+    if (Object.keys(userOverride).length > 0) {
+      hints.push(
+        'The test user fields were ignored: the exchange always runs for your own account, because it needs your stored sign-in token.'
+      );
+    }
+
+    exchanged.info = info;
+    return {
+      status: hints.length > 0 ? STATUS.WARN : STATUS.OK,
+      message: info.decoded
+        ? `${settings.displayName} issued a token for sub="${info.subject}", aud=${JSON.stringify(info.audience)}`
+        : `${settings.displayName} issued an opaque token`,
+      details: {
+        provider: settings.providerName,
+        tokenURL: settings.tokenURL,
+        grantType: settings.grantType,
+        clientId: settings.clientId,
+        audience: settings.audience || '(none)',
+        requestedScope: exchanged.requestedScope,
+        sentScope: exchanged.scope || '(none)',
+        issuer: info.issuer,
+        tokenAudience: info.audience,
+        subject: info.subject,
+        scopeClaim: payload.scope ?? payload.scp,
+        expectedClaims: expected,
+        presentClaims: claims.present,
+        missingClaims: claims.missing,
+        issuedAt: info.issuedAt,
+        expiresAt: info.expiresAt,
+        providerResponse: exchanged.response,
+        header: info.header,
+        payload: info.payload,
+        tokenPreview: previewToken(exchanged.token),
+        ...(includeToken ? { token: exchanged.token } : {})
+      },
+      hints
+    };
+  });
+
+  if (step.status === STATUS.FAIL) {
+    step.hints = [
+      'The exchange runs for your own account with the token stored when you signed in. Sign out and sign in again via the selected provider (with "offline_access" in its scopes) if no token is stored.',
+      'Check that the provider allows this client to exchange tokens for the iFinder audience: Zitadel needs the token exchange feature enabled, Keycloak the "Standard token exchange" switch on the client, Entra an API permission with admin consent.',
+      'For Entra ID choose the On-Behalf-Of grant, and make sure the login scope asks for a token for the iHub API (api://<ihub-client-id>/...), not for Microsoft Graph.'
+    ];
+    return null;
+  }
+
+  report.skip(
+    'jwtVerify',
+    'JWT signature (verified locally)',
+    'Not applicable: the token is signed by the OIDC provider and only decoded here; iFinder verifies it against the JWKS of that provider.'
+  );
+
+  return {
+    authHeader: `Bearer ${exchanged.token}`,
+    token: exchanged.token,
+    info: exchanged.info
+  };
+}
+
+/**
  * Check the OIDC metadata iFinder has to fetch in order to validate the token.
  *
  * This is the step that explains the "iFinder returned 500 because it could not
@@ -493,6 +610,15 @@ async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeo
   // taken from the request can decide which host the JWKS probe contacts.
   const fetchableJwksUrl = fetchableIssuer ? `${fetchableIssuer}/.well-known/jwks.json` : null;
   const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
+
+  if (getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) {
+    report.skip(
+      'oidcIssuer',
+      'Issuer reachable for iFinder',
+      'Not applicable: the token is issued by the OIDC provider, so iFinder verifies it against the JWKS of that provider, not of iHub.'
+    );
+    return { issuer, jwksUrl, applicable: false };
+  }
 
   if (!iFinderConfig.useOidcKeyPair) {
     report.skip(
@@ -1025,7 +1151,10 @@ export default function registerIntegrationTestRoutes(app) {
           id: 'configuration',
           label: 'Configuration',
           status: STATUS.OK,
-          message: `Signing with ${signingKey.description}, subject from "${configDetails.jwtSubjectField}"`,
+          message:
+            signingKey.mode === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE
+              ? `Using a ${signingKey.description}`
+              : `Signing with ${signingKey.description}, subject from "${configDetails.jwtSubjectField}"`,
           details: configDetails
         });
 
@@ -1037,6 +1166,7 @@ export default function registerIntegrationTestRoutes(app) {
 
         const jwtResult = await runJwtSteps(report, {
           user: testUser,
+          adminUser: req.user,
           iFinderConfig,
           userOverride,
           includeToken
@@ -1294,6 +1424,7 @@ export default function registerIntegrationTestRoutes(app) {
 
         const jwtResult = await runJwtSteps(report, {
           user: testUser,
+          adminUser: req.user,
           iFinderConfig,
           userOverride,
           includeToken
