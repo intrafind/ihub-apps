@@ -115,7 +115,9 @@ The iFinder integration uses JWT tokens for authentication with the following st
 
 - **Algorithm**: RS256 (RSA with SHA-256)
 - **Private Key**: Must be in PEM format
-- **Scope**: `fa_index_read` for document access
+- **Scope**: `fa_index_read` for document access. The calls that list a user's smart collections
+  (projects of the iFinder tier, see [Projects](projects.md#the-ifinder-tier-smart-collections))
+  request `fi_smartcollections` explicitly, and the user needs that role in iFinder.
 - **User Context**: Tokens are generated per authenticated user
 
 ### 4. User Authentication

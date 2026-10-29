@@ -559,7 +559,13 @@
       "unavailableOne": "nicht verfügbar",
       "overBudget": "über dem Budget",
       "openProject": "Projekt öffnen",
-      "privateProject": "Privates Projekt"
+      "privateProject": "Privates Projekt",
+      "ifinderCollection": "iFinder-Collection",
+      "missingOne": "{{name}} · nicht verfügbar",
+      "missing_one": "{{count}} Projekt nicht verfügbar",
+      "missing_other": "{{count}} Projekte nicht verfügbar",
+      "missingIFinder": "iFinder war nicht erreichbar, daher hat diese Antwort es nicht verwendet.",
+      "missingOther": "Diese Antwort hat es nicht verwendet."
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -4196,7 +4202,7 @@
         "idRequired": "Die Projekt-ID ist erforderlich.",
         "idInvalid": "Nur Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche verwenden.",
         "idTooLong": "Höchstens {{max}} Zeichen.",
-        "idReserved": "IDs, die mit „prj_“ beginnen, sind Benutzerprojekten vorbehalten.",
+        "idReserved": "IDs, die mit „prj_“ oder „ifc_“ beginnen, sind Benutzerprojekten und iFinder-Collections vorbehalten.",
         "nameRequired": "Ein Name ist erforderlich.",
         "idExists": "Ein Projekt mit dieser ID existiert bereits."
       },
@@ -7004,7 +7010,8 @@
       "pager": {
         "showing": "Projekte {{start}}–{{end}} von {{total}}",
         "perPage": "Pro Seite"
-      }
+      },
+      "ifinderUnavailable": "Ihre iFinder Smart Collections konnten gerade nicht geladen werden und fehlen deshalb in dieser Liste. Ihre übrigen Projekte werden angezeigt."
     },
     "members": {
       "everyone": "Alle angemeldeten Benutzer",
@@ -7030,7 +7037,8 @@
       "delete": "Projekt löschen",
       "deleteConfirm": "„{{name}}“ mit allen Dokumenten löschen? Die Chats bleiben erhalten, außerhalb des Projekts. Das lässt sich nicht rückgängig machen.",
       "deleteTitle": "Projekt löschen",
-      "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt."
+      "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt.",
+      "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um."
     },
     "preview": {
       "edit": "Text bearbeiten",
@@ -7150,7 +7158,8 @@
     "composer": {
       "placeholder": "Neuer Chat in {{name}}",
       "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
-      "app": "App"
+      "app": "App",
+      "hintAttached": "Die Antworten können die Dokumente dieses Projekts nutzen. Seine Anweisungen gelten nicht."
     },
     "appSelect": {
       "unavailable": "{{id}} (nicht verfügbar)"
@@ -7199,6 +7208,18 @@
         "shared": "Mit mir geteilt",
         "admin": "Von den Administratoren"
       }
+    },
+    "tier": {
+      "ifinder": "iFinder",
+      "readOnly": "nur lesbar",
+      "ifinderHint": "Eine Smart Collection aus iFinder. iHub liest sie nur; ändern Sie sie in iFinder.",
+      "ifinderDetail": "Smart Collection aus iFinder"
+    },
+    "ifinder": {
+      "sourceTitle": "Smart Collection in iFinder",
+      "sourceText": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Hinzufügen, Entfernen, Umbenennen oder Teilen geschieht in iFinder.",
+      "documentCount_one": "{{count}} Dokument",
+      "documentCount_other": "{{count}} Dokumente"
     }
   }
 }

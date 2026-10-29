@@ -9,6 +9,7 @@
  * @module services/projects/projectView
  */
 import { getLocalizedContent } from '../../../shared/localize.js';
+import { isIFinderProjectId } from './projectConstants.js';
 
 function memberView(member) {
   return {
@@ -116,6 +117,17 @@ export function serializeProject(
     id: project.id,
     ownership: project.ownership,
     tier: project.tier || 'ihub',
+    // A smart collection of the iFinder tier: a read-only view of what iFinder
+    // holds. `source` says where it lives, for the badge and the link back.
+    ...(isIFinderProjectId(project.id)
+      ? {
+          readOnly: true,
+          source: {
+            type: 'smart-collection',
+            collectionId: project.source?.collectionId || null
+          }
+        }
+      : {}),
     name: project.name,
     description: project.description || '',
     instructions: project.instructions || '',

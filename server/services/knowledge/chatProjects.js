@@ -15,6 +15,8 @@ import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { callerContext, ensurePrincipal, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository, isProjectId } from '../projects/ProjectRepository.js';
+import { loadProjectFor } from '../projects/projectLoader.js';
+import { isIFinderProjectId } from '../projects/projectConstants.js';
 import { getProjectService } from '../projects/ProjectService.js';
 import {
   appAllowsUserProjects,
@@ -68,10 +70,13 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
   const containerGiven = projectId !== undefined;
   const requestedContainer = typeof projectId === 'string' && projectId ? projectId : null;
   const requestedAttached = Array.isArray(projects)
-    ? [...new Set(projects.filter(id => typeof id === 'string' && isProjectId(id)))].slice(
-        0,
-        MAX_ATTACHED
-      )
+    ? [
+        ...new Set(
+          projects.filter(
+            id => typeof id === 'string' && (isProjectId(id) || isIFinderProjectId(id))
+          )
+        )
+      ].slice(0, MAX_ATTACHED)
     : [];
   const storedContainer = chat?.projectId || null;
   const storedAttached = Array.isArray(chat?.attachedProjectIds) ? chat.attachedProjectIds : [];
@@ -126,8 +131,10 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
   const repository = getProjectRepository();
   const context = callerContext(req.user);
   const usable = async (id, { container = false } = {}) => {
-    if (!isProjectId(id)) return false;
-    const project = await repository.get(id);
+    if (!isProjectId(id) && !isIFinderProjectId(id)) return false;
+    // A smart collection of the iFinder tier is attached, never a container:
+    // its permission block has `canHoldChats: false`.
+    const { project } = await loadProjectFor(req.user, id, { repository });
     if (!project) return false;
     // A container holds chats, which its members may read: only a user
     // project is one (the same rule as a move, `routes/chats.js`). An admin

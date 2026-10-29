@@ -190,8 +190,12 @@ class PromptService {
   async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName, scopeKey }) {
     const placeholder = '{{projects}}';
     const hasPlaceholder = systemPrompt.includes(placeholder);
+    // `includeUnavailable`: an attached iFinder collection that iFinder cannot deliver
+    // right now is named in the prompt and in the answer's badge, not dropped.
     const scope =
-      hasProjectScope(app) && user ? await resolveProjectScope({ appConfig: app, user }) : [];
+      hasProjectScope(app) && user
+        ? await resolveProjectScope({ appConfig: app, user, includeUnavailable: true })
+        : [];
     if (!scope.length) {
       return hasPlaceholder ? systemPrompt.replace(placeholder, () => '') : systemPrompt;
     }

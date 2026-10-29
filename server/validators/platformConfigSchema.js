@@ -643,8 +643,10 @@ export const platformConfigSchema = z
       .passthrough()
       .optional(),
     // Projects (#1036): the one container for documents, instructions and
-    // chats. `tierPolicy` is validated and shown but only `ihub` is active in
-    // this version. `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
+    // chats. `tierPolicy` `both` or `ifinder` also lists the user's iFinder
+    // smart collections as read-only projects (needs `iFinder` configured);
+    // creating projects in the iFinder tier is not part of this version.
+    // `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
     // of zero or less means no cap; `retentionDays` of zero or less keeps user
     // projects until deleted. `kinds` switches item kinds off by id.
     projects: z
