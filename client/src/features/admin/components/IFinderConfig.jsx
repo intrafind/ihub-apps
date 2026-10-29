@@ -8,8 +8,24 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
 import IntegrationTestResults from './IntegrationTestResults';
 import { CredentialRefSelect } from './OpenApiToolEditor';
+import TokenExchangeSettings from './IFinderTokenExchangeSettings';
 
 const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'];
+
+const AUTH_MODES = ['ihubSigned', 'oidcTokenExchange'];
+
+const DEFAULT_TOKEN_EXCHANGE = {
+  oidcProvider: '',
+  grantType: 'tokenExchange',
+  clientId: '',
+  clientSecretRef: '',
+  audience: '',
+  scopeMap: { fa_index_read: '', fa_iassistant: '' },
+  extraScopes: []
+};
+
+const INPUT_CLASS =
+  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
 
 const JWT_SUBJECT_OPTIONS = [
   { value: 'email', label: 'Email address' },
@@ -30,8 +46,11 @@ function IFinderConfig() {
     audience: 'ifinder-api',
     tokenExpirationSeconds: 3600,
     defaultScope: 'fa_index_read',
-    jwtSubjectField: 'email'
+    jwtSubjectField: 'email',
+    authMode: 'ihubSigned',
+    tokenExchange: DEFAULT_TOKEN_EXCHANGE
   });
+  const [oidcProviders, setOidcProviders] = useState([]);
   const [iAssistantConfig, setIAssistantConfig] = useState({
     defaultProfileId: '',
     timeout: 60000
@@ -77,8 +96,15 @@ function IFinderConfig() {
           defaultProfileId: '',
           timeout: 60000
         };
-        setIFinderConfig(iFinder);
+        setIFinderConfig({
+          ...iFinder,
+          authMode: iFinder.authMode || 'ihubSigned',
+          tokenExchange: { ...DEFAULT_TOKEN_EXCHANGE, ...(iFinder.tokenExchange || {}) }
+        });
         setIAssistantConfig(iAssistant);
+        setOidcProviders(
+          Array.isArray(response.data.oidcAuth?.providers) ? response.data.oidcAuth.providers : []
+        );
 
         const configuredOauthIssuer = response.data.oauth?.issuer || '';
         setOauthIssuer(configuredOauthIssuer);
@@ -126,6 +152,20 @@ function IFinderConfig() {
     }));
   };
 
+  const handleTokenExchangeChange = (field, value) => {
+    setIFinderConfig(prev => ({
+      ...prev,
+      tokenExchange: { ...prev.tokenExchange, [field]: value }
+    }));
+  };
+
+  // The scope map is edited as rows; a row is renamed by key, so keep the order.
+  const scopeMapEntries = Object.entries(iFinderConfig.tokenExchange?.scopeMap || {});
+  const setScopeMapEntries = entries =>
+    handleTokenExchangeChange('scopeMap', Object.fromEntries(entries));
+
+  const isExchangeMode = iFinderConfig.authMode === 'oidcTokenExchange';
+
   const handleIAssistantChange = (field, value) => {
     setIAssistantConfig(prev => ({
       ...prev,
@@ -134,12 +174,27 @@ function IFinderConfig() {
   };
 
   const handleSave = async () => {
+    if (isExchangeMode && !iFinderConfig.tokenExchange?.oidcProvider) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.iFinder.tokenExchange.providerRequired',
+          'Select the OIDC provider iHub shares with iFinder.'
+        )
+      });
+      return;
+    }
+
     // When using OIDC keypair, we need a valid issuer URL
     // Use the configured issuer if set, otherwise fall back to auto-detected
     const effectiveIssuer =
       oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer;
 
-    if (iFinderConfig.useOidcKeyPair && (!effectiveIssuer || !effectiveIssuer.startsWith('http'))) {
+    if (
+      !isExchangeMode &&
+      iFinderConfig.useOidcKeyPair &&
+      (!effectiveIssuer || !effectiveIssuer.startsWith('http'))
+    ) {
       setMessage({
         type: 'error',
         text: t(
@@ -194,6 +249,8 @@ function IFinderConfig() {
    */
   const buildTestPayload = () => {
     const payload = { includeToken: testOptions.includeToken };
+    // The exchange always runs as the admin; there is no user to override.
+    if (isExchangeMode) return payload;
 
     const user = {};
     if (testOptions.userEmail.trim()) user.email = testOptions.userEmail.trim();
@@ -373,239 +430,299 @@ function IFinderConfig() {
                   </p>
                 </div>
 
-                {/* JWT Signing Mode */}
+                {/* Who issues the iFinder token */}
                 <div>
-                  <div className="flex items-start">
-                    <input
-                      type="checkbox"
-                      id="iFinderUseOidcKeyPair"
-                      checked={iFinderConfig.useOidcKeyPair}
-                      onChange={handleToggleOidcKeyPair}
-                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-                    />
-                    <label
-                      htmlFor="iFinderUseOidcKeyPair"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.iFinder.useOidcKeyPair', 'Use iHub OIDC Keypair for JWT signing')}
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
-                    {t(
-                      'admin.iFinder.useOidcKeyPairHelp',
-                      'When enabled, tokens are signed with the same RSA key as the iHub OIDC server. iFinder can then validate tokens via JWKS Discovery (/.well-known/jwks.json) — no manual key distribution needed.'
-                    )}
+                  <label
+                    htmlFor="iFinderAuthMode"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.iFinder.authMode.label', 'Token issuer')}
+                  </label>
+                  <select
+                    id="iFinderAuthMode"
+                    value={iFinderConfig.authMode || 'ihubSigned'}
+                    onChange={e => handleIFinderChange('authMode', e.target.value)}
+                    className={INPUT_CLASS}
+                  >
+                    {AUTH_MODES.map(mode => (
+                      <option key={mode} value={mode}>
+                        {mode === 'ihubSigned'
+                          ? t('admin.iFinder.authMode.ihubSigned', 'iHub signs the token')
+                          : t(
+                              'admin.iFinder.authMode.oidcTokenExchange',
+                              'Shared OIDC provider (token exchange)'
+                            )}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {isExchangeMode
+                      ? t(
+                          'admin.iFinder.authMode.oidcTokenExchangeHelp',
+                          'iHub and iFinder share one OIDC provider. iHub keeps the sign-in token of each user and exchanges it at the provider for a token for iFinder. Users must sign in to iHub through that provider; background runs use the stored refresh token.'
+                        )
+                      : t(
+                          'admin.iFinder.authMode.ihubSignedHelp',
+                          'iHub signs the iFinder token itself, with a private key or the iHub OIDC key pair. iFinder trusts iHub as the issuer.'
+                        )}
                   </p>
                 </div>
 
-                {/* OIDC Keypair - Effective Issuer URL Display */}
-                {iFinderConfig.useOidcKeyPair && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.effectiveIssuer', 'Effective OAuth Issuer URL')}
-                    </label>
-                    <div className="flex items-center">
-                      <div className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
-                        <code className="text-sm text-gray-900 dark:text-gray-100">
-                          {oauthIssuer && oauthIssuer.startsWith('http')
-                            ? oauthIssuer
-                            : autoDetectedIssuer ||
-                              t('admin.iFinder.issuerNotAvailable', 'Not available')}
-                        </code>
-                      </div>
-                      {!oauthIssuer && autoDetectedIssuer && (
-                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
-                          {t('admin.iFinder.autoDetected', 'Auto-detected')}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {!oauthIssuer
-                        ? t(
-                            'admin.iFinder.effectiveIssuerAutoHelp',
-                            'This URL is automatically detected from your server. You can set a custom issuer in Admin > OAuth Server if needed.'
-                          )
-                        : t(
-                            'admin.iFinder.effectiveIssuerConfiguredHelp',
-                            'This URL is configured in Admin > OAuth Server.'
-                          )}
-                    </p>
-                  </div>
+                {isExchangeMode && (
+                  <TokenExchangeSettings
+                    t={t}
+                    settings={iFinderConfig.tokenExchange || DEFAULT_TOKEN_EXCHANGE}
+                    oidcProviders={oidcProviders}
+                    onChange={handleTokenExchangeChange}
+                    scopeMapEntries={scopeMapEntries}
+                    setScopeMapEntries={setScopeMapEntries}
+                  />
                 )}
 
-                {/* OIDC Keypair info box */}
-                {iFinderConfig.useOidcKeyPair && (
-                  <div
-                    className={`border rounded-md p-4 ${
-                      (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
-                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                        : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-                    }`}
-                  >
-                    <div className="flex">
-                      <Icon
-                        name={
-                          (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
-                            ? 'check'
-                            : 'warning'
-                        }
-                        size="md"
-                        className={`mt-0.5 mr-3 shrink-0 ${
-                          (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
-                            ? 'text-green-500'
-                            : 'text-amber-500'
-                        }`}
-                      />
-                      <div className="text-sm">
-                        {(oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer ? (
-                          <>
-                            <p className="font-medium text-green-800 dark:text-green-200">
-                              {t('admin.iFinder.oidcKeyPairReady', 'OIDC Keypair ready')}
-                            </p>
-                            <p className="mt-1 text-green-700 dark:text-green-300">
-                              {t('admin.iFinder.oidcKeyPairReadyHelp', 'Configure iFinder with:')}
-                            </p>
-                            <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded-sm p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
-                              {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
-                            </pre>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-medium text-amber-800 dark:text-amber-200">
-                              {t(
-                                'admin.iFinder.oidcKeyPairMissingIssuer',
-                                'OAuth Issuer URL required'
-                              )}
-                            </p>
-                            <p className="mt-1 text-amber-700 dark:text-amber-300">
-                              {t(
-                                'admin.iFinder.oidcKeyPairMissingIssuerHelp',
-                                'Set the OAuth Issuer URL in Admin > Authentication > OAuth Server before saving.'
-                              )}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Private key and algorithm: only shown when NOT using OIDC keypair */}
-                {!iFinderConfig.useOidcKeyPair && (
+                {!isExchangeMode && (
                   <>
-                    <CredentialRefSelect
-                      value={iFinderConfig.privateKeyRef}
-                      onChange={id => handleIFinderChange('privateKeyRef', id)}
-                      types={['secret']}
-                      label={`${t('admin.iFinder.privateKeyRef', 'Private Key')} *`}
-                      help={t(
-                        'admin.iFinder.privateKeyRefHelp',
-                        'Select a stored credential holding the RSA/EC private key (PEM format) used to sign JWT tokens. Alternatively, set the IFINDER_PRIVATE_KEY environment variable on the server.'
-                      )}
-                    />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('admin.iFinder.algorithm', 'JWT Algorithm')}
-                        </label>
-                        <select
-                          value={iFinderConfig.algorithm}
-                          onChange={e => handleIFinderChange('algorithm', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    {/* JWT Signing Mode */}
+                    <div>
+                      <div className="flex items-start">
+                        <input
+                          type="checkbox"
+                          id="iFinderUseOidcKeyPair"
+                          checked={iFinderConfig.useOidcKeyPair}
+                          onChange={handleToggleOidcKeyPair}
+                          className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                        />
+                        <label
+                          htmlFor="iFinderUseOidcKeyPair"
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
                         >
-                          {ALGORITHM_OPTIONS.map(alg => (
-                            <option key={alg} value={alg}>
-                              {alg}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
+                          {t(
+                            'admin.iFinder.useOidcKeyPair',
+                            'Use iHub OIDC Keypair for JWT signing'
+                          )}
                         </label>
-                        <input
-                          type="number"
-                          value={iFinderConfig.tokenExpirationSeconds}
-                          onChange={e =>
-                            handleIFinderChange(
-                              'tokenExpirationSeconds',
-                              Number.parseInt(e.target.value, 10) || 3600
-                            )
-                          }
-                          min={60}
-                          max={86400}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                        />
                       </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+                        {t(
+                          'admin.iFinder.useOidcKeyPairHelp',
+                          'When enabled, tokens are signed with the same RSA key as the iHub OIDC server. iFinder can then validate tokens via JWKS Discovery (/.well-known/jwks.json) — no manual key distribution needed.'
+                        )}
+                      </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* OIDC Keypair - Effective Issuer URL Display */}
+                    {iFinderConfig.useOidcKeyPair && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('admin.iFinder.issuer', 'JWT Issuer')}
+                          {t('admin.iFinder.effectiveIssuer', 'Effective OAuth Issuer URL')}
                         </label>
-                        <input
-                          type="text"
-                          value={iFinderConfig.issuer}
-                          onChange={e => handleIFinderChange('issuer', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                          placeholder="ihub-apps"
-                        />
+                        <div className="flex items-center">
+                          <div className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
+                            <code className="text-sm text-gray-900 dark:text-gray-100">
+                              {oauthIssuer && oauthIssuer.startsWith('http')
+                                ? oauthIssuer
+                                : autoDetectedIssuer ||
+                                  t('admin.iFinder.issuerNotAvailable', 'Not available')}
+                            </code>
+                          </div>
+                          {!oauthIssuer && autoDetectedIssuer && (
+                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                              {t('admin.iFinder.autoDetected', 'Auto-detected')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {!oauthIssuer
+                            ? t(
+                                'admin.iFinder.effectiveIssuerAutoHelp',
+                                'This URL is automatically detected from your server. You can set a custom issuer in Admin > OAuth Server if needed.'
+                              )
+                            : t(
+                                'admin.iFinder.effectiveIssuerConfiguredHelp',
+                                'This URL is configured in Admin > OAuth Server.'
+                              )}
+                        </p>
                       </div>
+                    )}
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('admin.iFinder.audience', 'JWT Audience')}
-                        </label>
-                        <input
-                          type="text"
-                          value={iFinderConfig.audience}
-                          onChange={e => handleIFinderChange('audience', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                          placeholder="ifinder-api"
-                        />
+                    {/* OIDC Keypair info box */}
+                    {iFinderConfig.useOidcKeyPair && (
+                      <div
+                        className={`border rounded-md p-4 ${
+                          (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                        }`}
+                      >
+                        <div className="flex">
+                          <Icon
+                            name={
+                              (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
+                                ? 'check'
+                                : 'warning'
+                            }
+                            size="md"
+                            className={`mt-0.5 mr-3 shrink-0 ${
+                              (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
+                                ? 'text-green-500'
+                                : 'text-amber-500'
+                            }`}
+                          />
+                          <div className="text-sm">
+                            {(oauthIssuer && oauthIssuer.startsWith('http')) ||
+                            autoDetectedIssuer ? (
+                              <>
+                                <p className="font-medium text-green-800 dark:text-green-200">
+                                  {t('admin.iFinder.oidcKeyPairReady', 'OIDC Keypair ready')}
+                                </p>
+                                <p className="mt-1 text-green-700 dark:text-green-300">
+                                  {t(
+                                    'admin.iFinder.oidcKeyPairReadyHelp',
+                                    'Configure iFinder with:'
+                                  )}
+                                </p>
+                                <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded-sm p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                                  {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
+                                </pre>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-medium text-amber-800 dark:text-amber-200">
+                                  {t(
+                                    'admin.iFinder.oidcKeyPairMissingIssuer',
+                                    'OAuth Issuer URL required'
+                                  )}
+                                </p>
+                                <p className="mt-1 text-amber-700 dark:text-amber-300">
+                                  {t(
+                                    'admin.iFinder.oidcKeyPairMissingIssuerHelp',
+                                    'Set the OAuth Issuer URL in Admin > Authentication > OAuth Server before saving.'
+                                  )}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Private key and algorithm: only shown when NOT using OIDC keypair */}
+                    {!iFinderConfig.useOidcKeyPair && (
+                      <>
+                        <CredentialRefSelect
+                          value={iFinderConfig.privateKeyRef}
+                          onChange={id => handleIFinderChange('privateKeyRef', id)}
+                          types={['secret']}
+                          label={`${t('admin.iFinder.privateKeyRef', 'Private Key')} *`}
+                          help={t(
+                            'admin.iFinder.privateKeyRefHelp',
+                            'Select a stored credential holding the RSA/EC private key (PEM format) used to sign JWT tokens. Alternatively, set the IFINDER_PRIVATE_KEY environment variable on the server.'
+                          )}
+                        />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              {t('admin.iFinder.algorithm', 'JWT Algorithm')}
+                            </label>
+                            <select
+                              value={iFinderConfig.algorithm}
+                              onChange={e => handleIFinderChange('algorithm', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            >
+                              {ALGORITHM_OPTIONS.map(alg => (
+                                <option key={alg} value={alg}>
+                                  {alg}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
+                            </label>
+                            <input
+                              type="number"
+                              value={iFinderConfig.tokenExpirationSeconds}
+                              onChange={e =>
+                                handleIFinderChange(
+                                  'tokenExpirationSeconds',
+                                  Number.parseInt(e.target.value, 10) || 3600
+                                )
+                              }
+                              min={60}
+                              max={86400}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              {t('admin.iFinder.issuer', 'JWT Issuer')}
+                            </label>
+                            <input
+                              type="text"
+                              value={iFinderConfig.issuer}
+                              onChange={e => handleIFinderChange('issuer', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                              placeholder="ihub-apps"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              {t('admin.iFinder.audience', 'JWT Audience')}
+                            </label>
+                            <input
+                              type="text"
+                              value={iFinderConfig.audience}
+                              onChange={e => handleIFinderChange('audience', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                              placeholder="ifinder-api"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Token expiration also shown when using OIDC keypair */}
+                    {iFinderConfig.useOidcKeyPair && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.iFinder.audience', 'JWT Audience')}
+                          </label>
+                          <input
+                            type="text"
+                            value={iFinderConfig.audience}
+                            onChange={e => handleIFinderChange('audience', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="ifinder-api"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
+                          </label>
+                          <input
+                            type="number"
+                            value={iFinderConfig.tokenExpirationSeconds}
+                            onChange={e =>
+                              handleIFinderChange(
+                                'tokenExpirationSeconds',
+                                Number.parseInt(e.target.value, 10) || 3600
+                              )
+                            }
+                            min={60}
+                            max={86400}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </>
-                )}
-
-                {/* Token expiration also shown when using OIDC keypair */}
-                {iFinderConfig.useOidcKeyPair && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.audience', 'JWT Audience')}
-                      </label>
-                      <input
-                        type="text"
-                        value={iFinderConfig.audience}
-                        onChange={e => handleIFinderChange('audience', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                        placeholder="ifinder-api"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
-                      </label>
-                      <input
-                        type="number"
-                        value={iFinderConfig.tokenExpirationSeconds}
-                        onChange={e =>
-                          handleIFinderChange(
-                            'tokenExpirationSeconds',
-                            Number.parseInt(e.target.value, 10) || 3600
-                          )
-                        }
-                        min={60}
-                        max={86400}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
-                  </div>
                 )}
 
                 <div>
@@ -621,59 +738,63 @@ function IFinderConfig() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.iFinder.jwtSubjectField', 'JWT Subject Field')}
-                  </label>
-                  <select
-                    value={
-                      JWT_SUBJECT_OPTIONS.some(o => o.value === iFinderConfig.jwtSubjectField)
-                        ? iFinderConfig.jwtSubjectField
-                        : 'custom'
-                    }
-                    onChange={e => {
-                      const value = e.target.value;
-                      if (value === 'custom') {
-                        handleIFinderChange('jwtSubjectField', '${email}');
-                      } else {
-                        handleIFinderChange('jwtSubjectField', value);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  >
-                    {JWT_SUBJECT_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>
-                        {t(`admin.iFinder.jwtSubject.${opt.value}`, opt.label)}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.iFinder.jwtSubjectFieldHelp',
-                      'Controls the "sub" claim in the iFinder JWT token. Choose which user field identifies the user.'
-                    )}
-                  </p>
-                </div>
+                {!isExchangeMode && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.jwtSubjectField', 'JWT Subject Field')}
+                      </label>
+                      <select
+                        value={
+                          JWT_SUBJECT_OPTIONS.some(o => o.value === iFinderConfig.jwtSubjectField)
+                            ? iFinderConfig.jwtSubjectField
+                            : 'custom'
+                        }
+                        onChange={e => {
+                          const value = e.target.value;
+                          if (value === 'custom') {
+                            handleIFinderChange('jwtSubjectField', '${email}');
+                          } else {
+                            handleIFinderChange('jwtSubjectField', value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      >
+                        {JWT_SUBJECT_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(`admin.iFinder.jwtSubject.${opt.value}`, opt.label)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.iFinder.jwtSubjectFieldHelp',
+                          'Controls the "sub" claim in the iFinder JWT token. Choose which user field identifies the user.'
+                        )}
+                      </p>
+                    </div>
 
-                {!JWT_SUBJECT_OPTIONS.some(o => o.value === iFinderConfig.jwtSubjectField) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.jwtSubjectTemplate', 'Custom Subject Template')}
-                    </label>
-                    <input
-                      type="text"
-                      value={iFinderConfig.jwtSubjectField}
-                      onChange={e => handleIFinderChange('jwtSubjectField', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
-                      placeholder="${domain}\${username}"
-                    />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.iFinder.jwtSubjectTemplateHelp',
-                        'Available placeholders: ${email}, ${username}, ${domain}, ${id}, ${name}'
-                      )}
-                    </p>
-                  </div>
+                    {!JWT_SUBJECT_OPTIONS.some(o => o.value === iFinderConfig.jwtSubjectField) && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('admin.iFinder.jwtSubjectTemplate', 'Custom Subject Template')}
+                        </label>
+                        <input
+                          type="text"
+                          value={iFinderConfig.jwtSubjectField}
+                          onChange={e => handleIFinderChange('jwtSubjectField', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
+                          placeholder="${domain}\${username}"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.iFinder.jwtSubjectTemplateHelp',
+                            'Available placeholders: ${email}, ${username}, ${domain}, ${id}, ${name}'
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -744,62 +865,71 @@ function IFinderConfig() {
               {showTestOptions && (
                 <div className="mt-3 p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-4">
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.iFinder.diagnostics.description',
-                      'The connection test signs a JWT for your own admin account and calls the same endpoints the integration uses at runtime. Use these options to test as a different user or to get a reproducible curl command.'
-                    )}
+                    {isExchangeMode
+                      ? t(
+                          'admin.iFinder.diagnostics.exchangeDescription',
+                          'The connection test exchanges your own stored sign-in token at the OIDC provider, shows the claims of the token iFinder receives, and calls the same endpoints the integration uses at runtime. It always runs as you: the exchange needs your sign-in.'
+                        )
+                      : t(
+                          'admin.iFinder.diagnostics.description',
+                          'The connection test signs a JWT for your own admin account and calls the same endpoints the integration uses at runtime. Use these options to test as a different user or to get a reproducible curl command.'
+                        )}
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.diagnostics.userEmail', 'Test as email')}
-                      </label>
-                      <input
-                        type="text"
-                        value={testOptions.userEmail}
-                        onChange={e => handleTestOptionChange('userEmail', e.target.value)}
-                        placeholder={t(
-                          'admin.iFinder.diagnostics.currentAdmin',
-                          'your admin account'
+                  {!isExchangeMode && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.iFinder.diagnostics.userEmail', 'Test as email')}
+                          </label>
+                          <input
+                            type="text"
+                            value={testOptions.userEmail}
+                            onChange={e => handleTestOptionChange('userEmail', e.target.value)}
+                            placeholder={t(
+                              'admin.iFinder.diagnostics.currentAdmin',
+                              'your admin account'
+                            )}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.iFinder.diagnostics.userUsername', 'Test as username')}
+                          </label>
+                          <input
+                            type="text"
+                            value={testOptions.userUsername}
+                            onChange={e => handleTestOptionChange('userUsername', e.target.value)}
+                            placeholder={t(
+                              'admin.iFinder.diagnostics.currentAdmin',
+                              'your admin account'
+                            )}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.iFinder.diagnostics.userDomain', 'Test as domain')}
+                          </label>
+                          <input
+                            type="text"
+                            value={testOptions.userDomain}
+                            onChange={e => handleTestOptionChange('userDomain', e.target.value)}
+                            placeholder="EXAMPLE"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.iFinder.diagnostics.userHelp',
+                          String.raw`Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\username instead of an email address.`
                         )}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.diagnostics.userUsername', 'Test as username')}
-                      </label>
-                      <input
-                        type="text"
-                        value={testOptions.userUsername}
-                        onChange={e => handleTestOptionChange('userUsername', e.target.value)}
-                        placeholder={t(
-                          'admin.iFinder.diagnostics.currentAdmin',
-                          'your admin account'
-                        )}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.diagnostics.userDomain', 'Test as domain')}
-                      </label>
-                      <input
-                        type="text"
-                        value={testOptions.userDomain}
-                        onChange={e => handleTestOptionChange('userDomain', e.target.value)}
-                        placeholder="EXAMPLE"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.iFinder.diagnostics.userHelp',
-                      String.raw`Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\username instead of an email address.`
-                    )}
-                  </p>
+                      </p>
+                    </>
+                  )}
 
                   <div className="space-y-3">
                     <div className="flex items-start">
