@@ -7,7 +7,7 @@
  */
 
 /** Where the chat input offers an integration's scope picker. */
-export const SCOPE_PICKER_PLACEMENTS = Object.freeze(['inline', 'menu', 'hidden']);
+export const SCOPE_PICKER_PLACEMENTS = Object.freeze(['menu', 'hidden']);
 
 /** Most characters a scope id may have (iAssistant ids carry a prefix). */
 export const MAX_SCOPE_ID_LENGTH = 256;

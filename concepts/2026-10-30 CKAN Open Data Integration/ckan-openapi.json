@@ -1,0 +1,483 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CKAN Action API (trimmed for iHub)",
+    "version": "2.11",
+    "description": "Read-only subset of the CKAN Action API (https://docs.ckan.org/en/2.11/api/) plus the DataStore extension. Every response is an envelope { help, success, result | error }. Paths are relative to {baseUrl}{apiPath} so a portal under a path prefix (/ckan, /data) or with a different API path works. Tested 2026-10-30 against demo.ckan.org (2.11.5), ckan.govdata.de (2.10.11), opendata.schleswig-holstein.de (2.11.7), open.canada.ca (2.10.8) and data.boston.gov (DataStore)."
+  },
+  "paths": {
+    "/package_search": {
+      "get": {
+        "operationId": "package_search",
+        "summary": "Search datasets",
+        "description": "Full-text and faceted search over datasets (CKAN calls them packages). Returns count, results[] with title, notes, organization, tags, resources[] and search_facets.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Solr query, e.g. 'parking' or 'title:Kitas'. Default *:*."
+          },
+          {
+            "name": "fq",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter query, e.g. 'organization:demo-organization res_format:CSV tags:climate'."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "e.g. 'metadata_modified desc', 'score desc', 'title_string asc'."
+          },
+          {
+            "name": "rows",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50,
+              "default": 10
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "facet.field",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "JSON list of facet fields as a string, e.g. [\"organization\",\"tags\",\"res_format\",\"license_id\",\"groups\"]. CKAN rejects comma-separated values; it accepts a JSON list or repeated query parameters."
+          },
+          {
+            "name": "facet.limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "name": "include_private",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/package_show": {
+      "get": {
+        "operationId": "package_show",
+        "summary": "Get one dataset with all metadata and resources",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Dataset name (slug) or UUID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/resource_show": {
+      "get": {
+        "operationId": "resource_show",
+        "summary": "Get one resource (file / distribution) of a dataset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/resource_search": {
+      "get": {
+        "operationId": "resource_search",
+        "summary": "Search resources by field",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "field:term, e.g. 'format:CSV' or 'name:temperature'."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/organization_list": {
+      "get": {
+        "operationId": "organization_list",
+        "summary": "List publishing organizations",
+        "parameters": [
+          {
+            "name": "all_fields",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "package_count desc"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/organization_show": {
+      "get": {
+        "operationId": "organization_show",
+        "summary": "Get one organization, optionally with its datasets",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_datasets",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/group_list": {
+      "get": {
+        "operationId": "group_list",
+        "summary": "List thematic groups / categories",
+        "parameters": [
+          {
+            "name": "all_fields",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/tag_list": {
+      "get": {
+        "operationId": "tag_list",
+        "summary": "List or search tags",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Prefix to search for."
+          },
+          {
+            "name": "all_fields",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/datastore_search": {
+      "get": {
+        "operationId": "datastore_search",
+        "summary": "Query the rows of a tabular resource loaded into the DataStore",
+        "description": "Only for resources with datastore_active = true. Returns fields[] (name and type) and records[].",
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Full-text search across all columns."
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "JSON object of exact matches, e.g. {\"status\":\"Active\"}."
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated column list."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "e.g. 'issued desc'."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "distinct",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "records_format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "objects",
+                "lists",
+                "csv",
+                "tsv"
+              ],
+              "default": "objects"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/datastore_search_sql": {
+      "get": {
+        "operationId": "datastore_search_sql",
+        "summary": "Run a read-only SQL SELECT against DataStore tables (if the portal enables it)",
+        "parameters": [
+          {
+            "name": "sql",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "SELECT ... FROM \"<resource_id>\" ... — table name is the resource UUID in double quotes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/datastore_info": {
+      "get": {
+        "operationId": "datastore_info",
+        "summary": "Column names, types and row count of a DataStore resource",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/status_show": {
+      "get": {
+        "operationId": "status_show",
+        "summary": "Portal name, CKAN version, installed extensions (health check)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "{baseUrl}{apiPath}",
+      "description": "Portal root plus API path from the install fields; default apiPath is /api/3/action",
+      "variables": {
+        "baseUrl": {
+          "default": "https://demo.ckan.org"
+        },
+        "apiPath": {
+          "default": "/api/3/action"
+        }
+      }
+    }
+  ]
+}

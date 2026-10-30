@@ -33,7 +33,7 @@ Exit: every existing integration runs through the new layer; e2e suite green; no
 2. Action detail with usage guidance and a test runner ([#2974](https://github.com/intrafind/ihub-apps/issues/2974)); custom integration builder for OpenAPI, MCP, A2A, HTTP and script actions ([#2975](https://github.com/intrafind/ihub-apps/issues/2975)).
 3. App editor: one `IntegrationsConfigSection`.
 4. User: Settings → Integrations "Available to you"; chat `IntegrationPicker`, chips, lazy connect that returns to the same chat and retries; server-side preferences.
-5. Marketplace type `integration`; shipped definitions moved to `server/defaults/integrations/`; IntraFind registry gets its first integrations (Jira and Confluence Data Center, SharePoint on-prem, Nextcloud, DeepL).
+5. Marketplace type `integration`; shipped definitions moved to `server/defaults/integrations/`; IntraFind registry gets its first integrations (Jira and Confluence Data Center, SharePoint on-prem, Nextcloud, DeepL). The first catalog integration is **CKAN Open Data Portal** ([concept](../2026-10-30%20CKAN%20Open%20Data%20Integration/README.md)): an `openapi` definition with companion document, no OAuth and no migration, built as a walking skeleton through definition, adapter, wizard, app binding and marketplace type.
 6. Shared `Switch`, `Badge`, `StatusDot`, `Drawer`; i18n en/de complete; dark mode.
 7. Member requests ("Request → Requested" and the admin queue).
 
