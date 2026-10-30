@@ -116,7 +116,7 @@
   "requiredIntegrations": ["ifinder"],
   "integrations": {
     "ifinder": {
-      "scopePicker": "inline"
+      "scopePicker": "menu"
     }
   },
   "enabled": true
