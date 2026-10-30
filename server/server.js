@@ -587,28 +587,28 @@ if (cluster.isPrimary && workerCount > 1) {
     // Installed integrations (#3061): load the definition catalog and offer
     // their scopes (publishers, search profiles) to the chat from the start.
     try {
-      const { default: integrationRegistry } =
+      const { default: integrationRegistry, INTEGRATIONS_CONFIG_KEY } =
         await import('./services/integrations/definitions/IntegrationRegistry.js');
-      // The built-in native connectors (iFinder, iAssistant) register
-      // themselves on import; definitions that name them load next.
-      await import('./services/integrations/protocols/native/connectors/register.js');
-      await integrationRegistry.reload();
       const { syncIntegrationScopeProviders } =
         await import('./services/integrations/integrationTools.js');
-      await syncIntegrationScopeProviders();
-      // Another worker installed, changed or removed an integration or a
-      // definition: refresh what this worker derives from them.
       const { registerConfigChangeHook, ALL_ENTRIES } = await import('./configSync.js');
-      const { INTEGRATIONS_CONFIG_KEY } =
-        await import('./services/integrations/definitions/IntegrationRegistry.js');
       const { invalidate } =
         await import('./services/integrations/protocols/openapi/OpenApiAdapter.js');
+      // Another worker installed, changed or removed an integration or a
+      // definition: refresh what this worker derives from them. Registered
+      // before the first load, so a load that fails here still leaves this
+      // worker following later changes.
       registerConfigChangeHook(async ({ entries }) => {
         if (!entries.includes(INTEGRATIONS_CONFIG_KEY) && !entries.includes(ALL_ENTRIES)) return;
         await integrationRegistry.reload();
         invalidate();
         await syncIntegrationScopeProviders();
       });
+      // The built-in native connectors (iFinder, iAssistant) register
+      // themselves on import; definitions that name them load next.
+      await import('./services/integrations/protocols/native/connectors/register.js');
+      await integrationRegistry.reload();
+      await syncIntegrationScopeProviders();
     } catch (error) {
       logger.warn({
         component: 'Server',

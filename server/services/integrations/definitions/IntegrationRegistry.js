@@ -175,7 +175,20 @@ export class IntegrationRegistry {
       if (hadPrevious) await fs.rename(backup, dir);
       throw error;
     }
-    if (hadPrevious) await fs.rm(backup, { recursive: true, force: true });
+    if (hadPrevious) {
+      // The new folder is in place; a backup that cannot be removed (a file
+      // lock on Windows) must not fail the install or skip the reload.
+      try {
+        await fs.rm(backup, { recursive: true, force: true });
+      } catch (error) {
+        logger.warn('Previous integration definition folder could not be removed', {
+          component: 'IntegrationRegistry',
+          id,
+          backup,
+          error: error.message
+        });
+      }
+    }
     await this.reload();
     this._announce();
     return this.get(id);

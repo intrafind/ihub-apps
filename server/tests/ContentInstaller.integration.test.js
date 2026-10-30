@@ -24,7 +24,11 @@ const state = {
   items: [],
   installations: { installations: {} },
   /** What the fake InstalledIntegrationService reports as instances. */
-  instances: []
+  instances: [],
+  /** The registry's credentials (`getRegistryWithAuth`). */
+  auth: { type: 'none' },
+  /** Every fetch the installer made: `{ url, headers }`. */
+  fetches: []
 };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
@@ -51,15 +55,20 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 jest.unstable_mockModule('../services/marketplace/RegistryService.js', () => ({
   default: {
-    getRegistryWithAuth: async () => ({ id: 'reg', auth: { type: 'none' } }),
+    getRegistryWithAuth: async () => ({
+      id: 'reg',
+      source: 'https://registry.example/catalog.json',
+      auth: state.auth
+    }),
     getCachedCatalogAsync: async () => ({ catalog: { items: state.items } }),
     resolveItemUrl: item => `https://registry.example/${item.source.path}`
   }
 }));
 
 jest.unstable_mockModule('../requestThrottler.js', () => ({
-  throttledFetch: async (_id, url) => {
-    const relative = url.replace('https://registry.example/', '');
+  throttledFetch: async (_id, url, options = {}) => {
+    state.fetches.push({ url, headers: options.headers || {} });
+    const relative = url.replace(/^https:\/\/[^/]+\//, '');
     const body = state.files[relative];
     if (body === undefined) return { ok: false, status: 404, text: async () => 'not found' };
     return {
@@ -150,6 +159,8 @@ describe('ContentInstaller: integration definitions', () => {
     state.instances = [];
     state.items = [];
     state.files = {};
+    state.auth = { type: 'none' };
+    state.fetches = [];
     invalidated.length = 0;
     // The registry singleton keeps the previous test's entries in memory.
     await integrationRegistry.reload();
@@ -173,6 +184,25 @@ describe('ContentInstaller: integration definitions', () => {
     const entry = integrationRegistry.get('org.example/service');
     expect(entry).toMatchObject({ source: 'installed' });
     expect(entry.document.paths['/search'].get.operationId).toBe('search');
+  });
+
+  test('sends the registry credentials only to the hosts the registry lives on', async () => {
+    publish(definition, { companions: ['README.md'] });
+    state.auth = { type: 'bearer', token: 'secret' };
+    // The catalog names another host as the folder's raw base.
+    state.items[0].source.rawBase = `https://files.elsewhere.example/integrations/${FOLDER}`;
+
+    await contentInstaller.install('reg', 'integration', FOLDER, 'admin');
+
+    const byUrl = Object.fromEntries(state.fetches.map(f => [f.url, f.headers]));
+    expect(byUrl[`https://registry.example/integrations/${FOLDER}/integration.json`]).toMatchObject(
+      { Authorization: 'Bearer secret' }
+    );
+    for (const name of ['README.md', 'openapi.json', 'icon.svg']) {
+      const headers = byUrl[`https://files.elsewhere.example/integrations/${FOLDER}/${name}`];
+      expect(headers).toBeDefined();
+      expect(headers.Authorization).toBeUndefined();
+    }
   });
 
   test('re-installing a definition drops the cached schemas of its installations', async () => {
