@@ -2970,6 +2970,16 @@
         "iassistantProfileIdDesc": "The iAssistant profile to use for this app (e.g., iassistant-workspace)",
         "iassistantSearchProfile": "Search Profile",
         "iassistantSearchProfileDesc": "The search profile to use for retrieval using iFinder (e.g., searchprofile-standard)",
+        "iassistantAssistantId": "iFinder iAssistant",
+        "iassistantAssistantIdDesc": "An iAssistant from iFinder. It sets both the conversation profile and the search profile, and only users who have its search profile can use it. Leave empty to set the profiles below.",
+        "iassistantAssistantLoad": "Load from iFinder",
+        "iassistantAssistantLoading": "Loading…",
+        "iassistantAssistantLoadFailed": "The iAssistants could not be loaded: {{error}}",
+        "iassistantAssistantNoneVisible": "iFinder shows you no iAssistants. You can still enter an ID.",
+        "iassistantAssistantProfiles": "Conversation profile: {{conversationProfile}} · Search profile: {{searchProfile}}",
+        "iassistantAssistantOverrides": "Set by the iAssistant.",
+        "iassistantAllSearchProfiles": "Search all of the user's search profiles",
+        "iassistantAllSearchProfilesDesc": "Sends no search profile, so iFinder searches everything the user may see through any of their search profiles. Requires iFinder 6.9 or later.",
         "iassistantExtraContext": "Extra Context",
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
@@ -5533,7 +5543,8 @@
       "answer": "Answer",
       "search": "Search",
       "doc_lookup": "Document Lookup",
-      "context": "Context"
+      "context": "Context",
+      "task": "Task"
     },
     "assess": {
       "started": "Analyzing current knowledge",
@@ -5580,6 +5591,9 @@
     "finalize": {
       "started": "Finalizing answer...",
       "completed": "Answer ready"
+    },
+    "task": {
+      "created": "Started a background task. Its result appears in the iFinder Workspace when it is done"
     }
   },
   "setup": {
@@ -6901,7 +6915,8 @@
       "submitPages_other": "Add {{count}} pages",
       "linkChangeProject": "Change",
       "linkPublishedDetail": "Published for everyone",
-      "linkFromAppsDetail": "Comes with one of your apps"
+      "linkFromAppsDetail": "Comes with one of your apps",
+      "nothingToAdd": "This kind of item is not available here."
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -6935,7 +6950,13 @@
       "creating": "Creating…",
       "submit": "Create project",
       "subtitle": "A project keeps documents, instructions and chats together. It stays private until you share it.",
-      "title": "New project"
+      "title": "New project",
+      "tier": "Where to keep it",
+      "tierIhub": "In iHub",
+      "tierIhubHint": "Files, web pages and text, with instructions and sharing.",
+      "tierIfinder": "As an iFinder smart collection",
+      "tierIfinderHint": "A list of iFinder documents you can read. It also shows up in iFinder.",
+      "submitCollection": "Create collection"
     },
     "errors": {
       "accessChanged": "Your access to this project changed in the meantime. Reload the page.",
@@ -6955,7 +6976,19 @@
       "storageUnavailable": "Projects are not available on this installation.",
       "unsupportedType": "This file type is not supported.",
       "unsupportedTypeWith": "This file type is not supported. Supported: {{types}}.",
-      "userProjectsDisabled": "User projects are switched off."
+      "userProjectsDisabled": "User projects are switched off.",
+      "quotaCollectionDocuments": "A smart collection holds at most {{limit}} documents; this one already has {{used}}.",
+      "documentNotReadable": "You cannot read this document in iFinder, so it cannot be added to a collection.",
+      "ifinderWritesDisabled": "Changing smart collections from iHub is switched off on this installation. Change them in iFinder.",
+      "ifinderForbidden": "iFinder does not allow your account to change smart collections.",
+      "tierNotAvailable": "Smart collections from iFinder are not available to you.",
+      "ifinderUnavailable": "iFinder could not be reached. Try again in a moment.",
+      "ifinderRejected": "iFinder did not accept the change.",
+      "collectionBusy": "The collection is being changed right now. Try again in a moment.",
+      "ifinderWritePartial": "iFinder reported an error after part of the change went through: {{done}} done, {{not}} not. Reload the collection and try again.",
+      "ifinderWriteNone": "iFinder reported an error and nothing was changed. Try again in a moment.",
+      "ifinderWriteUnknown": "iFinder did not answer, so it is not known whether the change went through. Reload the collection to see.",
+      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only."
     },
     "form": {
       "description": "Description",
@@ -7017,7 +7050,9 @@
       "title": "Documents",
       "tokens": "~{{tokens}} tokens",
       "selectAll": "Select all items",
-      "selectItem": "Select {{name}}"
+      "selectItem": "Select {{name}}",
+      "collectionFull": "A smart collection holds as many documents as iFinder allows.",
+      "removeFromCollectionConfirm": "Remove \"{{name}}\" from the collection? The document stays in iFinder."
     },
     "list": {
       "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",
@@ -7073,7 +7108,8 @@
       "deleteConfirm": "Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.",
       "deleteTitle": "Delete project",
       "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it.",
-      "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder."
+      "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.",
+      "ifinderManage": "This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. Sharing and deleting it are done in iFinder."
     },
     "preview": {
       "edit": "Edit text",
@@ -7144,7 +7180,8 @@
       "bytesOf": "{{used}} of {{limit}}",
       "items": "Items",
       "itemsOf": "{{used}} of {{limit}}",
-      "storage": "Storage"
+      "storage": "Storage",
+      "documents": "Documents"
     },
     "estimate": {
       "button": "Estimate tokens",
@@ -7248,13 +7285,20 @@
       "ifinder": "iFinder",
       "readOnly": "read-only",
       "ifinderHint": "A smart collection from iFinder. iHub only reads it; change it in iFinder.",
-      "ifinderDetail": "Smart collection from iFinder"
+      "ifinderDetail": "Smart collection from iFinder",
+      "ifinderManageHint": "A smart collection from iFinder. You can rename it and add or remove its documents here."
     },
     "ifinder": {
       "sourceTitle": "Smart collection in iFinder",
       "sourceText": "Its documents stay in iFinder and are read with your own access rights. Add, remove, rename or share them in iFinder.",
       "documentCount_one": "{{count}} document",
-      "documentCount_other": "{{count}} documents"
+      "documentCount_other": "{{count}} documents",
+      "sourceTextManage": "Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share or delete it in iFinder.",
+      "documentCountOf": "{{count}} of {{max}} documents",
+      "rename": "Rename",
+      "renameTitle": "Rename collection",
+      "renameSubtitle": "The name and the description are changed in iFinder too.",
+      "renameHint": "A smart collection has no instructions: it is a list of documents."
     }
   }
 }

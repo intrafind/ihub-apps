@@ -47,6 +47,7 @@ class ConversationApiService {
    * @param {Object} [params.retrievalScope] - Document scope restrictions (merged into retrieval_scope)
    * @param {boolean} [params.ephemeral] - Whether the conversation is ephemeral
    * @param {Object} [params.responseGeneration] - Response generation options (extra_context, system_prompt_preamble)
+   * @param {string} [params.fallbackLanguage] - BCP 47 tag the assistant writes in when the conversation has no text yet
    * @returns {Promise<Object>} Created conversation object
    */
   async createConversation({
@@ -57,6 +58,7 @@ class ConversationApiService {
     retrievalScope,
     ephemeral,
     responseGeneration,
+    fallbackLanguage,
     signal
   }) {
     const url = this.buildUrl(baseUrl, '/conversations');
@@ -74,6 +76,7 @@ class ConversationApiService {
     const body = { conversation };
     if (Object.keys(retrieval_scope).length > 0) body.retrieval_scope = retrieval_scope;
     if (responseGeneration) body.response_generation = responseGeneration;
+    if (fallbackLanguage) body.fallback_language = fallbackLanguage;
 
     logger.info('Creating conversation', {
       component: 'ConversationApiService',
@@ -106,9 +109,13 @@ class ConversationApiService {
    * @param {Array} [params.tools] - Tools available for this message
    * @param {Object} params.user - Authenticated user
    * @param {string} params.baseUrl - iFinder base URL
+   * @param {string} [params.fallbackLanguage] - BCP 47 tag for a turn without text
    * @returns {Promise<Response>} Raw fetch Response for streaming
    */
-  async sendMessage(conversationId, { content, parentId, profileId, tools, user, baseUrl }) {
+  async sendMessage(
+    conversationId,
+    { content, parentId, profileId, tools, user, baseUrl, fallbackLanguage }
+  ) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}/messages`);
     const headers = await this.buildHeaders(user, { accept: 'text/event-stream' });
 
@@ -116,8 +123,9 @@ class ConversationApiService {
     if (profileId) message.profile_id = profileId;
     if (tools && tools.length > 0) message.tools = tools;
 
-    const body = { message };
+    const body = { message, mode: 'APPEND' };
     if (parentId) body.parent_id = parentId;
+    if (fallbackLanguage) body.fallback_language = fallbackLanguage;
 
     logger.info('Sending message', {
       component: 'ConversationApiService',
@@ -282,38 +290,6 @@ class ConversationApiService {
     }
 
     return response.status === 204 ? null : response.json();
-  }
-
-  /**
-   * Get a single conversation profile, including its workflow configuration.
-   *
-   * The list endpoint returns {@link ProfileSummary} objects, which the API
-   * documents as "without configuration details", so a caller that needs the
-   * workflow configuration has to read the profile itself.
-   *
-   * @param {string} profileId - Profile id, e.g. "iassistant-workspace"
-   * @param {Object} params
-   * @param {Object} params.user - Authenticated user
-   * @param {string} params.baseUrl - iFinder base URL
-   * @param {AbortSignal} [params.signal]
-   * @returns {Promise<Object>} the profile
-   */
-  async getProfile(profileId, { user, baseUrl, signal }) {
-    const url = this.buildUrl(baseUrl, `/profiles/${encodeURIComponent(profileId)}`);
-    const headers = await this.buildHeaders(user);
-
-    const response = await throttledFetch('iAssistantConversation', url, {
-      method: 'GET',
-      headers,
-      ...(signal ? { signal } : {})
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to get profile ${profileId} (${response.status}): ${errorText}`);
-    }
-
-    return response.json();
   }
 
   /**

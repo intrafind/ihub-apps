@@ -340,6 +340,11 @@ export class LLMStream {
 
 // ── Error mapping ───────────────────────────────────────────────────────────
 
+/** Whether a provider response is a refusal rather than the start of an answer. */
+function isFailedResponse(res) {
+  return !res || res.ok === false || (typeof res.status === 'number' && res.status >= 400);
+}
+
 function mapProviderCode(providerCode, status) {
   switch (providerCode) {
     case 'AUTH_FAILED':
@@ -794,8 +799,11 @@ export class LLMClient {
             abortErr.name = 'AbortError';
             throw abortErr;
           }
-          const res = await this._connect(request, callSignal, model, effectiveStream);
-          if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
+          let res = await this._connect(request, callSignal, model, effectiveStream);
+          if (isFailedResponse(res) && (await this._reviseAfterError(res, request, model))) {
+            res = await this._connect(request, callSignal, model, effectiveStream);
+          }
+          if (isFailedResponse(res)) {
             throw await this._httpError(res, model, language, request);
           }
           return res;
@@ -1291,6 +1299,36 @@ export class LLMClient {
       throw err;
     } finally {
       if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Give the provider's adapter one chance to repair a request the provider
+   * refused (`adapter.reviseRequestAfterError(response, request)`), for
+   * refusals that name their own fix — the iAssistant's 409 says which message
+   * the conversation now ends with. The adapter revises `request` in place and
+   * answers true to have it sent again; it must answer false for a request it
+   * has already revised, so this can never loop.
+   *
+   * @returns {Promise<boolean>} true when the revised request should be sent
+   */
+  async _reviseAfterError(response, request, model) {
+    let adapter;
+    try {
+      adapter = getAdapter(model.provider);
+    } catch {
+      return false;
+    }
+    if (typeof adapter?.reviseRequestAfterError !== 'function') return false;
+    try {
+      return (await adapter.reviseRequestAfterError(response, request)) === true;
+    } catch (err) {
+      logger.warn('Adapter could not revise a refused request', {
+        component: COMPONENT,
+        provider: model.provider,
+        error: err?.message
+      });
+      return false;
     }
   }
 

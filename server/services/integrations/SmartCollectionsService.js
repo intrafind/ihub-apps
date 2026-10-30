@@ -3,7 +3,8 @@
 
 /**
  * Client of the iFinder Smart Collections public API (v1, GA since iFinder 6.8):
- * list and get, with the calling user's own JWT.
+ * list and get, and (iteration 2 of the iFinder tier) create, rename, add
+ * documents and remove documents, with the calling user's own JWT.
  *
  *  - The paths are the **v1** ones (`/public-api/smart-collections/api/v1/...`),
  *    not the v0 paths the 6.8 documentation still shows.
@@ -17,6 +18,17 @@
  *    whose owner differs from the caller's `sub` only in case is missing from
  *    {@link SmartCollectionsService#list} but still opens by id. iHub does not
  *    work around that.
+ *  - **Writes are an unversioned read-modify-write in iFinder** (the utilities
+ *    service has no `if_seq_no`), so two writes to one collection that overlap
+ *    lose one of them. This client does not serialize them: the caller does,
+ *    across all iHub instances (`services/projects/ifinder/collectionLock.js`).
+ *  - `PATCH` updates **every non-null field** it is sent, `owner`, `documents`
+ *    and `viewers` included. {@link SmartCollectionsService#rename} therefore
+ *    builds its body from `name` and `description` alone: an `owner` would hand
+ *    the collection to someone else and `documents` would overwrite the list.
+ *  - The owner of a new collection is **not sent**: the webapp fills it from
+ *    the token. iFinder checks no document id on add (no existence, no ACL),
+ *    so the caller checks readability first.
  *
  * The service holds no state: caching and the merge into the project list are
  * the project tier's (`services/projects/ifinder/IFinderTier.js`).
@@ -46,6 +58,10 @@ export const MAX_COLLECTIONS = 300;
 /** Default timeouts, in milliseconds. The list sits on the way to the projects page. */
 export const LIST_TIMEOUT_MS = 5000;
 export const GET_TIMEOUT_MS = 8000;
+export const WRITE_TIMEOUT_MS = 15000;
+
+/** Documents one collection holds at most (utilities `max-document-count`). */
+export const MAX_COLLECTION_DOCUMENTS = 200;
 
 const COLLECTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,7 +78,9 @@ export const SMART_COLLECTIONS_ERRORS = Object.freeze({
   /** Timeout, network or TLS error, or a 5xx. */
   UNAVAILABLE: 'UNAVAILABLE',
   /** iFinder answered with something that is no collection. */
-  INVALID_RESPONSE: 'INVALID_RESPONSE'
+  INVALID_RESPONSE: 'INVALID_RESPONSE',
+  /** iFinder refused a write as invalid (400, 409, 422). Asking again unchanged will not help. */
+  REJECTED: 'REJECTED'
 });
 
 export class SmartCollectionsError extends Error {
@@ -143,6 +161,13 @@ export function parseCollection(raw) {
   return summary ? { ...summary, documentIds: documentIdsOf(raw) } : null;
 }
 
+function collectionIdOrThrow(id) {
+  if (typeof id !== 'string' || !COLLECTION_ID.test(id)) {
+    throw new SmartCollectionsError(SMART_COLLECTIONS_ERRORS.NOT_FOUND, 'Invalid collection id');
+  }
+  return id.toLowerCase();
+}
+
 function withTimeout(signal, timeoutMs) {
   const timeout = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -150,18 +175,29 @@ function withTimeout(signal, timeoutMs) {
 
 class SmartCollectionsService {
   /**
-   * One authenticated GET against the collections resource.
+   * One authenticated request against the collections resource.
    *
    * @param {Object} params
    * @param {Object} params.user - The calling user (the JWT subject).
+   * @param {string} [params.method='GET']
    * @param {string} [params.suffix] - Path below the collection resource (`/<id>`).
    * @param {Object} [params.query] - Query parameters.
+   * @param {Object|Array} [params.body] - JSON body.
    * @param {AbortSignal} [params.signal]
    * @param {number} [params.timeoutMs]
-   * @returns {Promise<Object|null>} The parsed JSON body, null for a 204.
+   * @returns {Promise<{status: number, body: Object|null}>} The status and the
+   *   parsed JSON body, null for a 204 or an empty body.
    * @throws {SmartCollectionsError}
    */
-  async _get({ user, suffix = '', query = {}, signal, timeoutMs = GET_TIMEOUT_MS }) {
+  async _request({
+    user,
+    method = 'GET',
+    suffix = '',
+    query = {},
+    body,
+    signal,
+    timeoutMs = GET_TIMEOUT_MS
+  }) {
     const baseUrl = iFinderService.getConfig().baseUrl.replace(/\/+$/, '');
     const url = new URL(`${baseUrl}${SMART_COLLECTIONS_PATH}${suffix}`);
     for (const [key, value] of Object.entries(query)) {
@@ -187,11 +223,17 @@ class SmartCollectionsService {
         { cause: error }
       );
     }
+    const hasBody = body !== undefined;
     let response;
     try {
       response = await httpFetch(url.toString(), {
-        method: 'GET',
-        headers: { Authorization: authorization, Accept: 'application/json' },
+        method,
+        headers: {
+          Authorization: authorization,
+          Accept: 'application/json',
+          ...(hasBody ? { 'Content-Type': 'application/json' } : {})
+        },
+        ...(hasBody ? { body: JSON.stringify(body) } : {}),
         signal: withTimeout(signal, timeoutMs)
       });
     } catch (error) {
@@ -199,6 +241,7 @@ class SmartCollectionsService {
       logger.warn('iFinder Smart Collections request failed', {
         component: COMPONENT,
         host: url.host,
+        method,
         reason: timedOut ? 'timeout' : error?.message
       });
       throw new SmartCollectionsError(
@@ -219,14 +262,18 @@ class SmartCollectionsService {
               ? SMART_COLLECTIONS_ERRORS.FORBIDDEN
               : status === 401
                 ? SMART_COLLECTIONS_ERRORS.UNAUTHORIZED
-                : SMART_COLLECTIONS_ERRORS.UNAVAILABLE;
+                : method !== 'GET' && (status === 400 || status === 409 || status === 422)
+                  ? SMART_COLLECTIONS_ERRORS.REJECTED
+                  : SMART_COLLECTIONS_ERRORS.UNAVAILABLE;
       throw new SmartCollectionsError(code, `iFinder answered ${status}`, { status });
     }
     // 204 is how the webapp answers when the utilities service sent no body:
     // nothing to read, not a failure.
-    if (response.status === 204) return null;
+    if (response.status === 204) return { status: 204, body: null };
+    let text = '';
     try {
-      return await response.json();
+      text = await response.text();
+      return { status: response.status, body: text.trim() ? JSON.parse(text) : null };
     } catch (error) {
       throw new SmartCollectionsError(
         SMART_COLLECTIONS_ERRORS.INVALID_RESPONSE,
@@ -234,6 +281,11 @@ class SmartCollectionsService {
         { status: response.status, cause: error }
       );
     }
+  }
+
+  /** One authenticated GET: the parsed JSON body, null when there is none. */
+  async _get(params) {
+    return (await this._request({ ...params, method: 'GET' })).body;
   }
 
   /**
@@ -336,6 +388,111 @@ class SmartCollectionsService {
       );
     }
     return collection;
+  }
+
+  /**
+   * Create a collection. The owner is **not sent**: the webapp sets it to the
+   * authenticated user's principal, so the collection is the caller's.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.name
+   * @param {string} [params.description='']
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<{id: string}>} The new collection's UUID, lowercase.
+   * @throws {SmartCollectionsError}
+   */
+  async create({ user, name, description = '', signal }) {
+    const { body } = await this._request({
+      user,
+      method: 'POST',
+      body: { name, description },
+      signal,
+      timeoutMs: WRITE_TIMEOUT_MS
+    });
+    const id = typeof body?.id === 'string' ? body.id.toLowerCase() : '';
+    if (!COLLECTION_ID.test(id)) {
+      throw new SmartCollectionsError(
+        SMART_COLLECTIONS_ERRORS.INVALID_RESPONSE,
+        'iFinder did not answer with the id of the new collection'
+      );
+    }
+    return { id };
+  }
+
+  /**
+   * Rename a collection (and change its description). The body holds only the
+   * fields given: `PATCH` writes every non-null field it gets, so `owner`,
+   * `documents` and `viewers` are never part of it.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.id
+   * @param {string} [params.name]
+   * @param {string} [params.description]
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<void>}
+   * @throws {SmartCollectionsError}
+   */
+  async rename({ user, id, name, description, signal }) {
+    const body = {};
+    if (typeof name === 'string') body.name = name;
+    if (typeof description === 'string') body.description = description;
+    if (Object.keys(body).length === 0) return;
+    await this._request({
+      user,
+      method: 'PATCH',
+      suffix: `/${collectionIdOrThrow(id)}`,
+      body,
+      signal,
+      timeoutMs: WRITE_TIMEOUT_MS
+    });
+  }
+
+  /**
+   * Add documents to a collection's membership. iFinder checks neither that
+   * a document exists nor that the user may read it: the caller did.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.id
+   * @param {string[]} params.documentIds
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<void>}
+   * @throws {SmartCollectionsError}
+   */
+  async addDocuments({ user, id, documentIds, signal }) {
+    await this._request({
+      user,
+      method: 'POST',
+      suffix: `/${collectionIdOrThrow(id)}/documents`,
+      body: documentIds.map(documentId => ({ id: documentId })),
+      signal,
+      timeoutMs: WRITE_TIMEOUT_MS
+    });
+  }
+
+  /**
+   * Remove documents from a collection's membership. The documents themselves
+   * are untouched: this endpoint knows nothing else.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.id
+   * @param {string[]} params.documentIds
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<void>}
+   * @throws {SmartCollectionsError}
+   */
+  async removeDocuments({ user, id, documentIds, signal }) {
+    await this._request({
+      user,
+      method: 'DELETE',
+      suffix: `/${collectionIdOrThrow(id)}/documents`,
+      body: documentIds.map(documentId => ({ id: documentId })),
+      signal,
+      timeoutMs: WRITE_TIMEOUT_MS
+    });
   }
 }
 

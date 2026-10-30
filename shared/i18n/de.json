@@ -3260,6 +3260,16 @@
         "iassistantProfileIdDesc": "Das iAssistant-Profil, das für diese App verwendet werden soll (z.B. iassistant-workspace)",
         "iassistantSearchProfile": "Suchprofil",
         "iassistantSearchProfileDesc": "Das Suchprofil, das für den Abruf mit iFinder verwendet werden soll (z.B. searchprofile-standard)",
+        "iassistantAssistantId": "iFinder-iAssistant",
+        "iassistantAssistantIdDesc": "Ein iAssistant aus iFinder. Er legt Konversationsprofil und Suchprofil fest und kann nur von Benutzern verwendet werden, die sein Suchprofil haben. Leer lassen, um die Profile unten festzulegen.",
+        "iassistantAssistantLoad": "Aus iFinder laden",
+        "iassistantAssistantLoading": "Wird geladen…",
+        "iassistantAssistantLoadFailed": "Die iAssistants konnten nicht geladen werden: {{error}}",
+        "iassistantAssistantNoneVisible": "iFinder zeigt Ihnen keine iAssistants. Sie können trotzdem eine ID eingeben.",
+        "iassistantAssistantProfiles": "Konversationsprofil: {{conversationProfile}} · Suchprofil: {{searchProfile}}",
+        "iassistantAssistantOverrides": "Vom iAssistant festgelegt.",
+        "iassistantAllSearchProfiles": "In allen Suchprofilen des Benutzers suchen",
+        "iassistantAllSearchProfilesDesc": "Sendet kein Suchprofil, sodass iFinder alles durchsucht, was der Benutzer über eines seiner Suchprofile sehen darf. Erfordert iFinder 6.9 oder neuer.",
         "iassistantExtraContext": "Zusätzlicher Kontext",
         "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
@@ -5498,7 +5508,8 @@
       "answer": "Antwort",
       "search": "Suche",
       "doc_lookup": "Dokumentensuche",
-      "context": "Kontext"
+      "context": "Kontext",
+      "task": "Aufgabe"
     },
     "assess": {
       "started": "Analyse des aktuellen Wissens",
@@ -5545,6 +5556,9 @@
     "finalize": {
       "started": "Antwort wird fertiggestellt...",
       "completed": "Antwort fertig"
+    },
+    "task": {
+      "created": "Hintergrundaufgabe gestartet. Ihr Ergebnis erscheint im iFinder Workspace, sobald sie fertig ist"
     }
   },
   "setup": {
@@ -6866,7 +6880,8 @@
       "submitPages_other": "{{count}} Seiten hinzufügen",
       "linkChangeProject": "Ändern",
       "linkPublishedDetail": "Für alle veröffentlicht",
-      "linkFromAppsDetail": "Gehört zu einer Ihrer Apps"
+      "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
+      "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar."
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -6900,7 +6915,13 @@
       "creating": "Wird angelegt…",
       "submit": "Projekt anlegen",
       "subtitle": "Ein Projekt hält Dokumente, Anweisungen und Chats zusammen. Es bleibt privat, bis Sie es teilen.",
-      "title": "Neues Projekt"
+      "title": "Neues Projekt",
+      "tier": "Wo es liegen soll",
+      "tierIhub": "In iHub",
+      "tierIhubHint": "Dateien, Webseiten und Text, mit Anweisungen und Freigabe.",
+      "tierIfinder": "Als Smart Collection in iFinder",
+      "tierIfinderHint": "Eine Liste von iFinder-Dokumenten, die Sie lesen dürfen. Sie erscheint auch in iFinder.",
+      "submitCollection": "Collection erstellen"
     },
     "errors": {
       "accessChanged": "Ihr Zugriff auf dieses Projekt hat sich inzwischen geändert. Laden Sie die Seite neu.",
@@ -6920,7 +6941,19 @@
       "storageUnavailable": "Projekte sind auf dieser Installation nicht verfügbar.",
       "unsupportedType": "Dieser Dateityp wird nicht unterstützt.",
       "unsupportedTypeWith": "Dieser Dateityp wird nicht unterstützt. Unterstützt: {{types}}.",
-      "userProjectsDisabled": "Benutzerprojekte sind ausgeschaltet."
+      "userProjectsDisabled": "Benutzerprojekte sind ausgeschaltet.",
+      "quotaCollectionDocuments": "Eine Smart Collection enthält höchstens {{limit}} Dokumente; diese hat bereits {{used}}.",
+      "documentNotReadable": "Sie dürfen dieses Dokument in iFinder nicht lesen, es kann deshalb keiner Collection hinzugefügt werden.",
+      "ifinderWritesDisabled": "Smart Collections von iHub aus zu ändern ist auf dieser Installation abgeschaltet. Ändern Sie sie in iFinder.",
+      "ifinderForbidden": "iFinder erlaubt Ihrem Konto nicht, Smart Collections zu ändern.",
+      "tierNotAvailable": "Smart Collections aus iFinder sind für Sie nicht verfügbar.",
+      "ifinderUnavailable": "iFinder ist nicht erreichbar. Versuchen Sie es gleich noch einmal.",
+      "ifinderRejected": "iFinder hat die Änderung nicht akzeptiert.",
+      "collectionBusy": "Die Collection wird gerade geändert. Versuchen Sie es gleich noch einmal.",
+      "ifinderWritePartial": "iFinder meldete einen Fehler, nachdem ein Teil der Änderung durchgelaufen war: {{done}} erledigt, {{not}} nicht. Laden Sie die Collection neu und versuchen Sie es erneut.",
+      "ifinderWriteNone": "iFinder meldete einen Fehler, es wurde nichts geändert. Versuchen Sie es gleich noch einmal.",
+      "ifinderWriteUnknown": "iFinder hat nicht geantwortet, es ist daher nicht bekannt, ob die Änderung durchgelaufen ist. Laden Sie die Collection neu, um es zu sehen.",
+      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente."
     },
     "form": {
       "description": "Beschreibung",
@@ -6982,7 +7015,9 @@
       "title": "Dokumente",
       "tokens": "~{{tokens}} Tokens",
       "selectAll": "Alle Elemente auswählen",
-      "selectItem": "{{name}} auswählen"
+      "selectItem": "{{name}} auswählen",
+      "collectionFull": "Eine Smart Collection enthält so viele Dokumente, wie iFinder erlaubt.",
+      "removeFromCollectionConfirm": "„{{name}}“ aus der Collection entfernen? Das Dokument bleibt in iFinder."
     },
     "list": {
       "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",
@@ -7038,7 +7073,8 @@
       "deleteConfirm": "„{{name}}“ mit allen Dokumenten löschen? Die Chats bleiben erhalten, außerhalb des Projekts. Das lässt sich nicht rückgängig machen.",
       "deleteTitle": "Projekt löschen",
       "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt.",
-      "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um."
+      "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um.",
+      "ifinderManage": "Dies ist eine Smart Collection aus iFinder. Fügen Sie Dokumente hinzu, die Sie lesen dürfen, oder entfernen Sie sie hier: Nur die Liste ändert sich, nie das Dokument. Die Collection ändert sich auch in iFinder. Teilen und Löschen erfolgt in iFinder."
     },
     "preview": {
       "edit": "Text bearbeiten",
@@ -7109,7 +7145,8 @@
       "bytesOf": "{{used}} von {{limit}}",
       "items": "Elemente",
       "itemsOf": "{{used}} von {{limit}}",
-      "storage": "Speicher"
+      "storage": "Speicher",
+      "documents": "Dokumente"
     },
     "estimate": {
       "button": "Tokens schätzen",
@@ -7213,13 +7250,20 @@
       "ifinder": "iFinder",
       "readOnly": "nur lesbar",
       "ifinderHint": "Eine Smart Collection aus iFinder. iHub liest sie nur; ändern Sie sie in iFinder.",
-      "ifinderDetail": "Smart Collection aus iFinder"
+      "ifinderDetail": "Smart Collection aus iFinder",
+      "ifinderManageHint": "Eine Smart Collection aus iFinder. Sie können sie hier umbenennen und Dokumente hinzufügen oder entfernen."
     },
     "ifinder": {
       "sourceTitle": "Smart Collection in iFinder",
       "sourceText": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Hinzufügen, Entfernen, Umbenennen oder Teilen geschieht in iFinder.",
       "documentCount_one": "{{count}} Dokument",
-      "documentCount_other": "{{count}} Dokumente"
+      "documentCount_other": "{{count}} Dokumente",
+      "sourceTextManage": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Sie können die Collection hier umbenennen und Dokumente hinzufügen oder entfernen; die Änderung wird in iFinder vorgenommen. Teilen oder löschen Sie sie in iFinder.",
+      "documentCountOf": "{{count}} von {{max}} Dokumenten",
+      "rename": "Umbenennen",
+      "renameTitle": "Collection umbenennen",
+      "renameSubtitle": "Name und Beschreibung werden auch in iFinder geändert.",
+      "renameHint": "Eine Smart Collection hat keine Anweisungen: Sie ist eine Liste von Dokumenten."
     }
   }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V187 — iFinder authentication mode (#3029)
+ * Migration V188 — iFinder authentication mode (#3029)
  *
  * iHub can now get iFinder tokens from an OIDC provider it shares with iFinder
  * (token exchange) instead of signing them itself. This writes the defaults of
@@ -17,7 +17,7 @@
  * keep running on the code defaults.
  */
 
-export const version = '187';
+export const version = '188';
 export const description = 'add_ifinder_auth_mode';
 
 export async function precondition(ctx) {

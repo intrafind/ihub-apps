@@ -117,11 +117,12 @@ export function serializeProject(
     id: project.id,
     ownership: project.ownership,
     tier: project.tier || 'ihub',
-    // A smart collection of the iFinder tier: a read-only view of what iFinder
-    // holds. `source` says where it lives, for the badge and the link back.
+    // A smart collection of the iFinder tier: it lives in iFinder, and only its
+    // owner changes it from iHub (and not where writes are switched off).
+    // `source` says where it lives, for the badge and the link back.
     ...(isIFinderProjectId(project.id)
       ? {
-          readOnly: true,
+          readOnly: permissions.readOnly === true,
           source: {
             type: 'smart-collection',
             collectionId: project.source?.collectionId || null

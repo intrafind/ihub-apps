@@ -38,6 +38,7 @@ import {
   satisfiesLevel
 } from '../services/projects/projectAccess.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
+import { collectionWriteSupport } from '../services/projects/ifinder/collectionLock.js';
 import { isUserProjectsConfigured, projectSettings } from '../services/projects/projectSettings.js';
 
 /**
@@ -84,7 +85,7 @@ export function isActiveUser(users, id) {
  *
  * @param {Object} user - `req.user` with resolved permissions.
  * @returns {{config: Object, groups: string[], isAdmin: boolean, isContentAdmin: boolean,
- *   linked: Set<string>, users: Object, catalog: boolean}}
+ *   linked: Set<string>, users: Object, catalog: boolean, ifinderWritable: boolean}}
  */
 export function callerContext(user) {
   const config = groupsConfig();
@@ -95,7 +96,8 @@ export function callerContext(user) {
     isContentAdmin: isProjectContentAdmin(user, config),
     linked: linkedProjectIds(user),
     users: usersDb(),
-    catalog: projectSettings(configCache.getPlatform() || {}).sharing.allowCatalog
+    catalog: projectSettings(configCache.getPlatform() || {}).sharing.allowCatalog,
+    ifinderWritable: collectionWriteSupport().writable
   };
 }
 
@@ -119,17 +121,46 @@ export function permissionsFor(project, user, context) {
         ? isActiveUser(context.users, project.owner.id)
         : true,
     linked: project.ownership === 'admin' && context.linked.has(project.id),
-    catalog: context.catalog === true
+    catalog: context.catalog === true,
+    ifinderWritable: context.ifinderWritable === true
   });
 }
 
-/** The methods that only read. A smart collection of the iFinder tier answers nothing else. */
+/** The methods that only read. */
 const READ_METHODS = new Set(['GET', 'HEAD']);
 
 /**
+ * The writes a smart collection of the iFinder tier (`ifc_…`) takes, and nothing
+ * else: rename, add documents, remove one. Each is named twice, because it is
+ * checked twice: by the path below `/api/projects/:projectId` (the guard in front
+ * of every route, before anything is looked up) and by the route it is
+ * registered on (the gate of the route, `projectAccessRequired`). Every other
+ * non-read request for an `ifc_` id is refused, including routes added later.
+ * Each listed route still needs `permissions.canEdit`, which is the owner's.
+ *
+ * Creating a collection is `POST /api/projects`, which has no project id.
+ */
+export const IFINDER_WRITE_ROUTES = Object.freeze([
+  { method: 'PATCH', route: '/:projectId', path: /^\/?$/ },
+  { method: 'POST', route: '/:projectId/items', path: /^\/items\/?$/ },
+  { method: 'DELETE', route: '/:projectId/items/:itemId', path: /^\/items\/[^/]+\/?$/ }
+]);
+
+function refuseReadOnly(res) {
+  sendErrorResponse(
+    res,
+    403,
+    'A project from iFinder can only be renamed, and have documents added or removed. Everything else is done in iFinder',
+    { details: { code: 'PROJECT_READ_ONLY' } }
+  );
+  return true;
+}
+
+/**
  * Refuse a write to a project of the iFinder tier (a smart collection, `ifc_…`)
- * before anything is looked up: they are read-only for everyone, so the
- * answer is the same for an id that exists and one that does not.
+ * that is not on {@link IFINDER_WRITE_ROUTES}, before anything is looked up: the
+ * answer is the same for an id that exists and one that does not. Used as the
+ * guard of `/api/projects/:projectId`, where `req.path` is the part below it.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -138,10 +169,30 @@ const READ_METHODS = new Set(['GET', 'HEAD']);
  */
 export function refuseIFinderWrite(req, res, projectId) {
   if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return false;
-  sendErrorResponse(res, 403, 'Projects from iFinder are read-only in iHub', {
-    details: { code: 'PROJECT_READ_ONLY' }
-  });
-  return true;
+  const allowed = IFINDER_WRITE_ROUTES.some(
+    entry =>
+      entry.method === req.method && typeof req.path === 'string' && entry.path.test(req.path)
+  );
+  return allowed ? false : refuseReadOnly(res);
+}
+
+/**
+ * The same refusal by the route the request matched (`req.route.path`, set by
+ * express), for the gate of each route: a second line behind the path guard.
+ * A request that matched no route template is refused.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {string} projectId
+ * @returns {boolean} True when the request was refused.
+ */
+export function refuseIFinderWriteRoute(req, res, projectId) {
+  if (!isIFinderProjectId(projectId) || READ_METHODS.has(req.method)) return false;
+  const template = String(req.route?.path || '');
+  const allowed = IFINDER_WRITE_ROUTES.some(
+    entry => entry.method === req.method && template.endsWith(entry.route)
+  );
+  return allowed ? false : refuseReadOnly(res);
 }
 
 /**
@@ -158,7 +209,7 @@ export function projectAccessRequired(level) {
     try {
       const { projectId } = req.params;
       if (!validateIdForPath(projectId, 'project', res)) return;
-      if (refuseIFinderWrite(req, res, projectId)) return;
+      if (refuseIFinderWriteRoute(req, res, projectId)) return;
       ensurePrincipal(req);
       const loaded = await loadProjectFor(req.user, projectId, {
         repository: getProjectRepository()
@@ -188,6 +239,22 @@ export function projectAccessRequired(level) {
       ) {
         sendErrorResponse(res, 403, 'User projects are switched off', {
           details: { code: 'USER_PROJECTS_DISABLED' }
+        });
+        return;
+      }
+      // Where no lock reaches every iHub instance a collection cannot be changed
+      // safely: say that, not a bare "no access" to its owner.
+      if (
+        isIFinderProjectId(project.id) &&
+        level !== 'use' &&
+        permissions.isOwner &&
+        context.ifinderWritable !== true
+      ) {
+        sendErrorResponse(res, 403, 'Changing smart collections from iHub is switched off here', {
+          details: {
+            code: 'IFINDER_WRITES_DISABLED',
+            reason: collectionWriteSupport().reason
+          }
         });
         return;
       }

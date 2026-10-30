@@ -380,7 +380,11 @@ export default function ProjectsPage() {
         />
       )}
       {creating && (
-        <CreateProjectDialog onClose={() => setCreating(false)} onCreated={handleCreated} />
+        <CreateProjectDialog
+          onClose={() => setCreating(false)}
+          onCreated={handleCreated}
+          ifinderWritable={config?.ifinder?.writable === true}
+        />
       )}
     </div>
   );

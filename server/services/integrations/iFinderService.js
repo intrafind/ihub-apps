@@ -5,6 +5,7 @@ import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import iFinderTokenProvider from './iFinderTokenProvider.js';
+import iFinderSearchProfiles from './iFinderSearchProfiles.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
@@ -124,13 +125,15 @@ class IFinderService {
             '/public-api/retrieval/api/v1/schema-types/{schemaType}/fields',
           facets:
             iFinderConfig.endpoints?.facets ||
-            '/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search',
-          assistants: iFinderConfig.endpoints?.assistants || '/public-api/v0/assistants'
+            '/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search'
         },
         defaultSearchProfile:
           iFinderConfig.defaultSearchProfile ||
           process.env.IFINDER_SEARCH_PROFILE ||
           'searchprofile-standard',
+        // The iFinder application whose search profile assignments
+        // listProfiles reads (`searchprofile.applications`).
+        searchProfileApplication: iFinderConfig.searchProfileApplication || 'ifinder',
         downloadDir:
           iFinderConfig.downloadDir || config.IFINDER_DOWNLOAD_DIR || '/tmp/ifinder-downloads',
         timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
@@ -955,24 +958,23 @@ class IFinderService {
   }
 
   /**
-   * List the search profiles reachable by the calling user.
+   * List the search profiles the calling user may search with.
    *
-   * The public API has no "list search profiles" endpoint — profile listing
-   * lives on the admin API, which an end-user token cannot reach. What it does
-   * expose is `GET /public-api/v0/assistants`, and every iAssistant names the
-   * search profile it is composed with, filtered to the ones the caller may
-   * use. That makes the assistants list the only user-scoped source of profile
-   * ids available here, so this derives the profiles from it and always
-   * includes the configured default.
+   * Read from the configuration action of iFinder's internal search API, the
+   * same list the searchbar offers the user (see `iFinderSearchProfiles.js`):
+   * the public API has no endpoint for it, and the iAssistants list only names
+   * the profiles some iAssistant is composed with. The configured default is
+   * always listed, flagged when the user does not have it, so a model that
+   * searched it in vain can tell why.
    *
-   * A deployment with no iAssistants configured therefore reports just the
-   * configured default. That is a limitation of the upstream API, not an error.
+   * When iFinder cannot be asked (an older or restricted installation, a user
+   * without `fi_ifinder_allow`), only the configured default is reported.
    *
    * @param {Object} params
    * @param {Object} params.user
    * @param {string} params.chatId
    * @param {AbortSignal} [params.signal]
-   * @returns {Promise<Object>} { defaultSearchProfile, profiles, assistants, source }
+   * @returns {Promise<Object>} { defaultSearchProfile, profiles, source }
    */
   async listProfiles({ user, chatId, signal }) {
     this.validateCommon(user, chatId);
@@ -982,65 +984,49 @@ class IFinderService {
 
     emitToolProgress(chatId, { phase: 'ifinder_profiles', data: {} });
 
-    let assistants = [];
-    let source = 'configured-default';
-
+    let userProfiles = null;
     try {
-      const data = await this._apiRequest({
-        path: `${cfg.endpoints.assistants}?size=100`,
+      userProfiles = await iFinderSearchProfiles.getUserSearchProfiles({
         user,
-        label: 'iFinderAssistants',
+        baseUrl: cfg.baseUrl,
+        application: cfg.searchProfileApplication,
+        timeout: cfg.timeout,
         signal
       });
-      assistants = Array.isArray(data?.assistants) ? data.assistants : [];
-      source = 'assistants';
     } catch (error) {
-      // A deployment older than the iAssistants API answers 404 here, and a
-      // deployment without the feature answers 403. Neither is fatal: the
-      // configured default is still a usable answer, so degrade instead of
-      // failing the whole discovery flow.
-      logger.warn('Could not list iFinder assistants; falling back to configured default', {
-        component: 'IFinderService',
-        error: error.message
+      logger.warn(
+        'Could not read the search profiles of the user; reporting the configured default',
+        {
+          component: 'IFinderService',
+          error: error.message
+        }
+      );
+    }
+
+    const profiles = (userProfiles || []).map(profile => ({
+      id: profile.id,
+      name: profile.name,
+      isDefault: profile.id === defaultProfile,
+      isUserDefault: profile.isDefault
+    }));
+    if (!profiles.some(profile => profile.id === defaultProfile)) {
+      profiles.unshift({
+        id: defaultProfile,
+        name: defaultProfile,
+        isDefault: true,
+        isUserDefault: false,
+        ...(userProfiles ? { available: false } : {})
       });
     }
 
-    const byProfile = new Map();
-    byProfile.set(defaultProfile, {
-      id: defaultProfile,
-      isDefault: true,
-      assistants: []
-    });
-
-    for (const assistant of assistants) {
-      const profileId = assistant?.search_profile_id;
-      if (!profileId) continue;
-      if (!byProfile.has(profileId)) {
-        byProfile.set(profileId, { id: profileId, isDefault: false, assistants: [] });
-      }
-      byProfile.get(profileId).assistants.push({
-        id: assistant.id,
-        name: assistant.name,
-        description: assistant.description ?? null
-      });
-    }
-
+    const source = userProfiles ? 'ifinder' : 'configured-default';
     logger.info('Listed iFinder search profiles', {
       component: 'IFinderService',
-      profileCount: byProfile.size,
+      profileCount: profiles.length,
       source
     });
 
-    return {
-      defaultSearchProfile: defaultProfile,
-      profiles: Array.from(byProfile.values()),
-      assistants: assistants.map(a => ({
-        id: a.id,
-        name: a.name,
-        searchProfileId: a.search_profile_id ?? null
-      })),
-      source
-    };
+    return { defaultSearchProfile: defaultProfile, profiles, source };
   }
 
   /**

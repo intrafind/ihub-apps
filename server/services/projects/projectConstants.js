@@ -33,11 +33,11 @@ export const ACCESS_LEVELS = Object.freeze(['use', 'edit', 'share', 'own']);
 /**
  * The tier policies the setting accepts. `ihub` offers local projects only;
  * `both` and `ifinder` also offer the user's iFinder smart collections as
- * read-only projects (the iFinder tier, iteration 1 of #3024).
+ * projects (the iFinder tier, #3024): readable, and changeable by their owner.
  */
 export const TIER_POLICIES = Object.freeze(['ihub', 'both', 'ifinder']);
 
-/** The storage tiers a project can live in. `ifinder` projects are read-only for now. */
+/** The storage tiers a project can live in. `ifinder` projects are smart collections: their owner renames them and adds or removes documents. */
 export const PROJECT_TIERS = Object.freeze(['ihub', 'ifinder']);
 
 /**

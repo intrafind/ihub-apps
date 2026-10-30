@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The iFinder tier of projects, iteration 1 (#3024): the user's smart
- * collections as **read-only projects**.
+ * The iFinder tier of projects (#3024): the user's smart collections as
+ * projects. This module is the **read side** (iteration 1) plus the cache
+ * bookkeeping the write side (`IFinderCollectionWriter.js`, iteration 2) needs.
  *
  * A collection becomes a project with `tier: 'ifinder'`, the id `ifc_<uuid>`
  * (a namespace no stored project can carry) and one `ifinder-document` item
@@ -28,7 +29,9 @@
  *  - **Failure.** iFinder being slow or down is an outcome, not an exception:
  *    the project list still answers with the local projects and a warning.
  *
- * Nothing here writes to iFinder.
+ * Nothing here writes to iFinder. After a write, {@link noteCollectionWritten}
+ * evicts what the write made stale (the principal's list and collection entries,
+ * the titles of the documents it touched), so the next read sees the change.
  *
  * @module services/projects/ifinder/IFinderTier
  */
@@ -56,6 +59,13 @@ export const TTL = Object.freeze({
   collection: 30_000,
   /** The titles of documents, per user. */
   title: 10 * 60_000,
+  /**
+   * What a write to a collection leaves behind for the list. The list is a search
+   * and iFinder's index refreshes every ten seconds, so a new or renamed
+   * collection can be missing or stale in it for that long; for this long the
+   * caller's own list is overlaid with what the write saw.
+   */
+  overlay: 20_000,
   /** The Smart Collections API is there. */
   supported: 5 * 60_000,
   /** The Smart Collections API is not there (an older iFinder). */
@@ -112,6 +122,20 @@ class TtlCache {
     while (this.entries.size > this.max) this.entries.delete(this.entries.keys().next().value);
   }
 
+  delete(key) {
+    this.entries.delete(key);
+  }
+
+  /** The live values whose key starts with `prefix`. */
+  valuesWithPrefix(prefix) {
+    const now = Date.now();
+    const found = [];
+    for (const [key, entry] of this.entries) {
+      if (key.startsWith(prefix) && entry.expires > now) found.push(entry.value);
+    }
+    return found;
+  }
+
   clear() {
     this.entries.clear();
   }
@@ -122,11 +146,16 @@ const lists = new TtlCache(1000); // per tenant and principal
 const collections = new TtlCache(4000); // per tenant, principal and collection
 const titles = new TtlCache(40_000); // per tenant, principal and document
 const names = new TtlCache(4000); // per tenant, principal and collection
+const overlays = new TtlCache(4000); // per tenant, principal and collection
+const epochs = new TtlCache(4000); // per tenant and principal: the last write
 const inflight = new Map();
+let epochSeq = 0;
 
 /** Test hook: forget everything cached. */
 export function resetIFinderTier() {
-  for (const cache of [capabilities, lists, collections, titles, names]) cache.clear();
+  for (const cache of [capabilities, lists, collections, titles, names, overlays, epochs]) {
+    cache.clear();
+  }
   inflight.clear();
 }
 
@@ -183,6 +212,82 @@ function keyFor(tenant, principal, ...parts) {
   return [tenant, principal, ...parts].join('\u0000');
 }
 
+/** The key of everything one principal holds in a tenant. */
+function principalKey(tenant, principal) {
+  return keyFor(tenant, principal, '');
+}
+
+const epochOf = key => epochs.get(key) ?? 0;
+
+/**
+ * The list of collections with what this principal's own writes saw laid over
+ * it: a collection the search has not indexed yet is added, a stale name or
+ * count is replaced. Newest first, like the list.
+ *
+ * @param {Object[]} listed - Summaries from iFinder's list.
+ * @param {string} tenant
+ * @param {string} principal
+ * @returns {Object[]}
+ */
+function withOverlay(listed, tenant, principal) {
+  const written = overlays.valuesWithPrefix(keyFor(tenant, principal, 'overlay', ''));
+  if (written.length === 0) return listed;
+  const merged = new Map(listed.map(summary => [summary.id, summary]));
+  for (const summary of written) merged.set(summary.id, summary);
+  return [...merged.values()].sort((a, b) =>
+    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+  );
+}
+
+/**
+ * Forget what a write to a collection made stale, for the principal that wrote.
+ * Called by the write side after every write, whether it succeeded or not (a
+ * failed write may still have changed the collection).
+ *
+ *  - the principal's cached list (60 s) and collection entry (30 s);
+ *  - a read of either that is in flight, so the next read starts afresh, and the
+ *    result of such a read is not kept (the epoch);
+ *  - the cached titles of the documents the write touched (a "not visible" entry
+ *    must not hide a document that was just added);
+ *  - the name the collection was last seen with, and the overlay for the list.
+ *
+ * Other principals' entries are not touched: a collection is one user's.
+ *
+ * @param {Object} user - The principal that wrote.
+ * @param {string} collectionId
+ * @param {{documentIds?: string[], summary?: Object|null}} [options] - `summary` is
+ *   the collection as it reads after the write.
+ */
+export function noteCollectionWritten(
+  user,
+  collectionId,
+  { documentIds = [], summary = null } = {}
+) {
+  const principal = principalOf(user);
+  if (!principal) return;
+  const tenant = tenantKey();
+  epochs.set(principalKey(tenant, principal), ++epochSeq, 5 * 60_000);
+  const listKey = keyFor(tenant, principal, 'list');
+  const collectionKey = keyFor(tenant, principal, 'collection', collectionId);
+  lists.delete(listKey);
+  collections.delete(collectionKey);
+  inflight.delete(listKey);
+  inflight.delete(collectionKey);
+  for (const id of documentIds) titles.delete(keyFor(tenant, principal, 'title', id));
+  if (summary) {
+    names.set(
+      keyFor(tenant, principal, 'name', collectionId),
+      summary.name || collectionId,
+      TTL.name
+    );
+    overlays.set(
+      keyFor(tenant, principal, 'overlay', collectionId),
+      { ...summary, id: collectionId },
+      TTL.overlay
+    );
+  }
+}
+
 // --- the capability call --------------------------------------------------------
 
 /**
@@ -234,11 +339,14 @@ function rememberedAvailability(tenant) {
  * capability call, whose answer is remembered per installation (and per user
  * for a missing role). Never throws.
  *
+ * No caller's `AbortSignal` goes into the capability call: it is shared by every
+ * caller that asks while it is out (`singleFlight`), so one caller's abort would
+ * fail the call for the others and mark iFinder unavailable for everyone.
+ *
  * @param {Object} user - The requesting user.
- * @param {{signal?: AbortSignal}} [options]
  * @returns {Promise<Availability>}
  */
-export async function availabilityFor(user, { signal } = {}) {
+export async function availabilityFor(user) {
   const platform = configCache.getPlatform() || {};
   if (!iFinderTierConfigured(platform)) return HIDDEN(TIER_REASONS.NOT_OFFERED);
   const principal = principalOf(user);
@@ -253,9 +361,7 @@ export async function availabilityFor(user, { signal } = {}) {
   if (remembered) return remembered;
   if (capabilities.get(tenant)?.state === 'supported') return { offered: true };
   try {
-    await singleFlight(keyFor(tenant, principal, 'probe'), () =>
-      smartCollections.probe({ user, signal })
-    );
+    await singleFlight(keyFor(tenant, principal, 'probe'), () => smartCollections.probe({ user }));
     capabilities.set(tenant, { state: 'supported' }, TTL.supported);
     return { offered: true };
   } catch (error) {
@@ -272,15 +378,15 @@ export async function availabilityFor(user, { signal } = {}) {
 
 /**
  * The user's collections as read-only projects, for the list: document counts
- * only, no items. Never throws.
+ * only, no items. Never throws. As for {@link availabilityFor}, the shared request
+ * takes no caller's signal.
  *
  * @param {Object} user
- * @param {{signal?: AbortSignal}} [options]
  * @returns {Promise<{offered: boolean, projects: Object[], warnings: Object[], truncated?: boolean}>}
  *   `offered`: the tier exists for this user (an empty list is a list, not a
  *   missing tier). `warnings` is non-empty when iFinder could not be asked.
  */
-export async function listCollectionProjects(user, { signal } = {}) {
+export async function listCollectionProjects(user) {
   const none = (offered, warnings = []) => ({ offered, projects: [], warnings });
   const platform = configCache.getPlatform() || {};
   if (!iFinderTierConfigured(platform)) return none(false);
@@ -295,9 +401,12 @@ export async function listCollectionProjects(user, { signal } = {}) {
       return none(false, remembered.unavailable ? [IFINDER_UNAVAILABLE_WARNING] : []);
     }
     try {
+      const epoch = epochOf(principalKey(tenant, principal));
       entry = await singleFlight(key, async () => {
-        const result = await smartCollections.list({ user, signal });
-        lists.set(key, result, TTL.list);
+        const result = await smartCollections.list({ user });
+        // A write that finished while this was out made it stale: it answers the
+        // callers that asked before the write and is not kept for the next ones.
+        if (epochOf(principalKey(tenant, principal)) === epoch) lists.set(key, result, TTL.list);
         capabilities.set(tenant, { state: 'supported' }, TTL.supported);
         return result;
       });
@@ -315,13 +424,14 @@ export async function listCollectionProjects(user, { signal } = {}) {
     }
   }
   if (entry.forbidden) return none(false);
-  for (const summary of entry.collections) {
+  const summaries = withOverlay(entry.collections, tenant, principal);
+  for (const summary of summaries) {
     names.set(keyFor(tenant, principal, 'name', summary.id), summary.name || summary.id, TTL.name);
   }
   return {
     offered: true,
     // Built for this user now, from what iFinder said: never stored.
-    projects: entry.collections.map(summary => projectOf(summary, user)),
+    projects: summaries.map(summary => projectOf(summary, user)),
     warnings: [],
     truncated: entry.truncated === true
   };
@@ -486,7 +596,9 @@ function lastKnownName(tenant, principal, collectionId) {
  * @param {Object} user
  * @param {string} projectId - `ifc_<uuid>`.
  * @param {{signal?: AbortSignal, titles?: boolean}} [options] - `titles: false`
- *   names the items by their ids and sends no search.
+ *   names the items by their ids and sends no search. `signal` goes to the title
+ *   search of this caller only, never into the collection request: that one is
+ *   shared by every caller that asks while it is out.
  * @returns {Promise<{status: 'ok', project: Object}|{status: 'hidden'|'not-found'}|{status: 'unavailable', name: string}>}
  */
 export async function loadCollectionProject(
@@ -512,9 +624,12 @@ export async function loadCollectionProject(
     }
     if (remembered) return { status: 'hidden' };
     try {
+      const epoch = epochOf(principalKey(tenant, principal));
       collection = await singleFlight(key, async () => {
-        const loaded = await smartCollections.get({ user, id: collectionId, signal });
-        collections.set(key, loaded, TTL.collection);
+        const loaded = await smartCollections.get({ user, id: collectionId });
+        if (epochOf(principalKey(tenant, principal)) === epoch) {
+          collections.set(key, loaded, TTL.collection);
+        }
         return loaded;
       });
     } catch (error) {
@@ -537,21 +652,53 @@ export async function loadCollectionProject(
       return { status: 'unavailable', name: lastKnownName(tenant, principal, collectionId) };
     }
   }
+  return {
+    status: 'ok',
+    project: await buildProject(user, principal, tenant, collection, {
+      signal,
+      titles: withTitles
+    })
+  };
+}
+
+/**
+ * A loaded collection as a project for its owner, its documents named with the
+ * titles the user may see.
+ */
+async function buildProject(user, principal, tenant, collection, { signal, titles: withTitles }) {
   names.set(
-    keyFor(tenant, principal, 'name', collectionId),
+    keyFor(tenant, principal, 'name', collection.id),
     collection.name || collection.id,
     TTL.name
   );
   const named = withTitles
-    ? await titlesFor(user, principal, tenant, collectionId, collection.documentIds, signal)
+    ? await titlesFor(user, principal, tenant, collection.id, collection.documentIds, signal)
     : new Map();
   const items = collection.documentIds.map(id => itemOf(collection, id, named.get(id), user));
-  return { status: 'ok', project: projectOf(collection, user, items) };
+  return projectOf(collection, user, items);
 }
+
+/**
+ * A collection that was just read from iFinder (by a write) as the project the
+ * caller sees, without asking for it again. `null` for a caller with no principal.
+ *
+ * @param {Object} user
+ * @param {import('../../integrations/SmartCollectionsService.js').SmartCollection} collection
+ * @returns {Promise<Object|null>}
+ */
+export async function projectOfCollection(user, collection) {
+  const principal = principalOf(user);
+  if (!principal) return null;
+  return buildProject(user, principal, tenantKey(), collection, { titles: true });
+}
+
+export { tenantKey };
 
 export default {
   availabilityFor,
   listCollectionProjects,
   loadCollectionProject,
+  noteCollectionWritten,
+  projectOfCollection,
   principalOf
 };

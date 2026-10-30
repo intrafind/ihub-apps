@@ -4,9 +4,10 @@
 /**
  * The Smart Collections client (`SmartCollectionsService`) against a fake
  * iFinder: the v1 paths, the explicitly requested `fi_smartcollections` scope,
- * paging, what an error answer means (the capability call), and the SSL
- * whitelist — a self-signed iFinder is reachable only when its host is on
- * `ssl.domainWhitelist`.
+ * paging, what an error answer means (the capability call), the write calls
+ * (create, rename, add and remove documents: their bodies and what they never
+ * send), and the SSL whitelist — a self-signed iFinder is reachable only when
+ * its host is on `ssl.domainWhitelist`, for reads and writes alike.
  */
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -210,6 +211,118 @@ describe('what iFinder answers, as the capability call reads it', () => {
   });
 });
 
+describe('the write calls', () => {
+  const sent = () => mock.requests.filter(entry => entry.method !== 'GET');
+
+  it('creates a collection with a name and a description and sends no owner', async () => {
+    mock.state.nextIds.push(ID(7));
+    const created = await service.create({ user: ADA, name: 'Contracts', description: 'All' });
+    assert.deepEqual(created, { id: ID(7) });
+    const [request] = sent();
+    assert.equal(request.method, 'POST');
+    assert.equal(request.path, '/public-api/smart-collections/api/v1/smart-collections');
+    assert.equal(request.scope, 'fi_smartcollections');
+    assert.deepEqual(request.body, { name: 'Contracts', description: 'All' });
+    assert.equal(mock.state.collections.get(ID(7)).owner, ADA.email, 'the token decides the owner');
+  });
+
+  it('refuses an answer without the id of a new collection', async () => {
+    mock.state.nextIds.push('not-a-uuid');
+    await assert.rejects(
+      service.create({ user: ADA, name: 'x' }),
+      error => error.code === SMART_COLLECTIONS_ERRORS.INVALID_RESPONSE
+    );
+  });
+
+  it('renames with the fields it was given and nothing else', async () => {
+    mock.addCollection(
+      collectionDocument({ id: ID(1), owner: ADA.email, name: 'Old', documents: ['a', 'b'] })
+    );
+    await service.rename({ user: ADA, id: ID(1), name: 'New' });
+    await service.rename({ user: ADA, id: ID(1), description: 'About' });
+    await service.rename({ user: ADA, id: ID(1), name: 'Both', description: 'Too' });
+    // Nothing to send is nothing sent.
+    await service.rename({ user: ADA, id: ID(1) });
+    const bodies = sent().map(entry => entry.body);
+    assert.deepEqual(bodies, [
+      { name: 'New' },
+      { description: 'About' },
+      { name: 'Both', description: 'Too' }
+    ]);
+    for (const request of sent()) {
+      assert.equal(request.method, 'PATCH');
+      assert.equal(request.path.endsWith(`/${ID(1)}`), true);
+      for (const field of ['owner', 'documents', 'viewers']) {
+        assert.equal(field in request.body, false, `${field} is never sent`);
+      }
+    }
+    const stored = mock.state.collections.get(ID(1));
+    assert.equal(stored.owner, ADA.email);
+    assert.deepEqual(mock.documentIdsOf(ID(1)), ['a', 'b']);
+  });
+
+  it('adds and removes documents as an array of ids, the remove with a body', async () => {
+    mock.addCollection(collectionDocument({ id: ID(1), owner: ADA.email, documents: ['a'] }));
+    await service.addDocuments({ user: ADA, id: ID(1), documentIds: ['b', 'c'] });
+    assert.deepEqual(mock.documentIdsOf(ID(1)), ['a', 'b', 'c']);
+    await service.removeDocuments({ user: ADA, id: ID(1), documentIds: ['a', 'c'] });
+    assert.deepEqual(mock.documentIdsOf(ID(1)), ['b']);
+    const [add, remove] = sent();
+    assert.equal(add.method, 'POST');
+    assert.equal(add.path.endsWith(`/${ID(1)}/documents`), true);
+    assert.deepEqual(add.body, [{ id: 'b' }, { id: 'c' }]);
+    assert.equal(remove.method, 'DELETE');
+    assert.equal(remove.path.endsWith(`/${ID(1)}/documents`), true);
+    assert.deepEqual(remove.body, [{ id: 'a' }, { id: 'c' }]);
+  });
+
+  it('reads an id that is no uuid as a missing collection, without asking', async () => {
+    await assert.rejects(
+      service.addDocuments({ user: ADA, id: '../x', documentIds: ['a'] }),
+      error => error.code === SMART_COLLECTIONS_ERRORS.NOT_FOUND
+    );
+    assert.equal(mock.requests.length, 0);
+  });
+
+  it('says what a refused write was: not found, forbidden, rejected, unavailable', async () => {
+    mock.addCollection(collectionDocument({ id: ID(1), owner: 'grace@example.com' }));
+    const code = promise =>
+      promise.then(
+        () => null,
+        error => error.code
+      );
+    assert.equal(
+      await code(service.addDocuments({ user: ADA, id: ID(1), documentIds: ['a'] })),
+      SMART_COLLECTIONS_ERRORS.NOT_FOUND,
+      'the collection of someone else'
+    );
+    for (const [status, expected] of [
+      [403, SMART_COLLECTIONS_ERRORS.FORBIDDEN],
+      [401, SMART_COLLECTIONS_ERRORS.UNAUTHORIZED],
+      [400, SMART_COLLECTIONS_ERRORS.REJECTED],
+      [409, SMART_COLLECTIONS_ERRORS.REJECTED],
+      [422, SMART_COLLECTIONS_ERRORS.REJECTED],
+      [500, SMART_COLLECTIONS_ERRORS.UNAVAILABLE],
+      [502, SMART_COLLECTIONS_ERRORS.UNAVAILABLE]
+    ]) {
+      mock.state.writeStatus = status;
+      assert.equal(
+        await code(service.create({ user: ADA, name: 'x' })),
+        expected,
+        `a ${status} on create`
+      );
+    }
+  });
+
+  it('is unavailable, not rejected, when iFinder drops the answer', async () => {
+    mock.state.dropAnswer = true;
+    await assert.rejects(
+      service.create({ user: ADA, name: 'x' }),
+      error => error.code === SMART_COLLECTIONS_ERRORS.UNAVAILABLE
+    );
+  });
+});
+
 describe(
   'the SSL whitelist',
   { skip: selfSignedCertificate() ? false : 'openssl is missing' },
@@ -248,6 +361,31 @@ describe(
         error => error.code === SMART_COLLECTIONS_ERRORS.UNAVAILABLE
       );
       assert.equal(secure.requests.length, 0, 'the TLS handshake failed, nothing was sent');
+    });
+
+    it('reaches a whitelisted host with a write, and refuses a host that is not', async () => {
+      configure(secure.url.replace('127.0.0.1', 'localhost'), ssl(['localhost']));
+      secure.state.nextIds.push(ID(8));
+      assert.deepEqual(await service.create({ user: ADA, name: 'Over TLS' }), { id: ID(8) });
+      await service.addDocuments({ user: ADA, id: ID(1), documentIds: ['a'] });
+      await service.removeDocuments({ user: ADA, id: ID(1), documentIds: ['a'] });
+      await service.rename({ user: ADA, id: ID(1), name: 'Renamed over TLS' });
+      assert.equal(secure.requests.filter(entry => entry.method !== 'GET').length, 4);
+      secure.requests.length = 0;
+      configure(secure.url, ssl(['localhost']));
+      for (const write of [
+        () => service.create({ user: ADA, name: 'x' }),
+        () => service.rename({ user: ADA, id: ID(1), name: 'x' }),
+        () => service.addDocuments({ user: ADA, id: ID(1), documentIds: ['a'] }),
+        () => service.removeDocuments({ user: ADA, id: ID(1), documentIds: ['a'] })
+      ]) {
+        await assert.rejects(write(), error => error.code === SMART_COLLECTIONS_ERRORS.UNAVAILABLE);
+      }
+      assert.equal(
+        secure.requests.length,
+        0,
+        'nothing was sent to the host that is not whitelisted'
+      );
     });
 
     it('refuses it when the bypass is off, whitelisted or not', async () => {

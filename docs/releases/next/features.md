@@ -264,19 +264,41 @@ warnings — before anything is changed; you confirm, and the server restarts in
   `--update=rollback --restore-config`.
 - See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).
 
-## Projects: Your iFinder Smart Collections as Read-Only Projects
+## Projects: Your iFinder Smart Collections as Projects
 
 With the tier policy set to `both` or `ifinder` (**platform.json → projects.tierPolicy**, until now
 accepted but ignored), iFinder 6.8 or later configured and **User Projects** switched on (**Admin →
-Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to their own projects, marked **iFinder · read-only**. Opening
-one lists its documents. A chat can use the collection as knowledge: tick it in the **Project**
-picker of the chat input, or start a chat from its page. Nothing is copied: the documents stay in
-iFinder and are read, searched and cited with the rights of the person asking, like any iFinder
-document in a project. A document the reader may not open is named as unavailable.
+Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to
+their own projects, marked **iFinder**. Opening one lists its documents. A chat can use the
+collection as knowledge: tick it in the **Project** picker of the chat input, or start a chat from
+its page. Nothing is copied: the documents stay in iFinder and are read, searched and cited with
+the rights of the person asking, like any iFinder document in a project. A document the reader may
+not open is named as unavailable.
 
-- **Read-only:** the page offers no edit, rename, share, delete, instructions, pins, upload or token
-  estimate, and the API refuses every write to such a project. Create, rename, add and remove
-  arrive later.
+Owners can also manage their collections from iHub:
+
+- **Create** a collection from **New project** by choosing **As an iFinder smart collection**
+  (name and description). The owner is the signed-in user; the collection also shows up in iFinder.
+- **Rename** it, and change its description.
+- **Add documents** with the iFinder document picker. iHub first checks that the user can read each
+  document, because iFinder checks nothing on add; if one is not readable, nothing is added. A
+  collection holds at most 200 documents, shown as a bar on the page; going over is refused with a
+  clear message.
+- **Remove documents.** Only the membership is removed, never the document.
+- Not part of iHub: sharing, deleting a collection, and any other kind of item (files, web pages,
+  text). Instructions, pins, members and the token estimate do not apply to a collection.
+- **Writes are serialized across all iHub instances.** iFinder changes a collection with an
+  unversioned read-and-write, so two overlapping changes would lose one. iHub takes a lock from the
+  storage layer for each collection. Where the storage is multi-instance and has no cluster-wide
+  lock (today: every installation that runs several instances on the filesystem provider), changing
+  collections is switched off, collections stay readable, and `GET /api/projects/_config` reports
+  `ifinder.writable: false` with the reason. Changes made in iFinder itself are not covered by that
+  lock.
+- **iFinder can fail in the middle of a change.** The call is not atomic. iHub reads the collection
+  again and tells the user which documents did and did not make it; repeating the call is safe.
+
+Also:
+
 - **Only where iFinder can serve it:** the tier is offered when iFinder is configured, the policy
   allows it and the Smart Collections API answers; an older iFinder never shows it. The user needs
   the `fi_smartcollections` role in iFinder and a login name iHub can sign for iFinder (the
@@ -284,16 +306,49 @@ document in a project. A document the reader may not open is named as unavailabl
 - **Same identity on both sides:** a collection belongs to the name iHub signs into the iFinder
   token. iFinder's list matches that name exactly, upper and lower case included, so a collection
   whose owner differs only in case is missing from the list (it still opens by id). Set the
-  **JWT Subject Field** so it produces the user's iFinder login exactly.
+  **JWT Subject Field** so it produces the user's iFinder login exactly. A new or renamed
+  collection can take up to about ten seconds to appear in iFinder's own list; iHub shows it at
+  once.
 - **If iFinder is slow or down,** the project list still loads, with a note that the collections
   are missing. A chat that has a collection attached still answers; the model is told the
   collection is unavailable and says so, and the answer shows a **not available** notice.
 - **Searched, never loaded in full:** a collection holds up to 200 documents, so a chat searches it
   instead of putting every document into the prompt.
+- **Local projects stay creatable under every policy**, including `ifinder`.
 - Admin project IDs starting with `ifc_` are now reserved for collections, as `prj_` is for user
   projects.
 
 See [Projects](../../projects.md#the-ifinder-tier-smart-collections).
+
+## iAssistant: Search Profiles per User, iFinder iAssistants in Apps, and iFinder 6.9
+
+Search profiles are assigned per user in iFinder, but an iAssistant app names one search profile
+for everyone. iHub now reads the search profiles of the user before it starts an iAssistant
+conversation — the same list the iFinder searchbar offers them — and uses the user's default
+profile when they do not have the configured one. Before, such a user got a conversation that
+could not find anything.
+
+- **Setting:** `iAssistant.verifySearchProfileAccess` (on by default) in `platform.json`. It
+  replaces `resolveSearchProfileFromProfile`, which read the conversation profile for a search
+  profile that iFinder never publishes there; the update renames the key and keeps its value.
+  `profileCacheTtlMs` becomes `searchProfileCacheTtlMs`.
+- The list is read for one iFinder application, `iFinder.searchProfileApplication` (default
+  `ifinder`, the searchbar's). Set it if your iAssistant profiles are assigned under another
+  application.
+- If iFinder cannot be asked, the configured profile is used as before. iFinder 6.9 refuses the
+  request for users without the feature `fi_ifinder_allow`.
+- **iFinder iAssistants in apps:** an app can name an iFinder iAssistant
+  (`iassistant.assistantId`), which brings its conversation profile and search profile with it.
+  **Admin → Apps → Edit → iAssistant** lists the iAssistants iFinder shows you. Users without
+  the iAssistant's search profile are told it is not available to them.
+- **All search profiles:** with `iassistant.allSearchProfiles`, an app sends no search profile and
+  iFinder 6.9 searches everything the user may see through any of their profiles.
+- **iFinder search tool:** `iFinder_listProfiles` lists the search profiles the user has, with
+  their names and the user's default, instead of only the profiles some iAssistant uses.
+- **iFinder 6.9:** iHub sends each question as an append to the conversation and passes the user's
+  language. When the conversation was continued elsewhere, for example in the iFinder Workspace,
+  the question is added after the last message instead of failing. A background task that a turn
+  starts is shown as a status.
 
 ## iFinder: Tokens From a Shared OIDC Provider (Token Exchange)
 

@@ -332,6 +332,7 @@
     "tokenExpirationSeconds": 3600,
     "defaultScope": "fa_index_read",
     "jwtSubjectField": "email",
+    "searchProfileApplication": "ifinder",
     "authMode": "ihubSigned",
     "tokenExchange": {
       "oidcProvider": "",
@@ -350,7 +351,7 @@
   "iAssistant": {
     "defaultProfileId": "",
     "defaultSearchProfile": "searchprofile-standard",
-    "resolveSearchProfileFromProfile": true,
+    "verifySearchProfileAccess": true,
     "groundedOnly": false
   },
   "copilotAgent": {
