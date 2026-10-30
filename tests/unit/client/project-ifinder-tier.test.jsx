@@ -2,11 +2,18 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The iFinder tier of projects, iteration 1 (#3024): a smart collection is
- * listed and opened as a read-only project. The page shows the tier badge, the
- * documents and a way to chat with them, and none of the controls that change
- * a project: edit, rename, share, delete, instructions, pins, adding, removing
- * and the token estimate. A list that could not include the collections says so.
+ * The iFinder tier of projects (#3024): a smart collection is listed and opened
+ * as a project.
+ *
+ * Read-only (iteration 1, and still the state wherever the caller is not the
+ * owner or `_config.ifinder.writable` is off): the page shows the tier badge, the
+ * documents and a way to chat with them, and none of the controls that change a
+ * project. A list that could not include the collections says so.
+ *
+ * Managed (iteration 2): the owner, where writes are on, renames the collection
+ * and adds and removes documents. The controls follow `permissions.canEdit` and
+ * the capability, not a blanket: instructions, pins, members, catalog, delete,
+ * share and the token estimate stay hidden.
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -18,7 +25,8 @@ const mockApi = {
   fetchProjectWarnings: jest.fn(),
   fetchProjectsConfig: jest.fn(),
   fetchProjectCatalog: jest.fn(),
-  fetchProjectItemText: jest.fn()
+  fetchProjectItemText: jest.fn(),
+  searchPickerIFinder: jest.fn()
 };
 jest.mock('../../../client/src/api', () => ({
   fetchProject: (...args) => mockApi.fetchProject(...args),
@@ -32,7 +40,7 @@ jest.mock('../../../client/src/api', () => ({
   fetchProjectItemText: (...args) => mockApi.fetchProjectItemText(...args),
   fetchProjectChats: () => Promise.resolve({ items: [], nextCursor: null, total: 0 }),
   fetchPickerPages: () => Promise.resolve([]),
-  searchPickerIFinder: () => Promise.resolve([]),
+  searchPickerIFinder: (...args) => mockApi.searchPickerIFinder(...args),
   checkPickerUrl: () => Promise.resolve({}),
   previewPickerUrl: () => Promise.resolve({}),
   crawlPickerUrl: () => Promise.resolve({}),
@@ -41,7 +49,9 @@ jest.mock('../../../client/src/api', () => ({
   addProjectItem: jest.fn(),
   uploadProjectItem: jest.fn(),
   updateProject: jest.fn(),
-  deleteProject: jest.fn()
+  deleteProject: jest.fn(),
+  deleteProjectItem: jest.fn(),
+  createProject: jest.fn()
 }));
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   usePlatformConfig: () => ({
@@ -101,7 +111,7 @@ const CONFIG = {
   sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: true },
   kinds: [{ id: 'url', name: { en: 'Web page (URL)' }, picker: { type: 'url' } }],
   upload: { available: true, accept: ['.pdf'], summary: 'PDF' },
-  ifinder: { available: true, readOnly: true }
+  ifinder: { available: true, writable: false, maxDocuments: 200 }
 };
 
 const READ_ONLY_PERMISSIONS = {
@@ -187,6 +197,10 @@ function renderList() {
 
 beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
+  const api = require('../../../client/src/api');
+  for (const name of ['addProjectItem', 'updateProject', 'deleteProjectItem', 'createProject']) {
+    api[name].mockReset();
+  }
   mockApi.fetchProjectsConfig.mockResolvedValue(CONFIG);
   mockApi.fetchProjects.mockResolvedValue([]);
   mockApi.fetchProjectWarnings.mockReturnValue([]);
@@ -270,7 +284,7 @@ describe('a smart collection opened as a project', () => {
     expect(screen.getByRole('textbox', { name: 'Message chat' })).toBeInTheDocument();
   });
 
-  it('offers no control that changes the project', async () => {
+  it('offers no control that changes the project where writes are off', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Contracts' });
     for (const name of [
@@ -393,5 +407,295 @@ describe('the chat badge for a collection iFinder could not deliver', () => {
   it('shows no notice when every project was reached', () => {
     renderBadge([{ id: 'faq', name: 'FAQ', mode: 'searched' }]);
     expect(screen.queryByTestId('knowledge-scope-missing')).not.toBeInTheDocument();
+  });
+});
+
+// --- iteration 2: manage the membership -----------------------------------------
+
+const OWNER_PERMISSIONS = {
+  ...READ_ONLY_PERMISSIONS,
+  canEdit: true,
+  readOnly: false
+};
+const MANAGED = { ...COLLECTION, readOnly: false, permissions: OWNER_PERMISSIONS };
+const WRITABLE_CONFIG = {
+  ...CONFIG,
+  kinds: [
+    ...CONFIG.kinds,
+    {
+      id: 'ifinder-document',
+      name: { en: 'iFinder document' },
+      picker: { type: 'ifinder', mode: 'document' }
+    },
+    { id: 'ifinder-query', name: { en: 'iFinder search' }, picker: { type: 'ifinder' } }
+  ],
+  ifinder: { available: true, writable: true, maxDocuments: 200 }
+};
+
+describe('a smart collection its owner manages', () => {
+  const NOT_OFFERED = [/delete/i, /share/i, /publish/i, /transfer/i, /estimate/i, /upload/i];
+
+  beforeEach(() => {
+    mockApi.fetchProjectsConfig.mockResolvedValue(WRITABLE_CONFIG);
+    mockApi.fetchProject.mockResolvedValue(MANAGED);
+  });
+
+  it('offers rename, add and remove, and still hides what does not apply', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(screen.getByTestId('rename-collection-button')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add documents/i })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: /remove item/i })).toHaveLength(2);
+    expect(screen.getByTestId('project-ifinder-banner')).toHaveTextContent(/never the document/);
+    expect(screen.getByTestId('project-tier-badge')).not.toHaveTextContent('read-only');
+    for (const name of NOT_OFFERED) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    // Nothing of a stored project: no pins, no refresh or rename of a document, no
+    // instructions, members or catalog.
+    expect(screen.queryByRole('button', { name: /refresh|retry/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rename item' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pinned')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /instructions/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /members/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/chats in this project/i)).not.toBeInTheDocument();
+    // The documents count against iFinder's cap, and there is no storage bar.
+    const usage = screen.getByTestId('project-usage');
+    expect(usage).toHaveTextContent('2 of 200');
+    expect(usage).not.toHaveTextContent(/storage/i);
+    expect(screen.getByTestId('project-ifinder-source')).toHaveTextContent('2 of 200 documents');
+  });
+
+  it.each([
+    [
+      'writes are off on this installation',
+      { ...WRITABLE_CONFIG, ifinder: { available: true, writable: false, maxDocuments: 200 } },
+      MANAGED
+    ],
+    ['the caller is not the owner', WRITABLE_CONFIG, COLLECTION],
+    [
+      'the permission block says read-only',
+      WRITABLE_CONFIG,
+      { ...MANAGED, permissions: { ...OWNER_PERMISSIONS, readOnly: true } }
+    ]
+  ])('stays read-only when %s', async (_label, config, project) => {
+    mockApi.fetchProjectsConfig.mockResolvedValue(config);
+    mockApi.fetchProject.mockResolvedValue(project);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(screen.queryByTestId('rename-collection-button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add documents/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove item/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('read-only');
+    expect(screen.getByTestId('project-ifinder-banner')).toHaveTextContent(/add, remove or rename/);
+  });
+
+  it('adds a document from the iFinder picker only, sends the reference alone, and reloads', async () => {
+    const { addProjectItem } = require('../../../client/src/api');
+    addProjectItem.mockResolvedValue({ item: { id: 'itm_c' } });
+    mockApi.searchPickerIFinder.mockResolvedValue([
+      { documentId: 'doc-c', title: 'Policy', mimeType: 'application/pdf' }
+    ]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByRole('button', { name: /add documents/i }));
+    const dialog = await screen.findByRole('dialog');
+    // One tab: the iFinder document. No upload, text, web page, cloud, search or project link.
+    expect(
+      within(dialog)
+        .getAllByRole('tab')
+        .map(tab => tab.textContent)
+    ).toEqual(['iFinder document']);
+    expect(within(dialog).queryByLabelText(/pinned/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId('project-usage')).toHaveTextContent('2 of 200');
+    fireEvent.change(within(dialog).getByLabelText('Search iFinder'), {
+      target: { value: 'policy' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Search' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Policy/ }));
+    mockApi.fetchProject.mockClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(addProjectItem).toHaveBeenCalledWith(COLLECTION_ID, {
+        kind: 'ifinder-document',
+        ref: { documentId: 'doc-c' }
+      })
+    );
+    await waitFor(() => expect(mockApi.fetchProject).toHaveBeenCalled());
+  });
+
+  it('shows why an add was refused, in the dialog', async () => {
+    const { addProjectItem } = require('../../../client/src/api');
+    addProjectItem.mockRejectedValue(
+      Object.assign(new Error('x'), {
+        originalError: {
+          response: {
+            status: 413,
+            data: {
+              error: 'A smart collection holds at most 200 documents',
+              details: { code: 'QUOTA_COLLECTION_DOCUMENTS', limit: 200, used: 200 }
+            }
+          }
+        }
+      })
+    );
+    mockApi.searchPickerIFinder.mockResolvedValue([{ documentId: 'doc-c', title: 'Policy' }]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByRole('button', { name: /add documents/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Search iFinder'), { target: { value: 'p' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Search' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /Policy/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'at most 200 documents; this one already has 200'
+    );
+  });
+
+  it('removes only the membership, and says the document stays', async () => {
+    const { deleteProjectItem } = require('../../../client/src/api');
+    deleteProjectItem.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getAllByRole('button', { name: /remove item/i })[0]);
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent(/The document stays in iFinder/);
+    fireEvent.click(within(confirm).getByRole('button', { name: /remove item/i }));
+    await waitFor(() => expect(deleteProjectItem).toHaveBeenCalledWith(COLLECTION_ID, 'itm_a'));
+    // The project is read again afterwards.
+    await waitFor(() => expect(mockApi.fetchProject.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('shows the error of a failed remove, with the document still listed', async () => {
+    const { deleteProjectItem } = require('../../../client/src/api');
+    const error = Object.assign(new Error('iFinder reported an error'), {
+      originalError: {
+        response: {
+          status: 502,
+          data: {
+            error: 'iFinder reported an error and nothing was changed',
+            details: { code: 'IFINDER_WRITE_FAILED', outcome: 'none', not: ['doc-a'] }
+          }
+        }
+      }
+    });
+    deleteProjectItem.mockRejectedValue(error);
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getAllByRole('button', { name: /remove item/i })[0]);
+    const confirm = await screen.findByRole('alertdialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: /remove item/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/nothing was changed/);
+    expect(screen.getByText('Lease 2026')).toBeInTheDocument();
+  });
+
+  it('renames with only the fields that changed', async () => {
+    const { updateProject } = require('../../../client/src/api');
+    updateProject.mockResolvedValue({ ...MANAGED, name: 'Contracts 2027' });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByTestId('rename-collection-button'));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: ' Contracts 2027 ' }
+    });
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(updateProject).toHaveBeenCalledWith(COLLECTION_ID, { name: 'Contracts 2027' })
+    );
+    expect(updateProject.mock.calls[0][1]).not.toHaveProperty('description');
+    expect(updateProject.mock.calls[0][1]).not.toHaveProperty('instructions');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Contracts 2027' })).toBeInTheDocument()
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('refuses an empty name without sending it', async () => {
+    const { updateProject } = require('../../../client/src/api');
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByTestId('rename-collection-button'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: '   ' } });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/name is required/i);
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the add button off when the collection is full', async () => {
+    mockApi.fetchProject.mockResolvedValue({ ...MANAGED, usage: { items: 200, bytes: 0 } });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(screen.getByRole('button', { name: /add documents/i })).toBeDisabled();
+    expect(screen.getByTestId('project-usage')).toHaveTextContent('200 of 200');
+  });
+
+  it('keeps the add button off when the iFinder document kind is switched off', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({
+      ...WRITABLE_CONFIG,
+      kinds: CONFIG.kinds
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(screen.queryByRole('button', { name: /add documents/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('rename-collection-button')).toBeInTheDocument();
+  });
+});
+
+describe('creating a collection', () => {
+  const openDialog = async config => {
+    mockApi.fetchProjectsConfig.mockResolvedValue(config);
+    mockApi.fetchProjects.mockResolvedValue([]);
+    renderList();
+    fireEvent.click(await screen.findByRole('button', { name: /new project/i }));
+    return screen.findByRole('dialog');
+  };
+
+  it('offers the tier only where collections can be changed', async () => {
+    const dialog = await openDialog(CONFIG);
+    expect(within(dialog).queryByTestId('create-project-tier')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Instructions')).toBeInTheDocument();
+  });
+
+  it('creates a smart collection with a name and a description, and no instructions', async () => {
+    const { createProject } = require('../../../client/src/api');
+    createProject.mockResolvedValue({ ...MANAGED, id: COLLECTION_ID });
+    const dialog = await openDialog(WRITABLE_CONFIG);
+    expect(within(dialog).getByLabelText(/^In iHub/)).toBeChecked();
+    fireEvent.click(within(dialog).getByLabelText(/^As an iFinder smart collection/));
+    expect(within(dialog).queryByLabelText('Instructions')).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: ' Contracts ' } });
+    fireEvent.change(within(dialog).getByLabelText('Description'), {
+      target: { value: 'Lease and NDA' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create collection' }));
+    await waitFor(() =>
+      expect(createProject).toHaveBeenCalledWith({
+        name: 'Contracts',
+        description: 'Lease and NDA',
+        tier: 'ifinder'
+      })
+    );
+    expect(await screen.findByText('project page')).toBeInTheDocument();
+  });
+
+  it('creates a local project as before, whatever was typed under the other tier', async () => {
+    const { createProject } = require('../../../client/src/api');
+    createProject.mockResolvedValue({ ...LOCAL });
+    const dialog = await openDialog(WRITABLE_CONFIG);
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Local' } });
+    fireEvent.change(within(dialog).getByLabelText('Instructions'), {
+      target: { value: 'Be brief' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create project' }));
+    await waitFor(() =>
+      expect(createProject).toHaveBeenCalledWith({ name: 'Local', instructions: 'Be brief' })
+    );
   });
 });

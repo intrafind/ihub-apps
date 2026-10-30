@@ -27,10 +27,12 @@
  *  - **Anonymous** callers, OAuth clients, agents and third-party apps
  *    holding a user-delegated token never hold or see a user project. A
  *    personal API key acts as its owner and does.
- *  - A project of the **iFinder tier** (a smart collection, id `ifc_…`) is
- *    read-only for everyone, whatever the role: the collection is the user's
- *    in iFinder, iHub only reads it. Its permission block is fixed here, ahead
- *    of every other rule, so no member, admin or catalog rule can widen it.
+ *  - A project of the **iFinder tier** (a smart collection, id `ifc_…`) belongs
+ *    to its owner in iFinder, and only the owner changes it (rename, add and
+ *    remove documents, while the installation can serialize those writes). It
+ *    has no members, no catalog, no transfer, no delete and holds no chats. Its
+ *    permission block is fixed here, ahead of every other rule, so no member,
+ *    admin or catalog rule can widen it: a full admin gains nothing.
  *
  * The share-target vocabulary and the marker keys are the ones user prompts
  * use (`userPromptAccess.js`), so one "shared with me" index read serves
@@ -234,28 +236,39 @@ export function memberRoleFor(project, user, groups = []) {
 }
 
 /**
- * What a user may do with a smart collection shown as a project: see it and
- * use it as knowledge, nothing else. It is the user's own in iFinder, so they
- * are its owner in the view; it holds no chats (`canHoldChats`), so a chat
- * that uses it attaches it.
+ * What a user may do with a smart collection shown as a project: see it and use
+ * it as knowledge, and — the owner only — change it (rename, add and remove
+ * documents). Nothing else: no sharing, no delete, no transfer, no chats inside
+ * it (`canHoldChats`, so a chat that uses it attaches it).
  *
+ * Owner means the project belongs to the caller. iFinder answers 404 for a
+ * collection that is not the caller's, so a loaded collection always is; the
+ * check stays here so the rule does not depend on how the project was loaded.
+ * `isAdmin` and every other context flag are ignored on purpose.
+ *
+ * @param {Object|null} project
  * @param {Object} user
+ * @param {{writable?: boolean}} [options] - `writable: false`: the installation
+ *   cannot serialize writes to a collection (`collectionLock.js`), so nobody
+ *   changes it from iHub.
  * @returns {typeof NO_ACCESS}
  */
-function iFinderProjectPermissions(user) {
+function iFinderProjectPermissions(project, user, { writable = true } = {}) {
   if (isAnonymousUser(user) || !canHoldProjects(user)) return NO_ACCESS;
+  const isOwner = String(project?.owner?.id ?? project?.ownerId ?? '') === String(user.id);
+  const canEdit = isOwner && writable;
   return {
     canView: true,
     canUse: true,
-    canEdit: false,
+    canEdit,
     canShare: false,
     canDelete: false,
     canTransfer: false,
     readsAllChats: false,
     canHoldChats: false,
-    isOwner: true,
-    role: 'owner',
-    readOnly: true
+    isOwner,
+    role: isOwner ? 'owner' : 'user',
+    readOnly: !canEdit
   };
 }
 
@@ -273,6 +286,9 @@ function iFinderProjectPermissions(user) {
  *   app, workflow or agent the caller may use.
  * @param {boolean} [context.catalog=false] - The catalog is on
  *   (`sharing.allowCatalog`): a published project reaches everyone signed in.
+ * @param {boolean} [context.ifinderWritable=true] - Smart collections of the
+ *   iFinder tier can be changed from this installation (a lock reaches every
+ *   instance). Only that tier reads it.
  * @returns {{canView: boolean, canUse: boolean, canEdit: boolean, canShare: boolean,
  *   canDelete: boolean, canTransfer: boolean, readsAllChats: boolean, canHoldChats: boolean,
  *   isOwner: boolean, role: 'owner'|'editor'|'user'|'catalog'|'admin'|'linked'|null,
@@ -289,13 +305,16 @@ export function projectPermissions(
     isContentAdmin = false,
     ownerActive = true,
     linked = false,
-    catalog = false
+    catalog = false,
+    ifinderWritable = true
   } = {}
 ) {
   if (!project || !user) return NO_ACCESS;
   // The id is the discriminator, not the stored `tier`: no stored project can
   // carry an `ifc_` id.
-  if (isIFinderProjectId(project.id)) return iFinderProjectPermissions(user);
+  if (isIFinderProjectId(project.id)) {
+    return iFinderProjectPermissions(project, user, { writable: ifinderWritable });
+  }
 
   if (project.ownership === 'admin') {
     // An admin project is configuration: whoever may use the app, workflow

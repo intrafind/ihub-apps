@@ -72,6 +72,10 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @param {boolean} [props.multipleUploads=false] - Allow several files at once.
  * @param {Object|null} [props.project] - The project, for the quota bar, the
  *   item quota and the pages it has already.
+ * @param {string[]|null} [props.allowedKinds] - Offer only the tabs of these item
+ *   kinds (a smart collection from iFinder takes `ifinder-document` and nothing
+ *   else), without the name and pinned options. A tab list that ends up empty
+ *   stays empty: the dialog says there is nothing to add.
  * @returns {JSX.Element|null}
  */
 function AddProjectItemDialog({
@@ -86,28 +90,32 @@ function AddProjectItemDialog({
   projectLinks = false,
   hideUnavailable = false,
   multipleUploads = false,
-  project = null
+  project = null,
+  allowedKinds = null
 }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const tabs = useMemo(() => {
     const all = buildItemDialogTabs(kinds, config, { cloud, projectLinks });
+    if (allowedKinds) {
+      return visibleItemDialogTabs(all).filter(candidate => allowedKinds.includes(candidate.kind));
+    }
     const shown = hideUnavailable ? visibleItemDialogTabs(all) : all;
     return shown.length > 0 ? shown : all;
-  }, [kinds, config, cloud, projectLinks, hideUnavailable]);
+  }, [kinds, config, cloud, projectLinks, hideUnavailable, allowedKinds]);
   const existingUrls = useMemo(() => projectUrls(project), [project]);
   // While a form adds items, Escape and the backdrop do not close the dialog.
   const [busy, setBusy] = useState(false);
   const closeUnlessBusy = () => {
     if (!busy) onClose();
   };
-  const firstEnabled = tabs.find(tab => tab.enabled)?.id || tabs[0].id;
+  const firstEnabled = tabs.find(tab => tab.enabled)?.id || tabs[0]?.id;
   // `null` until a tab is picked: follows the first usable one, which may
   // change while the kinds are still loading.
   const [chosenTab, setChosenTab] = useState(null);
   const tab = tabs.find(candidate => candidate.id === (chosenTab ?? firstEnabled)) || tabs[0];
-  const isCloudTab = CLOUD_ITEM_KINDS.includes(tab.kind) && tab.enabled;
-  const isLinkTab = tab.kind === PROJECT_ITEM_KIND && tab.enabled;
+  const isCloudTab = Boolean(tab) && CLOUD_ITEM_KINDS.includes(tab.kind) && tab.enabled;
+  const isLinkTab = Boolean(tab) && tab.kind === PROJECT_ITEM_KIND && tab.enabled;
 
   const tabLabel = candidate => {
     if (candidate.id === 'upload') return t('projects.addItem.tabs.upload', 'Upload');
@@ -130,7 +138,7 @@ function AddProjectItemDialog({
         >
           {t('projects.addItem.title', 'Add item')}
         </h3>
-        {project && config?.limits && (
+        {project && (config?.limits || allowedKinds) && (
           <ProjectUsageBar project={project} config={config} className="mt-3" />
         )}
         <div
@@ -143,11 +151,11 @@ function AddProjectItemDialog({
               key={candidate.id}
               type="button"
               role="tab"
-              aria-selected={candidate.id === tab.id}
+              aria-selected={candidate.id === tab?.id}
               aria-disabled={!candidate.enabled || undefined}
               onClick={() => setChosenTab(candidate.id)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md ${
-                candidate.id === tab.id
+                candidate.id === tab?.id
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               } ${candidate.enabled ? '' : 'opacity-50'}`}
@@ -159,7 +167,11 @@ function AddProjectItemDialog({
         </div>
       </div>
 
-      {isLinkTab ? (
+      {!tab ? (
+        <p className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+          {t('projects.addItem.nothingToAdd', 'This kind of item is not available here.')}
+        </p>
+      ) : isLinkTab ? (
         <ProjectLinkTab
           projectId={projectId}
           project={project}
@@ -198,6 +210,7 @@ function AddProjectItemDialog({
           onAdded={onAdded}
           onClose={onClose}
           onBusyChange={setBusy}
+          hideItemOptions={Boolean(allowedKinds)}
         />
       )}
     </Modal>
