@@ -8,7 +8,7 @@
  */
 
 import assert from 'assert';
-import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
+import { convertGoogleResponseToGeneric } from '../protocols/toolCalling/GoogleConverter.js';
 
 console.log('Testing Google Image Generation with google_search...');
 

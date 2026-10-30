@@ -17,8 +17,8 @@
  */
 
 import assert from 'assert';
-import VLLMAdapter from '../adapters/vllm.js';
-import MistralAdapter from '../adapters/mistral.js';
+import VLLMAdapter from '../protocols/vllm.js';
+import MistralAdapter from '../protocols/mistral.js';
 import logger from '../utils/logger.js';
 
 function runImageFormattingTests(adapter, label) {

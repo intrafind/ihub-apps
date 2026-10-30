@@ -25,11 +25,11 @@
  */
 
 import assert from 'assert';
-import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
+import { convertGoogleResponseToGeneric } from '../protocols/toolCalling/GoogleConverter.js';
 import {
   isFailureFinishReason,
   FAILURE_FINISH_REASONS
-} from '../adapters/toolCalling/GenericToolCalling.js';
+} from '../protocols/toolCalling/GenericToolCalling.js';
 import { appendWebSearchDisabledNotice } from '../services/chat/RequestBuilder.js';
 
 console.log('Testing Gemini MALFORMED_FUNCTION_CALL empty-answer handling...\n');

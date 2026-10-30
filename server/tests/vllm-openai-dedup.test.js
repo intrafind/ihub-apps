@@ -5,15 +5,15 @@
 // Regression coverage for issue #1747: vLLM's adapter/converter duplicated
 // OpenAI's near-verbatim, and the duplication had already drifted into two
 // real bugs. This test pins both fixes plus the deduplication itself.
-import VLLMAdapter from '../adapters/vllm.js';
+import VLLMAdapter from '../protocols/vllm.js';
 import {
   convertGenericToolCallsToVLLM,
   convertVLLMToolsToGeneric
-} from '../adapters/toolCalling/VLLMConverter.js';
+} from '../protocols/toolCalling/VLLMConverter.js';
 import {
   convertOpenAIToolCallsToGeneric,
   convertOpenAIResponseToGeneric
-} from '../adapters/toolCalling/OpenAIConverter.js';
+} from '../protocols/toolCalling/OpenAIConverter.js';
 
 let failures = 0;
 function check(label, cond, detail) {

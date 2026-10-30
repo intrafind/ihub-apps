@@ -9,9 +9,9 @@
  */
 
 import assert from 'assert';
-import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
-import { THOUGHT_SIGNATURE_SKIP_SENTINEL } from '../adapters/toolCalling/thoughtSignatures.js';
-import GoogleAdapter from '../adapters/google.js';
+import { convertGoogleResponseToGeneric } from '../protocols/toolCalling/GoogleConverter.js';
+import { THOUGHT_SIGNATURE_SKIP_SENTINEL } from '../protocols/toolCalling/thoughtSignatures.js';
+import GoogleAdapter from '../protocols/google.js';
 
 describe('Gemini ThoughtSignature Handling', () => {
   describe('Response Parsing', () => {

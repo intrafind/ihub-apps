@@ -13,8 +13,8 @@
  * `reasoning_content` (legacy), from streaming deltas and full messages.
  */
 
-import VLLMAdapter from '../adapters/vllm.js';
-import { convertVLLMResponseToGeneric } from '../adapters/toolCalling/VLLMConverter.js';
+import VLLMAdapter from '../protocols/vllm.js';
+import { convertVLLMResponseToGeneric } from '../protocols/toolCalling/VLLMConverter.js';
 
 const baseModel = {
   modelId: 'Qwen/Qwen3-8B',

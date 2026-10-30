@@ -15,7 +15,7 @@ import assert from 'assert';
 import {
   convertGoogleResponseToGeneric,
   clearGoogleStreamingState
-} from '../adapters/toolCalling/GoogleConverter.js';
+} from '../protocols/toolCalling/GoogleConverter.js';
 import logger from '../utils/logger.js';
 
 logger.info('Testing Google parallel tool call streaming indices...\n');

@@ -54,6 +54,14 @@ export function registerScopeProvider(provider) {
 }
 
 /**
+ * Remove a provider (an installed integration that was disabled or removed).
+ * @param {string} integrationId
+ */
+export function unregisterScopeProvider(integrationId) {
+  providers.delete(integrationId);
+}
+
+/**
  * The provider registered for an integration id, or null.
  * @param {string} integrationId
  * @returns {Object|null}

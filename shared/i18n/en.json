@@ -2803,7 +2803,7 @@
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
-        "marketplaceDesc": "Discover and install apps, models, prompts, skills, and workflows from registries"
+        "marketplaceDesc": "Discover and install apps, models, prompts, skills, workflows and integrations from registries"
       }
     },
     "marketplace": {
@@ -2845,11 +2845,16 @@
         "skill": "Skill",
         "skills": "Skills",
         "workflow": "Workflow",
-        "workflows": "Workflows"
+        "workflows": "Workflows",
+        "integration": "Integration",
+        "integrations": "Integrations"
       },
+      "viewSkill": "View Skill",
+      "viewIntegration": "Set up integration",
+      "integrationInUse": "This integration definition is still installed as an instance. Remove the instance under Integrations → Installed first.",
       "registries": {
         "title": "Marketplace Registries",
-        "subtitle": "Manage content registries to discover and install apps, models, prompts, skills, and workflows.",
+        "subtitle": "Manage content registries to discover and install apps, models, prompts, skills, workflows and integrations.",
         "addRegistry": "Add Registry",
         "addFirst": "Add your first registry",
         "empty": "No registries configured yet.",

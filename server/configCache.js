@@ -387,6 +387,10 @@ const CONFIG_LOADERS = {
     label: 'A2A agents',
     count: data => (data.agents || []).length
   },
+  'config/integrations.json': {
+    label: 'installed integrations',
+    count: data => (data.installed || []).length
+  },
   'config/peopleDirectories.json': {
     label: 'people directories',
     count: data => (data.directories || []).length
@@ -466,6 +470,7 @@ class ConfigCache {
       'config/installations.json',
       'config/mcpServers.json',
       'config/a2aAgents.json',
+      'config/integrations.json',
       'config/peopleDirectories.json',
       'config/credentials.json',
       'config/agents.json',
@@ -1559,6 +1564,21 @@ class ConfigCache {
     if (!cached || !cached.data) {
       return {
         data: { agents: [], security: { blockPrivateIps: true, allowedHosts: [] } },
+        etag: null
+      };
+    }
+    return cached;
+  }
+
+  /**
+   * Get the installed integrations (instances of catalog definitions, #3061).
+   * @returns {{ data: { installed: Array, security: Object }, etag: string|null }}
+   */
+  getIntegrations() {
+    const cached = this.get('config/integrations.json');
+    if (!cached || !cached.data) {
+      return {
+        data: { installed: [], security: { blockPrivateIps: true, allowedHosts: [] } },
         etag: null
       };
     }

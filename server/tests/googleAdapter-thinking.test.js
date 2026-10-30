@@ -20,7 +20,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import GoogleAdapter from '../adapters/google.js';
+import GoogleAdapter from '../protocols/google.js';
 
 const messages = [{ role: 'user', content: 'test' }];
 

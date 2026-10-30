@@ -584,6 +584,22 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.setConfigCache(configCache);
     // Reconfigure logger to pick up logging settings from platform config
     logger.reconfigureLogger();
+    // Installed integrations (#3061): load the definition catalog and offer
+    // their scopes (publishers, search profiles) to the chat from the start.
+    try {
+      const { default: integrationRegistry } =
+        await import('./services/integrations/definitions/IntegrationRegistry.js');
+      await integrationRegistry.reload();
+      const { syncIntegrationScopeProviders } =
+        await import('./services/integrations/integrationTools.js');
+      await syncIntegrationScopeProviders();
+    } catch (error) {
+      logger.warn({
+        component: 'Server',
+        message: 'Installed integrations could not be initialized',
+        error: error.message
+      });
+    }
   } catch (error) {
     logger.error({
       component: 'Server',

@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import OpenAIAdapter from '../adapters/openai.js';
-import AnthropicAdapter from '../adapters/anthropic.js';
-import GoogleAdapter from '../adapters/google.js';
-import MistralAdapter from '../adapters/mistral.js';
+import OpenAIAdapter from '../protocols/openai.js';
+import AnthropicAdapter from '../protocols/anthropic.js';
+import GoogleAdapter from '../protocols/google.js';
+import MistralAdapter from '../protocols/mistral.js';
 import logger from '../utils/logger.js';
 import {
   formatToolsForOpenAI,
   formatToolsForAnthropic,
   formatToolsForGoogle
-} from '../adapters/toolFormatter.js';
-import { convertResponseToGeneric } from '../adapters/toolCalling/index.js';
+} from '../protocols/toolFormatter.js';
+import { convertResponseToGeneric } from '../protocols/toolCalling/index.js';
 
 // Test tool definition
 const testTool = {

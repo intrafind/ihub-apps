@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import { getAdapter } from '../adapters/index.js';
+import { getAdapter } from '../protocols/index.js';
 import logger from '../utils/logger.js';
 
 // Test that known providers return the correct adapter

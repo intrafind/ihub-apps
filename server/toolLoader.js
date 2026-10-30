@@ -305,8 +305,24 @@ function discoverDirectoryTools(language, otherTools) {
 }
 
 /**
- * Load tools from local configuration, MCP servers, remote A2A agents and
- * people directories.
+ * Tools of the installed integrations (Admin → Integrations → Installed).
+ * Imported lazily: the integration services read configCache, which imports
+ * this module.
+ */
+async function discoverIntegrationTools(language) {
+  try {
+    const { discoverIntegrationTools: discover } =
+      await import('./services/integrations/integrationTools.js');
+    return await discover(language);
+  } catch (error) {
+    logger.error('Error discovering integration tools', { component: 'ToolLoader', error });
+    return [];
+  }
+}
+
+/**
+ * Load tools from local configuration, MCP servers, remote A2A agents,
+ * people directories and installed integrations.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
@@ -321,7 +337,8 @@ export async function loadTools(language = null) {
     ...mcpTools,
     ...a2aTools
   ]);
-  const discovered = [...mcpTools, ...a2aTools, ...directoryTools];
+  const integrationTools = await discoverIntegrationTools(language);
+  const discovered = [...mcpTools, ...a2aTools, ...directoryTools, ...integrationTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -656,6 +673,22 @@ export async function getToolsForApp(app, language = null, context = {}) {
       appTools = appTools.filter(
         t => isInteractiveTool(t) || isToolSelected(t, context.enabledTools)
       );
+    }
+  }
+
+  // Tools of the installed integrations the app binds under `app.integrations`
+  // (#3061). The chat's narrowing applies to them like to any other tool.
+  if (app.integrations && typeof app.integrations === 'object') {
+    try {
+      const { getIntegrationToolsForApp } =
+        await import('./services/integrations/integrationTools.js');
+      let bound = getIntegrationToolsForApp(app, allTools, context);
+      if (Array.isArray(context.enabledTools)) {
+        bound = bound.filter(t => isToolSelected(t, context.enabledTools));
+      }
+      appTools = appTools.concat(bound.filter(t => !appTools.some(a => a.id === t.id)));
+    } catch (error) {
+      logger.error('Error adding integration tools', { component: 'ToolLoader', error });
     }
   }
 
@@ -1088,6 +1121,17 @@ export async function runTool(toolId, params = {}, options = {}) {
   const tool = allTools.find(t => t.id === toolId);
   if (!tool) {
     throw new Error(`Tool ${toolId} not found`);
+  }
+
+  // Tools of installed integrations run through their protocol adapter.
+  if (tool._integration) {
+    logger.info('Dispatching integration tool call', {
+      component: 'ToolLoader',
+      toolId,
+      instanceId: tool._integration.instanceId
+    });
+    const { runIntegrationTool } = await import('./services/integrations/integrationTools.js');
+    return await runIntegrationTool(tool, params, options);
   }
 
   // People directory tools run through their directory, as the calling user.

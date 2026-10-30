@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import OpenAIAdapter from '../adapters/openai.js';
+import OpenAIAdapter from '../protocols/openai.js';
 import logger from '../utils/logger.js';
 
 const model = {

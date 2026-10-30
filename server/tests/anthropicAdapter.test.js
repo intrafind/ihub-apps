@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import AnthropicAdapter from '../adapters/anthropic.js';
+import AnthropicAdapter from '../protocols/anthropic.js';
 import logger from '../utils/logger.js';
 
 const model = {

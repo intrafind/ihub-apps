@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
-import { convertOpenaiResponsesResponseToGeneric } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
+import OpenAIResponsesAdapter from '../protocols/openai-responses.js';
+import { convertOpenaiResponsesResponseToGeneric } from '../protocols/toolCalling/OpenAIResponsesConverter.js';
 import logger from '../utils/logger.js';
 
 // Test basic adapter functionality

@@ -8,10 +8,10 @@
  * consistent behavior across OpenAI, Anthropic, Google, and Mistral adapters.
  */
 
-import OpenAIAdapter from '../adapters/openai.js';
-import AnthropicAdapter from '../adapters/anthropic.js';
-import GoogleAdapter from '../adapters/google.js';
-import MistralAdapter from '../adapters/mistral.js';
+import OpenAIAdapter from '../protocols/openai.js';
+import AnthropicAdapter from '../protocols/anthropic.js';
+import GoogleAdapter from '../protocols/google.js';
+import MistralAdapter from '../protocols/mistral.js';
 import logger from '../utils/logger.js';
 
 logger.info('🔧 Tool Calling Fixes and Standardization\n');

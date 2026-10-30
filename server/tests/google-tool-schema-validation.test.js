@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfiguredTools } from '../toolLoader.js';
-import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
+import { convertToolsFromGeneric } from '../protocols/toolCalling/index.js';
 
 describe('Google Gemini Tool Schema Validation', () => {
   it('should not have object descriptions in Google-formatted tools when language is null', async () => {

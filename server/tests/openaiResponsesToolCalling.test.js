@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
+import { convertToolsFromGeneric } from '../protocols/toolCalling/index.js';
 import logger from '../utils/logger.js';
 
 // Test tool conversion for OpenAI Responses API

@@ -18,12 +18,12 @@
  */
 
 import assert from 'assert';
-import { convertGenericToolsToOpenAI } from '../adapters/toolCalling/OpenAIConverter.js';
-import { convertGenericToolsToOpenaiResponses } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
-import { convertGenericToolsToGoogle } from '../adapters/toolCalling/GoogleConverter.js';
-import { convertGenericToolsToVLLM } from '../adapters/toolCalling/VLLMConverter.js';
-import { convertGenericToolsToMistral } from '../adapters/toolCalling/MistralConverter.js';
-import { convertGenericToolsToAnthropic } from '../adapters/toolCalling/AnthropicConverter.js';
+import { convertGenericToolsToOpenAI } from '../protocols/toolCalling/OpenAIConverter.js';
+import { convertGenericToolsToOpenaiResponses } from '../protocols/toolCalling/OpenAIResponsesConverter.js';
+import { convertGenericToolsToGoogle } from '../protocols/toolCalling/GoogleConverter.js';
+import { convertGenericToolsToVLLM } from '../protocols/toolCalling/VLLMConverter.js';
+import { convertGenericToolsToMistral } from '../protocols/toolCalling/MistralConverter.js';
+import { convertGenericToolsToAnthropic } from '../protocols/toolCalling/AnthropicConverter.js';
 
 console.log('Testing provider-specific tool filtering across all converters...\n');
 

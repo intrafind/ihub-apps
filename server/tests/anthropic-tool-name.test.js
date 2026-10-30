@@ -7,7 +7,7 @@
  */
 
 import assert from 'assert';
-import { convertGenericToolsToAnthropic } from '../adapters/toolCalling/AnthropicConverter.js';
+import { convertGenericToolsToAnthropic } from '../protocols/toolCalling/AnthropicConverter.js';
 import logger from '../utils/logger.js';
 
 logger.info('🧪 Testing Anthropic Tool Name Validation Fix\n');

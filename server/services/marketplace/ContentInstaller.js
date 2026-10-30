@@ -44,6 +44,12 @@ import { modelConfigSchema } from '../../validators/modelConfigSchema.js';
 import { promptConfigSchema } from '../../validators/promptConfigSchema.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
+import integrationRegistry from '../integrations/definitions/IntegrationRegistry.js';
+import {
+  validateIntegrationDefinition,
+  definitionIdToDirName,
+  dirNameToDefinitionId
+} from '../../validators/integrationDefinitionSchema.js';
 
 const COMPONENT = 'ContentInstaller';
 
@@ -129,6 +135,22 @@ const CONTENT_CONFIG = {
     ext: '.json',
     cacheRefresh: 'refreshWorkflowsCache',
     validate: schemaValidator(workflowConfigSchema)
+  },
+  integration: {
+    // A definition folder (integration.json plus companions such as the
+    // OpenAPI document); the IntegrationRegistry owns the files and the id
+    // check, so the installer only validates the shape here.
+    dir: 'integration-definitions',
+    ext: null,
+    cacheRefresh: null,
+    validate: content => {
+      const raw = content?.files?.['integration.json'];
+      if (!raw) return { success: false, errors: ['integration.json is missing'] };
+      const parsed = validateIntegrationDefinition(typeof raw === 'string' ? JSON.parse(raw) : raw);
+      return parsed.success
+        ? { success: true }
+        : { success: false, errors: parsed.errors.map(e => `${e.path.join('.')}: ${e.message}`) };
+    }
   }
 };
 
@@ -271,13 +293,57 @@ export async function fetchItemContent(registryId, type, name) {
       'utf8'
     );
     try {
-      return { item, content: JSON.parse(decoded) };
+      responseData = JSON.parse(decoded);
     } catch {
       return { item, content: await buildSkillContent(item, decoded, authHeaders) };
     }
   }
 
+  if (type === 'integration') {
+    return {
+      item,
+      content: await buildIntegrationContent(item, responseData, itemUrl, authHeaders)
+    };
+  }
+
   return { item, content: responseData };
+}
+
+/**
+ * Build the folder of an integration definition: `integration.json` plus the
+ * companions the catalog lists and the files the definition itself names
+ * (its OpenAPI document and icon, when they are relative paths).
+ *
+ * @param {object} item - Catalog item
+ * @param {object} definition - Parsed integration.json
+ * @param {string} itemUrl - URL integration.json was fetched from
+ * @param {Record<string, string>} authHeaders
+ * @returns {Promise<{ files: Record<string, string|object> }>}
+ */
+async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
+  const listed = Array.isArray(item.source?.companions) ? item.source.companions : [];
+  const referenced = [definition?.protocol?.document, definition?.icon].filter(
+    value => typeof value === 'string' && value && !/^https?:\/\//i.test(value)
+  );
+  const companions = [...new Set([...listed, ...referenced])];
+  const baseUrl = itemUrl.replace(/\/[^/]*$/, '');
+  const { throttledFetch } = await import('../../requestThrottler.js');
+  const files = { 'integration.json': definition };
+  for (const relativePath of companions) {
+    if (relativePath === 'integration.json') continue;
+    const companionUrl = `${baseUrl}/${relativePath}`;
+    const res = await throttledFetch('marketplace-installer', companionUrl, {
+      headers: {
+        Accept: 'text/plain, application/json, application/vnd.github.raw+json',
+        ...authHeaders
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`Companion file '${relativePath}' could not be fetched (HTTP ${res.status})`);
+    }
+    files[relativePath] = await res.text();
+  }
+  return { files };
 }
 
 /**
@@ -424,6 +490,17 @@ class ContentInstaller {
     // Validate the fetched content against the schema for this type
     assertValidContent(type, name, content, config);
 
+    if (type === 'integration') {
+      // The catalog name is the definition's folder name; the definition
+      // inside must agree, or two registries could fight over one folder.
+      const definitionId = content.files['integration.json']?.id;
+      if (definitionIdToDirName(definitionId || '') !== name) {
+        throw new Error(
+          `Content validation failed: definition id '${definitionId}' does not match the catalog name '${name}'`
+        );
+      }
+    }
+
     await this._writeContent(type, name, content, config);
 
     // Record installation in manifest
@@ -483,6 +560,19 @@ class ContentInstaller {
 
     if (!installations.installations[key]) {
       throw new Error(`${type} '${name}' is not installed`);
+    }
+
+    if (type === 'integration') {
+      const { default: installedIntegrationService } =
+        await import('../integrations/InstalledIntegrationService.js');
+      const instances = installedIntegrationService.instancesOf(dirNameToDefinitionId(name));
+      if (instances.length > 0) {
+        const error = new Error(
+          `integration '${name}' is still installed as ${instances.map(i => `'${i.id}'`).join(', ')}; remove those first`
+        );
+        error.code = 'INTEGRATION_IN_USE';
+        throw error;
+      }
     }
 
     await this._deleteContent(type, name, config);
@@ -609,6 +699,10 @@ class ContentInstaller {
     if (type === 'skill' && isSystemSkill(name)) {
       throw new Error(`skill '${name}' is a system skill of iHub and cannot be replaced`);
     }
+    if (type === 'integration') {
+      await integrationRegistry.writeInstalled(dirNameToDefinitionId(name), content.files);
+      return;
+    }
     if (type === 'skill') {
       const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
       await fs.mkdir(skillDir, { recursive: true });
@@ -664,6 +758,10 @@ class ContentInstaller {
    * @returns {Promise<void>}
    */
   async _deleteContent(type, name, typeConfig) {
+    if (type === 'integration') {
+      await integrationRegistry.removeInstalled(dirNameToDefinitionId(name));
+      return;
+    }
     if (type === 'skill') {
       const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
       await fs.rm(skillDir, { recursive: true, force: true });

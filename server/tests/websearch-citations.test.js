@@ -27,9 +27,9 @@ import {
   convertOpenaiResponsesResponseToGeneric,
   toGroundingMetadata,
   withCitationMarkers
-} from '../adapters/toolCalling/OpenAIResponsesConverter.js';
-import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
-import { withWebSupports } from '../adapters/toolCalling/GoogleConverter.js';
+} from '../protocols/toolCalling/OpenAIResponsesConverter.js';
+import { convertAnthropicResponseToGeneric } from '../protocols/toolCalling/AnthropicConverter.js';
+import { withWebSupports } from '../protocols/toolCalling/GoogleConverter.js';
 import {
   citationMarkers,
   emptySourceSet,

@@ -13,7 +13,7 @@ import {
   convertGenericToolsToBedrock,
   convertBedrockToolUseToGeneric,
   convertBedrockToolChoice
-} from '../adapters/toolCalling/BedrockConverter.js';
+} from '../protocols/toolCalling/BedrockConverter.js';
 import logger from '../utils/logger.js';
 
 let passed = 0;

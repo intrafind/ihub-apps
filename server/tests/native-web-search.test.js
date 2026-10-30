@@ -20,10 +20,10 @@ import {
   resolveAppNativeWebSearch,
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES
 } from '../toolLoader.js';
-import AnthropicAdapter, { buildAnthropicWebSearchTool } from '../adapters/anthropic.js';
-import GoogleAdapter from '../adapters/google.js';
-import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
-import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
+import AnthropicAdapter, { buildAnthropicWebSearchTool } from '../protocols/anthropic.js';
+import GoogleAdapter from '../protocols/google.js';
+import OpenAIResponsesAdapter from '../protocols/openai-responses.js';
+import { convertAnthropicResponseToGeneric } from '../protocols/toolCalling/AnthropicConverter.js';
 import { LLMClient } from '../services/loop/LLMClient.js';
 import { AgentLoop } from '../services/loop/AgentLoop.js';
 import {

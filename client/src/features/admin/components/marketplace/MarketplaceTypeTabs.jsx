@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 
 /** All supported marketplace item types in display order */
-const TYPES = ['all', 'app', 'model', 'prompt', 'skill', 'workflow'];
+const TYPES = ['all', 'app', 'model', 'prompt', 'skill', 'workflow', 'integration'];
 
 /**
  * Horizontal tab bar for filtering marketplace items by type.

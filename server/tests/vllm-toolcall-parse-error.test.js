@@ -7,7 +7,7 @@
 // undefined `e`, so a RECOVERABLE malformed-tool-args parse failure threw a
 // FATAL error that crashed the whole agent run. Long/complex vLLM responses can
 // emit truncated tool-call arguments, hitting exactly this path.
-import { convertVLLMResponseToGeneric } from '../adapters/toolCalling/VLLMConverter.js';
+import { convertVLLMResponseToGeneric } from '../protocols/toolCalling/VLLMConverter.js';
 
 let failures = 0;
 function check(label, cond, detail) {

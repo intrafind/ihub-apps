@@ -3094,7 +3094,7 @@
     "home": {
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren",
-        "marketplaceDesc": "Apps, Modelle, Prompts, Skills und Workflows aus Registries entdecken und installieren"
+        "marketplaceDesc": "Apps, Modelle, Prompts, Skills, Workflows und Integrationen aus Registries entdecken und installieren"
       }
     },
     "marketplace": {
@@ -3136,11 +3136,16 @@
         "skill": "Skill",
         "skills": "Skills",
         "workflow": "Workflow",
-        "workflows": "Workflows"
+        "workflows": "Workflows",
+        "integration": "Integration",
+        "integrations": "Integrationen"
       },
+      "viewSkill": "Skill ansehen",
+      "viewIntegration": "Integration einrichten",
+      "integrationInUse": "Diese Integrationsdefinition ist noch als Instanz installiert. Entferne die Instanz zuerst unter Integrationen → Installiert.",
       "registries": {
         "title": "Marktplatz-Registries",
-        "subtitle": "Inhalts-Registries verwalten, um Apps, Modelle, Prompts, Skills und Workflows zu entdecken und zu installieren.",
+        "subtitle": "Inhalts-Registries verwalten, um Apps, Modelle, Prompts, Skills, Workflows und Integrationen zu entdecken und zu installieren.",
         "addRegistry": "Registry hinzufügen",
         "addFirst": "Erste Registry hinzufügen",
         "empty": "Noch keine Registries konfiguriert.",
