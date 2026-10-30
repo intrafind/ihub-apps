@@ -4398,6 +4398,19 @@
         "label": "Standard-App für Projekt-Chats",
         "none": "Erste App der Liste",
         "help": "Ein Chat in einem Projekt startet in der Standard-App des Projekts; hat das Projekt keine, startet er in dieser App."
+      },
+      "settings": {
+        "title": "Projekteinstellungen"
+      },
+      "tierPolicy": {
+        "legend": "Wo Benutzer ihre Projekte finden",
+        "ihub": "Nur iHub-Projekte",
+        "ihubHelp": "iFinder Smart Collections werden nicht angeboten. Dies ist die Standardeinstellung.",
+        "both": "iHub-Projekte und iFinder Smart Collections",
+        "bothHelp": "Benutzer fügen ihre iFinder Smart Collections aus dem Katalog zu ihren Projekten hinzu und wählen beim Anlegen eines Projekts, wo es liegt.",
+        "ifinder": "iFinder Smart Collections bevorzugt",
+        "ifinderHelp": "Smart Collections können wie unter „both“ hinzugefügt werden. Lokale Projekte bleiben nutzbar und können weiterhin angelegt werden.",
+        "requirements": "Smart Collections brauchen außerdem ein konfiguriertes iFinder (Integrationen → iFinder), einen Benutzer mit der Rolle fi_smartcollections und iFinder 6.8 oder neuer. Prüfen Sie das mit dem iFinder-Integrationstest."
       }
     },
     "peopleDirectories": {

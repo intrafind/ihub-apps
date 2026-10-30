@@ -21,6 +21,9 @@ const mockApi = {
   saveProjectSettings: jest.fn()
 };
 
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => ({ platformConfig: {}, refreshConfig: () => {} })
+}));
 jest.mock('../../../client/src/shared/hooks/useApps', () => ({
   __esModule: true,
   default: () => ({ apps: [], loading: false })

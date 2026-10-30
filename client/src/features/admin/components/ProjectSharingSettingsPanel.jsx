@@ -8,6 +8,7 @@ import {
   getAdminApiErrorMessage,
   saveProjectSettings
 } from '../../../api/adminApi';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 
 const TIER_POLICIES = [
@@ -55,6 +56,8 @@ function ProjectSharingSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  // The default app reaches the chat composers through the platform config.
+  const { refreshConfig } = usePlatformConfig() || {};
 
   useEffect(() => {
     let active = true;
@@ -102,6 +105,7 @@ function ProjectSharingSettingsPanel() {
     setError(null);
     try {
       const settings = await saveProjectSettings(draft);
+      if (settings?.defaultAppId !== stored?.defaultAppId) refreshConfig?.();
       setStored(settings);
       setDraft(settings);
       setSaved(true);

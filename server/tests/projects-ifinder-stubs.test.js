@@ -345,4 +345,42 @@ describe('the iFinder picker of a project', () => {
     assert.equal(refused.statusCode, 403, JSON.stringify(refused.body));
     assert.equal(refused.body.details.code, 'INTEGRATION_SCOPE_NOT_ALLOWED');
   });
+
+  it('stores an iFinder item only with a profile the caller may search in', async () => {
+    h.platform.iFinder = {
+      ...h.platform.iFinder,
+      defaultSearchProfile: 'standard',
+      allowedSearchProfiles: ['standard', 'legal']
+    };
+    h.configCache.setCacheEntry('config/platform.json', h.platform);
+    const created = await drive(h.handlersFor('post', '/api/projects'), {
+      user: ADA,
+      method: 'POST',
+      body: { name: 'Local' }
+    });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    const add = ref =>
+      drive(route.addItem, {
+        user: ADA,
+        method: 'POST',
+        params: { projectId: created.body.id },
+        body: { kind: 'ifinder-query', ref: { query: 'lease', ...ref } }
+      });
+    for (const kind of ['ifinder-query', 'ifinder-document']) {
+      const body =
+        kind === 'ifinder-query'
+          ? { kind, ref: { query: 'lease', searchProfile: 'secret' } }
+          : { kind, ref: { documentId: 'doc-a', searchProfile: 'secret' } };
+      const refused = await drive(route.addItem, {
+        user: ADA,
+        method: 'POST',
+        params: { projectId: created.body.id },
+        body
+      });
+      assert.equal(refused.statusCode, 403, `${kind}: ${JSON.stringify(refused.body)}`);
+      assert.equal(refused.body.details.code, 'SOURCE_FORBIDDEN');
+    }
+    const allowed = await add({ searchProfile: 'legal' });
+    assert.ok(allowed.statusCode < 300, JSON.stringify(allowed.body));
+  });
 });
