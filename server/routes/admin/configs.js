@@ -416,14 +416,36 @@ export default function registerAdminConfigRoutes(app) {
         JSON.stringify(existingConfig.iFinder) !== JSON.stringify(newConfig.iFinder);
       const iAssistantChanged =
         JSON.stringify(existingConfig.iAssistant) !== JSON.stringify(newConfig.iAssistant);
+      // A changed OIDC provider (token URL, client) invalidates exchanged
+      // iFinder tokens as well; the iFinder block below covers its own settings.
+      if (
+        !iFinderChanged &&
+        JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)
+      ) {
+        try {
+          const { clearExchangedTokenCache } =
+            await import('../../services/integrations/iFinderTokenProvider.js');
+          clearExchangedTokenCache();
+        } catch (error) {
+          logger.warn('Could not clear the iFinder token cache', {
+            component: 'AdminConfigs',
+            error
+          });
+        }
+      }
+
       if (iFinderChanged || iAssistantChanged) {
         try {
           const { default: iAssistantService } =
             await import('../../services/integrations/iAssistantService.js');
           const { default: iFinderService } =
             await import('../../services/integrations/iFinderService.js');
+          const { clearExchangedTokenCache } =
+            await import('../../services/integrations/iFinderTokenProvider.js');
           iAssistantService.resetConfig();
           iFinderService.resetConfig();
+          // Exchanged tokens were issued for the old audience, scopes or provider.
+          clearExchangedTokenCache();
           logger.info('iFinder/iAssistant service caches reset after config change', {
             component: 'AdminConfigs'
           });

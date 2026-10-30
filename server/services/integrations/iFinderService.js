@@ -4,7 +4,7 @@
 import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
-import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider from './iFinderTokenProvider.js';
 import iFinderSearchProfiles from './iFinderSearchProfiles.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
@@ -246,7 +246,7 @@ class IFinderService {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user);
+      const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
 
       // Log authentication header with proper masking
       authDebugService.log('iFinder', 'info', 'JWT token generated for search request', {
@@ -513,7 +513,7 @@ class IFinderService {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user);
+      const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
 
       // Construct document URL
       const documentEndpoint = config.endpoints.document
@@ -742,7 +742,7 @@ class IFinderService {
   async _apiRequest({ path, user, label = 'iFinderApi', method = 'GET', body, signal }) {
     const cfg = this.getConfig();
     const url = `${cfg.baseUrl.replace(/\/+$/, '')}${path}`;
-    const authHeader = getIFinderAuthorizationHeader(user);
+    const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
 
     const headers = { Authorization: authHeader, Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -1298,7 +1298,7 @@ class IFinderService {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user);
+      const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
 
       // Construct document URL
       const documentEndpoint = config.endpoints.document
@@ -1498,7 +1498,7 @@ class IFinderService {
 
     const config = this.getConfig();
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
-    const authHeader = getIFinderAuthorizationHeader(user);
+    const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user);
 
     // Validate documentId against the central safe ID allowlist to prevent
     // query injection into the sSearchTerm below.

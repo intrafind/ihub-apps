@@ -36,7 +36,8 @@
  * @module services/integrations/SmartCollectionsService
  */
 import { httpFetch } from '../../utils/httpConfig.js';
-import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider from './iFinderTokenProvider.js';
+import { isUnavailableError } from './oauthRefreshError.js';
 import logger from '../../utils/logger.js';
 import iFinderService from './iFinderService.js';
 
@@ -206,13 +207,19 @@ class SmartCollectionsService {
     }
     let authorization;
     try {
-      authorization = getIFinderAuthorizationHeader(user, { scope: SMART_COLLECTIONS_SCOPE });
+      authorization = await iFinderTokenProvider.getAuthorizationHeader(user, {
+        scope: SMART_COLLECTIONS_SCOPE
+      });
     } catch (error) {
-      // No private key, or no value for the configured subject field: iFinder
-      // was not asked, and asking again will not help until an admin acts.
+      // No private key, no value for the configured subject field, or (token
+      // exchange) no usable sign-in: iFinder was not asked, and asking again
+      // will not help until an admin or the user acts. A provider that is
+      // briefly unreachable is the exception.
       throw new SmartCollectionsError(
-        SMART_COLLECTIONS_ERRORS.UNAUTHORIZED,
-        `The iFinder token could not be signed: ${error?.message}`,
+        isUnavailableError(error)
+          ? SMART_COLLECTIONS_ERRORS.UNAVAILABLE
+          : SMART_COLLECTIONS_ERRORS.UNAUTHORIZED,
+        `The iFinder token could not be obtained: ${error?.message}`,
         { cause: error }
       );
     }

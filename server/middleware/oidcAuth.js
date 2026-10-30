@@ -17,6 +17,10 @@ import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { createOidcStateStore } from '../utils/oidcLoginState.js';
+import {
+  shouldStoreLoginTokens,
+  storeLoginTokens
+} from '../services/integrations/iFinderTokenProvider.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -234,6 +238,28 @@ export function configureOidcProviders() {
               },
               sessionId
             );
+
+            // iFinder token exchange: keep this provider's tokens (encrypted, in
+            // the token store, never on the user object) so iHub can exchange
+            // them for iFinder tokens, also in background runs. Only for the
+            // provider iFinder is configured to share. A failure here must not
+            // fail the sign-in; iFinder then asks the user to sign in again.
+            if (shouldStoreLoginTokens(provider.name, platform)) {
+              try {
+                await storeLoginTokens(validatedUser.id, provider.name, {
+                  accessToken,
+                  refreshToken: _refreshToken,
+                  expiresIn: params?.expires_in
+                });
+              } catch (error) {
+                logger.error('Could not store the OIDC sign-in tokens for iFinder', {
+                  component: 'OidcAuth',
+                  providerName: provider.name,
+                  userId: validatedUser.id,
+                  error
+                });
+              }
+            }
 
             // Pass the raw ID token out via Passport's `info` argument rather than
             // attaching it to validatedUser: that object flows into

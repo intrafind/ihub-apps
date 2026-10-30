@@ -9,7 +9,7 @@
  * Provider name: "iassistant-conversation"
  */
 import { BaseAdapter } from './BaseAdapter.js';
-import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
+import iFinderTokenProvider from '../services/integrations/iFinderTokenProvider.js';
 import conversationApiService from '../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
@@ -318,7 +318,9 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     // with its search profile; otherwise the configured one applies, so an
     // admin's profile change reaches running conversations.
     const profileId = state.assistantId ? state.profileId : config.profileId;
-    const authHeader = getIFinderAuthorizationHeader(user, { scope: config.scope });
+    const authHeader = await iFinderTokenProvider.getAuthorizationHeader(user, {
+      scope: config.scope
+    });
 
     const url = `${config.baseUrl.replace(/\/+$/, '')}/public-api/rag/api/v0/conversations/${state.conversationId}/messages`;
 

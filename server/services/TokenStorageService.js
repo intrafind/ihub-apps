@@ -731,14 +731,16 @@ class TokenStorageService {
    * not file-name safe), so the caller names every id to clear.
    *
    * @param {string[]} storageIds - File-name-safe ids the user's tokens are filed under
+   * @param {Object} [options]
+   * @param {string} [options.serviceName] - Only clear this one service directory
    * @returns {Promise<number>} How many files were removed
    * @throws {Error} When a directory cannot be listed or a file cannot be removed
    */
-  async deleteAllTokensForStorageIds(storageIds) {
+  async deleteAllTokensForStorageIds(storageIds, { serviceName: onlyService } = {}) {
     const ids = [...new Set(storageIds)].filter(id => this._isSafeFilenameComponent(id));
     if (ids.length === 0) return 0;
 
-    const services = await listDirectory(this.storageBasePath);
+    const services = onlyService ? [onlyService] : await listDirectory(this.storageBasePath);
     let removed = 0;
     for (const serviceName of services.filter(name => this._isSafeFilenameComponent(name))) {
       removed += await deleteTokenFilesIn(path.join(this.storageBasePath, serviceName), ids);

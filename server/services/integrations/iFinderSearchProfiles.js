@@ -37,7 +37,7 @@
  * that, like any other failure, as "unknown" rather than "no profiles".
  */
 import { throttledFetch } from '../../requestThrottler.js';
-import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider from './iFinderTokenProvider.js';
 import logger from '../../utils/logger.js';
 
 export const CONFIGURATION_PATH = '/internal-api/v2/search';
@@ -171,7 +171,7 @@ class IFinderSearchProfiles {
     const response = await this.fetch('iFinderSearchProfiles', url, {
       method: 'GET',
       headers: {
-        Authorization: getIFinderAuthorizationHeader(user),
+        Authorization: await iFinderTokenProvider.getAuthorizationHeader(user),
         Accept: 'application/json'
       },
       ...(timeout ? { timeout } : {}),

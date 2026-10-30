@@ -47,7 +47,7 @@ const INTEGRATION_ERROR_CODES = new Set([
 export default function IntegrationsPage() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const { user } = useAuth();
+  const { user, loginWithOidc } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const location = useLocation();
   const navigate = useNavigate();
@@ -67,6 +67,8 @@ export default function IntegrationsPage() {
   const [connectionPendingRevoke, setConnectionPendingRevoke] = useState(null);
   // MCP servers with per-user sign-in the user may connect. Null until loaded.
   const [mcpServers, setMcpServers] = useState(null);
+  // Stored sign-in iFinder calls are authorized with (OIDC token exchange mode).
+  const [iFinderAuthorization, setIFinderAuthorization] = useState(null);
 
   // Derive cloud storage providers from platform config
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -180,7 +182,11 @@ export default function IntegrationsPage() {
   // Two kinds of integration share this page: accounts iHub signs in to on the
   // user's behalf, and tools that sign in to iHub as the user. Each section is
   // shown only when it has something in it.
-  const hasAccounts = !!jiraEnabled || cloudProviders.length > 0 || mcpServers?.length > 0;
+  const hasAccounts =
+    !!jiraEnabled ||
+    cloudProviders.length > 0 ||
+    mcpServers?.length > 0 ||
+    !!iFinderAuthorization?.enabled;
   const hasAccess = !!officeEnabled || !!apiKeyOverview?.enabled || !!connectionOverview?.enabled;
 
   // Load integration status
@@ -227,6 +233,19 @@ export default function IntegrationsPage() {
           }
         } catch (err) {
           console.error('Error loading connections:', err);
+        }
+
+        // iFinder background authorization. `enabled` is false unless iFinder
+        // gets its tokens from a shared OIDC provider.
+        try {
+          const iFinderResponse = await fetch(buildApiUrl('integrations/ifinder/authorization'), {
+            credentials: 'include'
+          });
+          if (iFinderResponse.ok) {
+            setIFinderAuthorization(await iFinderResponse.json());
+          }
+        } catch (err) {
+          console.error('Error loading iFinder authorization:', err);
         }
 
         // MCP servers with per-user sign-in visible to this user.
@@ -311,6 +330,29 @@ export default function IntegrationsPage() {
       setMessage({
         type: 'error',
         text: t('integrations.page.jira.connectionFailed', { message: error.message })
+      });
+    }
+  };
+
+  const handleIFinderRevoke = async () => {
+    try {
+      const response = await fetch(buildApiUrl('integrations/ifinder/authorization'), {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(response.statusText);
+      setIFinderAuthorization(prev => ({ ...prev, authorized: false, authorizedAt: undefined }));
+      setMessage({
+        type: 'success',
+        text: t('integrations.page.iFinder.revoked', 'iFinder authorization revoked')
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t('integrations.page.iFinder.revokeFailed', {
+          message: error.message,
+          defaultValue: 'Could not revoke the iFinder authorization: {{message}}'
+        })
       });
     }
   };
@@ -762,6 +804,43 @@ export default function IntegrationsPage() {
                         }
                       />
                     ))}
+
+                    {/* iFinder: the stored sign-in its tokens are exchanged from */}
+                    {iFinderAuthorization?.enabled && (
+                      <IntegrationCard
+                        icon="search"
+                        iconBgClassName="bg-indigo-600"
+                        connectButtonClassName="bg-indigo-600 hover:bg-indigo-700"
+                        title={t('integrations.page.iFinder.title', 'iFinder')}
+                        description={t('integrations.page.iFinder.description', {
+                          provider: iFinderAuthorization.provider.displayName,
+                          defaultValue:
+                            'iHub uses your {{provider}} sign-in to search iFinder for you, also in scheduled tasks and workflows while you are signed out.'
+                        })}
+                        connected={!!iFinderAuthorization.authorized}
+                        userInfo={
+                          iFinderAuthorization.authorized
+                            ? {
+                                displayName: t('integrations.page.iFinder.authorizedSince', {
+                                  provider: iFinderAuthorization.provider.displayName,
+                                  date: iFinderAuthorization.authorizedAt
+                                    ? new Date(iFinderAuthorization.authorizedAt).toLocaleString(
+                                        lang
+                                      )
+                                    : '',
+                                  defaultValue: 'Authorized via {{provider}} on {{date}}'
+                                })
+                              }
+                            : null
+                        }
+                        connectLabel={t('integrations.page.iFinder.authorize', {
+                          provider: iFinderAuthorization.provider.displayName,
+                          defaultValue: 'Sign in via {{provider}}'
+                        })}
+                        onConnect={() => loginWithOidc(iFinderAuthorization.provider.name)}
+                        onDisconnect={handleIFinderRevoke}
+                      />
+                    )}
 
                     {/* MCP servers with per-user sign-in */}
                     {mcpServers?.length > 0 && (

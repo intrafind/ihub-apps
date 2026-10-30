@@ -3465,7 +3465,41 @@
         "includeToken": "Signiertes JWT mit ausgeben",
         "includeTokenHelp": "Gibt das Token selbst sowie einen direkt ausführbaren curl-Befehl zurück. Das Token ist ein gültiger Zugang für den getesteten Benutzer — behandeln Sie es wie ein Passwort und fügen Sie es nicht in Tickets ein.",
         "conversationRoundTrip": "Konversations-Testlauf ausführen (iAssistant)",
-        "conversationRoundTripHelp": "Erstellt eine ephemere Testkonversation in iAssistant und löscht sie wieder. Prüft Schreibzugriff, nicht nur die Authentifizierung."
+        "conversationRoundTripHelp": "Erstellt eine ephemere Testkonversation in iAssistant und löscht sie wieder. Prüft Schreibzugriff, nicht nur die Authentifizierung.",
+        "exchangeDescription": "Der Verbindungstest tauscht Ihr eigenes gespeichertes Anmelde-Token beim OIDC-Provider, zeigt die Claims des Tokens, das iFinder erhält, und ruft dieselben Endpunkte auf wie die Integration zur Laufzeit. Er läuft immer als Sie: Der Austausch braucht Ihre Anmeldung."
+      },
+      "authMode": {
+        "label": "Token-Aussteller",
+        "ihubSigned": "iHub signiert das Token",
+        "oidcTokenExchange": "Gemeinsamer OIDC-Provider (Token Exchange)",
+        "ihubSignedHelp": "iHub signiert das iFinder-Token selbst, mit einem privaten Schlüssel oder dem iHub-OIDC-Schlüsselpaar. iFinder vertraut iHub als Aussteller.",
+        "oidcTokenExchangeHelp": "iHub und iFinder nutzen denselben OIDC-Provider. iHub speichert das Anmelde-Token jedes Benutzers und tauscht es beim Provider gegen ein Token für iFinder. Benutzer müssen sich über diesen Provider bei iHub anmelden; Hintergrundläufe verwenden das gespeicherte Refresh-Token."
+      },
+      "tokenExchange": {
+        "providerRequired": "Wählen Sie den OIDC-Provider, den iHub mit iFinder teilt.",
+        "provider": "OIDC-Provider",
+        "selectProvider": "Provider auswählen…",
+        "providerDisabled": "deaktiviert",
+        "noProviders": "Es ist kein OIDC-Provider konfiguriert. Legen Sie zuerst unter Admin > Authentifizierung den Provider an, den iFinder nutzt.",
+        "providerHelp": "Der Provider, den iHub und iFinder teilen. Seine Anmelde-Tokens werden (verschlüsselt) gespeichert und mit der unter Admin > Authentifizierung konfigurierten Client-ID und dem Client-Secret gegen iFinder-Tokens getauscht. Fügen Sie \"offline_access\" zu seinen Scopes hinzu, damit Hintergrundläufe weiter funktionieren.",
+        "grantType": "Grant-Typ",
+        "grantTokenExchange": "Token Exchange (RFC 8693: Zitadel, Keycloak)",
+        "grantEntraObo": "On-Behalf-Of (Microsoft Entra ID)",
+        "audience": "Audience",
+        "audienceHelp": "Die Client- oder Projekt-ID von iFinder beim Provider. Das ausgestellte Token trägt sie als \"aud\".",
+        "audienceObo": "Bei On-Behalf-Of nicht verwendet: Entra entnimmt die Audience dem Scope (api://<ifinder-app-id>/.default).",
+        "scopeMap": "Scope-Zuordnung",
+        "scopeMapHelp": "Übersetzt die Scopes, die iHub anfordert, in die Scopes des Providers (Zitadel-Rollen-Scopes, Entra api://…/.default). Ein leerer Wert sendet den iHub-Scope unverändert.",
+        "ihubScope": "iHub-Scope",
+        "providerScope": "Provider-Scope",
+        "unchanged": "(unverändert)",
+        "removeScope": "Scope entfernen",
+        "addScope": "Scope hinzufügen",
+        "extraScopes": "Zusätzliche Scopes",
+        "extraScopesHelp": "Durch Leerzeichen getrennte Scopes, die bei jedem Austausch gesendet werden.",
+        "ifinderSetupTitle": "iFinder konfigurieren mit:",
+        "providerIssuer": "Issuer-URL des Providers",
+        "ifinderSetupHelp": "Das Token, das iHub sendet, muss zusätzlich die fa_*-Claims tragen, die iFinder liest – entweder als angeforderte Scopes oder über einen Claim-Mapper beim Provider. Der Verbindungstest unten zeigt, welche vorhanden sind."
       }
     },
     "integrations": {
@@ -5224,6 +5258,14 @@
           "issuer_mismatch": "die Antwort der Anmeldung kam von einem anderen Autorisierungsserver als erwartet",
           "public_url_mismatch": "iHub wurde unter einer anderen Adresse aufgerufen als der beim Server registrierten; bitten Sie Ihre Administration, die öffentliche URL des MCP-Gateways zu setzen"
         }
+      },
+      "iFinder": {
+        "title": "iFinder",
+        "description": "iHub nutzt Ihre {{provider}}-Anmeldung, um für Sie in iFinder zu suchen – auch in geplanten Aufgaben und Workflows, während Sie abgemeldet sind.",
+        "authorizedSince": "Autorisiert über {{provider}} am {{date}}",
+        "authorize": "Über {{provider}} anmelden",
+        "revoked": "iFinder-Autorisierung widerrufen",
+        "revokeFailed": "Die iFinder-Autorisierung konnte nicht widerrufen werden: {{message}}"
       }
     }
   },

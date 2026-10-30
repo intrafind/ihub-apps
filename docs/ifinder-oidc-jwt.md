@@ -6,6 +6,10 @@
 > to be created, no public key has to be copied into iFinder — the whole trust
 > relationship is established through configuration alone.
 
+> **iHub and iFinder already share an OIDC provider** (Zitadel, Keycloak, Entra
+> ID)? Then iFinder can trust that provider instead of iHub: see
+> [Shared OIDC Provider (Token Exchange)](#shared-oidc-provider-token-exchange).
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -19,7 +23,8 @@
 9. [Migrating from Manual Key Exchange](#migrating-from-manual-key-exchange)
 10. [Configuration Reference](#configuration-reference)
 11. [Troubleshooting](#troubleshooting)
-12. [Related Documentation](#related-documentation)
+12. [Shared OIDC Provider (Token Exchange)](#shared-oidc-provider-token-exchange)
+13. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -404,6 +409,191 @@ is unrelated to the signing mode.
 `principal-claim-name` on iFinder must match the claim iHub fills via
 `jwtSubjectField`. If iHub sends `sub = email` but iFinder reads `sub` as an
 opaque id, set `principal-claim-name: email` (or align the two).
+
+## Shared OIDC Provider (Token Exchange)
+
+Everything above describes the **`ihubSigned`** mode: iHub issues the iFinder
+token and iFinder trusts iHub. When iHub and iFinder already sign users in
+through the **same OIDC provider**, iFinder usually trusts that provider and
+nothing else, and pointing it at iHub as a second issuer conflicts with its own
+logins. For that setup iHub offers a second mode, **`oidcTokenExchange`**: the
+provider issues the iFinder token.
+
+| | `ihubSigned` (default) | `oidcTokenExchange` |
+|---|---|---|
+| Who issues the iFinder token | iHub (private key or OIDC key pair) | The shared OIDC provider |
+| iFinder `issuer-uri` | iHub (`oauth.issuer`) or the key you deployed | The provider |
+| `sub` in the token | `iFinder.jwtSubjectField` | The provider's user claim, the same iFinder sees for its own logins |
+| `fa_*` claims | `scope` claim set by iHub | Scopes iHub requests, or added by a claim mapper on the provider |
+| Who can use iFinder | Every signed-in user | Users who signed in to iHub through that provider |
+
+### How it works
+
+1. **Sign-in.** When a user signs in to iHub through the selected provider, iHub
+   keeps the provider's access and refresh token, encrypted in
+   `contents/integrations/oidc-login/` (AES-256-GCM, the same store the cloud
+   storage integrations use). They are never written to `users.json`. Sign-ins
+   through any other provider store nothing.
+2. **Per iFinder call.** iHub exchanges the stored access token at the provider's
+   token endpoint for a token with the iFinder audience and scopes, and caches it
+   per user, audience and scope until one minute before it expires.
+3. **Expiry.** An expired sign-in token is refreshed with the refresh token first.
+   Cluster workers take a per-user lock for the refresh, because Zitadel and
+   Keycloak rotate refresh tokens and two concurrent refreshes would invalidate
+   them.
+4. **Background runs.** Scheduled tasks, personal API keys and workflows have no
+   session; they use the stored refresh token in the same way. **Add
+   `offline_access` to the provider's scopes** (Admin > Authentication > OIDC
+   provider > Scopes), otherwise there is no refresh token and iFinder access ends
+   when the sign-in token expires.
+
+The stored tokens stay after logout, so scheduled tasks keep running. They are
+deleted when the user is deleted or deactivated, when the user revokes them
+under **Integrations** in their profile, and when the provider rejects the
+refresh token for good (revoked, expired, user disabled). In that last case the
+call fails with *"Sign in again via &lt;provider&gt; to re-authorize iFinder
+access"*; signing in once restores it.
+
+Users who did not sign in through the selected provider (local, LDAP, NTLM, or
+another OIDC provider) have no token to exchange. Their iFinder calls fail with
+*"iFinder requires sign-in via &lt;provider&gt;"*. There is no fallback to
+iHub-signed tokens.
+
+### Configure iHub
+
+In **Admin > Integrations > iFinder**, set **Token issuer** to *Shared OIDC
+provider (token exchange)*, then:
+
+| Field | `platform.json` | Purpose |
+|---|---|---|
+| OIDC provider | `iFinder.tokenExchange.oidcProvider` | Name of the provider under Admin > Authentication that iFinder shares |
+| Grant type | `iFinder.tokenExchange.grantType` | `tokenExchange` (RFC 8693: Zitadel, Keycloak) or `entraObo` (Entra On-Behalf-Of) |
+| Audience | `iFinder.tokenExchange.audience` | iFinder's client or project id at the provider (RFC 8693 only) |
+| Scope map | `iFinder.tokenExchange.scopeMap` | Maps the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `fi_smartcollections` for Smart Collections, `iFinder.defaultScope` otherwise) to provider scopes. An empty value sends the scope unchanged |
+| Additional scopes | `iFinder.tokenExchange.extraScopes` | Sent with every exchange |
+
+```json
+"iFinder": {
+  "enabled": true,
+  "baseUrl": "https://ifinder.example.com",
+  "defaultScope": "fa_index_read",
+  "authMode": "oidcTokenExchange",
+  "tokenExchange": {
+    "oidcProvider": "zitadel",
+    "grantType": "tokenExchange",
+    "audience": "312345678901234567",
+    "scopeMap": { "fa_index_read": "", "fa_iassistant": "", "fi_smartcollections": "" },
+    "extraScopes": []
+  }
+}
+```
+
+The key, issuer, algorithm, expiry and **JWT Subject Field** settings do not
+apply in this mode: the provider signs the token and sets its subject. No new
+credentials are needed: iHub refreshes and exchanges with the client ID and
+secret configured for the provider under Admin > Authentication, so that client
+must be allowed to exchange for the iFinder audience. iHub authenticates at the
+token endpoint with `client_secret_post` (client id and secret in the form
+body), the same way it signs users in; make sure the client allows that
+method. The token endpoint is called through the iHub proxy and SSL
+settings, so a provider with a private CA works once its host is in
+`ssl.domainWhitelist`.
+
+### Configure iFinder
+
+Point iFinder at the provider, the same issuer it already uses for its own
+logins:
+
+```yaml
+intrafind.security.auth.enable-oauth2-resource-server: true
+spring.security.oauth2.resourceserver.jwt.issuer-uri: https://<provider issuer>
+```
+
+| Provider | `issuer-uri` |
+|---|---|
+| Zitadel | `https://<instance>.zitadel.cloud` (or your custom domain) |
+| Keycloak | `https://<host>/realms/<realm>` |
+| Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
+
+Extra claims in the provider's token are harmless. The token must **also**
+carry the `fa_*` claims iFinder reads, in the form iFinder reads them today:
+either as scopes iHub requests (scope map) or added by a claim mapper on the
+provider for the iFinder audience.
+
+To switch an existing installation without downtime, let iFinder accept both
+issuers first (iHub and the provider), then switch iHub's mode.
+
+### Provider setup
+
+**Zitadel**
+
+1. Enable token exchange for the instance: it is a beta feature, switched on
+   through the feature API (`PUT /v2/features/instance` with
+   `"oidcTokenExchange": true`) or in the instance's feature settings in the
+   console.
+2. The iHub application must be a confidential web application (client secret).
+   Enable the *Token Exchange* grant on it, and the *Refresh Token* grant for
+   `offline_access`.
+3. Set the audience to iFinder's project id, and request project roles through
+   Zitadel's reserved scopes, for example in **Additional scopes**:
+   `urn:zitadel:iam:org:project:id:<ifinder-project-id>:aud` and
+   `urn:zitadel:iam:org:projects:roles`. Map the `fa_*` roles into the claim
+   iFinder reads with an Action if they are not already there.
+4. Add `offline_access` to the provider's sign-in scopes in iHub.
+
+**Keycloak 26.2 or later**
+
+1. On the iHub client (confidential, *Client authentication* on), enable
+   **Standard token exchange** under *Capability config*.
+2. Allow the iHub client to exchange for the iFinder client: add the iFinder
+   client as an audience (an *audience* mapper or a client scope), and set
+   **Audience** in iHub to the iFinder client id.
+3. Make the `fa_*` values available: as client scopes iHub requests through the
+   scope map, or as roles mapped into the token by a protocol mapper.
+4. Add `offline_access` to the provider's sign-in scopes in iHub. Keycloak
+   rotates refresh tokens when *Revoke refresh token* is on; iHub handles that.
+
+Only internal-to-internal exchange is supported by Keycloak's standard token
+exchange, and the subject token must be an access token, which is what iHub
+sends.
+
+**Microsoft Entra ID (On-Behalf-Of)**
+
+Entra does not support RFC 8693; choose the grant type **On-Behalf-Of**.
+
+1. Expose an API on the iHub app registration (*Expose an API*, for example
+   `api://<ihub-client-id>/access_as_user`). Add that scope to the provider's
+   sign-in scopes in iHub, together with `openid profile email offline_access`.
+   Without it the sign-in returns a Microsoft Graph token, which On-Behalf-Of
+   rejects.
+2. Expose an API on the iFinder app registration and give the iHub registration
+   an API permission for it, with admin consent.
+3. Map the iHub scope to iFinder's `.default` scope: in the scope map set
+   `fa_index_read` (and `fa_iassistant`) to `api://<ifinder-app-id>/.default`.
+   Audience is not used.
+4. Provide the `fa_*` claims as app roles of the iFinder app registration
+   assigned to the users or groups, or as optional claims.
+
+### Verify
+
+**Admin > Integrations > iFinder > Test connection** runs the exchange for your
+own account (you must have signed in through the selected provider), decodes
+the token without verifying it, and shows `iss`, `aud`, `sub`, the scope claim
+and which of the expected `fa_*` claims are present. It then calls the iFinder
+search API with that token.
+
+Users see the stored authorization under **Integrations** in their profile,
+with the date it was granted and a button to revoke it.
+
+### Troubleshooting
+
+| Message | Cause |
+|---|---|
+| *iFinder requires sign-in via &lt;provider&gt;* | The user signed in some other way. Sign in through the selected provider |
+| *Sign in again via &lt;provider&gt; to re-authorize iFinder access* | No stored token (signed in before the mode was switched on, revoked, deactivated) or the refresh token was rejected |
+| *&lt;provider&gt; refused the iFinder token exchange (HTTP 400): …* | The provider's exchange policy: token exchange not enabled, client not allowed for the audience, scope not granted, or (Entra) a Graph token as assertion |
+| *The sign-in provider &lt;provider&gt; is temporarily unavailable* | The refresh failed for a temporary reason (network, 5xx); the stored tokens are kept |
+| Diagnostics: *The token does not carry fa_…* | Request the claim through the scope map or add it with a claim mapper |
 
 ## Related Documentation
 

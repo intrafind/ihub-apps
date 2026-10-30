@@ -15,7 +15,7 @@
  * user when it creates a conversation.
  */
 import { throttledFetch } from '../../requestThrottler.js';
-import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import iFinderTokenProvider from './iFinderTokenProvider.js';
 import logger from '../../utils/logger.js';
 
 export const ASSISTANTS_PATH = '/public-api/v0/assistants';
@@ -147,11 +147,11 @@ class IFinderAssistants {
   }
 
   /** @private */
-  request({ url, user, language, signal }) {
+  async request({ url, user, language, signal }) {
     return this.fetch('iFinderAssistants', url, {
       method: 'GET',
       headers: {
-        Authorization: getIFinderAuthorizationHeader(user),
+        Authorization: await iFinderTokenProvider.getAuthorizationHeader(user),
         Accept: 'application/json',
         ...(language ? { 'Accept-Language': language } : {})
       },

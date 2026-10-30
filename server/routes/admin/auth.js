@@ -19,6 +19,7 @@ import {
 import { isLastAdmin } from '../../utils/adminRescue.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { startUserCleanup } from '../../services/userDeletion.js';
+import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvider.js';
 import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
 import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
 
@@ -585,6 +586,7 @@ export default function registerAdminAuthRoutes(app) {
       }
 
       const user = usersData.users[userId];
+      const deactivated = active === false && user.active !== false;
 
       // Update fields
       if (email !== undefined) user.email = email;
@@ -611,6 +613,20 @@ export default function registerAdminAuthRoutes(app) {
 
       // Refresh cache to ensure updated user data is available in cache
       await configCache.refreshCacheEntry('config/users.json');
+
+      // A deactivated user's stored sign-in must not keep iFinder background
+      // runs going (iFinder token exchange). Reactivating needs a new sign-in.
+      if (deactivated) {
+        try {
+          await deleteLoginTokens(userId);
+        } catch (error) {
+          logger.warn('Could not delete stored sign-in tokens of a deactivated user', {
+            component: 'AdminAuth',
+            userId,
+            error
+          });
+        }
+      }
 
       logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
 

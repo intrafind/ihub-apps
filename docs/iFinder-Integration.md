@@ -29,6 +29,12 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 
 ## Configuration
 
+> **Who issues the iFinder token.** By default iHub signs the token itself
+> (`iFinder.authMode: "ihubSigned"`, with a private key or the iHub OIDC key
+> pair). When iHub and iFinder share one OIDC provider, iHub can instead exchange
+> each user's sign-in token at that provider (`"oidcTokenExchange"`); no key is
+> needed then. See [Shared OIDC Provider (Token Exchange)](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange).
+
 ### 1. Environment Variables
 
 Set these environment variables for iFinder integration:

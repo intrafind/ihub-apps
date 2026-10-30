@@ -701,3 +701,34 @@ export function describeHttpFailure({
 
   return hints;
 }
+
+/** Every string a claim set carries: claim names, string values, array items and nested keys. */
+function collectClaimStrings(value, into, depth = 0) {
+  if (depth > 4 || value === null || value === undefined) return into;
+  if (typeof value === 'string') {
+    for (const part of value.split(/\s+/)) if (part) into.add(part);
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectClaimStrings(item, into, depth + 1);
+  } else if (typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value)) {
+      into.add(key);
+      collectClaimStrings(nested, into, depth + 1);
+    }
+  }
+  return into;
+}
+
+/**
+ * Which of the expected iFinder claims (`fa_index_read`, `fa_iassistant`, …) a
+ * provider-issued token carries anywhere: in the scope string, as a role, as a
+ * claim name or as a key of a role map (Zitadel's
+ * `urn:zitadel:iam:org:project:roles`). The token is decoded, not verified.
+ * @param {Object} payload - Decoded JWT payload
+ * @param {string[]} expected - Claim values iFinder reads
+ * @returns {{present: string[], missing: string[]}}
+ */
+export function findExpectedClaims(payload, expected) {
+  const strings = collectClaimStrings(payload || {}, new Set());
+  const present = expected.filter(claim => strings.has(claim));
+  return { present, missing: expected.filter(claim => !present.includes(claim)) };
+}

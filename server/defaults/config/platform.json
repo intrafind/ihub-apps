@@ -332,7 +332,19 @@
     "tokenExpirationSeconds": 3600,
     "defaultScope": "fa_index_read",
     "jwtSubjectField": "email",
-    "searchProfileApplication": "ifinder"
+    "searchProfileApplication": "ifinder",
+    "authMode": "ihubSigned",
+    "tokenExchange": {
+      "oidcProvider": "",
+      "grantType": "tokenExchange",
+      "audience": "",
+      "scopeMap": {
+        "fa_index_read": "",
+        "fa_iassistant": "",
+        "fi_smartcollections": ""
+      },
+      "extraScopes": []
+    }
   },
   "iAssistant": {
     "defaultProfileId": "",
