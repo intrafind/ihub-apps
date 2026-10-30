@@ -89,7 +89,9 @@ export function isToolSelected(tool, refs) {
   // old base id (`iFinder`), which group grants and apps may still use.
   if (tool._integration?.instanceId) {
     if (has(tool._integration.instanceId)) return true;
-    if (!tool._integration.fixedToolId) return false;
+    // A remote agent's skill (an A2A installation) also answers to the
+    // agent references below, which group grants may use.
+    if (!tool._integration.fixedToolId && !tool._a2a) return false;
   }
   if (tool._a2a?.agentId) {
     if (has(a2aAgentReference(tool._a2a.agentId))) return true;

@@ -2378,7 +2378,6 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "installedIntegrations": "Installed integrations",
-      "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
       "systemResources": "System Resources",
       "voiceInput": "Voice Input",
@@ -2453,90 +2452,6 @@
         "cimdApprovalAuto": "Connect automatically",
         "a2aDefaultSkill": "A2A default skill",
         "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none)."
-      }
-    },
-    "a2a": {
-      "agents": {
-        "form": {
-          "authType": "Authentication type",
-          "authNone": "None",
-          "authApiKey": "API key in a header",
-          "authBearer": "Bearer token",
-          "authOauth": "OAuth (client credentials)",
-          "headerName": "Header name (optional)",
-          "headerNameHint": "Leave empty to use the header the agent's card names for its API key, or X-API-Key.",
-          "apiKey": "API key",
-          "apiKeyHint": "Select a stored credential profile holding the API key.",
-          "token": "Token",
-          "tokenHint": "Select a stored credential profile holding the bearer token.",
-          "tokenUrl": "Token URL",
-          "clientId": "Client ID",
-          "scope": "Scope (optional)",
-          "clientSecret": "Client secret",
-          "clientSecretHint": "Select a stored credential profile holding the OAuth client secret.",
-          "id": "ID",
-          "idHint": "Letters, digits, _ and - only (no __). Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id, so it must differ from every tool and MCP server id.",
-          "name": "Name",
-          "description": "Description",
-          "enabled": "Enabled",
-          "cardUrl": "Agent Card URL",
-          "cardUrlHint": "HTTPS is required; plain HTTP works for localhost only. Private addresses need an entry in allowedHosts of a2aAgents.json.",
-          "authentication": "Authentication",
-          "timeout": "Timeout (ms)",
-          "streaming": "Streaming",
-          "streamingAuto": "When the agent supports it",
-          "streamingNever": "Never (poll instead)",
-          "pollInterval": "Poll interval (ms)",
-          "timingHint": "The timeout covers the whole call; a task still running then is cancelled. Long-running tasks are polled with tasks/get.",
-          "allowedSkills": "Skills offered to apps",
-          "allowedSkillsAll": "All skills on the card",
-          "allowedSkillsSelected": "Only the skills I select",
-          "allowedSkillsManual": "Skill ids as the card names them, comma-separated. Test the connection to pick them from a list instead."
-        },
-        "status": {
-          "disabled": "disabled",
-          "unknown": "unknown",
-          "unhealthy": "unreachable",
-          "connected": "card loaded ({{count}} skills)",
-          "idle": "not contacted yet"
-        },
-        "test": {
-          "failed": "Connection failed: {{error}}",
-          "success": "Agent Card loaded — {{count}} skills",
-          "cardName": "Agent",
-          "cardDescription": "Description",
-          "cardVersion": "Version",
-          "cardEndpoint": "Endpoint",
-          "cardStreaming": "Streaming",
-          "yes": "yes",
-          "no": "no",
-          "noSkills": "The agent lists no skills on its card.",
-          "running": "Fetching the Agent Card…",
-          "button": "Test connection"
-        },
-        "loadError": "Failed to load A2A agents: {{error}}",
-        "saveError": "Save failed: {{error}}",
-        "deleteConfirm": "Delete A2A agent \"{{id}}\"?",
-        "deleteError": "Delete failed: {{error}}",
-        "testError": "Test failed: {{error}}",
-        "title": "A2A agents (remote)",
-        "subtitle": "Remote agents iHub calls over the Agent-to-Agent (A2A) protocol. Each skill on an agent's card becomes a tool that apps can use.",
-        "create": "Add A2A agent",
-        "empty": "No A2A agents configured",
-        "emptyHint": "Add an agent by the URL of its Agent Card, usually <agent>/.well-known/agent-card.json.",
-        "actions": {
-          "test": "Test connection",
-          "edit": "Edit",
-          "delete": "Delete"
-        },
-        "createTitle": "Add A2A agent",
-        "editTitle": "Edit {{id}}"
-      },
-      "common": {
-        "saved": "Saved",
-        "deleted": "Deleted",
-        "testing": "Testing {{id}}...",
-        "testOk": "OK — {{name}} offers {{count}} skills"
       }
     },
     "telemetry": {
@@ -2813,19 +2728,6 @@
             "menu": "In the menu",
             "hidden": "Hidden"
           }
-        },
-        "a2aAgents": {
-          "loading": "Loading A2A agents…",
-          "error": "Failed to load A2A agents: {{error}}",
-          "empty": "No remote A2A agents are configured. Add one under Integrations → A2A agents to use it here.",
-          "remoteBadge": "remote agent",
-          "disabled": "disabled",
-          "skills": "Skills: {{skills}}",
-          "agentError": "Could not read the Agent Card: {{error}}",
-          "idConflict": "A tool or MCP server uses the id \"{{id}}\" too, so this app refers to the agent as \"{{reference}}\".",
-          "helper": "Each skill of an agent becomes a tool the model can call; the agent runs on its own servers. Which skills are offered is set under Integrations → A2A agents.",
-          "title": "Remote A2A agents",
-          "desc": "Choose the remote agents (Agent-to-Agent protocol) this app can delegate to. Users see each agent as a single entry in the chat."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",

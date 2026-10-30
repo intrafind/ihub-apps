@@ -339,7 +339,21 @@ const nativeProtocolSchema = z.object({
   module: identifierSchema
 });
 
-const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp']);
+/**
+ * A remote A2A agent. The card URL may be fixed here or left to the install
+ * field `cardUrl`; the skills of the card are the actions (`actions` stays
+ * empty).
+ */
+const a2aProtocolSchema = z.object({
+  type: z.literal('a2a'),
+  /** Agent Card URL template; `{key}` placeholders are install fields. */
+  cardUrl: z.string().min(1).max(2048).optional(),
+  timeoutMs: z.number().int().min(1000).max(600000).optional(),
+  streaming: z.enum(['auto', 'never']).optional(),
+  pollIntervalMs: z.number().int().min(250).max(60000).optional()
+});
+
+const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp', 'a2a']);
 
 const reservedProtocolSchema = z
   .object({
@@ -351,6 +365,7 @@ export const integrationProtocolSchema = z.union([
   openapiProtocolSchema,
   nativeProtocolSchema,
   mcpProtocolSchema,
+  a2aProtocolSchema,
   reservedProtocolSchema
 ]);
 
