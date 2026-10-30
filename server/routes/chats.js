@@ -180,6 +180,30 @@ async function resolveOwnerId(user) {
 }
 
 /**
+ * Download name of a chat's artifact archive: its title, made file-safe.
+ *
+ * Cut by code point and with lone surrogates replaced: a title cut in the
+ * middle of an emoji is not encodable, and `buildContentDisposition` would
+ * throw on it.
+ *
+ * @param {Object|null} chat
+ * @returns {string}
+ */
+function zipNameFor(chat) {
+  const title = typeof chat?.title === 'string' ? chat.title : '';
+  const cleaned = title
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '_')
+    .replaceAll(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  const base = Array.from(cleaned)
+    .slice(0, 80)
+    .join('')
+    .replaceAll(/^[.\s]+|[.\s]+$/g, '');
+  return `${base || 'chat'} - artifacts.zip`;
+}
+
+/**
  * Authorize a chat for this caller and require that it exists.
  *
  * `authorizeChat` deliberately reports an absent chat as authorized — the
@@ -197,23 +221,6 @@ async function resolveOwnerId(user) {
  *   is set for every read that does not rest on ownership (an admin's or a
  *   project member's), so the owner's side effects can be skipped.
  */
-/**
- * Download name of a chat's artifact archive: its title, made file-safe.
- *
- * @param {Object|null} chat
- * @returns {string}
- */
-function zipNameFor(chat) {
-  const title = typeof chat?.title === 'string' ? chat.title : '';
-  const base = title
-    .replaceAll(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
-    .replaceAll(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80)
-    .replaceAll(/^[.\s]+|[.\s]+$/g, '');
-  return `${base || 'chat'} - artifacts.zip`;
-}
-
 async function loadOwnedChat(chatId, user, repository, intent = 'read') {
   const auth = await authorizeChat(chatId, user, { repository, intent });
   if (!auth.ok || !auth.chat) return null;

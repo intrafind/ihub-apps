@@ -23,7 +23,7 @@ import logger from '../../utils/logger.js';
 export class ZipLimitError extends Error {
   /**
    * @param {string} message
-   * @param {'too-many-files'|'too-large'|'empty'} code
+   * @param {'too-many-files'|'too-large'|'empty'|'closed'} code
    */
   constructor(message, code) {
     super(message);
@@ -130,6 +130,16 @@ export async function writeZip(entries, output) {
     archive.on('error', reject);
     archive.on('warning', reject);
   });
+  // A client that goes away mid-download closes the response; nothing reads
+  // the archive any more, so it would wait on backpressure for ever and hold
+  // every payload. Abort it and settle instead.
+  const closed = new Promise((_, reject) => {
+    output.once('close', () => {
+      if (output.writableFinished) return;
+      archive.abort();
+      reject(new ZipLimitError('The download was closed before it finished.', 'closed'));
+    });
+  });
   archive.pipe(output);
   for (const entry of entries) {
     const date = entry.date ? new Date(entry.date) : new Date();
@@ -138,7 +148,11 @@ export async function writeZip(entries, output) {
       date: Number.isNaN(date.getTime()) ? new Date() : date
     });
   }
-  await Promise.race([archive.finalize(), failed]);
+  // Settled once the race is decided; a late event must not surface as an
+  // unhandled rejection.
+  failed.catch(() => {});
+  closed.catch(() => {});
+  await Promise.race([archive.finalize(), failed, closed]);
 }
 
 /**
@@ -283,6 +297,7 @@ export async function sendArtifactsZip(
   try {
     await writeZip(entries, res);
   } catch (error) {
+    if (error instanceof ZipLimitError && error.code === 'closed') return;
     logger.error('Artifact ZIP failed while streaming', {
       component: 'ArtifactZip',
       scopeType: scope?.type,

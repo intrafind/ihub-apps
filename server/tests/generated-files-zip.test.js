@@ -12,6 +12,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
+import { randomBytes } from 'node:crypto';
+import { PassThrough } from 'node:stream';
 
 import configCache from '../configCache.js';
 import {
@@ -30,6 +32,7 @@ import {
   ZipLimitError,
   planZipEntries,
   uniqueArchivePath,
+  writeZip,
   zipToBuffer
 } from '../services/artifacts/artifactZip.js';
 import {
@@ -184,6 +187,20 @@ describe('paths inside an archive', () => {
       'src/index.js': 'console.log(1);\n',
       'README.md': '# Hi\n'
     });
+  });
+});
+
+describe('a download closed midway', () => {
+  it('aborts the archive instead of waiting for a reader that is gone', async () => {
+    // Incompressible and larger than the stream buffers, so the archive
+    // blocks on backpressure once nobody reads.
+    const output = new PassThrough({ highWaterMark: 1024 });
+    const writing = writeZip([{ path: 'big.bin', data: randomBytes(4 * 1024 * 1024) }], output);
+    setImmediate(() => output.destroy());
+    await assert.rejects(
+      writing,
+      error => error instanceof ZipLimitError && error.code === 'closed'
+    );
   });
 });
 
@@ -343,6 +360,22 @@ describe('create_zip', () => {
     });
     assert.equal(result.success, false);
     assert.equal(result.code, 'too-many-files');
+  });
+
+  it('refuses an archive the chat could not keep', async () => {
+    configCache.setCacheEntry('config/platform.json', {
+      ...(platform || {}),
+      artifacts: { maxBytes: 1024 }
+    });
+    const result = await runCreateZip({
+      user: USER,
+      chatId: CHAT,
+      filename: 'big',
+      files: [{ name: 'noise.txt', content: randomBytes(4096).toString('base64') }]
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, 'too-large');
+    assert.match(result.error, /split them/);
   });
 
   it('refuses an empty archive and a malformed file', async () => {

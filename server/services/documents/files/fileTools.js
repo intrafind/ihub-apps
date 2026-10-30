@@ -238,7 +238,7 @@ export async function runCreateZip(params) {
     const freshPaths = new Set(fresh.map(file => keyOf(file.name)));
     const items = [...existing.filter(file => !freshPaths.has(keyOf(file.name))), ...fresh];
 
-    const { maxZipFiles, maxZipBytes } = artifactPolicy();
+    const { enabled, maxBytes: maxStoredBytes, maxZipFiles, maxZipBytes } = artifactPolicy();
     // The archive becomes a generated file, so it may not outgrow one either.
     const maxBytes =
       maxZipBytes > 0 ? Math.min(maxZipBytes, MAX_GENERATED_FILE_BYTES) : MAX_GENERATED_FILE_BYTES;
@@ -251,6 +251,15 @@ export async function runCreateZip(params) {
       entries.push({ path: item.path, data, date: item.createdAt });
     }
     const archive = await zipToBuffer(entries);
+    // The answer stores the archive as an artifact, and the store refuses one
+    // over `artifacts.maxBytes` (decoded bytes). Refused there, the card works
+    // only until the page reloads; refused here, the model can split it.
+    if (enabled && maxStoredBytes > 0 && archive.length > maxStoredBytes) {
+      throw new GeneratedFileError(
+        `The archive is ${(archive.length / 1024 / 1024).toFixed(1)} MB, over the ${(maxStoredBytes / 1024 / 1024).toFixed(1)} MB a chat keeps per file. Pack fewer files, or split them into several archives.`,
+        'too-large'
+      );
+    }
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,

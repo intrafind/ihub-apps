@@ -889,6 +889,24 @@ describe('artifacts as one ZIP', () => {
     });
   });
 
+  it('names the archive after a title cut inside an emoji without failing', async () => {
+    chatCounter += 1;
+    const chatId = `chat-${chatCounter}`;
+    await getChatRepository().ensureChat({
+      chatId,
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: `${'x'.repeat(79)}😀 and more`
+    });
+    await seedFile(chatId, 'a.js', 'x');
+    const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
+    assert.equal(res.statusCode, 200);
+    assert.match(
+      res.headers['content-disposition'],
+      /filename\*=UTF-8''x{79}%F0%9F%98%80 - |filename\*=UTF-8''x{79}%F0%9F%98%80%20-%20/
+    );
+  });
+
   it('packs a selection, and answers 404 for an id outside the chat', async () => {
     const chatId = await seedChat(ADA, { turns: 0 });
     const a = await seedFile(chatId, 'a.py', 'print(1)', 'text/x-python');
