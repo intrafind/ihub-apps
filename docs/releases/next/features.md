@@ -17,3 +17,9 @@ user and says why the tier would stay hidden:
   policy hides the tier, so they do not turn an otherwise working test red.
 - **Owner:** an empty list and a login with capital letters get a hint, because iFinder lists
   collections by exact owner name.
+  
+## Chat: Click a Cited Source Row to Open It in the Sources Panel
+
+In the "Cited in this answer" list under an answer, only the number opened the sources panel. Now a
+click anywhere on a row opens the panel on that source. The title link still opens the document,
+and the row is still highlighted on hover.
