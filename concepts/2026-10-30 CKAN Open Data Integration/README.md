@@ -111,7 +111,7 @@ The full draft is [`integration.json`](integration.json). The parts that matter 
 
 **Scopes (#3050).** Publishers (organizations) are the natural "where to search" for a portal. The definition points `scopes` at `list_organizations` and applies the pick as `fq=organization:<name>` on `search_datasets` in `append` mode, after the model's arguments. A city administration can thus ship one app per department without one integration per department.
 
-A scope is a search focus, not an access boundary. Access to data is CKAN's job and follows the token (or the absence of one on a public portal); a user who knows a dataset id can call `get_dataset` on it whatever the scope says, exactly as on the portal's website. Where an installation wants hard isolation between publishers, the admin sets `defaultFilter` on the instance and binds the app with `userMayChange: false`; iteration 2 adds `scopes.strict`, which makes the adapter check `organization.name` of every `get_dataset` result and resolve the owning dataset of `get_resource`, `describe_datastore` and `query_datastore` before answering.
+A scope is a search focus, not an access boundary. Access to data is CKAN's job and follows the token (or the absence of one on a public portal); a user who knows a dataset id can call `get_dataset` on it whatever the scope says, exactly as on the portal's website. An admin who wants the focus pinned sets `defaultFilter` on the instance and binds the app with `userMayChange: false`; that fixes what search returns, but direct-id actions can still answer about datasets of other publishers. Hard isolation between publishers inside one app needs ownership checks on every dataset and resource action: `scopes.strict` in iteration 2 makes the adapter check `organization.name` of every `get_dataset` result and resolve the owning dataset of `get_resource`, `describe_datastore` and `query_datastore` before answering. Whether a customer needs that in iteration 1 is open question 5.
 
 **Answer Sources.** Every dataset in a result becomes a source: title, `{baseUrl}/dataset/{name}`, `notes` as snippet; resources become file sources with their `url` for preview and download. Declared in the definition, not coded.
 
@@ -182,6 +182,7 @@ Decisions requested:
 2. Should the `dcat-ap-de` metadata profile normalize `format` and `license` URIs in the adapter (so every portal looks the same to the model) or stay model guidance only? Recommendation: guidance in iteration 1, normalization in iteration 2 after seeing real questions.
 3. Does the customer need file content (CSV preview, PDF summary) in iteration 1? If yes, decision 1 above moves forward.
 4. Icon: CKAN's logo is trademarked by the Open Knowledge Foundation; use a neutral "open data" icon in the marketplace entry.
+5. Does any customer need hard isolation between publishers inside one app (`scopes.strict`, ownership checks on direct-id actions) in iteration 1? The public-portal use case does not; an internal catalog with department-level separation might, although CKAN's own organization permissions and a token per department are the simpler answer.
 
 ## Sources
 
