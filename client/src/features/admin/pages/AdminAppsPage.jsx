@@ -51,14 +51,19 @@ function AppNameCell({ app, currentLanguage }) {
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
   ifinder: 'iFinder integration',
+  iassistant: 'iFinder integration',
   peopleDirectories: 'People directories'
 };
 
+/** `app.integrations` keys that are the built-in iFinder connection, not installations. */
+const BUILT_IN_BINDINGS = { ifinder: 'ifinder', iassistant: 'ifinder' };
+
 /**
- * The features (`requiredFeatures`) and integrations (`requiredIntegrations`)
- * an app requires that are off, by name. While one is off, users do not get
- * the app, even though it is enabled. An id nothing defines (a typo) counts as
- * off and is shown as it is.
+ * The features (`requiredFeatures`) and integrations (`requiredIntegrations`,
+ * and every installation bound under `app.integrations`) an app requires that
+ * are off, by name. While one is off, users do not get the app, even though it
+ * is enabled. An id nothing defines (a typo, an uninstalled integration)
+ * counts as off and is shown as it is.
  *
  * @param {Object} app - App config.
  * @param {Object} [platformConfig] - Platform config with its resolved `features`.
@@ -78,12 +83,17 @@ function missingRequirements(app, platformConfig, integrationStatus, language) {
           return [getLocalizedContent(feature.name, language) || feature.id];
         })
       : [];
-  const missingIntegrations =
-    Array.isArray(app.requiredIntegrations) && integrationStatus
-      ? app.requiredIntegrations.flatMap(id =>
-          integrationStatus[id] === true ? [] : [INTEGRATION_NAMES[id] || id]
-        )
-      : [];
+  if (!integrationStatus) return missingFeatures;
+  const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : [];
+  const bound =
+    app.integrations && typeof app.integrations === 'object' ? Object.keys(app.integrations) : [];
+  const missingIntegrations = [];
+  for (const id of [...required, ...bound]) {
+    const statusId = BUILT_IN_BINDINGS[id] || id;
+    if (integrationStatus[statusId] === true) continue;
+    const name = INTEGRATION_NAMES[id] || `Installed integration "${id}"`;
+    if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
+  }
   return [...missingFeatures, ...missingIntegrations];
 }
 

@@ -39,6 +39,8 @@ Installed instances can be tested, edited, disabled and removed from the **Insta
 
 The same object carries the scope settings of the built-in `ifinder` and `iassistant` integrations (`scopePicker`, `defaultScope`, `pinnedScope`).
 
+An app is offered to users only while every installation it binds exists and is enabled (and, for `ifinder`/`iassistant`, while the iFinder integration is on). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools.
+
 In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action*. The tools menu shows one switch per installation (the instance id is the tool reference, like an MCP server's id), on by default. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs

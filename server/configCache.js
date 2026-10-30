@@ -1030,10 +1030,12 @@ class ConfigCache {
       return apps;
     }
 
-    // Only enabled apps whose required features and integrations are all on.
-    // The ETag changes with the apps they hide: features.json and platform.json
-    // have their own ETags, and a client holding the old list must not get a
-    // 304 once a feature or an integration flips.
+    // Only enabled apps whose required features and integrations are all on
+    // (`requiredIntegrations`, and every installation bound under
+    // `app.integrations`). The ETag changes with the apps they hide:
+    // features.json, platform.json and integrations.json have their own ETags,
+    // and a client holding the old list must not get a 304 once a feature or
+    // an integration flips.
     const features = this.getFeatures();
     const integrationContext = this.getIntegrationContext();
     const isAvailable = app =>
@@ -1231,12 +1233,13 @@ class ConfigCache {
    * The config an integration check (integrationRegistry) reads: the platform
    * config and the people directories. Tolerates a cache that is not loaded yet.
    *
-   * @returns {{platform: Object, peopleDirectories: Object}}
+   * @returns {{platform: Object, peopleDirectories: Object, installedIntegrations: Array}}
    */
   getIntegrationContext() {
     return {
       platform: this.get('config/platform.json')?.data || {},
-      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {}
+      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {},
+      installedIntegrations: this.get('config/integrations.json')?.data?.installed || []
     };
   }
 

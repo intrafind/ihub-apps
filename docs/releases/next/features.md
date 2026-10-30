@@ -20,7 +20,8 @@ actions as tools.
 - **Cited answers:** a definition declares how results become sources, so every dataset or record
   an answer mentions is linked.
 - **In apps:** **Admin → Apps → Edit → Installed integrations** binds an installation, narrows it
-  to some actions and sets the default or pinned scope.
+  to some actions and sets the default or pinned scope. An app is offered only while every
+  installation it binds exists and is enabled; **Admin → Apps** names a missing one.
 - **Marketplace:** the new item type **Integrations** installs definitions from a registry. The
   official marketplace publishes the first one with an example app.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
