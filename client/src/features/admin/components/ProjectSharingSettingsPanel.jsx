@@ -4,15 +4,44 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  fetchProjectSharingSettings,
+  fetchProjectSettings,
   getAdminApiErrorMessage,
-  saveProjectSharingSettings
+  saveProjectSettings
 } from '../../../api/adminApi';
 
+const TIER_POLICIES = [
+  {
+    value: 'ihub',
+    label: ['admin.projects.tierPolicy.ihub', 'iHub projects only'],
+    help: [
+      'admin.projects.tierPolicy.ihubHelp',
+      'iFinder smart collections are not listed. This is the default.'
+    ]
+  },
+  {
+    value: 'both',
+    label: ['admin.projects.tierPolicy.both', 'iHub projects and iFinder smart collections'],
+    help: [
+      'admin.projects.tierPolicy.bothHelp',
+      "Each user's iFinder smart collections are listed as projects, and users choose the tier when they create a project."
+    ]
+  },
+  {
+    value: 'ifinder',
+    label: ['admin.projects.tierPolicy.ifinder', 'iFinder smart collections preferred'],
+    help: [
+      'admin.projects.tierPolicy.ifinderHelp',
+      'Smart collections are listed like under "both". Local projects stay usable and can still be created.'
+    ]
+  }
+];
+
 /**
- * Who users may share their projects with (`platform.projects.sharing`):
- * specific users, groups, everyone signed in, and the catalog of published
- * projects. Full admins only: for anyone else the panel is not shown.
+ * Platform settings of user projects: who users may share their projects with
+ * (`platform.projects.sharing`: specific users, groups, everyone signed in and
+ * the catalog of published projects) and the tier policy
+ * (`platform.projects.tierPolicy`: whether iFinder smart collections are
+ * listed). Full admins only: for anyone else the panel is not shown.
  *
  * @returns {JSX.Element|null}
  */
@@ -27,11 +56,11 @@ function ProjectSharingSettingsPanel() {
 
   useEffect(() => {
     let active = true;
-    fetchProjectSharingSettings()
-      .then(sharing => {
+    fetchProjectSettings()
+      .then(settings => {
         if (!active) return;
-        setStored(sharing);
-        setDraft(sharing);
+        setStored(settings);
+        setDraft(settings);
       })
       .catch(err => {
         if (!active) return;
@@ -54,7 +83,11 @@ function ProjectSharingSettingsPanel() {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(stored);
   const update = patch => {
-    setDraft(previous => ({ ...previous, ...patch }));
+    setDraft(previous => ({ ...previous, sharing: { ...previous.sharing, ...patch } }));
+    setSaved(false);
+  };
+  const updateTierPolicy = tierPolicy => {
+    setDraft(previous => ({ ...previous, tierPolicy }));
     setSaved(false);
   };
 
@@ -62,9 +95,9 @@ function ProjectSharingSettingsPanel() {
     setSaving(true);
     setError(null);
     try {
-      const sharing = await saveProjectSharingSettings(draft);
-      setStored(sharing);
-      setDraft(sharing);
+      const settings = await saveProjectSettings(draft);
+      setStored(settings);
+      setDraft(settings);
       setSaved(true);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -78,7 +111,7 @@ function ProjectSharingSettingsPanel() {
       <input
         type="checkbox"
         className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
-        checked={draft[key] === true}
+        checked={draft.sharing[key] === true}
         onChange={e => update({ [key]: e.target.checked })}
       />
       <span>
@@ -91,9 +124,40 @@ function ProjectSharingSettingsPanel() {
   return (
     <details className="mb-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
       <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-        {t('admin.projects.sharing.title', 'Sharing of user projects')}
+        {t('admin.projects.settings.title', 'Project settings')}
       </summary>
       <div className="px-4 pb-4 space-y-4">
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('admin.projects.tierPolicy.legend', 'Where users find their projects')}
+          </legend>
+          {TIER_POLICIES.map(({ value, label, help }) => (
+            <label
+              key={value}
+              className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"
+            >
+              <input
+                type="radio"
+                name="project-tier-policy"
+                className="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600"
+                checked={draft.tierPolicy === value}
+                onChange={() => updateTierPolicy(value)}
+              />
+              <span>
+                {t(label[0], label[1])}
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  {t(help[0], help[1])}
+                </span>
+              </span>
+            </label>
+          ))}
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.projects.tierPolicy.requirements',
+              'Smart collections also need iFinder configured (Integrations → iFinder), a user with the fi_smartcollections role and iFinder 6.8 or later. Use the iFinder integration test to check them.'
+            )}
+          </p>
+        </fieldset>
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.projects.sharing.legend', 'Users may share their projects with')}

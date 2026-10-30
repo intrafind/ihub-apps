@@ -127,8 +127,9 @@ every 15 minutes.
 its category and tags and when it was last updated, with counts of all, enabled and disabled
 projects and of the user projects on the installation; filter by item kind and status. The page
 needs the `projects` feature flag and the admin page switch `admin.pages.projects`; content admins
-and full admins may use it. Full administrators also find **Sharing of user projects** there (see
-[Roles and sharing](#roles-and-sharing)).
+and full admins may use it. Full administrators also find **Project settings** there: the sharing
+audiences (see [Roles and sharing](#roles-and-sharing)) and the tier policy (see
+[The iFinder tier](#the-ifinder-tier-smart-collections)).
 
 1. **New project** opens one form: the name (the **Project ID** is filled in from it until you
    type one; it cannot be changed later), an optional description, **Who can use this project?**,
@@ -556,8 +557,8 @@ A member is a user, a group (inherited groups count) or everyone signed in; the 
 that reaches you wins. The `anonymous` group cannot be a member. A project holds at most 100
 members. Who you may add depends on the `projectSharing` permission and on
 `platform.projects.sharing`: users and groups by default, everyone signed in only when an admin
-allows it. Full administrators change these audiences under **Admin → Projects → Sharing of user
-projects** (`GET`/`PUT /api/admin/projects/_settings`); a change there applies at once, without a
+allows it. Full administrators change these audiences under **Admin → Projects → Project
+settings** (`GET`/`PUT /api/admin/projects/_settings`, which also carry `tierPolicy`); a change there applies at once, without a
 restart.
 
 A project shared with everyone signed in shows **Global**; one in the catalog shows **Published**.
@@ -643,7 +644,8 @@ drawn from an attached private project.
 
 ### The iFinder tier: smart collections
 
-With `platform.projects.tierPolicy` set to `both` or `ifinder`, **iFinder** configured
+With `platform.projects.tierPolicy` set to `both` or `ifinder` (**Admin → Projects → Project
+settings**, a change applies at once), **iFinder** configured
 (**Admin → Integrations → iFinder**) and **User Projects** switched on, the user's iFinder
 smart collections are listed under **Projects** as projects marked **iFinder**. Their owner can
 **create** a collection from iHub, **rename** it, **add** iFinder documents to it and **remove**
@@ -693,6 +695,12 @@ iFinder UI only if both sides produce the same string.
   list, but still opens by its id**. iHub does not work around this. Set the **JWT Subject Field** so it yields the iFinder login exactly, and
   test with a user whose login has capitals.
 - Caches use the name exactly as signed, so `Ada@…` and `ada@…` never share an entry.
+
+**Checking the setup.** **Admin → Integrations → iFinder → Test** has an **iFinder smart
+collections** step. It asks the Smart Collections API for the collections of the test user (with
+the `fi_smartcollections` scope) and reports the tier policy, an iFinder without the API, a user
+without the role, and a subject whose case may not match the owner. A failure is a warning while
+the policy hides the tier.
 
 **The list.** `GET /api/projects` (scope `all` or `mine`) merges the user's collections with the
 local list. Each shows its document count only; the documents are fetched when the project is

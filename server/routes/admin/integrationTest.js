@@ -12,6 +12,12 @@ import iFinderTokenProvider, {
   IFINDER_AUTH_MODES,
   getAuthMode
 } from '../../services/integrations/iFinderTokenProvider.js';
+import smartCollections, {
+  SMART_COLLECTIONS_ERRORS,
+  SMART_COLLECTIONS_SCOPE,
+  SmartCollectionsError
+} from '../../services/integrations/SmartCollectionsService.js';
+import { policyOffersIFinder, projectSettings } from '../../services/projects/projectSettings.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
@@ -584,6 +590,112 @@ async function runExchangeSteps(report, { user, userOverride, includeToken }) {
     token: exchanged.token,
     info: exchanged.info
   };
+}
+
+/** What an admin can do about each way the Smart Collections call can fail. */
+function smartCollectionsFailureHints(code, { exchange }) {
+  const scopeHint = exchange
+    ? `Make sure the OIDC provider issues "${SMART_COLLECTIONS_SCOPE}": check the scope map under Admin > Integrations > iFinder (token exchange) and the roles the provider grants the user.`
+    : `The token asks for the scope "${SMART_COLLECTIONS_SCOPE}" and iFinder grants it from the user's roles.`;
+  switch (code) {
+    case SMART_COLLECTIONS_ERRORS.UNSUPPORTED:
+      return [
+        'iFinder answered, but has no Smart Collections v1 API (public-api/smart-collections/api/v1). The tier needs iFinder 6.8 or later.',
+        'If iFinder is 6.8 or later, check that the reverse proxy in front of it forwards /public-api/smart-collections.'
+      ];
+    case SMART_COLLECTIONS_ERRORS.FORBIDDEN:
+      return [
+        `iFinder refused the token: the user lacks the "${SMART_COLLECTIONS_SCOPE}" role. Give it to this user in iFinder.`,
+        scopeHint
+      ];
+    case SMART_COLLECTIONS_ERRORS.UNAUTHORIZED:
+      return [
+        'iFinder does not accept the token (signature, issuer or audience), or no token could be created for this user. The search step above shows the same cause when it fails too.',
+        scopeHint
+      ];
+    case SMART_COLLECTIONS_ERRORS.INVALID_RESPONSE:
+      return ['iFinder answered with something that is not a list of smart collections.'];
+    default:
+      return [
+        'iFinder could not be reached or answered with an error. Check the transport steps above and the iFinder log.'
+      ];
+  }
+}
+
+/**
+ * Ask the Smart Collections API for the test user's collections, the call the
+ * iFinder tier of the projects makes, and say why the tier would stay hidden.
+ *
+ * The step reports four independent causes: the tier policy, the Smart
+ * Collections API of this iFinder, the `fi_smartcollections` role of the
+ * user, and a subject that differs from the iFinder login only in case (the
+ * list matches the owner case-sensitively, so such a collection is missing
+ * from it). Nothing is written to iFinder.
+ *
+ * @param {DiagnosticsReport} report
+ * @param {Object} params
+ * @param {Object} params.user - The user the token is minted for. In token
+ *   exchange mode the calling admin, never an overridden test user.
+ * @param {boolean} params.exchange - Token exchange mode.
+ * @param {string|undefined} params.subject - The `sub` of the test token.
+ * @param {Object} params.platformConfig
+ */
+export async function runSmartCollectionsStep(report, { user, exchange, subject, platformConfig }) {
+  const settings = projectSettings(platformConfig);
+  const policyOffers = policyOffersIFinder(settings);
+  await report.run('smartCollections', 'iFinder smart collections', async () => {
+    const hints = [];
+    const details = {
+      tierPolicy: settings.tierPolicy,
+      scope: SMART_COLLECTIONS_SCOPE,
+      subject
+    };
+    if (!policyOffers) {
+      hints.push(
+        `The tier policy is "${settings.tierPolicy}", so users see no iFinder smart collections. Set it to "both" or "ifinder" under Admin > Projects > Project settings.`
+      );
+    }
+    let collections;
+    try {
+      ({ collections } = await smartCollections.list({
+        user,
+        timeoutMs: iFinderService.getConfig().timeout || 30000
+      }));
+    } catch (error) {
+      const code =
+        error instanceof SmartCollectionsError ? error.code : SMART_COLLECTIONS_ERRORS.UNAVAILABLE;
+      return {
+        // A warning while no user is meant to see the tier: an older iFinder
+        // must not turn the whole iFinder test red.
+        status: policyOffers ? STATUS.FAIL : STATUS.WARN,
+        message: `The Smart Collections API is not usable: ${code}${error?.status ? ` (HTTP ${error.status})` : ''}`,
+        details: { ...details, error: code, httpStatus: error?.status ?? undefined },
+        hints: [...smartCollectionsFailureHints(code, { exchange }), ...hints]
+      };
+    }
+    details.collectionCount = collections.length;
+    details.collections = collections.slice(0, 10).map(({ id, name, documentCount }) => ({
+      id,
+      name,
+      documentCount
+    }));
+    if (subject && subject !== subject.toLowerCase()) {
+      hints.push(
+        `The subject "${subject}" has capital letters. iFinder's list matches the collection owner case-sensitively: a collection created in iFinder under a differently cased login is missing from the list, but still opens by its id. Set the JWT Subject Field so it yields the iFinder login exactly.`
+      );
+    }
+    if (collections.length === 0) {
+      hints.push(
+        `The API works, but "${subject || 'this user'}" owns no smart collection. Collections are listed by owner; ones shared with the user are not. Check the owner of the collection in iFinder against this subject.`
+      );
+    }
+    return {
+      status: !policyOffers || collections.length === 0 ? STATUS.WARN : STATUS.OK,
+      message: `The Smart Collections API answered: ${collections.length} collection(s) owned by "${subject || 'the test user'}"`,
+      details,
+      hints
+    };
+  });
 }
 
 /**
@@ -1234,6 +1346,23 @@ export default function registerIntegrationTestRoutes(app) {
                   : []
             });
           }
+        }
+
+        const exchange = getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE;
+        if (!urlInfo.valid || !jwtResult) {
+          report.skip(
+            'smartCollections',
+            'iFinder smart collections',
+            'Skipped because the base URL or the JWT could not be prepared.'
+          );
+        } else {
+          await runSmartCollectionsStep(report, {
+            // The exchange never runs for an overridden test user (see runJwtSteps).
+            user: exchange ? req.user : testUser,
+            exchange,
+            subject: jwtResult.info?.subject,
+            platformConfig
+          });
         }
 
         return respond(res, report, {
