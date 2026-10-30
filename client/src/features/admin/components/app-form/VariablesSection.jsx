@@ -9,8 +9,9 @@ import Icon from '../../../../shared/components/Icon';
  * VariablesSection - Input variable list editor for the App form.
  * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
  * owns its own immutable-update handlers since they only ever touch
- * `app.variables` and `app.startForm`, the form those variables can be
- * asked in when a chat starts (issue #2581).
+ * `app.variables`, `app.startForm`, the form those variables can be
+ * asked in when a chat starts (issue #2581), and `app.variablesPanel`, the
+ * panel they sit in beside the chat otherwise (issue #3053).
  */
 function VariablesSection({ app, onChange }) {
   const { t } = useTranslation();
@@ -153,6 +154,40 @@ function VariablesSection({ app, onChange }) {
                 </div>
               )}
             </div>
+
+            {app.startForm?.enabled !== true && (
+              <div className="border-b border-gray-200 dark:border-gray-600 pb-4">
+                <div className="flex items-center">
+                  <input
+                    id="app-variables-panel-pinned"
+                    type="checkbox"
+                    checked={app.variablesPanel?.pinned !== false}
+                    onChange={e =>
+                      onChange({
+                        ...app,
+                        variablesPanel: { ...app.variablesPanel, pinned: e.target.checked }
+                      })
+                    }
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                  />
+                  <label
+                    htmlFor="app-variables-panel-pinned"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t(
+                      'admin.apps.edit.variablesPanelPinned',
+                      'Pin the input parameters by default'
+                    )}
+                  </label>
+                </div>
+                <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.apps.edit.variablesPanelPinnedHelp',
+                    'Pinned, the input parameters stay open beside the chat. Unpinned, they collapse each time a message is sent and can be expanded again. Users can collapse, expand and pin the panel themselves; this sets where it starts.'
+                  )}
+                </p>
+              </div>
+            )}
 
             {(app.variables || []).map((variable, index) => (
               <div

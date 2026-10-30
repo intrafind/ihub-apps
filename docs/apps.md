@@ -720,6 +720,28 @@ Administrators can override the automatically generated placeholder for each var
 | `boolean`  | Boolean true/false toggle        |
 | `date`     | Date picker input                |
 
+#### Variables Panel
+
+Without a start form, the variables sit in a panel beside the chat. Users can collapse it to a
+narrow strip, expand it again and pin it:
+
+- **Pinned**: the panel stays as the user left it.
+- **Unpinned**: the panel collapses each time a message is sent, so the conversation gets the
+  room. Expanded again, it collapses again with the next message.
+- A chat — a new one or one opened from the history — always opens with the panel expanded.
+
+`variablesPanel.pinned` sets whether the panel starts pinned; the user's own choice is remembered
+per app in the browser. Unset, it is pinned.
+
+```json
+"variablesPanel": {
+  "pinned": false
+}
+```
+
+Admins set it under **Admin → Apps → (app) → Variables → Pin the input parameters by default**.
+On phones the variables open in a dialog from the header instead, as before.
+
 #### Start Form
 
 By default the variables sit in a panel next to the chat, and the `prompt` template is filled in again for every message the user sends. With `startForm`, a new chat instead opens with the variables as a form, in place of the chat input:

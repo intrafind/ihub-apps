@@ -90,6 +90,15 @@ const startFormSchema = z
   })
   .optional();
 
+// The input parameters panel beside the chat (issue #3053). Users can collapse,
+// expand and pin it; `pinned` is the default for this app. Unpinned, the panel
+// collapses each time a message is sent. Unset = pinned, as before.
+const variablesPanelSchema = z
+  .object({
+    pinned: z.boolean().optional()
+  })
+  .optional();
+
 // Web search configuration schema
 const websearchSchema = z
   .object({
@@ -487,6 +496,7 @@ const baseAppConfigSchema = z.object({
   prompt: localizedStringSchema.optional(),
   variables: z.array(variableSchema).optional(),
   startForm: startFormSchema,
+  variablesPanel: variablesPanelSchema,
   settings: settingsSchema.optional(),
   inputMode: inputModeSchema.optional(),
   upload: uploadSchema.optional(),
