@@ -10,6 +10,7 @@
  *   GET    /api/shares/:shareId                    the frozen transcript (auth per mode)
  *   GET    /api/shares/:shareId/artifacts          descriptors of the artifacts it references
  *   GET    /api/shares/:shareId/artifacts/:id      the bytes of one (`?download=1` to attach)
+ *   POST   /api/shares/:shareId/artifacts/zip      several (or all) of those as one ZIP
  *   DELETE /api/shares/:shareId                    revoke (owner or admin)
  *   GET    /api/users/lookup?q=                    recipient picker for `users` shares
  *
@@ -49,6 +50,8 @@ import { isAdminUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
+import { downloadName, sendArtifactsZip } from '../services/artifacts/artifactZip.js';
+import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { isChatHistoryConfigured } from '../services/chat/chatPersistence.js';
 import {
   getChatShareRepository,
@@ -319,42 +322,6 @@ async function isShareOwnerOrAdmin(share, user) {
 }
 
 /**
- * A file name for a downloaded artifact, from its stored name or its kind.
- *
- * @param {Object} artifact - Artifact with `name`, `kind`, `mimeType`, `id`.
- * @returns {string}
- */
-export function downloadName(artifact) {
-  const stored = typeof artifact.name === 'string' ? artifact.name.trim() : '';
-  // Well-formed and cut by code point: the stored name was capped in UTF-16
-  // units, which can leave half a surrogate pair behind, and a name with a
-  // lone surrogate is not encodable — the download would answer 500.
-  if (stored) {
-    const wellFormed = stored.replace(
-      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
-      '_'
-    );
-    return Array.from(wellFormed.replace(/[\r\n"\\/]+/g, '_'))
-      .slice(0, 200)
-      .join('');
-  }
-  const ext =
-    {
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-      'image/svg+xml': 'svg',
-      'application/pdf': 'pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-      'text/plain': 'txt',
-      'text/markdown': 'md'
-    }[artifact.mimeType] || 'bin';
-  return `${artifact.kind || 'artifact'}-${String(artifact.id).slice(0, 8)}.${ext}`;
-}
-
-/**
  * Register the sharing endpoints.
  *
  * @param {import('express').Application} app - Express application.
@@ -558,6 +525,32 @@ export default function registerChatShareRoutes(app) {
     }
   });
 
+  // Several of the share's artifacts as one ZIP: `{ artifactIds?: string[] }`,
+  // every one the snapshot named when omitted. Nothing outside the share's
+  // allow-list can be packed — an id beyond it answers 404 like an unknown one.
+  app.post(buildServerPath('/api/shares/:shareId/artifacts/zip'), async (req, res) => {
+    try {
+      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
+      if (!loaded) return;
+      const { share } = loaded;
+      const allowed = new Set(share.artifactIds || []);
+      const scope = getChatRepository().artifactScope(share.chatId);
+      const artifacts = getArtifactRepository();
+      const descriptors = (await artifacts.list(scope)).filter(item => allowed.has(item.id));
+      return await sendArtifactsZip(res, {
+        repository: artifacts,
+        scope,
+        descriptors,
+        artifactIds: req.body?.artifactIds,
+        archiveName: 'shared-chat-artifacts.zip',
+        beforeSend: response => setViewerHeaders(response, share)
+      });
+    } catch (error) {
+      if (res.headersSent) return res.destroy(error);
+      return sendStorageError(res, error, 'zip shared artifacts');
+    }
+  });
+
   app.get(buildServerPath('/api/shares/:shareId/artifacts/:artifactId'), async (req, res) => {
     try {
       const { artifactId } = req.params;
@@ -576,7 +569,7 @@ export default function registerChatShareRoutes(app) {
       if (!artifact) return sendNotFound(res, 'Artifact');
       const body = artifact.data;
       const download = req.query.download === '1' || req.query.download === 'true';
-      res.setHeader('Content-Type', artifact.mimeType);
+      res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
       res.setHeader('Content-Length', String(body.length));
       // Written once, keyed by a fresh uuid: the bytes behind this URL cannot
       // change. `private`, because the link may be revoked and a shared cache

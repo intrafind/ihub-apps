@@ -20,7 +20,7 @@
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredSources } from './chatSources.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
-import { generatedFilesOf } from '../../../shared/generatedFiles.js';
+import { generatedFileKind, generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 import { insertSupportMarkers } from '../../../shared/sources/index.js';
 
@@ -566,8 +566,9 @@ export async function settleAssistantTurn({
     // The loop reports generated pictures on `summary.images`; they are stored
     // as artifacts of kind `image`, which is the vocabulary the stored message
     // and the artifact endpoints use. Files a system skill tool generated (a
-    // PDF from `create_pdf`) come on `summary.generatedFiles` and are stored
-    // as artifacts of kind `document`.
+    // PDF from `create_pdf`, a source file from `create_file`) come on
+    // `summary.generatedFiles` and are stored as artifacts of kind `document`,
+    // `code` or `archive` (see `generatedFileKind`).
     const artifacts = pausedWithoutAnswer
       ? []
       : await storeGeneratedArtifacts({
@@ -576,7 +577,7 @@ export async function settleAssistantTurn({
           artifacts: [
             ...(summary?.images || []).map(image => ({ ...image, kind: 'image' })),
             ...generatedFilesOf(summary?.generatedFiles).map(file => ({
-              kind: 'document',
+              kind: generatedFileKind(file.mimeType),
               mimeType: file.mimeType,
               data: file.data,
               name: file.name

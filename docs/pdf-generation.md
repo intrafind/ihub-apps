@@ -1,4 +1,4 @@
-# Document Generation (PDF, Word, PowerPoint) and System Skills
+# Document and File Generation (PDF, Word, PowerPoint, Code, ZIP) and System Skills
 
 iHub generates PDF files, Word documents and PowerPoint presentations on the server, without Python, Office or a browser. The engines serve two purposes:
 
@@ -35,12 +35,13 @@ The shipped system skills:
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
 | `docx` | `create_docx` | Create editable Word documents on request |
 | `pptx` | `create_pptx` | Create PowerPoint presentations on request |
+| `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 A system skill for Excel workbooks is planned on the same infrastructure.
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -127,18 +128,42 @@ Enable it like the `pdf` skill: add `docx` to the app's skills.
 
 There is no slide preview for the model: rendering slides would need Office or LibreOffice on the server.
 
+## The `files` skill
+
+The `files` skill hands the user files that are not office documents: source code, configuration, data and text. Enable it like the other skills (`"skills": ["files"]`).
+
+`create_file` takes a `name` and the file's `content` (UTF-8 text):
+
+- **The extension decides the type.** JavaScript and TypeScript, Python, Java, Kotlin, C/C++, C#, Go, Rust, Ruby, PHP, Swift, SQL, shell and PowerShell scripts, CSS/SCSS, JSON and JSON Lines, YAML, TOML, XML, INI, CSV/TSV, Markdown, plain text and more. A name without a known extension (`Dockerfile`, `Makefile`) is plain text. The optional `mimeType` counts only when the extension says nothing.
+- **Folders are kept.** A name such as `src/components/Button.tsx` keeps its folders in a ZIP archive. `..` segments, drive letters, leading slashes and control characters are removed; a path has at most 10 levels and 200 characters.
+- **No active content.** `.html` and `.svg` files are recorded as plain text, and every text file is served as `text/plain` (see [Artifacts](artifacts.md#kinds)).
+
+`create_zip` packs files into one ZIP archive:
+
+| Parameter | Use |
+|---|---|
+| `filename` | Archive name; `.zip` is added |
+| `files` | New files: `[{ "name": "src/index.ts", "content": "…" }]` |
+| `include` | Files already created in this chat, by name (`src/index.ts`, or just `index.ts` when only one file has that name) or id |
+| `includeAll` | Every file created in this chat: documents and text files, not pictures or other archives. When a name occurs more than once, the newest file is packed |
+
+A new file in `files` replaces an existing file of the same name. A name that is not found is reported back to the model together with the names that exist, so it can correct the call. Duplicate paths get a ` (2)` suffix.
+
+The archive follows the [artifact ZIP limits](artifacts.md#configuration) (`maxZipFiles`, `maxZipBytes`). Because the archive is a generated file, it cannot be larger than 25 MB of content.
+
 ## Generated files
 
 A file the model created takes the path a generated picture takes. There is no download route of its own:
 
 - **While the answer streams:** `create_pdf` keeps the PDF in server memory and returns only a descriptor, so the model never sees the bytes. The bytes reach the chat with the tool's `tool/completed` event, and the download card below the answer saves them.
-- **Stored with the answer:** in a stored chat (every chat is), the PDF is stored as a `document` [artifact](artifacts.md) of the chat. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
+- **Stored with the answer:** in a stored chat (every chat is), the file is stored as an [artifact](artifacts.md) of the chat: kind `document` for PDF, Word and PowerPoint, `code` for a text file, `archive` for a ZIP. After a reload, the card downloads it from `GET /api/chats/:chatId/artifacts/:artifactId`. It is deleted with the chat, and a [share](chat-sharing.md) of the chat includes it.
 - **Chats that are not stored:** the file lives as long as the page, like a generated picture. After a reload, the card says it is no longer available.
 - **Limits:**
   - 25 MB per file.
   - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
 - **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
-- **Types:** PDF, Word (`.docx`) and PowerPoint (`.pptx`). The card shows the page or slide count while the answer is on screen.
+- **Types:** PDF, Word (`.docx`), PowerPoint (`.pptx`), text files from `create_file` and ZIP archives from `create_zip`. The card shows the page or slide count while the answer is on screen. A text file is saved under the last part of its name (`src/index.js` → `index.js`).
+- **Many files in one turn:** `maxPerBatch` (default 8) also caps how many generated files one answer stores. For a project, the `files` skill tells the model to use one `create_zip` call instead of one `create_file` call per file.
 
 ## Server-side PDF export
 

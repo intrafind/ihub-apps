@@ -404,7 +404,7 @@ export function chatToolSeam({
       // download card); the same field on any other tool's result is ignored.
       // The result names the file without its bytes, so the model never sees
       // them: they were held for this turn, and go to the client here and to
-      // the stored answer (as a `document` artifact) through `generatedFiles`.
+      // the stored answer (as an artifact) through `generatedFiles`.
       const files = info.toolDef?.isSystemSkillTool
         ? generatedFilesOf(outcome.rawResult?.files)
             .map(file => ({ ...file, data: heldGeneratedFileData(file.id, { chatId }) }))
