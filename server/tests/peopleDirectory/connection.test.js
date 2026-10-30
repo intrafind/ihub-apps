@@ -182,11 +182,25 @@ describe('people directory connections', { skip }, () => {
           assert.equal(error.step, 'connect');
           assert.equal(error.details.missingIssuer, 'Test Root CA');
           assert.match(error.message, /issuer "Test Root CA" is not trusted/);
-          assert.deepEqual(
-            error.details.certificateChain.map(cert => cert.subject),
-            ['ldap.test', 'Test Intermediate CA']
-          );
-          assert.match(error.details.certificateChain[0].fingerprint256, /^[0-9A-F:]+$/);
+          assert.match(error.hints[0], /contents\/config\/certs/);
+          return true;
+        }
+      );
+    });
+
+    it('points only to tlsCa when the directory trusts its own certificates', async () => {
+      // With tlsCa, `ca` replaces the default roots: installing the issuer in
+      // the operating system store would change nothing.
+      const other = generateCertificates('other.test');
+      await assert.rejects(
+        openDirectoryConnection(
+          ldapsDirectory({ tlsCa: ['other-root'] }),
+          connectOptions({ loadAnchors: async () => [other.rootPem] })
+        ),
+        error => {
+          assert.equal(error.code, 'tls_untrusted');
+          assert.match(error.hints[0], /trusts only its own certificates \(other-root\)/);
+          assert.doesNotMatch(error.hints[0], /operating system/);
           return true;
         }
       );

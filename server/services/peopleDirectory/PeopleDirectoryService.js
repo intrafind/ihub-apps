@@ -3,9 +3,11 @@
 
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import {
   ALLOWED_TLS_OPTION_KEYS,
+  LDAP_BROWSE_DEFAULTS,
   PEOPLE_DIRECTORY_DEFAULTS,
   RESERVED_DIRECTORY_IDS,
   peopleDirectorySchema
@@ -33,6 +35,12 @@ import { assertTransportAllowed, describeTransport, parseDirectoryUrl } from './
  * tool listing, an app's tools, a direct tool run, the MCP gateway, and the
  * tool itself when it runs.
  *
+ * A directory with `browse` on also offers the admin LDAP browser:
+ * `<id>__browse_search`, `<id>__browse_read` and `<id>__browse_children`. They
+ * return raw entries, so they have their own access list (`browse.groups`,
+ * checked by `mayBrowseDirectory` in the same places), are selected only by the
+ * `ldapBrowse` reference, and are never offered over the MCP gateway.
+ *
  * This module is on the path of every tool listing, so it opens nothing and
  * loads no LDAP client; running a tool and the admin test live in
  * peopleDirectoryRunner.js.
@@ -44,6 +52,9 @@ const COMPONENT = 'PeopleDirectory';
 const TOOL_SEPARATOR = '__';
 
 export const DIRECTORY_ACTIONS = ['search_people', 'get_person', 'list_units'];
+
+/** The admin LDAP browser's actions; see LdapBrowser.js. */
+export const BROWSE_ACTIONS = ['browse_search', 'browse_read', 'browse_children'];
 
 const trimmed = value => (typeof value === 'string' ? value.trim() : '');
 
@@ -79,6 +90,23 @@ export function directoryOfToolId(toolId) {
   }
   const directory = findDirectory(toolId.slice(0, at));
   return directory ? directory.id : null;
+}
+
+/**
+ * The directory tool a tool id names — people search or LDAP browser — read
+ * from the id alone, in the shape of a tool's `_peopleDirectory` marker.
+ * @param {string} toolId
+ * @returns {{id: string, action: string, browse: boolean}|null}
+ */
+export function directoryToolOfId(toolId) {
+  if (typeof toolId !== 'string') return null;
+  const at = toolId.indexOf(TOOL_SEPARATOR);
+  if (at <= 0) return null;
+  const action = toolId.slice(at + TOOL_SEPARATOR.length);
+  const browse = BROWSE_ACTIONS.includes(action);
+  if (!browse && !DIRECTORY_ACTIONS.includes(action)) return null;
+  const directory = findDirectory(toolId.slice(0, at));
+  return directory ? { id: directory.id, action, browse } : null;
 }
 
 /**
@@ -147,7 +175,7 @@ export function resolveDirectory(raw, platform = configCache.getPlatform() || {}
   Object.assign(tlsOptions, directory.tlsOptions || {});
   if (ignoredTlsOptionKeys.length > 0) {
     warnings.push(
-      `The sign-in provider's TLS option(s) ${ignoredTlsOptionKeys.join(', ')} are ignored for people search; only ${ALLOWED_TLS_OPTION_KEYS.join(', ')} are taken over. Trust a private CA through the certificate store (tlsCa) instead.`
+      `The sign-in provider's TLS option(s) ${ignoredTlsOptionKeys.join(', ')} are ignored for people search; only ${ALLOWED_TLS_OPTION_KEYS.join(', ')} are taken over. Trust a private CA through tlsCa or the server's certificate store instead.`
     );
   }
 
@@ -241,7 +269,45 @@ export function resolveDirectory(raw, platform = configCache.getPlatform() || {}
 
   resolved.problems = problems;
   resolved.warnings = warnings;
+  resolved.browse = resolveBrowse(directory.browse, resolved);
   return resolved;
+}
+
+/**
+ * The admin LDAP browser of a resolved directory, or null while it is off.
+ * Its `problems` keep only the browser from being offered.
+ *
+ * @param {Object|undefined} browse - The directory's `browse` block
+ * @param {Object} resolved - The resolved directory
+ * @returns {Object|null}
+ */
+function resolveBrowse(browse, resolved) {
+  if (browse?.enabled !== true) return null;
+  const problems = [];
+  const base = trimmed(browse.base) || resolved.baseDn;
+  if (!base) {
+    problems.push("The LDAP browser needs a base: set browse.base, or the directory's base DN.");
+  }
+  const bind = browse.bind || resolved.bind;
+  if (!bind) problems.push('The LDAP browser has no bind account: set browse.bind.');
+  if (resolved.url && bind) {
+    try {
+      assertTransportAllowed({ ...resolved, bind });
+    } catch (error) {
+      problems.push(error.message);
+    }
+  }
+  return {
+    groups: Array.isArray(browse.groups)
+      ? browse.groups.filter(group => group !== '*')
+      : ['admins'],
+    maxResults: browse.maxResults ?? LDAP_BROWSE_DEFAULTS.maxResults,
+    base,
+    bind,
+    ownBind: Boolean(browse.bind),
+    denyAttributes: Array.isArray(browse.denyAttributes) ? browse.denyAttributes : [],
+    problems
+  };
 }
 
 /**
@@ -292,14 +358,66 @@ export function mayUseDirectory(user, directoryId) {
 }
 
 /**
- * Drop the tools of directories a user may not use. Other tools pass.
+ * Whether a user may use a directory's admin LDAP browser: the directory is
+ * enabled, `browse.enabled` is on, and a signed-in user is in one of
+ * `browse.groups` (default `admins`). The directory's own `groups` neither
+ * grant nor deny it. Fails closed.
+ *
+ * Delegated and machine principals — personal API keys, OAuth clients and
+ * tokens, agents — never browse, whatever their groups: they could otherwise
+ * reach the browser through an app (`app__ldap-browser` over MCP, A2A or the
+ * chat API), and raw entries would leave iHub (REVIEW.md, A01).
+ *
+ * @param {Object|null} user
+ * @param {string} directoryId
+ * @returns {boolean}
+ */
+export function mayBrowseDirectory(user, directoryId) {
+  try {
+    const directory = findDirectory(directoryId);
+    if (!directory || directory.enabled === false || directory.browse?.enabled !== true) {
+      return false;
+    }
+    if (!user?.id || user.id === 'anonymous') return false;
+    if (!isAdminEligiblePrincipal(user)) return false;
+    const groups = Array.isArray(directory.browse.groups) ? directory.browse.groups : ['admins'];
+    const userGroups = expandUserGroups(user.groups);
+    return groups.some(group => group !== '*' && userGroups.has(group));
+  } catch (error) {
+    logger.warn('LDAP browser access check failed; denying', {
+      component: COMPONENT,
+      directoryId,
+      error: error.message
+    });
+    return false;
+  }
+}
+
+/**
+ * Whether a user may use one directory tool: the LDAP browser's against
+ * `browse.groups`, every other against the directory's `groups`. The action
+ * decides, not a flag, so a browse action is never checked against `groups`.
+ *
+ * @param {Object|null} user
+ * @param {{id?: string, action?: string}|null} marker - A tool's `_peopleDirectory`
+ * @returns {boolean}
+ */
+export function mayUseDirectoryTool(user, marker) {
+  if (!marker?.id) return false;
+  return BROWSE_ACTIONS.includes(marker.action)
+    ? mayBrowseDirectory(user, marker.id)
+    : mayUseDirectory(user, marker.id);
+}
+
+/**
+ * Drop the directory tools a user may not use. Other tools pass.
  * @param {Object[]} tools
  * @param {Object|null} user
  * @returns {Object[]}
  */
 export function filterDirectoryToolsForUser(tools, user) {
   return tools.filter(
-    tool => !tool?._peopleDirectory || mayUseDirectory(user, tool._peopleDirectory.id)
+    tool => !tool?._peopleDirectory || mayUseDirectoryTool(user, tool._peopleDirectory)
   );
 }
 
@@ -508,6 +626,97 @@ export function buildDirectoryTools(resolved, language = 'en') {
   return tools;
 }
 
+const BROWSE_TEXT = {
+  browse_search: {
+    en: max =>
+      `Admin LDAP browser: search raw directory entries with an LDAP filter (RFC 4515), e.g. (&(objectClass=group)(cn=*admin*)). Returns entries with all their attributes as the server stores them, at most ${max}; on "truncated": true, narrow the filter or the base. Secret attributes are withheld and cannot be used in a filter.`,
+    de: max =>
+      `Admin-LDAP-Browser: Rohe Verzeichniseinträge mit einem LDAP-Filter (RFC 4515) suchen, z. B. (&(objectClass=group)(cn=*admin*)). Liefert Einträge mit allen Attributen, wie der Server sie speichert, höchstens ${max}; bei "truncated": true Filter oder Basis eingrenzen. Geheime Attribute werden zurückgehalten und können nicht in einem Filter vorkommen.`
+  },
+  browse_read: {
+    en: () => 'Admin LDAP browser: read one entry by its full DN, with its raw attributes.',
+    de: () =>
+      'Admin-LDAP-Browser: Einen Eintrag anhand seines vollständigen DN mit seinen rohen Attributen lesen.'
+  },
+  browse_children: {
+    en: () =>
+      'Admin LDAP browser: list the direct children of a DN (default: the browse base) with their object classes, without attributes. Use it to walk the tree.',
+    de: () =>
+      'Admin-LDAP-Browser: Die direkten Kinder eines DN (Standard: die Browse-Basis) mit ihren Objektklassen auflisten, ohne Attribute. Damit den Baum durchlaufen.'
+  }
+};
+
+const BROWSE_NAME = {
+  browse_search: { en: 'LDAP browse search', de: 'LDAP-Browser-Suche' },
+  browse_read: { en: 'LDAP browse read', de: 'LDAP-Browser lesen' },
+  browse_children: { en: 'LDAP browse children', de: 'LDAP-Browser Kinder' }
+};
+
+/**
+ * The admin LDAP browser tools of one resolved directory with `browse` on.
+ * @param {Object} resolved
+ * @param {string} language
+ * @returns {Object[]}
+ */
+export function buildBrowseTools(resolved, language = 'en') {
+  const lang = language === 'de' ? 'de' : 'en';
+  const directoryName =
+    getLocalizedString(resolved.name, language, 'en', resolved.id) || resolved.id;
+  const { base, maxResults } = resolved.browse;
+  const tool = (action, parameters) => ({
+    id: `${resolved.id}${TOOL_SEPARATOR}${action}`,
+    name: `${directoryName}: ${BROWSE_NAME[action][lang]}`,
+    description: `${directoryName} (${base})\n${BROWSE_TEXT[action][lang](maxResults)}`,
+    enabled: true,
+    dataFlow: resolved.dataFlow,
+    readOnly: true,
+    parameters,
+    _peopleDirectory: { id: resolved.id, action, browse: true }
+  });
+  const dn = description => ({ type: 'string', description });
+  const attributes = {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'Attribute names to return. Leave out for all user attributes; name operational attributes (e.g. memberOf, createTimestamp) to get them.'
+  };
+  return [
+    tool('browse_search', {
+      type: 'object',
+      properties: {
+        filter: {
+          type: 'string',
+          description: 'An LDAP filter in parentheses, e.g. (&(objectClass=person)(sn=Muster*)).'
+        },
+        base: dn(`DN to search under, inside ${base}. Leave out for ${base}.`),
+        scope: {
+          type: 'string',
+          enum: ['base', 'one', 'sub'],
+          description:
+            'base: only the base entry; one: its direct children; sub (default): the whole subtree.'
+        },
+        attributes,
+        maxResults: {
+          type: 'integer',
+          minimum: 1,
+          maximum: maxResults,
+          description: `How many entries to return, 1 to ${maxResults}.`
+        }
+      },
+      required: ['filter']
+    }),
+    tool('browse_read', {
+      type: 'object',
+      properties: { dn: dn(`The full DN of the entry, inside ${base}.`), attributes },
+      required: ['dn']
+    }),
+    tool('browse_children', {
+      type: 'object',
+      properties: { dn: dn(`The full DN whose children to list. Leave out for ${base}.`) }
+    })
+  ];
+}
+
 /**
  * The tools of every enabled, usable directory, for `loadTools()`. Not narrowed
  * to a user — `loadTools` has none; see {@link mayUseDirectory}.
@@ -563,9 +772,33 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
       );
       continue;
     }
-    tools.push(...buildDirectoryTools(resolved, language));
+    tools.push(
+      ...buildDirectoryTools(resolved, language),
+      ...usableBrowseTools(resolved, language)
+    );
   }
   return tools;
+}
+
+/**
+ * The LDAP browser tools of a usable directory: none while the browser is off,
+ * or when its own settings cannot work (reported once).
+ * @param {Object} resolved
+ * @param {string} language
+ * @returns {Object[]}
+ */
+function usableBrowseTools(resolved, language) {
+  if (!resolved.browse) return [];
+  if (resolved.browse.problems.length > 0) {
+    reportOnce(
+      `browse:${resolved.id}`,
+      resolved.browse.problems.join('|'),
+      'LDAP browser of a people directory is not usable; its tools are not offered',
+      { directoryId: resolved.id, problems: resolved.browse.problems }
+    );
+    return [];
+  }
+  return buildBrowseTools(resolved, language);
 }
 
 /**
@@ -582,7 +815,11 @@ export function summarizeDirectory(raw, platform = configCache.getPlatform() || 
     preset: resolved.preset,
     transport: resolved.transport,
     external: resolved.dataFlow === 'external',
+    browse: Boolean(resolved.browse),
     problems: resolved.problems,
-    warnings: resolved.warnings
+    warnings: [
+      ...resolved.warnings,
+      ...(resolved.browse?.problems || []).map(problem => `LDAP browser: ${problem}`)
+    ]
   };
 }

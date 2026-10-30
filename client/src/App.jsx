@@ -172,6 +172,12 @@ const AdminIntegrationsGoogleDrivePage = lazyWithRetry(
 const AdminIntegrationsNextcloudPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsNextcloudPage')
 );
+const AdminDocumentTemplatesPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminDocumentTemplatesPage')
+);
+const AdminDocumentTemplateEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminDocumentTemplateEditPage')
+);
 const AdminPeopleDirectoriesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminPeopleDirectoriesPage')
 );
@@ -818,6 +824,18 @@ function App() {
             )}
             {showAdminPage('pages') && (
               <Route path="pages" element={<LazyAdminRoute component={AdminPagesPage} />} />
+            )}
+            {showAdminPage('ui') && (
+              <Route
+                path="document-templates"
+                element={<LazyAdminRoute component={AdminDocumentTemplatesPage} />}
+              />
+            )}
+            {showAdminPage('ui') && (
+              <Route
+                path="document-templates/:templateId"
+                element={<LazyAdminRoute component={AdminDocumentTemplateEditPage} />}
+              />
             )}
             {showAdminPage('pages') && (
               <Route

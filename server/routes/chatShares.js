@@ -346,6 +346,8 @@ export function downloadName(artifact) {
       'image/gif': 'gif',
       'image/svg+xml': 'svg',
       'application/pdf': 'pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
       'text/plain': 'txt',
       'text/markdown': 'md'
     }[artifact.mimeType] || 'bin';

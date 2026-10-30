@@ -215,7 +215,7 @@ administration, x500.bund.de. The model picks the directory by its description a
 several in one answer; every hit names the directory it came from.
 
 - **Admin → Integrations → People directories** lists the directories, with an editor, a
-  connection test that shows each step and the mapped results, and a Certificates tab.
+  connection test that shows each step and the mapped results.
 - **Use for people search** on an LDAP sign-in provider creates the company directory in one
   click. Searching needs the provider's bind account.
 - x500.bund.de ships as a disabled entry. It connects over LDAPS and trusts the Verwaltungs-PKI
@@ -225,7 +225,13 @@ several in one answer; every hit names the directory it came from.
   appears for users as soon as one directory is switched on under **Admin → Integrations →
   People directories**; until then users do not get it (`requiredIntegrations`).
 - Each directory has its own groups, on top of the tool permissions. Plain-text LDAP, private
-  addresses and untrusted certificates are refused unless allowed explicitly.
+  addresses and untrusted certificates are refused unless allowed explicitly. A private CA is
+  trusted through the server's certificate store, or per directory by naming a PEM file in
+  `contents/config/certs/`.
+- **LDAP browser for admins:** with the LDAP browser switched on in a directory's editor, admins
+  ask in plain words and see the raw entries — attributes, branch layout, group members.
+  Passwords and other secrets are withheld and cannot be used in a filter, and every call goes to
+  the audit log. The **LDAP browser** app ships disabled.
 
 See [People Directory Search](../../people-directory-search.md).
 
@@ -264,6 +270,45 @@ warnings — before anything is changed; you confirm, and the server restarts in
   `--update=rollback --restore-config`.
 - See [Binary Installation Updates](../../INSTALLATION.md#binary-installation-updates).
 
+## Document Templates: Your Corporate Design for Every PDF, Word and PowerPoint File
+
+**Admin → Customization → Document templates** holds your company's design for the documents iHub
+creates: colours, fonts, logo, header and footer, a letterhead PDF, and your own Word (`.dotx`) and
+PowerPoint (`.potx`) templates. The default template applies to every app; an app can fix its own
+under **Admin → Apps → Edit → Document template**, so its documents always look the same.
+
+- **PDF:** brand colours and fonts (upload `.ttf`/`.otf` files to embed them), the logo in the
+  header and on cover pages, and your letterhead printed under every page.
+- **Word:** documents are merged into your Word template — its styles, headers, footers and page
+  setup. Templates saved by Word in any language work. `{{content}}`, `{{title}}`, `{{date}}`,
+  `{{author}}` and `{{company}}` placeholders are filled in.
+- **PowerPoint:** slides use your template's own layouts, so titles, text, fonts, colours and logos
+  come from it. Without a template, a slide design is made from your brand.
+- **Previews:** the editor shows a sample PDF page and downloads a sample PDF, Word document and
+  presentation.
+- **Exports:** the chat export dialog lists your templates under **Company templates**, the
+  default one preselected.
+
+See [Document templates](../../document-templates.md).
+
+## Word Documents and PowerPoint Presentations on Request
+
+Two new system skills, **`docx`** and **`pptx`**, let the model create editable Word documents and
+PowerPoint presentations in a chat, in your document template. The user gets a download card
+below the answer, as for PDFs.
+
+- **Word:** real Word headings, lists, tables, callouts, pictures, a cover page and a table of
+  contents, from the Markdown the model writes.
+- **PowerPoint:** title, section, bullet, table, two-column and picture slides, native charts the
+  user can edit, and speaker notes.
+- **Enable them** like the `pdf` skill: turn on **Skills** under Features and add `docx` or
+  `pptx` to an app's skills.
+- PDFs now also show GitHub-style callouts (`> [!NOTE]`, `> [!WARNING]`, …) as coloured boxes,
+  as Word documents do.
+
+See [Document generation](../../pdf-generation.md).
+
+## Projects: Your iFinder Smart Collections as Read-Only Projects
 ## Projects: Your iFinder Smart Collections as Projects
 
 With the tier policy set to `both` or `ifinder` (**platform.json → projects.tierPolicy**, until now

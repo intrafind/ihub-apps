@@ -135,7 +135,9 @@ export function isColor(value) {
  * @param {Object} [overrides]
  * @param {string} [overrides.primaryColor] - Headings, rules and accents.
  * @param {string} [overrides.accentColor] - Secondary accents.
- * @param {string} [overrides.font] - `sans`, `serif` or `mono`.
+ * @param {string} [overrides.textColor] - Body text.
+ * @param {string} [overrides.font] - `sans`, `serif`, `mono` or a template font family.
+ * @param {string} [overrides.headingFont] - Headings and titles; defaults to `font`.
  * @param {number} [overrides.fontSize] - Body font size in points (7–16).
  * @returns {Object} Resolved theme.
  */
@@ -149,7 +151,11 @@ export function resolveTheme(name, overrides = {}) {
       theme.link = overrides.primaryColor;
     }
     if (isColor(overrides.accentColor)) theme.accent = overrides.accentColor;
+    if (isColor(overrides.textColor)) theme.text = overrides.textColor;
     if (overrides.font) theme.font = resolveFontFamily(overrides.font, theme.font);
+    if (overrides.headingFont) {
+      theme.headingFont = resolveFontFamily(overrides.headingFont, theme.font);
+    }
     const size = Number(overrides.fontSize);
     if (Number.isFinite(size) && size >= 7 && size <= 16) theme.baseFontSize = size;
   }
@@ -164,7 +170,10 @@ export function resolveTheme(name, overrides = {}) {
  */
 export function themeStyles(theme) {
   const s = theme.baseFontSize;
+  // A brand heading font applies to headings and titles only.
+  const headingFont = theme.headingFont ? { font: theme.headingFont } : {};
   const heading = (scale, top, bottom) => ({
+    ...headingFont,
     fontSize: Math.round(s * scale * 10) / 10,
     bold: true,
     color: theme.heading,
@@ -187,7 +196,7 @@ export function themeStyles(theme) {
     small: { fontSize: s - 2, color: theme.muted },
     muted: { color: theme.muted },
     quote: { color: theme.quoteText, italics: true },
-    title: { fontSize: s * 2.6, bold: true, color: theme.heading, lineHeight: 1.1 },
+    title: { ...headingFont, fontSize: s * 2.6, bold: true, color: theme.heading, lineHeight: 1.1 },
     subtitle: { fontSize: s * 1.35, color: theme.muted },
     tocTitle: { ...heading(1.55, 0, 10) },
     tocItem: { fontSize: s }

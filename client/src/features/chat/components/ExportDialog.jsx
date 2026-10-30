@@ -9,6 +9,7 @@ import { exportChatToFormat, getExportErrorMessage } from '../utils/chatExport';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { fetchDocumentTemplateChoices } from '../../../api/endpoints/exports';
 
 // Formats whose content can be copied to the clipboard as plain text. Binary
 // formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
@@ -74,7 +75,31 @@ function ExportDialog({
     }
   }));
 
+  // Document templates (Admin → Document templates): the company's designs.
+  // The app's own template, or else the default template, is preselected;
+  // an app that pins one exports only with it.
+  const [documentTemplates, setDocumentTemplates] = useState({ templates: [], pinned: null });
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let active = true;
+    fetchDocumentTemplateChoices({ language: currentLanguage, appId })
+      .then(result => {
+        if (!active) return;
+        setDocumentTemplates(result);
+        const preferred = result.pinned || result.templates.find(t => t.default)?.id;
+        if (preferred) setPdfConfig(prev => ({ ...prev, template: preferred }));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isOpen, appId, currentLanguage]);
+
   if (!isOpen) return null;
+
+  const pinnedTemplate = documentTemplates.templates.find(
+    template => template.id === documentTemplates.pinned
+  );
 
   const canCopySelectedFormat = COPYABLE_FORMATS.has(selectedFormat);
 
@@ -427,8 +452,19 @@ function ExportDialog({
                   value={pdfConfig.template}
                   onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
                   className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  disabled={isExporting}
+                  disabled={isExporting || Boolean(pinnedTemplate)}
                 >
+                  {documentTemplates.templates.length > 0 && (
+                    <optgroup
+                      label={t('pages.appChat.export.companyTemplates', 'Company templates')}
+                    >
+                      {documentTemplates.templates.map(template => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                   <option value="default">
                     {t('pages.appChat.export.templateDefault', 'Default')}
                   </option>
@@ -439,6 +475,15 @@ function ExportDialog({
                     {t('pages.appChat.export.templateMinimal', 'Minimal')}
                   </option>
                 </select>
+                {pinnedTemplate && (
+                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                    {t(
+                      'pages.appChat.export.templatePinned',
+                      'This app exports in the "{{name}}" template.',
+                      { name: pinnedTemplate.name }
+                    )}
+                  </p>
+                )}
               </div>
 
               <div>

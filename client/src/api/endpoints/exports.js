@@ -49,3 +49,21 @@ export const exportPdfOnServer = async payload => {
     throw error;
   }
 };
+
+/**
+ * The document templates a user can export with (`GET /api/document-templates`).
+ *
+ * @param {Object} [options]
+ * @param {string} [options.language]
+ * @param {string} [options.appId] - Also report the template this app pins.
+ * @returns {Promise<{ templates: Array<{ id: string, name: string, description: string, default: boolean }>, pinned: string|null }>}
+ */
+export const fetchDocumentTemplateChoices = async ({ language, appId } = {}) => {
+  const response = await apiClient.get('/document-templates', {
+    params: { lang: language, ...(appId ? { appId } : {}) }
+  });
+  return {
+    templates: Array.isArray(response.data?.templates) ? response.data.templates : [],
+    pinned: typeof response.data?.pinned === 'string' ? response.data.pinned : null
+  };
+};

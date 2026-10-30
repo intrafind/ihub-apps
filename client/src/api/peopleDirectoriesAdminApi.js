@@ -4,9 +4,9 @@
 import { makeAdminApiCall } from './adminApi.js';
 
 /**
- * Admin API for people directories (`contents/config/peopleDirectories.json`)
- * and their certificate store (`contents/config/certs/`). Every route sits
- * behind `adminAuth` on the server (`server/routes/admin/peopleDirectories.js`).
+ * Admin API for people directories (`contents/config/peopleDirectories.json`).
+ * Every route sits behind `adminAuth` on the server
+ * (`server/routes/admin/peopleDirectories.js`).
  *
  * The config file is read and written as a whole: an editor loads the list,
  * replaces, adds or removes one entry and writes the whole list back.
@@ -70,58 +70,4 @@ export async function testPeopleDirectory(target, query) {
   if (query && query.trim()) body.query = query.trim();
   const response = await makeAdminApiCall(`${BASE}/test`, { method: 'POST', body });
   return response.data;
-}
-
-/**
- * List the trust anchors in the certificate store, with the directories that
- * use each one.
- *
- * @returns {Promise<Array<Object>>} Certificate descriptions
- */
-export async function fetchDirectoryCertificates() {
-  const response = await makeAdminApiCall(`${BASE}/certificates`);
-  return Array.isArray(response.data?.certificates) ? response.data.certificates : [];
-}
-
-/**
- * Parse a certificate without storing it, so the admin can compare its
- * fingerprint with the one the publisher lists before saving.
- *
- * @param {string} content - PEM text, or base64 of DER bytes
- * @param {'pem'|'base64'} encoding - How `content` is encoded
- * @returns {Promise<Object>} The parsed certificate
- */
-export async function previewDirectoryCertificate(content, encoding) {
-  const response = await makeAdminApiCall(`${BASE}/certificates/preview`, {
-    method: 'POST',
-    body: { content, encoding }
-  });
-  return response.data?.certificate;
-}
-
-/**
- * Store a certificate under a name (`^[a-z0-9-]+$`, at most 64 characters).
- *
- * @param {{name: string, content: string, encoding: 'pem'|'base64'}} certificate
- * @returns {Promise<Object>} The stored certificate
- */
-export async function uploadDirectoryCertificate({ name, content, encoding }) {
-  const response = await makeAdminApiCall(`${BASE}/certificates`, {
-    method: 'POST',
-    body: { name, content, encoding }
-  });
-  return response.data?.certificate;
-}
-
-/**
- * Remove a certificate from the store. The server refuses (409) while a
- * directory names it in `tlsCa`.
- *
- * @param {string} name - Certificate name
- * @returns {Promise<void>}
- */
-export async function deleteDirectoryCertificate(name) {
-  await makeAdminApiCall(`${BASE}/certificates/${encodeURIComponent(name)}`, {
-    method: 'DELETE'
-  });
 }

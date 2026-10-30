@@ -9,8 +9,8 @@
  *   - "Use for people search" (?authProvider=…&name=…) prefills a new entry that
  *     reuses the sign-in provider, and saving appends it to the list;
  *   - a new entry without id, URL or base DN is not sent;
- *   - the test panel posts the unsaved form and shows steps, the certificate
- *     chain and the mapped people.
+ *   - the test panel posts the unsaved form and shows steps, the untrusted
+ *     issuer and the mapped people.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -20,21 +20,13 @@ const mockApi = {
   fetchPeopleDirectories: jest.fn(),
   savePeopleDirectories: jest.fn(),
   fetchPeopleDirectoryPresets: jest.fn(),
-  testPeopleDirectory: jest.fn(),
-  fetchDirectoryCertificates: jest.fn(),
-  previewDirectoryCertificate: jest.fn(),
-  uploadDirectoryCertificate: jest.fn(),
-  deleteDirectoryCertificate: jest.fn()
+  testPeopleDirectory: jest.fn()
 };
 jest.mock('../../../client/src/api/peopleDirectoriesAdminApi', () => ({
   fetchPeopleDirectories: (...args) => mockApi.fetchPeopleDirectories(...args),
   savePeopleDirectories: (...args) => mockApi.savePeopleDirectories(...args),
   fetchPeopleDirectoryPresets: (...args) => mockApi.fetchPeopleDirectoryPresets(...args),
-  testPeopleDirectory: (...args) => mockApi.testPeopleDirectory(...args),
-  fetchDirectoryCertificates: (...args) => mockApi.fetchDirectoryCertificates(...args),
-  previewDirectoryCertificate: (...args) => mockApi.previewDirectoryCertificate(...args),
-  uploadDirectoryCertificate: (...args) => mockApi.uploadDirectoryCertificate(...args),
-  deleteDirectoryCertificate: (...args) => mockApi.deleteDirectoryCertificate(...args)
+  testPeopleDirectory: (...args) => mockApi.testPeopleDirectory(...args)
 }));
 
 const mockToggleApps = jest.fn();
@@ -176,7 +168,6 @@ beforeEach(() => {
   mockToggleApps.mockReset();
   mockApi.fetchPeopleDirectories.mockResolvedValue(LISTING);
   mockApi.fetchPeopleDirectoryPresets.mockResolvedValue(PRESETS);
-  mockApi.fetchDirectoryCertificates.mockResolvedValue([]);
   mockApi.savePeopleDirectories.mockImplementation(async directories => ({
     success: true,
     directories
@@ -408,6 +399,44 @@ describe('people directory editor', () => {
     expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
   });
 
+  test('the LDAP browser section switches the browser on with its own groups and account', async () => {
+    renderAt('/admin/integrations/people-directories/x500bund');
+    await screen.findByLabelText('ID');
+    expect(screen.queryByLabelText('Browse base')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Offer the LDAP browser'));
+    expect(screen.getByText(/x500bund__browse_search/)).toBeInTheDocument();
+    // The default: the directory's account, with a warning about its reach.
+    expect(document.getElementById('pd-browse-bind-mode-directory')).toBeChecked();
+    expect(screen.getByText(/full reach of the people search account/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Browse base')).toHaveAttribute('placeholder', 'o=Bund,c=DE');
+
+    // An account of its own needs a DN and a credential.
+    fireEvent.click(document.getElementById('pd-browse-bind-mode-service'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+    expect(await screen.findByText('Please check these fields')).toBeInTheDocument();
+    expect(mockApi.savePeopleDirectories).not.toHaveBeenCalled();
+
+    fireEvent.click(document.getElementById('pd-browse-bind-mode-anonymous'));
+    fireEvent.change(screen.getByLabelText('Browse base'), {
+      target: { value: 'ou=MRI,o=Bund,c=DE' }
+    });
+    fireEvent.change(screen.getByLabelText('Further attributes to withhold'), {
+      target: { value: 'info\nsecretNote' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save directory' }));
+
+    await waitFor(() => expect(mockApi.savePeopleDirectories).toHaveBeenCalledTimes(1));
+    const saved = mockApi.savePeopleDirectories.mock.calls[0][0].find(d => d.id === 'x500bund');
+    expect(saved.browse).toEqual({
+      enabled: true,
+      groups: ['admins'],
+      base: 'ou=MRI,o=Bund,c=DE',
+      bind: { mode: 'anonymous' },
+      denyAttributes: ['info', 'secretNote']
+    });
+  });
+
   test('editing a plain-text directory warns until plain text is allowed', async () => {
     renderAt('/admin/integrations/people-directories/legacy');
     expect(await screen.findByLabelText('ID')).toHaveAttribute('readonly');
@@ -420,7 +449,7 @@ describe('people directory editor', () => {
     ).toBeInTheDocument();
   });
 
-  test('the test panel posts the unsaved form and shows steps, chain and people', async () => {
+  test('the test panel posts the unsaved form and shows steps, issuer and people', async () => {
     mockApi.testPeopleDirectory.mockResolvedValue({
       success: false,
       message: 'Connect failed',
@@ -432,18 +461,8 @@ describe('people directory editor', () => {
           label: 'Connect',
           status: 'fail',
           message: 'certificate not trusted',
-          details: {
-            missingIssuer: 'C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23',
-            certificateChain: [
-              {
-                subject: 'CN=x500.bund.de',
-                issuer: 'CN=CA IVBB Deutsche Telekom AG 23',
-                validFrom: '2025-12-03T00:00:00Z',
-                validTo: '2026-12-03T00:00:00Z',
-                fingerprint256: 'AA:BB'
-              }
-            ]
-          }
+          details: { errorCode: 'UNABLE_TO_GET_ISSUER_CERT', missingIssuer: 'PCA-1-Verwaltung-23' },
+          hints: ['Install "PCA-1-Verwaltung-23" in the operating system\'s certificate store']
         }
       ],
       results: [
@@ -475,8 +494,7 @@ describe('people directory editor', () => {
     expect(target.directory).toMatchObject({ id: 'x500bund', baseDn: 'ou=MRI,o=Bund,c=DE' });
 
     expect(await screen.findByText('certificate not trusted')).toBeInTheDocument();
-    expect(screen.getByText(/The issuer "PCA-1-Verwaltung-23" is not trusted/)).toBeInTheDocument();
-    expect(screen.getByText('AA:BB')).toBeInTheDocument();
+    expect(screen.getByText(/Install "PCA-1-Verwaltung-23"/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Mapped results (1)' });
     expect(within(table).getByText('Vertreterin des Präsidenten')).toBeInTheDocument();
     // Fields without a value in any result get no column.

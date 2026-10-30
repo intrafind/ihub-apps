@@ -34,7 +34,8 @@ import { mentionAccess } from './services/workflow/workflowAccess.js';
 import {
   isSystemSkillTool,
   runSystemSkillTool,
-  systemSkillToolsFor
+  systemSkillToolsFor,
+  usesDocumentTemplates
 } from './services/systemSkillTools.js';
 
 /**
@@ -851,7 +852,17 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
 
     const appSkills = await getUsableSkills({ skillIds: app.skills, user: context.user });
-    const skillTools = systemSkillToolsFor(appSkills, { language: lang, model: context.model });
+    // The document skills' tools follow the app's document template.
+    const templates = usesDocumentTemplates(appSkills)
+      ? await (
+          await import('./services/documents/templates/DocumentTemplateService.js')
+        ).documentTemplateContext({ app, language: lang })
+      : null;
+    const skillTools = systemSkillToolsFor(appSkills, {
+      language: lang,
+      model: context.model,
+      templates
+    });
     appTools = appTools.concat(skillTools.filter(t => !appTools.some(a => a.id === t.id)));
   }
 
