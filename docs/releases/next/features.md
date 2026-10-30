@@ -438,10 +438,9 @@ chat, instead of leaving the choice to the model. The list is the user's own sea
 their display names, or the iFinder iAssistants they can see, plus "All my search profiles" where
 the app allows it.
 
-- **In the chat:** the **iFinder Search** app shows a **Search in** picker next to the model
-  selector. Other apps with iFinder tools, and chats with an iAssistant model, get a row under
-  **Use in this chat** in the **+** menu with a submenu, and a chip under the composer shows where
-  the next question goes.
+- **In the chat:** apps with iFinder tools, the **iFinder Search** app included, and chats with an
+  iAssistant model get a row under **Use in this chat** in the **+** menu with a submenu. Picking
+  an entry closes the menu, and a chip under the composer shows where the next question goes.
 - **Saved with the chat:** a reopened chat continues in the profile it used. Changing the
   iAssistant mid-chat continues in a new iFinder conversation.
 - **Binding:** every iFinder search, document read and facet lookup of the chat uses the picked
@@ -456,7 +455,7 @@ the app allows it.
   change the profile at all (`iFinder.allowUserSearchProfileChange`). The upgrade keeps the
   profile your installation already searched as the default.
 - **Per app:** `integrations.ifinder` and `integrations.iassistant` set where the picker appears
-  (`scopePicker`: `inline`, `menu`, `hidden`), the scope a new chat starts with (`defaultScope`),
+  (`scopePicker`: `menu` or `hidden`), the scope a new chat starts with (`defaultScope`),
   or a scope the app's chats always use (`pinnedScope`).
 
 ## Code, Data and Text Files, and ZIP Archives on Request

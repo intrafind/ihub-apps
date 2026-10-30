@@ -89,6 +89,7 @@ function ChatInputActionsMenu({
   const [openScopeMenu, setOpenScopeMenu] = useState(null);
   const dropdownRef = useRef(null);
   const actionsMenuRef = useRef(null);
+  const triggerRef = useRef(null);
 
   /** Closes the actions menu dropdown */
   const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
@@ -330,6 +331,7 @@ function ChatInputActionsMenu({
     <div className="relative" ref={dropdownRef}>
       {/* Show + button on mobile always, on desktop only if menu has content */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
@@ -655,9 +657,13 @@ function ChatInputActionsMenu({
                         >
                           {integration.scopes.map(scope => {
                             const isSelected = scope.id === integration.current;
+                            // A pick is the whole job: close the menu, not
+                            // just the submenu, and give focus back to "+".
                             const select = () => {
                               onIntegrationScopeChange(integration.id, scope.id);
                               setOpenScopeMenu(null);
+                              setIsOpen(false);
+                              triggerRef.current?.focus();
                             };
                             return (
                               <div
@@ -692,12 +698,10 @@ function ChatInputActionsMenu({
                               </div>
                             );
                           })}
-                          {hint && (
-                            <p className="px-2 pt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {hint}
-                            </p>
-                          )}
                         </div>
+                      )}
+                      {hint && (
+                        <p className="px-2 pt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
                       )}
                     </div>
                   );

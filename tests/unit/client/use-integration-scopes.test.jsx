@@ -26,7 +26,7 @@ const LISTED = {
   integrations: [
     {
       id: 'ifinder',
-      scopePicker: 'inline',
+      scopePicker: 'menu',
       fixed: false,
       defaultScope: 'standard',
       scopes: [{ id: 'standard' }, { id: 'contracts' }]

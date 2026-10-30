@@ -1300,19 +1300,19 @@ The picked scope is saved with the chat and restored when the chat is reopened. 
 
 ```json
 "integrations": {
-  "ifinder": { "scopePicker": "inline", "defaultScope": "contracts" },
+  "ifinder": { "defaultScope": "contracts" },
   "iassistant": { "scopePicker": "menu", "allowAllSearchProfiles": true }
 }
 ```
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `scopePicker` | `inline` \| `menu` \| `hidden` | `menu` | `inline`: a "Search in: … ▾" picker next to the model selector. `menu`: a row in the "+" menu with a submenu, and a chip under the composer showing the scope in use. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
+| `scopePicker` | `menu` \| `hidden` | `menu` | `menu`: a row under **Use in this chat** in the "+" menu with a submenu, and a chip under the composer showing the scope in use. Picking a scope closes the menu. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
 | `defaultScope` | String | the platform default | The scope a new chat starts with, when the user has it |
 | `pinnedScope` | String | - | The only scope the app's chats use. The picker shows it but offers nothing else, and the server applies it whatever the request says |
 | `allowAllSearchProfiles` | Boolean | the app's `iassistant.allSearchProfiles` | `iassistant` only: offer "All my search profiles" (iFinder 6.9+) |
 
-When iFinder cannot be asked for the list (a user without the feature `fi_ifinder_allow` gets 403, or iFinder is down), the picker offers the configured default (and the admin allow-list) with a short hint instead of an empty list. The shipped **iFinder Search** app uses `scopePicker: "inline"`. `GET /api/integrations/scopes?appId=…&modelId=…` returns what the picker shows.
+When iFinder cannot be asked for the list (a user without the feature `fi_ifinder_allow` gets 403, or iFinder is down), the picker offers the configured default (and the admin allow-list) with a short hint instead of an empty list. `GET /api/integrations/scopes?appId=…&modelId=…` returns what the picker shows.
 
 ### Available Icons
 
