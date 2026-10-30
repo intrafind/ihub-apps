@@ -2964,7 +2964,9 @@
           "testing": "Teste...",
           "testConnection": "Verbindung testen",
           "autoRefresh": "Automatische Aktualisierung",
-          "hours": "Stunden"
+          "hours": "Stunden",
+          "trustCode": "Darf Integrationen liefern, die Code auf diesem Server ausführen",
+          "trustCodeHelp": "Nur für einen Herausgeber, dem Sie vertrauen. Eine solche Integration führt ihr Connector-Modul im Serverprozess aus; jede Code-Datei muss im Katalog einen Hash tragen, der bei der Installation geprüft wird."
         }
       },
       "detail": {
@@ -3322,7 +3324,8 @@
         "test": "Verbindung testen",
         "testing": "Teste …",
         "dynamicActionsEmpty": "Der Server listet seine Tools, sobald iHub sich verbindet. Testen Sie die Verbindung, um sie zu sehen; jedes Tool ist an, bis Sie welche abschalten.",
-        "dynamicActionsHint": "Das sind die Tools, die der Server listet; ein später hinzugefügtes Tool ist standardmäßig an."
+        "dynamicActionsHint": "Das sind die Tools, die der Server listet; ein später hinzugefügtes Tool ist standardmäßig an.",
+        "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen."
       },
       "connections": {
         "title": "Verbundene Benutzer",
@@ -3334,7 +3337,8 @@
         "resetRegistration": "OAuth-Client-Registrierung zurücksetzen",
         "resetConfirm": "OAuth-Client-Registrierung von {{label}} zurücksetzen? Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden.",
         "resetDone": "OAuth-Client-Registrierung zurückgesetzt"
-      }
+      },
+      "runsCode": "Führt Code auf diesem Server aus"
     },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",

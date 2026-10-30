@@ -2673,7 +2673,9 @@
           "testing": "Testing...",
           "testConnection": "Test Connection",
           "autoRefresh": "Auto Refresh",
-          "hours": "hours"
+          "hours": "hours",
+          "trustCode": "May deliver integrations that run code on this server",
+          "trustCodeHelp": "Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install."
         }
       },
       "detail": {
@@ -3031,7 +3033,8 @@
         "test": "Test connection",
         "testing": "Testing…",
         "dynamicActionsEmpty": "The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.",
-        "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default."
+        "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default.",
+        "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust."
       },
       "connections": {
         "title": "Connected users",
@@ -3043,7 +3046,8 @@
         "resetRegistration": "Reset OAuth client registration",
         "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
         "resetDone": "OAuth client registration reset"
-      }
+      },
+      "runsCode": "Runs code on this server"
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",

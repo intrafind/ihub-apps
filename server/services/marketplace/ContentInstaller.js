@@ -33,6 +33,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import registryService from './RegistryService.js';
@@ -300,13 +301,75 @@ export async function fetchItemContent(registryId, type, name) {
   }
 
   if (type === 'integration') {
-    return {
+    const content = await buildIntegrationContent(
       item,
-      content: await buildIntegrationContent(item, responseData, itemUrl, authHeaders, registry)
-    };
+      responseData,
+      itemUrl,
+      authHeaders,
+      registry
+    );
+    verifyIntegrationCode(item, content, registry);
+    return { item, content };
   }
 
   return { item, content: responseData };
+}
+
+const CODE_FILE = /\.(m?js|cjs)$/i;
+
+/** Whether `text` has the hash `expected` (`sha256-<base64>` or a hex digest). */
+export function matchesIntegrity(text, expected) {
+  if (typeof expected !== 'string' || !expected) return false;
+  const digest = crypto.createHash('sha256').update(text, 'utf8');
+  const value = expected.startsWith('sha256-') ? expected.slice('sha256-'.length) : expected;
+  if (/^[0-9a-f]{64}$/i.test(value)) return digest.digest('hex') === value.toLowerCase();
+  return digest.digest('base64') === value;
+}
+
+/**
+ * Code travels only from a registry the admin trusts for it, and only with a
+ * hash per code file in the catalog, which the fetched file must match. Every
+ * hash the catalog lists is checked, whatever the file.
+ *
+ * @param {object} item - Catalog item
+ * @param {{ files: Record<string, string|object> }} content
+ * @param {object} registry - Registry config (`trustCode`)
+ */
+export function verifyIntegrationCode(item, content, registry) {
+  const definition = content.files['integration.json'];
+  const isScript = definition?.protocol?.type === 'script';
+  const codeFiles = Object.keys(content.files).filter(file => CODE_FILE.test(file));
+  const integrity = item.source?.integrity || {};
+  if (isScript || codeFiles.length) {
+    if (registry?.trustCode !== true) {
+      const error = new Error(
+        `Integration '${item.name}' brings code that runs on this server; the registry ` +
+          `'${registry?.id || ''}' is not trusted for code. Mark the registry as trusted ` +
+          'for code to install it.'
+      );
+      error.code = 'CODE_NOT_TRUSTED';
+      throw error;
+    }
+    const unhashed = codeFiles.filter(file => !integrity[file]);
+    if (unhashed.length) {
+      const error = new Error(
+        `Integration '${item.name}': the catalog lists no hash for the code file(s) ${unhashed.join(', ')}`
+      );
+      error.code = 'CODE_INTEGRITY_REQUIRED';
+      throw error;
+    }
+  }
+  for (const [file, expected] of Object.entries(integrity)) {
+    const text = content.files[file];
+    if (typeof text !== 'string') continue;
+    if (!matchesIntegrity(text, expected)) {
+      const error = new Error(
+        `Integration '${item.name}': the file ${file} does not match the hash the catalog lists`
+      );
+      error.code = 'INTEGRITY_MISMATCH';
+      throw error;
+    }
+  }
 }
 
 /**

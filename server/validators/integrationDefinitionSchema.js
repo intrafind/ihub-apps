@@ -353,7 +353,21 @@ const a2aProtocolSchema = z.object({
   pollIntervalMs: z.number().int().min(250).max(60000).optional()
 });
 
-const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp', 'a2a']);
+/**
+ * A connector module shipped inside the definition folder (a companion file)
+ * with the same contract as a built-in native connector. It runs in the
+ * server process, so a registry may deliver one only when the admin marked
+ * the registry as trusted for code, and every code file must carry a hash.
+ */
+export const SCRIPT_MODULE_PATTERN = /^(?!\.)(?!.*(^|\/)\.\.(\/|$))[A-Za-z0-9_./-]+\.(m?js|cjs)$/;
+
+const scriptProtocolSchema = z.object({
+  type: z.literal('script'),
+  /** Relative path of the connector module inside the folder, e.g. `connector.js`. */
+  module: z.string().min(1).max(256).regex(SCRIPT_MODULE_PATTERN, 'invalid module path')
+});
+
+const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp', 'a2a', 'script']);
 
 const reservedProtocolSchema = z
   .object({
@@ -366,6 +380,7 @@ export const integrationProtocolSchema = z.union([
   nativeProtocolSchema,
   mcpProtocolSchema,
   a2aProtocolSchema,
+  scriptProtocolSchema,
   reservedProtocolSchema
 ]);
 
@@ -536,8 +551,16 @@ export const integrationDefinitionSchema = z
       }
     });
 
+    if (def.protocol.type === 'script' && def.builtIn) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['protocol', 'type'],
+        message: 'a built-in integration uses the native protocol, not a script module'
+      });
+    }
+
     if (def.scopes) {
-      const declarative = def.protocol.type !== 'native';
+      const declarative = def.protocol.type !== 'native' && def.protocol.type !== 'script';
       if (declarative && (!def.scopes.action || !def.scopes.map || !def.scopes.applyAs)) {
         ctx.addIssue({
           code: 'custom',

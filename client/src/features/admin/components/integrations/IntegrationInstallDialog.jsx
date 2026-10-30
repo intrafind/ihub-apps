@@ -355,6 +355,14 @@ function IntegrationInstallDialog({
             {definition.description && (
               <p className="text-sm text-gray-600 dark:text-gray-400">{definition.description}</p>
             )}
+            {definition.runsCode && (
+              <div className={CALLOUT_CLASS.warning}>
+                {t(
+                  'admin.integrationCatalog.wizard.runsCode',
+                  'This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust.'
+                )}
+              </div>
+            )}
             {!definition.supported && (
               <div className={CALLOUT_CLASS.warning}>
                 {t(

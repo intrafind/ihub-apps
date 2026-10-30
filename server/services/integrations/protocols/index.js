@@ -24,8 +24,8 @@
  * `status(instance)`, `listConnections` / `disconnectUser` /
  * `resetRegistration` (per-user sign-in), `invalidate(instanceId)`.
  *
- * `openapi`, `native`, `mcp` and `a2a` have adapters; the other protocol
- * types validate but cannot be installed.
+ * `openapi`, `native`, `script`, `mcp` and `a2a` have adapters; the other
+ * protocol types validate but cannot be installed.
  */
 
 import * as openapi from './openapi/OpenApiAdapter.js';
@@ -33,7 +33,8 @@ import * as native from './native/NativeAdapter.js';
 import * as mcp from './mcp/McpAdapter.js';
 import * as a2a from './a2a/A2aAdapter.js';
 
-const adapters = { openapi, native, mcp, a2a };
+// `script` is the native adapter with the connector loaded from the folder.
+const adapters = { openapi, native, mcp, a2a, script: native };
 
 /**
  * @param {string} protocolType

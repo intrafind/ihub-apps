@@ -38,7 +38,8 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
     auth: { type: 'none' },
     enabled: true,
     autoRefresh: false,
-    refreshIntervalHours: 24
+    refreshIntervalHours: 24,
+    trustCode: false
   });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -56,7 +57,8 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
         auth: registry.auth || { type: 'none' },
         enabled: registry.enabled ?? true,
         autoRefresh: registry.autoRefresh ?? false,
-        refreshIntervalHours: registry.refreshIntervalHours ?? 24
+        refreshIntervalHours: registry.refreshIntervalHours ?? 24,
+        trustCode: registry.trustCode ?? false
       });
     }
   }, [registry]);
@@ -391,6 +393,42 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Code from this registry */}
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => set('trustCode', !form.trustCode)}
+              className={`relative mt-0.5 inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                form.trustCode ? 'bg-amber-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+              aria-label={t(
+                'admin.marketplace.registries.form.trustCode',
+                'May deliver integrations that run code on this server'
+              )}
+              aria-pressed={form.trustCode}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  form.trustCode ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <div>
+              <label className="text-sm text-gray-700 dark:text-gray-300">
+                {t(
+                  'admin.marketplace.registries.form.trustCode',
+                  'May deliver integrations that run code on this server'
+                )}
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.marketplace.registries.form.trustCodeHelp',
+                  'Only for a publisher you trust. Such an integration runs its connector module in the server process; every code file must carry a hash in the catalog, which is checked on install.'
+                )}
+              </p>
+            </div>
           </div>
 
           {/* Footer buttons */}
