@@ -4,8 +4,10 @@
 import DOMPurify from 'dompurify';
 import { Marked, Renderer } from 'marked';
 import {
+  codeDownloadName,
   escapeHtml,
   getLanguageDisplayName,
+  parseCodeInfo,
   isMermaidLanguage,
   hashString,
   detectDiagramType
@@ -157,7 +159,9 @@ const createRenderer = t => {
       actualCode = String(actualCode);
     }
 
-    const lang = (actualLanguage || 'text').toLowerCase();
+    // The info string can name the file as well (```js title="src/index.js"):
+    // the language is its first word, the name goes on the download button.
+    const { language: lang, fileName } = parseCodeInfo(actualLanguage);
 
     if (isMermaidLanguage(lang)) {
       return renderMermaidPlaceholder(actualCode, lang);
@@ -172,7 +176,7 @@ const createRenderer = t => {
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-xs">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
-        <div class="code-block-toolbar flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
+        <div class="code-block-toolbar select-none flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
           <span class="text-xs font-medium text-gray-600">${displayLanguage}</span>
           <div class="flex flex-row items-center gap-2">
             <button
@@ -188,6 +192,7 @@ const createRenderer = t => {
               class="code-download-btn p-1.5 rounded-sm text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               data-code-language="${lang}"
+              data-code-filename="${encodeURIComponent(codeDownloadName(fileName, lang))}"
               type="button"
               title="${t ? t('common.downloadCode', 'Download code') : 'Download code'}"
             >

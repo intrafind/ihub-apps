@@ -124,6 +124,9 @@ Hover a message to see its actions:
 - Answers: **Copy** (as text, Markdown or HTML), **Download**, **Open in Canvas** (edit a long text
   together with the model), **Read aloud** when your administrator enabled it, and a star rating
   with an optional comment for feedback.
+- Code blocks in an answer: **Copy** copies the code, **Download** saves it as a file. The file
+  takes the name the block gives (` ```js title="src/index.js" ` or ` ```python:app/main.py `
+  saves `index.js` or `main.py`), otherwise `code.<extension>` by its language.
 
 ### The chat header
 
