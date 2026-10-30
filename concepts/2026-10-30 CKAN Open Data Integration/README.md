@@ -26,7 +26,7 @@ We tested the API against five live portals and ran a trimmed OpenAPI document t
 | [Open-Data Schleswig-Holstein](https://opendata.schleswig-holstein.de) | 2.11.7 | 33,000 datasets, DCAT-AP.de, `ckanext-dcat`: every dataset is also available as JSON-LD at `/dataset/<name>.jsonld`, the whole catalog at `/catalog.jsonld?page=n`. |
 | [open.canada.ca](https://open.canada.ca/data) | 2.10.8 | 48,000 datasets, DataStore active on many resources. |
 | [data.boston.gov](https://data.boston.gov) | 2.x | Used for DataStore tests: `datastore_search`, `datastore_info` and `datastore_search_sql` all enabled. |
-| [data.europa.eu](https://data.europa.eu) | not CKAN | Offers a CKAN-compatible `package_search` under `/api/hub/search/ckan/` (137,000 results for "Kitas"), but no `status_show`. A health check must therefore use `package_search?rows=0`, not `status_show`. |
+| [data.europa.eu](https://data.europa.eu) | not CKAN | Offers a CKAN-compatible `package_search` (with facets) under `/api/hub/search/ckan/`, 137,000 results for "Kitas". Nothing else: `package_show`, `organization_list`, `group_list`, `tag_list`, `resource_show`, `datastore_search` and `status_show` return 404 or 500. An instance pointed at it keeps only `search_datasets`; its health check must be `package_search?rows=0`. |
 
 Other CKAN deployments relevant to IntraFind customers: Bavaria (open.bydata.de), Berlin, Hamburg (transparenzportal), Rhineland-Palatinate, NRW, many cities (Bonn, Köln, Leipzig, Dresden), the EU Joint Research Centre, and research data catalogs. Companies also run CKAN as an internal data catalog, which is where private datasets and API tokens matter.
 
@@ -99,15 +99,19 @@ Conclusion: CKAN fits the planned `openapi` adapter. Nothing in CKAN needs nativ
 
 The full draft is [`integration.json`](integration.json). The parts that matter for the interface:
 
-**Identity.** `id: org.ckan/open-data-portal`, `protocol.type: openapi` with the companion document `ckan-openapi.json` in the definition folder (like a skill's companion files). One definition, installed once per portal (`ckan-govdata`, `ckan-internal`), as #2924 allows.
+**Identity.** `id: org.ckan/open-data-portal`, `protocol.type: openapi` with the companion document `ckan-openapi.json` in the definition folder (like a skill's companion files); the document's paths are relative to `{baseUrl}{apiPath}`. One definition, installed once per portal (`ckan-govdata`, `ckan-internal`), as #2924 allows. The marketplace package adds `icon.svg` (a neutral open-data icon, see open question 4) and a README; the draft here carries neither.
 
-**Install fields (`ConfigField`, scope `admin`).** `baseUrl` (url, required, `injectAs: urlVariable`, including a path prefix), `apiPath` (advanced, default `/api/3/action`), `tokenHeader` (enum `Authorization` | `X-CKAN-API-Key`), `apiToken` (secret, optional, to the credential store), `defaultFilter` (Solr `fq` applied to every search), `includePrivate`, `datastoreSql` (unlocks the SQL action), `maxRows` (1 to 50, default 10), `metadataProfile` (`ckan` | `dcat-ap-de`).
+**Install fields (`ConfigField`, scope `admin`).** `baseUrl` (url, required, `injectAs: urlVariable`, including a path prefix), `apiPath` (advanced, default `/api/3/action`), `tokenHeader` (string with suggestions `Authorization` and `X-CKAN-API-Key`, any header name a portal configures as `apitoken_header_name`), `apiToken` (secret, optional, to the credential store), `defaultFilter` (Solr `fq` applied to every search), `includePrivate`, `datastoreSql` (unlocks the SQL action), `maxRows` (1 to 50, default 10), `metadataProfile` (`ckan` | `dcat-ap-de`). Every enum choice and title carries en and de.
+
+**Enforced defaults.** Install values reach an action through `defaults` with an explicit mode, because the model's arguments must not undo what the admin configured: `fixed` (install value wins, model value dropped: `include_private`, `all_fields`), `cap` (the smaller number wins: `rows` against `maxRows`), `append` (filters are combined: `defaultFilter` AND the model's `fq`), `default` (install value only when the model sent nothing: `sort`, `limit`). Today's `OpenApiToolRunner` applies only OpenAPI schema defaults and sends the model's arguments as they are, so this is adapter work (section 6, item 5).
 
 **Auth modes.** `none` (public portals, the default), `service-account` (one shared token, header injection), `api-key-user` (each user's own token; phase 3, #2929). No OAuth exists in CKAN.
 
 **Actions.** Read, enabled by default: `search_datasets`, `get_dataset`, `get_resource`, `list_organizations`, `get_organization`, `list_groups`, `describe_datastore`, `query_datastore`. Read, off by default: `search_resources`, `list_tags`, `query_datastore_sql` (requires `datastoreSql`), `read_resource_file` (see decision 1). Phase 2, off by default, token required, approval per #2945: `create_dataset` (write), `update_dataset` (write), `add_resource` (write), `delete_dataset` (destructive). Each action carries `sideEffect`, `dataFlow: external`, model guidance, example prompts and a `hideFields` list; the model-facing names are verbs, not CKAN's `package_*` vocabulary.
 
-**Scopes (#3050).** Publishers (organizations) are the natural "where to search" for a portal. The definition points `scopes` at `list_organizations` and applies the pick as `fq=organization:<name>` on `search_datasets`, after the model's arguments. A city administration can thus ship one app per department without one integration per department.
+**Scopes (#3050).** Publishers (organizations) are the natural "where to search" for a portal. The definition points `scopes` at `list_organizations` and applies the pick as `fq=organization:<name>` on `search_datasets` in `append` mode, after the model's arguments. A city administration can thus ship one app per department without one integration per department.
+
+A scope is a search focus, not an access boundary. Access to data is CKAN's job and follows the token (or the absence of one on a public portal); a user who knows a dataset id can call `get_dataset` on it whatever the scope says, exactly as on the portal's website. Where an installation wants hard isolation between publishers, the admin sets `defaultFilter` on the instance and binds the app with `userMayChange: false`; iteration 2 adds `scopes.strict`, which makes the adapter check `organization.name` of every `get_dataset` result and resolve the owning dataset of `get_resource`, `describe_datastore` and `query_datastore` before answering.
 
 **Answer Sources.** Every dataset in a result becomes a source: title, `{baseUrl}/dataset/{name}`, `notes` as snippet; resources become file sources with their `url` for preview and download. Declared in the definition, not coded.
 
@@ -120,7 +124,7 @@ The full draft is [`integration.json`](integration.json). The parts that matter 
 ```jsonc
 "integrations": [
   { "id": "ckan-govdata", "actions": ["search_datasets", "get_dataset", "get_resource", "list_organizations", "describe_datastore", "query_datastore"],
-    "connection": "none", "scope": { "default": "stadt-norderstedt", "userMayChange": true } }
+    "connection": "none", "scope": { "default": "stadt-norderstedt", "userMayChange": true } }   // userMayChange: false pins the publisher for this app
 ]
 ```
 
@@ -134,9 +138,9 @@ These are the generic requirements the first catalog integration exercises. Each
 | 2 | `openapi` adapter: **`baseUrl` and path prefix from an install field** (`injectAs: urlVariable`); header injection of a secret install field; the `none` auth mode. | #2913, #2912 (`auth.modes` gains `none`) |
 | 3 | `openapi` adapter: **array parameters** serialized per OpenAPI `style`/`explode` (repeated query parameters), not comma-joined. *new, bug-level* | #2913 |
 | 4 | **Response post-processing** declared per action: `hideFields` (document the `[]` syntax), and *new*: an **envelope mapping** (`success`, `result`, `error` paths) so the model sees `result` and a structured error, not `{help, success, result}`. | #2913 |
-| 5 | **Action defaults** from install values (`rows: {maxRows}`, `fq: {defaultFilter}`) merged under the model's arguments; **conditional actions** (`requires: install.datastoreSql`). *new* | #2912, #2913 |
+| 5 | **Action defaults** from install values with an enforcement mode (`fixed`, `cap`, `append`, `default`) so the model cannot undo admin settings (`include_private` fixed, `rows` capped by `maxRows`, `fq` appended to `defaultFilter`); **conditional actions** (`requires: install.datastoreSql`). *new* | #2912, #2913 |
 | 6 | **Model-facing action names and descriptions** that differ from the OpenAPI `operationId` and summary, plus `guidance` and `examples` per action. | #2912, #2974 |
-| 7 | **Scopes from an action**: `scopes()` of the adapter runs a declared read action and maps its result to `[{id, name}]`; the pick is applied as a fixed parameter. *new for non-native adapters* | #2913, #3050 |
+| 7 | **Scopes from an action**: `scopes()` of the adapter runs a declared read action and maps its result to `[{id, name}]`; the pick is applied with an enforcement mode like a default; optional `strict` ownership checks on follow-up actions (iteration 2). *new for non-native adapters* | #2913, #3050 |
 | 8 | **Declarative Answer Sources** mapping (items path, title, url template, snippet, kind) so a definition produces citations without a producer module. *new* | #2913 (adapter contract), Answer Sources provider for `openapi` |
 | 9 | **Health probe as a declared action and arguments**, not `status_show`-style assumptions. *new* | #2920 (test before save), instance health loop |
 | 10 | **Install wizard** rendered from the `ConfigField` list above, including enum, secret, number with min/max, boolean, and advanced fields. | #2920 |
