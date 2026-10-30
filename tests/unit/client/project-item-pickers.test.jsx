@@ -444,4 +444,57 @@ describe('IFinderDocumentPicker', () => {
     fireEvent.click(screen.getByText('Lease agreement'));
     expect(draftOf()).toMatchObject({ documentId: 'd1', name: 'Our lease' });
   });
+
+  test('searches in the search profile the user picks, and keeps the default out of the draft', async () => {
+    const searchIFinder = jest.fn(() => Promise.resolve(RESULTS));
+    const fetchProfiles = () =>
+      Promise.resolve({
+        profiles: [
+          { id: 'standard', name: 'Everything', isDefault: true },
+          { id: 'legal', name: 'Legal' }
+        ],
+        defaultProfile: 'standard',
+        fixed: false
+      });
+    await act(async () => {
+      render(
+        <WithDraft
+          picker={IFinderDocumentPicker}
+          initial={{ documentId: '', documentTitle: '', name: '', searchProfile: '' }}
+          searchIFinder={searchIFinder}
+          fetchProfiles={fetchProfiles}
+          errorMessage={errorMessage}
+        />
+      );
+    });
+    const select = screen.getByLabelText('Search in');
+    expect(select).toHaveValue('standard');
+    fireEvent.change(select, { target: { value: 'legal' } });
+    expect(draftOf()).toMatchObject({ searchProfile: 'legal' });
+    const field = screen.getByLabelText('Search iFinder');
+    fireEvent.change(field, { target: { value: 'lease' } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+    expect(searchIFinder).toHaveBeenCalledWith('lease', { profile: 'legal' });
+    fireEvent.change(select, { target: { value: 'standard' } });
+    expect(draftOf()).toMatchObject({ searchProfile: '', documentId: '' });
+  });
+
+  test('offers no choice with one profile, or without a profile loader', async () => {
+    await act(async () => {
+      render(
+        <WithDraft
+          picker={IFinderDocumentPicker}
+          initial={{ documentId: '', documentTitle: '', name: '' }}
+          searchIFinder={() => Promise.resolve([])}
+          fetchProfiles={() =>
+            Promise.resolve({ profiles: [{ id: 'standard', name: 'All' }], fixed: false })
+          }
+          errorMessage={errorMessage}
+        />
+      );
+    });
+    expect(screen.queryByLabelText('Search in')).not.toBeInTheDocument();
+  });
 });

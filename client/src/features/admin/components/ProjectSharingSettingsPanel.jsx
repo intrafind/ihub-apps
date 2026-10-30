@@ -8,6 +8,7 @@ import {
   getAdminApiErrorMessage,
   saveProjectSettings
 } from '../../../api/adminApi';
+import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 
 const TIER_POLICIES = [
   {
@@ -15,7 +16,7 @@ const TIER_POLICIES = [
     label: ['admin.projects.tierPolicy.ihub', 'iHub projects only'],
     help: [
       'admin.projects.tierPolicy.ihubHelp',
-      'iFinder smart collections are not listed. This is the default.'
+      'iFinder smart collections are not offered. This is the default.'
     ]
   },
   {
@@ -23,7 +24,7 @@ const TIER_POLICIES = [
     label: ['admin.projects.tierPolicy.both', 'iHub projects and iFinder smart collections'],
     help: [
       'admin.projects.tierPolicy.bothHelp',
-      "Each user's iFinder smart collections are listed as projects, and users choose the tier when they create a project."
+      'Users add their iFinder smart collections to their projects from the catalog, and choose the tier when they create a project.'
     ]
   },
   {
@@ -31,7 +32,7 @@ const TIER_POLICIES = [
     label: ['admin.projects.tierPolicy.ifinder', 'iFinder smart collections preferred'],
     help: [
       'admin.projects.tierPolicy.ifinderHelp',
-      'Smart collections are listed like under "both". Local projects stay usable and can still be created.'
+      'Smart collections can be added like under "both". Local projects stay usable and can still be created.'
     ]
   }
 ];
@@ -40,8 +41,9 @@ const TIER_POLICIES = [
  * Platform settings of user projects: who users may share their projects with
  * (`platform.projects.sharing`: specific users, groups, everyone signed in and
  * the catalog of published projects) and the tier policy
- * (`platform.projects.tierPolicy`: whether iFinder smart collections are
- * listed). Full admins only: for anyone else the panel is not shown.
+ * (`platform.projects.tierPolicy`: whether iFinder smart collections can be
+ * added) and the default app of project chats (`platform.projects.defaultAppId`).
+ * Full admins only: for anyone else the panel is not shown.
  *
  * @returns {JSX.Element|null}
  */
@@ -88,6 +90,10 @@ function ProjectSharingSettingsPanel() {
   };
   const updateTierPolicy = tierPolicy => {
     setDraft(previous => ({ ...previous, tierPolicy }));
+    setSaved(false);
+  };
+  const updateDefaultApp = defaultAppId => {
+    setDraft(previous => ({ ...previous, defaultAppId }));
     setSaved(false);
   };
 
@@ -158,6 +164,27 @@ function ProjectSharingSettingsPanel() {
             )}
           </p>
         </fieldset>
+        <div className="space-y-1">
+          <label
+            htmlFor="project-settings-default-app"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            {t('admin.projects.defaultApp.label', 'Default app for project chats')}
+          </label>
+          <ProjectAppSelect
+            id="project-settings-default-app"
+            value={draft.defaultAppId || ''}
+            onChange={updateDefaultApp}
+            noneLabel={t('admin.projects.defaultApp.none', 'First app in the list')}
+            className="block w-full max-w-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.projects.defaultApp.help',
+              'A chat in a project starts in the default app of the project; when the project has none, it starts in this app.'
+            )}
+          </p>
+        </div>
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.projects.sharing.legend', 'Users may share their projects with')}

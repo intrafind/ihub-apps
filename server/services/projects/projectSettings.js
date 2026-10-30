@@ -42,6 +42,7 @@ export { MAX_FILES_CEILING, MAX_MEMBERS, PROJECT_TIERS, TIER_POLICIES };
 /** Built-in `platform.projects` values. */
 export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   tierPolicy: 'ihub',
+  defaultAppId: '',
   limits: Object.freeze({
     maxFiles: 25,
     maxFileBytes: 20 * 1024 * 1024,
@@ -88,7 +89,7 @@ function readPositive(value, fallback) {
  * `retentionDays` of zero or less keeps user projects until deleted.
  *
  * @param {Object} [platformConfig] - Platform configuration.
- * @returns {{tierPolicy: string, limits: {maxFiles: number, maxFileBytes: number,
+ * @returns {{tierPolicy: string, defaultAppId: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
  *   allowGroups: boolean, allowEveryone: boolean, allowCatalog: boolean}, retentionDays: number,
  *   loadAllMaxTokens: number, kinds: Object<string, boolean>, encryption: {keyProvider: string},
@@ -105,6 +106,10 @@ export function projectSettings(platformConfig) {
     : defaults.tierPolicy;
   return {
     tierPolicy,
+    // The app a project chat starts in when its project names none ('' for the
+    // first app the user may chat in).
+    defaultAppId:
+      typeof block.defaultAppId === 'string' ? block.defaultAppId.trim() : defaults.defaultAppId,
     limits: {
       maxFiles: Math.min(
         MAX_FILES_CEILING,
@@ -246,6 +251,7 @@ export function projectsClientConfig(
     // iFinder version has the Smart Collections API is the per-user answer of
     // `GET /api/projects/_config` (`ifinder.available`).
     tiers: iFinderTierConfigured(platformConfig) ? ['ihub', 'ifinder'] : ['ihub'],
+    defaultAppId: settings.defaultAppId,
     limits: settings.limits,
     sharing: settings.sharing,
     retentionDays: settings.retentionDays

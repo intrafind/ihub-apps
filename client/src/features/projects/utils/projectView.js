@@ -54,20 +54,54 @@ const QUOTA_WARN_RATIO = 0.8;
 export const IFINDER_PROJECT_ID_PREFIX = 'ifc_';
 
 /**
+ * Whether a project is the project of an iFinder smart collection the user added
+ * (from the catalog, or by creating the collection): a stored project that keeps
+ * the default app, the instructions and the chats, while the documents live in
+ * the collection. `collection.state` says whether the collection is still there.
+ *
+ * @param {{id?: string, tier?: string, source?: Object}|null|undefined} project
+ * @returns {boolean}
+ */
+export function isCollectionStub(project) {
+  return (
+    typeof project?.id === 'string' &&
+    !project.id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
+    project.tier === 'ifinder' &&
+    project.source?.type === 'smart-collection'
+  );
+}
+
+/**
  * Whether a project is a smart collection of the iFinder tier: it lives in
  * iFinder, only its owner renames it or adds and removes its documents, and it is
- * never shared, deleted or held chats in. The id decides (the server never gives
- * that prefix to a stored project), the `tier` says the same.
+ * never shared. Either the project of a collection the user added
+ * ({@link isCollectionStub}), or a collection reached by its own id (`ifc_…`,
+ * attached to a chat before collections were added to the projects), which holds
+ * no chats.
  *
- * @param {{id?: string, tier?: string}|null|undefined} project
+ * @param {{id?: string, tier?: string, source?: Object}|null|undefined} project
  * @returns {boolean}
  */
 export function isIFinderProject(project) {
   return (
-    typeof project?.id === 'string' &&
-    project.id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
-    project.tier === 'ifinder'
+    (typeof project?.id === 'string' &&
+      project.id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
+      project.tier === 'ifinder') ||
+    isCollectionStub(project)
   );
+}
+
+/**
+ * The state of the collection behind a project of a smart collection: `ok`,
+ * `deleted` (deleted in iFinder), `unavailable` (iFinder could not be asked) or
+ * `unknown`. `ok` for a collection reached by its own id, which loads or fails.
+ *
+ * @param {Object|null|undefined} project
+ * @returns {'ok'|'deleted'|'unavailable'|'unknown'}
+ */
+export function collectionState(project) {
+  if (!isCollectionStub(project)) return 'ok';
+  return project.collection?.state || 'unknown';
 }
 
 /**
@@ -83,6 +117,7 @@ export function isIFinderProject(project) {
 export function canManageCollection(project, config) {
   return (
     isIFinderProject(project) &&
+    collectionState(project) === 'ok' &&
     project.permissions?.canEdit === true &&
     project.permissions?.readOnly !== true &&
     config?.ifinder?.writable === true
@@ -256,16 +291,14 @@ export function validateProjectForm(form) {
 export function buildCreateProjectBody(form, { tier = 'ihub' } = {}) {
   const description = (form.description || '').trim();
   const instructions = form.instructions || '';
-  // A smart collection has a name and a description: instructions and a default
-  // app do not exist there, and the server refuses them.
-  if (tier === 'ifinder') {
-    return { name: (form.name || '').trim(), ...(description ? { description } : {}), tier };
-  }
+  // A smart collection gets the name and the description in iFinder; its
+  // project in iHub keeps the instructions and the default app.
   return {
     name: (form.name || '').trim(),
     ...(description ? { description } : {}),
     ...(instructions.trim() ? { instructions } : {}),
-    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {})
+    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {}),
+    ...(tier === 'ifinder' ? { tier } : {})
   };
 }
 
@@ -528,16 +561,22 @@ export function appsForProjectChats(apps) {
 
 /**
  * The app a chat of the project starts in unless the user picks another: the
- * project's default app while the viewer can still use it, else the first
- * of the list. A default the viewer has no access to (or an app that was
- * removed) falls back silently; the project keeps it for those who can use it.
+ * project's default app while the viewer can still use it, else the default
+ * app the administrator set for project chats (`platform.projects.defaultAppId`),
+ * else the first of the list. A default the viewer has no access to (or an app
+ * that was removed) falls back silently; the project keeps it for those who can
+ * use it.
  *
  * @param {Array<{id: string}>} choices - Apps from {@link appsForProjectChats}, in display order.
- * @param {string|null|undefined} defaultAppId
+ * @param {string|null|undefined} defaultAppId - The project's.
+ * @param {string|null|undefined} [platformDefaultAppId] - The installation's.
  * @returns {string|null} The app id, or null when no app can chat in projects.
  */
-export function resolveProjectChatApp(choices, defaultAppId) {
+export function resolveProjectChatApp(choices, defaultAppId, platformDefaultAppId) {
   const list = choices || [];
   if (defaultAppId && list.some(app => app.id === defaultAppId)) return defaultAppId;
+  if (platformDefaultAppId && list.some(app => app.id === platformDefaultAppId)) {
+    return platformDefaultAppId;
+  }
   return list[0]?.id ?? null;
 }

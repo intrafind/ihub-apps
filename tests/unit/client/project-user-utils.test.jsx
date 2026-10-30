@@ -524,6 +524,14 @@ describe('project page rules', () => {
     expect(resolveProjectChatApp(apps, null)).toBe('chat');
     expect(resolveProjectChatApp([], 'chat')).toBeNull();
   });
+
+  test('falls back to the default app the administrator set, then to the first', () => {
+    const apps = [{ id: 'chat' }, { id: 'summarizer' }];
+    expect(resolveProjectChatApp(apps, null, 'summarizer')).toBe('summarizer');
+    expect(resolveProjectChatApp(apps, 'chat', 'summarizer')).toBe('chat');
+    expect(resolveProjectChatApp(apps, 'removed', 'summarizer')).toBe('summarizer');
+    expect(resolveProjectChatApp(apps, null, 'removed')).toBe('chat');
+  });
 });
 
 describe('project errors', () => {

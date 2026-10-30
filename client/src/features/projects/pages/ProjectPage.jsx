@@ -26,7 +26,13 @@ import {
 } from '../hooks/useProjects';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
-import { canManageCollection, isIFinderProject, projectDisplayName } from '../utils/projectView';
+import {
+  canManageCollection,
+  collectionState,
+  isCollectionStub,
+  isIFinderProject,
+  projectDisplayName
+} from '../utils/projectView';
 import RenameCollectionDialog from '../components/RenameCollectionDialog';
 
 /**
@@ -77,11 +83,43 @@ function IFinderBanner({ editable }) {
         {editable
           ? t(
               'projects.page.ifinderManage',
-              'This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. Sharing and deleting it are done in iFinder.'
+              'This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. It is shared in iFinder.'
             )
           : t(
               'projects.page.ifinderReadOnly',
               'This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.'
+            )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The banner of a project whose smart collection is gone from iFinder, or could
+ * not be asked: the project keeps its chats, default app and instructions, and
+ * has no documents until the collection is back.
+ *
+ * @param {{state: 'deleted'|'unavailable'}} props
+ * @returns {JSX.Element}
+ */
+function CollectionStateBanner({ state }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+      data-testid={`project-collection-${state}`}
+    >
+      <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
+      <p>
+        {state === 'deleted'
+          ? t(
+              'projects.page.collectionDeleted',
+              'The smart collection of this project was deleted in iFinder. Its chats, default app and instructions are kept here; it has no documents any more. Delete the project when you no longer need it.'
+            )
+          : t(
+              'projects.page.collectionUnavailable',
+              'iFinder could not be reached, so the documents of this smart collection are missing for now.'
             )}
       </p>
     </div>
@@ -124,6 +162,8 @@ function ProjectPageContent({ projectId }) {
   const { config } = useProjectsConfig();
   const { project, setProject, loading, error, reload } = useProject(projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The project of a smart collection: delete the collection in iFinder too.
+  const [deleteCollection, setDeleteCollection] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [renaming, setRenaming] = useState(false);
 
@@ -137,7 +177,9 @@ function ProjectPageContent({ projectId }) {
     setConfirmDelete(false);
     setDeleteError(null);
     try {
-      await deleteProject(project.id);
+      await deleteProject(project.id, {
+        deleteCollection: isCollectionStub(project) && deleteCollection
+      });
       backToList();
     } catch (err) {
       setDeleteError(projectErrorMessage(err, t));
@@ -189,14 +231,21 @@ function ProjectPageContent({ projectId }) {
   const permissions = project.permissions || {};
   // A smart collection from iFinder is changed by its owner only (rename, add and
   // remove documents), and only where the installation can serialize those writes
-  // (`config.ifinder.writable`). None of the pieces of a stored user project
-  // (members, catalog, instructions, chats) apply to it.
+  // (`config.ifinder.writable`). Members and the catalog do not apply to it. The
+  // project of a collection the user added (a stub) keeps its own default app,
+  // instructions and chats, and is deleted here; a collection reached by its own
+  // id holds none of them.
   const isIFinder = isIFinderProject(project);
+  const isStub = isCollectionStub(project);
+  const stubState = collectionState(project);
   const isUserProject = project.ownership === 'user' && !isIFinder;
   const collectionEditable = canManageCollection(project, config);
   const editable = isIFinder
     ? collectionEditable
     : isUserProject && permissions.canEdit === true && !permissions.readOnly;
+  const settingsEditable = isStub
+    ? permissions.canEdit === true && !permissions.readOnly
+    : editable;
   const readOnlyOwnerGone =
     isUserProject && (permissions.readOnly === true || project.owner?.active === false);
   // An admin project available to everyone: added from the catalog, and
@@ -231,7 +280,7 @@ function ProjectPageContent({ projectId }) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {collectionEditable && (
+            {collectionEditable && !isStub && (
               <button
                 type="button"
                 onClick={() => setRenaming(true)}
@@ -242,10 +291,13 @@ function ProjectPageContent({ projectId }) {
                 {t('projects.ifinder.rename', 'Rename')}
               </button>
             )}
-            {isUserProject && permissions.canDelete && (
+            {(isUserProject || isStub) && permissions.canDelete && (
               <button
                 type="button"
-                onClick={() => setConfirmDelete(true)}
+                onClick={() => {
+                  setDeleteCollection(false);
+                  setConfirmDelete(true);
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
               >
                 <Icon name="trash" size="sm" />
@@ -256,7 +308,10 @@ function ProjectPageContent({ projectId }) {
         </div>
 
         {readOnlyOwnerGone && <ReadOnlyBanner />}
-        {isIFinder && <IFinderBanner editable={collectionEditable} />}
+        {isIFinder && stubState === 'ok' && <IFinderBanner editable={collectionEditable} />}
+        {isStub && (stubState === 'deleted' || stubState === 'unavailable') && (
+          <CollectionStateBanner state={stubState} />
+        )}
         {project.ownership === 'admin' && (
           <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             {project.role === 'catalog'
@@ -302,8 +357,30 @@ function ProjectPageContent({ projectId }) {
               reload={reload}
             />
           </div>
-          {/* The side panel: one card of compact rows; editing opens a dialog. */}
-          {isIFinder ? (
+          {/* The side panel: one card of compact rows; editing opens a dialog. The
+              project of a smart collection has its settings (renaming renames the
+              collection too) above where its documents live. */}
+          {isStub ? (
+            <div className="self-start min-w-0 space-y-6">
+              <div className={PANEL_CARD} data-testid="project-settings-panel">
+                <ProjectSettingsCard
+                  project={project}
+                  editable={settingsEditable}
+                  onSaved={saved => {
+                    setProject(saved);
+                    invalidateProjectsList();
+                  }}
+                />
+              </div>
+              {stubState !== 'deleted' && (
+                <IFinderProjectCard
+                  project={project}
+                  config={config}
+                  editable={collectionEditable}
+                />
+              )}
+            </div>
+          ) : isIFinder ? (
             <IFinderProjectCard project={project} config={config} editable={collectionEditable} />
           ) : (
             <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
@@ -360,11 +437,43 @@ function ProjectPageContent({ projectId }) {
       <ConfirmDialog
         isOpen={confirmDelete}
         title={t('projects.page.deleteTitle', 'Delete project')}
-        message={t(
-          'projects.page.deleteConfirm',
-          'Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.',
-          { name: projectDisplayName(project, language) }
-        )}
+        message={
+          isStub ? (
+            <div className="space-y-3">
+              <p>
+                {t(
+                  'projects.page.deleteStubConfirm',
+                  'Remove “{{name}}” from your projects? Its chats are kept, outside the project, and its default app and instructions are deleted.',
+                  { name: projectDisplayName(project, language) }
+                )}
+              </p>
+              {stubState !== 'deleted' && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600"
+                    checked={deleteCollection}
+                    disabled={config?.ifinder?.writable !== true}
+                    onChange={e => setDeleteCollection(e.target.checked)}
+                    data-testid="delete-collection-checkbox"
+                  />
+                  <span>
+                    {t(
+                      'projects.page.deleteCollectionToo',
+                      'Also delete the smart collection in iFinder. Its documents stay in iFinder. Without this, the collection stays in iFinder and can be added again.'
+                    )}
+                  </span>
+                </label>
+              )}
+            </div>
+          ) : (
+            t(
+              'projects.page.deleteConfirm',
+              'Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.',
+              { name: projectDisplayName(project, language) }
+            )
+          )
+        }
         confirmLabel={t('common.delete', 'Delete')}
         danger
         onConfirm={handleDelete}
