@@ -7,12 +7,12 @@
  * Which integrations an app depends on, and whether they are on. An app
  * depends on an integration in two ways:
  *
- * - `requiredIntegrations`: the built-in checks below (iFinder, people
- *   directories), configured under Admin → Integrations;
- * - `app.integrations[<id>]`: a binding. `ifinder` and `iassistant` are the
- *   built-in iFinder connection; every other key is an installed integration
- *   (Admin → Integrations → Installed, `config/integrations.json`), which must
- *   exist and be enabled.
+ * - `requiredIntegrations`: the built-in checks below (people directories),
+ *   configured under Admin → Integrations;
+ * - `app.integrations[<id>]`: a binding to an installed integration (Admin →
+ *   Integrations → Installed, `config/integrations.json`), which must exist
+ *   and be enabled. The built-in iFinder and iAssistant are the installations
+ *   `ifinder` and `iassistant`.
  *
  * An integration counts as on when it is set up and switched on; without it
  * the apps that need it are not offered to users, like an app whose required
@@ -26,8 +26,6 @@
  */
 
 const integrations = {
-  // Admin → Integrations → iFinder (platform.json)
-  ifinder: ({ platform }) => platform?.iFinder?.enabled === true,
   // Admin → Integrations → People directories: at least one enabled directory
   // in peopleDirectories.json
   peopleDirectories: ({ peopleDirectories }) =>
@@ -36,9 +34,6 @@ const integrations = {
 };
 
 export const INTEGRATION_IDS = Object.keys(integrations);
-
-/** Keys of `app.integrations` that are the built-in iFinder connection, not installations. */
-const BUILT_IN_BINDINGS = { ifinder: 'ifinder', iassistant: 'ifinder' };
 
 /**
  * Whether an installed integration (`config/integrations.json`) exists and is
@@ -92,8 +87,7 @@ export function getIntegrationStatus(context = {}) {
 /**
  * The integrations an app depends on that are off: ids from
  * `requiredIntegrations`, and the keys of `app.integrations` whose installation
- * is missing or disabled (`ifinder` and `iassistant` stand for the iFinder
- * connection). Empty when the app can be offered.
+ * is missing or disabled. Empty when the app can be offered.
  *
  * @param {Object} app - App config
  * @param {Object} [context] - `{ platform, peopleDirectories, installedIntegrations }`
@@ -108,11 +102,7 @@ export function missingAppIntegrations(app, context = {}) {
   const bindings = app?.integrations;
   if (bindings && typeof bindings === 'object') {
     for (const key of Object.keys(bindings)) {
-      const builtIn = BUILT_IN_BINDINGS[key];
-      const on = builtIn
-        ? isIntegrationEnabled(builtIn, context)
-        : isInstalledIntegrationEnabled(key, context);
-      if (!on && !missing.includes(key)) missing.push(key);
+      if (!isInstalledIntegrationEnabled(key, context) && !missing.includes(key)) missing.push(key);
     }
   }
   return missing;

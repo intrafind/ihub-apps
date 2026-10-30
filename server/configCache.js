@@ -157,7 +157,8 @@ const IHUB_ENV_PREFIXES = {
  * the templated field.
  */
 const ENV_VAR_SKIP_PATHS_BY_KEY = {
-  'config/platform.json': ['iFinder.jwtSubjectField']
+  // The iFinder installation's JWT subject may be a `${user.x}` template.
+  'config/integrations.json': ['installed[].values.jwtSubjectField']
 };
 
 /**

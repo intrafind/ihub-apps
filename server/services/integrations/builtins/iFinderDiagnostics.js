@@ -1,21 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { adminAuth } from '../../middleware/adminAuth.js';
-import { buildServerPath } from '../../utils/basePath.js';
-import config from '../../config.js';
-import iFinderService from '../../services/integrations/iFinderService.js';
-import iAssistantService from '../../services/integrations/iAssistantService.js';
-import conversationApiService from '../../services/integrations/ConversationApiService.js';
-import { validateIFinderJWT } from '../../utils/iFinderJwt.js';
+import { buildServerPath } from '../../../utils/basePath.js';
+import config from '../../../config.js';
+import { validateIFinderJWT } from '../../../utils/iFinderJwt.js';
 import iFinderTokenProvider, {
   IFINDER_AUTH_MODES,
   getAuthMode
-} from '../../services/integrations/iFinderTokenProvider.js';
-import { throttledFetch } from '../../requestThrottler.js';
-import configCache from '../../configCache.js';
-import logger from '../../utils/logger.js';
-import tokenStorageService from '../../services/TokenStorageService.js';
+} from '../../../services/integrations/iFinderTokenProvider.js';
+import { throttledFetch } from '../../../requestThrottler.js';
+import configCache from '../../../configCache.js';
+import logger from '../../../utils/logger.js';
+import tokenStorageService from '../../../services/TokenStorageService.js';
 import {
   DiagnosticsReport,
   STATUS,
@@ -32,13 +28,13 @@ import {
   redactHeaders,
   resolveHostname,
   truncateBody
-} from '../../services/integrations/integrationDiagnostics.js';
+} from '../../../services/integrations/integrationDiagnostics.js';
 
 /**
- * Admin routes for testing integrations (iFinder, iAssistant).
+ * Diagnostic steps for the built-in iFinder and iAssistant integrations,
+ * run by their connectors' tests (Admin → Integrations → Installed → Test).
  *
- * Both endpoints run a sequence of diagnostic steps instead of a single
- * pass/fail probe, because the failures admins actually hit while connecting
+ * They run a sequence of diagnostic steps instead of a single pass/fail probe, because the failures admins actually hit while connecting
  * iHub to iFinder are indistinguishable from the outside: a 500 raised inside
  * iFinder while it tries to resolve the JWKS hostname of iHub, and a 401 with an
  * empty body, both used to surface as "test failed". Each step therefore reports
@@ -51,7 +47,7 @@ const OVERRIDABLE_USER_FIELDS = ['id', 'email', 'username', 'name', 'domain'];
 const MAX_OVERRIDE_LENGTH = 320;
 
 /** Search term used for the iFinder test request. Constant on purpose — see buildIntegrationUrl. */
-const TEST_SEARCH_QUERY = 'test';
+export const TEST_SEARCH_QUERY = 'test';
 
 /**
  * Ceiling for the iAssistant diagnostic probes. An admin waits on these in the
@@ -60,7 +56,7 @@ const TEST_SEARCH_QUERY = 'test';
  * This used to read `iAssistant.timeout`, a platform setting that looked like
  * it governed chat turns and never did.
  */
-const IASSISTANT_DIAGNOSTIC_TIMEOUT_MS = 60000;
+export const IASSISTANT_DIAGNOSTIC_TIMEOUT_MS = 60000;
 
 /**
  * Build the URL for an integration request.
@@ -77,7 +73,7 @@ const IASSISTANT_DIAGNOSTIC_TIMEOUT_MS = 60000;
  * @returns {string} Absolute URL
  * @throws {Error} If the result would leave the configured origin
  */
-function buildIntegrationUrl(baseUrl, path, query = {}) {
+export function buildIntegrationUrl(baseUrl, path, query = {}) {
   const base = new URL(baseUrl.replace(/\/+$/, ''));
   const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, '')}${path}`);
 
@@ -99,7 +95,7 @@ function buildIntegrationUrl(baseUrl, path, query = {}) {
  * @param {Object} raw - `user` object from the request body
  * @returns {Object} Sanitized override (may be empty)
  */
-function sanitizeUserOverride(raw) {
+export function sanitizeUserOverride(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
 
   const override = {};
@@ -128,7 +124,7 @@ function sanitizeUserOverride(raw) {
  * @param {Object} override - Result of sanitizeUserOverride
  * @returns {Object} User object
  */
-function buildTestUser(req, override) {
+export function buildTestUser(req, override) {
   const base = {
     id: req.user?.id || 'test-admin',
     email: req.user?.email || 'admin@test.com',
@@ -185,7 +181,7 @@ function resolveIssuerUrl(req) {
  * @param {Object} iFinderConfig
  * @returns {Object} `{ mode, available, description }`
  */
-function describeSigningKey(iFinderConfig) {
+export function describeSigningKey(iFinderConfig) {
   if (getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) {
     const provider = iFinderConfig.tokenExchange?.oidcProvider;
     return {
@@ -235,7 +231,7 @@ function describeSigningKey(iFinderConfig) {
  * @param {number} params.timeout
  * @returns {Promise<Object>} URL inspection result
  */
-async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
+export async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
   const urlInfo = inspectUrl(rawUrl);
   const hints = [...urlInfo.errors, ...urlInfo.warnings];
 
@@ -393,12 +389,15 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
  * @param {Object} params
  * @param {Object} params.user - Test user
  * @param {Object} params.adminUser - The admin running the test (`req.user`)
- * @param {Object} params.iFinderConfig - platform.iFinder
+ * @param {Object} params.iFinderConfig - the iFinder connection (`getIFinderConfig()`)
  * @param {Object} params.userOverride - Explicitly overridden user fields
  * @param {boolean} params.includeToken - Whether the raw JWT may be returned
  * @returns {Promise<Object|null>} `{ authHeader, token, info }` or null on failure
  */
-async function runJwtSteps(report, { user, adminUser, iFinderConfig, userOverride, includeToken }) {
+export async function runJwtSteps(
+  report,
+  { user, adminUser, iFinderConfig, userOverride, includeToken }
+) {
   if (getAuthMode(iFinderConfig) === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) {
     // Never the test user: its id can be overridden, and the exchange would
     // then run with somebody else's stored sign-in.
@@ -504,7 +503,7 @@ async function runJwtSteps(report, { user, adminUser, iFinderConfig, userOverrid
  * @param {boolean} params.includeToken - Whether the raw token may be returned
  * @returns {Promise<Object|null>} `{ authHeader, token, info }` or null on failure
  */
-async function runExchangeSteps(report, { user, userOverride, includeToken }) {
+export async function runExchangeSteps(report, { user, userOverride, includeToken }) {
   let exchanged;
   const step = await report.run('jwt', 'Token exchange', async () => {
     exchanged = await iFinderTokenProvider.exchangeForDiagnostics(user);
@@ -602,7 +601,7 @@ async function runExchangeSteps(report, { user, userOverride, includeToken }) {
  * @param {number} params.timeout
  * @returns {Promise<Object>} `{ jwksUrl, issuer }`
  */
-async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeout }) {
+export async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeout }) {
   const { issuer, fetchableIssuer, source, fromTrustedConfig } = resolveIssuerUrl(req);
   // Display value: may be derived from the request, so it is only ever printed.
   const jwksUrl = `${issuer}/.well-known/jwks.json`;
@@ -810,7 +809,7 @@ async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeo
  * @param {Object} params
  * @returns {Promise<Object>} `{ ok, request, response }`
  */
-async function runApiRequestStep(
+export async function runApiRequestStep(
   report,
   { id, label, url, method = 'GET', headers, body, token, includeToken, timeout, jwtInfo, context }
 ) {
@@ -915,685 +914,3 @@ async function runApiRequestStep(
  * @param {Object} [params.request] - Primary request that was executed
  * @param {Object} [params.details] - Flat summary retained for existing consumers
  */
-function respond(res, report, { integration, successMessage, jwt, request, details }) {
-  const summary = report.summary();
-  const success = !report.hasFailure();
-  const firstFailure = report.steps.find(step => step.status === STATUS.FAIL);
-
-  const message = success
-    ? summary.warn > 0
-      ? `${successMessage} (${summary.warn} warning${summary.warn === 1 ? '' : 's'})`
-      : successMessage
-    : `${firstFailure.label}: ${firstFailure.message}`;
-
-  logger.info(`${integration} integration test finished`, {
-    component: 'IntegrationTest',
-    success,
-    summary,
-    failedStep: firstFailure?.id
-  });
-
-  return res.json({
-    success,
-    message,
-    integration,
-    summary,
-    steps: report.steps,
-    ...(jwt ? { jwt } : {}),
-    ...(request ? { request } : {}),
-    details: {
-      ...details,
-      failedStep: firstFailure?.id,
-      steps: summary
-    }
-  });
-}
-
-export default function registerIntegrationTestRoutes(app) {
-  /**
-   * @swagger
-   * /admin/integrations/ifinder/_test:
-   *   post:
-   *     summary: Run iFinder connection diagnostics
-   *     description: >
-   *       Runs a sequence of diagnostic steps against the configured iFinder instance
-   *       (URL validation, DNS resolution, TCP/TLS probe, JWT generation and local
-   *       verification, OIDC/JWKS callback reachability, search API request) and returns
-   *       every observed detail plus remediation hints (admin access required).
-   *     tags:
-   *       - Admin - Integrations
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     requestBody:
-   *       required: false
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               includeToken:
-   *                 type: boolean
-   *                 description: Include the signed JWT and an executable curl command in the result
-   *               user:
-   *                 type: object
-   *                 description: Mint the test JWT for these user fields instead of the calling admin
-   *                 properties:
-   *                   id: { type: string }
-   *                   email: { type: string }
-   *                   username: { type: string }
-   *                   name: { type: string }
-   *                   domain: { type: string }
-   *                   groups:
-   *                     type: array
-   *                     items: { type: string }
-   *     responses:
-   *       200:
-   *         description: Diagnostics result
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 success:
-   *                   type: boolean
-   *                   description: True when no step failed
-   *                 message:
-   *                   type: string
-   *                   description: Summary, or the first failing step
-   *                 summary:
-   *                   type: object
-   *                   description: Step counts per status plus total duration
-   *                 steps:
-   *                   type: array
-   *                   description: Ordered diagnostic steps
-   *                   items:
-   *                     type: object
-   *                     properties:
-   *                       id: { type: string }
-   *                       label: { type: string }
-   *                       status:
-   *                         type: string
-   *                         enum: [ok, warn, fail, skip]
-   *                       message: { type: string }
-   *                       durationMs: { type: number }
-   *                       details: { type: object }
-   *                       hints:
-   *                         type: array
-   *                         items: { type: string }
-   *                 jwt:
-   *                   type: object
-   *                   description: Decoded header, payload and claims of the test token
-   *                 request:
-   *                   type: object
-   *                   description: The API request that was executed, including a curl command
-   *                 details:
-   *                   type: object
-   *                   description: Flat result summary
-   *       401:
-   *         description: Admin authentication required
-   *       500:
-   *         description: Test failed unexpectedly
-   */
-  app.post(
-    buildServerPath('/api/admin/integrations/ifinder/_test'),
-    adminAuth,
-    async (req, res) => {
-      const report = new DiagnosticsReport();
-
-      try {
-        const includeToken = req.body?.includeToken === true;
-        const userOverride = sanitizeUserOverride(req.body?.user);
-        const testUser = buildTestUser(req, userOverride);
-
-        const platformConfig = configCache.getPlatform() || {};
-        const iFinderConfig = platformConfig.iFinder || {};
-        const config = iFinderService.getConfig();
-        // Both the search term and the profile are fixed here rather than taken
-        // from the request. A diagnostic should exercise the configured state, and
-        // keeping request input out of the URL entirely is a stronger guarantee
-        // than validating it: no caller-supplied value can reach an outbound URL.
-        const testQuery = TEST_SEARCH_QUERY;
-        const searchProfile = config.defaultSearchProfile;
-        const signingKey = describeSigningKey(iFinderConfig);
-        const timeout = config.timeout || 30000;
-
-        logger.info('Running iFinder integration diagnostics', {
-          component: 'IntegrationTest',
-          baseUrl: config.baseUrl,
-          searchProfile,
-          useOidcKeyPair: Boolean(iFinderConfig.useOidcKeyPair),
-          includeToken,
-          overriddenUserFields: Object.keys(userOverride),
-          requestedBy: req.user?.id
-        });
-
-        const configDetails = {
-          enabled: Boolean(iFinderConfig.enabled),
-          baseUrl: config.baseUrl,
-          searchEndpoint: config.endpoints.search,
-          documentEndpoint: config.endpoints.document,
-          searchProfile,
-          timeoutMs: timeout,
-          jwtSubjectField: iFinderConfig.jwtSubjectField || 'email',
-          jwtAlgorithm: iFinderConfig.useOidcKeyPair ? 'RS256' : iFinderConfig.algorithm || 'RS256',
-          jwtAudience: iFinderConfig.audience || 'ifinder-api',
-          jwtIssuer: iFinderConfig.issuer || 'ihub-apps',
-          tokenExpirationSeconds: iFinderConfig.tokenExpirationSeconds || 3600,
-          // Deliberately not defaulted here: duplicating the fallback would risk
-          // reporting a scope other than the one actually signed. The scope that
-          // ends up in the token is reported by the JWT step from the real claim.
-          defaultScope: iFinderConfig.defaultScope || '(not configured)',
-          signingKeyMode: signingKey.mode,
-          signingKeySource: signingKey.description
-        };
-
-        if (!iFinderConfig.enabled) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: 'The iFinder integration is disabled',
-            details: configDetails,
-            hints: ['Enable the integration at the top of this page and save.']
-          });
-          return respond(res, report, {
-            integration: 'iFinder',
-            details: { enabled: false, ...configDetails }
-          });
-        }
-
-        if (!iFinderConfig.baseUrl && !config.baseUrl) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: 'No iFinder base URL is configured',
-            details: configDetails,
-            hints: [
-              'Set the iFinder Base URL on this page, or provide the IFINDER_API_URL environment variable.'
-            ]
-          });
-          return respond(res, report, {
-            integration: 'iFinder',
-            details: { missingConfig: 'baseUrl', ...configDetails }
-          });
-        }
-
-        if (!signingKey.available) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: iFinderConfig.useOidcKeyPair
-              ? 'The iHub OIDC RSA key pair is not initialized, so no iFinder JWT can be signed'
-              : 'No iFinder private key is configured',
-            details: configDetails,
-            hints: iFinderConfig.useOidcKeyPair
-              ? [
-                  'Set "jwt.algorithm" to RS256 under Admin > Authentication so iHub generates an RSA key pair, then restart the server.'
-                ]
-              : [
-                  'Select or create the private key credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable on the server (PEM format) and restart it.',
-                  'Alternatively enable "Use OIDC key pair" to sign with the key pair iHub already publishes via JWKS.'
-                ]
-          });
-          return respond(res, report, {
-            integration: 'iFinder',
-            details: {
-              missingConfig: iFinderConfig.useOidcKeyPair ? 'oidcKeyPair' : 'privateKey',
-              ...configDetails
-            }
-          });
-        }
-
-        report.add({
-          id: 'configuration',
-          label: 'Configuration',
-          status: STATUS.OK,
-          message:
-            signingKey.mode === IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE
-              ? `Using a ${signingKey.description}`
-              : `Signing with ${signingKey.description}, subject from "${configDetails.jwtSubjectField}"`,
-          details: configDetails
-        });
-
-        const urlInfo = await runTransportSteps(report, {
-          rawUrl: config.baseUrl,
-          urlLabel: 'iFinder base',
-          timeout
-        });
-
-        const jwtResult = await runJwtSteps(report, {
-          user: testUser,
-          adminUser: req.user,
-          iFinderConfig,
-          userOverride,
-          includeToken
-        });
-
-        const oidc = await runOidcCallbackSteps(report, {
-          req,
-          iFinderConfig,
-          jwtInfo: jwtResult?.info,
-          timeout
-        });
-
-        let request;
-        if (!urlInfo.valid || !jwtResult) {
-          report.skip(
-            'search',
-            'iFinder search API request',
-            'Skipped because the base URL or the JWT could not be prepared.'
-          );
-        } else {
-          const searchEndpoint = config.endpoints.search.replace(
-            '{profileId}',
-            encodeURIComponent(searchProfile)
-          );
-          const searchUrl = buildIntegrationUrl(config.baseUrl, searchEndpoint, {
-            query: testQuery,
-            size: 1
-          });
-
-          const result = await runApiRequestStep(report, {
-            id: 'search',
-            label: 'iFinder search API request',
-            url: searchUrl,
-            method: 'GET',
-            headers: { Authorization: jwtResult.authHeader, Accept: 'application/json' },
-            token: jwtResult.token,
-            includeToken,
-            timeout,
-            jwtInfo: jwtResult.info,
-            context: {
-              useOidcKeyPair: Boolean(iFinderConfig.useOidcKeyPair),
-              jwksUrl: oidc.applicable ? oidc.jwksUrl : undefined,
-              searchProfile
-            }
-          });
-          request = result.request;
-
-          if (result.ok) {
-            report.add({
-              id: 'searchResult',
-              label: 'Search result',
-              status: STATUS.OK,
-              message: `iFinder answered the query "${testQuery}" with ${result.parsed?.metadata?.total_hits ?? 0} hit(s)`,
-              details: {
-                query: testQuery,
-                searchProfile,
-                totalHits: result.parsed?.metadata?.total_hits ?? 0,
-                tookMs: result.parsed?.metadata?.took
-              },
-              hints:
-                (result.parsed?.metadata?.total_hits ?? 0) === 0
-                  ? [
-                      `The connection works but the query "${testQuery}" matched nothing. Confirm the search profile "${searchProfile}" contains documents the user "${jwtResult.info.subject}" is allowed to see.`
-                    ]
-                  : []
-            });
-          }
-        }
-
-        return respond(res, report, {
-          integration: 'iFinder',
-          successMessage: 'iFinder integration is working correctly',
-          jwt: jwtResult
-            ? {
-                subject: jwtResult.info.subject,
-                header: jwtResult.info.header,
-                payload: jwtResult.info.payload,
-                preview: previewToken(jwtResult.token),
-                ...(includeToken ? { token: jwtResult.token } : {})
-              }
-            : undefined,
-          request,
-          details: {
-            ...configDetails,
-            jwtGeneration: jwtResult ? 'success' : 'failed',
-            jwksUrl: oidc.applicable ? oidc.jwksUrl : undefined
-          }
-        });
-      } catch (error) {
-        logger.error('iFinder integration test error', { component: 'IntegrationTest', error });
-        report.add({
-          id: 'unexpected',
-          label: 'Unexpected error',
-          status: STATUS.FAIL,
-          message: error.message || 'iFinder integration test failed',
-          details: { error: error.message, stack: error.stack?.split('\n').slice(0, 5).join('\n') },
-          hints: [
-            'Check the iHub server log (component "IntegrationTest") for the full stack trace.'
-          ]
-        });
-        return respond(res, report, {
-          integration: 'iFinder',
-          details: { error: error.message }
-        });
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /admin/integrations/iassistant/_test:
-   *   post:
-   *     summary: Run iAssistant connection diagnostics
-   *     description: >
-   *       Runs a sequence of diagnostic steps against the iAssistant Conversation API
-   *       (URL validation, DNS resolution, TCP/TLS probe, JWT generation and local
-   *       verification, OIDC/JWKS callback reachability, profile listing, and optionally a
-   *       full conversation round-trip) and returns every observed detail plus remediation
-   *       hints (admin access required).
-   *     tags:
-   *       - Admin - Integrations
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     requestBody:
-   *       required: false
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               includeToken:
-   *                 type: boolean
-   *                 description: Include the signed JWT and an executable curl command in the result
-   *               conversationRoundTrip:
-   *                 type: boolean
-   *                 description: Additionally create and delete an ephemeral conversation
-   *               user:
-   *                 type: object
-   *                 description: Mint the test JWT for these user fields instead of the calling admin
-   *                 properties:
-   *                   id: { type: string }
-   *                   email: { type: string }
-   *                   username: { type: string }
-   *                   name: { type: string }
-   *                   domain: { type: string }
-   *                   groups:
-   *                     type: array
-   *                     items: { type: string }
-   *     responses:
-   *       200:
-   *         description: Diagnostics result, same shape as the iFinder diagnostics
-   *       401:
-   *         description: Admin authentication required
-   *       500:
-   *         description: Test failed unexpectedly
-   */
-  app.post(
-    buildServerPath('/api/admin/integrations/iassistant/_test'),
-    adminAuth,
-    async (req, res) => {
-      const report = new DiagnosticsReport();
-
-      try {
-        const includeToken = req.body?.includeToken === true;
-        const conversationRoundTrip = req.body?.conversationRoundTrip === true;
-        const userOverride = sanitizeUserOverride(req.body?.user);
-        const testUser = buildTestUser(req, userOverride);
-
-        const platformConfig = configCache.getPlatform() || {};
-        const iFinderConfig = platformConfig.iFinder || {};
-        const config = iAssistantService.getConfig();
-        const signingKey = describeSigningKey(iFinderConfig);
-        // Bounds the diagnostic probes below, not a chat turn: these are
-        // reachability and round-trip checks an admin waits on in the browser.
-        // A real iAssistant turn is bounded by the model's streamIdleTimeoutMs
-        // and the whole-call REQUEST_TIMEOUT instead.
-        const timeout = IASSISTANT_DIAGNOSTIC_TIMEOUT_MS;
-
-        logger.info('Running iAssistant integration diagnostics', {
-          component: 'IntegrationTest',
-          baseUrl: config.baseUrl,
-          profileId: config.defaultProfileId,
-          conversationRoundTrip,
-          includeToken,
-          requestedBy: req.user?.id
-        });
-
-        const configDetails = {
-          baseUrl: config.baseUrl,
-          baseUrlSource: 'inherited from the iFinder base URL',
-          apiBasePath: '/public-api/rag/api/v0',
-          profileId: config.defaultProfileId,
-          searchProfile: config.defaultSearchProfile,
-          timeoutMs: timeout,
-          jwtSubjectField: iFinderConfig.jwtSubjectField || 'email',
-          signingKeyMode: signingKey.mode,
-          signingKeySource: signingKey.description
-        };
-
-        if (!config.baseUrl) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: 'No base URL is configured',
-            details: configDetails,
-            hints: [
-              'iAssistant reuses the iFinder Base URL. Configure it in the iFinder Connection section above.'
-            ]
-          });
-          return respond(res, report, {
-            integration: 'iAssistant',
-            details: { missingConfig: 'baseUrl', ...configDetails }
-          });
-        }
-
-        if (!signingKey.available) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: 'No signing key is available for the iAssistant JWT',
-            details: configDetails,
-            hints: [
-              'iAssistant authenticates with the same JWT as iFinder. Configure the iFinder signing key first.'
-            ]
-          });
-          return respond(res, report, {
-            integration: 'iAssistant',
-            details: { missingConfig: 'signingKey', ...configDetails }
-          });
-        }
-
-        report.add({
-          id: 'configuration',
-          label: 'Configuration',
-          status: config.defaultProfileId ? STATUS.OK : STATUS.WARN,
-          message: config.defaultProfileId
-            ? `Profile "${config.defaultProfileId}" on ${config.baseUrl}`
-            : 'No default profile id configured',
-          details: configDetails,
-          hints: config.defaultProfileId
-            ? []
-            : [
-                'Apps without an explicit profile fall back to the default profile id. Set it in the iAssistant Settings section, or provide IASSISTANT_PROFILE_ID.'
-              ]
-        });
-
-        const urlInfo = await runTransportSteps(report, {
-          rawUrl: config.baseUrl,
-          urlLabel: 'iAssistant base',
-          timeout
-        });
-
-        const jwtResult = await runJwtSteps(report, {
-          user: testUser,
-          adminUser: req.user,
-          iFinderConfig,
-          userOverride,
-          includeToken
-        });
-
-        const oidc = await runOidcCallbackSteps(report, {
-          req,
-          iFinderConfig,
-          jwtInfo: jwtResult?.info,
-          timeout
-        });
-
-        let request;
-        if (!urlInfo.valid || !jwtResult) {
-          report.skip(
-            'profiles',
-            'iAssistant profile list',
-            'Skipped because the base URL or the JWT could not be prepared.'
-          );
-        } else {
-          const profilesUrl = buildIntegrationUrl(
-            config.baseUrl,
-            '/public-api/rag/api/v0/profiles'
-          );
-          const requestContext = {
-            useOidcKeyPair: Boolean(iFinderConfig.useOidcKeyPair),
-            jwksUrl: oidc.applicable ? oidc.jwksUrl : undefined,
-            profileId: config.defaultProfileId
-          };
-
-          const result = await runApiRequestStep(report, {
-            id: 'profiles',
-            label: 'iAssistant profile list',
-            url: profilesUrl,
-            method: 'GET',
-            headers: { Authorization: jwtResult.authHeader, Accept: 'application/json' },
-            token: jwtResult.token,
-            includeToken,
-            timeout,
-            jwtInfo: jwtResult.info,
-            context: requestContext
-          });
-          request = result.request;
-
-          if (result.ok) {
-            // The payload shape differs between iAssistant versions, so accept
-            // either a bare array or a wrapper object.
-            const rawProfiles = Array.isArray(result.parsed)
-              ? result.parsed
-              : result.parsed?.profiles || result.parsed?.items || [];
-            const profileIds = rawProfiles
-              .map(profile => (typeof profile === 'string' ? profile : profile?.id))
-              .filter(Boolean);
-            const configured = config.defaultProfileId;
-            const known = !configured || profileIds.length === 0 || profileIds.includes(configured);
-
-            report.add({
-              id: 'profileExists',
-              label: 'Configured profile exists',
-              status: known ? STATUS.OK : STATUS.FAIL,
-              message: known
-                ? configured
-                  ? `Profile "${configured}" is available`
-                  : `iAssistant offers ${profileIds.length} profile(s)`
-                : `Profile "${configured}" is not among the profiles iAssistant returns`,
-              details: { configuredProfileId: configured, availableProfileIds: profileIds },
-              hints: known
-                ? []
-                : [
-                    `Set the Default Profile ID to one of: ${profileIds.join(', ') || '(none returned)'}.`,
-                    `Profile ids are case sensitive, and the user "${jwtResult.info.subject}" only sees the profiles they are permitted to use.`
-                  ]
-            });
-          }
-
-          if (!conversationRoundTrip) {
-            report.skip(
-              'conversation',
-              'Conversation round-trip',
-              'Not requested. Enable "Run conversation round-trip" to additionally create and delete an ephemeral conversation.'
-            );
-          } else if (!result.ok) {
-            report.skip(
-              'conversation',
-              'Conversation round-trip',
-              'Skipped because the profile list request already failed.'
-            );
-          } else {
-            await report.run('conversation', 'Conversation round-trip', async () => {
-              const conversation = await conversationApiService.createConversation({
-                user: testUser,
-                baseUrl: config.baseUrl,
-                searchProfile: config.defaultSearchProfile,
-                labels: ['ihub-connection-test'],
-                ephemeral: true
-              });
-
-              const conversationId = conversation?.id || conversation?.conversation?.id;
-              let deleted = false;
-              if (conversationId) {
-                try {
-                  await conversationApiService.deleteConversation(conversationId, {
-                    user: testUser,
-                    baseUrl: config.baseUrl
-                  });
-                  deleted = true;
-                } catch (error) {
-                  logger.warn('Could not delete the test conversation', {
-                    component: 'IntegrationTest',
-                    conversationId,
-                    error: error.message
-                  });
-                }
-              }
-
-              return {
-                status: STATUS.OK,
-                message: `Created an ephemeral conversation${deleted ? ' and deleted it again' : ''}`,
-                details: {
-                  conversationId,
-                  searchProfile: config.defaultSearchProfile,
-                  cleanedUp: deleted
-                },
-                hints: deleted
-                  ? []
-                  : [
-                      `The test conversation ${conversationId || '(unknown id)'} could not be deleted. It is marked ephemeral, so iAssistant should clean it up on its own.`
-                    ]
-              };
-            });
-          }
-        }
-
-        return respond(res, report, {
-          integration: 'iAssistant',
-          successMessage: 'iAssistant integration is working correctly',
-          jwt: jwtResult
-            ? {
-                subject: jwtResult.info.subject,
-                header: jwtResult.info.header,
-                payload: jwtResult.info.payload,
-                preview: previewToken(jwtResult.token),
-                ...(includeToken ? { token: jwtResult.token } : {})
-              }
-            : undefined,
-          request,
-          details: {
-            ...configDetails,
-            jwtGeneration: jwtResult ? 'success' : 'failed',
-            jwksUrl: oidc.applicable ? oidc.jwksUrl : undefined
-          }
-        });
-      } catch (error) {
-        logger.error('iAssistant integration test error', { component: 'IntegrationTest', error });
-        report.add({
-          id: 'unexpected',
-          label: 'Unexpected error',
-          status: STATUS.FAIL,
-          message: error.message || 'iAssistant integration test failed',
-          details: { error: error.message, stack: error.stack?.split('\n').slice(0, 5).join('\n') },
-          hints: [
-            'Check the iHub server log (component "IntegrationTest") for the full stack trace.'
-          ]
-        });
-        return respond(res, report, {
-          integration: 'iAssistant',
-          details: { error: error.message }
-        });
-      }
-    }
-  );
-}

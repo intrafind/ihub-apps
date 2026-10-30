@@ -29,8 +29,6 @@
  * `validators/appConfigSchema.js`): `scopePicker` (`menu | hidden`),
  * `defaultScope` and `pinnedScope`.
  */
-import iFinderScopes from './iFinderScopes.js';
-import iAssistantScopes from './iAssistantScopes.js';
 import { isScopeIdShape } from './common.js';
 
 export {
@@ -139,5 +137,5 @@ export async function resolveChatScopes({ requested, user, app, model, language,
   return { ok: true, scopes };
 }
 
-registerScopeProvider(iFinderScopes);
-registerScopeProvider(iAssistantScopes);
+// The built-in iFinder and iAssistant providers are registered with their
+// installations by `integrationTools.syncIntegrationScopeProviders`.

@@ -51,12 +51,9 @@ function AppNameCell({ app, currentLanguage }) {
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
   ifinder: 'iFinder integration',
-  iassistant: 'iFinder integration',
+  iassistant: 'iAssistant integration',
   peopleDirectories: 'People directories'
 };
-
-/** `app.integrations` keys that are the built-in iFinder connection, not installations. */
-const BUILT_IN_BINDINGS = { ifinder: 'ifinder', iassistant: 'ifinder' };
 
 /**
  * The features (`requiredFeatures`) and integrations (`requiredIntegrations`,
@@ -89,8 +86,7 @@ function missingRequirements(app, platformConfig, integrationStatus, language) {
     app.integrations && typeof app.integrations === 'object' ? Object.keys(app.integrations) : [];
   const missingIntegrations = [];
   for (const id of [...required, ...bound]) {
-    const statusId = BUILT_IN_BINDINGS[id] || id;
-    if (integrationStatus[statusId] === true) continue;
+    if (integrationStatus[id] === true) continue;
     const name = INTEGRATION_NAMES[id] || `Installed integration "${id}"`;
     if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
   }

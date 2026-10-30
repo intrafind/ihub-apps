@@ -44,14 +44,15 @@ test('version is the next unused number', () => {
   assert.equal(version, '094');
 });
 
-test('the shipped default app waits for the iFinder integration, hides the model selector, and templates the user', async () => {
+test('the shipped default app binds the iAssistant installation, hides the model selector, and templates the user', async () => {
   const ctx = fakeCtx({});
   await up(ctx);
   const app = ctx.files['apps/iassistant.json'];
 
   assert.ok(app, 'default app was not seeded');
   assert.equal(app.enabled, true);
-  assert.deepEqual(app.requiredIntegrations, ['ifinder']);
+  assert.deepEqual(app.integrations, { iassistant: { actions: [] } });
+  assert.equal(app.requiredIntegrations, undefined);
   assert.equal(app.disallowModelSelection, true);
   assert.equal(app.settings.model.enabled, false);
   assert.match(app.iassistant.extraContext, /\{\{user_name\}\}/);

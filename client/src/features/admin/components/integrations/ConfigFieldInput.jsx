@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CHECKBOX_CLASS,
@@ -9,6 +9,8 @@ import {
   INPUT_CLASS,
   LABEL_CLASS
 } from '../people-directories/formStyles';
+import { CredentialRefSelect } from '../OpenApiToolEditor';
+import { fetchInstalledIntegrations } from '../../../../api/integrationsAdminApi';
 
 /** A localized definition string (`{ en, de }` or plain text). */
 export function pickText(value, language, fallback = '') {
@@ -61,6 +63,70 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
       )}
     </>
   );
+
+  if (field.type === 'credential') {
+    return (
+      <div>
+        <CredentialRefSelect
+          id={inputId}
+          value={value ?? ''}
+          onChange={onChange}
+          types={field.credentialTypes}
+          label={title}
+          help={description}
+          required={required}
+        />
+        {error && (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (field.type === 'instance') {
+    return (
+      <div>
+        {label}
+        <InstanceSelect
+          id={inputId}
+          value={value ?? ''}
+          onChange={onChange}
+          definitionId={field.definition}
+          required={required}
+          describedBy={description ? helpId : undefined}
+        />
+        {help}
+      </div>
+    );
+  }
+
+  if (field.type === 'list') {
+    const lines = Array.isArray(value) ? value : [];
+    return (
+      <div>
+        {label}
+        <textarea
+          id={inputId}
+          className={`${INPUT_CLASS} font-mono`}
+          rows={Math.min(8, Math.max(3, lines.length + 1))}
+          value={lines.join('\n')}
+          onChange={e => {
+            const next = e.target.value
+              .split('\n')
+              .map(s => s.trim())
+              .filter(Boolean);
+            onChange(next.length ? next : '');
+          }}
+          placeholder={t('admin.integrationCatalog.wizard.onePerLine', 'One entry per line')}
+          aria-describedby={description ? helpId : undefined}
+          aria-invalid={error ? 'true' : undefined}
+        />
+        {help}
+      </div>
+    );
+  }
 
   if (field.type === 'boolean') {
     return (
@@ -176,6 +242,50 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
       )}
       {help}
     </div>
+  );
+}
+
+/**
+ * Picks an installed integration of one definition (`instance` fields), e.g.
+ * the iFinder installation an iAssistant installation runs on.
+ */
+function InstanceSelect({ id, value, onChange, definitionId, required, describedBy }) {
+  const { t } = useTranslation();
+  const [instances, setInstances] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchInstalledIntegrations()
+      .then(res => {
+        if (cancelled) return;
+        const items = (res.items || []).filter(
+          item => !definitionId || item.definition === definitionId
+        );
+        setInstances(items);
+      })
+      .catch(() => {
+        if (!cancelled) setInstances([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [definitionId]);
+  const known = (instances || []).some(item => item.id === value);
+  return (
+    <select
+      id={id}
+      className={INPUT_CLASS}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      aria-describedby={describedBy}
+    >
+      {!required && <option value="">{t('common.none', 'None')}</option>}
+      {value && !known && <option value={value}>{value}</option>}
+      {(instances || []).map(item => (
+        <option key={item.id} value={item.id}>
+          {item.label ? `${item.label} (${item.id})` : item.id}
+        </option>
+      ))}
+    </select>
   );
 }
 

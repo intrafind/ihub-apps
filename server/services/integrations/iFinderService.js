@@ -8,6 +8,7 @@ import iFinderTokenProvider from './iFinderTokenProvider.js';
 import iFinderSearchProfiles from './iFinderSearchProfiles.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
+import { getIFinderConfig, hasConfigOverride } from './ifinderConfig.js';
 import authDebugService from '../../utils/authDebugService.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -101,51 +102,9 @@ class IFinderService {
    * @returns {Object} iFinder API configuration
    */
   getConfig() {
-    if (!this.config) {
-      this.platform = configCache.getPlatform() || {};
-      const iFinderConfig = this.platform.iFinder || {};
-
-      this.config = {
-        baseUrl:
-          config.IFINDER_API_URL ||
-          process.env.IFINDER_API_URL ||
-          iFinderConfig.baseUrl ||
-          'https://api.ifinder.example.com',
-        endpoints: {
-          search:
-            iFinderConfig.endpoints?.search ||
-            '/public-api/retrieval/api/v1/search-profiles/{profileId}/_search',
-          document:
-            iFinderConfig.endpoints?.document ||
-            '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}',
-          // Discovery endpoints. `fields` is profile-independent — it describes the
-          // index schema, not a profile's view of it.
-          fields:
-            iFinderConfig.endpoints?.fields ||
-            '/public-api/retrieval/api/v1/schema-types/{schemaType}/fields',
-          facets:
-            iFinderConfig.endpoints?.facets ||
-            '/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search'
-        },
-        defaultSearchProfile:
-          iFinderConfig.defaultSearchProfile ||
-          process.env.IFINDER_SEARCH_PROFILE ||
-          'searchprofile-standard',
-        // The iFinder application whose search profile assignments
-        // listProfiles reads (`searchprofile.applications`).
-        searchProfileApplication: iFinderConfig.searchProfileApplication || 'ifinder',
-        // Which of the user's profiles may be offered and searched; empty
-        // offers all of them. The default profile is always allowed.
-        allowedSearchProfiles: Array.isArray(iFinderConfig.allowedSearchProfiles)
-          ? iFinderConfig.allowedSearchProfiles.filter(id => typeof id === 'string' && id)
-          : [],
-        // false pins every chat (and the model) to the default profile.
-        allowUserSearchProfileChange: iFinderConfig.allowUserSearchProfileChange !== false,
-        downloadDir:
-          iFinderConfig.downloadDir || config.IFINDER_DOWNLOAD_DIR || '/tmp/ifinder-downloads',
-        timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
-      };
-    }
+    // A draft under test (the wizard) is never cached.
+    if (hasConfigOverride()) return getIFinderConfig();
+    if (!this.config) this.config = getIFinderConfig();
     return this.config;
   }
 

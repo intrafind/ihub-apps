@@ -589,6 +589,9 @@ if (cluster.isPrimary && workerCount > 1) {
     try {
       const { default: integrationRegistry } =
         await import('./services/integrations/definitions/IntegrationRegistry.js');
+      // The built-in native connectors (iFinder, iAssistant) register
+      // themselves on import; definitions that name them load next.
+      await import('./services/integrations/protocols/native/connectors/register.js');
       await integrationRegistry.reload();
       const { syncIntegrationScopeProviders } =
         await import('./services/integrations/integrationTools.js');

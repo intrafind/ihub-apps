@@ -17,11 +17,11 @@ const TEMPLATE = /\{([A-Za-z_][A-Za-z0-9_.-]*)\}/g;
  * is an array when any segment carries `[]`.
  *
  * @param {unknown} value
- * @param {string|undefined} path
+ * @param {string|null|undefined} path
  * @returns {unknown}
  */
 export function valueAtPath(value, path) {
-  if (path === undefined || path === null || path === '' || path === '$') return value;
+  if (!path || path === '$') return value;
   const normalized = String(path).replace(/^\$\.?/, '');
   if (!normalized) return value;
   const segments = normalized.split('.');

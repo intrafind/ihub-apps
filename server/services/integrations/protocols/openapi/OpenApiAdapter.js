@@ -9,6 +9,7 @@ import {
 import credentialService from '../../../CredentialService.js';
 import logger from '../../../../utils/logger.js';
 import { effectiveValues, localized } from '../../definitions/installedValues.js';
+import { toolIdFor, actionEnabled } from '../common.js';
 import { fillTemplate, valueAtPath } from '../../definitions/valuePaths.js';
 import {
   applyActionDefaults,
@@ -29,10 +30,7 @@ import {
 
 const COMPONENT = 'OpenApiAdapter';
 
-/** Tool id of an action: `<instanceId>__<action>`. */
-export function toolIdFor(instanceId, actionName) {
-  return `${instanceId}__${actionName}`;
-}
+export { toolIdFor };
 
 function isHttpUrl(value) {
   try {
@@ -96,7 +94,7 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
 function buildRunnerTool(definition, instance, document, action, settings, security) {
   const protocol = definition.protocol;
   return {
-    id: toolIdFor(instance.id, action.name),
+    id: toolIdFor(instance.id, action.name, action),
     type: 'openapi',
     name: action.name,
     openapi: {
@@ -133,14 +131,6 @@ function sourcesDeclarationFor(definition, instance, action) {
     ...declaration,
     fields
   };
-}
-
-function actionEnabled(instance, action) {
-  const policy = instance.actions || {};
-  if ((policy.disabled || []).includes(action.name)) return false;
-  const enabled = policy.enabled || ['*'];
-  if (enabled.includes(action.name)) return true;
-  return enabled.includes('*') && action.enabledByDefault !== false;
 }
 
 /**
@@ -199,7 +189,7 @@ export async function discoverActions({
     results.push({
       name: action.name,
       operationId: action.operationId,
-      toolId: toolIdFor(instance.id, action.name),
+      toolId: toolIdFor(instance.id, action.name, action),
       title: localized(action.title, language, action.name),
       description: localized(override.description, language) || description,
       parameters,

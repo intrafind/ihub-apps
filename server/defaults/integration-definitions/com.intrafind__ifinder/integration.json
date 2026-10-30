@@ -1,0 +1,568 @@
+{
+  "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
+  "id": "com.intrafind/ifinder",
+  "version": "1.0.0",
+  "name": {
+    "en": "iFinder",
+    "de": "iFinder"
+  },
+  "description": {
+    "en": "Enterprise search over the documents your organisation indexed in IntraFind iFinder: search in the user's search profiles, read document text and metadata, discover fields and facets. Every call runs as the signed-in user, so results respect iFinder's permissions.",
+    "de": "Unternehmenssuche über die in IntraFind iFinder indexierten Dokumente: Suche in den Suchprofilen des Benutzers, Dokumenttexte und Metadaten lesen, Felder und Facetten entdecken. Jeder Aufruf läuft als angemeldeter Benutzer, Ergebnisse respektieren die iFinder-Berechtigungen."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "url": "https://www.intrafind.com",
+    "verification": "intrafind"
+  },
+  "icon": "icon.svg",
+  "categories": ["search", "documents", "intrafind"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/iFinder-Integration.md",
+  "runs": "on-prem",
+  "trusted": true,
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "ifinder"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "ifinder"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "capabilities": ["tools", "scopes", "sources", "search"],
+  "install": [
+    {
+      "key": "baseUrl",
+      "type": "url",
+      "title": {
+        "en": "iFinder base URL",
+        "de": "iFinder-Basis-URL"
+      },
+      "description": {
+        "en": "The iFinder server, e.g. https://ifinder.example.com. The public API paths are appended.",
+        "de": "Der iFinder-Server, z. B. https://ifinder.example.com. Die Pfade der Public API werden angehängt."
+      },
+      "required": true
+    },
+    {
+      "key": "authMode",
+      "type": "enum",
+      "title": {
+        "en": "Authentication",
+        "de": "Authentifizierung"
+      },
+      "description": {
+        "en": "How iHub authenticates users at iFinder: a JWT signed by iHub, or a token exchanged at the OIDC provider the user signed in with.",
+        "de": "Wie iHub Benutzer bei iFinder authentifiziert: ein von iHub signiertes JWT oder ein Token-Austausch beim OIDC-Provider, über den sich der Benutzer angemeldet hat."
+      },
+      "default": "ihubSigned",
+      "required": true,
+      "choices": [
+        {
+          "value": "ihubSigned",
+          "label": {
+            "en": "JWT signed by iHub",
+            "de": "Von iHub signiertes JWT"
+          }
+        },
+        {
+          "value": "oidcTokenExchange",
+          "label": {
+            "en": "OIDC token exchange",
+            "de": "OIDC-Token-Austausch"
+          },
+          "requires": ["tokenExchangeProvider"]
+        }
+      ]
+    },
+    {
+      "key": "useOidcKeyPair",
+      "type": "boolean",
+      "title": {
+        "en": "Sign with iHub's OIDC key pair",
+        "de": "Mit dem OIDC-Schlüsselpaar von iHub signieren"
+      },
+      "description": {
+        "en": "Sign the JWT with the RSA key pair iHub publishes via JWKS instead of a private key credential.",
+        "de": "Das JWT mit dem RSA-Schlüsselpaar signieren, das iHub per JWKS veröffentlicht, statt mit einem hinterlegten privaten Schlüssel."
+      },
+      "default": false
+    },
+    {
+      "key": "privateKeyRef",
+      "type": "credential",
+      "credentialTypes": ["privateKey", "secret"],
+      "title": {
+        "en": "Private key",
+        "de": "Privater Schlüssel"
+      },
+      "description": {
+        "en": "The credential holding the PEM private key that signs the JWT. Not needed with the OIDC key pair or token exchange.",
+        "de": "Das Credential mit dem privaten PEM-Schlüssel, der das JWT signiert. Nicht nötig mit OIDC-Schlüsselpaar oder Token-Austausch."
+      }
+    },
+    {
+      "key": "algorithm",
+      "type": "enum",
+      "title": {
+        "en": "Signing algorithm",
+        "de": "Signaturalgorithmus"
+      },
+      "default": "RS256",
+      "advanced": true,
+      "choices": [
+        {
+          "value": "RS256",
+          "label": {
+            "en": "RS256",
+            "de": "RS256"
+          }
+        },
+        {
+          "value": "RS384",
+          "label": {
+            "en": "RS384",
+            "de": "RS384"
+          }
+        },
+        {
+          "value": "RS512",
+          "label": {
+            "en": "RS512",
+            "de": "RS512"
+          }
+        },
+        {
+          "value": "ES256",
+          "label": {
+            "en": "ES256",
+            "de": "ES256"
+          }
+        },
+        {
+          "value": "ES384",
+          "label": {
+            "en": "ES384",
+            "de": "ES384"
+          }
+        },
+        {
+          "value": "HS256",
+          "label": {
+            "en": "HS256",
+            "de": "HS256"
+          }
+        }
+      ]
+    },
+    {
+      "key": "issuer",
+      "type": "string",
+      "title": {
+        "en": "JWT issuer",
+        "de": "JWT-Aussteller"
+      },
+      "default": "ihub-apps",
+      "advanced": true
+    },
+    {
+      "key": "audience",
+      "type": "string",
+      "title": {
+        "en": "JWT audience",
+        "de": "JWT-Zielgruppe"
+      },
+      "default": "ifinder-api",
+      "advanced": true
+    },
+    {
+      "key": "tokenExpirationSeconds",
+      "type": "number",
+      "title": {
+        "en": "Token lifetime (seconds)",
+        "de": "Token-Lebensdauer (Sekunden)"
+      },
+      "default": 3600,
+      "min": 60,
+      "max": 86400,
+      "advanced": true
+    },
+    {
+      "key": "defaultScope",
+      "type": "string",
+      "title": {
+        "en": "Token scope",
+        "de": "Token-Scope"
+      },
+      "description": {
+        "en": "The scope claim of the signed JWT.",
+        "de": "Der Scope-Claim des signierten JWT."
+      },
+      "default": "fa_index_read",
+      "advanced": true
+    },
+    {
+      "key": "jwtSubjectField",
+      "type": "enum",
+      "title": {
+        "en": "User identity sent to iFinder",
+        "de": "An iFinder gesendete Benutzeridentität"
+      },
+      "description": {
+        "en": "Which attribute of the iHub user becomes the JWT subject; it must match how iFinder knows the user.",
+        "de": "Welches Attribut des iHub-Benutzers zum JWT-Subject wird; es muss dem entsprechen, wie iFinder den Benutzer kennt."
+      },
+      "default": "email",
+      "choices": [
+        {
+          "value": "email",
+          "label": {
+            "en": "E-mail",
+            "de": "E-Mail"
+          }
+        },
+        {
+          "value": "id",
+          "label": {
+            "en": "User id",
+            "de": "Benutzer-ID"
+          }
+        },
+        {
+          "value": "username",
+          "label": {
+            "en": "Username",
+            "de": "Benutzername"
+          }
+        },
+        {
+          "value": "name",
+          "label": {
+            "en": "Display name",
+            "de": "Anzeigename"
+          }
+        }
+      ]
+    },
+    {
+      "key": "tokenExchangeProvider",
+      "type": "string",
+      "title": {
+        "en": "OIDC provider for token exchange",
+        "de": "OIDC-Provider für den Token-Austausch"
+      },
+      "description": {
+        "en": "Name of the OIDC provider (Admin → Authentication) whose tokens are exchanged for iFinder tokens.",
+        "de": "Name des OIDC-Providers (Admin → Authentifizierung), dessen Tokens gegen iFinder-Tokens getauscht werden."
+      }
+    },
+    {
+      "key": "tokenExchangeGrant",
+      "type": "enum",
+      "title": {
+        "en": "Token exchange grant",
+        "de": "Grant des Token-Austauschs"
+      },
+      "default": "tokenExchange",
+      "advanced": true,
+      "choices": [
+        {
+          "value": "tokenExchange",
+          "label": {
+            "en": "RFC 8693 token exchange",
+            "de": "RFC 8693 Token-Austausch"
+          }
+        },
+        {
+          "value": "entraObo",
+          "label": {
+            "en": "Microsoft Entra on-behalf-of",
+            "de": "Microsoft Entra On-Behalf-Of"
+          }
+        }
+      ]
+    },
+    {
+      "key": "tokenExchangeAudience",
+      "type": "string",
+      "title": {
+        "en": "Token exchange audience",
+        "de": "Zielgruppe des Token-Austauschs"
+      },
+      "advanced": true
+    },
+    {
+      "key": "tokenExchangeScopeIndexRead",
+      "type": "string",
+      "title": {
+        "en": "Provider scope for fa_index_read",
+        "de": "Provider-Scope für fa_index_read"
+      },
+      "advanced": true
+    },
+    {
+      "key": "tokenExchangeScopeAssistant",
+      "type": "string",
+      "title": {
+        "en": "Provider scope for fa_iassistant",
+        "de": "Provider-Scope für fa_iassistant"
+      },
+      "advanced": true
+    },
+    {
+      "key": "tokenExchangeScopeSmartCollections",
+      "type": "string",
+      "title": {
+        "en": "Provider scope for fi_smartcollections",
+        "de": "Provider-Scope für fi_smartcollections"
+      },
+      "advanced": true
+    },
+    {
+      "key": "tokenExchangeExtraScopes",
+      "type": "list",
+      "title": {
+        "en": "Extra scopes for the exchange",
+        "de": "Zusätzliche Scopes für den Austausch"
+      },
+      "advanced": true
+    },
+    {
+      "key": "searchProfileApplication",
+      "type": "string",
+      "title": {
+        "en": "Search profile application",
+        "de": "Suchprofil-Anwendung"
+      },
+      "description": {
+        "en": "The iFinder application whose search profile assignments are read when listing a user's profiles.",
+        "de": "Die iFinder-Anwendung, deren Suchprofil-Zuweisungen beim Auflisten der Profile eines Benutzers gelesen werden."
+      },
+      "default": "ifinder",
+      "advanced": true
+    },
+    {
+      "key": "defaultSearchProfile",
+      "type": "string",
+      "title": {
+        "en": "Default search profile",
+        "de": "Standard-Suchprofil"
+      },
+      "description": {
+        "en": "Searched when neither the chat nor the model names a profile.",
+        "de": "Wird durchsucht, wenn weder Chat noch Modell ein Profil nennen."
+      },
+      "default": "searchprofile-standard",
+      "required": true
+    },
+    {
+      "key": "allowedSearchProfiles",
+      "type": "list",
+      "title": {
+        "en": "Offered search profiles",
+        "de": "Angebotene Suchprofile"
+      },
+      "description": {
+        "en": "Profile ids users may pick and search; empty offers all of the user's profiles. The default profile is always allowed.",
+        "de": "Profil-IDs, die Benutzer wählen und durchsuchen dürfen; leer bietet alle Profile des Benutzers an. Das Standardprofil ist immer erlaubt."
+      }
+    },
+    {
+      "key": "allowUserSearchProfileChange",
+      "type": "boolean",
+      "title": {
+        "en": "Users may change the search profile",
+        "de": "Benutzer dürfen das Suchprofil wechseln"
+      },
+      "description": {
+        "en": "Off pins every chat to the default profile.",
+        "de": "Aus bindet jeden Chat an das Standardprofil."
+      },
+      "default": true
+    },
+    {
+      "key": "timeout",
+      "type": "number",
+      "title": {
+        "en": "Request timeout (ms)",
+        "de": "Zeitlimit pro Anfrage (ms)"
+      },
+      "default": 30000,
+      "min": 1000,
+      "max": 300000,
+      "advanced": true
+    },
+    {
+      "key": "downloadDir",
+      "type": "directory",
+      "title": {
+        "en": "Download directory",
+        "de": "Download-Verzeichnis"
+      },
+      "description": {
+        "en": "Where fetched documents are stored temporarily.",
+        "de": "Wo abgerufene Dokumente zwischengespeichert werden."
+      },
+      "advanced": true
+    },
+    {
+      "key": "searchEndpoint",
+      "type": "string",
+      "title": {
+        "en": "Search endpoint path",
+        "de": "Pfad des Such-Endpunkts"
+      },
+      "default": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
+      "advanced": true
+    },
+    {
+      "key": "documentEndpoint",
+      "type": "string",
+      "title": {
+        "en": "Document endpoint path",
+        "de": "Pfad des Dokument-Endpunkts"
+      },
+      "default": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}",
+      "advanced": true
+    },
+    {
+      "key": "fieldsEndpoint",
+      "type": "string",
+      "title": {
+        "en": "Fields endpoint path",
+        "de": "Pfad des Feld-Endpunkts"
+      },
+      "default": "/public-api/retrieval/api/v1/schema-types/{schemaType}/fields",
+      "advanced": true
+    },
+    {
+      "key": "facetsEndpoint",
+      "type": "string",
+      "title": {
+        "en": "Facets endpoint path",
+        "de": "Pfad des Facetten-Endpunkts"
+      },
+      "default": "/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search",
+      "advanced": true
+    }
+  ],
+  "scopes": {
+    "label": {
+      "en": "Search profile",
+      "de": "Suchprofil"
+    }
+  },
+  "actions": [
+    {
+      "name": "search",
+      "toolId": "iFinder_search",
+      "title": {
+        "en": "Search documents",
+        "de": "Dokumente suchen"
+      },
+      "description": {
+        "en": "Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes. The `ifinder-search` skill — MCP resource `ihub://skill/ifinder-search`, with its references as resources of their own — carries the full query syntax, the discovery loop and the fixes for a search that returns nothing or the wrong thing.",
+        "de": "Dokumente in iFinder mit der IntraFind-Syntax suchen (Lucene plus die Operatoren NEAR/, MODE/, THES/, ENTITY/ und weitere). Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen. Das Skill `ifinder-search` — MCP-Ressource `ihub://skill/ifinder-search`, dessen Referenzdateien eigene Ressourcen sind — enthält die vollständige Query-Syntax, den Discovery-Loop und die Korrekturen für Suchen, die nichts oder das Falsche liefern."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "getContent",
+      "toolId": "iFinder_getContent",
+      "title": {
+        "en": "Read document text",
+        "de": "Dokumenttext lesen"
+      },
+      "description": {
+        "en": "Fetch the extracted text of one document from iFinder for LLM processing. Takes the document's `id` as returned by iFinder_search (the `id` field of a hit) — titles, file names and links are not accepted.",
+        "de": "Den extrahierten Text eines Dokuments aus iFinder für die LLM-Verarbeitung abrufen. Erwartet die `id` des Dokuments, wie iFinder_search sie liefert (Feld `id` eines Treffers) — Titel, Dateinamen und Links werden nicht akzeptiert."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "getMetadata",
+      "toolId": "iFinder_getMetadata",
+      "title": {
+        "en": "Read document metadata",
+        "de": "Dokument-Metadaten lesen"
+      },
+      "description": {
+        "en": "Fetch the metadata of one document from iFinder without its text — title, authors, dates, source, file details and links. Takes the document's `id` as returned by iFinder_search (the `id` field of a hit) — titles, file names and links are not accepted.",
+        "de": "Die Metadaten eines Dokuments ohne seinen Text aus iFinder abrufen — Titel, Autoren, Daten, Quelle, Dateidetails und Links. Erwartet die `id` des Dokuments, wie iFinder_search sie liefert (Feld `id` eines Treffers) — Titel, Dateinamen und Links werden nicht akzeptiert."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "discover",
+      "toolId": "iFinder_discover",
+      "title": {
+        "en": "Discover a search profile",
+        "de": "Suchprofil erkunden"
+      },
+      "description": {
+        "en": "Probe a search profile and return a corpus map: total documents, the top values of the main facets, sample document titles and the field catalog. Run it once before searching an unfamiliar profile to learn what is in it and which fields can be filtered on.",
+        "de": "Ein Suchprofil sondieren und eine Korpus-Karte zurückgeben: Gesamtzahl der Dokumente, häufigste Facettenwerte, Beispieltitel und den Feldkatalog. Einmal vor der Suche in einem unbekannten Profil ausführen, um zu erfahren, was darin liegt und welche Felder gefiltert werden können."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "getFields",
+      "toolId": "iFinder_getFields",
+      "title": {
+        "en": "List index fields",
+        "de": "Indexfelder auflisten"
+      },
+      "description": {
+        "en": "List every field in the iFinder index with the exact field name to use for each purpose: full-text search, filtering, faceting and sorting. This is the authoritative answer to which fields exist in this deployment (including custom `cust.*` fields) and which of them need a `.keyword` suffix. Call it before constructing a filter, facet or sort you are not certain about.",
+        "de": "Alle Felder des iFinder-Index auflisten, mit dem exakten Feldnamen je Verwendungszweck: Volltextsuche, Filter, Facetten und Sortierung. Dies ist die verbindliche Auskunft darüber, welche Felder in dieser Installation existieren (auch eigene `cust.*`-Felder) und welche davon ein `.keyword`-Suffix benötigen. Vor unsicheren Filtern, Facetten oder Sortierungen aufrufen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "getFacetValues",
+      "toolId": "iFinder_getFacetValues",
+      "title": {
+        "en": "List facet values",
+        "de": "Facettenwerte auflisten"
+      },
+      "description": {
+        "en": "Enumerate the values of a single facet — which sources, authors, applications or languages actually exist in a search profile, with a document count per value. Returns far more values than the facet block that rides along with a search, so use it to learn the vocabulary of a field before filtering on it.",
+        "de": "Die Werte einer einzelnen Facette aufzählen — welche Quellen, Autoren, Anwendungen oder Sprachen in einem Suchprofil tatsächlich vorkommen, mit Dokumentanzahl je Wert. Liefert deutlich mehr Werte als der Facettenblock einer Suche und eignet sich daher, um das Vokabular eines Feldes vor dem Filtern kennenzulernen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    },
+    {
+      "name": "listProfiles",
+      "toolId": "iFinder_listProfiles",
+      "title": {
+        "en": "List search profiles",
+        "de": "Suchprofile auflisten"
+      },
+      "description": {
+        "en": "List the iFinder search profiles this user may search with (id, display name, which one is the user's default) — the same list the iFinder searchbar offers them. Use it when a question names a corpus (\"the legal documents\") rather than a profile id, or when a search in the configured default profile finds nothing. The configured default is always listed; `available: false` means the user does not have it.",
+        "de": "Die iFinder-Suchprofile auflisten, mit denen dieser Benutzer suchen darf (ID, Anzeigename, welches sein Standardprofil ist) — dieselbe Liste, die ihm die iFinder-Suchleiste anbietet. Nützlich, wenn eine Frage einen Korpus benennt („die juristischen Dokumente“) statt einer Profil-ID, oder wenn eine Suche im konfigurierten Standardprofil nichts findet. Das konfigurierte Standardprofil wird immer aufgeführt; `available: false` bedeutet, dass der Benutzer es nicht hat."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "enabledByDefault": true
+    }
+  ],
+  "instructions": {
+    "en": "iFinder is the organisation's document search. Search before answering questions about internal documents, cite the documents you used, and fetch a document's text with its id when the snippet is not enough.",
+    "de": "iFinder ist die Dokumentensuche der Organisation. Suche vor Antworten zu internen Dokumenten, zitiere die verwendeten Dokumente und lade den Text eines Dokuments über seine ID, wenn der Ausschnitt nicht reicht."
+  }
+}

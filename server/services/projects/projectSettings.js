@@ -20,6 +20,7 @@
  * @module services/projects/projectSettings
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
+import { isIFinderConfigured as iFinderInstalled } from '../integrations/ifinderConfig.js';
 
 // The per-app switches live in shared/ so the browser reads them alike.
 export { appAllowsUserProjects, appUsesProjects } from '../../../shared/appProjects.js';
@@ -157,14 +158,15 @@ export function projectSettings(platformConfig) {
 }
 
 /**
- * Whether `platform.iFinder` points at an iFinder installation, the way the
- * iFinder item kinds read it (`kinds/linkKinds.js`).
+ * Whether the iFinder installation (Admin → Integrations → Installed) is on
+ * and points at an iFinder, the way the iFinder item kinds read it
+ * (`kinds/linkKinds.js`). The platform config is no longer consulted; the
+ * parameter stays so callers that pass it keep working.
  *
- * @param {Object} [platformConfig] - Platform configuration.
  * @returns {boolean}
  */
-export function isIFinderConfigured(platformConfig) {
-  return Boolean(platformConfig?.iFinder?.baseUrl || process.env.IFINDER_API_URL);
+export function isIFinderConfigured() {
+  return iFinderInstalled();
 }
 
 /**

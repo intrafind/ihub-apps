@@ -22,12 +22,23 @@ jest.mock('../../../server/services/integrations/iFinderTokenProvider.js', () =>
 jest.mock('../../../server/configCache.js', () => ({
   __esModule: true,
   default: {
-    getPlatform: () => ({
-      iFinder: {
-        baseUrl: 'https://ifinder.test',
-        defaultSearchProfile: 'searchprofile-standard',
-        endpoints: { search: '/public-api/retrieval/api/v1/search/{profileId}' },
-        timeout: 5000
+    getPlatform: () => ({}),
+    // The iFinder connection is the `ifinder` installation (integrations.json).
+    getIntegrations: () => ({
+      data: {
+        installed: [
+          {
+            id: 'ifinder',
+            definition: 'com.intrafind/ifinder',
+            enabled: true,
+            values: {
+              baseUrl: 'https://ifinder.test',
+              defaultSearchProfile: 'searchprofile-standard',
+              searchEndpoint: '/public-api/retrieval/api/v1/search/{profileId}',
+              timeout: 5000
+            }
+          }
+        ]
       }
     })
   }

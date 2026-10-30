@@ -15,14 +15,15 @@
 import { z } from 'zod';
 import { zSafeId, isHttpUrl } from '../../../validators/common.js';
 import { registerItemKind } from './registry.js';
+import { isIFinderConfigured } from '../../integrations/ifinderConfig.js';
 
 /** Default cache lifetime of a link item's text, in seconds (the URL handler's). */
 export const DEFAULT_LINK_TTL_SECONDS = 7200;
 
 const LANGUAGE_CODE = /^[a-z]{2}(-[A-Z]{2})?$/;
 
-function ifinderConfigured({ platform }) {
-  return Boolean(platform?.iFinder?.baseUrl || process.env.IFINDER_API_URL);
+function ifinderConfigured() {
+  return isIFinderConfigured();
 }
 
 function hostOf(url) {

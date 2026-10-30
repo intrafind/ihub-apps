@@ -31,3 +31,25 @@ actions as tools.
 
 See [Integrations](../../integrations.md).
 
+
+## iFinder and iAssistant Are Installed Integrations
+
+iFinder and iAssistant are the first two built-in integrations under **Admin → Integrations →
+Installed**, and no longer a block in `platform.json` or an editor on the Providers page.
+
+- **One place for the connection:** the iFinder installation holds the base URL, the sign-in
+  mode (iHub-signed JWT or OIDC token exchange), the signing key as a credential-store
+  reference, the search-profile settings and the endpoint paths. The iAssistant installation
+  runs on that connection and only adds its own defaults (profile, search profile, grounded
+  answers).
+- **Test before you save:** the install wizard runs the known iFinder diagnostics (reachability,
+  signing key, token exchange, a search) on the unsaved draft, and the installed list tests a
+  saved installation the same way.
+- **Apps bind instead of listing tools:** an app binds the installation (`integrations.ifinder`)
+  and picks actions by name; the seven tools keep their ids, so group grants and prompts that
+  name `iFinder_search` and friends are unchanged. An iAssistant app binds `integrations.iassistant`.
+  An app whose installation is missing or disabled is not offered, and **Admin → Apps** names it.
+- **Migrated for you:** migration V192 moves the two platform blocks into installations (keeping
+  their enabled state), rewrites the shipped and custom apps and retires `tools/iFinder.json`.
+  Environment variables (`IFINDER_API_URL`, `IFINDER_PRIVATE_KEY`, `IASSISTANT_PROFILE_ID`)
+  still apply.

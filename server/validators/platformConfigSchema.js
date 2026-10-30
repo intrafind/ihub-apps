@@ -621,40 +621,11 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
-    // iFinder / iAssistant. Only the token settings are typed; the rest of the
-    // section passes through. `authMode` picks who issues the iFinder token:
-    // iHub itself (`ihubSigned`, the default) or the OIDC provider iHub shares
-    // with iFinder, by exchanging the user's sign-in token (`oidcTokenExchange`,
-    // services/integrations/iFinderTokenProvider.js). `scopeMap` maps the
-    // iHub-side scopes (`fa_index_read`, `fa_iassistant`, ...) to the provider's
-    // scope strings; an empty value passes the scope through unchanged.
-    // The search settings (#3050) sit beside the shared connection:
-    // `defaultSearchProfile` (what a chat searches until the user picks
-    // another), `allowedSearchProfiles` (which of the user's profiles may be
-    // offered; empty for all) and `allowUserSearchProfileChange` (false pins
-    // every chat to the default).
-    iFinder: z
-      .object({
-        defaultSearchProfile: z.string().optional(),
-        allowedSearchProfiles: z.array(z.string().min(1)).optional(),
-        allowUserSearchProfileChange: z.boolean().optional(),
-        authMode: z.enum(['ihubSigned', 'oidcTokenExchange']).prefault('ihubSigned'),
-        tokenExchange: z
-          .object({
-            oidcProvider: z.string().prefault(''),
-            grantType: z.enum(['tokenExchange', 'entraObo']).prefault('tokenExchange'),
-            audience: z.string().prefault(''),
-            scopeMap: z.record(z.string(), z.string()).prefault({}),
-            extraScopes: z.array(z.string()).prefault([])
-          })
-          .passthrough()
-          .prefault({})
-      })
-      .passthrough()
-      .optional(),
+    // iFinder and iAssistant are installed integrations (config/integrations.json),
+    // not platform settings, since V192.
     // Projects (#1036): the one container for documents, instructions and
     // chats. `tierPolicy` `both` or `ifinder` also lists the user's iFinder
-    // smart collections as read-only projects (needs `iFinder` configured);
+    // smart collections as read-only projects (needs the iFinder installation);
     // creating projects in the iFinder tier is not part of this version.
     // `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
     // of zero or less means no cap; `retentionDays` of zero or less keeps user

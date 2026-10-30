@@ -62,7 +62,9 @@ function toolFromAction(resolved, action, language) {
       instanceId: instance.id,
       instanceLabel: label,
       action: action.name,
-      definition: definition.id
+      definition: definition.id,
+      // A built-in that kept the tool id it had before (`iFinder_search`).
+      fixedToolId: action.toolId !== `${instance.id}__${action.name}`
     },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
@@ -144,13 +146,9 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
     const instance = installedIntegrationService.get(instanceId);
     if (!instance || instance.enabled === false) continue;
     if (!userMayUse(instance, context.user)) continue;
-    if (
-      Array.isArray(binding.actions) &&
-      binding.actions.length &&
-      !binding.actions.includes(action)
-    ) {
-      continue;
-    }
+    // `actions` absent: every action; a list (even empty): only those. An
+    // empty list binds the installation for its scopes and nothing else.
+    if (Array.isArray(binding.actions) && !binding.actions.includes(action)) continue;
     out.push(tool);
   }
   return out;
@@ -195,7 +193,7 @@ export async function runIntegrationTool(tool, params = {}) {
     security: resolved.security,
     action,
     args,
-    context: { scope, user: params.user, chatId: params.chatId }
+    context: { scope, user: params.user, chatId: params.chatId, params }
   });
 }
 
@@ -309,7 +307,11 @@ export async function syncIntegrationScopeProviders() {
   const wanted = new Set();
   for (const resolved of resolvedAll) {
     if (!resolved.definition.scopes) continue;
-    registerScopeProvider(scopeProviderFor(resolved));
+    // A native connector brings its own provider (it knows the system's
+    // per-user listings); declarative protocols get the generic one.
+    const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+    const own = adapter?.scopeProvider ? adapter.scopeProvider(resolved) : null;
+    registerScopeProvider(own || scopeProviderFor(resolved));
     wanted.add(resolved.instance.id);
   }
   for (const id of registeredInstanceIds) {

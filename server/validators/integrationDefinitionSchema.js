@@ -101,7 +101,13 @@ export const CONFIG_FIELD_TYPES = [
   'url',
   'secret',
   'file',
-  'directory'
+  'directory',
+  /** A reference to a credential profile (`credentials.json`), picked, never a value. */
+  'credential',
+  /** The id of another installed integration (`definition` names its definition). */
+  'instance',
+  /** A list of strings. */
+  'list'
 ];
 
 export const CONFIG_FIELD_SCOPES = ['admin', 'user'];
@@ -135,7 +141,7 @@ export const configFieldSchema = z
     title: localizedStringSchema,
     description: localizedStringSchema.optional(),
     required: z.boolean().prefault(false),
-    default: primitiveSchema.optional(),
+    default: z.union([primitiveSchema, z.array(z.string())]).optional(),
     /** Never stored in a config file; goes to the credential store (admin) or token store (user). */
     sensitive: z.boolean().optional(),
     choices: z.array(configFieldChoiceSchema).optional(),
@@ -148,7 +154,11 @@ export const configFieldSchema = z
     scope: z.enum(CONFIG_FIELD_SCOPES).prefault('admin'),
     injectAs: z.enum(CONFIG_FIELD_INJECTIONS).optional(),
     /** Hidden behind "Advanced" in the wizard. */
-    advanced: z.boolean().prefault(false)
+    advanced: z.boolean().prefault(false),
+    /** `credential` fields: the credential types offered (any when empty). */
+    credentialTypes: z.array(z.string().min(1).max(64)).optional(),
+    /** `instance` fields: the definition the referenced installation must have. */
+    definition: integrationIdSchema.optional()
   })
   .transform(field => ({ ...field, sensitive: field.sensitive ?? field.type === 'secret' }))
   .refine(field => field.type !== 'enum' || (field.choices && field.choices.length > 0), {
@@ -248,13 +258,26 @@ export const PROTOCOL_TYPES = [
   'websearch'
 ];
 
-const reservedProtocolSchema = z
+/**
+ * A built-in whose actions are implemented by a server module
+ * (`services/integrations/protocols/native/connectors/<module>.js`).
+ */
+const nativeProtocolSchema = z.object({
+  type: z.literal('native'),
+  module: identifierSchema
+});
+
+const reservedProtocolSchemaWithoutNative = z
   .object({
-    type: z.enum(PROTOCOL_TYPES.filter(t => t !== 'openapi'))
+    type: z.enum(PROTOCOL_TYPES.filter(t => t !== 'openapi' && t !== 'native'))
   })
   .passthrough();
 
-export const integrationProtocolSchema = z.union([openapiProtocolSchema, reservedProtocolSchema]);
+export const integrationProtocolSchema = z.union([
+  openapiProtocolSchema,
+  nativeProtocolSchema,
+  reservedProtocolSchemaWithoutNative
+]);
 
 export const SIDE_EFFECTS = ['read', 'write', 'destructive', 'unknown'];
 export const DATA_FLOWS = ['internal', 'external'];
@@ -263,6 +286,15 @@ export const ACTION_CONNECTIONS = ['none', 'user', 'service', 'token'];
 export const integrationActionSchema = z.object({
   /** Model-facing name; the tool id becomes `<instanceId>__<name>`. */
   name: identifierSchema,
+  /**
+   * Built-ins only: the tool id the action keeps from before it was an
+   * integration (`iFinder_search`), so apps, group grants and the MCP and A2A
+   * gateways keep addressing it.
+   */
+  toolId: z
+    .string()
+    .regex(/^[A-Za-z][A-Za-z0-9_-]{0,127}$/, 'invalid tool id')
+    .optional(),
   /** OpenAPI operationId this action calls (openapi protocol). */
   operationId: z.string().min(1).max(200).optional(),
   title: localizedStringSchema.optional(),
@@ -297,20 +329,25 @@ export const CAPABILITIES = ['tools', 'scopes', 'sources', 'files', 'views', 'se
  * and the pick is applied to the named parameters of other actions.
  */
 export const integrationScopesSchema = z.object({
-  action: identifierSchema,
+  /** The action whose result lists the scopes (declarative protocols); a native connector lists them itself. */
+  action: identifierSchema.optional(),
   label: localizedStringSchema,
   /** Path to the array of items in the action's (unwrapped) result; absent = the result itself. */
   items: jsonPathSchema.optional(),
-  map: z.object({
-    id: jsonPathSchema,
-    name: jsonPathSchema,
-    isDefault: jsonPathSchema.optional()
-  }),
+  map: z
+    .object({
+      id: jsonPathSchema,
+      name: jsonPathSchema,
+      isDefault: jsonPathSchema.optional()
+    })
+    .optional(),
   /** `"<action>.<param>"` → how the picked id reaches that parameter; `{id}` and `{name}` are substituted. */
-  applyAs: z.record(
-    z.string().regex(/^[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*$/, 'use "<action>.<param>"'),
-    enforcedValueSchema
-  ),
+  applyAs: z
+    .record(
+      z.string().regex(/^[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*$/, 'use "<action>.<param>"'),
+      enforcedValueSchema
+    )
+    .optional(),
   /** Iteration 2: verify ownership on follow-up actions. */
   strict: z.boolean().prefault(false)
 });
@@ -355,7 +392,10 @@ export const integrationDefinitionSchema = z
     runs: z.enum(['cloud', 'on-prem', 'local']).optional(),
     dataResidency: z.array(z.string().max(16)).optional(),
     trusted: z.boolean().prefault(false),
+    /** Ships with iHub: always in the catalog, never uninstalled from a registry. */
     builtIn: z.boolean().prefault(false),
+    /** Exactly one installation, with this fixed id (the built-in iFinder is `ifinder`). */
+    singleton: z.object({ instanceId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) }).optional(),
     protocol: integrationProtocolSchema,
     auth: integrationAuthSchema,
     install: z.array(configFieldSchema).prefault([]),
@@ -397,17 +437,32 @@ export const integrationDefinitionSchema = z
           message: 'an openapi action needs an operationId'
         });
       }
+      if (action.toolId && !def.builtIn) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actions', i, 'toolId'],
+          message: 'only a built-in definition may fix its tool ids'
+        });
+      }
     });
 
     if (def.scopes) {
-      if (!actionNames.has(def.scopes.action)) {
+      const declarative = def.protocol.type !== 'native';
+      if (declarative && (!def.scopes.action || !def.scopes.map || !def.scopes.applyAs)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['scopes'],
+          message: 'scopes need action, map and applyAs unless the protocol is native'
+        });
+      }
+      if (def.scopes.action && !actionNames.has(def.scopes.action)) {
         ctx.addIssue({
           code: 'custom',
           path: ['scopes', 'action'],
           message: `scopes.action "${def.scopes.action}" is not a declared action`
         });
       }
-      for (const target of Object.keys(def.scopes.applyAs)) {
+      for (const target of Object.keys(def.scopes.applyAs || {})) {
         const [actionName] = target.split('.');
         if (!actionNames.has(actionName)) {
           ctx.addIssue({
@@ -522,6 +577,11 @@ export function checkInstallValues(definition, values = {}, options = {}) {
         if (!ok) errors.push({ key: field.key, message: 'must be an http(s) URL' });
         break;
       }
+      case 'list':
+        if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+          errors.push({ key: field.key, message: 'must be a list of strings' });
+        }
+        break;
       default:
         if (typeof value !== 'string') {
           errors.push({ key: field.key, message: 'must be a string' });
