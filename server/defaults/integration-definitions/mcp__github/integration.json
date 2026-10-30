@@ -1,0 +1,67 @@
+{
+  "id": "mcp/github",
+  "version": "1.0.0",
+  "name": {
+    "en": "GitHub",
+    "de": "GitHub"
+  },
+  "description": {
+    "en": "Work with repositories, issues, pull requests, code search and Actions.\n\nUse https://api.githubcopilot.com/mcp/readonly for read-only tools. GitHub Enterprise Cloud with data residency uses https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server is not supported.",
+    "de": "Mit Repositories, Issues, Pull Requests, Codesuche und Actions arbeiten.\n\nMit https://api.githubcopilot.com/mcp/readonly nur lesende Tools nutzen. GitHub Enterprise Cloud mit Datenresidenz nutzt https://copilot-api.<subdomain>.ghe.com/mcp; GitHub Enterprise Server wird nicht unterstützt."
+  },
+  "publisher": {
+    "name": "GitHub"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/set-up-the-github-mcp-server",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create a personal access token under GitHub Settings → Developer settings → Personal access tokens, with the scopes the tools need (for example repo, read:org).",
+        "de": "Persönliches Zugriffstoken unter GitHub Settings → Developer settings → Personal access tokens erstellen, mit den Scopes, die die Tools brauchen (z. B. repo, read:org)."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["git", "code", "issues", "pull requests"]
+  }
+}

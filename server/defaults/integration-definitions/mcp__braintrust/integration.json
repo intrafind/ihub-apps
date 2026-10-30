@@ -1,0 +1,67 @@
+{
+  "id": "mcp/braintrust",
+  "version": "1.0.0",
+  "name": {
+    "en": "Braintrust",
+    "de": "Braintrust"
+  },
+  "description": {
+    "en": "Search Braintrust experiments, datasets and logs for evaluating AI applications.\n\nThe EU region uses https://api-eu.braintrust.dev/mcp.",
+    "de": "Braintrust-Experimente, Datasets und Logs zur Evaluierung von KI-Anwendungen durchsuchen.\n\nDie EU-Region nutzt https://api-eu.braintrust.dev/mcp."
+  },
+  "publisher": {
+    "name": "Braintrust"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://www.braintrust.dev/docs/reference/mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://api.braintrust.dev/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API key in Braintrust under Settings → API keys; the server acts with its owner’s permissions.",
+        "de": "API-Schlüssel in Braintrust unter Settings → API keys erstellen; der Server handelt mit den Rechten des Besitzers."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["evals", "llm", "observability"]
+  }
+}

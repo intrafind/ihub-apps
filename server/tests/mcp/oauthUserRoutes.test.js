@@ -72,7 +72,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => state.platform,
     getUI: () => ({ data: { title: { en: 'iHub Apps' } } }),
     getAppsForUser: jest.fn(async () => ({ data: state.apps })),
-    getMcpServers: () => ({ data: { servers: [] } }),
+    getIntegrations: () => ({ data: { installed: [] } }),
     get: () => null
   }
 }));

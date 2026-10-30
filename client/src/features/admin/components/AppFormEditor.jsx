@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import StarterPromptsSection from './app-form/StarterPromptsSection';
 import UsageGuideSection from './app-form/UsageGuideSection';
 import ToolsConfigSection from './app-form/ToolsConfigSection';
-import McpToolsConfigSection from './app-form/McpToolsConfigSection';
+import A2aAgentsConfigSection from './app-form/A2aAgentsConfigSection';
 import IntegrationsConfigSection from './app-form/IntegrationsConfigSection';
 import SkillsConfigSection from './app-form/SkillsConfigSection';
 import WorkflowsConfigSection from './app-form/WorkflowsConfigSection';
@@ -61,8 +61,8 @@ function AppFormEditor({
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
-  // Tool ids sourced from MCP servers. Managed in a dedicated section and
-  // excluded from the generic tools picker so they don't appear twice.
+  // Tool ids sourced from remote A2A agents. Managed in a dedicated section
+  // and excluded from the generic tools picker so they don't appear twice.
   const [mcpToolIds, setMcpToolIds] = useState([]);
   const transcriptionModels = useAdminTranscriptionModels();
   const ttsModels = useAdminTtsModels();
@@ -238,11 +238,11 @@ function AppFormEditor({
               onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
             />
 
-            {/* MCP Server Tools */}
-            <McpToolsConfigSection
+            {/* Remote A2A agents */}
+            <A2aAgentsConfigSection
               selectedTools={app.tools || []}
               onToolsChange={tools => handleInputChange('tools', tools)}
-              onMcpToolIdsChange={setMcpToolIds}
+              onRemoteToolIdsChange={setMcpToolIds}
             />
 
             {/* Installed integrations (#3061) */}

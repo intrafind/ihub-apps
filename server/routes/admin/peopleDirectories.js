@@ -3,6 +3,7 @@
 
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
+import { installedIntegrationRefs } from '../../services/integrations/installedRefs.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
@@ -111,7 +112,7 @@ async function writeDirectories(file) {
 function findIdConflict(directories) {
   const others = {
     tools: configCache.getTools?.(true)?.data || [],
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    mcpServers: installedIntegrationRefs(),
     a2aAgents: configCache.getA2aAgents?.()?.data?.agents || []
   };
   for (const directory of directories) {
@@ -203,9 +204,11 @@ export default function registerAdminPeopleDirectoriesRoutes(app) {
       const conflict = findIdConflict(parsed.data.directories);
       if (conflict) {
         const what =
-          { mcpServer: 'MCP server', a2aAgent: 'A2A agent', reserved: 'reserved reference' }[
-            conflict.kind
-          ] || 'tool';
+          {
+            mcpServer: 'installed integration',
+            a2aAgent: 'A2A agent',
+            reserved: 'reserved reference'
+          }[conflict.kind] || 'tool';
         return res.status(409).json({
           success: false,
           error: `Directory id "${conflict.directoryId}" is already used by the ${what} "${conflict.id}". Apps and groups select directories, tools and MCP servers by id, so the directory needs an id of its own.`,

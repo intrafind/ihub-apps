@@ -18,14 +18,21 @@
  *   listScopes({ definition, instance, document, language })
  *     → Promise<Array<{ id, name, isDefault? }>> when the definition declares scopes
  *
- * Only `openapi` has an adapter in this iteration; the other protocol types
+ * Optional exports: `dynamicActions` (the actions come from the system, not
+ * the definition), `supportedAuthModes`, `discoverTools(resolved, language)`
+ * (ready-made tool objects instead of `discoverActions` → `toolFromAction`),
+ * `status(instance)`, `listConnections` / `disconnectUser` /
+ * `resetRegistration` (per-user sign-in), `invalidate(instanceId)`.
+ *
+ * `openapi`, `native` and `mcp` have adapters; the other protocol types
  * validate but cannot be installed.
  */
 
 import * as openapi from './openapi/OpenApiAdapter.js';
 import * as native from './native/NativeAdapter.js';
+import * as mcp from './mcp/McpAdapter.js';
 
-const adapters = { openapi, native };
+const adapters = { openapi, native, mcp };
 
 /**
  * @param {string} protocolType

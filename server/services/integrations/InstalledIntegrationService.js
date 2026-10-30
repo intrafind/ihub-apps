@@ -11,7 +11,10 @@ import {
   validateIntegrationsConfig,
   validateInstalledIntegration
 } from '../../validators/integrationsConfigSchema.js';
-import { checkInstallValues } from '../../validators/integrationDefinitionSchema.js';
+import {
+  checkInstallValues,
+  secretFieldForMode
+} from '../../validators/integrationDefinitionSchema.js';
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
 
 /**
@@ -212,8 +215,22 @@ export class InstalledIntegrationService {
         }
       );
     }
+    const adapter = getProtocolAdapter(definition.protocol.type);
+    if (
+      Array.isArray(adapter.supportedAuthModes) &&
+      !adapter.supportedAuthModes.includes(instance.auth.mode)
+    ) {
+      throw new IntegrationError(
+        `Auth mode "${instance.auth.mode}" is not available for "${definition.protocol.type}" integrations in this release`,
+        { code: 'UNSUPPORTED_AUTH_MODE' }
+      );
+    }
 
-    const secretField = definition.auth.serviceAccount?.field;
+    // The secret a sign-in mode keeps in the credential store: the service
+    // account's token, the OAuth client's secret, or (optional) the secret of
+    // a pre-registered client for per-user OAuth.
+    const secretSpec = secretFieldForMode(definition, instance.auth.mode);
+    const secretField = secretSpec?.key || null;
     const providedSecret =
       secrets &&
       secretField &&
@@ -236,7 +253,7 @@ export class InstalledIntegrationService {
     }
 
     const toStore = [];
-    if (instance.auth.mode === 'service-account') {
+    if (secretSpec) {
       if (providedSecret) {
         const credentialRef = credentialIdFor(instance.id, secretField);
         toStore.push({

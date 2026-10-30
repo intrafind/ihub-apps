@@ -23,10 +23,6 @@ jest.mock('../../../client/src/api/adminApi', () => ({ makeAdminApiCall: jest.fn
 jest.mock('../../../client/src/features/admin/components/OpenApiToolEditor', () => ({
   CredentialRefSelect: () => null
 }));
-jest.mock('../../../client/src/features/admin/components/McpServerCatalogDialog', () => ({
-  __esModule: true,
-  default: () => null
-}));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: ({ name }) => <span data-testid="icon" data-name={name} />
@@ -53,69 +49,18 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => mockI18n
 }));
 
-const {
-  authFields,
-  apiErrorText,
-  formWithTransportType
-} = require('../../../client/src/features/admin/pages/AdminMcpServersPage');
 const IntegrationsPage =
   require('../../../client/src/features/settings/pages/IntegrationsPage').default;
 
-const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
-
-describe('admin MCP server form', () => {
-  test('offers per-user sign-in for HTTP transports only', () => {
-    const { container, unmount } = render(
-      authFields({ type: 'none' }, jest.fn(), t, { type: 'streamableHttp', url: '' })
-    );
-    expect(container.querySelector('option[value="oauthUser"]')).not.toBeNull();
-    unmount();
-
-    render(authFields({ type: 'none' }, jest.fn(), t, { type: 'stdio', command: '' }));
-    expect(document.querySelector('option[value="oauthUser"]')).toBeNull();
-    expect(screen.getByText(/Streamable HTTP and SSE transports only/)).toBeInTheDocument();
-  });
-
-  test('switching to stdio resets per-user sign-in', () => {
-    const form = {
-      transport: { type: 'streamableHttp', url: 'https://x' },
-      auth: { type: 'oauthUser' }
-    };
-    expect(formWithTransportType(form, 'stdio')).toMatchObject({
-      transport: { type: 'stdio', command: '', args: [] },
-      auth: { type: 'none' }
-    });
-    expect(formWithTransportType(form, 'sse').auth).toEqual({ type: 'oauthUser' });
-    const bearer = { ...form, auth: { type: 'bearer', tokenRef: 'r' } };
-    expect(formWithTransportType(bearer, 'stdio').auth).toEqual({ type: 'bearer', tokenRef: 'r' });
-  });
-
-  test("a refused config shows the schema's message", () => {
-    const err = {
-      message: 'Request failed with status code 400',
-      response: {
-        data: {
-          error: 'Invalid server config',
-          details: [{ message: 'auth.type "oauthUser" requires a streamableHttp or sse transport' }]
-        }
-      }
-    };
-    expect(apiErrorText(err)).toBe(
-      'Invalid server config: auth.type "oauthUser" requires a streamableHttp or sse transport'
-    );
-    expect(apiErrorText(new Error('Network Error'))).toBe('Network Error');
-  });
-});
-
 describe('connected-users badge', () => {
   test.each([
-    ['en', en, '1 user connected', '3 users connected'],
-    ['de', de, '1 Person verbunden', '3 Personen verbunden']
+    ['en', en, '1 connected user', '3 connected users'],
+    ['de', de, '1 verbundene Person', '3 verbundene Personen']
   ])('has plural forms in %s', async (lng, resources, one, other) => {
     const i18n = i18next.createInstance();
     await i18n.init({ lng, resources: { [lng]: { translation: resources } } });
-    expect(i18n.t('admin.mcp.servers.status.connectedUsers', { count: 1 })).toBe(one);
-    expect(i18n.t('admin.mcp.servers.status.connectedUsers', { count: 3 })).toBe(other);
+    expect(i18n.t('admin.integrationCatalog.status.userConnections', { count: 1 })).toBe(one);
+    expect(i18n.t('admin.integrationCatalog.status.userConnections', { count: 3 })).toBe(other);
   });
 });
 

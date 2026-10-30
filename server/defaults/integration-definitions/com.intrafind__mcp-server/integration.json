@@ -1,0 +1,296 @@
+{
+  "id": "com.intrafind/mcp-server",
+  "version": "1.0.0",
+  "name": { "en": "MCP server", "de": "MCP-Server" },
+  "description": {
+    "en": "Any server that speaks the Model Context Protocol: a hosted endpoint (Streamable HTTP or SSE), a WebSocket endpoint, or a local process started by iHub (stdio). Its tools become the actions of this installation.",
+    "de": "Ein beliebiger Server, der das Model Context Protocol spricht: ein gehosteter Endpunkt (Streamable HTTP oder SSE), ein WebSocket-Endpunkt oder ein lokaler Prozess, den iHub startet (stdio). Seine Tools werden zu den Aktionen dieser Installation."
+  },
+  "publisher": { "name": "IntraFind Software AG", "verification": "intrafind" },
+  "categories": ["mcp"],
+  "docsUrl": "https://modelcontextprotocol.io",
+  "builtIn": true,
+  "protocol": { "type": "mcp" },
+  "auth": {
+    "modes": ["none", "service-account", "oauth-client", "oauth-user"],
+    "serviceAccount": { "kind": "bearer", "field": "secret" },
+    "oauthClient": { "field": "oauthClientSecret" },
+    "oauthUser": { "field": "oauthUserClientSecret" }
+  },
+  "install": [
+    {
+      "key": "transport",
+      "type": "enum",
+      "title": { "en": "Transport", "de": "Transport" },
+      "required": true,
+      "default": "streamableHttp",
+      "choices": [
+        {
+          "value": "streamableHttp",
+          "label": { "en": "Streamable HTTP (recommended)", "de": "Streamable HTTP (empfohlen)" }
+        },
+        { "value": "sse", "label": { "en": "SSE (legacy)", "de": "SSE (veraltet)" } },
+        { "value": "websocket", "label": { "en": "WebSocket", "de": "WebSocket" } },
+        {
+          "value": "stdio",
+          "label": { "en": "Local process (stdio)", "de": "Lokaler Prozess (stdio)" }
+        }
+      ]
+    },
+    {
+      "key": "url",
+      "type": "url",
+      "title": { "en": "Server URL", "de": "Server-URL" },
+      "description": {
+        "en": "The MCP endpoint, e.g. https://mcp.example.com/mcp",
+        "de": "Der MCP-Endpunkt, z. B. https://mcp.example.com/mcp"
+      },
+      "required": true,
+      "when": { "field": "transport", "in": ["streamableHttp", "sse", "websocket"] }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": { "en": "Additional headers", "de": "Zusätzliche Header" },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". Credentials belong in the sign-in step.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Zugangsdaten gehören in den Schritt Anmeldung."
+      },
+      "advanced": true,
+      "when": { "field": "transport", "in": ["streamableHttp", "sse"] }
+    },
+    {
+      "key": "command",
+      "type": "string",
+      "title": { "en": "Command", "de": "Befehl" },
+      "description": {
+        "en": "The executable iHub starts, e.g. npx or /usr/local/bin/my-server",
+        "de": "Das Programm, das iHub startet, z. B. npx oder /usr/local/bin/my-server"
+      },
+      "required": true,
+      "when": { "field": "transport", "equals": "stdio" }
+    },
+    {
+      "key": "args",
+      "type": "list",
+      "title": { "en": "Arguments", "de": "Argumente" },
+      "description": { "en": "One argument per line.", "de": "Ein Argument pro Zeile." },
+      "when": { "field": "transport", "equals": "stdio" }
+    },
+    {
+      "key": "env",
+      "type": "list",
+      "title": { "en": "Environment variables", "de": "Umgebungsvariablen" },
+      "description": {
+        "en": "One per line as KEY=value. Stored as entered: put secrets into a credential and reference them in the sign-in step where the server allows it.",
+        "de": "Eine pro Zeile als KEY=Wert. Wird so gespeichert wie eingegeben: Geheimnisse gehören in einen Zugangsdaten-Eintrag und den Schritt Anmeldung, wo der Server es erlaubt."
+      },
+      "advanced": true,
+      "when": { "field": "transport", "equals": "stdio" }
+    },
+    {
+      "key": "cwd",
+      "type": "directory",
+      "title": { "en": "Working directory", "de": "Arbeitsverzeichnis" },
+      "advanced": true,
+      "when": { "field": "transport", "equals": "stdio" }
+    },
+    {
+      "key": "authKind",
+      "type": "enum",
+      "title": { "en": "How the token is sent", "de": "Wie das Token gesendet wird" },
+      "default": "bearer",
+      "choices": [
+        {
+          "value": "bearer",
+          "label": { "en": "Authorization: Bearer <token>", "de": "Authorization: Bearer <Token>" }
+        },
+        {
+          "value": "header",
+          "label": { "en": "In a header of its own", "de": "In einem eigenen Header" }
+        },
+        {
+          "value": "basic",
+          "label": {
+            "en": "HTTP Basic (username and password)",
+            "de": "HTTP Basic (Benutzername und Passwort)"
+          }
+        }
+      ],
+      "when": { "authMode": ["service-account"] }
+    },
+    {
+      "key": "headerName",
+      "type": "string",
+      "title": { "en": "Header name", "de": "Header-Name" },
+      "description": { "en": "e.g. X-Api-Key", "de": "z. B. X-Api-Key" },
+      "required": true,
+      "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+      "when": { "field": "authKind", "equals": "header" }
+    },
+    {
+      "key": "valuePrefix",
+      "type": "string",
+      "title": { "en": "Value prefix", "de": "Wert-Präfix" },
+      "description": {
+        "en": "Text placed before the token, e.g. \"Token token=\"",
+        "de": "Text vor dem Token, z. B. „Token token=“"
+      },
+      "when": { "field": "authKind", "equals": "header" }
+    },
+    {
+      "key": "username",
+      "type": "string",
+      "title": { "en": "Username", "de": "Benutzername" },
+      "required": true,
+      "when": { "field": "authKind", "equals": "basic" }
+    },
+    {
+      "key": "secret",
+      "type": "secret",
+      "title": { "en": "Token, API key or password", "de": "Token, API-Schlüssel oder Passwort" },
+      "when": { "authMode": ["service-account"] }
+    },
+    {
+      "key": "oauthTokenUrl",
+      "type": "url",
+      "title": { "en": "Token URL", "de": "Token-URL" },
+      "description": {
+        "en": "The authorization server's token endpoint (client credentials grant).",
+        "de": "Der Token-Endpunkt des Autorisierungsservers (Client-Credentials-Grant)."
+      },
+      "required": true,
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthClientId",
+      "type": "string",
+      "title": { "en": "Client ID", "de": "Client-ID" },
+      "description": {
+        "en": "For per-user sign-in: leave empty to let iHub identify itself through its Client ID Metadata Document or register dynamically.",
+        "de": "Bei Anmeldung pro Benutzer: leer lassen, damit sich iHub über sein Client-ID-Metadata-Dokument ausweist oder dynamisch registriert."
+      },
+      "when": { "authMode": ["oauth-client", "oauth-user"] }
+    },
+    {
+      "key": "oauthScope",
+      "type": "string",
+      "title": { "en": "Scope", "de": "Scope" },
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthClientSecret",
+      "type": "secret",
+      "title": { "en": "Client secret", "de": "Client-Secret" },
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthScopes",
+      "type": "list",
+      "title": { "en": "Scopes", "de": "Scopes" },
+      "description": {
+        "en": "One scope per line; empty asks for what the server advertises.",
+        "de": "Ein Scope pro Zeile; leer fordert an, was der Server ankündigt."
+      },
+      "when": { "authMode": ["oauth-user"] }
+    },
+    {
+      "key": "oauthAuthorizationServer",
+      "type": "url",
+      "title": { "en": "Authorization server", "de": "Autorisierungsserver" },
+      "description": {
+        "en": "Only when the server does not advertise it (RFC 9728).",
+        "de": "Nur wenn der Server ihn nicht ankündigt (RFC 9728)."
+      },
+      "advanced": true,
+      "when": { "authMode": ["oauth-user"] }
+    },
+    {
+      "key": "oauthUserClientSecret",
+      "type": "secret",
+      "title": {
+        "en": "Client secret (pre-registered confidential client)",
+        "de": "Client-Secret (vorregistrierter vertraulicher Client)"
+      },
+      "when": { "authMode": ["oauth-user"] }
+    },
+    {
+      "key": "toolPrefix",
+      "type": "string",
+      "title": { "en": "Tool prefix", "de": "Tool-Präfix" },
+      "description": {
+        "en": "Prefix of the tool ids; empty means \"<id>__\".",
+        "de": "Präfix der Tool-IDs; leer bedeutet „<id>__“."
+      },
+      "pattern": "^[a-zA-Z0-9_]*$",
+      "advanced": true
+    },
+    {
+      "key": "timeoutMs",
+      "type": "number",
+      "title": { "en": "Tool call timeout (ms)", "de": "Zeitlimit für Tool-Aufrufe (ms)" },
+      "default": 30000,
+      "min": 1000,
+      "max": 600000,
+      "advanced": true
+    },
+    {
+      "key": "appsEnabled",
+      "type": "boolean",
+      "title": {
+        "en": "Render MCP App views in the chat",
+        "de": "MCP-App-Ansichten im Chat anzeigen"
+      },
+      "description": {
+        "en": "Interactive views the server's tools declare are shown inline.",
+        "de": "Interaktive Ansichten, die die Tools des Servers deklarieren, werden direkt angezeigt."
+      },
+      "default": true,
+      "advanced": true
+    },
+    {
+      "key": "reconnectEnabled",
+      "type": "boolean",
+      "title": { "en": "Reconnect automatically", "de": "Automatisch neu verbinden" },
+      "default": true,
+      "advanced": true
+    },
+    {
+      "key": "reconnectMaxRetries",
+      "type": "number",
+      "title": { "en": "Reconnect attempts", "de": "Verbindungsversuche" },
+      "default": 5,
+      "min": 0,
+      "max": 20,
+      "advanced": true
+    },
+    {
+      "key": "reconnectInitialDelayMs",
+      "type": "number",
+      "title": { "en": "First reconnect delay (ms)", "de": "Erste Wartezeit (ms)" },
+      "default": 1000,
+      "min": 100,
+      "max": 60000,
+      "advanced": true
+    },
+    {
+      "key": "reconnectMaxDelayMs",
+      "type": "number",
+      "title": { "en": "Longest reconnect delay (ms)", "de": "Längste Wartezeit (ms)" },
+      "default": 30000,
+      "min": 1000,
+      "max": 120000,
+      "advanced": true
+    },
+    {
+      "key": "reconnectGrowthFactor",
+      "type": "number",
+      "title": { "en": "Delay growth factor", "de": "Wachstumsfaktor der Wartezeit" },
+      "default": 1.5,
+      "min": 1,
+      "max": 5,
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"]
+}

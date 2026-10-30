@@ -1,0 +1,76 @@
+{
+  "id": "mcp/atlassian",
+  "version": "1.0.0",
+  "name": {
+    "en": "Atlassian (Jira & Confluence)",
+    "de": "Atlassian (Jira & Confluence)"
+  },
+  "description": {
+    "en": "Search, create and update Jira issues and Confluence pages.\n\nAn Atlassian organization admin must allow API-token authentication for the Rovo MCP server. For a service account, use Bearer token with its API key instead. Compass tools are not available with API tokens.",
+    "de": "Jira-Issues und Confluence-Seiten suchen, erstellen und bearbeiten.\n\nEin Atlassian-Organisationsadmin muss die API-Token-Authentifizierung für den Rovo-MCP-Server erlauben. Für ein Servicekonto stattdessen Bearer-Token mit dessen API-Schlüssel verwenden. Compass-Tools sind mit API-Tokens nicht verfügbar."
+  },
+  "publisher": {
+    "name": "Atlassian"
+  },
+  "categories": ["mcp", "productivity"],
+  "docsUrl": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.atlassian.com/v2/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "basic",
+      "field": "password"
+    }
+  },
+  "install": [
+    {
+      "key": "username",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Username",
+        "de": "Benutzername"
+      }
+    },
+    {
+      "key": "password",
+      "type": "secret",
+      "title": {
+        "en": "Password or API token",
+        "de": "Passwort oder API-Token"
+      },
+      "description": {
+        "en": "Enter the Atlassian account email as username and store a scoped API token (id.atlassian.com/manage-profile/security/api-tokens) as the password.",
+        "de": "Die E-Mail-Adresse des Atlassian-Kontos als Benutzername eintragen und ein API-Token mit Scopes (id.atlassian.com/manage-profile/security/api-tokens) als Passwort speichern."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["jira", "confluence", "rovo", "issues", "wiki"]
+  }
+}

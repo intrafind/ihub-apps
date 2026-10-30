@@ -12,6 +12,7 @@ import AdminTabs from '../components/AdminTabs';
 import AdminLoadError from '../components/AdminLoadError';
 import IntegrationTestResults from '../components/IntegrationTestResults';
 import IntegrationInstallDialog from '../components/integrations/IntegrationInstallDialog';
+import IntegrationConnectionsDialog from '../components/integrations/IntegrationConnectionsDialog';
 import {
   CALLOUT_CLASS,
   DANGER_BUTTON_CLASS,
@@ -71,6 +72,7 @@ function AdminInstalledIntegrationsPage() {
   const [message, setMessage] = useState(null);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null); // { definitionId, instanceId? }
+  const [connectionsFor, setConnectionsFor] = useState(null); // an installation that signs users in
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [busy, setBusy] = useState(null);
   const [testResult, setTestResult] = useState(null);
@@ -314,6 +316,34 @@ function AdminInstalledIntegrationsPage() {
                           )}
                         </Pill>
                       )}
+                      {item.status && item.enabled !== false && (
+                        <Pill
+                          tone={
+                            item.status.unhealthy
+                              ? 'red'
+                              : item.status.connected || item.status.perUser
+                                ? 'green'
+                                : 'gray'
+                          }
+                        >
+                          {item.status.unhealthy
+                            ? t('admin.integrationCatalog.status.unhealthy', 'Unreachable')
+                            : item.status.perUser
+                              ? t(
+                                  'admin.integrationCatalog.status.userConnections',
+                                  '{{count}} connected users',
+                                  { count: item.status.userConnections || 0 }
+                                )
+                              : item.status.connected
+                                ? t('admin.integrationCatalog.status.connected', 'Connected')
+                                : t(
+                                    'admin.integrationCatalog.status.notConnected',
+                                    'Not connected'
+                                  )}
+                          {typeof item.status.toolCount === 'number' &&
+                            ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.status.toolCount })}`}
+                        </Pill>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                       {item.definitionName}
@@ -335,6 +365,21 @@ function AdminInstalledIntegrationsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    {item.perUser && (
+                      <button
+                        type="button"
+                        className={SECONDARY_BUTTON_CLASS}
+                        onClick={() => setConnectionsFor(item)}
+                        aria-label={t(
+                          'admin.integrationCatalog.actions.connections',
+                          'Connected users of {{id}}',
+                          { id: item.id }
+                        )}
+                        title={t('admin.integrationCatalog.connections.title', 'Connected users')}
+                      >
+                        <Icon name="users" size="sm" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={SECONDARY_BUTTON_CLASS}
@@ -499,6 +544,13 @@ function AdminInstalledIntegrationsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {connectionsFor && (
+        <IntegrationConnectionsDialog
+          instance={connectionsFor}
+          onClose={() => setConnectionsFor(null)}
+        />
       )}
 
       {dialog && (

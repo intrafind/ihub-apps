@@ -1,0 +1,51 @@
+{
+  "id": "mcp/microsoft-learn",
+  "version": "1.0.0",
+  "name": {
+    "en": "Microsoft Learn",
+    "de": "Microsoft Learn"
+  },
+  "description": {
+    "en": "Search and read official Microsoft documentation and code samples for Azure, Microsoft 365, .NET and more.",
+    "de": "Offizielle Microsoft-Dokumentation und Codebeispiele zu Azure, Microsoft 365, .NET und mehr durchsuchen und lesen."
+  },
+  "publisher": {
+    "name": "Microsoft"
+  },
+  "categories": ["mcp", "documentation"],
+  "docsUrl": "https://learn.microsoft.com/en-us/training/support/mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["azure", "microsoft 365", ".net", "docs"]
+  }
+}

@@ -85,7 +85,7 @@ configCache.getGroups = () => ({
   }
 });
 configCache.getTools = () => ({ data: state.tools, etag: 'tools' });
-configCache.getMcpServers = () => ({ data: { servers: state.mcpServers } });
+configCache.getIntegrations = () => ({ data: { installed: state.mcpServers } });
 configCache.getA2aAgents = () => ({ data: { agents: state.a2aAgents } });
 configCache.getApps = () => ({ data: [], etag: 'apps' });
 configCache.getFeatures = () => ({ skills: false, appAsTool: false });

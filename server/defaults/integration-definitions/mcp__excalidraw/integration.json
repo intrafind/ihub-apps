@@ -1,0 +1,52 @@
+{
+  "id": "mcp/excalidraw",
+  "version": "1.0.0",
+  "name": {
+    "en": "Excalidraw",
+    "de": "Excalidraw"
+  },
+  "description": {
+    "en": "Official Excalidraw MCP App server. Draws hand-drawn diagrams inline in the chat. Used by the \"Excalidraw Sketches\" app.",
+    "de": "Offizieller Excalidraw-MCP-App-Server. Zeichnet handgezeichnete Diagramme direkt im Chat. Wird von der App „Excalidraw-Skizzen“ verwendet."
+  },
+  "publisher": {
+    "name": "Excalidraw"
+  },
+  "categories": ["mcp", "design"],
+  "docsUrl": "https://excalidraw.com",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.excalidraw.com/mcp"
+    },
+    "timeoutMs": 60000,
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["sketch", "whiteboard"]
+  }
+}

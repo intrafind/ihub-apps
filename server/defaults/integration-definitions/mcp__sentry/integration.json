@@ -1,0 +1,69 @@
+{
+  "id": "mcp/sentry",
+  "version": "1.0.0",
+  "name": {
+    "en": "Sentry",
+    "de": "Sentry"
+  },
+  "description": {
+    "en": "Investigate errors, issues, traces and releases, and query events across projects.\n\nSentry expects the “Sentry-Bearer” scheme, not “Bearer”. Append /<organization> or /<organization>/<project> to the URL to limit the scope.",
+    "de": "Fehler, Issues, Traces und Releases untersuchen und Events projektübergreifend abfragen.\n\nSentry erwartet das Schema „Sentry-Bearer“, nicht „Bearer“. Mit /<organisation> oder /<organisation>/<projekt> an der URL den Umfang eingrenzen."
+  },
+  "publisher": {
+    "name": "Sentry"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://github.com/getsentry/sentry-mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.sentry.dev/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "Authorization",
+      "valuePrefix": "Sentry-Bearer "
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create a user auth token in Sentry (User settings → User Auth Tokens) with org:read, project:read, project:write, team:read, team:write and event:write.",
+        "de": "User Auth Token in Sentry erstellen (User settings → User Auth Tokens) mit org:read, project:read, project:write, team:read, team:write und event:write."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["errors", "monitoring", "observability"]
+  }
+}

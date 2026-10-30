@@ -120,6 +120,36 @@ export const CONFIG_FIELD_INJECTIONS = [
   'credentialRef'
 ];
 
+export const AUTH_MODES = [
+  'none',
+  'service-account',
+  /** iHub holds one OAuth client (client credentials); every call runs as it. */
+  'oauth-client',
+  'api-key-user',
+  'oauth-user',
+  'enterprise-managed'
+];
+
+/**
+ * When a field applies at all: only while another field has one of the
+ * listed values, or while the installation uses one of the listed sign-in
+ * modes. A field that does not apply is hidden in the wizard, never required,
+ * and its stored value is ignored.
+ */
+const configFieldWhenSchema = z
+  .object({
+    field: identifierSchema.optional(),
+    in: z.array(primitiveSchema).optional(),
+    equals: primitiveSchema.optional(),
+    authMode: z.array(z.enum(AUTH_MODES)).optional()
+  })
+  .refine(when => when.field || when.authMode, {
+    message: 'a when clause names a field or sign-in modes'
+  })
+  .refine(when => !when.field || when.in !== undefined || when.equals !== undefined, {
+    message: 'a when clause on a field needs "in" or "equals"'
+  });
+
 const configFieldChoiceSchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]),
   label: localizedStringSchema,
@@ -158,7 +188,9 @@ export const configFieldSchema = z
     /** `credential` fields: the credential types offered (any when empty). */
     credentialTypes: z.array(z.string().min(1).max(64)).optional(),
     /** `instance` fields: the definition the referenced installation must have. */
-    definition: integrationIdSchema.optional()
+    definition: integrationIdSchema.optional(),
+    /** Shown and required only while this holds (another field's value, the sign-in mode). */
+    when: configFieldWhenSchema.optional()
   })
   .transform(field => ({ ...field, sensitive: field.sensitive ?? field.type === 'secret' }))
   .refine(field => field.type !== 'enum' || (field.choices && field.choices.length > 0), {
@@ -167,14 +199,6 @@ export const configFieldSchema = z
   .refine(field => !(field.sensitive && field.default !== undefined), {
     message: 'a sensitive field cannot have a default value'
   });
-
-export const AUTH_MODES = [
-  'none',
-  'service-account',
-  'api-key-user',
-  'oauth-user',
-  'enterprise-managed'
-];
 
 const HTTP_HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~{}-]+$/; // `{}` allows a {field} template
 
@@ -198,6 +222,12 @@ export const integrationAuthSchema = z
     default: z.enum(AUTH_MODES).optional(),
     serviceAccount: serviceAccountAuthSchema.optional(),
     apiKeyUser: serviceAccountAuthSchema.optional(),
+    /** Client credentials: `field` names the sensitive install field holding the client secret. */
+    oauthClient: z.object({ field: identifierSchema.optional() }).optional(),
+    /**
+     * Per-user OAuth: `field` names the sensitive install field holding the
+     * secret of a pre-registered confidential client, when there is one.
+     */
     oauthUser: z.record(z.string(), z.any()).optional()
   })
   .transform(auth => ({ ...auth, default: auth.default ?? auth.modes[0] }))
@@ -245,11 +275,10 @@ const openapiProtocolSchema = z.object({
   timeoutMs: z.number().int().min(1000).max(120000).prefault(30000)
 });
 
-/** Adapters the architecture names; only `openapi` has an adapter in this iteration. */
+/** Adapters the architecture names; `openapi`, `native` and `mcp` have one. */
 export const PROTOCOL_TYPES = [
   'openapi',
-  'mcp-remote',
-  'mcp-stdio',
+  'mcp',
   'a2a',
   'native',
   'http',
@@ -257,6 +286,49 @@ export const PROTOCOL_TYPES = [
   'storage',
   'websearch'
 ];
+
+export const MCP_TRANSPORT_TYPES = ['streamableHttp', 'sse', 'stdio', 'websocket'];
+
+/**
+ * An MCP server. Every transport setting may be fixed here or left to the
+ * install fields of the same name (`transport`, `url`, `headers`, `command`,
+ * `args`, `env`, `cwd`); a fixed value wins. The actions are whatever the
+ * server lists (`tools/list`), so `actions` stays empty.
+ */
+const mcpProtocolSchema = z.object({
+  type: z.literal('mcp'),
+  transport: z
+    .object({
+      type: z.enum(MCP_TRANSPORT_TYPES).optional(),
+      /** URL template of the http transports; `{key}` placeholders are install fields. */
+      url: z.string().min(1).max(2048).optional(),
+      /** Non-secret headers sent on every request (values may be templates). */
+      headers: z.record(z.string().regex(HTTP_HEADER_NAME), z.string().max(1024)).optional(),
+      command: z.string().min(1).max(1024).optional(),
+      args: z.array(z.string().max(1024)).optional(),
+      env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(4096)).optional(),
+      cwd: z.string().max(1024).optional()
+    })
+    .prefault({}),
+  /** Tool id prefix; the default is `<instanceId>__`. */
+  toolPrefix: z
+    .string()
+    .regex(/^[a-zA-Z0-9_]*$/)
+    .max(32)
+    .optional(),
+  /** MCP Apps (`io.modelcontextprotocol/ui`): render the views the server's tools declare. */
+  apps: z.object({ enabled: z.boolean().prefault(true) }).optional(),
+  timeoutMs: z.number().int().min(1000).max(600000).optional(),
+  reconnect: z
+    .object({
+      enabled: z.boolean().optional(),
+      maxRetries: z.number().int().min(0).max(20).optional(),
+      initialDelayMs: z.number().int().min(100).max(60000).optional(),
+      maxDelayMs: z.number().int().min(1000).max(120000).optional(),
+      growthFactor: z.number().min(1).max(5).optional()
+    })
+    .optional()
+});
 
 /**
  * A built-in whose actions are implemented by a server module
@@ -267,16 +339,19 @@ const nativeProtocolSchema = z.object({
   module: identifierSchema
 });
 
-const reservedProtocolSchemaWithoutNative = z
+const ADAPTED_PROTOCOLS = new Set(['openapi', 'native', 'mcp']);
+
+const reservedProtocolSchema = z
   .object({
-    type: z.enum(PROTOCOL_TYPES.filter(t => t !== 'openapi' && t !== 'native'))
+    type: z.enum(PROTOCOL_TYPES.filter(t => !ADAPTED_PROTOCOLS.has(t)))
   })
   .passthrough();
 
 export const integrationProtocolSchema = z.union([
   openapiProtocolSchema,
   nativeProtocolSchema,
-  reservedProtocolSchemaWithoutNative
+  mcpProtocolSchema,
+  reservedProtocolSchema
 ]);
 
 export const SIDE_EFFECTS = ['read', 'write', 'destructive', 'unknown'];
@@ -514,14 +589,63 @@ export function validateIntegrationDefinition(data) {
 }
 
 /**
+ * Whether a field applies, given the other values and the sign-in mode
+ * (`when` clause); a field without one always applies.
+ *
+ * @param {object} field - ConfigField
+ * @param {Record<string, unknown>} [values]
+ * @param {string} [authMode]
+ * @returns {boolean}
+ */
+export function fieldApplies(field, values = {}, authMode) {
+  const when = field?.when;
+  if (!when) return true;
+  if (when.authMode && !when.authMode.includes(authMode || 'none')) return false;
+  if (when.field) {
+    const actual = values[when.field];
+    if (when.equals !== undefined && actual !== when.equals) return false;
+    if (when.in && !when.in.includes(actual)) return false;
+  }
+  return true;
+}
+
+/**
+ * The sensitive install field a sign-in mode stores in the credential store:
+ * the service account's secret, the OAuth client's secret, or the secret of a
+ * pre-registered client for per-user OAuth (optional there).
+ *
+ * @param {object} definition
+ * @param {string} mode - auth mode
+ * @returns {{ key: string, required: boolean } | null}
+ */
+export function secretFieldForMode(definition, mode) {
+  const auth = definition?.auth || {};
+  if (mode === 'service-account') {
+    return auth.serviceAccount?.field ? { key: auth.serviceAccount.field, required: true } : null;
+  }
+  if (mode === 'oauth-client') {
+    const key =
+      auth.oauthClient?.field ||
+      (definition.install || []).find(f => f.key === 'clientSecret' && f.sensitive)?.key;
+    return key ? { key, required: true } : null;
+  }
+  if (mode === 'oauth-user') {
+    const key = auth.oauthUser?.field;
+    return key ? { key, required: false } : null;
+  }
+  return null;
+}
+
+/**
  * Check an installation's non-sensitive values against the definition's
  * install fields: unknown keys, missing required fields, type mismatches,
  * enum membership, patterns, ranges, and sensitive values that must not be
- * stored in a config file.
+ * stored in a config file. A field whose `when` clause does not hold is
+ * neither required nor checked.
  *
  * @param {object} definition - a validated definition
  * @param {Record<string, unknown>} values
- * @param {{ authMode?: string }} [options]
+ * @param {{ authMode?: string, hasCredential?: boolean }} [options]
  * @returns {Array<{ key: string, message: string }>} empty when valid
  */
 export function checkInstallValues(definition, values = {}, options = {}) {
@@ -534,6 +658,7 @@ export function checkInstallValues(definition, values = {}, options = {}) {
 
   for (const field of definition.install) {
     if (field.scope !== 'admin') continue;
+    if (!fieldApplies(field, values, options.authMode)) continue;
     const value = values[field.key];
     if (field.sensitive && value !== undefined && value !== null && value !== '') {
       errors.push({ key: field.key, message: 'sensitive values belong in the credential store' });
@@ -601,6 +726,7 @@ export function checkInstallValues(definition, values = {}, options = {}) {
   // Choices may make other fields required (e.g. "Data Center" needs a URL).
   for (const field of definition.install) {
     if (field.type !== 'enum' || !field.choices) continue;
+    if (!fieldApplies(field, values, options.authMode)) continue;
     const choice = field.choices.find(c => c.value === values[field.key]);
     for (const requiredKey of choice?.requires || []) {
       const v = values[requiredKey];
@@ -610,11 +736,9 @@ export function checkInstallValues(definition, values = {}, options = {}) {
     }
   }
 
-  if (options.authMode === 'service-account') {
-    const secretField = definition.auth.serviceAccount?.field;
-    if (secretField && !options.hasCredential) {
-      errors.push({ key: secretField, message: 'a credential is required for a service account' });
-    }
+  const secret = secretFieldForMode(definition, options.authMode);
+  if (secret?.required && !options.hasCredential) {
+    errors.push({ key: secret.key, message: 'a credential is required for this sign-in mode' });
   }
 
   return errors;

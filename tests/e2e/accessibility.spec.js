@@ -297,7 +297,6 @@ const KNOWN_VIOLATIONS = {
   '/admin/oauth/clients': { 'aria-valid-attr-value': 1 },
   '/admin/oauth/connections': { 'aria-valid-attr-value': 1 },
   '/admin/oauth/server': { 'aria-valid-attr-value': 1 },
-  '/admin/mcp/servers': { 'button-name': 4 },
   '/admin/browser-extension': { 'button-name': 1, label: 1 },
   '/admin/ui': { 'select-name': 5 },
   '/admin/usage': { 'select-name': 1 },
