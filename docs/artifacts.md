@@ -230,6 +230,30 @@ A client fetches through its API client rather than pointing an `<img src>` at
 the URL: the URL is credentialed, and a bearer token in `localStorage` only
 travels on a request the client makes itself.
 
+## The Artifacts panel
+
+The chat shows a chat's artifacts in the **Artifacts** panel (header button,
+or the actions menu on small screens), offered once an answer produced a
+picture or a file. It lists `GET /api/chats/:chatId/artifacts`, newest first,
+with the size, the answer that produced each one and its time, and:
+
+- previews pictures, Markdown (rendered and sanitized), JSON (pretty-printed)
+  and every other `code` artifact as highlighted text; office documents and
+  archives have no preview. A text preview reads at most 512 KB.
+- downloads one artifact (`GET …/:artifactId`), saved under the last part of
+  its name, and copies a text artifact to the clipboard.
+- downloads a selection or everything as one ZIP
+  (`POST …/artifacts/zip`), and says so when the archive is over the
+  [ZIP limits](#configuration).
+
+A shared chat offers the same panel, through the share's routes: it lists and
+packs only the artifacts the snapshot named. The panel is a modal dialog: it
+takes focus when it opens, keeps Tab inside, closes with Escape and gives
+focus back to the button that opened it.
+
+Code: `client/src/features/chat/components/ArtifactsPanel.jsx`,
+`ArtifactPreview.jsx`, `client/src/features/chat/utils/artifactFiles.js`.
+
 ## Lifetime
 
 An artifact goes when its scope goes, and when whatever named it goes:

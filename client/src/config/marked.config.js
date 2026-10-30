@@ -52,7 +52,15 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-const highlightCode = (code, lang) => {
+/**
+ * Code as highlighted HTML when highlight.js is loaded and knows the
+ * language, escaped text otherwise.
+ *
+ * @param {string} code
+ * @param {string} [lang] - highlight.js language name.
+ * @returns {string} HTML
+ */
+export const highlightCode = (code, lang) => {
   if (
     typeof window !== 'undefined' &&
     lang &&

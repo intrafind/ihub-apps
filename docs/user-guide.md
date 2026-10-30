@@ -131,6 +131,12 @@ Depending on the app: **Clear** the chat, **Export** it (Markdown, PDF, Word, HT
 **Share** a read-only link, switch on **Compare mode**, and open the chat **Settings** (model,
 output format, reasoning effort, tools).
 
+Once an answer produced a picture or a file, **Artifacts** lists every file of the chat: generated
+pictures, PDF, Word and PowerPoint documents, code and data files, ZIP archives. Select one to
+preview it (pictures, rendered Markdown, formatted JSON, code), then **Download** or **Copy** it.
+Tick several and choose **Download selected (.zip)**, or **Download all (.zip)** for everything.
+A shared chat offers the same panel for the files it contains.
+
 ### Compare two models
 
 **Compare mode** splits the chat into two panels with a model each. Every message goes to both, and
