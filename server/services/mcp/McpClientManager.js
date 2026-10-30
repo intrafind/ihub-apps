@@ -61,7 +61,14 @@ export function userConnectionKey(serverId, userId) {
  * never the model's arguments and must not leave iHub: an external MCP server
  * would otherwise receive the full user object or the app configuration.
  */
-const IHUB_CONTEXT_KEYS = new Set(['chatId', 'user', 'appConfig', 'passthrough', '_fileData']);
+const IHUB_CONTEXT_KEYS = new Set([
+  'chatId',
+  'user',
+  'appConfig',
+  'passthrough',
+  '_fileData',
+  'integrationScopes'
+]);
 
 /**
  * `language` is a default iHub adds that the model may also set; it is

@@ -333,6 +333,9 @@
     "defaultScope": "fa_index_read",
     "jwtSubjectField": "email",
     "searchProfileApplication": "ifinder",
+    "defaultSearchProfile": "",
+    "allowedSearchProfiles": [],
+    "allowUserSearchProfileChange": true,
     "authMode": "ihubSigned",
     "tokenExchange": {
       "oidcProvider": "",

@@ -4,6 +4,20 @@
 // This wrapper is maintained for backward compatibility
 
 import iFinderService from '../services/integrations/iFinderService.js';
+import iFinderScopes, {
+  resolveToolSearchProfile
+} from '../services/integrations/scopes/iFinderScopes.js';
+
+/**
+ * The call's params with the search profile it may search in: the chat's
+ * scope when the user picked one (it wins over the model's `searchProfile`),
+ * otherwise the model's choice once it passed the allow-list and the user's
+ * own profiles (#3050).
+ */
+async function withSearchProfile(params = {}) {
+  const { searchProfile } = await resolveToolSearchProfile(params);
+  return { ...params, searchProfile };
+}
 
 /**
  * Search for documents in iFinder
@@ -13,7 +27,7 @@ import iFinderService from '../services/integrations/iFinderService.js';
  * @returns {Promise<Object>} The search results
  */
 export async function search(params) {
-  return iFinderService.search(params);
+  return iFinderService.search(await withSearchProfile(params));
 }
 
 /**
@@ -23,7 +37,7 @@ export async function search(params) {
  * @returns {Promise<Object>} The document content
  */
 export async function getContent(params) {
-  return iFinderService.getContent(params);
+  return iFinderService.getContent(await withSearchProfile(params));
 }
 
 /**
@@ -33,7 +47,7 @@ export async function getContent(params) {
  * @returns {Promise<Object>} The document metadata
  */
 export async function getMetadata(params) {
-  return iFinderService.getMetadata(params);
+  return iFinderService.getMetadata(await withSearchProfile(params));
 }
 
 /**
@@ -46,7 +60,7 @@ export async function getMetadata(params) {
  * @returns {Promise<Object>} Discovery result including `markdown` field
  */
 export async function discover(params) {
-  return iFinderService.discover(params);
+  return iFinderService.discover(await withSearchProfile(params));
 }
 
 /**
@@ -70,7 +84,7 @@ export async function getFields(params) {
  * @returns {Promise<Object>} Facet values with counts
  */
 export async function getFacetValues(params) {
-  return iFinderService.getFacetValues(params);
+  return iFinderService.getFacetValues(await withSearchProfile(params));
 }
 
 /**
@@ -81,7 +95,20 @@ export async function getFacetValues(params) {
  * @returns {Promise<Object>} The profiles and the configured default
  */
 export async function listProfiles(params) {
-  return iFinderService.listProfiles(params);
+  const { searchProfile, fixed } = await resolveToolSearchProfile({
+    ...params,
+    searchProfile: undefined
+  });
+  if (!fixed) return iFinderService.listProfiles(params);
+  // The chat searches one profile; there is nothing to switch to.
+  const { scopes } = await iFinderScopes.listScopes({ user: params.user, app: params.appConfig });
+  const name = scopes.find(scope => scope.id === searchProfile)?.name || searchProfile;
+  return {
+    defaultSearchProfile: searchProfile,
+    profiles: [{ id: searchProfile, name, isDefault: true }],
+    fixed: true,
+    note: 'The search profile is fixed for this chat. Every iFinder call searches it; do not pass another searchProfile.'
+  };
 }
 
 // Export default with all methods

@@ -19,6 +19,8 @@ import ChatProjectChips from '../../projects/components/ChatProjectChips';
 import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
+import IntegrationScopeSelector from './IntegrationScopeSelector';
+import { currentScopeOf, scopeActionLabel, scopeDisplayName } from '../utils/integrationScopes';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import VoiceModeButton from '../../voice/components/VoiceModeButton';
@@ -103,6 +105,10 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Integration scopes (#3050), from `useIntegrationScopes`: shown inline for
+  // `scopePicker: "inline"`, as a chip for `"menu"`, and in the "+" menu.
+  integrationScopes = null,
+  onIntegrationScopeChange = null,
   // Ephemeral (incognito-style) chat. When on, the chat is a temporary one: it
   // is stored like any chat but never listed in the history, and it is deleted
   // `chats.temporaryRetentionHours` after its last activity. The toggle renders
@@ -435,7 +441,13 @@ function ChatInput({
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
   const offeredProjects = useOfferedProjects(projectContext);
-  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const visibleScopes =
+    onIntegrationScopeChange && Array.isArray(integrationScopes)
+      ? integrationScopes.filter(
+          integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
+        )
+      : [];
+  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (visibleScopes.length > 0 ? 1 : 0);
   const isSingleActionOptimization =
     totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
@@ -830,6 +842,8 @@ function ChatInput({
               onWebsearchEnabledChange={onWebsearchEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
+              integrationScopes={integrationScopes}
+              onIntegrationScopeChange={onIntegrationScopeChange}
             />
 
             {/* The projects of the chat: picked in the project picker, shown as chips. */}
@@ -860,6 +874,31 @@ function ChatInput({
                 />
               </button>
             )}
+
+            {/* Where the next question goes, for integrations whose picker
+                lives in the "+" menu: a chip, so it is visible before sending. */}
+            {visibleScopes
+              .filter(integration => integration.scopePicker === 'menu')
+              .map(integration => {
+                const action = scopeActionLabel(integration, t);
+                const current = scopeDisplayName(currentScopeOf(integration), currentLanguage);
+                const name = scopeDisplayName(integration, currentLanguage);
+                return (
+                  <span
+                    key={integration.id}
+                    className="flex min-w-0 shrink items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                    title={`${name}: ${action} ${current}`}
+                  >
+                    <Icon
+                      name={integration.fixed ? 'lock-closed' : 'search'}
+                      size="xs"
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">{`${name}: ${action}`}</span>
+                    <span className="max-w-[10rem] truncate">{current}</span>
+                  </span>
+                );
+              })}
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
             {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
@@ -977,6 +1016,19 @@ function ChatInput({
                 <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
               </div>
             )}
+
+            {/* Inline scope pickers ("Search in: Contracts ▾"), next to the model */}
+            {visibleScopes
+              .filter(integration => integration.scopePicker === 'inline')
+              .map(integration => (
+                <IntegrationScopeSelector
+                  key={integration.id}
+                  integration={integration}
+                  onScopeChange={onIntegrationScopeChange}
+                  language={currentLanguage}
+                  disabled={isInputDisabled || isProcessing}
+                />
+              ))}
 
             {/* Model Selector */}
             {showModelSelector && models && models.length > 0 && onModelChange && (

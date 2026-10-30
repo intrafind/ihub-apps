@@ -296,7 +296,11 @@ function toChat(doc) {
  * `modelId` is not here: it has its own field on the chat document and is
  * written by the materializer.
  *
- * @type {Readonly<Object<string, 'string'|'boolean'|'stringArray'>>}
+ * `integrationScopes` is the scope picked per integration (#3050): where an
+ * integration searches or whom it asks, `{ ifinder: 'contracts' }`. Keys are
+ * integration ids, values scope ids; the route stores only scopes it checked.
+ *
+ * @type {Readonly<Object<string, 'string'|'boolean'|'stringArray'|'scopeMap'>>}
  */
 const CHAT_SETTING_TYPES = Object.freeze({
   style: 'string',
@@ -308,7 +312,8 @@ const CHAT_SETTING_TYPES = Object.freeze({
   enabledTools: 'stringArray',
   websearchEnabled: 'boolean',
   imageAspectRatio: 'string',
-  imageQuality: 'string'
+  imageQuality: 'string',
+  integrationScopes: 'scopeMap'
 });
 
 /** Longest string a single setting may be, and the cap on `enabledTools`. */
@@ -337,6 +342,28 @@ const MAX_SETTING_CHARS = 64;
 export const MAX_MESSAGE_CHARS = 100_000;
 const MAX_ENABLED_TOOLS = 64;
 
+/** Most integrations a chat stores a scope for, and the longest scope id. */
+const MAX_INTEGRATION_SCOPES = 16;
+const MAX_SCOPE_ID_CHARS = 256;
+const INTEGRATION_ID_PATTERN = /^[a-z][a-zA-Z0-9_-]{0,63}$/;
+
+/**
+ * The storable entries of a scope map, or null when none survive.
+ * @param {unknown} value
+ * @returns {Object<string, string>|null}
+ */
+function normalizeScopeMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = {};
+  for (const [integrationId, scopeId] of Object.entries(value)) {
+    if (Object.keys(out).length >= MAX_INTEGRATION_SCOPES) break;
+    if (!INTEGRATION_ID_PATTERN.test(integrationId)) continue;
+    if (typeof scopeId !== 'string' || !scopeId || scopeId.length > MAX_SCOPE_ID_CHARS) continue;
+    out[integrationId] = scopeId;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 /**
  * The storable subset of a turn's settings.
  *
@@ -364,6 +391,9 @@ export function normalizeChatSettings(settings) {
         .filter(entry => typeof entry === 'string' && entry)
         .slice(0, MAX_ENABLED_TOOLS)
         .map(entry => entry.slice(0, MAX_SETTING_CHARS));
+    } else if (kind === 'scopeMap') {
+      const scopes = normalizeScopeMap(value);
+      if (scopes) out[key] = scopes;
     }
   }
   return Object.keys(out).length > 0 ? out : null;

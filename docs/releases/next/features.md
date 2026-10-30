@@ -430,3 +430,31 @@ room; pinned, it stays open.
 - Admins set where it starts per app under **Admin → Apps → (app) → Variables → Pin the input
   parameters by default** (`variablesPanel.pinned`). Unset, the panel is pinned, as before.
 - See [Apps → Variables Panel](../../apps.md#variables-panel).
+
+## iFinder and iAssistant: Choose Where to Search and Whom to Ask in the Chat
+
+Users now pick the iFinder search profile ("Search in: Contracts") and the iAssistant to ask per
+chat, instead of leaving the choice to the model. The list is the user's own search profiles with
+their display names, or the iFinder iAssistants they can see, plus "All my search profiles" where
+the app allows it.
+
+- **In the chat:** the **iFinder Search** app shows a **Search in** picker next to the model
+  selector. Other apps with iFinder tools, and chats with an iAssistant model, get a row under
+  **Use in this chat** in the **+** menu with a submenu, and a chip under the composer shows where
+  the next question goes.
+- **Saved with the chat:** a reopened chat continues in the profile it used. Changing the
+  iAssistant mid-chat continues in a new iFinder conversation.
+- **Binding:** every iFinder search, document read and facet lookup of the chat uses the picked
+  profile, even when the model asks for another one. The server checks the pick on every turn
+  against the user's profiles and the admin allow-list; a profile the user does not have is
+  refused. A profile the model picks on its own is checked the same way.
+- **When the list cannot be read** (users without the iFinder feature `fi_ifinder_allow`, or
+  iFinder is down), the picker offers the configured default with a short hint.
+- **Admin → Integrations → iFinder** has a new **iFinder Search Settings** section, separate from
+  the iAssistant settings: default search profile (`iFinder.defaultSearchProfile`), the profiles
+  users may pick (`iFinder.allowedSearchProfiles`, empty for all of theirs) and whether users may
+  change the profile at all (`iFinder.allowUserSearchProfileChange`). The upgrade keeps the
+  profile your installation already searched as the default.
+- **Per app:** `integrations.ifinder` and `integrations.iassistant` set where the picker appears
+  (`scopePicker`: `inline`, `menu`, `hidden`), the scope a new chat starts with (`defaultScope`),
+  or a scope the app's chats always use (`pinnedScope`).

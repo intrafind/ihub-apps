@@ -15,6 +15,10 @@ import conversationStateManager from '../services/integrations/ConversationState
 import iAssistantService from '../services/integrations/iAssistantService.js';
 import iAssistantProfileResolver from '../services/integrations/iAssistantProfileResolver.js';
 import { AssistantNotAvailableError } from '../services/integrations/iFinderAssistants.js';
+import {
+  conversationScopeOf,
+  scopeToConversationConfig
+} from '../services/integrations/scopes/iAssistantScopes.js';
 import { composeExtraContext } from '../services/integrations/iAssistantGrounding.js';
 import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
@@ -142,15 +146,25 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     const groundedOnly =
       appConfig.groundedOnly ?? modelConfig.groundedOnly ?? serviceConfig.groundedOnly ?? false;
 
+    // The scope the user picked for the chat (#3050), checked by the chat
+    // route: it names the iAssistant to ask, or all of the user's profiles.
+    const scopeId = options.integrationScopes?.iassistant || null;
+    const scoped = scopeId ? scopeToConversationConfig(scopeId) : null;
+
     return {
       baseUrl: appConfig.baseUrl || modelConfig.baseUrl || serviceConfig.baseUrl,
+      scopeId: scoped ? scopeId : null,
       // An iFinder iAssistant supplies both the conversation profile and the
       // search profile; when one is named, the two below are only fallbacks.
-      assistantId: appConfig.assistantId || modelConfig.assistantId || undefined,
+      assistantId: scoped
+        ? scoped.assistantId
+        : appConfig.assistantId || modelConfig.assistantId || undefined,
       // Send no search profile, so iFinder (6.9+) retrieves across every
       // search profile the user has. `??` so an app can turn a model's
       // setting off.
-      allSearchProfiles: appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false,
+      allSearchProfiles: scoped
+        ? scoped.allSearchProfiles
+        : (appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false),
       profileId: appConfig.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
       // What the app/model/platform configured. The iAssistant profile gets
       // asked first at conversation-creation time and wins when it answers —
@@ -194,6 +208,18 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     // landed on another worker (or before a restart) must thread onto the same
     // remote conversation instead of silently starting a second one.
     let state = await conversationStateManager.loadState(chatId, { ownerId: user.id });
+
+    // The profiles are fixed on a conversation when it is created, so a chat
+    // whose scope changed since continues in a new iFinder conversation.
+    if (state?.conversationId && config.scopeId && conversationScopeOf(state) !== config.scopeId) {
+      logger.info('The chat scope changed; starting a new conversation', {
+        component: 'IAssistantConversationAdapter',
+        chatId,
+        previousScope: conversationScopeOf(state),
+        scope: config.scopeId
+      });
+      state = null;
+    }
 
     // Lazy conversation creation: create on first message if no conversation exists
     if (!state?.conversationId) {
@@ -296,6 +322,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         // `all`: the conversation searches every profile of the user, so no
         // one profile is the right default for its document links.
         searchScope: searchProfileSource === 'all-search-profiles' ? 'all' : 'profile',
+        // The chat scope the conversation was created for, when one was picked.
+        scopeId: config.scopeId || null,
         // Whose conversation this is. A chat id is a URL path segment, so
         // without an owner on the state a user holding someone else's id
         // would thread their turn onto that user's remote conversation.

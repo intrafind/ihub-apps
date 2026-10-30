@@ -102,6 +102,7 @@ import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
 import personalApiKeyRoutes from './routes/integrations/personalApiKeys.js';
 import connectionRoutes from './routes/integrations/connections.js';
+import integrationScopeRoutes from './routes/integrations/scopes.js';
 import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
 import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
@@ -858,6 +859,8 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/api-keys'), personalApiKeyRoutes);
   app.use(buildApiPath('/integrations/connections'), connectionRoutes);
   app.use(buildApiPath('/integrations/nextcloud-embed'), nextcloudEmbedRoutes);
+  // Scopes the chat input offers per integration (iFinder profiles, iAssistants).
+  app.use(buildApiPath('/integrations'), integrationScopeRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 

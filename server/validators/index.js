@@ -128,6 +128,12 @@ export const chatPostSchema = {
      * against the caller's access in the route (`resolveChatProjects`).
      */
     projectId: z.string().max(200).nullable().optional(),
-    projects: z.array(z.string().max(200)).max(20).optional()
+    projects: z.array(z.string().max(200)).max(20).optional(),
+    /**
+     * The scope picked per integration for this chat (#3050), e.g.
+     * `{ ifinder: 'contracts' }`. Checked against what each integration
+     * offers the user in the route (`resolveChatScopes`).
+     */
+    integrationScopes: z.record(z.string().max(64), z.string().max(256)).optional()
   })
 };

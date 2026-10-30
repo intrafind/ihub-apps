@@ -17,6 +17,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { isValidId } from '../../utils/pathSecurity.js';
+import { authorizeChat } from '../../services/chat/chatAccess.js';
+import { scopeToConversationConfig } from '../../services/integrations/scopes/iAssistantScopes.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
 function preferredModelConfig(app) {
@@ -40,19 +42,29 @@ function resolveBaseUrl(app) {
 
 /**
  * The search profile an app's conversations search, resolved the way the
- * adapter does when it creates one: the named iFinder iAssistant's, none when
- * the app searches all of the user's profiles, or the configured one (app →
- * model → service defaults) unless the user does not have it.
+ * adapter does when it creates one: the iFinder iAssistant the chat's scope or
+ * the app names, none when the chat or the app searches all of the user's
+ * profiles, or the configured one (app → model → service defaults) unless the
+ * user does not have it.
  * Never throws — without a profile the history is returned as iFinder sent it.
+ *
+ * @param {Object} app
+ * @param {Object} params
+ * @param {Object} params.user
+ * @param {string} params.baseUrl
+ * @param {string|null} [params.scopeId] - the chat's iAssistant scope (#3050)
  */
-async function resolveConversationSearchProfile(app, { user, baseUrl }) {
+async function resolveConversationSearchProfile(app, { user, baseUrl, scopeId = null }) {
   try {
     const appConfig = app?.iassistant || {};
     const modelConfig = preferredModelConfig(app);
     const serviceConfig = iAssistantService.getConfig();
+    const scoped = scopeToConversationConfig(scopeId);
     const { searchProfile } = await iAssistantProfileResolver.resolveScope({
-      assistantId: appConfig.assistantId || modelConfig.assistantId,
-      allSearchProfiles: appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false,
+      assistantId: scoped ? scoped.assistantId : appConfig.assistantId || modelConfig.assistantId,
+      allSearchProfiles: scoped
+        ? scoped.allSearchProfiles
+        : (appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false),
       configuredSearchProfile:
         appConfig.searchProfile || modelConfig.searchProfile || serviceConfig.defaultSearchProfile,
       user,
@@ -99,7 +111,28 @@ export async function conversationSearchProfile(app, { chatId, conversationId, u
       }
     }
   }
-  return resolveConversationSearchProfile(app, { user, baseUrl });
+  return resolveConversationSearchProfile(app, {
+    user,
+    baseUrl,
+    scopeId: await storedChatScope(chatId, user)
+  });
+}
+
+/**
+ * The iAssistant scope stored with a chat the user may read, or null.
+ * @param {string} chatId
+ * @param {Object} user
+ * @returns {Promise<string|null>}
+ */
+async function storedChatScope(chatId, user) {
+  if (!isValidId(chatId)) return null;
+  try {
+    const access = await authorizeChat(chatId, user, { intent: 'read' });
+    const scopeId = access.ok ? access.chat?.settings?.integrationScopes?.iassistant : null;
+    return typeof scopeId === 'string' && scopeId ? scopeId : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function registerConversationRoutes(app) {

@@ -711,7 +711,9 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     query: 'berlin',
     chatId,
     user: USER,
-    appConfig: prep.app
+    appConfig: prep.app,
+    // The chat's picked integration scopes (#3050), set after the model's args.
+    integrationScopes: {}
   });
 
   assert.equal(requests.length, 2, 'one model call per round');
