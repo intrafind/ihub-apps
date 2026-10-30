@@ -14,6 +14,13 @@ jest.mock('../../../server/requestThrottler.js', () => ({
   throttledFetch: (...args) => mockFetch(...args)
 }));
 
+// `ifinderConfig.js` resolves the default download directory under contents/;
+// the helper reaches `pathUtils.js`, an ES module jest cannot load here.
+jest.mock('../../../server/utils/contentsPath.js', () => ({
+  __esModule: true,
+  getContentsPath: (...segments) => ['/contents', ...segments].join('/')
+}));
+
 jest.mock('../../../server/services/integrations/iFinderTokenProvider.js', () => ({
   __esModule: true,
   default: { getAuthorizationHeader: jest.fn(async () => 'Bearer test-token') }
