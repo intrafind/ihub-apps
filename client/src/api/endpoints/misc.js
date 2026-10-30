@@ -89,6 +89,23 @@ export const fetchToolsBasic = async (options = {}) => {
   );
 };
 
+// The scopes the user can pick per integration of an app (iFinder search
+// profiles, iAssistants). Not cached: the list is per user, and the server
+// keeps its own short cache of what iFinder answers.
+export const fetchIntegrationScopes = async ({ appId, modelId, language } = {}) => {
+  return handleApiResponse(
+    () =>
+      apiClient.get('/integrations/scopes', {
+        params: {
+          appId,
+          ...(modelId ? { modelId } : {}),
+          ...(language ? { lang: language } : {})
+        }
+      }),
+    null
+  );
+};
+
 // Authentication status
 export const fetchAuthStatus = async (options = {}) => {
   const { skipCache = false } = options;

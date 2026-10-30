@@ -82,6 +82,7 @@ import {
 } from '../../projects/hooks/useChatAttachedProjects';
 import { ATTACH_PROJECT_QUERY_PARAM, PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
+import useIntegrationScopes from '../../chat/hooks/useIntegrationScopes';
 
 /**
  * Initialize variables with default values from app configuration
@@ -411,6 +412,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     websearchEnabled,
     imageAspectRatio,
     imageQuality,
+    integrationScopes: selectedIntegrationScopes,
     models,
     styles,
     setSelectedModel,
@@ -425,8 +427,23 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     setWebsearchEnabled,
     setImageAspectRatio,
     setImageQuality,
+    setIntegrationScopes,
     modelsLoading
   } = useAppSettings(appId, app, { chatSettings, isolated: embedded, withTranscription: true });
+
+  // Where the chat's integrations search and whom they ask (#3050): the "+"
+  // menu and the inline picker change it, every turn sends it.
+  const {
+    integrations: integrationScopeOptions,
+    scopes: integrationScopes,
+    setScope: setIntegrationScope
+  } = useIntegrationScopes({
+    app,
+    modelId: selectedModel,
+    language: currentLanguage,
+    selected: selectedIntegrationScopes,
+    onChange: setIntegrationScopes
+  });
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -1374,6 +1391,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {}),
+          ...(Object.keys(integrationScopes).length > 0 ? { integrationScopes } : {}),
           ...(containerProjectId ? { projectId: containerProjectId } : {})
         };
 
@@ -1448,6 +1466,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     effectiveEnabledTools,
     imageAspectRatio,
     imageQuality,
+    integrationScopes,
     sendChatMessage,
     getLocalizedContent
   ]);
@@ -2450,6 +2469,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ...(imageQuality ? { imageQuality } : {}),
       ...(documentId ? { documentIds: [documentId] } : {}),
       ...(isVoiceTurn ? { voiceMode: true } : {}),
+      ...(Object.keys(integrationScopes).length > 0 ? { integrationScopes } : {}),
       // The container project: accepted on the first turn and fixed for the
       // chat afterwards; the same id on later turns is accepted too, which
       // keeps a chat that is not stored server-side inside its project.
@@ -2803,6 +2823,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
+      integrationScopes: integrationScopeOptions,
+      onIntegrationScopeChange: setIntegrationScope,
       // The project the chat runs in (started from the project page) and the
       // ones it draws on, chosen in the project picker. A chat is never moved into a
       // project once it exists.

@@ -477,6 +477,7 @@ These optional fields work for all app types:
 | `category` | String | - | App category for grouping |
 | `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
 | `requiredIntegrations` | Array | - | Integrations (Admin → Integrations) the app needs. `ifinder` (iFinder integration switched on) or `peopleDirectories` (at least one enabled people directory). While one is off, users do not get the app, exactly like `requiredFeatures`. The shipped `iassistant`, `ifinder-search` (iFinder) and `people-directory` (People directories) apps use it |
+| `integrations` | Object | - | Per-integration chat settings: where the user picks the integration's scope and which scope the app starts with or pins. See [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask) |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -1203,6 +1204,8 @@ The search profile comes from `searchProfile`, then the model's, then `iAssistan
 
 **All search profiles (`allSearchProfiles`):** iFinder 6.9 accepts a conversation without a search profile and then searches everything the user may see through any of their search profiles — the content filters of all their profiles combined, without profile-specific boosting. Use it for an assistant over "everything I can find in iFinder". iFinder 6.8 rejects such a conversation.
 
+**Picked per chat:** users can pick the iAssistant to ask (or "All my search profiles") per chat in the chat input; see [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask). Users never override the search profile of an iAssistant itself; that stays an admin setting.
+
 **Prompt variables in `extraContext` and `systemPromptPreamble`:**
 
 Both fields support the same global prompt variables as system prompts — built-ins like `{{user_name}}`, `{{user_email}}`, `{{date}}`, `{{date_iso}}`, `{{time}}`, `{{timezone}}`, `{{locale}}`, plus any custom variables defined under **Admin → Prompts → Global Variables**. Values resolve against the requesting user when the conversation is created, so every user gets a personalized context:
@@ -1261,6 +1264,33 @@ is no longer accepted — see [Models](models.md#model-thinking-configuration).
 - `disallowModelSelection`: Prevent user from changing the model
 - `customResponseRenderer`: Specify a custom component for rendering AI responses
 - `outputSchema`: JSON schema defining the required structure of the AI response
+
+### Integration scopes: where to search and whom to ask
+
+An integration can offer *scopes* the user picks per chat: where it searches, or whom it asks. Today two integrations do:
+
+| Integration | `integrations` key | Scopes | Offered to |
+|---|---|---|---|
+| iFinder | `ifinder` | The user's iFinder search profiles, with their display names ("Search in: Contracts") | Apps with `iFinder_*` tools, while the iFinder integration is on |
+| iAssistant | `iassistant` | `assistant:<id>` — an iFinder iAssistant the user can see; `configured` — the app's own conversation and search profile (when the app names no iAssistant); `all` — all of the user's search profiles, when allowed | Chats whose model is an iAssistant (`iassistant-conversation`) |
+
+The picked scope is saved with the chat and restored when the chat is reopened. It is binding: every `iFinder_*` call of the chat searches the picked profile, whatever `searchProfile` the model passes, and the model is told the profile is fixed (`iFinder_listProfiles` is not offered then). Changing an iAssistant scope mid-chat continues in a new iFinder conversation, because iFinder fixes the profiles of a conversation when it is created. The server checks the scope on every turn against what the integration offers the user and the admin allow-list (`iFinder.allowedSearchProfiles`, see [Platform → iFinder](platform.md)); a scope the user may not use refuses the turn with `403 INTEGRATION_SCOPE_NOT_ALLOWED`.
+
+```json
+"integrations": {
+  "ifinder": { "scopePicker": "inline", "defaultScope": "contracts" },
+  "iassistant": { "scopePicker": "menu", "allowAllSearchProfiles": true }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `scopePicker` | `inline` \| `menu` \| `hidden` | `menu` | `inline`: a "Search in: … ▾" picker next to the model selector. `menu`: a row in the "+" menu with a submenu, and a chip under the composer showing the scope in use. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
+| `defaultScope` | String | the platform default | The scope a new chat starts with, when the user has it |
+| `pinnedScope` | String | - | The only scope the app's chats use. The picker shows it but offers nothing else, and the server applies it whatever the request says |
+| `allowAllSearchProfiles` | Boolean | the app's `iassistant.allSearchProfiles` | `iassistant` only: offer "All my search profiles" (iFinder 6.9+) |
+
+When iFinder cannot be asked for the list (a user without the feature `fi_ifinder_allow` gets 403, or iFinder is down), the picker offers the configured default (and the admin allow-list) with a short hint instead of an empty list. The shipped **iFinder Search** app uses `scopePicker: "inline"`. `GET /api/integrations/scopes?appId=…&modelId=…` returns what the picker shows.
 
 ### Available Icons
 

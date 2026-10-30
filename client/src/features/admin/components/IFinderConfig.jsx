@@ -71,6 +71,8 @@ function IFinderConfig() {
     userDomain: ''
   });
   const [showTestOptions, setShowTestOptions] = useState(false);
+  // The allow-list is edited as text, one profile id per line, and parsed on save.
+  const [allowedProfilesText, setAllowedProfilesText] = useState('');
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -100,6 +102,11 @@ function IFinderConfig() {
           tokenExchange: { ...DEFAULT_TOKEN_EXCHANGE, ...(iFinder.tokenExchange || {}) }
         });
         setIAssistantConfig(iAssistant);
+        setAllowedProfilesText(
+          Array.isArray(iFinder.allowedSearchProfiles)
+            ? iFinder.allowedSearchProfiles.join('\n')
+            : ''
+        );
         setOidcProviders(
           Array.isArray(response.data.oidcAuth?.providers) ? response.data.oidcAuth.providers : []
         );
@@ -213,7 +220,17 @@ function IFinderConfig() {
 
       const updatedPlatformConfig = {
         ...response.data,
-        iFinder: iFinderConfig,
+        iFinder: {
+          ...iFinderConfig,
+          allowedSearchProfiles: [
+            ...new Set(
+              allowedProfilesText
+                .split(/[\n,]/)
+                .map(id => id.trim())
+                .filter(Boolean)
+            )
+          ]
+        },
         iAssistant: iAssistantConfig
       };
 
@@ -796,6 +813,94 @@ function IFinderConfig() {
                 )}
               </div>
 
+              {/* iFinder Search Settings Section */}
+              <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                {t('admin.iFinder.searchSection', 'iFinder Search Settings')}
+              </h4>
+              <div className="space-y-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="ifinder-default-search-profile"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t('admin.iFinder.defaultSearchProfile', 'Default search profile')}
+                    </label>
+                    <input
+                      id="ifinder-default-search-profile"
+                      type="text"
+                      value={iFinderConfig.defaultSearchProfile || ''}
+                      onChange={e => handleIFinderChange('defaultSearchProfile', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      placeholder="searchprofile-standard"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.iFinder.defaultSearchProfileHelp',
+                        'The search profile a chat searches until the user picks another one.'
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="ifinder-allowed-search-profiles"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t('admin.iFinder.allowedSearchProfiles', 'Search profiles users may pick')}
+                    </label>
+                    <textarea
+                      id="ifinder-allowed-search-profiles"
+                      rows={3}
+                      value={allowedProfilesText}
+                      onChange={e => setAllowedProfilesText(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      placeholder={t(
+                        'admin.iFinder.allowedSearchProfilesPlaceholder',
+                        "All of the user's profiles"
+                      )}
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.iFinder.allowedSearchProfilesHelp',
+                        'One search profile id per line. Empty offers every profile the user has in iFinder.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <input
+                    id="ifinder-allow-user-search-profile-change"
+                    type="checkbox"
+                    aria-describedby="ifinder-allow-user-search-profile-change-help"
+                    checked={iFinderConfig.allowUserSearchProfileChange !== false}
+                    onChange={e =>
+                      handleIFinderChange('allowUserSearchProfileChange', e.target.checked)
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>
+                    <label
+                      htmlFor="ifinder-allow-user-search-profile-change"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {t(
+                        'admin.iFinder.allowUserSearchProfileChange',
+                        'Users may change the search profile'
+                      )}
+                    </label>
+                    <span
+                      id="ifinder-allow-user-search-profile-change-help"
+                      className="block text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      {t(
+                        'admin.iFinder.allowUserSearchProfileChangeHelp',
+                        'Off: every chat searches the default search profile, and neither the user nor the model can pick another.'
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
               {/* iAssistant Settings Section */}
               <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                 {t('admin.iFinder.iAssistantSection', 'iAssistant Settings')}
@@ -817,6 +922,29 @@ function IFinderConfig() {
                       {t(
                         'admin.iFinder.defaultProfileIdHelp',
                         'Search profile ID (plain text or base64 encoded)'
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="iassistant-default-search-profile"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t('admin.iFinder.iAssistantDefaultSearchProfile', 'Default search profile')}
+                    </label>
+                    <input
+                      id="iassistant-default-search-profile"
+                      type="text"
+                      value={iAssistantConfig.defaultSearchProfile || ''}
+                      onChange={e => handleIAssistantChange('defaultSearchProfile', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      placeholder="searchprofile-standard"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.iFinder.iAssistantDefaultSearchProfileHelp',
+                        'The search profile iAssistant conversations search when neither the app nor the model names one.'
                       )}
                     </p>
                   </div>

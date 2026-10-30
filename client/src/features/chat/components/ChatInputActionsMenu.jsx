@@ -14,6 +14,12 @@ import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
+import {
+  currentScopeOf,
+  scopeActionLabel,
+  scopeDisplayName,
+  scopeHint
+} from '../utils/integrationScopes';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -55,7 +61,12 @@ function ChatInputActionsMenu({
   // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
   // `hostContextFlags` is the user-visible state map keyed by toggle.key.
   hostContextFlags = null,
-  onHostContextFlagChange = null
+  onHostContextFlagChange = null,
+  // Integration scopes (#3050): where an integration searches, whom it asks.
+  // `integrationScopes` is `useIntegrationScopes().integrations`; each row
+  // shows the scope in use and opens a submenu to change it.
+  integrationScopes = null,
+  onIntegrationScopeChange = null
 }) {
   const { t, i18n } = useTranslation();
   const { platformConfig } = usePlatformConfig();
@@ -74,6 +85,8 @@ function ChatInputActionsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
+  // The integration whose scope submenu is open, if any.
+  const [openScopeMenu, setOpenScopeMenu] = useState(null);
   const dropdownRef = useRef(null);
   const actionsMenuRef = useRef(null);
 
@@ -179,6 +192,10 @@ function ChatInputActionsMenu({
   const toolCount = menuToolRefs.length;
   const enabledCount = hasTools ? menuToolRefs.filter(ref => enabledTools.includes(ref)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const scopeIntegrations = (Array.isArray(integrationScopes) ? integrationScopes : []).filter(
+    integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
+  );
+  const hasScopes = scopeIntegrations.length > 0 && onIntegrationScopeChange !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
   // providers are rendered separately so they must remain available even when
@@ -196,7 +213,12 @@ function ChatInputActionsMenu({
   // Check if we have any actions to show
   const hasHostContextToggles = hostContextToggles.length > 0;
   const hasActions =
-    hasTools || hasWebsearch || hasHostContextToggles || hasCloudProviders || quickActionCount > 0;
+    hasTools ||
+    hasWebsearch ||
+    hasScopes ||
+    hasHostContextToggles ||
+    hasCloudProviders ||
+    quickActionCount > 0;
 
   if (!hasActions) return null;
 
@@ -206,6 +228,7 @@ function ChatInputActionsMenu({
     quickActionCount +
     (hasTools ? 1 : 0) +
     (hasWebsearch ? 1 : 0) +
+    (hasScopes ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
@@ -279,6 +302,16 @@ function ChatInputActionsMenu({
     if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
   });
   if (hasWebsearch) menuNavItems.push('websearch');
+  if (hasScopes) {
+    scopeIntegrations.forEach(integration => {
+      menuNavItems.push(`scope-${integration.id}`);
+      if (openScopeMenu === integration.id) {
+        integration.scopes.forEach(scope =>
+          menuNavItems.push(`scope-${integration.id}-${scope.id}`)
+        );
+      }
+    });
+  }
   grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
@@ -287,7 +320,11 @@ function ChatInputActionsMenu({
   // Quick Actions and Image Generation are hidden on desktop with md:hidden
   // So only Cloud Storage, Web Search, and Tools remain visible on desktop
   const hasDesktopMenuContent =
-    enabledCloudProviders.length > 0 || hasWebsearch || hasTools || hasHostContextToggles;
+    enabledCloudProviders.length > 0 ||
+    hasWebsearch ||
+    hasScopes ||
+    hasTools ||
+    hasHostContextToggles;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -494,7 +531,9 @@ function ChatInputActionsMenu({
           {/* Web Search Section */}
           {hasWebsearch && (
             <div
-              className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+              className={`p-3 ${
+                hasTools || hasScopes ? 'border-b border-gray-200 dark:border-gray-700' : ''
+              }`}
             >
               <div
                 role="menuitemcheckbox"
@@ -532,6 +571,133 @@ function ChatInputActionsMenu({
                   />
                   <div className="w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                 </span>
+              </div>
+            </div>
+          )}
+
+          {/* Integration scopes: where an integration searches, whom it asks */}
+          {hasScopes && (
+            <div
+              className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('integrationScopes.menuTitle', 'Use in this chat')}
+              </h3>
+              <div className="space-y-1">
+                {scopeIntegrations.map(integration => {
+                  const integrationName = scopeDisplayName(integration, i18n.language);
+                  const action = scopeActionLabel(integration, t);
+                  const current = scopeDisplayName(currentScopeOf(integration), i18n.language);
+                  const canPick = !integration.fixed && integration.scopes.length > 1;
+                  const expanded = canPick && openScopeMenu === integration.id;
+                  const hint = scopeHint(integration, t);
+                  const toggle = () => {
+                    if (canPick) setOpenScopeMenu(expanded ? null : integration.id);
+                  };
+                  return (
+                    <div key={integration.id} role="none">
+                      <div
+                        role="menuitem"
+                        aria-haspopup={canPick ? 'menu' : undefined}
+                        aria-expanded={canPick ? expanded : undefined}
+                        aria-disabled={canPick ? undefined : 'true'}
+                        tabIndex={navTabIndex(`scope-${integration.id}`)}
+                        className={`flex items-center justify-between gap-2 p-2 rounded-lg focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset ${
+                          canPick ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''
+                        }`}
+                        onClick={toggle}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+                            e.preventDefault();
+                            if (!expanded || e.key !== 'ArrowRight') toggle();
+                          } else if (e.key === 'ArrowLeft' && expanded) {
+                            e.preventDefault();
+                            setOpenScopeMenu(null);
+                          }
+                        }}
+                        title={hint || undefined}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {integrationName}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                            {action}: <span className="font-medium">{current}</span>
+                            {integration.fixed && (
+                              <span className="ml-1">
+                                ({t('integrationScopes.fixed', 'Set by the app')})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Icon
+                          name={
+                            integration.fixed
+                              ? 'lock-closed'
+                              : expanded
+                                ? 'chevronDown'
+                                : 'chevronRight'
+                          }
+                          size="sm"
+                          className="shrink-0 text-gray-500 dark:text-gray-400"
+                          aria-hidden="true"
+                        />
+                      </div>
+                      {expanded && (
+                        <div
+                          role="group"
+                          aria-label={`${integrationName}: ${action}`}
+                          className="ml-3 mt-1 space-y-0.5 border-l border-gray-200 pl-2 dark:border-gray-700"
+                        >
+                          {integration.scopes.map(scope => {
+                            const isSelected = scope.id === integration.current;
+                            const select = () => {
+                              onIntegrationScopeChange(integration.id, scope.id);
+                              setOpenScopeMenu(null);
+                            };
+                            return (
+                              <div
+                                key={scope.id}
+                                role="menuitemradio"
+                                aria-checked={isSelected}
+                                tabIndex={navTabIndex(`scope-${integration.id}-${scope.id}`)}
+                                className={`flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:ring-inset ${
+                                  isSelected
+                                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                                    : 'text-gray-800 hover:bg-gray-50 focus:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus:bg-gray-700'
+                                }`}
+                                onClick={select}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    select();
+                                  }
+                                }}
+                              >
+                                <span className="min-w-0 truncate">
+                                  {scopeDisplayName(scope, i18n.language)}
+                                </span>
+                                {isSelected && (
+                                  <Icon
+                                    name="check"
+                                    size="sm"
+                                    className="shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {hint && (
+                            <p className="px-2 pt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {hint}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
