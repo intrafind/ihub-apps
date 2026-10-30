@@ -326,13 +326,15 @@ export function directoryToForm(directory = {}) {
  */
 function browseToForm(browse) {
   const bind = browse?.bind;
+  let browseBindMode = 'directory';
+  if (bind) browseBindMode = bind.mode === 'service' ? 'service' : 'anonymous';
   return {
     hasBrowse: Boolean(browse),
     browseEnabled: browse?.enabled === true,
     browseGroups: Array.isArray(browse?.groups) ? [...browse.groups] : ['admins'],
     browseMaxResults: numberText(browse?.maxResults),
     browseBase: browse?.base ?? '',
-    browseBindMode: !bind ? 'directory' : bind.mode === 'service' ? 'service' : 'anonymous',
+    browseBindMode,
     browseBindDn: bind?.dn ?? '',
     browseBindPasswordRef: bind?.passwordRef ?? '',
     browseDenyAttributes: asList(browse?.denyAttributes).join('\n')

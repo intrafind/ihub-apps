@@ -251,6 +251,60 @@ const UNTRUSTED_ISSUER_CODES = new Set([
 ]);
 
 /**
+ * What an admin can do about an untrusted issuer. With tlsCa, `ca` replaces the
+ * default roots, so the operating system store and NODE_EXTRA_CA_CERTS do not
+ * count for this directory.
+ */
+function untrustedIssuerHint(missingIssuer, tlsCa) {
+  const where =
+    tlsCa.length > 0
+      ? `This directory trusts only its own certificates (${tlsCa.join(', ')}). Put "${missingIssuer}" into contents/config/certs/<name>.pem and add <name> to its trusted certificates (tlsCa).`
+      : `Install "${missingIssuer}" in the operating system's certificate store of the iHub server (or point NODE_EXTRA_CA_CERTS at it), or put it into contents/config/certs/<name>.pem and add <name> to this directory's trusted certificates (tlsCa).`;
+  return `${where} Compare its fingerprint with the one its publisher states first.`;
+}
+
+/** A certificate verification failure as a {@link DirectoryConnectionError}. */
+function certificateError(error, { step, hostname, port, state, tlsCa }) {
+  const code = error.code;
+  const details = { host: hostname, port, errorCode: code, missingIssuer: null };
+  if (code === 'ERR_TLS_CERT_ALTNAME_INVALID') {
+    return new DirectoryConnectionError(
+      `The certificate of ${hostname} does not name that host: ${error.message}`,
+      {
+        code: 'tls_hostname',
+        step,
+        cause: error,
+        details,
+        hints: ['Use the host name the certificate was issued for in the directory URL.']
+      }
+    );
+  }
+  const missingIssuer = UNTRUSTED_ISSUER_CODES.has(code) ? state.missingIssuer : null;
+  if (!missingIssuer) {
+    return new DirectoryConnectionError(
+      `The certificate of ${hostname} was rejected (${code}): ${error.message}`,
+      {
+        code: 'tls_untrusted',
+        step,
+        cause: error,
+        details,
+        hints: ['Check the validity of the server certificate and the clock of the iHub server.']
+      }
+    );
+  }
+  return new DirectoryConnectionError(
+    `The certificate of ${hostname} is not trusted: issuer "${missingIssuer}" is not trusted (${code}).`,
+    {
+      code: 'tls_untrusted',
+      step,
+      cause: error,
+      details: { ...details, missingIssuer },
+      hints: [untrustedIssuerHint(missingIssuer, tlsCa)]
+    }
+  );
+}
+
+/**
  * Turn a socket/TLS/LDAP error from the connection phase into a
  * {@link DirectoryConnectionError}.
  */
@@ -258,30 +312,7 @@ function classifyConnectionError(error, { step, hostname, port, state, tlsCa = [
   if (error instanceof DirectoryConnectionError) return error;
   const code = error?.code;
   if (CERTIFICATE_ERROR_CODES.has(code)) {
-    const missingIssuer = UNTRUSTED_ISSUER_CODES.has(code) ? state.missingIssuer : null;
-    const hostnameMismatch = code === 'ERR_TLS_CERT_ALTNAME_INVALID';
-    // With tlsCa, `ca` replaces the default roots, so the operating system
-    // store and NODE_EXTRA_CA_CERTS do not count for this directory.
-    const trustHint =
-      tlsCa.length > 0
-        ? `This directory trusts only its own certificates (${tlsCa.join(', ')}). Put "${missingIssuer}" into contents/config/certs/<name>.pem and add <name> to its trusted certificates (tlsCa).`
-        : `Install "${missingIssuer}" in the operating system's certificate store of the iHub server (or point NODE_EXTRA_CA_CERTS at it), or put it into contents/config/certs/<name>.pem and add <name> to this directory's trusted certificates (tlsCa).`;
-    const message = hostnameMismatch
-      ? `The certificate of ${hostname} does not name that host: ${error.message}`
-      : missingIssuer
-        ? `The certificate of ${hostname} is not trusted: issuer "${missingIssuer}" is not trusted (${code}).`
-        : `The certificate of ${hostname} was rejected (${code}): ${error.message}`;
-    return new DirectoryConnectionError(message, {
-      code: hostnameMismatch ? 'tls_hostname' : 'tls_untrusted',
-      step,
-      cause: error,
-      details: { host: hostname, port, errorCode: code, missingIssuer },
-      hints: hostnameMismatch
-        ? ['Use the host name the certificate was issued for in the directory URL.']
-        : !missingIssuer
-          ? ['Check the validity of the server certificate and the clock of the iHub server.']
-          : [`${trustHint} Compare its fingerprint with the one its publisher states first.`]
-    });
+    return certificateError(error, { step, hostname, port, state, tlsCa });
   }
   if (code === 'ECONNREFUSED') {
     return new DirectoryConnectionError(
