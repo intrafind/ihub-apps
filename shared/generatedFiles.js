@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Files a tool generated for the user (e.g. a PDF from the `pdf` system
- * skill), as the chat's download cards carry them.
+ * Files a tool generated for the user (a PDF, Word document or presentation
+ * from the `pdf`, `docx` and `pptx` system skills), as the chat's download
+ * cards carry them.
  *
  * A file takes the path a generated picture takes:
  *
- * - **Live** — `{ id, name, mimeType, bytes, pages?, data }` on the
+ * - **Live** — `{ id, name, mimeType, bytes, pages?, slides?, data }` on the
  *   `tool/completed` event, the bytes base64 in `data`.
  * - **Stored** — with the answer, as a `document` artifact of the chat
  *   (`message.artifacts`); {@link generatedFilesFromArtifacts} turns those
@@ -22,7 +23,11 @@
 export const MAX_GENERATED_FILES = 20;
 
 /** Media types a generated file may have. */
-export const GENERATED_FILE_MEDIA_TYPES = Object.freeze(['application/pdf']);
+export const GENERATED_FILE_MEDIA_TYPES = Object.freeze([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+]);
 
 const FILE_ID = /^[a-f0-9]{32}$/;
 
@@ -31,7 +36,7 @@ const FILE_ID = /^[a-f0-9]{32}$/;
  *
  * @param {unknown} entry
  * @returns {{ id?: string, name: string, mimeType: string, bytes: number, pages?: number,
- *   data?: string, stored?: true, unavailable?: string } | null}
+ *   slides?: number, data?: string, stored?: true, unavailable?: string } | null}
  */
 export function generatedFileOf(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
@@ -46,12 +51,14 @@ export function generatedFileOf(entry) {
     typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 200) : 'file';
   const bytes = Number(entry.bytes);
   const pages = Number(entry.pages);
+  const slides = Number(entry.slides);
   return {
     ...(id ? { id } : {}),
     name,
     mimeType: entry.mimeType,
     bytes: Number.isFinite(bytes) && bytes >= 0 ? bytes : 0,
     ...(Number.isInteger(pages) && pages > 0 ? { pages } : {}),
+    ...(Number.isInteger(slides) && slides > 0 ? { slides } : {}),
     ...(typeof entry.data === 'string' && entry.data ? { data: entry.data } : {}),
     ...(entry.stored === true ? { stored: true } : {}),
     ...(unavailable ? { unavailable } : {})

@@ -182,9 +182,10 @@ export const toolCompletedData = z.object({
     })
     .optional(),
   /**
-   * Files a system skill tool generated for the user (a PDF from
-   * `create_pdf`): the chat shows a download card for each. `data` is the
-   * file, base64 — the model's tool result never carries it.
+   * Files a system skill tool generated for the user (a PDF, Word document
+   * or presentation from `create_pdf`, `create_docx`, `create_pptx`): the
+   * chat shows a download card for each. `data` is the file, base64 — the
+   * model's tool result never carries it.
    */
   files: z
     .array(
@@ -194,6 +195,7 @@ export const toolCompletedData = z.object({
         mimeType: z.string(),
         bytes: z.number().int().nonnegative(),
         pages: z.number().int().positive().optional(),
+        slides: z.number().int().positive().optional(),
         data: z.string()
       })
     )

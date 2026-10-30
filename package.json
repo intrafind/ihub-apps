@@ -78,7 +78,7 @@
     "test:backup": "node --test server/tests/backup-import-swap.test.js",
     "test:update": "node --test server/tests/update-archive.test.js server/tests/update-swap.test.js server/tests/update-staging.test.js server/tests/update-restart.test.js server/tests/update-release-assets.test.js && cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/update-cli-error-handling.test.js",
     "test:system-resources": "node --test server/tests/systemResources.test.js server/tests/storageMonitor.test.js",
-    "test:pdf": "node --test server/tests/pdf-engine.test.js server/tests/system-skills.test.js server/tests/document-extraction-pdf.test.js server/tests/document-extraction-pdf-structure.test.js",
+    "test:pdf": "node --test server/tests/pdf-engine.test.js server/tests/system-skills.test.js server/tests/document-templates.test.js server/tests/document-extraction-pdf.test.js server/tests/document-extraction-pdf-structure.test.js",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",

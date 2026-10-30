@@ -4,8 +4,8 @@
 import { randomUUID } from 'node:crypto';
 
 /**
- * Files a tool generated during a chat turn — a PDF from `create_pdf`, later
- * a DOCX, PPTX or XLSX.
+ * Files a tool generated during a chat turn — a PDF from `create_pdf`, a
+ * Word document from `create_docx`, a presentation from `create_pptx`.
  *
  * They take the path generated pictures already take, so there is no store or
  * download route of their own:
@@ -30,7 +30,9 @@ export const MAX_GENERATED_FILE_BYTES = 25 * 1024 * 1024;
 
 /** Media types a generated file may have, with the extension it gets. */
 export const GENERATED_FILE_TYPES = Object.freeze({
-  'application/pdf': 'pdf'
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx'
 });
 
 const HOLD_MS = 60 * 60 * 1000;
@@ -93,8 +95,8 @@ function prune(now = Date.now()) {
  * @param {Buffer} params.data
  * @param {string} params.mimeType - A key of {@link GENERATED_FILE_TYPES}.
  * @param {string} [params.name] - Download name; the extension is added.
- * @param {Object} [params.meta] - Extra descriptor fields (`pages`).
- * @returns {{ id: string, name: string, mimeType: string, bytes: number, pages?: number }}
+ * @param {Object} [params.meta] - Extra descriptor fields (`pages`, `slides`).
+ * @returns {{ id: string, name: string, mimeType: string, bytes: number, pages?: number, slides?: number }}
  */
 export function holdGeneratedFile({ user, chatId, data, mimeType, name, meta = {} }) {
   const extension = GENERATED_FILE_TYPES[mimeType];
@@ -113,7 +115,8 @@ export function holdGeneratedFile({ user, chatId, data, mimeType, name, meta = {
     name: safeFileName(name, extension),
     mimeType,
     bytes: data.length,
-    ...(Number.isInteger(meta.pages) && meta.pages > 0 ? { pages: meta.pages } : {})
+    ...(Number.isInteger(meta.pages) && meta.pages > 0 ? { pages: meta.pages } : {}),
+    ...(Number.isInteger(meta.slides) && meta.slides > 0 ? { slides: meta.slides } : {})
   };
   held.set(descriptor.id, {
     owner: ownerOf(user),

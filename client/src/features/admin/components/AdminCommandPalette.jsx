@@ -26,6 +26,7 @@ const ADMIN_PAGES = [
   { label: 'UI Customization', href: '/admin/ui' },
   { label: 'Localization', href: '/admin/localization' },
   { label: 'Pages', href: '/admin/pages' },
+  { label: 'Document Templates', href: '/admin/document-templates' },
   { label: 'Short Links', href: '/admin/shortlinks' },
   { label: 'Usage Reports', href: '/admin/usage' },
   { label: 'Logging', href: '/admin/logging' },

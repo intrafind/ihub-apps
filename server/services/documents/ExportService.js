@@ -151,6 +151,8 @@ function settingsBlock(settings, labels) {
  * @param {string} [params.title]
  * @param {string} [params.appName]
  * @param {string} [params.template] - default | professional | minimal
+ * @param {Object} [params.themeOptions] - Brand colours of a document
+ *   template, so the message boxes match the rest of the document.
  * @param {{ text?: string, position?: string, opacity?: number }} [params.watermark]
  * @param {string} [params.language]
  * @param {string} [params.timeZone]
@@ -162,12 +164,13 @@ export function buildChatExportSpec({
   title,
   appName,
   template,
+  themeOptions,
   watermark,
   language,
   timeZone
 }) {
   assertMessages(messages);
-  const theme = resolveTheme(template);
+  const theme = resolveTheme(template, themeOptions);
   const labels = labelsFor(language);
   const blocks = [];
   const settingsNode = settingsBlock(settings, labels);
@@ -274,8 +277,9 @@ export function buildMarkdownExportSpec({ markdown, title, template, language })
  * Render an export spec.
  *
  * @param {import('./pdf/buildDocument.js').PdfSpec} spec
+ * @param {Object} [assets] - Document template files (see `templates/applyTemplate.js`).
  * @returns {Promise<{ buffer: Buffer, pages: number, warnings: string[] }>}
  */
-export function renderExport(spec) {
-  return createPdf(spec, { timeoutMs: EXPORT_TIMEOUT_MS });
+export function renderExport(spec, assets) {
+  return createPdf(spec, { timeoutMs: EXPORT_TIMEOUT_MS, assets });
 }

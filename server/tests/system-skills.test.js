@@ -131,19 +131,19 @@ describe('system skills in the skill loader', () => {
 describe('tools of system skills', () => {
   it('are offered only through a system skill', () => {
     const tools = systemSkillToolsFor(skills);
-    assert.deepEqual(
-      tools.map(t => [t.id, t.skillName]),
-      [
-        ['create_pdf', 'pdf'],
-        ['preview_pdf', 'pdf']
-      ]
-    );
+    assert.deepEqual(tools.map(t => [t.id, t.skillName]).sort(), [
+      ['create_docx', 'docx'],
+      ['create_pdf', 'pdf'],
+      ['create_pptx', 'pptx'],
+      ['preview_pdf', 'pdf']
+    ]);
     assert.ok(tools.every(t => t.isSystemSkillTool));
   });
 
   it('leave out the page preview for a model that cannot see images', () => {
     const ids = systemSkillToolsFor(skills, { model: { supportsImages: false } }).map(t => t.id);
-    assert.deepEqual(ids, ['create_pdf']);
+    assert.ok(!ids.includes('preview_pdf'));
+    assert.ok(ids.includes('create_pdf'));
   });
 
   it('come with the skill when an app enables it for a permitted user', async () => {

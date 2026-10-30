@@ -385,7 +385,9 @@
           "html": "HTML-Dokument",
           "json": "JSON-Format mit Metadaten",
           "jsonl": "JSON-Zeilen-Format"
-        }
+        },
+        "companyTemplates": "Unternehmensvorlagen",
+        "templatePinned": "Diese App exportiert in der Vorlage „{{name}}“."
       },
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
@@ -598,7 +600,8 @@
       "downloadNamed": "{{name}} herunterladen",
       "expired": "Diese Datei ist nicht mehr verfügbar",
       "failed": "Download fehlgeschlagen. Bitte versuchen Sie es erneut.",
-      "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert"
+      "notKept": "Diese Datei wurde nicht mit dem Chat gespeichert",
+      "slides": "{{count}} Folien"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
@@ -2670,7 +2673,8 @@
       "scheduledTasks": "Geplante Aufgaben",
       "projects": "Projekte",
       "overview": "Übersicht",
-      "integrations": "Integrationen"
+      "integrations": "Integrationen",
+      "documentTemplates": "Dokumentvorlagen"
     },
     "mcp": {
       "common": {
@@ -3359,7 +3363,15 @@
         "projectsEnabled": "Projekte in dieser App nutzen",
         "projectsEnabledNote": "Wenn deaktiviert, nutzt die App kein Projekt: weder die unten verknüpften noch Chats, die in einem Projekt begonnen wurden, noch im Chat angehängte Projekte.",
         "userProjectsEnabled": "Persönliche Projekte erlauben",
-        "userProjectsEnabledNote": "Benutzer können Chats dieser App in eigenen Projekten beginnen und eigene Projekte im Chat anhängen. Die plattformweite Funktion für persönliche Projekte muss ebenfalls aktiviert sein."
+        "userProjectsEnabledNote": "Benutzer können Chats dieser App in eigenen Projekten beginnen und eigene Projekte im Chat anhängen. Die plattformweite Funktion für persönliche Projekte muss ebenfalls aktiviert sein.",
+        "documentTemplate": "Dokumentvorlage",
+        "documentTemplateDesc": "Das Corporate Design der PDF-, Word- und PowerPoint-Dateien, die diese App erstellt (Skills „pdf“, „docx“, „pptx“), und ihres PDF-Exports.",
+        "documentTemplateDefault": "Standardvorlage ({{name}})",
+        "documentTemplateNone": "Eingebaute Gestaltung (keine Standardvorlage)",
+        "documentTemplatePinned": "Jedes Dokument dieser App verwendet diese Vorlage; das Modell kann keine andere wählen.",
+        "documentTemplateFree": "Die Standardvorlage gilt; das Modell kann eine andere Vorlage verwenden, wenn der Benutzer darum bittet.",
+        "documentTemplatesLink": "Dokumentvorlagen verwalten",
+        "documentTemplateMissing": "Die Vorlage „{{id}}“ existiert nicht; die Standardvorlage gilt."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -4691,6 +4703,142 @@
         "min-update-from": "Version {{version}} kann nur über {{minimum}} oder neuer installiert werden; aktualisieren Sie zuerst auf diese Version.",
         "legacy-launcher": "Der laufende Launcher kennt das Installieren beim Start noch nicht; dieses Update wird vom laufenden Server installiert (spätere Updates installiert der Launcher, bevor der Server startet).",
         "node-does-not-start": "Das mitgelieferte Node.js startet auf diesem Server nicht ({{error}}); prüfen Sie die Quarantäne des Virenscanners oder macOS Gatekeeper."
+      }
+    },
+    "documentTemplates": {
+      "edit": {
+        "fixErrors": "Bitte zuerst die markierten Felder korrigieren.",
+        "saved": "Vorlage gespeichert.",
+        "loadError": "Die Vorlage konnte nicht geladen werden",
+        "new": "Neue Vorlage",
+        "general": "Allgemein",
+        "id": "ID",
+        "idHelp": "Kleinbuchstaben, Ziffern und „-“. Apps verweisen über die ID auf die Vorlage; sie lässt sich später nicht ändern.",
+        "name": "Name",
+        "description": "Beschreibung",
+        "enabled": "Aktiviert",
+        "default": "Standardvorlage – gilt für jede App, die keine eigene Vorlage festlegt",
+        "createFirst": "Legen Sie die Vorlage zuerst an; danach können Sie Farben und Schriften festlegen und Logo, Briefpapier und Office-Vorlagen hochladen.",
+        "brand": "Marke",
+        "brandHelp": "Farben, Schriften und Logo für alle Formate. Eine Word- oder PowerPoint-Vorlage weiter unten hat für ihr Format Vorrang.",
+        "primaryColor": "Primärfarbe",
+        "accentColor": "Akzentfarbe",
+        "textColor": "Textfarbe",
+        "headingFont": "Schrift für Überschriften",
+        "fontHelp": "„sans“, „serif“, eine hochgeladene Schrift oder eine Schrift, die auf Ihren Rechnern installiert ist (Word, PowerPoint).",
+        "bodyFont": "Schrift für Fließtext",
+        "fontSize": "Textgröße (pt)",
+        "companyName": "Firmenname",
+        "companyHelp": "Autor von Dokumenten ohne eigenen Autor und {company} in Kopf- und Fußzeilen.",
+        "fonts": "Schriften für PDFs",
+        "fontsHelp": "PDFs betten ihre Schriften ein. Laden Sie Ihre Hausschriften als .ttf oder .otf hoch (eine Datei je Schnitt) und verwenden Sie den Familiennamen oben. Word- und PowerPoint-Dateien nennen die Schrift nur; sie muss auf den Rechnern installiert sein, die sie öffnen. Prüfen Sie, ob Ihre Schriftlizenz das Einbetten erlaubt.",
+        "page": "Seite, Kopf- und Fußzeile",
+        "pageHelp": "Für PDF- und Word-Dokumente ohne Word-Vorlage. Platzhalter: {title}, {date}, {page}, {pages}, {company}. Eine leere Kopf- oder Fußzeile bedeutet: keine.",
+        "pageSize": "Seitenformat",
+        "notSet": "Nicht festgelegt",
+        "orientation": "Ausrichtung",
+        "portrait": "Hochformat",
+        "landscape": "Querformat",
+        "margins": "Ränder (pt)",
+        "marginsHelp": "Links, oben, rechts, unten. Mit Briefpapier den Text von Logo und Adressblock fernhalten.",
+        "marginLeft": "Links",
+        "marginTop": "Oben",
+        "marginRight": "Rechts",
+        "marginBottom": "Unten",
+        "header": "Kopfzeile",
+        "footer": "Fußzeile",
+        "logoPosition": "Logo in der Kopfzeile",
+        "logoRight": "Rechts",
+        "logoLeft": "Links",
+        "logoNone": "Keins",
+        "logoWidth": "Logobreite (pt)",
+        "pageNumbers": "Seitenzahlen",
+        "coverLogo": "Logo auf Deckblättern",
+        "pdf": "PDF",
+        "pdfHelp": "Ein Briefpapier-PDF wird unter jede Seite gedruckt: seine erste Seite unter die erste Seite eines Dokuments, das Briefpapier für Folgeseiten (oder seine zweite Seite) unter die übrigen.",
+        "theme": "Grundgestaltung",
+        "word": "Word",
+        "wordHelp": "Laden Sie Ihre Word-Vorlage hoch (.dotx oder .docx). Ihre Formatvorlagen, Kopf- und Fußzeilen und Seiteneinstellungen werden übernommen; der Inhalt wird an einem Absatz eingefügt, der nur {{content}} enthält, sonst nach dem Text der Vorlage. {{fields}} werden ausgefüllt.",
+        "powerpoint": "PowerPoint",
+        "powerpointHelp": "Laden Sie Ihre Folienvorlage hoch (.potx oder .pptx). Folien verwenden ihre Layouts, sodass Titel, Text, Schriften, Farben und Logos daraus stammen; Beispielfolien in der Datei werden nicht übernommen. Ohne Vorlage werden die Folien aus der Marke oben gestaltet.",
+        "aspectRatio": "Folienformat",
+        "aspectRatioHelp": "Ohne PowerPoint-Vorlage.",
+        "slideFooter": "Fußzeile der Folien",
+        "slideNumbers": "Foliennummern",
+        "preview": "Vorschau",
+        "previewHelp": "Beispieldokumente mit der gespeicherten Vorlage. Offene Änderungen werden vorher gespeichert."
+      },
+      "files": {
+        "uploaded": "„{{name}}“ hochgeladen.",
+        "logo": "Logo",
+        "logoHelp": "PNG (mit Transparenz) oder JPEG, mindestens 600 Pixel breit.",
+        "logoPreview": "Logo-Vorschau",
+        "letterhead": "Briefpapier (erste Seite)",
+        "letterheadFollowing": "Briefpapier (Folgeseiten)",
+        "wordTemplate": "Word-Vorlage",
+        "powerpointTemplate": "PowerPoint-Vorlage",
+        "none": "Keine Datei",
+        "replace": "Ersetzen",
+        "upload": "Hochladen",
+        "removeNamed": "{{name}} entfernen"
+      },
+      "title": "Dokumentvorlagen",
+      "fonts": {
+        "newFamily": "Neue Schriftfamilie",
+        "normal": "Normal",
+        "bold": "Fett",
+        "italics": "Kursiv",
+        "bolditalics": "Fett kursiv"
+      },
+      "word": {
+        "placeholders": "Platzhalter: {{list}}",
+        "noPlaceholders": "Keine Platzhalter.",
+        "noHeadings": "Die Vorlage definiert Überschrift 1–3 nicht; Überschriften verwenden die Schriften und Farben ihres Designs."
+      },
+      "pptx": {
+        "layouts": "Layouts für jede Folienart",
+        "layoutsHelp": "Nach den Layouttypen gewählt; ändern Sie eine Wahl, wenn sie nicht passt. Folienformat: {{size}}.",
+        "automatic": "Automatisch ({{name}})",
+        "kinds": {
+          "title": "Titelfolie",
+          "section": "Abschnitt",
+          "content": "Inhalt",
+          "twoColumn": "Zwei Spalten",
+          "titleOnly": "Nur Titel",
+          "blank": "Leer"
+        }
+      },
+      "preview": {
+        "show": "PDF-Seite anzeigen",
+        "pdf": "Beispiel-PDF",
+        "docx": "Beispiel-Word-Dokument",
+        "pptx": "Beispielpräsentation",
+        "alt": "Erste Seite eines Beispiel-PDFs"
+      },
+      "parts": {
+        "logo": "Logo",
+        "fonts": "Schriften",
+        "letterhead": "Briefpapier",
+        "word": "Word-Vorlage",
+        "powerpoint": "PowerPoint-Vorlage"
+      },
+      "list": {
+        "deleted": "„{{name}}“ gelöscht.",
+        "add": "Vorlage hinzufügen",
+        "loadError": "Die Dokumentvorlagen konnten nicht geladen werden",
+        "empty": "Noch keine Vorlagen. Dokumente verwenden die eingebaute Gestaltung, bis Sie eine hinzufügen.",
+        "default": "Standard",
+        "disabled": "Deaktiviert",
+        "deleteNamed": "{{name}} löschen",
+        "deleteTitle": "Vorlage löschen",
+        "deleteConfirm": "„{{name}}“ und ihre Dateien löschen? Apps, die sie verwenden, nutzen dann die Standardvorlage."
+      },
+      "subtitle": "Ihr Corporate Design für die PDF-, Word- und PowerPoint-Dateien, die iHub erstellt: Farben, Schriften, Logo, Briefpapier und Ihre eigenen Word- und PowerPoint-Vorlagen. Die Standardvorlage gilt überall; eine App kann eine eigene Vorlage verwenden.",
+      "errors": {
+        "id": "1–64 Kleinbuchstaben, Ziffern und „-“, beginnend mit einem Buchstaben oder einer Ziffer.",
+        "reservedId": "Diese ID ist reserviert; bitte eine andere wählen.",
+        "name": "Geben Sie der Vorlage einen Namen.",
+        "color": "Hexadezimale Farbe wie #e30613 verwenden."
       }
     }
   },

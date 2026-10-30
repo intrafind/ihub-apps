@@ -3,10 +3,10 @@
 
 import { DEFAULT_FONT } from './fonts.js';
 import { makePrintable, printableString } from './glyphs.js';
-import { markdownToContent } from './markdownToPdfmake.js';
+import { markdownToContent, warn } from './markdownToPdfmake.js';
 import { sanitizeBlocks, sanitizeImageMap, sanitizeStyles } from './sanitizeBlocks.js';
 import { isColor, resolveTheme, themeStyles } from './themes.js';
-import { clampNumber, sanitizeMargin } from './validators.js';
+import { checkImageDataUri, clampNumber, imagePixelSize, sanitizeMargin } from './validators.js';
 
 /**
  * Build a pdfmake document definition from a document spec.
@@ -40,6 +40,9 @@ import { clampNumber, sanitizeMargin } from './validators.js';
  *   `position` `bottom-left|bottom-center|bottom-right` draws a small label
  *   above the footer instead of the diagonal stamp.
  * @property {boolean} [markdownBreaks] - Single newlines break lines (chat text).
+ * @property {Object} [logo] - Brand logo from a document template (never from
+ *   the model): `{ image: dataUri, position: 'header-left'|'header-right'|'none',
+ *   width, onCover }`.
  */
 
 export const PAGE_SIZES = Object.freeze({
@@ -120,6 +123,37 @@ function pageSetup(page = {}) {
 
 function fillTemplate(template, values) {
   return template.replace(/\{(page|pages|title|date)\}/g, (_, key) => String(values[key] ?? ''));
+}
+
+/**
+ * The running header: its text, and the template logo on the left or right,
+ * both vertically centred in the top margin.
+ */
+function pageHeader({ text, logo, setup, decoSize }) {
+  const [left, top, right] = setup.margins;
+  if (!logo || logo.position === 'none') {
+    return {
+      text,
+      alignment: 'left',
+      style: DECORATION_STYLE,
+      margin: [left, Math.max(14, top / 2 - 6), right, 0]
+    };
+  }
+  const logoTop = Math.max(8, (top - logo.height) / 2);
+  const textTop = Math.max(0, (logo.height - decoSize * 1.2) / 2);
+  const image = { image: LOGO_IMAGE, width: logo.width, height: logo.height };
+  const label = { text, style: DECORATION_STYLE, margin: [0, textTop, 0, 0] };
+  const columns =
+    logo.position === 'header-left'
+      ? [
+          { ...image, width: logo.width },
+          { ...label, alignment: 'right', width: '*' }
+        ]
+      : [
+          { ...label, alignment: 'left', width: '*' },
+          { ...image, width: logo.width }
+        ];
+  return { columns, columnGap: 12, style: DECORATION_STYLE, margin: [left, logoTop, right, 0] };
 }
 
 function isDecoration(nodeInfo) {
@@ -317,15 +351,66 @@ function resolveLayouts(node, theme, imageCallback, font) {
   }
 }
 
-function coverPage(spec, theme, setup) {
+/** Name of the brand logo in the document's image map. */
+const LOGO_IMAGE = 'ihubBrandLogo';
+
+/**
+ * The brand logo of a document template, sized for the header: its width as
+ * configured, its height from the picture, both scaled down to fit the top
+ * margin.
+ *
+ * @returns {{ dataUri: string, position: string, width: number, height: number, onCover: boolean } | null}
+ */
+function brandLogo(spec, setup, ctx) {
+  const logo = spec.logo;
+  if (!logo || typeof logo !== 'object') return null;
+  const check = checkImageDataUri(logo.image);
+  if (!check.ok) {
+    warn(ctx, `The template logo was skipped: ${check.reason}.`);
+    return null;
+  }
+  const pixels = imagePixelSize(check.dataUri);
+  const ratio = pixels?.width > 0 && pixels?.height > 0 ? pixels.height / pixels.width : 0.4;
+  let width = clampNumber(logo.width, 20, 300) ?? 80;
+  let height = width * ratio;
+  const maxHeight = Math.max(16, setup.margins[1] - 22);
+  if (height > maxHeight) {
+    width *= maxHeight / height;
+    height = maxHeight;
+  }
+  const position = ['header-left', 'header-right'].includes(logo.position) ? logo.position : 'none';
+  return {
+    dataUri: check.dataUri,
+    position,
+    width: Math.round(width * 100) / 100,
+    height: Math.round(height * 100) / 100,
+    ratio,
+    onCover: logo.onCover !== false
+  };
+}
+
+function coverPage(spec, theme, setup, logo) {
   const cover = spec.coverPage && typeof spec.coverPage === 'object' ? spec.coverPage : {};
   const title = str(cover.title) || str(spec.title) || '';
   const subtitle = str(cover.subtitle) || str(spec.subtitle);
   const author = str(cover.author) || str(spec.author);
   const date = str(cover.date) || str(spec.date);
   const note = str(cover.note, 2000);
-  const nodes = [
-    { text: '', margin: [0, setup.contentHeight * 0.28, 0, 0] },
+  const nodes = [];
+  let spacer = setup.contentHeight * 0.28;
+  if (logo?.onCover) {
+    // The logo on the cover, larger than in the header, on its side.
+    const width = Math.min(logo.width * 1.8, setup.contentWidth / 2);
+    const height = Math.min(width * logo.ratio, 90);
+    nodes.push({
+      image: LOGO_IMAGE,
+      fit: [width, height],
+      alignment: logo.position === 'header-right' ? 'right' : 'left'
+    });
+    spacer = Math.max(20, spacer - height);
+  }
+  nodes.push(
+    { text: '', margin: [0, spacer, 0, 0] },
     {
       canvas: [
         {
@@ -340,7 +425,7 @@ function coverPage(spec, theme, setup) {
       margin: [0, 0, 0, 18]
     },
     { text: title, style: 'title', margin: [0, 0, 0, 10] }
-  ];
+  );
   if (subtitle) nodes.push({ text: subtitle, style: 'subtitle', margin: [0, 0, 0, 28] });
   const meta = [author, date].filter(Boolean);
   if (meta.length) nodes.push({ text: meta.join('  ·  '), style: 'muted', margin: [0, 8, 0, 0] });
@@ -375,6 +460,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
     contentHeight: setup.contentHeight,
     tocDepth,
     breaks: Boolean(spec.markdownBreaks),
+    language: spec.language,
     warnings,
     nodeCount: 0,
     imageBytes: 0
@@ -382,6 +468,8 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
 
   const images = sanitizeImageMap(spec.images, ctx);
   ctx.imageNames = new Map(Object.entries(images));
+  const logo = brandLogo(spec, setup, ctx);
+  if (logo) images[LOGO_IMAGE] = logo.dataUri;
   const styles = { ...themeStyles(theme), ...sanitizeStyles(spec.styles, ctx) };
 
   const hasCover = Boolean(spec.coverPage);
@@ -403,7 +491,7 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
   }
 
   const content = [];
-  if (hasCover) content.push(...coverPage(spec, theme, setup));
+  if (hasCover) content.push(...coverPage(spec, theme, setup, logo));
   if (tocRequested) {
     const tocTitle = str(spec.toc?.title, 200) || labels.contents;
     content.push({ toc: { title: { text: tocTitle, style: 'tocTitle' } } });
@@ -469,27 +557,20 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
     // Never leave a heading alone at the bottom of a page, within the
     // budget for the layout passes that costs.
     ...(orphanBreaks > 0 ? { pageBreakBefore: keepHeadingsWithContent(theme, orphanBreaks) } : {}),
-    header: headerText
-      ? (currentPage, pageCount) =>
-          currentPage < firstDecoratedPage
-            ? null
-            : {
-                text: fillTemplate(headerText, {
-                  page: currentPage,
-                  pages: pageCount,
-                  title,
-                  date
-                }),
-                alignment: 'left',
-                style: DECORATION_STYLE,
-                margin: [
-                  setup.margins[0],
-                  Math.max(14, setup.margins[1] / 2 - 6),
-                  setup.margins[2],
-                  0
-                ]
-              }
-      : undefined,
+    header:
+      headerText || logo?.position.startsWith('header')
+        ? (currentPage, pageCount) =>
+            currentPage < firstDecoratedPage
+              ? null
+              : pageHeader({
+                  text: headerText
+                    ? fillTemplate(headerText, { page: currentPage, pages: pageCount, title, date })
+                    : '',
+                  logo,
+                  setup,
+                  decoSize
+                })
+        : undefined,
     footer: (currentPage, pageCount) => {
       pageInfo.total = pageCount;
       if (currentPage < firstDecoratedPage || (!footerText && !pageNumbers)) return null;

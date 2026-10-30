@@ -128,4 +128,6 @@ JSON, Markdown or HTML entirely in the browser. The dialog's defaults come from
 - Encryption, and referencing uploaded images from `create_pdf`.
 - System skill tools inside workflow and agent nodes.
 - Canvas "Print as PDF" and the Mermaid PDF export.
-- The DOCX, PPTX and XLSX system skills.
+- The DOCX, PPTX and XLSX system skills. DOCX and PPTX, and document templates for all three
+  formats, followed in
+  [`2026-10-29 Document Templates and Office System Skills`](<2026-10-29%20Document%20Templates%20and%20Office%20System%20Skills.md>).

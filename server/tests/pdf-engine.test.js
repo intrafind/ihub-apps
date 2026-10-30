@@ -25,11 +25,8 @@ import { printableRuns } from '../services/documents/pdf/glyphs.js';
 import { isColor, resolveTheme } from '../services/documents/pdf/themes.js';
 import { CREATE_PDF_TOOL } from '../services/documents/pdf/pdfToolDefinitions.js';
 import { renderPdfSpec } from '../services/documents/pdf/renderPdf.js';
-import {
-  createPdf,
-  PdfGenerationError,
-  renderPagePreview
-} from '../services/documents/pdf/PdfService.js';
+import { createPdf, renderPagePreview } from '../services/documents/pdf/PdfService.js';
+import { DocumentGenerationError } from '../services/documents/renderService.js';
 import { specFromToolArgs } from '../services/documents/pdf/pdfTools.js';
 import {
   checkImageDataUri,
@@ -440,7 +437,7 @@ describe('rendering', () => {
     });
     assert.deepEqual(spec.blocks, [{ text: 'x', style: 'badge' }]);
     assert.deepEqual(spec.styles, { badge: { bold: true } });
-    assert.throws(() => specFromToolArgs({ title: 't', blocks: '[' }), PdfGenerationError);
+    assert.throws(() => specFromToolArgs({ title: 't', blocks: '[' }), DocumentGenerationError);
   });
 
   it('declares blocks, styles and images as JSON text', () => {
@@ -466,14 +463,14 @@ describe('PdfService', () => {
   it('stops a render that runs past its time budget', async () => {
     await assert.rejects(
       createPdf({ title: 'Slow', markdown: 'x' }, { timeoutMs: 1 }),
-      error => error instanceof PdfGenerationError && error.code === 'timeout'
+      error => error instanceof DocumentGenerationError && error.code === 'timeout'
     );
   });
 
   it('reports a document without content as invalid', async () => {
     await assert.rejects(
       createPdf({ title: 'Empty' }),
-      error => error instanceof PdfGenerationError && /no content/.test(error.message)
+      error => error instanceof DocumentGenerationError && /no content/.test(error.message)
     );
   });
 });
