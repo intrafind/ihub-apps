@@ -2941,7 +2941,6 @@
           "scopePicker": "Scope picker",
           "picker": {
             "menu": "In the menu",
-            "inline": "Next to the input",
             "hidden": "Hidden"
           }
         },

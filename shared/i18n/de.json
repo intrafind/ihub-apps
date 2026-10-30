@@ -3232,7 +3232,6 @@
           "scopePicker": "Bereichsauswahl",
           "picker": {
             "menu": "Im Menü",
-            "inline": "Neben der Eingabe",
             "hidden": "Verborgen"
           }
         },

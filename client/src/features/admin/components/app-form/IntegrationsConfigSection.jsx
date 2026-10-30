@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -35,7 +35,10 @@ function IntegrationsConfigSection({ integrations, onChange }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const bindings = integrations && typeof integrations === 'object' ? integrations : {};
+  const bindings = useMemo(
+    () => (integrations && typeof integrations === 'object' ? integrations : {}),
+    [integrations]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -275,9 +278,6 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                           >
                             <option value="menu">
                               {t('admin.apps.edit.integrations.picker.menu', 'In the menu')}
-                            </option>
-                            <option value="inline">
-                              {t('admin.apps.edit.integrations.picker.inline', 'Next to the input')}
                             </option>
                             <option value="hidden">
                               {t('admin.apps.edit.integrations.picker.hidden', 'Hidden')}
