@@ -3412,6 +3412,7 @@
       "openAppHint": "App in einem neuen Tab öffnen",
       "openDisabledHint": "Aktivieren Sie die App, um sie zu öffnen",
       "openMissingFeaturesHint": "Schalten Sie {{features}} ein, um sie zu öffnen",
+      "missingInstalledIntegration": "Installierte Integration \"{{id}}\"",
       "test": {
         "title": "App testen",
         "subtitle": "Läuft mit der gespeicherten Version, so wie Benutzer sie sehen",

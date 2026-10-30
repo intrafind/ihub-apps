@@ -1871,10 +1871,23 @@ class ConfigCache {
       // are callable in that app whatever the group grants say, so they are
       // listed too — otherwise the menu cannot name them or tell which MCP
       // server they belong to.
-      const appToolRefs = appId
-        ? await this.getAppToolRefsForUser(user, platformConfig, appId)
-        : [];
-      tools = tools.filter(tool => granted.has(tool) || isToolSelected(tool, appToolRefs));
+      const app = appId ? await this.getAppForUserById(user, platformConfig, appId) : null;
+      const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
+      // An installed integration's tools are listed as the chat gets them
+      // (`getIntegrationToolsForApp`): only when the app binds the
+      // installation, the user is in its groups and the binding allows the
+      // action — never through the instance id alone.
+      let appIntegrationTools = new Set();
+      if (app?.integrations && typeof app.integrations === 'object') {
+        const { getIntegrationToolsForApp } =
+          await import('./services/integrations/integrationTools.js');
+        appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
+      }
+      tools = tools.filter(tool => {
+        if (granted.has(tool)) return true;
+        if (tool._integration) return appIntegrationTools.has(tool);
+        return isToolSelected(tool, appToolRefs);
+      });
     }
 
     // A people directory's own `groups` hold on top of every grant, `*` included.
@@ -1894,29 +1907,16 @@ class ConfigCache {
   }
 
   /**
-   * The tool references (`app.tools`, plus the installed integrations the
-   * app binds) of an app the user may access, or an empty list when the app
-   * is unknown or not available to them.
+   * An app the user may access, by id (case-insensitive), or null when the
+   * app is unknown or not available to them.
    * @param {object} user
    * @param {object} platformConfig
    * @param {string} appId
-   * @returns {Promise<string[]>}
+   * @returns {Promise<object|null>}
    */
-  async getAppToolRefsForUser(user, platformConfig, appId) {
+  async getAppForUserById(user, platformConfig, appId) {
     const { data: apps = [] } = await this.getAppsForUser(user, platformConfig);
-    const app = findByIdCaseInsensitive(apps || [], appId);
-    const refs = Array.isArray(app?.tools) ? [...app.tools] : [];
-    // An installed integration the app binds (`app.integrations[<instanceId>]`,
-    // #3061) is referenced by the instance id, like an MCP server by its id.
-    if (app?.integrations && typeof app.integrations === 'object') {
-      const installed = new Set(
-        (this.getIntegrations().data?.installed || []).map(instance => instance.id)
-      );
-      for (const id of Object.keys(app.integrations)) {
-        if (installed.has(id)) refs.push(id);
-      }
-    }
-    return refs;
+    return findByIdCaseInsensitive(apps || [], appId) || null;
   }
 
   /**

@@ -27,7 +27,8 @@ actions as tools.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
   and the list of files with their formats and download links (the files' contents are not read
   in this release), query DataStore tables, on GovData, the German state and city portals,
-  data.gov and internal CKAN catalogs. Tested against six live portals.
+  data.gov and internal CKAN catalogs. Tested against demo.ckan.org, GovData, Open-Data
+  Schleswig-Holstein, open.canada.ca and data.boston.gov; data.europa.eu offers only the search.
 
 See [Integrations](../../integrations.md).
 

@@ -302,7 +302,7 @@ export async function fetchItemContent(registryId, type, name) {
   if (type === 'integration') {
     return {
       item,
-      content: await buildIntegrationContent(item, responseData, itemUrl, authHeaders)
+      content: await buildIntegrationContent(item, responseData, itemUrl, authHeaders, registry)
     };
   }
 
@@ -318,9 +318,10 @@ export async function fetchItemContent(registryId, type, name) {
  * @param {object} definition - Parsed integration.json
  * @param {string} itemUrl - URL integration.json was fetched from
  * @param {Record<string, string>} authHeaders
+ * @param {object} [registry] - Registry config (`source` names its own host)
  * @returns {Promise<{ files: Record<string, string|object> }>}
  */
-async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
+async function buildIntegrationContent(item, definition, itemUrl, authHeaders, registry) {
   const listed = Array.isArray(item.source?.companions) ? item.source.companions : [];
   const referenced = [definition?.protocol?.document, definition?.icon].filter(
     value => typeof value === 'string' && value && !/^https?:\/\//i.test(value)
@@ -338,10 +339,20 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
   for (const relativePath of companions) {
     if (relativePath === 'integration.json') continue;
     const companionUrl = `${baseUrl}/${relativePath}${query ? `?${query}` : ''}`;
+    // The catalog chose `rawBase`; the registry's credentials go only where
+    // the registry itself lives.
+    const trusted = sharesCredentialScope(companionUrl, [itemUrl, registry?.source]);
+    if (!trusted) {
+      logger.warn('Companion file is fetched without the registry credentials', {
+        component: COMPONENT,
+        companionUrl,
+        itemUrl
+      });
+    }
     const res = await throttledFetch('marketplace-installer', companionUrl, {
       headers: {
         Accept: 'text/plain, application/json, application/vnd.github.raw+json',
-        ...authHeaders
+        ...(trusted ? authHeaders : {})
       }
     });
     if (!res.ok) {
@@ -350,6 +361,40 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
     files[relativePath] = unwrapGitHubContent(await res.text());
   }
   return { files };
+}
+
+/** Hosts that share one GitHub token: the Contents API and the raw host. */
+const GITHUB_HOSTS = new Set(['api.github.com', 'raw.githubusercontent.com', 'github.com']);
+
+/**
+ * Whether a companion URL may carry the registry's credentials: it is an
+ * http(s) URL on the host of one of the `trustedUrls` (integration.json, the
+ * registry's catalog), or both are GitHub hosts.
+ *
+ * @param {string} url
+ * @param {Array<string|undefined>} trustedUrls
+ * @returns {boolean}
+ */
+export function sharesCredentialScope(url, trustedUrls) {
+  let target;
+  try {
+    target = new URL(url);
+  } catch {
+    return false;
+  }
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return false;
+  for (const trusted of trustedUrls) {
+    if (typeof trusted !== 'string') continue;
+    let known;
+    try {
+      known = new URL(trusted);
+    } catch {
+      continue;
+    }
+    if (known.host === target.host) return true;
+    if (GITHUB_HOSTS.has(known.hostname) && GITHUB_HOSTS.has(target.hostname)) return true;
+  }
+  return false;
 }
 
 /**

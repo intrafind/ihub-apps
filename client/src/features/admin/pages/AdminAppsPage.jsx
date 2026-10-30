@@ -70,9 +70,10 @@ const BUILT_IN_BINDINGS = { ifinder: 'ifinder', iassistant: 'ifinder' };
  * @param {Object} [integrationStatus] - Integration ids with whether they are on
  *   (`GET /admin/apps/integration-status`). Unknown until loaded: nothing is flagged then.
  * @param {string} language - Current language.
+ * @param {Function} t - Translator.
  * @returns {string[]} Names of the required features and integrations that are off.
  */
-function missingRequirements(app, platformConfig, integrationStatus, language) {
+function missingRequirements(app, platformConfig, integrationStatus, language, t) {
   const features = platformConfig?.features;
   const missingFeatures =
     Array.isArray(app.requiredFeatures) && Array.isArray(features)
@@ -91,7 +92,9 @@ function missingRequirements(app, platformConfig, integrationStatus, language) {
   for (const id of [...required, ...bound]) {
     const statusId = BUILT_IN_BINDINGS[id] || id;
     if (integrationStatus[statusId] === true) continue;
-    const name = INTEGRATION_NAMES[id] || `Installed integration "${id}"`;
+    const name =
+      INTEGRATION_NAMES[id] ||
+      t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
     if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
   }
   return [...missingFeatures, ...missingIntegrations];
@@ -361,7 +364,7 @@ function AdminAppsPage() {
       sortAccessor: app => (app.enabled ? 1 : 0),
       render: app => {
         const missing = app.enabled
-          ? missingRequirements(app, platformConfig, integrationStatus, currentLanguage)
+          ? missingRequirements(app, platformConfig, integrationStatus, currentLanguage, t)
           : [];
         return (
           <div className="flex flex-col items-start gap-1">
@@ -418,7 +421,8 @@ function AdminAppsPage() {
           app,
           platformConfig,
           integrationStatus,
-          currentLanguage
+          currentLanguage,
+          t
         );
         return missing.length > 0
           ? t('admin.apps.openMissingFeaturesHint', {
