@@ -480,3 +480,9 @@ ZIP archive. Each file appears as a download card below the answer, with the rig
 
 See [Document and file generation](../../pdf-generation.md#the-files-skill) and
 [Artifacts](../../artifacts.md).
+
+## Chat: Click a Cited Source Row to Open It in the Sources Panel
+
+In the "Cited in this answer" list under an answer, only the number opened the sources panel. Now a
+click anywhere on a row opens the panel on that source. The title link still opens the document,
+and the row is still highlighted on hover.
