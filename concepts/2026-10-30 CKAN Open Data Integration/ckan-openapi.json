@@ -3,10 +3,10 @@
   "info": {
     "title": "CKAN Action API (trimmed for iHub)",
     "version": "2.11",
-    "description": "Read-only subset of the CKAN Action API (https://docs.ckan.org/en/2.11/api/) plus the DataStore extension. Every response is an envelope { help, success, result | error }. Tested 2026-10-30 against demo.ckan.org (2.11.5), ckan.govdata.de (2.10.11), opendata.schleswig-holstein.de (2.11.7), open.canada.ca (2.10.8) and data.boston.gov (DataStore)."
+    "description": "Read-only subset of the CKAN Action API (https://docs.ckan.org/en/2.11/api/) plus the DataStore extension. Every response is an envelope { help, success, result | error }. Paths are relative to {baseUrl}{apiPath} so a portal under a path prefix (/ckan, /data) or with a different API path works. Tested 2026-10-30 against demo.ckan.org (2.11.5), ckan.govdata.de (2.10.11), opendata.schleswig-holstein.de (2.11.7), open.canada.ca (2.10.8) and data.boston.gov (DataStore)."
   },
   "paths": {
-    "/api/3/action/package_search": {
+    "/package_search": {
       "get": {
         "operationId": "package_search",
         "summary": "Search datasets",
@@ -87,7 +87,7 @@
         }
       }
     },
-    "/api/3/action/package_show": {
+    "/package_show": {
       "get": {
         "operationId": "package_show",
         "summary": "Get one dataset with all metadata and resources",
@@ -109,7 +109,7 @@
         }
       }
     },
-    "/api/3/action/resource_show": {
+    "/resource_show": {
       "get": {
         "operationId": "resource_show",
         "summary": "Get one resource (file / distribution) of a dataset",
@@ -130,7 +130,7 @@
         }
       }
     },
-    "/api/3/action/resource_search": {
+    "/resource_search": {
       "get": {
         "operationId": "resource_search",
         "summary": "Search resources by field",
@@ -169,7 +169,7 @@
         }
       }
     },
-    "/api/3/action/organization_list": {
+    "/organization_list": {
       "get": {
         "operationId": "organization_list",
         "summary": "List publishing organizations",
@@ -222,7 +222,7 @@
         }
       }
     },
-    "/api/3/action/organization_show": {
+    "/organization_show": {
       "get": {
         "operationId": "organization_show",
         "summary": "Get one organization, optionally with its datasets",
@@ -251,7 +251,7 @@
         }
       }
     },
-    "/api/3/action/group_list": {
+    "/group_list": {
       "get": {
         "operationId": "group_list",
         "summary": "List thematic groups / categories",
@@ -289,7 +289,7 @@
         }
       }
     },
-    "/api/3/action/tag_list": {
+    "/tag_list": {
       "get": {
         "operationId": "tag_list",
         "summary": "List or search tags",
@@ -318,7 +318,7 @@
         }
       }
     },
-    "/api/3/action/datastore_search": {
+    "/datastore_search": {
       "get": {
         "operationId": "datastore_search",
         "summary": "Query the rows of a tabular resource loaded into the DataStore",
@@ -411,7 +411,7 @@
         }
       }
     },
-    "/api/3/action/datastore_search_sql": {
+    "/datastore_search_sql": {
       "get": {
         "operationId": "datastore_search_sql",
         "summary": "Run a read-only SQL SELECT against DataStore tables (if the portal enables it)",
@@ -433,7 +433,7 @@
         }
       }
     },
-    "/api/3/action/datastore_info": {
+    "/datastore_info": {
       "get": {
         "operationId": "datastore_info",
         "summary": "Column names, types and row count of a DataStore resource",
@@ -454,7 +454,7 @@
         }
       }
     },
-    "/api/3/action/status_show": {
+    "/status_show": {
       "get": {
         "operationId": "status_show",
         "summary": "Portal name, CKAN version, installed extensions (health check)",
@@ -465,5 +465,19 @@
         }
       }
     }
-  }
+  },
+  "servers": [
+    {
+      "url": "{baseUrl}{apiPath}",
+      "description": "Portal root plus API path from the install fields; default apiPath is /api/3/action",
+      "variables": {
+        "baseUrl": {
+          "default": "https://demo.ckan.org"
+        },
+        "apiPath": {
+          "default": "/api/3/action"
+        }
+      }
+    }
+  ]
 }

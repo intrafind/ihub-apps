@@ -8,7 +8,6 @@
     "de": "Datensätze finden, Metadaten lesen (Herausgeber, Lizenz, Formate, Abdeckung), tabellarische Daten im DataStore abfragen und Ressourcen von jedem CKAN-basierten Open-Data-Portal laden (GovData, Landes- und Stadtportale, data.europa.eu, interne Datenkataloge)."
   },
   "publisher": { "name": "IntraFind Software AG", "url": "https://www.intrafind.com", "verification": "intrafind" },
-  "icon": "icon.svg",
   "categories": ["open-data", "data", "public-sector", "research"],
   "docsUrl": "https://docs.ckan.org/en/2.11/api/",
   "license": "LicenseRef-iHub-Apps",
@@ -20,10 +19,16 @@
   "protocol": {
     "type": "openapi",
     "document": "ckan-openapi.json",
-    "baseUrl": "{baseUrl}",
+    "baseUrl": "{baseUrl}{apiPath}",
     "_proposed": {
       "responseEnvelope": { "success": "$.success", "result": "$.result", "error": "$.error.message" },
-      "arrayParameterStyle": "json-list"
+      "arrayParameterStyle": "json-list",
+      "enforcementModes": {
+        "fixed": "the install value is sent; a model-supplied value is dropped",
+        "cap": "numeric: the smaller of model value and install value is sent",
+        "append": "string filters: install value AND model value (Solr fq: both terms, space-joined)",
+        "default": "install value only when the model sent nothing"
+      }
     }
   },
 
@@ -51,19 +56,18 @@
       "key": "apiPath",
       "type": "string",
       "title": { "en": "API path", "de": "API-Pfad" },
-      "description": { "en": "Advanced. Defaults to /api/3/action; data.europa.eu uses /api/hub/search/ckan.", "de": "Erweitert. Standard /api/3/action; data.europa.eu nutzt /api/hub/search/ckan." },
+      "description": { "en": "Advanced. Defaults to /api/3/action. data.europa.eu uses /api/hub/search/ckan and supports only search_datasets.", "de": "Erweitert. Standard /api/3/action. data.europa.eu nutzt /api/hub/search/ckan und unterstützt nur search_datasets." },
       "default": "/api/3/action",
       "scope": "admin",
       "injectAs": "urlVariable"
     },
     {
       "key": "tokenHeader",
-      "type": "enum",
+      "type": "string",
       "title": { "en": "API token header", "de": "Header für den API-Token" },
-      "choices": [
-        { "value": "Authorization", "label": { "en": "Authorization (CKAN 2.10+ default)" } },
-        { "value": "X-CKAN-API-Key", "label": { "en": "X-CKAN-API-Key (legacy or custom apitoken_header_name)" } }
-      ],
+      "description": { "en": "Authorization (CKAN 2.10+ default), X-CKAN-API-Key (older portals), or the portal's custom apitoken_header_name.", "de": "Authorization (Standard ab CKAN 2.10), X-CKAN-API-Key (ältere Portale) oder der im Portal konfigurierte apitoken_header_name." },
+      "suggestions": ["Authorization", "X-CKAN-API-Key"],
+      "pattern": "^[A-Za-z0-9-]+$",
       "default": "Authorization",
       "scope": "admin"
     },
@@ -114,8 +118,8 @@
       "title": { "en": "Metadata profile", "de": "Metadatenprofil" },
       "description": { "en": "How to read extras and format values. DCAT-AP.de portals use URIs for formats and licenses.", "de": "Wie extras und Formatwerte gelesen werden. DCAT-AP.de-Portale verwenden URIs für Formate und Lizenzen." },
       "choices": [
-        { "value": "ckan", "label": { "en": "Plain CKAN" } },
-        { "value": "dcat-ap-de", "label": { "en": "DCAT-AP.de (GovData and German portals)" } }
+        { "value": "ckan", "label": { "en": "Plain CKAN", "de": "Standard-CKAN" } },
+        { "value": "dcat-ap-de", "label": { "en": "DCAT-AP.de (GovData and German portals)", "de": "DCAT-AP.de (GovData und deutsche Portale)" } }
       ],
       "default": "ckan",
       "scope": "admin"
@@ -129,7 +133,9 @@
       "action": "list_organizations",
       "label": { "en": "Publisher", "de": "Herausgeber" },
       "map": { "id": "$.name", "name": "$.title" },
-      "applyAs": { "search_datasets.fq": "organization:{id}" }
+      "applyAs": { "search_datasets.fq": { "value": "organization:{id}", "mode": "append" } },
+      "strict": false,
+      "_note": "A scope is a search focus, not an access boundary: CKAN enforces access through the token. With strict: true (iteration 2) the adapter also checks organization.name of every get_dataset result and resolves the owning dataset of get_resource, describe_datastore and query_datastore before answering, so a known id cannot leave the picked publisher."
     },
     "sources": {
       "search_datasets": { "items": "$.result.results[*]", "title": "$.title", "url": "{baseUrl}/dataset/{name}", "snippet": "$.notes", "kind": "dataset" },
@@ -146,7 +152,11 @@
       "title": { "en": "Search datasets", "de": "Datensätze suchen" },
       "sideEffect": "read",
       "dataFlow": "external",
-      "defaults": { "rows": "{maxRows}", "fq": "{defaultFilter}", "include_private": "{includePrivate}" },
+      "defaults": {
+        "rows": { "value": "{maxRows}", "mode": "cap" },
+        "fq": { "value": "{defaultFilter}", "mode": "append" },
+        "include_private": { "value": "{includePrivate}", "mode": "fixed" }
+      },
       "hideFields": [
         "help", "result.facets",
         "result.results[].extras", "result.results[].relationships_as_subject", "result.results[].relationships_as_object",
@@ -163,7 +173,7 @@
         "de": "Für jede Frage 'welche Datensätze gibt es zu …'. Thema in q, Einschränkung über fq (organization:, tags:, res_format:, license_id:). Facetten (organization, res_format, tags) anfordern, wenn der Nutzer einen Überblick will. Datensätze immer als Link auf die Portalseite zitieren."
       },
       "examples": [
-        { "en": "Which datasets about parking does the city publish?", "de": "Welche Datensätze zu Kitas gibt es in Norderstedt?" },
+        { "en": "Which datasets about parking does the city publish?", "de": "Welche Datensätze zu Parkplätzen veröffentlicht die Stadt?" },
         { "en": "Show the ten newest datasets with CSV files.", "de": "Zeig die zehn neuesten Datensätze mit CSV-Dateien." }
       ]
     },
@@ -200,7 +210,7 @@
       "title": { "en": "List publishers", "de": "Herausgeber auflisten" },
       "sideEffect": "read",
       "dataFlow": "external",
-      "defaults": { "all_fields": true, "sort": "package_count desc" },
+      "defaults": { "all_fields": { "value": true, "mode": "fixed" }, "sort": { "value": "package_count desc", "mode": "default" } },
       "examples": [{ "en": "Who publishes data on this portal and how much?" }]
     },
     {
@@ -216,7 +226,7 @@
       "title": { "en": "List categories", "de": "Kategorien auflisten" },
       "sideEffect": "read",
       "dataFlow": "external",
-      "defaults": { "all_fields": true }
+      "defaults": { "all_fields": { "value": true, "mode": "fixed" } }
     },
     {
       "name": "list_tags",
@@ -240,7 +250,7 @@
       "title": { "en": "Query table rows", "de": "Tabellenzeilen abfragen" },
       "sideEffect": "read",
       "dataFlow": "external",
-      "defaults": { "limit": 20 },
+      "defaults": { "limit": { "value": 20, "mode": "default" } },
       "guidance": { "en": "Rows of a tabular resource: full-text q, exact filters as a JSON object, fields, sort, limit and offset. Prefer fields and limit to keep answers small; say how many rows exist in total." },
       "examples": [{ "en": "How many active licenses are there per license type?" }, { "en": "List the five newest entries sorted by issue date." }]
     },
