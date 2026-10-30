@@ -18,7 +18,7 @@ const APPS = [
   {
     id: 'ifinder-search',
     tools: ['iFinder_search'],
-    integrations: { ifinder: { scopePicker: 'inline' } }
+    integrations: { ifinder: { scopePicker: 'hidden' } }
   },
   { id: 'plain-chat', tools: [] },
   { id: 'secret-app', tools: ['iFinder_search'] },
@@ -76,7 +76,7 @@ describe('integration scope routes', () => {
     const [ifinder] = res.body.integrations;
     assert.equal(ifinder.id, 'ifinder');
     assert.equal(ifinder.action, 'search');
-    assert.equal(ifinder.scopePicker, 'inline');
+    assert.equal(ifinder.scopePicker, 'hidden');
     assert.equal(ifinder.defaultScope, 'searchprofile-standard');
     assert.deepEqual(
       ifinder.scopes.map(scope => scope.name),

@@ -7,8 +7,8 @@ import '@testing-library/jest-dom';
 /**
  * Integration scopes in the chat input (intrafind/ihub-apps#3050): the "+"
  * menu row that shows where an integration searches and opens a submenu to
- * change it, and the inline "Search in: … ▾" picker. Both are driven by the
- * integrations the server lists, so nothing here names iFinder.
+ * change it. It is driven by the integrations the server lists, so nothing
+ * here names iFinder.
  */
 
 jest.mock('react-i18next', () => ({
@@ -62,8 +62,6 @@ jest.mock('../../../client/src/features/office/contexts/EmbeddedHostContext', ()
 
 const ChatInputActionsMenu =
   require('../../../client/src/features/chat/components/ChatInputActionsMenu').default;
-const IntegrationScopeSelector =
-  require('../../../client/src/features/chat/components/IntegrationScopeSelector').default;
 
 const SEARCH = {
   id: 'ifinder',
@@ -114,6 +112,21 @@ describe('integration scopes in the "+" menu', () => {
     expect(onIntegrationScopeChange).toHaveBeenCalledWith('ifinder', 'standard');
   });
 
+  it('closes the whole menu once a scope is picked', () => {
+    const { onIntegrationScopeChange } = openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /iFinder/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Standard' }));
+
+    expect(onIntegrationScopeChange).toHaveBeenCalledWith('ifinder', 'standard');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions menu' })).toHaveFocus();
+  });
+
+  it('shows a hint when only the default could be offered', () => {
+    openMenu({ ...SEARCH, hint: 'forbidden', current: 'standard', scopes: [SEARCH.scopes[0]] });
+    expect(screen.getByText(/only the default is offered/)).toBeInTheDocument();
+  });
+
   it('offers no submenu for a fixed scope', () => {
     openMenu({ ...SEARCH, fixed: true, current: 'standard', scopes: [SEARCH.scopes[0]] });
     const row = screen.getByRole('menuitem', { name: /iFinder/ });
@@ -136,47 +149,5 @@ describe('integration scopes in the "+" menu', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Actions menu' }));
     expect(screen.queryByText('Use in this chat')).not.toBeInTheDocument();
-  });
-});
-
-describe('inline integration scope picker', () => {
-  it('names the integration and the scope, and picks another one', () => {
-    const onScopeChange = jest.fn();
-    render(
-      <IntegrationScopeSelector
-        integration={{ ...SEARCH, scopePicker: 'inline' }}
-        onScopeChange={onScopeChange}
-        language="en"
-      />
-    );
-    const trigger = screen.getByRole('button', { name: 'iFinder: Search in Contracts' });
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Standard' }));
-    expect(onScopeChange).toHaveBeenCalledWith('ifinder', 'standard');
-  });
-
-  it('shows a hint when only the default could be offered', () => {
-    render(
-      <IntegrationScopeSelector
-        integration={{ ...SEARCH, hint: 'forbidden' }}
-        onScopeChange={jest.fn()}
-        language="en"
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /iFinder/ }));
-    expect(screen.getByText(/only the default is offered/)).toBeInTheDocument();
-  });
-
-  it('shows a fixed scope without a menu', () => {
-    render(
-      <IntegrationScopeSelector
-        integration={{ ...SEARCH, fixed: true, current: 'standard' }}
-        onScopeChange={jest.fn()}
-        language="en"
-      />
-    );
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText('Standard')).toBeInTheDocument();
   });
 });
