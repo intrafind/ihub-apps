@@ -25,18 +25,22 @@ A definition's folder name is its id with the one `/` replaced by `__`: `org.cka
 
 The iAssistant installation has no base URL of its own: its `connection` field names the iFinder installation it runs on. The fields of both installations are described in [iFinder Integration](iFinder-Integration.md#configuration) and [iFinder & iAssistant Admin Guide](ifinder-iassistant-admin-guide.md).
 
+### MCP servers
+
+An MCP server is an installed integration of the `mcp` protocol. iHub ships the generic **MCP server** definition (`com.intrafind/mcp-server`: any Streamable HTTP, SSE or WebSocket endpoint, or a local process over stdio) and one definition per hosted server of the former built-in catalog (`mcp/microsoft-learn`, `mcp/context7`, `mcp/github`, `mcp/drawio`, …), each with its endpoint fixed and its sign-in mode set. All of them are `builtIn` and may be installed several times (two GitHub organisations, two draw.io installations). The server's tools are the installation's actions: they are not written into the definition but listed when iHub connects, so the wizard shows them after **Test connection** and the admin switches single tools off. Tool ids are `<toolPrefix or id__><tool>`, e.g. `drawio__create_diagram`; per-user OAuth, MCP App views and the inbound gateway are as described in [MCP Integration](mcp-integration.md). Migration V193 turned every server of the former `config/mcpServers.json` into an installation under the same id.
+
 ## Installing
 
 1. **Admin → Integrations → Installed → Catalog** lists every definition: shipped ones and those installed from the [Marketplace](marketplace.md) (type **Integrations**).
 2. **Install** opens a wizard generated from the definition's install fields:
    - **Name**: the instance id apps refer to, and a label users see in the chat.
    - **Settings**: the definition's fields (URL, numbers, switches, choices). Advanced fields are folded away.
-   - **Sign-in**: the modes the definition offers. *No sign-in* for public APIs; *Shared service account* stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file. Per-user sign-in modes come in a later release.
+   - **Sign-in**: the modes the definition offers and the protocol can run. *No sign-in* for public APIs; *Shared service account* stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; *OAuth client* (client credentials) and *Each user signs in* (per-user OAuth) are available for MCP servers, the other protocols get them in a later release. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
    - **Who may use it**: groups, or everyone who may use an app that binds the integration.
-   - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is *none*; actions with a requirement (for example SQL on a DataStore) appear once the setting is on.
-3. **Test connection** runs the definition's health action with the values as entered and lists the actions the model would get. Nothing is saved until **Install**.
+   - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is *none*; actions with a requirement (for example SQL on a DataStore) appear once the setting is on. For an MCP server the list is what the server reports after a test (or on edit); a tool the server adds later is on by default.
+3. **Test connection** runs the definition's health action with the values as entered and lists the actions the model would get (for an MCP server: connects and lists its tools). Nothing is saved until **Install**.
 
-Installed instances can be tested, edited, disabled and removed from the **Installed** tab. Removing an instance deletes its managed secret. Removing a *definition* (uninstalling it from the marketplace) is refused while instances of it exist.
+Installed instances can be tested, edited, disabled and removed from the **Installed** tab, which also shows the connection health of an MCP installation (connected, unreachable, the number of connected users of a per-user server) and, for a per-user server, the **Connected users** dialog (disconnect a user, reset iHub's OAuth client registration). Removing an instance deletes its managed secret. Removing a *definition* (uninstalling it from the marketplace) is refused while instances of it exist.
 
 ## Binding to an app
 
@@ -52,11 +56,11 @@ The built-in `ifinder` and `iassistant` installations are bound the same way, an
 
 An app is offered to users only while every installation it binds exists and is enabled (for `iassistant`, the iFinder installation too). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools.
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action* (the built-in integrations keep their `iFinder_*` ids, see above). The tools menu shows one switch per installation (the instance id is the tool reference, like an MCP server's id), on by default. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action* (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The tools menu shows one switch per installation (the instance id is the tool reference), on by default. An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs
 
-Two protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors, and `openapi`, for every catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
+Three protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
 
 1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is *service account*;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
@@ -105,6 +109,10 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
 }
 ```
 
+An `mcp` definition has no actions and no document; its `protocol` fixes what the definition knows and leaves the rest to install fields of the same name: `{ "type": "mcp", "transport": { "type": "streamableHttp", "url": "https://mcp.example.com/mcp", "headers": { "X-Scope": "read" } }, "toolPrefix": "ex_", "timeoutMs": 60000, "apps": { "enabled": true } }`. A registry may publish MCP definitions with a fixed remote transport only; a local process (`stdio`) is installed from the shipped generic definition. The sign-in modes are `none`, `service-account`, `oauth-client` (`auth.oauthClient.field` names the client-secret field) and `oauth-user` (`auth.oauthUser.field` optionally names the secret of a pre-registered client); the adapter decides which of the declared modes it can run.
+
+A field may carry a `when` clause so it applies only in some cases: `{ "field": "transport", "in": ["streamableHttp", "sse"] }`, `{ "field": "authKind", "equals": "basic" }` or `{ "authMode": ["oauth-user"] }`. A field that does not apply is hidden in the wizard, never required, and its stored value is ignored.
+
 A service account's secret goes into a header (`kind: header` with `header` and `valuePrefix`, `bearer`, or `basic`); a secret in a query parameter is not supported. Field types: `string` (with optional `suggestions` and `pattern`), `number` (`min`, `max`), `boolean`, `enum` (`choices` with localized labels), `url`, `secret` (always sensitive, stored in the credential store), `credential` (a reference to an entry of the credential store, picked in the wizard; the iFinder private key uses it), `instance` (another installation, whose definition `definition` names; the iAssistant `connection` field uses it), `list` (a list of strings), `file`, `directory`. `scope: "user"` fields are reserved for per-user connections. The schema is `server/validators/integrationDefinitionSchema.js`; the sources mapping is the [declared-sources format](answer-sources.md) with `urlTemplate` on top.
 
 To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document and the icon are fetched even when not listed). See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
@@ -120,6 +128,7 @@ To publish a definition, put the folder in a marketplace registry as an item of 
 | `GET` / `POST /api/admin/integrations/installed` | list, install |
 | `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id` | read with live actions, update, uninstall |
 | `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable` | lifecycle |
+| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in |
 
 Every write is audited with resource `integration`.
 
@@ -132,10 +141,13 @@ Every write is audited with resource `integration`.
 | `server/services/integrations/InstalledIntegrationService.js` | `integrations.json` CRUD, managed secrets, tests |
 | `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js` | the `openapi` adapter: actions, run, test, scopes |
 | `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js` | the `native` adapter and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
+| `server/services/integrations/protocols/mcp/` | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations |
 | `server/services/integrations/integrationTools.js` | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers |
 | `server/routes/admin/integrations.js` | the admin API |
 | `server/services/marketplace/ContentInstaller.js` | marketplace type `integration` |
 | `client/src/features/admin/pages/AdminInstalledIntegrationsPage.jsx`, `components/integrations/*` | Installed and Catalog page, install wizard |
 | `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx` | app editor binding |
 | `server/defaults/integration-definitions/org.ckan__open-data-portal/` | the shipped CKAN definition |
+| `server/defaults/integration-definitions/com.intrafind__mcp-server/`, `mcp__*/` | the generic MCP server definition and the shipped hosted MCP servers |
+| `server/migrations/V193__mcp_servers_installed_integrations.js` | `mcpServers.json` → installations |
 | `server/defaults/integration-definitions/com.intrafind__ifinder/`, `com.intrafind__iassistant/` | the built-in iFinder and iAssistant definitions |

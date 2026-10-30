@@ -553,7 +553,7 @@ Each app is defined with the following essential properties:
 | `iassistant`            | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below |
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
-| `tools`                 | Array   | Optional. Array of tool identifiers available in this app. The iFinder tools are not listed here: an app gets them by binding the `ifinder` installation under `integrations` |
+| `tools`                 | Array   | Optional. Array of tool identifiers available in this app. The iFinder tools and the tools of MCP servers are not listed here: an app gets them by binding the installation (`ifinder`, `drawio`, …) under `integrations`; an MCP server id or a `<server>__<tool>` id in `tools` selects nothing |
 | `toolChoice`            | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
@@ -1310,7 +1310,9 @@ The binding is also the requirement: the app is offered to users only while ever
 
 **iAssistant.** An app on the iAssistant model (`preferredModel: "iassistant-conversation"`) binds `"iassistant": { "actions": [] }`: the installation has no tools, the binding ties the app to it and carries the scope settings. The `iassistant` object of the app holds the per-app overrides, see [iAssistant Configuration](#iassistant-configuration).
 
-Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and listed the `iFinder_*` tools in `tools`; migration V192 rewrites both into the binding. `requiredIntegrations` now only knows `peopleDirectories`, and the schema rejects `ifinder` in it.
+**MCP servers.** An [MCP server](mcp-integration.md) is an installation too (**Admin → Integrations → Installed**), and its tools are its actions: `"drawio": {}` offers every tool the installation has enabled, `"drawio": { "actions": ["create_diagram"] }` one of them. The tools keep their ids in the chat and in group tool grants (`drawio__create_diagram`). The shipped **draw.io Diagrams** and **Excalidraw Sketches** apps bind the `drawio` and `excalidraw` installations, which ship disabled; enable the installation to offer the app.
+
+Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and listed the `iFinder_*` tools in `tools`; migration V192 rewrites both into the binding. `requiredIntegrations` now only knows `peopleDirectories`, and the schema rejects `ifinder` in it. Likewise, earlier versions selected an MCP server by listing its id (`"tools": ["drawio"]`) or single tools (`"drawio__create_diagram"`) in `tools`; migration V193 rewrites those into the binding, and such entries in `tools` select nothing now.
 
 ### Integration scopes: where to search and whom to ask
 

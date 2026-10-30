@@ -460,9 +460,11 @@ Cursor, etc).
 
 See [MCP Integration](mcp-integration.md) for the full guide:
 
-- Outbound: register external MCP servers in `contents/config/mcpServers.json`
-  or via `/admin/mcp/servers`. Supports Streamable HTTP, SSE (legacy),
-  stdio, and WebSocket transports with SSRF guards and encrypted credentials.
+- Outbound: install external MCP servers as integrations under
+  **Admin → Integrations → Installed** (`/admin/integrations/installed`,
+  stored in `contents/config/integrations.json`) and bind them to apps under
+  `integrations`. Supports Streamable HTTP, SSE (legacy), stdio, and
+  WebSocket transports with SSRF guards and encrypted credentials.
 - Inbound: enable the gateway in `platform.mcpServer.enabled` and point
   MCP-aware clients at `https://your-ihub/mcp`. Gated by the existing
   OAuth2 authorization server using new `mcp:*` scopes.

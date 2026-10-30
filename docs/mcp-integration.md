@@ -18,43 +18,57 @@ already uses.
 
 ### Configuration
 
-External MCP servers are configured in `contents/config/mcpServers.json`
-or via the admin UI at **Admin → MCP servers**. To start from a known
-hosted server, use **Browse catalog** there (see [Server catalog](#server-catalog)).
+An external MCP server is an [installed integration](integrations.md):
+it is installed under **Admin → Integrations → Installed**
+(`/admin/integrations/installed`) and stored in
+`contents/config/integrations.json`. There is no separate MCP servers page
+and no `mcpServers.json` any more (see [Migration](#migration-from-mcp_server_url)).
+
+Two kinds of definition install an MCP server:
+
+- **Hosted servers** from the **Catalog** tab (see
+  [Catalog](#mcp-servers-in-the-catalog)) — Microsoft Learn, Context7,
+  GitHub, Atlassian, Stripe, draw.io, Excalidraw and so on ship as
+  definitions `mcp/<id>` (`mcp/github`, `mcp/drawio`, …) with a fixed
+  endpoint, so the wizard asks only for the credential and, where the vendor
+  needs them, extra headers.
+- **Any other server**, including a local process, is installed from the
+  generic definition **MCP server** (`com.intrafind/mcp-server`). Its install
+  fields:
+
+  | Field | Shown for | Purpose |
+  |-------|-----------|---------|
+  | `transport` | always | `streamableHttp` (default), `sse`, `websocket` or `stdio` |
+  | `url` | HTTP and WebSocket transports | The server endpoint |
+  | `headers` (advanced) | `streamableHttp`, `sse` | Non-secret headers, one `Name: value` per line |
+  | `command`, `args`, `env` (advanced), `cwd` (advanced) | `stdio` | The child process; `env` takes one `KEY=value` per line |
+  | `toolPrefix` (advanced) | always | Prefix of the tool ids, default `<id>__` |
+  | `timeoutMs` (advanced) | always | Per-call timeout, default `30000` |
+  | `appsEnabled` (advanced) | always | Render interactive views (MCP Apps), default on |
+  | `reconnectEnabled`, `reconnectMaxRetries`, `reconnectInitialDelayMs`, `reconnectMaxDelayMs`, `reconnectGrowthFactor` (advanced) | always | Reconnect with exponential backoff (defaults: on, 5, 1000, 30000, 1.5) |
+
+  The sign-in fields are listed under [Authentication](#authentication).
+  A field appears only when it applies (a `when` clause on the transport or
+  on the sign-in mode).
+
+The installation's **Name** is its id: tool ids, group grants, app bindings
+and the per-user OAuth routes all use it. In `integrations.json` an
+installation looks like this:
 
 ```jsonc
 {
-  "servers": [
-    {
-      "id": "github",
-      "name": { "en": "GitHub" },
-      "enabled": true,
-      "transport": {
-        "type": "streamableHttp",
-        "url": "https://api.githubcopilot.com/mcp/"
-      },
-      "auth": {
-        "type": "bearer",
-        "tokenRef": "github-pat"
-      },
-      "toolPrefix": "github__",
-      "allowedTools": ["*"],
-      "timeoutMs": 30000,
-      "reconnect": {
-        "enabled": true,
-        "maxRetries": 5,
-        "initialDelayMs": 1000,
-        "maxDelayMs": 30000,
-        "growthFactor": 1.5
-      }
-    }
-  ],
-  "security": {
-    "blockPrivateIps": true,
-    "allowedHosts": []
-  }
+  "id": "github",
+  "definition": "com.intrafind/mcp-server",
+  "enabled": true,
+  "values": { "transport": "streamableHttp", "url": "https://api.githubcopilot.com/mcp/" },
+  "auth": { "mode": "service-account", "credentialRef": "integration-github-secret" },
+  "actions": { "enabled": ["*"], "disabled": [] },
+  "allowedGroups": []
 }
 ```
+
+The file's `security` block (`blockPrivateIps`, `allowedHosts`) applies to
+every integration, MCP servers included (see [Security](#security)).
 
 ### Transports
 
@@ -65,20 +79,13 @@ hosted server, use **Browse catalog** there (see [Server catalog](#server-catalo
 | `stdio` | Local MCP server invoked as a child process. iHub does not invoke a shell — args go straight to `execve`. |
 | `websocket` | Less common. Supported for parity. |
 
-`streamableHttp` and `sse` accept an optional `headers` map of non-secret
-headers sent with every request — a scope or account id some vendors
-expect next to the key:
-
-```json
-"transport": {
-  "type": "streamableHttp",
-  "url": "https://mcp.close.com/mcp",
-  "headers": { "Close-Scope": "mcp.read" }
-}
-```
+`streamableHttp` and `sse` accept optional non-secret `headers` sent with
+every request — a scope or account id some vendors expect next to the key.
+In the wizard they are one `Name: value` per line (`Close-Scope: mcp.read`);
+a catalog definition that needs them pre-fills the field.
 
 Values are stored in plaintext, so `Authorization` is refused here —
-credentials go in the `auth` block. Header names the transport sets
+credentials go through the sign-in mode. Header names the transport sets
 itself are refused as well.
 
 **Private certificates.** `streamableHttp` and `sse` connections trust the
@@ -90,60 +97,68 @@ options, so the whitelist does not apply to it. See
 
 ### Authentication
 
-The `auth` block on a server entry supports:
+The wizard's **Sign-in** step chooses the installation's `auth.mode`:
 
-- `{ "type": "none" }` — no auth header.
-- `{ "type": "bearer", "tokenRef": "..." }` — `Authorization: Bearer <token>`.
-- `{ "type": "header", "headerName": "X-Goog-Api-Key", "valueRef": "..." }` —
-  the key in a vendor-specific header. An optional `valuePrefix` is put in
-  front of the key (`"valuePrefix": "Token token="` sends
-  `Token token=<key>`). Header names the transport sets itself (`Host`,
-  `Content-Type`, `Accept`, `Mcp-Session-Id`, `Mcp-Protocol-Version`, …)
-  are refused.
-- `{ "type": "basic", "username": "...", "passwordRef": "..." }`.
-- `{ "type": "oauth", "tokenUrl": "...", "clientId": "...", "clientSecretRef": "..." }`
-  — OAuth client credentials: iHub fetches a token and refreshes it before
-  it expires.
-- `{ "type": "oauthUser", "scopes": ["..."] }` — every user signs in with
-  their own account; see [Per-user sign-in](#per-user-sign-in-oauthuser).
+- **No sign-in** (`none`) — no auth header.
+- **Service account** (`service-account`) — one shared credential for every
+  user. A catalog definition fixes how it is sent; the generic definition
+  asks with `authKind`:
+  - `bearer` — `Authorization: Bearer <secret>`.
+  - `header` — the secret in a vendor-specific header named `headerName`
+    (`X-Goog-Api-Key`). An optional `valuePrefix` is put in front of it
+    (`Token token=` sends `Token token=<key>`). Header names the transport
+    sets itself (`Host`, `Content-Type`, `Accept`, `Mcp-Session-Id`,
+    `Mcp-Protocol-Version`, …) are refused.
+  - `basic` — `username` plus the secret as password.
+- **OAuth client** (`oauth-client`) — OAuth 2.0 client credentials:
+  `oauthTokenUrl`, `oauthClientId`, optional `oauthScope` and the client
+  secret. iHub fetches a token and refreshes it before it expires.
+- **Per-user OAuth** (`oauth-user`) — every user signs in with their own
+  account; see [Per-user sign-in](#per-user-sign-in-oauth-user).
 
-Every `*Ref` field names a profile in the central credential store
-(**Admin → Credentials**, `contents/config/credentials.json`). The secret
-is encrypted at rest there and resolved only when the connection is
-opened, so `mcpServers.json` never holds secret material.
+A secret entered in the wizard goes to the central credential store
+(**Admin → Credentials**, `contents/config/credentials.json`), where it is
+encrypted at rest and resolved only when the connection is opened. The
+installation holds only `auth.credentialRef`, so `integrations.json` never
+holds secret material.
 
-With every type except `oauthUser`, all users of a server share the one
+With every mode except per-user OAuth, all users of a server share the one
 credential configured for it. Servers that only accept an interactive OAuth
-login for each user use `oauthUser`: each user connects their own account and
-the server's tools act as that user.
+login for each user use per-user OAuth: each user connects their own account
+and the server's tools act as that user.
 
-### Per-user sign-in (`oauthUser`)
+### Per-user sign-in (`oauth-user`)
 
 Some MCP servers act as the person using them — "who am I", "my tickets",
 "my calendar" — and accept no shared credential: every user signs in at the
-server's own authorization server. With `auth.type: "oauthUser"` iHub runs
-that sign-in for each user (OAuth 2.1 authorization code with PKCE, as the
-MCP authorization specification describes) and keeps one set of tokens per
-user and server.
+server's own authorization server. With the sign-in mode **Per-user OAuth**
+iHub runs that sign-in for each user (OAuth 2.1 authorization code with
+PKCE, as the MCP authorization specification describes) and keeps one set of
+tokens per user and server.
+
+The wizard asks for:
+
+- `oauthScopes` — optional; default: the scopes the server's metadata
+  advertises.
+- `oauthClientId` and a client secret — optional, only for a confidential
+  client registered by hand at the authorization server.
+- `oauthAuthorizationServer` (advanced) — optional, when the server does not
+  advertise its authorization server.
 
 ```jsonc
 {
   "id": "okta",
-  "name": "Okta directory",
-  "transport": { "type": "streamableHttp", "url": "https://okta-mcp.example.com/mcp" },
-  "auth": {
-    "type": "oauthUser",
-    // Optional. Default: the scopes the server's metadata advertises.
-    "scopes": ["openid", "profile", "email"]
-    // Optional, only for a client registered by hand at the authorization server:
-    // "clientId": "ihub", "clientSecretRef": "okta-mcp-client-secret",
-    // Optional, when the server does not advertise its authorization server:
-    // "authorizationServer": "https://login.example.com"
-  }
+  "definition": "com.intrafind/mcp-server",
+  "values": {
+    "transport": "streamableHttp",
+    "url": "https://okta-mcp.example.com/mcp",
+    "oauthScopes": ["openid", "profile", "email"]
+  },
+  "auth": { "mode": "oauth-user" }
 }
 ```
 
-Only the `streamableHttp` and `sse` transports support it.
+The wizard offers the mode for the Streamable HTTP and SSE transports only.
 
 **Discovery.** When a user connects, iHub reads the server's protected-resource
 metadata (RFC 9728, `/.well-known/oauth-protected-resource`) to find its
@@ -154,8 +169,8 @@ server without RFC 9728 metadata is treated as its own authorization server
 
 **How iHub identifies itself**, in this order:
 
-1. A pre-registered client from the config (`clientId`, plus
-   `clientSecretRef` for a confidential client).
+1. A pre-registered client from the installation (`oauthClientId`, plus
+   the client secret for a confidential client).
 2. iHub's Client ID Metadata Document for this server, when the
    authorization server advertises `client_id_metadata_document_supported`
    and iHub's public URL is https. Every server has its own document, served
@@ -172,8 +187,9 @@ users connecting a fresh server at the same moment share one registration.
 It is stored in the storage provider (namespace `mcp-oauth-clients`, a client
 secret encrypted with the installation key) and dropped when the server's URL
 or auth block changes, when the authorization server answers
-`invalid_client`, or when an admin resets it (**Admin → MCP servers**, the
-reset button of a per-user server). Reset it when the authorization server
+`invalid_client`, or when an admin resets it (**Admin → Integrations →
+Installed**, the **Connected users** dialog of a per-user server). Reset it
+when the authorization server
 lost its registered clients (for example an MCP server that keeps them in
 memory and was restarted): such a server refuses the sign-in on its own page,
 which never comes back to iHub.
@@ -202,10 +218,11 @@ key `contents/.encryption-key`) in
 `contents/integrations/mcp/<userId>__<serverId>.json`; user ids with
 characters outside `A-Z a-z 0-9 . _ @ + -` are filed under a hash
 (`u_<32 hex>`), with the real id inside the encrypted file. Tokens are never
-logged. They are bound to the server's endpoint and auth block (URL,
-`clientId`, `clientSecretRef`, `authorizationServer`, `scopes`) and to the
-authorization server and client that issued them: when the server is
-removed, or its URL or auth block changes, every user's tokens for it are
+logged. They are bound to the server's endpoint and auth settings (URL,
+`oauthClientId`, the client secret, `oauthAuthorizationServer`,
+`oauthScopes`) and to the authorization server and client that issued them:
+when the installation is removed, or its URL or auth settings change, every
+user's tokens for it are
 deleted, and tokens issued under another config are never sent (a change
 made while iHub was down counts too). Users then connect again.
 
@@ -272,13 +289,15 @@ with **Connect** and **Disconnect**. Disconnect revokes the tokens at the
 authorization server's `revocation_endpoint` when it has one (RFC 7009, best
 effort) and deletes them.
 
-**Admins** see how many users connected each per-user server on
-**Admin → MCP servers**. **Test connection** uses the admin's own account;
-without one it offers **Connect my account**. In the edit dialog it tests
-with the admin's account only while the URL and auth settings are the saved
-ones — an edited draft is never probed with a token issued for the saved
-endpoint and never touches the live registration; save it first. The form
-offers per-user sign-in for the Streamable HTTP and SSE transports only.
+**Admins** see how many users connected each per-user server in the
+installed list under **Admin → Integrations → Installed**; its **Connected
+users** dialog lists them, disconnects one and resets iHub's client
+registration. **Test connection** uses the admin's own account; without one
+it offers **Connect my account**. In the edit wizard it tests with the
+admin's account only while the URL and auth settings are the saved ones — an
+edited draft is never probed with a token issued for the saved endpoint and
+never touches the live registration; save it first. The wizard offers
+per-user sign-in for the Streamable HTTP and SSE transports only.
 
 **Security notes.**
 
@@ -310,7 +329,7 @@ offers per-user sign-in for the Streamable HTTP and SSE transports only.
   (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed|issuer_mismatch|public_url_mismatch`),
   never as text from the authorization server.
 
-Routes:
+Routes (`serverId` is the installation id):
 
 - `GET /api/mcp/oauth/authorize?serverId=&returnUrl=` — start a sign-in (302).
 - `GET /api/mcp/oauth/callback/:serverId` — the server's redirect URI.
@@ -318,11 +337,11 @@ Routes:
 - `POST /api/mcp/oauth/disconnect` `{ "serverId": "…" }`.
 - `GET /api/mcp/oauth/client-metadata/:serverId` — iHub's Client ID Metadata
   Document for that server.
-- `GET /api/admin/mcp/servers/:id/connections` and
-  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — admin view and
-  disconnect.
-- `POST /api/admin/mcp/servers/:id/registration/reset` — forget iHub's client
-  registration at the server's authorization server.
+- `GET /api/admin/integrations/installed/:id/connections` and
+  `DELETE /api/admin/integrations/installed/:id/connections/:userId` — admin
+  view and disconnect.
+- `POST /api/admin/integrations/installed/:id/registration/_reset` — forget
+  iHub's client registration at the server's authorization server.
 
 ### Security
 
@@ -339,22 +358,31 @@ The shared `safeFetch` wrapper guards every outbound HTTP connection:
    address (defeats DNS rebinding).
 
 To intentionally point at a private host, list its hostname in
-`security.allowedHosts`.
+`security.allowedHosts` of `contents/config/integrations.json`
+(`blockPrivateIps` lives there as well; both apply to every integration).
 
 ### How tools surface
 
+The server's tools are the installation's **actions**. The wizard lists them
+after **Test connection** (or when editing a saved installation), and the
+admin switches single tools off: `actions.disabled` names them, `actions.enabled`
+(default `["*"]`) the ones offered. A tool the server adds later is on by
+default. An app binding can narrow the list further (see
+[Apps](#using-the-tools-in-apps)).
+
 `McpClientManager.listAllTools()` aggregates `tools/list` across every
 enabled, healthy server. Each tool is exposed with `id` = `${prefix}${name}`,
-defaulting to `<serverId>__<toolName>` if `toolPrefix` is not set or empty.
+defaulting to `<installationId>__<toolName>` if `toolPrefix` is not set or
+empty — `drawio__create_diagram`, for example.
 
 `runTool(toolId, params)` detects MCP tools by the `_mcp` marker on the
 tool definition and forwards to `McpClientManager.callTool`, which:
 
-- Applies the server's per-call `timeoutMs` via `AbortController`.
+- Applies the installation's per-call `timeoutMs` via `AbortController`.
 - Re-throws on MCP responses with `isError: true` so tool-level failures
   surface as iHub tool errors (not silent success-with-garbage-content).
 - Lazy-connects on first use; reconnects with exponential backoff up to
-  `reconnect.maxRetries` before marking the server unhealthy.
+  `reconnectMaxRetries` before marking the server unhealthy.
 - Sends only the tool's own arguments. The context iHub adds for its native
   tools (`user`, `chatId`, `appConfig`, workflow plumbing) never leaves iHub;
   `language` is forwarded only when the tool's schema declares it.
@@ -370,6 +398,28 @@ source says `"private": false`. A tool named after a web search engine
 as well: only the platform's own web search is known to search the open web.
 See [Answer Sources](answer-sources.md).
 
+#### Using the tools in apps
+
+An app offers an MCP server by binding the installation under
+`integrations`, keyed by the installation id — **Admin → Apps → Edit →
+Installed integrations** writes it. All of the installation's enabled tools
+by default, or some of them by action name:
+
+```jsonc
+{ "id": "whiteboard", "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view"] } } }
+```
+
+Listing a server id or a prefixed tool id in `app.tools` (`["drawio"]`,
+`["drawio__create_diagram"]`) no longer selects anything. The installation's
+groups (`allowedGroups`) and the binding's action list apply in the chat and
+in `GET /api/tools?appId=`; an app whose installation is missing or disabled
+is not offered to users. In the chat's **+** menu each installation is one
+toggle. See [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
+
+Group grants in `groups.json` (`permissions.tools`) still accept the
+installation id (or the prefix base) to grant all of a server's tools, for
+the MCP gateway and `/api/tools`.
+
 ### MCP Apps — interactive views
 
 iHub is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps)
@@ -380,47 +430,40 @@ view renders inline in the chat answer, next to the text reply.
 
 iHub ships two example apps to try it with, both **disabled**:
 **draw.io Diagrams** (`drawio-diagrams`) and **Excalidraw Sketches**
-(`excalidraw-sketches`). Their MCP servers, `drawio` and `excalidraw`, are
-pre-configured and also disabled (migration `V132` adds them to existing
-installations unless the ids are taken), so nothing contacts these public
-endpoints until an admin opts in. To try one, enable the server under
-**Admin → MCP servers**, then the app under **Admin → Apps**.
+(`excalidraw-sketches`). They bind the installations `drawio` and
+`excalidraw` (definitions `mcp/drawio` and `mcp/excalidraw`), which ship
+**disabled** as well, so nothing contacts these public endpoints until an
+admin opts in. To try one, enable the installation under **Admin →
+Integrations → Installed**, then the app under **Admin → Apps**; while the
+installation is disabled the app is not offered.
 
-The server entries look like this:
+In `integrations.json` the installations look like this:
 
 ```jsonc
 {
-  "servers": [
-    {
-      "id": "drawio",
-      "name": { "en": "draw.io" },
-      "transport": { "type": "streamableHttp", "url": "https://mcp.draw.io/mcp" }
-    },
-    {
-      "id": "excalidraw",
-      "name": { "en": "Excalidraw" },
-      "transport": { "type": "streamableHttp", "url": "https://mcp.excalidraw.com/mcp" }
-    }
+  "installed": [
+    { "id": "drawio", "definition": "mcp/drawio", "enabled": false, "values": {}, "auth": { "mode": "none" } },
+    { "id": "excalidraw", "definition": "mcp/excalidraw", "enabled": false, "values": {}, "auth": { "mode": "none" } }
   ]
 }
 ```
 
-Then give an app the server's tools, either all of them by server id or one
-by one:
+An app binds them, all tools or some:
 
 ```jsonc
-{ "id": "whiteboard", "tools": ["drawio", "excalidraw__create_view", "excalidraw__read_me"] }
+{ "id": "whiteboard", "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view", "read_me"] } } }
 ```
 
 Both servers can also be self-hosted (`jgraph/drawio-mcp` on Docker Hub, or
-`excalidraw/excalidraw-mcp` from source); list an internal hostname in
+`excalidraw/excalidraw-mcp` from source): install the generic **MCP server**
+definition with the internal URL and list the hostname in
 `security.allowedHosts`.
 
 #### Enabling and disabling
 
-Per server, `apps.enabled` (admin UI: **Render interactive views (MCP
-Apps)**, on by default; migration `V131` seeds it). When on, iHub advertises
-the extension in `initialize`:
+Per installation, the `appsEnabled` field (wizard: **Render interactive
+views (MCP Apps)**, advanced, on by default). When on, iHub advertises the
+extension in `initialize`:
 
 ```json
 { "capabilities": { "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } } } }
@@ -429,8 +472,8 @@ the extension in `initialize`:
 When off the extension is not advertised, no view renders, and a
 well-behaved server returns text only (draw.io, for example, returns an
 "open in draw.io" link instead). Changing the toggle reconnects the server,
-because capabilities are negotiated once per connection. The connection test
-in the admin dialog marks each tool that renders a view.
+because capabilities are negotiated once per connection. **Test connection**
+in the wizard marks each tool that renders a view.
 
 #### Tool visibility
 
@@ -443,8 +486,9 @@ in the admin dialog marks each tool that renders a view.
 | `["app"]` | **never** | yes |
 
 App-only tools (Excalidraw's `save_checkpoint`, for example) are hidden from
-the model even when MCP Apps are disabled. `allowedTools` restricts what the
-model is offered and which model-visible tools a view may call; app-only
+the model even when MCP Apps are disabled. The installation's actions
+(`actions.enabled` / `actions.disabled`) restrict what the model is offered
+and which model-visible tools a view may call; app-only
 tools exist only to serve the server's own views and stay callable by them.
 A view can never call a tool of a different server.
 
@@ -555,7 +599,7 @@ one). Its rules:
   ask for those.
 - The view may call the same server's app-callable tools and read its
   resources through the host endpoints, like any other view.
-- `apps.enabled: false` on the server turns these views off.
+- `appsEnabled: false` on the installation turns these views off.
 - A page larger than the 1 MB view payload (see _Persistence_) is not shown;
   the chat says the view was too large.
 
@@ -597,43 +641,57 @@ where a view was without running it.
 
 ### Admin operations
 
-- `GET /api/admin/mcp/servers` — list configured servers + per-server
-  health (`connected`, `unhealthy`, `consecutiveFailures`, `toolCount`).
-- `POST /api/admin/mcp/servers` — create.
-- `PUT /api/admin/mcp/servers/:id` — update. Submitting `***REDACTED***`
-  in a secret field preserves the existing encrypted value.
-- `DELETE /api/admin/mcp/servers/:id`.
-- `POST /api/admin/mcp/servers/:id/test` — drop the cached connection,
-  reconnect, run `tools/list`, return the resulting status. For an
-  `oauthUser` server this runs on the acting admin's own connection (and
-  refreshes the server's tool catalog); without one it answers
-  `{ "status": "auth_required", "connectUrl": "…" }`.
-- `GET /api/admin/mcp/servers/:id/connections` /
-  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — users connected
-  to an `oauthUser` server; disconnect one (revokes upstream when possible).
-- `GET /api/admin/mcp/catalog` — the built-in server catalog (see below),
-  each entry flagged `installed` when a configured server already uses its
-  id or URL.
+MCP servers use the integrations admin API (see
+[Integrations → API](integrations.md#api)); the former `/api/admin/mcp/*`
+routes are gone.
 
-### Server catalog
+- The **Installed** list shows each MCP installation's connection health
+  (connected / unreachable, tool count; for per-user servers the number of
+  connected users). `GET /api/admin/integrations/installed` carries it.
+- `POST /api/admin/integrations/installed` / `PUT …/installed/:id` /
+  `DELETE …/installed/:id` — install, update, uninstall. Secrets entered in
+  the wizard go to the credential store; uninstalling deletes the managed
+  secret.
+- `POST /api/admin/integrations/installed/:id/_test` (**Test** in the
+  list) — drop the cached connection, reconnect, run `tools/list`, return the
+  resulting status and tools. For a per-user server this runs on the acting
+  admin's own connection (and refreshes the server's tool catalog); without
+  one it answers `{ "status": "auth_required", "connectUrl": "…" }`.
+  `POST /api/admin/integrations/catalog/:definitionId/_test` probes an
+  unsaved draft from the wizard.
+- `POST /api/admin/integrations/installed/:id/_enable` / `_disable`.
+- `GET /api/admin/integrations/installed/:id/connections` /
+  `DELETE …/connections/:userId` — users connected to a per-user server;
+  disconnect one (revokes upstream when possible). The **Connected users**
+  dialog of the list uses them.
+- `POST /api/admin/integrations/installed/:id/registration/_reset` — forget
+  iHub's OAuth client registration at the server's authorization server.
+- `GET /api/admin/integrations/catalog` — every definition, the MCP ones
+  included (see below), with its install state.
 
-**Admin → MCP servers → Browse catalog** offers hosted MCP servers that
-iHub can connect to with one shared credential. Picking one pre-fills the
-create form — endpoint, auth type, header name, extra headers — and shows
-where to create the key plus region-specific URLs and URL options. The
-admin stores the key under **Admin → Credentials**, selects it, tests and
-saves; nothing is added until then.
+### MCP servers in the Catalog
 
-The catalog ships with iHub (`server/services/mcp/serverCatalog.js`), so it
-updates with each release and needs no configuration. Servers that only
-support an interactive OAuth login for each user are not listed yet; they can
-be added by hand with `auth.type: "oauthUser"` (see
-[Per-user sign-in](#per-user-sign-in-oauthuser)).
+**Admin → Integrations → Installed → Catalog** lists hosted MCP servers
+that iHub can connect to with one shared credential, as definitions
+`mcp/<id>`. Each has a fixed endpoint, so **Install** asks only for the
+name, the credential and, where the vendor needs them, extra headers, and
+shows where to create the key plus region-specific URLs and URL options.
+**Test connection** lists the tools, the admin switches off the ones the
+model should not get, and nothing is saved until **Install**.
+
+The definitions ship with iHub
+(`server/defaults/integration-definitions/mcp__<id>/`), so they update with
+each release and need no configuration. A server not in the catalog, or one
+that only supports an interactive OAuth login for each user, is installed
+from the generic **MCP server** definition (`com.intrafind/mcp-server`), with
+the sign-in mode **Per-user OAuth** where needed (see
+[Per-user sign-in](#per-user-sign-in-oauth-user)).
 
 draw.io and Excalidraw are MCP App servers (see [MCP Apps](#mcp-apps--interactive-views)):
 their tools return a view that renders in the chat. iHub already ships both
-as disabled servers with the same ids, so on most installations the catalog
-shows them as **Added** — enable them in the server list instead.
+as disabled installations with the ids `drawio` and `excalidraw`, so on most
+installations the catalog shows them as installed — enable them in the
+**Installed** list instead.
 
 | Server | Category | Endpoint | Authentication |
 |--------|----------|----------|----------------|
@@ -678,7 +736,7 @@ shows them as **Added** — enable them in the server list instead.
 | Debitura | Finance & payments | `https://mcp.debitura.com/mcp` | Bearer token |
 
 Endpoints and credential requirements are the vendors' and change over
-time. **Test connection** in the create dialog shows at once whether a
+time. **Test connection** in the install wizard shows at once whether a
 key is accepted.
 
 ## Inbound — exposing iHub as an MCP server
@@ -1265,10 +1323,22 @@ The authorization server records four events of its own through
 Earlier versions of iHub supported a single-server stub via the
 `MCP_SERVER_URL` environment variable. That code path was removed; on
 the first server start after upgrading, migration **V042** auto-promotes
-a set `MCP_SERVER_URL` into the new `mcpServers.json` as a server with
+a set `MCP_SERVER_URL` into `mcpServers.json` as a server with
 `id: "legacy-mcp-server"` and `transport.type: "streamableHttp"`. After
-the migration runs, the env var is ignored — manage the server via
-`/admin/mcp/servers` instead.
+the migration runs, the env var is ignored.
+
+`mcpServers.json` itself was later replaced: migration **V193** moves every
+server of `contents/config/mcpServers.json` into
+`contents/config/integrations.json` as an installation with the same id — a
+server whose endpoint matches a shipped `mcp/<id>` definition installs that
+definition, every other one the generic `com.intrafind/mcp-server`. The
+`auth` block becomes the sign-in mode (credential references kept),
+`allowedTools` becomes `actions.enabled`, the `security` block is merged,
+apps that listed the server or its tools in `tools` get an `integrations`
+binding instead, and `mcpServers.json` is deleted. Per-user tokens and OAuth
+client registrations stay valid, since transport, URL and auth settings are
+preserved. Manage the servers under **Admin → Integrations → Installed**
+from then on.
 
 ## Connecting Claude (claude.ai / Claude Desktop)
 

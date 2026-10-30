@@ -61,7 +61,7 @@ New here? Start with [Getting Started](GETTING_STARTED.md), then take the tour i
 ## Features
 
 - [Tool Calling](tool-calling.md) - LLM tool/function calling
-- [MCP Integration](mcp-integration.md) - Connect MCP servers as tools, MCP Apps, per-user sign-in
+- [MCP Integration](mcp-integration.md) - MCP servers as installed integrations, MCP Apps, per-user sign-in, MCP gateway
 - [Remote A2A Agents as Tools](a2a-agents.md) - Use remote A2A agents as tools
 - [Ask User Tool](ask-user-tool.md) - Interactive user prompts
 - [Structured Output](structured-output.md) - Structured LLM responses

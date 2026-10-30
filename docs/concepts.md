@@ -11,7 +11,7 @@ This guide explains the building blocks of iHub Apps and, more importantly, **wh
 | **App**            | What is the concrete use case and its frame?          | Admin → Apps                     |
 | **Skill**          | Which reusable procedure, rules, or know-how apply?   | Admin → Skills                   |
 | **Project**        | What domain knowledge does the model need?            | Admin → Projects                 |
-| **Tool**           | What can the model *do* beyond producing text?        | Admin → Tools / MCP servers      |
+| **Tool**           | What can the model *do* beyond producing text?        | Admin → Tools / Integrations     |
 | **Prompt library** | Which reusable text can a user drop into a chat?      | Admin → Prompts                  |
 | **Group**          | Who sees all of the above?                            | Admin → Groups                   |
 
