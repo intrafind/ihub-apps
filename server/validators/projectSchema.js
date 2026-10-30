@@ -491,5 +491,10 @@ export const projectSharingSettingsSchema = z
       })
       .partial()
       .strict()
+      .optional(),
+    tierPolicy: z.enum(['ihub', 'both', 'ifinder']).optional()
   })
-  .strict();
+  .strict()
+  .refine(body => body.sharing !== undefined || body.tierPolicy !== undefined, {
+    message: 'Send sharing, tierPolicy or both'
+  });

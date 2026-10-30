@@ -100,6 +100,7 @@ describe('project sharing settings', () => {
       allowEveryone: false,
       allowCatalog: false
     });
+    assert.equal(res.body.tierPolicy, 'ihub');
   });
 
   it('writes only the fields sent and keeps the rest of the file', async () => {
@@ -118,6 +119,26 @@ describe('project sharing settings', () => {
       sharing: { allowUsers: true, allowCatalog: true, allowEveryone: true }
     });
     assert.equal(configCache.getPlatform().projects.sharing.allowCatalog, true);
+  });
+
+  it('writes the tier policy alone and keeps the sharing block', async () => {
+    const res = await drive(route.put, { user: ROOT, body: { tierPolicy: 'both' } });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.tierPolicy, 'both');
+    const stored = JSON.parse(
+      await fs.readFile(path.join(scratch, 'config', 'platform.json'), 'utf8')
+    );
+    assert.equal(stored.projects.tierPolicy, 'both');
+    assert.deepEqual(stored.projects.limits, { maxFiles: 10 });
+    assert.equal(stored.projects.sharing.allowCatalog, true);
+    assert.equal(configCache.getPlatform().projects.tierPolicy, 'both');
+  });
+
+  it('refuses an unknown tier policy and an empty body', async () => {
+    const unknown = await drive(route.put, { user: ROOT, body: { tierPolicy: 'cloud' } });
+    assert.equal(unknown.statusCode, 400);
+    const empty = await drive(route.put, { user: ROOT, body: {} });
+    assert.equal(empty.statusCode, 400);
   });
 
   it('refuses unknown fields and anyone but a full admin', async () => {

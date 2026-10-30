@@ -374,28 +374,30 @@ export const fetchAdminProjectStats = async () => {
 };
 
 /**
- * Who users may share their projects with (full admins only).
+ * The project settings an admin edits on the projects page (full admins only):
+ * who users may share their projects with, and the tier policy (whether the
+ * users' iFinder smart collections are listed as projects).
  *
- * @returns {Promise<{allowUsers: boolean, allowGroups: boolean, allowEveryone: boolean,
- *   allowCatalog: boolean}>}
+ * @returns {Promise<{sharing: {allowUsers: boolean, allowGroups: boolean,
+ *   allowEveryone: boolean, allowCatalog: boolean}, tierPolicy: 'ihub'|'both'|'ifinder'}>}
  */
-export const fetchProjectSharingSettings = async () => {
+export const fetchProjectSettings = async () => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`);
-  return response.data.sharing;
+  return response.data;
 };
 
 /**
- * Change who users may share their projects with; only the fields sent change.
+ * Change the sharing audiences and/or the tier policy; only the fields sent change.
  *
- * @param {Object} sharing
- * @returns {Promise<Object>} The effective sharing settings.
+ * @param {{sharing?: Object, tierPolicy?: 'ihub'|'both'|'ifinder'}} settings
+ * @returns {Promise<{sharing: Object, tierPolicy: string}>} The effective settings.
  */
-export const saveProjectSharingSettings = async sharing => {
+export const saveProjectSettings = async settings => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`, {
     method: 'PUT',
-    body: { sharing }
+    body: settings
   });
-  return response.data.sharing;
+  return response.data;
 };
 
 /**
