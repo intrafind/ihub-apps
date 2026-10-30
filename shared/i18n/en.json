@@ -7304,7 +7304,8 @@
       "reset": "Discard changes",
       "saved": "Saved.",
       "saving": "Saving…",
-      "title": "Instructions"
+      "title": "Instructions",
+      "collectionNameLocked": "The name and the description are those of the smart collection, which cannot be changed from here on this installation. Change them in iFinder."
     },
     "transfer": {
       "hint": "Choose who takes the project over. You confirm in the next step.",

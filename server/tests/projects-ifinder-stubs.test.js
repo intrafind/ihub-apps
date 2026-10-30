@@ -34,6 +34,7 @@ const { resolveChatProjects } = await import('../services/knowledge/chatProjects
 const { resolveProjectScope } = await import('../services/knowledge/ProjectScope.js');
 const { getProjectRepository } = await import('../services/projects/ProjectRepository.js');
 const { getProjectService } = await import('../services/projects/ProjectService.js');
+const { setStorageResolver } = await import('../services/projects/ifinder/collectionLock.js');
 
 const route = {
   collections: h.handlersFor('get', '/api/projects/_collections'),
@@ -190,6 +191,29 @@ describe('changing a stub', () => {
     assert.deepEqual(Object.keys(patch.body), ['name'], 'nothing but the name goes to iFinder');
     const stored = await getProjectRepository().get(stub.id);
     assert.equal(stored.name, 'New', 'and the stub keeps the name');
+  });
+
+  it('refuses a rename with a reason where collections cannot be changed, and keeps the rest', async () => {
+    h.collection(1, ADA.email, { name: 'Old' });
+    const { body: stub } = await addCollection(ADA, { collectionId: ID(1) });
+    setStorageResolver(() => null);
+    const renamed = await drive(route.patch, {
+      user: ADA,
+      method: 'PATCH',
+      params: { projectId: stub.id },
+      body: { name: 'New' }
+    });
+    assert.equal(renamed.statusCode, 403, JSON.stringify(renamed.body));
+    assert.equal(renamed.body.details.code, 'IFINDER_WRITES_DISABLED');
+    assert.equal(ifinder.state.collections.get(ID(1)).name, 'Old');
+    const configured = await drive(route.patch, {
+      user: ADA,
+      method: 'PATCH',
+      params: { projectId: stub.id },
+      body: { instructions: 'Still mine' }
+    });
+    assert.equal(configured.statusCode, 200, JSON.stringify(configured.body));
+    assert.equal(configured.body.instructions, 'Still mine');
   });
 
   it('sends nothing to iFinder for the default app and the instructions alone', async () => {

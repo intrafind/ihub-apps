@@ -358,22 +358,52 @@ function useIFinderProfiles(fetchProfiles) {
 }
 
 /**
+ * The profile a picker searches in until the user picks another: the one the
+ * profile list names as the user's default. Never empty while the user has a
+ * profile: an empty choice would fall back to the configured default, which
+ * need not be one of theirs.
+ *
+ * @param {ReturnType<typeof useIFinderProfiles>} listing
+ * @returns {string}
+ */
+function initialProfile(listing) {
+  if (!listing || listing.fixed || !listing.profiles?.length) return '';
+  return listing.defaultProfile || listing.profiles[0].id;
+}
+
+/**
+ * Put the profile the picker shows into the draft once the list arrives, so the
+ * search and the stored item use exactly that one.
+ *
+ * @param {ReturnType<typeof useIFinderProfiles>} listing
+ * @param {Object} draft
+ * @param {(changes: Object) => void} update
+ */
+function useInitialProfile(listing, draft, update) {
+  const initial = initialProfile(listing);
+  const current = draft.searchProfile;
+  useEffect(() => {
+    // Only fills an empty choice: a profile the user picked stays theirs.
+    if (initial && !current) update({ searchProfile: initial });
+  }, [initial, current, update]);
+}
+
+/**
  * Where an iFinder picker searches: the caller's search profiles, as the chat
  * input offers them. Not shown with a single profile or a fixed one. The draft
- * keeps `searchProfile` empty for the default, so only another profile is
- * stored with the item (and read with it).
+ * holds the profile shown (`useInitialProfile`), which is stored with the item
+ * and read with it.
  *
  * @param {Object} props
  * @param {string} props.id
  * @param {ReturnType<typeof useIFinderProfiles>} props.listing
- * @param {string} props.value - The draft's `searchProfile`; empty for the default.
+ * @param {string} props.value - The draft's `searchProfile`.
  * @param {(profile: string) => void} props.onChange
  * @returns {JSX.Element|null}
  */
 function IFinderProfileSelect({ id, listing, value, onChange }) {
   const { t } = useTranslation();
   if (!listing || listing.fixed || listing.profiles.length < 2) return null;
-  const fallback = listing.defaultProfile || listing.profiles[0]?.id || '';
   return (
     <div>
       <label htmlFor={id} className={LABEL_CLASS}>
@@ -381,8 +411,8 @@ function IFinderProfileSelect({ id, listing, value, onChange }) {
       </label>
       <select
         id={id}
-        value={value || fallback}
-        onChange={e => onChange(e.target.value === fallback ? '' : e.target.value)}
+        value={value || initialProfile(listing)}
+        onChange={e => onChange(e.target.value)}
         className={INPUT_CLASS}
       >
         {listing.profiles.map(profile => (
@@ -421,6 +451,7 @@ export function IFinderDocumentPicker({
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
   const profiles = useIFinderProfiles(fetchProfiles);
+  useInitialProfile(profiles, draft, update);
 
   const search = async () => {
     // Enter in the field reaches here too, not only the (disabled) button.
@@ -556,6 +587,7 @@ export function IFinderDocumentPicker({
 export function IFinderQueryPicker({ draft, update, fetchProfiles }) {
   const { t } = useTranslation();
   const profiles = useIFinderProfiles(fetchProfiles);
+  useInitialProfile(profiles, draft, update);
   return (
     <div className="space-y-3">
       <IFinderProfileSelect

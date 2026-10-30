@@ -7269,7 +7269,8 @@
       "reset": "Änderungen verwerfen",
       "saved": "Gespeichert.",
       "saving": "Wird gespeichert…",
-      "title": "Anweisungen"
+      "title": "Anweisungen",
+      "collectionNameLocked": "Name und Beschreibung gehören zur Smart Collection, die auf dieser Installation nicht von hier aus geändert werden kann. Ändern Sie sie in iFinder."
     },
     "transfer": {
       "hint": "Wählen Sie, wer das Projekt übernimmt. Sie bestätigen im nächsten Schritt.",

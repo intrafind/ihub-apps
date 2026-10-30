@@ -366,6 +366,10 @@ function ProjectPageContent({ projectId }) {
                 <ProjectSettingsCard
                   project={project}
                   editable={settingsEditable}
+                  // The name and the description are the collection's: renamed in
+                  // iFinder, which needs collection writes (and a collection that
+                  // is still there to rename alongside).
+                  nameLocked={stubState !== 'deleted' && !collectionEditable}
                   onSaved={saved => {
                     setProject(saved);
                     invalidateProjectsList();
