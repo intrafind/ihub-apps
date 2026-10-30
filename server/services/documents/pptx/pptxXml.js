@@ -327,7 +327,7 @@ export function paragraphsXml(
 export function placeholderShape({ id, name, ph, body, rect, bodyPr = '' }) {
   const phAttrs = [];
   if (ph.type && ph.type !== 'obj') phAttrs.push(`type="${xmlEscape(ph.type)}"`);
-  if (ph.idx !== undefined && ph.idx !== null) phAttrs.push(`idx="${xmlEscape(ph.idx)}"`);
+  if (ph.idx) phAttrs.push(`idx="${xmlEscape(ph.idx)}"`);
   if (ph.orient) phAttrs.push(`orient="${xmlEscape(ph.orient)}"`);
   const spPr = rect
     ? `<p:spPr><a:xfrm><a:off x="${rect.x}" y="${rect.y}"/><a:ext cx="${rect.cx}" cy="${rect.cy}"/></a:xfrm></p:spPr>`

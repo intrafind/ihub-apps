@@ -676,7 +676,7 @@ export default function AdminDocumentTemplateEditPage() {
                           onChange={event => {
                             const margins = [...(draft.document.margins || [56, 70, 56, 70])];
                             margins[index] =
-                              event.target.value === '' ? NaN : Number(event.target.value);
+                              event.target.value === '' ? Number.NaN : Number(event.target.value);
                             update('document', 'margins', margins);
                           }}
                         />
