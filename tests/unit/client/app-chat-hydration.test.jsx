@@ -580,6 +580,8 @@ describe('a chat started from a project page', () => {
     jest.useFakeTimers();
     try {
       renderChat({ path: '/apps/acme?project=prj_case', app: { ...APP, autoStart: true } });
+      // Auto-start waits for the integration scope list (#3050) to settle.
+      await act(async () => {});
       // The auto-start timer is 300 ms.
       await act(async () => {
         jest.advanceTimersByTime(1000);

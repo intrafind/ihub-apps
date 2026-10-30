@@ -436,7 +436,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const {
     integrations: integrationScopeOptions,
     scopes: integrationScopes,
-    setScope: setIntegrationScope
+    setScope: setIntegrationScope,
+    loading: integrationScopesLoading
   } = useIntegrationScopes({
     app,
     modelId: selectedModel,
@@ -1359,6 +1360,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       !hydrating &&
       !chatModeResolving &&
       !processing && // Not currently processing
+      // The opening turn waits for the checked scopes: a stored one the
+      // server no longer accepts would refuse it, and it is not retried.
+      !integrationScopesLoading &&
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
       app.variables; // Variables are initialized
@@ -1467,6 +1471,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     imageAspectRatio,
     imageQuality,
     integrationScopes,
+    integrationScopesLoading,
     sendChatMessage,
     getLocalizedContent
   ]);
