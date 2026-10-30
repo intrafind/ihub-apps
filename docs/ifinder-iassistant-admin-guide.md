@@ -326,7 +326,7 @@ the **Private key** field of the wizard; the installation stores a
 | `tokenExpirationSeconds` | JWT token TTL (advanced) | No | `3600` |
 | `tokenExchangeProvider`, `tokenExchangeGrant`, `tokenExchangeAudience`, `tokenExchangeScopeIndexRead`, `tokenExchangeScopeAssistant`, `tokenExchangeScopeSmartCollections`, `tokenExchangeExtraScopes` | The `oidcTokenExchange` settings, see [Configure iHub](ifinder-oidc-jwt.md#configure-ihub) | With `oidcTokenExchange` | - |
 | `timeout` | Request timeout (ms, advanced) | No | `30000` |
-| `downloadDir` | Download directory (advanced) | No | `/tmp/ifinder-downloads` |
+| `downloadDir` | Download directory (advanced) | No | `contents/data/ifinder-downloads` |
 | `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | API paths (advanced); change only for a non-standard deployment | No | the public API paths |
 
 The installation's own switch (`enabled`) turns the integration on and off.

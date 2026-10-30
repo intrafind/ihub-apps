@@ -14,6 +14,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import configCache from '../../configCache.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
 /** A draft installation under test replaces the installed one for the calls it makes. */
 const overrides = new AsyncLocalStorage();
@@ -94,7 +95,9 @@ export function iFinderConfigFromInstance(instance) {
     allowedSearchProfiles: stringList(v.allowedSearchProfiles),
     // false pins every chat (and the model) to the default profile.
     allowUserSearchProfileChange: v.allowUserSearchProfileChange !== false,
-    downloadDir: v.downloadDir || '/tmp/ifinder-downloads',
+    // Under contents/data by default: a world-writable /tmp would let another
+    // local user plant or read fetched documents.
+    downloadDir: v.downloadDir || getContentsPath('data', 'ifinder-downloads'),
     timeout: finite(v.timeout, 30000),
     authMode: v.authMode === 'oidcTokenExchange' ? 'oidcTokenExchange' : 'ihubSigned',
     useOidcKeyPair: v.useOidcKeyPair === true,

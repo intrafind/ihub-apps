@@ -86,7 +86,7 @@ value) and pick it in the **Private key** field; the installation stores a
 | Offered search profiles | `allowedSearchProfiles` | `[]` (all of the user's) | Which of the user's profiles the chat picker offers and the tools may search |
 | Users may change the search profile | `allowUserSearchProfileChange` | `true` | `false` pins every chat to the default profile |
 | Search profile application | `searchProfileApplication` | `ifinder` | The iFinder application whose profile assignments are read for a user (advanced) |
-| Request timeout (ms), Download directory | `timeout`, `downloadDir` | `30000`, `/tmp/ifinder-downloads` | Advanced |
+| Request timeout (ms), Download directory | `timeout`, `downloadDir` | `30000`, `contents/data/ifinder-downloads` | Advanced |
 | Search, Document, Fields, Facets endpoint path | `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | the iFinder public API paths | Advanced; change only for a non-standard deployment |
 
 The installation in `contents/config/integrations.json` looks like this (the
@@ -664,7 +664,7 @@ The settings live in the `ifinder` installation (**Admin → Integrations → In
 | Keyless (OIDC)   | -                        | `useOidcKeyPair`               | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
 | Private Key      | `IFINDER_PRIVATE_KEY`    | `privateKeyRef`                | -                                 | JWT signing private key (PEM format, env var) or credential (Admin → Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
 | Timeout          | -                        | `timeout`                      | `30000`                           | Request timeout (milliseconds), advanced                                       |
-| Download Dir     | -                        | `downloadDir`                  | `/tmp/ifinder-downloads`          | Local download directory, advanced                                             |
+| Download Dir     | -                        | `downloadDir`                  | `contents/data/ifinder-downloads`          | Local download directory, advanced                                             |
 
 ### Error Codes
 

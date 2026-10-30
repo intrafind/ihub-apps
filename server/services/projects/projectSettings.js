@@ -191,9 +191,7 @@ export function policyOffersIFinder(settings) {
  * @returns {boolean}
  */
 export function iFinderTierConfigured(platformConfig) {
-  return (
-    policyOffersIFinder(projectSettings(platformConfig)) && isIFinderConfigured(platformConfig)
-  );
+  return policyOffersIFinder(projectSettings(platformConfig)) && isIFinderConfigured();
 }
 
 /**
