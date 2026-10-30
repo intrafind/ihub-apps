@@ -41,6 +41,8 @@ function fieldError(t, field, code) {
  * @param {string} [props.idPrefix='project'] - Prefix of the input ids.
  * @param {boolean} [props.disabled=false]
  * @param {boolean} [props.showDefaultApp=false]
+ * @param {boolean} [props.hideInstructions=false] - Leave the instructions out (a
+ *   smart collection from iFinder has none).
  * @returns {JSX.Element}
  */
 function ProjectFormFields({
@@ -49,7 +51,8 @@ function ProjectFormFields({
   errors = {},
   idPrefix = 'project',
   disabled = false,
-  showDefaultApp = false
+  showDefaultApp = false,
+  hideInstructions = false
 }) {
   const { t } = useTranslation();
   const fields = [
@@ -67,32 +70,34 @@ function ProjectFormFields({
   ];
   return (
     <div className="space-y-4">
-      {fields.map(({ field, label, rows, hint }) => {
-        const id = `${idPrefix}-${field}`;
-        const error = fieldError(t, field, errors[field]);
-        const common = {
-          id,
-          value: form[field] || '',
-          disabled,
-          onChange: e => onChange(field, e.target.value),
-          'aria-invalid': error ? true : undefined,
-          className: `${INPUT_CLASS} ${field === 'instructions' ? 'font-mono text-sm' : ''}`
-        };
-        return (
-          <div key={field}>
-            <label htmlFor={id} className={LABEL_CLASS}>
-              {label}
-            </label>
-            {rows > 0 ? <textarea rows={rows} {...common} /> : <input type="text" {...common} />}
-            {hint && <p className={HINT_CLASS}>{hint}</p>}
-            {error && (
-              <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
-                {error}
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {fields
+        .filter(({ field }) => !(hideInstructions && field === 'instructions'))
+        .map(({ field, label, rows, hint }) => {
+          const id = `${idPrefix}-${field}`;
+          const error = fieldError(t, field, errors[field]);
+          const common = {
+            id,
+            value: form[field] || '',
+            disabled,
+            onChange: e => onChange(field, e.target.value),
+            'aria-invalid': error ? true : undefined,
+            className: `${INPUT_CLASS} ${field === 'instructions' ? 'font-mono text-sm' : ''}`
+          };
+          return (
+            <div key={field}>
+              <label htmlFor={id} className={LABEL_CLASS}>
+                {label}
+              </label>
+              {rows > 0 ? <textarea rows={rows} {...common} /> : <input type="text" {...common} />}
+              {hint && <p className={HINT_CLASS}>{hint}</p>}
+              {error && (
+                <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
+                  {error}
+                </p>
+              )}
+            </div>
+          );
+        })}
       {showDefaultApp && (
         <div>
           <label htmlFor={`${idPrefix}-defaultAppId`} className={LABEL_CLASS}>

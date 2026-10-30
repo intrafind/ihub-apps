@@ -38,6 +38,35 @@ export function projectErrorDetails(error) {
 const size = bytes => formatBytes(Number(bytes));
 
 /**
+ * iFinder failed while it changed a collection. The call is not atomic, so the
+ * message says what the server found out afterwards: which documents made it.
+ */
+function ifinderWriteFailedMessage(details, message, t) {
+  const done = (details.added || details.removed || []).length;
+  const not = (details.not || []).length;
+  if (details.outcome === 'partial') {
+    return t(
+      'projects.errors.ifinderWritePartial',
+      'iFinder reported an error after part of the change went through: {{done}} done, {{not}} not. Reload the collection and try again.',
+      { done, not }
+    );
+  }
+  if (details.outcome === 'none') {
+    return t(
+      'projects.errors.ifinderWriteNone',
+      'iFinder reported an error and nothing was changed. Try again in a moment.'
+    );
+  }
+  return (
+    message ||
+    t(
+      'projects.errors.ifinderWriteUnknown',
+      'iFinder did not answer, so it is not known whether the change went through. Reload the collection to see.'
+    )
+  );
+}
+
+/**
  * A message for a failed projects call.
  *
  * @param {Error} error - Thrown by an API call.
@@ -122,6 +151,51 @@ export function projectErrorMessage(error, t) {
         'projects.errors.shareTargetInvalid',
         'One of the people or groups cannot be added: {{message}}',
         { message }
+      );
+    case 'QUOTA_COLLECTION_DOCUMENTS':
+      return t(
+        'projects.errors.quotaCollectionDocuments',
+        'A smart collection holds at most {{limit}} documents; this one already has {{used}}.',
+        { limit: details.limit ?? '', used: details.used ?? '' }
+      );
+    case 'DOCUMENT_NOT_READABLE':
+      return t(
+        'projects.errors.documentNotReadable',
+        'You cannot read this document in iFinder, so it cannot be added to a collection.'
+      );
+    case 'IFINDER_WRITES_DISABLED':
+      return t(
+        'projects.errors.ifinderWritesDisabled',
+        'Changing smart collections from iHub is switched off on this installation. Change them in iFinder.'
+      );
+    case 'IFINDER_FORBIDDEN':
+      return t(
+        'projects.errors.ifinderForbidden',
+        'iFinder does not allow your account to change smart collections.'
+      );
+    case 'TIER_NOT_AVAILABLE':
+      return t(
+        'projects.errors.tierNotAvailable',
+        'Smart collections from iFinder are not available to you.'
+      );
+    case 'IFINDER_UNAVAILABLE':
+      return t(
+        'projects.errors.ifinderUnavailable',
+        'iFinder could not be reached. Try again in a moment.'
+      );
+    case 'IFINDER_REJECTED':
+      return t('projects.errors.ifinderRejected', 'iFinder did not accept the change.');
+    case 'COLLECTION_BUSY':
+      return t(
+        'projects.errors.collectionBusy',
+        'The collection is being changed right now. Try again in a moment.'
+      );
+    case 'IFINDER_WRITE_FAILED':
+      return ifinderWriteFailedMessage(details, message, t);
+    case 'KIND_NOT_ALLOWED':
+      return t(
+        'projects.errors.kindNotAllowed',
+        'A smart collection from iFinder holds iFinder documents only.'
       );
     case 'KIND_DISABLED':
     case 'KIND_UNKNOWN':

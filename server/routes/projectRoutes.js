@@ -73,6 +73,18 @@ import {
   availabilityFor,
   listCollectionProjects
 } from '../services/projects/ifinder/IFinderTier.js';
+import {
+  collectionWriteSupport,
+  WRITE_DISABLED_REASONS
+} from '../services/projects/ifinder/collectionLock.js';
+import { MAX_DOCUMENTS } from '../services/projects/ifinder/IFinderCollectionWriter.js';
+import {
+  addIFinderDocuments,
+  createIFinderProject,
+  forIFinderProject,
+  removeIFinderDocument,
+  renameIFinderProject
+} from './projectIFinderHandlers.js';
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { estimateProject } from '../services/projects/projectEstimate.js';
@@ -267,10 +279,12 @@ const CHATS_PAGE_MAX = 100;
 export default function registerProjectRoutes(app) {
   const gate = [requireFeature(PROJECTS_FEATURE)];
   const route = suffix => buildServerPath(`/api/projects${suffix}`);
-  // A smart collection of the iFinder tier (`ifc_…`) is read-only: no write
-  // reaches any route below, whatever that route checks, and routes added later
-  // inherit it. Reads pass on to `projectAccessRequired`, which loads the
-  // collection with the caller's own rights.
+  // A smart collection of the iFinder tier (`ifc_…`) takes three writes and no
+  // other: rename (PATCH), add documents (POST items) and remove one (DELETE
+  // item). No other write reaches any route below, whatever that route checks,
+  // and routes added later inherit it. What passes goes on to
+  // `projectAccessRequired`, which loads the collection with the caller's own
+  // rights and needs `canEdit`, the owner's.
   app.use(route('/:projectId'), (req, res, next) => {
     if (refuseIFinderWrite(req, res, req.params.projectId)) return;
     next();
@@ -302,10 +316,22 @@ export default function registerProjectRoutes(app) {
       // The iFinder tier is per user: the policy and the iFinder configuration
       // are the installation's, the principal and the Smart Collections API
       // (the capability call) are the caller's.
-      const ifinder = { available: false, readOnly: true };
+      // Whether collections can be changed from here is the installation's: a lock
+      // must reach every iHub instance (`collectionLock.js`). When it does not,
+      // the tier stays readable and `writable` says why it is not changeable.
+      const support = collectionWriteSupport();
+      const ifinder = {
+        available: false,
+        writable: false,
+        maxDocuments: MAX_DOCUMENTS
+      };
       if (base.userProjects && iFinderTierConfigured(platform)) {
         const availability = await availabilityFor(req.user);
         ifinder.available = availability.offered;
+        ifinder.writable = availability.offered && support.writable;
+        if (availability.offered && !support.writable) {
+          ifinder.writeDisabledReason = support.reason || WRITE_DISABLED_REASONS.NO_LOCK;
+        }
         if (!availability.offered) {
           ifinder.reason = availability.reason;
           if (availability.unavailable) ifinder.unavailable = true;
@@ -528,7 +554,13 @@ export default function registerProjectRoutes(app) {
       }
       const body = parseBody(userProjectCreateSchema, req, res);
       if (!body) return;
-      const project = await deps.service.createUserProject({ owner: req.user, content: body });
+      // A smart collection is created in iFinder, as the caller's own. The
+      // local limits, quota and storage of user projects do not apply to it.
+      if (body.tier === 'ifinder') {
+        return createIFinderProject(req, res, { body, serialize: serializeFor });
+      }
+      const { tier: _tier, ...content } = body;
+      const project = await deps.service.createUserProject({ owner: req.user, content });
       logAudit({
         req,
         action: 'create',
@@ -577,6 +609,7 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('edit'),
+    forIFinderProject(renameIFinderProject(serializeFor)),
     async (req, res) => {
       try {
         // An admin project keeps the admin document's shape (localized
@@ -652,6 +685,7 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('edit'),
+    forIFinderProject(addIFinderDocuments),
     (req, res, next) => (isMultipart(req) ? receiveUpload(req, res, next) : next()),
     async (req, res) => {
       if (isMultipart(req)) {
@@ -788,6 +822,10 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('edit'),
+    forIFinderProject((req, res) => {
+      if (!validateIdForPath(req.params.itemId, 'item', res)) return undefined;
+      return removeIFinderDocument(req, res);
+    }),
     async (req, res) => {
       try {
         const { itemId } = req.params;

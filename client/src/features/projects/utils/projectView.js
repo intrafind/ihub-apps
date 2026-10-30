@@ -54,9 +54,10 @@ const QUOTA_WARN_RATIO = 0.8;
 export const IFINDER_PROJECT_ID_PREFIX = 'ifc_';
 
 /**
- * Whether a project is a smart collection of the iFinder tier: read-only in
- * iHub, never edited, shared, deleted or held chats in. The id decides (the
- * server never gives that prefix to a stored project), the `tier` says the same.
+ * Whether a project is a smart collection of the iFinder tier: it lives in
+ * iFinder, only its owner renames it or adds and removes its documents, and it is
+ * never shared, deleted or held chats in. The id decides (the server never gives
+ * that prefix to a stored project), the `tier` says the same.
  *
  * @param {{id?: string, tier?: string}|null|undefined} project
  * @returns {boolean}
@@ -66,6 +67,25 @@ export function isIFinderProject(project) {
     typeof project?.id === 'string' &&
     project.id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
     project.tier === 'ifinder'
+  );
+}
+
+/**
+ * Whether the caller may change a smart collection from iHub: they are its owner
+ * (`permissions.canEdit`) and this installation can serialize writes to it
+ * (`_config.ifinder.writable`, which is off where no lock reaches every iHub
+ * instance). Drives the add, remove and rename controls of the tier.
+ *
+ * @param {Object|null|undefined} project
+ * @param {Object|null|undefined} config - `GET /api/projects/_config`.
+ * @returns {boolean}
+ */
+export function canManageCollection(project, config) {
+  return (
+    isIFinderProject(project) &&
+    project.permissions?.canEdit === true &&
+    project.permissions?.readOnly !== true &&
+    config?.ifinder?.writable === true
   );
 }
 
@@ -229,11 +249,18 @@ export function validateProjectForm(form) {
  * The body of `POST /api/projects`: the name, and the other fields when set.
  *
  * @param {{name: string, description?: string, instructions?: string, defaultAppId?: string}} form
- * @returns {{name: string, description?: string, instructions?: string, defaultAppId?: string}}
+ * @param {{tier?: 'ihub'|'ifinder'}} [options] - `ifinder` creates a smart collection.
+ * @returns {{name: string, description?: string, instructions?: string, defaultAppId?: string,
+ *   tier?: 'ifinder'}}
  */
-export function buildCreateProjectBody(form) {
+export function buildCreateProjectBody(form, { tier = 'ihub' } = {}) {
   const description = (form.description || '').trim();
   const instructions = form.instructions || '';
+  // A smart collection has a name and a description: instructions and a default
+  // app do not exist there, and the server refuses them.
+  if (tier === 'ifinder') {
+    return { name: (form.name || '').trim(), ...(description ? { description } : {}), tier };
+  }
   return {
     name: (form.name || '').trim(),
     ...(description ? { description } : {}),
@@ -319,12 +346,21 @@ export function quotaState(used, limit) {
  * The project's usage against the installation's limits (spec 1 §9.4).
  *
  * @param {{usage?: {items?: number, bytes?: number}, items?: Array}} project
- * @param {{limits?: {maxFiles?: number, maxProjectBytes?: number}}|null} config
+ * @param {{limits?: {maxFiles?: number, maxProjectBytes?: number},
+ *   ifinder?: {maxDocuments?: number}}|null} config
  * @returns {{items: ReturnType<typeof quotaState>, bytes: ReturnType<typeof quotaState>}}
  */
 export function projectUsage(project, config) {
   const usage = project?.usage || {};
   const items = Number.isFinite(usage.items) ? usage.items : (project?.items || []).length;
+  // A smart collection is bounded by iFinder's cap, not by the local limits, and
+  // holds no bytes in iHub.
+  if (isIFinderProject(project)) {
+    return {
+      items: quotaState(items, config?.ifinder?.maxDocuments),
+      bytes: quotaState(0, null)
+    };
+  }
   return {
     items: quotaState(items, config?.limits?.maxFiles),
     bytes: quotaState(usage.bytes || 0, config?.limits?.maxProjectBytes)
