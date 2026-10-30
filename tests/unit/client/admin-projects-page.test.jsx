@@ -17,8 +17,8 @@ const mockApi = {
   fetchAdminProjectDependencies: jest.fn(),
   deleteAdminProject: jest.fn(),
   toggleAdminProjects: jest.fn(),
-  fetchProjectSharingSettings: jest.fn(),
-  saveProjectSharingSettings: jest.fn()
+  fetchProjectSettings: jest.fn(),
+  saveProjectSettings: jest.fn()
 };
 
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -28,8 +28,8 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminProjectDependencies: (...args) => mockApi.fetchAdminProjectDependencies(...args),
   deleteAdminProject: (...args) => mockApi.deleteAdminProject(...args),
   toggleAdminProjects: (...args) => mockApi.toggleAdminProjects(...args),
-  fetchProjectSharingSettings: (...args) => mockApi.fetchProjectSharingSettings(...args),
-  saveProjectSharingSettings: (...args) => mockApi.saveProjectSharingSettings(...args),
+  fetchProjectSettings: (...args) => mockApi.fetchProjectSettings(...args),
+  saveProjectSettings: (...args) => mockApi.saveProjectSettings(...args),
   getAdminApiErrorMessage: err => err?.message ?? 'error'
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
@@ -90,11 +90,9 @@ beforeEach(() => {
   ]);
   mockApi.toggleAdminProjects.mockResolvedValue({ message: 'ok' });
   mockApi.deleteAdminProject.mockResolvedValue(undefined);
-  mockApi.fetchProjectSharingSettings.mockResolvedValue({
-    allowUsers: true,
-    allowGroups: true,
-    allowEveryone: false,
-    allowCatalog: false
+  mockApi.fetchProjectSettings.mockResolvedValue({
+    sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: false },
+    tierPolicy: 'ihub'
   });
 });
 
@@ -207,7 +205,7 @@ describe('AdminProjectsPage', () => {
 
 describe('AdminProjectsPage – sharing of user projects', () => {
   test('turns the catalog on and saves only on request', async () => {
-    mockApi.saveProjectSharingSettings.mockImplementation(async sharing => sharing);
+    mockApi.saveProjectSettings.mockImplementation(async settings => settings);
     renderPage();
     const catalog = await screen.findByRole('checkbox', { name: /The project catalog/ });
     expect(catalog).not.toBeChecked();
@@ -217,18 +215,30 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     fireEvent.click(catalog);
     fireEvent.click(save);
     await waitFor(() =>
-      expect(mockApi.saveProjectSharingSettings).toHaveBeenCalledWith({
-        allowUsers: true,
-        allowGroups: true,
-        allowEveryone: false,
-        allowCatalog: true
+      expect(mockApi.saveProjectSettings).toHaveBeenCalledWith({
+        sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: true },
+        tierPolicy: 'ihub'
       })
     );
     expect(await screen.findByText('Saved')).toBeInTheDocument();
   });
 
+  test('switches the tier policy to iFinder smart collections', async () => {
+    mockApi.saveProjectSettings.mockImplementation(async settings => settings);
+    renderPage();
+    const ihub = await screen.findByRole('radio', { name: /iHub projects only/ });
+    expect(ihub).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: /iHub projects and iFinder smart/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ tierPolicy: 'both' })
+      )
+    );
+  });
+
   test('is not shown to a content admin', async () => {
-    mockApi.fetchProjectSharingSettings.mockRejectedValue(
+    mockApi.fetchProjectSettings.mockRejectedValue(
       Object.assign(new Error('forbidden'), { response: { status: 403 } })
     );
     renderPage();
