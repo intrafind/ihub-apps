@@ -90,3 +90,13 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
   narrowed to some skills; tool ids (`a2a__<id>__<skill>`) and group grants are unchanged.
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
+
+## Integrations Can Bring Their Own Code
+
+A definition in a registry may ship a connector module (`"protocol": { "type": "script",
+"module": "connector.js" }`) with the same contract as iHub's built-in connectors, so an
+integration that no OpenAPI document can express (Jira, Microsoft 365 and the like) can be
+published through a registry instead of only built in. Two guard rails: a registry delivers such
+an integration only when an admin marked it as **trusted for code** (**Admin → Marketplace →
+Manage Registries**), and the catalog must carry a hash for every code file, which the install
+checks. The Catalog tab and the install wizard say when an integration runs code on the server.

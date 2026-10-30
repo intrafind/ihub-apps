@@ -29,6 +29,16 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 An MCP server is an installed integration of the `mcp` protocol. iHub ships the generic **MCP server** definition (`com.intrafind/mcp-server`: any Streamable HTTP, SSE or WebSocket endpoint, or a local process over stdio) and one definition per hosted server of the former built-in catalog (`mcp/microsoft-learn`, `mcp/context7`, `mcp/github`, `mcp/drawio`, …), each with its endpoint fixed and its sign-in mode set. All of them are `builtIn` and may be installed several times (two GitHub organisations, two draw.io installations). The server's tools are the installation's actions: they are not written into the definition but listed when iHub connects, so the wizard shows them after **Test connection** and the admin switches single tools off. Tool ids are `<toolPrefix or id__><tool>`, e.g. `drawio__create_diagram`; per-user OAuth, MCP App views and the inbound gateway are as described in [MCP Integration](mcp-integration.md). Migration V193 turned every server of the former `config/mcpServers.json` into an installation under the same id.
 
+### Code-based integrations (`script`)
+
+A definition may bring its own connector module instead of an OpenAPI document: `"protocol": { "type": "script", "module": "connector.js" }`, with `connector.js` as a companion file in the folder. The module has the same contract as a built-in native connector (`export default { id, actions: { <name>: { parameters, run(args, ctx) } }, test(ctx), scopeProvider(resolved), onChanged({ before, after }) }`; `ctx` carries `definition`, `instance`, `values`, `user`, `chatId`, `scope`, `params`) and is run by the same adapter, so a built-in integration is just the case where the module lives inside the server. Because the module runs in the server process:
+
+- a registry may deliver such an integration only when the admin marked it as **trusted for code** (**Admin → Marketplace → Manage Registries → Edit**); the install is refused otherwise (`CODE_NOT_TRUSTED`);
+- the catalog item must list a hash for every code file (`source.integrity`, `"connector.js": "sha256-<base64>"`), and the fetched file must match it (`CODE_INTEGRITY_REQUIRED`, `INTEGRITY_MISMATCH`);
+- the Catalog tab marks the definition **Runs code on this server**, and the wizard says so before the install.
+
+A shipped definition never uses `script` (it is `native`); the shipped IntraFind registry is the place to publish connectors such as Jira or Microsoft 365 that cannot be expressed as an OpenAPI document.
+
 ### Remote A2A agents
 
 A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a` protocol, installed from the shipped **A2A agent** definition (`com.intrafind/a2a-agent`): the Agent Card URL, a sign-in mode (none, a shared token or API key, or an OAuth client) and the call budget are its install values. The card's skills are the installation's actions, listed after **Test connection**; tool ids stay `a2a__<id>__<skill>`. Calling an agent, its conversations and the inbound side are described in [A2A Agents](a2a-agents.md). Migration V194 turned every agent of the former `config/a2aAgents.json` into an installation under the same id.
@@ -64,7 +74,7 @@ In the chat, every bound action appears as a tool `<instanceId>__<action>` named
 
 ## How an action runs
 
-Four protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
+Five protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors, and `script`, the same adapter with the connector module loaded from the definition folder; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
 
 1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is *service account*;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
@@ -146,7 +156,7 @@ Every write is audited with resource `integration`.
 | `server/services/integrations/definitions/IntegrationRegistry.js` | loads shipped and installed definition folders and their OpenAPI documents |
 | `server/services/integrations/InstalledIntegrationService.js` | `integrations.json` CRUD, managed secrets, tests |
 | `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js` | the `openapi` adapter: actions, run, test, scopes |
-| `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js` | the `native` adapter and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
+| `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js` | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
 | `server/services/integrations/protocols/mcp/` | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations |
 | `server/services/integrations/protocols/a2a/` | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager |
 | `server/services/integrations/integrationTools.js` | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers |
