@@ -75,7 +75,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server (or the base of its `toolPrefix`) or an A2A agent: apps and groups select all of them by id. The admin pages refuse such a clash both ways: a directory cannot take an existing id, and a new tool, MCP server or agent cannot take a directory's id, even a switched-off one's. Reserved: `peopleDirectories`, `new`, `app`, `workflow`, `source`, `knowledge`, `a2a`. |
+| `id` | 2–32 lower-case letters, digits and `-`. Becomes the tool id prefix (`<id>__search_people`). No `_`, and it must not be the id of a tool, an MCP server (or the base of its `toolPrefix`) or an A2A agent: apps and groups select all of them by id. The admin pages refuse such a clash both ways: a directory cannot take an existing id, and a new tool, MCP server or agent cannot take a directory's id, even a switched-off one's. Reserved: `peopleDirectories`, `ldapBrowse`, `new`, `app`, `workflow`, `source`, `knowledge`, `a2a`. |
 | `enabled` | Default `true`. A disabled directory offers no tools. |
 | `type` | `ldap` (Entra follows later). |
 | `authProvider` | Name of an `ldapAuth.providers[]` entry. Inherits `url`, `starttls`, TLS version settings, `baseDn`, `preset` and the bind account. Any field set on the directory overrides the inherited one. |
@@ -86,7 +86,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 | `personFilter`, `searchAttributes`, `attributeMapping` | Override the preset (see [Presets](#presets-and-mapping)). |
 | `units` | Offer `list_units` and the `unit` parameter: the one-level children of the search base (authorities in x500.bund.de). |
 | `allowPlaintext` | Default `false`. A plain `ldap://` URL without StartTLS is refused unless this is `true`, anonymous binds included. A service bind is never sent in plain text. |
-| `tlsCa` | Trust anchors from the [certificate store](#certificates). When set, only these anchors are trusted for this directory, and verification stays on — unless the host is on the platform's SSL whitelist, which switches verification off for every connection to it. When unset, Node's default roots are used. |
+| `tlsCa` | Names of [trust anchors](#certificates) in `contents/config/certs/<name>.pem`. When set, only these anchors are trusted for this directory, and verification stays on — unless the host is on the platform's SSL whitelist, which switches verification off for every connection to it. When unset, Node's default roots and the server's operating system certificate store are used. |
 | `allowedHosts` | Hosts this directory may reach although they resolve to a private address (`*.corp.example` patterns allowed). |
 | `maxResults` | Default 10, at most 50. The most people one search returns; a tool call can ask for fewer, never more. |
 | `timeoutMs` | Default 8000, at most 30000. |
@@ -94,6 +94,7 @@ An example with both entries is in `examples/config/peopleDirectories.json`.
 | `groups` | Who may use the directory. Default `["authenticated"]`; `"*"` opens it to every caller including anonymous ones; an empty list closes it. Inherited groups count (`admins` inherit `users`). |
 | `dataFlow` | `internal` (default) or `external`: the search terms leave your network. Shown as a badge and carried on the tools. |
 | `name`, `description` | What the model reads to choose a directory, in each language. Say what the directory holds and what to search by. |
+| `browse` | The admin [LDAP browser](#ldap-browser-for-admins) of this directory. Off unless `browse.enabled` is `true`. |
 
 ## Tools
 
@@ -147,6 +148,64 @@ An app (or a group's `permissions.tools`) selects directory tools by:
 
 A directory's `groups` hold on top of that: an app that lists `x500bund`, or a `"*"` tool grant, does not give the directory to a user outside its groups. The check runs in the tools listing, an app's tools, direct tool runs, the MCP gateway, and again when the tool runs.
 
+## LDAP browser (for admins)
+
+Admins sometimes need to see what is really in a directory: which attributes an entry has, how a branch is built, who is in a group. The LDAP browser answers that in plain words: the admin asks, the model writes the LDAP filter, and the raw entries come back. It is separate from people search, which only ever returns mapped fields and is safe to give to every user.
+
+Switch it on per directory in the directory editor, section **LDAP browser** (**Admin → Integrations → People directories**), or in `peopleDirectories.json`. The directory list marks such directories with an **LDAP browser** badge.
+
+```jsonc
+{
+  "id": "corp",
+  "authProvider": "corp-ad",
+  "groups": ["authenticated"],
+  "browse": {
+    "enabled": true,                 // default false
+    "groups": ["admins"],            // default; "*" is refused
+    "maxResults": 50,                // default 50, at most 200
+    "base": "dc=corp,dc=example",    // default: the directory's baseDn
+    "bind": { "mode": "service", "dn": "cn=ldap-reader,dc=corp,dc=example", "passwordRef": "ldap-reader" },
+    "denyAttributes": ["info"]       // withheld on top of the built-in list
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `enabled` | The browse tools exist only while this is `true` and the directory itself is enabled and usable. |
+| `groups` | Who may browse. Separate from the directory's `groups`: neither grants the other. Only signed-in users; `"*"` is refused. Personal API keys, OAuth clients and tokens and agents never browse, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API. A directory with `"groups": []` is browse-only. |
+| `maxResults` | The most entries one search returns. |
+| `base` | The DN the browser is confined to. Defaults to the directory's base DN — the whole directory, not just the people search base — so groups and other branches are in reach. Set a narrower branch to limit what admins can see. |
+| `bind` | A separate account for browsing, same shape as the directory's `bind`. **Without it, the browser reads whatever the directory's bind account can read**, minus the deny list. Use a read-only account with the reach you want. |
+| `denyAttributes` | Attribute names withheld for this directory, on top of the built-in list. |
+
+The shipped **LDAP browser** app (`ldap-browser`) selects the browse tools of every directory with `"tools": ["ldapBrowse"]`. It ships **disabled**; enable it under **Admin → Apps**. Users outside `browse.groups` who open it get no browse tools, so restrict the app to admins in **Admin → Groups** as well.
+
+### Browse tools
+
+| Tool | Parameters | Returns |
+| --- | --- | --- |
+| `<id>__browse_search` | `filter` (required, RFC 4515, e.g. `(&(objectClass=group)(cn=*admin*))`), `base` (a DN inside the browse base), `scope` (`base`, `one` or `sub`, default `sub`), `attributes` (names; default all user attributes), `maxResults` | `{ directory, base, scope, entries: [{ dn, attributes, omitted? }], truncated, hint? }` |
+| `<id>__browse_read` | `dn` (required), `attributes` | `{ directory, entry: { dn, attributes, omitted? } }` |
+| `<id>__browse_children` | `dn` (default: the browse base) | `{ directory, dn, children: [{ dn, rdn, objectClass }], truncated }` |
+
+- Values come back as the server returns them, every attribute as a list. Binary values are shown as `[binary, N bytes]`; values over 500 characters are cut with their length. An attribute returns at most 100 values (a large group's `member`, for example); a cut attribute ends with `… (N more values)` and is named in the entry's `cut` list. One response holds about 30,000 characters, and so does a single entry; beyond that, or beyond `maxResults` or the server's own size limit, `truncated` is `true`.
+- Operational attributes (`memberOf`, `createTimestamp`, …) come only when named in `attributes`.
+- Every DN — the search base, the entry read, the parent listed, and every entry returned — must lie in the browse base. The check works on parsed DNs, like `get_person`'s.
+- The browse tools are reachable only through `ldapBrowse` or their exact ids: not through a directory id, `peopleDirectories` or `requiredIntegrations`, so the People search app never gets them. They are never offered over iHub's MCP gateway.
+
+### Secrets
+
+These attributes never leave a directory — not in people search, not in the browser: `userPassword`, `unicodePwd`, `ntPassword`, `lmPassword`, `sambaNTPassword`, `sambaLMPassword`, `krbPrincipalKey`, `supplementalCredentials`, `dBCSPwd`, `unixUserPassword`, the password histories `pwdHistory` and `sambaPasswordHistory`, FreeIPA's `ipaNTHash`, the LAPS passwords (`ms-Mcs-AdmPwd`, `msLAPS-Password`, `msLAPS-EncryptedPassword` and their history and DSRM variants), `msFVE-RecoveryPassword`, `msDS-ManagedPassword`, certificates (`userCertificate`, `userSMIMECertificate`, `userPKCS12`, `cACertificate`, revocation lists), photos (`jpegPhoto`, `thumbnailPhoto`), `objectSid` and `objectGUID`. Names are compared case-insensitively and without options (`userPassword;binary`).
+
+- In results, a withheld attribute is left out and named in the entry's `omitted` list.
+- A filter that names one, anywhere — nested, negated, in an extensible match — is refused before anything is sent, so a value cannot be guessed one character at a time with `(userPassword=a*)`. An extensible match without an attribute type (`(:caseExactMatch:=x)`) is refused for the same reason, and so is a filter that does not parse.
+- The list holds names only. A site that keeps secrets in custom attributes adds them to `browse.denyAttributes`.
+
+### Audit
+
+Every browse call — answered, refused for a bad argument, or refused for lack of access — writes an audit record (**Admin → Audit log**, resource `ldapBrowse`, the directory id as resource id). It holds the user, the tool, the filter, base, scope, DN and attributes asked for (text cut at 1,000 characters, at most 50 attribute names), how many entries came back and whether the result was truncated. Entry values are never written. Filters are recorded as sent and can contain names or e-mail addresses; they follow the audit log's retention.
+
 ## Presets and mapping
 
 | | `openldap` | `activeDirectory` | `ivbb` (x500.bund.de) |
@@ -177,18 +236,17 @@ Every connection is checked when it is opened, not only when the configuration i
 
 - **Transport.** `ldaps://` or StartTLS is required; plain `ldap://` needs `allowPlaintext` and shows the same warning as a plain-text sign-in provider. A service bind is never sent in plain text.
 - **Address check.** The host is resolved and every address classified. A private, loopback or link-local address is refused unless the host is allowed explicitly: the directory's `allowedHosts`, the platform-wide `ssrf.allowedHosts` (Admin → Security), or the host of the referenced sign-in provider. The socket then connects to the checked address, so a DNS change cannot redirect it; TLS still checks the certificate against the host name.
-- **Certificates.** Verification is always on. Private CAs are trusted per directory with `tlsCa`. The only way to switch verification off is the platform's SSL whitelist (`ssl.ignoreInvalidCertificates` with the host in `ssl.domainWhitelist`), like every other outbound connection; a sign-in provider's `rejectUnauthorized: false` is ignored here.
+- **Certificates.** Verification is always on. Private CAs are trusted through the server's certificate store, or per directory with `tlsCa`. The only way to switch verification off is the platform's SSL whitelist (`ssl.ignoreInvalidCertificates` with the host in `ssl.domainWhitelist`), like every other outbound connection; a sign-in provider's `rejectUnauthorized: false` is ignored here.
 - **No proxy.** LDAP is not HTTP. External directories need a direct route on port 389 or 636.
-- **Data protection.** Directory tools are read-only. Searches are logged with directory, user, result count and duration; the search text only at debug level. External directories are marked `dataFlow: external`.
+- **Data protection.** Directory tools are read-only. Searches are logged with directory, user, result count and duration; the search text only at debug level. LDAP browser calls also go to the audit log, filter included (see [Audit](#audit)). External directories are marked `dataFlow: external`.
 
 ## Certificates
 
-The **Certificates** tab manages the trust anchors in `contents/config/certs/<name>.pem`. It lists each certificate with subject, validity, SHA-256 fingerprint and the directories that use it, and warns from 90 days before expiry.
+People directories trust the same roots as every other outbound connection: Node's built-in roots and the operating system certificate store of the iHub server (see [SSL Certificates](ssl-certificates.md)). A company CA installed on the server, or added with `NODE_EXTRA_CA_CERTS`, works without further configuration.
 
-- **Upload** a PEM or DER file. The page shows its subject and fingerprint; compare them with the value the publisher states before saving. Private keys are refused.
-- **Remove** a certificate that no directory uses. A shipped certificate comes back on the next start.
+For a CA you do not want to trust server-wide, put its PEM file into `contents/config/certs/<name>.pem` and list `<name>` under **Trusted certificates** (`tlsCa`) of the directory. Only those anchors then verify that directory's server, and no other connection trusts them. Compare the certificate's fingerprint with the one its publisher states before you add it. A shipped certificate comes back on the next start if it is deleted.
 
-iHub never fetches or trusts a root on its own. When a server's certificate is not trusted, the connection test shows the chain the server sent — subject, issuer, validity and fingerprint of each certificate — and names the issuer that is missing.
+iHub never fetches or trusts a root on its own. When a server's certificate is not trusted, the connection test names the issuer that is missing.
 
 ### The shipped Verwaltungs-PKI root
 
@@ -213,9 +271,8 @@ It is trusted only by directories that name it in `tlsCa`.
 **Admin → Integrations → People directories** (`/admin/integrations/people-directories`):
 
 - **Directories:** one row per directory with source, preset, groups and an on/off switch; badges for plain-text transport and external data flow.
-- **Editor:** source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), network, visibility, the model-facing name and description, limits and the mapping with the preset's value next to each field.
+- **Editor:** source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), network, visibility, the model-facing name and description, limits, the mapping with the preset's value next to each field, and the [LDAP browser](#ldap-browser-for-admins).
 - **Test panel:** runs the connection test on the form as it stands — configuration, address check, connect, StartTLS, bind, a sample search, and the mapped people next to the attributes they came from. Nothing is saved.
-- **Certificates:** see above.
 
 The admin API, all behind `adminAuth` (personal API keys, OAuth clients and agents get a 403):
 
@@ -225,16 +282,12 @@ The admin API, all behind `adminAuth` (personal API keys, OAuth clients and agen
 | `PUT` | `/api/admin/people-directories` | Replace the file (validated; 409 on an id clash) |
 | `GET` | `/api/admin/people-directories/presets` | Presets and their mappings |
 | `POST` | `/api/admin/people-directories/test` | Test a saved (`id`) or unsaved (`directory`) entry, optional `query` |
-| `GET` | `/api/admin/people-directories/certificates` | Trust anchors |
-| `POST` | `/api/admin/people-directories/certificates/preview` | Parse an upload without saving |
-| `POST` | `/api/admin/people-directories/certificates` | Add a trust anchor (`name`, `content`, `encoding`) |
-| `DELETE` | `/api/admin/people-directories/certificates/:name` | Remove an unused trust anchor |
 
 ## Troubleshooting
 
 | Test result | What to do |
 | --- | --- |
-| *issuer "…" is not trusted* | Get the named root from its publisher, compare the fingerprint, upload it under Certificates and add it to the directory's trust anchors. |
+| *issuer "…" is not trusted* | Get the named root from its publisher and compare the fingerprint. Install it in the server's operating system certificate store, or put it into `contents/config/certs/<name>.pem` and add `<name>` to the directory's trusted certificates. |
 | *resolves to the private address …* | Add the host to the directory's allowed hosts or to `ssrf.allowedHosts`, or reuse the sign-in provider that connects to it. |
 | *did not answer in time* | The iHub server has no route to the directory on that port; LDAP does not use the HTTP proxy. |
 | *rejected an anonymous bind* / no results from Active Directory | Configure a service account; Active Directory does not allow anonymous search. |

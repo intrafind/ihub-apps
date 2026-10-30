@@ -2,186 +2,179 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Resolves the iFinder *search* profile that belongs to an iAssistant
- * *conversation* profile.
+ * Resolves the iFinder *search* profile an iAssistant conversation is created
+ * with, for the user who creates it.
  *
- * The two are different things and are configured in different places:
+ * The search profile (`retrieval_scope.ifinder_search_profile`) selects which
+ * documents retrieval may see. It is configured on the app, the model or the
+ * platform (`iAssistant.defaultSearchProfile`), and that one value applies to
+ * every user — but search profiles are assigned per user in iFinder, and a
+ * user who lacks the configured one gets nothing useful out of the
+ * conversation.
  *
- *   - the conversation profile (`message.profile_id`, e.g. `iassistant-workspace`)
- *     selects a workflow and its parameter overrides;
- *   - the search profile (`retrieval_scope.ifinder_search_profile`, e.g.
- *     `searchprofile-standard`) selects which documents retrieval may see.
+ * So iHub asks iFinder which search profiles the user has (the internal API
+ * the searchbar reads them from, see `iFinderSearchProfiles.js`) and:
  *
- * Administrators reasonably expect the first to imply the second — a profile
- * built for one corpus should not have to be paired by hand with the matching
- * search profile in every app that uses it. So iHub asks the profile first and
- * only falls back to what the app, the model or the platform configured.
+ *   - keeps the configured profile when the user has it;
+ *   - otherwise uses the user's default profile, which is what iFinder's own
+ *     searchbar falls back to for a profile the user does not have;
+ *   - keeps the configured profile when the list cannot be read or is empty,
+ *     so the check never turns a working setup into a broken one.
  *
- * As of iFinder 6.9 the Conversation API does not expose a search profile on a
- * profile: `WorkflowConfiguration` carries `workflow`, `state_defaults` and
- * `states`, none of which is documented to hold one, and retrieval reads the
- * search profile solely from `retrieval_scope`. The lookup below is therefore
- * written to find one wherever it might plausibly appear and to return null
- * when it does not, so the configured fallback keeps applying today and the
- * profile takes over by itself once iFinder starts publishing it.
+ * Earlier versions read the *conversation* profile (`GET /v0/profiles/{id}`)
+ * looking for a search profile. The Conversation API never published one
+ * there: a conversation profile selects a workflow and its tuning, nothing
+ * about the corpus. iFinder's own pairing of the two is the iAssistant
+ * (`/public-api/v0/assistants`), which is a separate entity.
  *
- * Every failure here is soft. A conversation that cannot be created is a
- * broken chat; a search profile that could not be read is just the fallback.
+ * Two settings take the search profile out of this check (`resolveScope`):
+ *
+ *   - `assistantId` names an iFinder iAssistant. iFinder offers a user only
+ *     the iAssistants whose search profile they have, so the iAssistant's
+ *     conversation profile and search profile are used as they are, and an
+ *     iAssistant iFinder does not offer the user is an error rather than a
+ *     silent fallback to another corpus.
+ *   - `allSearchProfiles` sends no search profile at all, which iFinder 6.9
+ *     answers by retrieving across every search profile the user has.
+ *
+ * Every failure of the check itself is soft. A conversation that cannot be
+ * created is a broken chat; a profile list that could not be read is just the
+ * configured value.
  */
-import conversationApiService from './ConversationApiService.js';
 import iAssistantService from './iAssistantService.js';
+import iFinderSearchProfiles from './iFinderSearchProfiles.js';
+import iFinderAssistants from './iFinderAssistants.js';
 import logger from '../../utils/logger.js';
 
-/**
- * Keys a search profile could be published under, in the snake_case the API
- * uses and the camelCase the workflow configuration uses for its parameters.
- */
-const SEARCH_PROFILE_KEYS = [
-  'ifinder_search_profile',
-  'ifinderSearchProfile',
-  'search_profile',
-  'searchProfile'
-];
-
 class IAssistantProfileResolver {
-  constructor() {
-    /** @type {Map<string, { value: string|null, expiresAt: number }>} */
-    this.cache = new Map();
-    /** @type {Map<string, Promise<string|null>>} in-flight lookups, keyed as the cache */
-    this.inFlight = new Map();
+  /** Drop every cached profile list and iAssistant. Called from the config reload hooks. */
+  reset() {
+    iFinderSearchProfiles.reset();
+    iFinderAssistants.reset();
   }
 
-  /** Drop every cached profile. Called from the config reload hooks. */
-  reset() {
-    this.cache.clear();
-    this.inFlight.clear();
+  /**
+   * The conversation profile and search profile a conversation is created with.
+   *
+   * @param {Object} params
+   * @param {string} [params.assistantId] - iFinder iAssistant the app names
+   * @param {boolean} [params.allSearchProfiles] - search every profile of the user
+   * @param {string} [params.configuredProfileId] - app/model/platform conversation profile
+   * @param {string} [params.configuredSearchProfile] - app/model/platform search profile
+   * @param {Object} params.user
+   * @param {string} params.baseUrl
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<{ profileId: string|undefined, searchProfile: string|undefined,
+   *   source: string, assistantId?: string }>} where `source` is `assistant`,
+   *   `all-search-profiles`, or one of resolveSearchProfile's sources
+   * @throws {import('./iFinderAssistants.js').AssistantNotAvailableError} when the
+   *   iAssistant is not offered to the user
+   */
+  async resolveScope({
+    assistantId,
+    allSearchProfiles,
+    configuredProfileId,
+    configuredSearchProfile,
+    user,
+    baseUrl,
+    signal
+  }) {
+    const profileId = configuredProfileId || undefined;
+
+    if (assistantId) {
+      const { searchProfileCacheTtlMs } = iAssistantService.getConfig();
+      const assistant = await iFinderAssistants.getAssistant({
+        assistantId,
+        user,
+        baseUrl,
+        ttlMs: searchProfileCacheTtlMs,
+        signal
+      });
+      return {
+        profileId: assistant.conversationProfileId || profileId,
+        searchProfile: assistant.searchProfileId || undefined,
+        source: 'assistant',
+        assistantId: assistant.id
+      };
+    }
+
+    if (allSearchProfiles) {
+      return { profileId, searchProfile: undefined, source: 'all-search-profiles' };
+    }
+
+    const resolved = await this.resolveSearchProfile({
+      configuredSearchProfile,
+      user,
+      baseUrl,
+      signal
+    });
+    return { profileId, ...resolved };
   }
 
   /**
    * The search profile a conversation should be created with.
    *
    * @param {Object} params
-   * @param {string} [params.profileId] - the iAssistant conversation profile
    * @param {string} [params.configuredSearchProfile] - app/model/platform value
    * @param {Object} params.user - authenticated user (the lookup is made as them)
    * @param {string} params.baseUrl - iFinder base URL
    * @param {AbortSignal} [params.signal]
-   * @returns {Promise<{ searchProfile: string|undefined, source: string }>}
+   * @returns {Promise<{ searchProfile: string|undefined, source: string }>} where
+   *   `source` is `configured` (the user has it), `user-default` (the user does
+   *   not have it, their default is used), `unverified` (the check is off or
+   *   the list could not be read) or `none` (nothing configured, nothing found)
    */
-  async resolveSearchProfile({ profileId, configuredSearchProfile, user, baseUrl, signal }) {
-    const fallback = {
-      searchProfile: configuredSearchProfile || undefined,
-      source: configuredSearchProfile ? 'configured' : 'none'
-    };
+  async resolveSearchProfile({ configuredSearchProfile, user, baseUrl, signal }) {
+    const configured = configuredSearchProfile || undefined;
+    const unverified = { searchProfile: configured, source: configured ? 'unverified' : 'none' };
 
-    const { resolveSearchProfileFromProfile } = iAssistantService.getConfig();
-    if (!resolveSearchProfileFromProfile || !profileId || !baseUrl) return fallback;
+    const { verifySearchProfileAccess, searchProfileCacheTtlMs, searchProfileApplication } =
+      iAssistantService.getConfig();
+    if (!verifySearchProfileAccess || !baseUrl) return unverified;
 
+    let profiles;
     try {
-      const fromProfile = await this.searchProfileOf({ profileId, user, baseUrl, signal });
-      if (fromProfile) return { searchProfile: fromProfile, source: 'profile' };
+      profiles = await iFinderSearchProfiles.getUserSearchProfiles({
+        user,
+        baseUrl,
+        application: searchProfileApplication,
+        ttlMs: searchProfileCacheTtlMs,
+        signal
+      });
     } catch (error) {
-      // Includes the 404 an installation returns for a profile id that only
-      // exists as a workflow default, which is not worth an error line.
-      logger.debug('Could not read search profile from iAssistant profile', {
+      logger.debug('Could not read the search profiles of the user', {
         component: 'IAssistantProfileResolver',
-        profileId,
         error: error?.message
       });
+      return unverified;
     }
 
-    return fallback;
-  }
+    if (configured && profiles.some(profile => profile.id === configured)) {
+      return { searchProfile: configured, source: 'configured' };
+    }
 
-  /**
-   * Cached, de-duplicated read of one profile's search profile.
-   *
-   * Cached per (baseUrl, profileId) rather than per user: the profile is a
-   * piece of installation configuration, and the value extracted from it is
-   * the same whoever asks. What a given user is then allowed to retrieve under
-   * that profile is decided by iFinder on every search, not here.
-   *
-   * @returns {Promise<string|null>}
-   */
-  searchProfileOf({ profileId, user, baseUrl, signal }) {
-    const key = `${baseUrl}::${profileId}`;
-    const now = Date.now();
-
-    const cached = this.cache.get(key);
-    if (cached && cached.expiresAt > now) return Promise.resolve(cached.value);
-
-    const pending = this.inFlight.get(key);
-    if (pending) return pending;
-
-    const { profileCacheTtlMs } = iAssistantService.getConfig();
-    const lookup = conversationApiService
-      .getProfile(profileId, { user, baseUrl, signal })
-      .then(profile => {
-        const value = extractSearchProfile(profile);
-        this.cache.set(key, { value, expiresAt: Date.now() + profileCacheTtlMs });
-        if (value) {
-          logger.info('Search profile resolved from iAssistant profile', {
-            component: 'IAssistantProfileResolver',
-            profileId,
-            searchProfile: value
-          });
-        }
-        return value;
-      })
-      .finally(() => {
-        this.inFlight.delete(key);
+    const userDefault = profiles.find(profile => profile.isDefault) || profiles[0];
+    if (!userDefault) {
+      // A user with no search profile at all cannot retrieve anything under
+      // any profile; iFinder reports that on the conversation itself.
+      logger.warn('The user has no iFinder search profile', {
+        component: 'IAssistantProfileResolver',
+        configuredSearchProfile: configured || '(none)'
       });
+      return unverified;
+    }
 
-    this.inFlight.set(key, lookup);
-    return lookup;
+    // A warning, not an info line: the conversation searches another corpus
+    // than the app names, and the cause may be an assignment under another
+    // iFinder application rather than a missing one.
+    logger.warn('Configured search profile is not assigned to the user; using their default', {
+      component: 'IAssistantProfileResolver',
+      configuredSearchProfile: configured || '(none)',
+      searchProfile: userDefault.id,
+      application: searchProfileApplication
+    });
+    return { searchProfile: userDefault.id, source: 'user-default' };
   }
-}
-
-/**
- * Pull a search profile out of a profile payload, looking in every place one
- * could reasonably be published: on the profile itself, on its retrieval
- * scope, and in the workflow configuration's three override levels.
- *
- * @param {Object} profile - a Profile as returned by GET /v0/profiles/{id}
- * @returns {string|null} the search profile, or null when the profile has none
- */
-export function extractSearchProfile(profile) {
-  if (!profile || typeof profile !== 'object') return null;
-
-  const configuration = profile.workflow?.configuration || {};
-  const states = configuration.states || {};
-
-  const candidates = [
-    profile,
-    profile.retrieval_scope,
-    profile.retrievalScope,
-    configuration,
-    configuration.workflow,
-    configuration.state_defaults,
-    configuration.stateDefaults,
-    ...Object.values(states)
-  ];
-
-  for (const candidate of candidates) {
-    const value = firstSearchProfileKey(candidate);
-    if (value) return value;
-  }
-
-  return null;
-}
-
-/**
- * The first non-blank search-profile value on one object, or null.
- * @param {*} source
- * @returns {string|null}
- */
-function firstSearchProfileKey(source) {
-  if (!source || typeof source !== 'object') return null;
-  for (const key of SEARCH_PROFILE_KEYS) {
-    const value = source[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
 }
 
 export default new IAssistantProfileResolver();

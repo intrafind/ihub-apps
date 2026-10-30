@@ -6,28 +6,44 @@ import Icon from '../../../shared/components/Icon';
 import { isIFinderProject } from '../utils/projectView';
 
 /**
- * The tier of a project that does not live in iHub: "iFinder", with a lock
- * and the reading hint, for a smart collection shown read-only (#3024).
+ * The tier of a project that does not live in iHub: "iFinder", for a smart
+ * collection (#3024). It says "read-only" only where the caller cannot change it
+ * from iHub (not the owner, or an installation that cannot serialize writes).
  * Renders nothing for a project of the iHub tier.
  *
- * @param {{project: {id?: string, tier?: string}}} props
+ * @param {Object} props
+ * @param {{id?: string, tier?: string, permissions?: Object}} props.project
+ * @param {boolean} [props.readOnly] - Overrides what the project's permissions say (the
+ *   page knows the installation's capability too).
  * @returns {JSX.Element|null}
  */
-function ProjectTierBadge({ project }) {
+function ProjectTierBadge({ project, readOnly: readOnlyOverride }) {
   const { t } = useTranslation();
   if (!isIFinderProject(project)) return null;
+  const readOnly =
+    readOnlyOverride ??
+    (project.permissions?.canEdit !== true || project.permissions?.readOnly === true);
   return (
     <span
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] font-semibold bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200"
-      title={t(
-        'projects.tier.ifinderHint',
-        'A smart collection from iFinder. iHub only reads it; change it in iFinder.'
-      )}
+      title={
+        readOnly
+          ? t(
+              'projects.tier.ifinderHint',
+              'A smart collection from iFinder. iHub only reads it; change it in iFinder.'
+            )
+          : t(
+              'projects.tier.ifinderManageHint',
+              'A smart collection from iFinder. You can rename it and add or remove its documents here.'
+            )
+      }
       data-testid="project-tier-badge"
     >
-      <Icon name="lock" size="xs" />
+      {readOnly && <Icon name="lock" size="xs" />}
       {t('projects.tier.ifinder', 'iFinder')}
-      <span className="font-normal">· {t('projects.tier.readOnly', 'read-only')}</span>
+      {readOnly && (
+        <span className="font-normal">· {t('projects.tier.readOnly', 'read-only')}</span>
+      )}
     </span>
   );
 }

@@ -2973,6 +2973,16 @@
         "iassistantProfileIdDesc": "The iAssistant profile to use for this app (e.g., iassistant-workspace)",
         "iassistantSearchProfile": "Search Profile",
         "iassistantSearchProfileDesc": "The search profile to use for retrieval using iFinder (e.g., searchprofile-standard)",
+        "iassistantAssistantId": "iFinder iAssistant",
+        "iassistantAssistantIdDesc": "An iAssistant from iFinder. It sets both the conversation profile and the search profile, and only users who have its search profile can use it. Leave empty to set the profiles below.",
+        "iassistantAssistantLoad": "Load from iFinder",
+        "iassistantAssistantLoading": "Loading…",
+        "iassistantAssistantLoadFailed": "The iAssistants could not be loaded: {{error}}",
+        "iassistantAssistantNoneVisible": "iFinder shows you no iAssistants. You can still enter an ID.",
+        "iassistantAssistantProfiles": "Conversation profile: {{conversationProfile}} · Search profile: {{searchProfile}}",
+        "iassistantAssistantOverrides": "Set by the iAssistant.",
+        "iassistantAllSearchProfiles": "Search all of the user's search profiles",
+        "iassistantAllSearchProfilesDesc": "Sends no search profile, so iFinder searches everything the user may see through any of their search profiles. Requires iFinder 6.9 or later.",
         "iassistantExtraContext": "Extra Context",
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
@@ -4066,44 +4076,28 @@
         "error": "The app could not be enabled: {{error}}",
         "text": "Also enable the “People search” app? Users can then ask for people in a chat, and it searches every directory they may use."
       },
-      "certificates": {
-        "ca": "CA",
-        "compareFingerprint": "Compare the SHA-256 fingerprint with the one the publisher lists (for the Verwaltungs-PKI: the BSI fingerprint page) before you save. Do not save a certificate whose fingerprint you cannot confirm.",
-        "confirm": "I compared the fingerprint with the publisher's, and it matches.",
-        "empty": "The store is empty.",
-        "expired": "Expired",
-        "expiresIn_one": "Expires in {{count}} day",
-        "expiresIn_other": "Expires in {{count}} days",
-        "file": "Certificate file (PEM or DER)",
-        "fileHelp": ".pem, .crt, .cer or .der with one certificate. Files with a private key are refused.",
-        "fingerprint": "SHA-256 fingerprint",
-        "inUse": "In use — remove it from these directories first.",
-        "inUseError": "Certificate \"{{name}}\" is still used by: {{directories}}.",
-        "intro": "Trust anchors for directories whose server certificate comes from a private CA. A directory trusts only the certificates selected in its Network section; nothing here is trusted globally.",
-        "issuer": "Issuer",
-        "listTitle": "Certificates in the store",
-        "loadError": "The certificate store could not be loaded",
-        "name": "Name in the store",
-        "nameHelp": "Directories name the certificate by this in \"tlsCa\".",
-        "nameInvalid": "Use 1 to 64 lower-case letters, digits and \"-\".",
-        "nameTaken": "A certificate with this name exists already.",
-        "reading": "Reading the certificate…",
-        "remove": "Remove",
-        "removeConfirm": "Remove \"{{name}}\" from the certificate store?",
-        "removeTitle": "Remove certificate",
-        "removed": "Certificate \"{{name}}\" removed.",
-        "save": "Save certificate",
-        "saved": "Certificate \"{{name}}\" saved.",
-        "saving": "Saving…",
-        "selfSigned": "Self-signed (root)",
-        "serialNumber": "Serial number",
-        "subject": "Subject",
-        "unused": "no directory",
-        "uploadError": "Certificate not accepted",
-        "uploadTitle": "Add a certificate",
-        "usedBy": "Used by",
-        "validity": "Valid",
-        "validityRange": "{{from}} to {{to}}"
+      "browse": {
+        "auditNote": "Every browser call is written to the audit log with the filter used, never the values returned. The LDAP browser app ships disabled: enable it under Apps and give it only to admin groups.",
+        "base": "Browse base",
+        "baseHelp": "Every DN the browser reads must lie here. Leave empty for the base DN, the whole directory; set a branch to limit what admins can see.",
+        "bind": "Account for browsing",
+        "bindAnonymousHelp": "Only what the directory shows to anonymous clients.",
+        "bindDirectory": "The directory's account",
+        "bindDirectoryHelp": "The account under Access. The browser can read everything it can read.",
+        "bindDirectoryWarning": "With the directory's account, the browser has the full reach of the people search account. Use an account of its own if that account can read more than admins should see.",
+        "bindService": "An account of its own",
+        "bindServiceHelp": "A read-only account with exactly the reach admins should have.",
+        "denyAttributes": "Further attributes to withhold",
+        "denyAttributesHelp": "One attribute name per line. Passwords, LAPS and BitLocker secrets, certificates and photos are always withheld; add attributes where your directory keeps other secrets. Withheld attributes cannot be used in a filter either.",
+        "description": "Lets admins ask about the directory in plain words and see the raw entries: attributes, branches, group members. Separate from people search, which only returns mapped fields.",
+        "enabled": "Offer the LDAP browser",
+        "enabledHelp": "Adds the tools {{tools}}. Only apps that list \"ldapBrowse\", such as the LDAP browser app, get them.",
+        "groups": "Who may browse",
+        "groupsHelp": "Signed-in users in one of these groups. Separate from the directory's groups under Visibility: neither grants the other.",
+        "maxResults": "Maximum entries per search",
+        "maxResultsHelp": "1 to {{max}}; empty for {{default}}.",
+        "offKept": "The LDAP browser is off. Its settings below are kept for when you switch it on again.",
+        "title": "LDAP browser"
       },
       "edit": {
         "backToList": "Back to people directories",
@@ -4125,9 +4119,11 @@
         "unsavedTitle": "Unsaved changes"
       },
       "errors": {
+        "attributeName": "\"{{name}}\" is not an LDAP attribute name.",
         "authProviderRequired": "Choose a sign-in provider.",
         "baseDnRequired": "Enter the base DN.",
         "bindDnRequired": "Enter the bind DN.",
+        "browseGroupsRequired": "Choose who may use the LDAP browser.",
         "idPattern": "Use 2 to 32 lower-case letters, digits and \"-\", starting with a letter or digit.",
         "idRequired": "Enter an id.",
         "idReserved": "\"{{id}}\" is reserved.",
@@ -4135,6 +4131,7 @@
         "limitRange": "Enter a whole number from {{min}} to {{max}}.",
         "passwordRefRequired": "Choose the credential that holds the password.",
         "personFilterPattern": "An LDAP filter in parentheses, e.g. (objectClass=person).",
+        "tlsCaPattern": "\"{{name}}\" is not a certificate name: use lower-case letters, digits and \"-\", without \".pem\".",
         "urlPattern": "Use ldaps://host:636 or ldap://host:389, without a path.",
         "urlRequired": "Enter the directory URL."
       },
@@ -4175,6 +4172,8 @@
       "list": {
         "add": "Add directory",
         "allOff": "All directories are off, so no search term leaves iHub. Switch one on to offer it to apps.",
+        "browse": "LDAP browser",
+        "browseHint": "Admins in the browse groups can read raw entries with the LDAP browser.",
         "delete": "Delete",
         "deleteConfirm": "Delete \"{{name}}\"? Apps lose its tools at once.",
         "deleteLabel": "Delete {{name}}",
@@ -4231,16 +4230,11 @@
         "allowedHosts": "Hosts allowed on private addresses",
         "allowedHostsHelp": "One host per line. iHub refuses a directory host that resolves to a private, loopback or link-local address unless it is listed here or in the platform-wide SSRF allow-list. The host of a reused sign-in provider is always allowed.",
         "description": "How the connection is secured and which servers iHub may reach.",
-        "manageCertificates": "Manage the certificate store (opens in a new tab)",
         "plaintextRefused": "This directory uses ldap:// without StartTLS. iHub refuses the connection until plain text is allowed here — better switch to ldaps:// or StartTLS.",
         "plaintextWarning": "Without TLS, the search terms and the records the directory returns — names, phone numbers, e-mail addresses — cross the network in plain text. Use ldaps://host:636, or ldap://host:389 with StartTLS, whenever the server supports it. A service account password is never sent in plain text.",
-        "reloadCertificates": "Reload certificates",
         "title": "Network",
         "tlsCa": "Trusted certificates",
-        "tlsCaEmpty": "The certificate store is empty.",
-        "tlsCaHelp": "When you pick certificates here, only they verify the server's certificate. Leave all unchecked to trust the usual public roots. Verification stays on unless the host is on the platform's SSL whitelist (ssl.ignoreInvalidCertificates with ssl.domainWhitelist): then it is switched off for this directory too, whatever you pick here.",
-        "tlsCaLoadError": "The certificate store could not be loaded: {{error}}",
-        "tlsCaMissing": "Not in the store",
+        "tlsCaHelp": "Only for a CA that the iHub server does not trust already. One name per line: the file contents/config/certs/<name>.pem on the server. When set, only these certificates verify the server's certificate. Leave empty to use the public roots and the server's operating system certificate store. Verification stays on unless the host is on the platform's SSL whitelist.",
         "transport": "Transport"
       },
       "presets": {
@@ -4281,17 +4275,10 @@
         "urlHelp": "ldaps://host:636 for TLS. ldap://host:389 needs StartTLS — or plain text allowed under Network, which is not recommended."
       },
       "subtitle": "LDAP directories the model can search for people — your own and external ones such as x500.bund.de. Each enabled directory becomes read-only tools that apps can use.",
-      "tabs": {
-        "aria": "People directory sections",
-        "certificates": "Certificates",
-        "directories": "Directories"
-      },
       "test": {
-        "chainTitle": "Certificate chain sent by the server ({{count}})",
         "couldNotRun": "The test could not run",
         "description": "Connects with the settings as they are on this page, saved or not, and searches for a name. Nothing is saved.",
         "failed": "Test failed",
-        "missingIssuer": "The issuer \"{{issuer}}\" is not trusted. Get its certificate from the publisher, compare the fingerprint, upload it on the Certificates tab and select it under Network → Trusted certificates.",
         "noResults": "The sample search found nobody.",
         "passed": "Test passed",
         "query": "Name to search for (optional)",
@@ -5635,7 +5622,8 @@
       "answer": "Answer",
       "search": "Search",
       "doc_lookup": "Document Lookup",
-      "context": "Context"
+      "context": "Context",
+      "task": "Task"
     },
     "assess": {
       "started": "Analyzing current knowledge",
@@ -5682,6 +5670,9 @@
     "finalize": {
       "started": "Finalizing answer...",
       "completed": "Answer ready"
+    },
+    "task": {
+      "created": "Started a background task. Its result appears in the iFinder Workspace when it is done"
     }
   },
   "setup": {
@@ -7003,7 +6994,8 @@
       "submitPages_other": "Add {{count}} pages",
       "linkChangeProject": "Change",
       "linkPublishedDetail": "Published for everyone",
-      "linkFromAppsDetail": "Comes with one of your apps"
+      "linkFromAppsDetail": "Comes with one of your apps",
+      "nothingToAdd": "This kind of item is not available here."
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -7037,7 +7029,13 @@
       "creating": "Creating…",
       "submit": "Create project",
       "subtitle": "A project keeps documents, instructions and chats together. It stays private until you share it.",
-      "title": "New project"
+      "title": "New project",
+      "tier": "Where to keep it",
+      "tierIhub": "In iHub",
+      "tierIhubHint": "Files, web pages and text, with instructions and sharing.",
+      "tierIfinder": "As an iFinder smart collection",
+      "tierIfinderHint": "A list of iFinder documents you can read. It also shows up in iFinder.",
+      "submitCollection": "Create collection"
     },
     "errors": {
       "accessChanged": "Your access to this project changed in the meantime. Reload the page.",
@@ -7057,7 +7055,19 @@
       "storageUnavailable": "Projects are not available on this installation.",
       "unsupportedType": "This file type is not supported.",
       "unsupportedTypeWith": "This file type is not supported. Supported: {{types}}.",
-      "userProjectsDisabled": "User projects are switched off."
+      "userProjectsDisabled": "User projects are switched off.",
+      "quotaCollectionDocuments": "A smart collection holds at most {{limit}} documents; this one already has {{used}}.",
+      "documentNotReadable": "You cannot read this document in iFinder, so it cannot be added to a collection.",
+      "ifinderWritesDisabled": "Changing smart collections from iHub is switched off on this installation. Change them in iFinder.",
+      "ifinderForbidden": "iFinder does not allow your account to change smart collections.",
+      "tierNotAvailable": "Smart collections from iFinder are not available to you.",
+      "ifinderUnavailable": "iFinder could not be reached. Try again in a moment.",
+      "ifinderRejected": "iFinder did not accept the change.",
+      "collectionBusy": "The collection is being changed right now. Try again in a moment.",
+      "ifinderWritePartial": "iFinder reported an error after part of the change went through: {{done}} done, {{not}} not. Reload the collection and try again.",
+      "ifinderWriteNone": "iFinder reported an error and nothing was changed. Try again in a moment.",
+      "ifinderWriteUnknown": "iFinder did not answer, so it is not known whether the change went through. Reload the collection to see.",
+      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only."
     },
     "form": {
       "description": "Description",
@@ -7119,7 +7129,9 @@
       "title": "Documents",
       "tokens": "~{{tokens}} tokens",
       "selectAll": "Select all items",
-      "selectItem": "Select {{name}}"
+      "selectItem": "Select {{name}}",
+      "collectionFull": "A smart collection holds as many documents as iFinder allows.",
+      "removeFromCollectionConfirm": "Remove \"{{name}}\" from the collection? The document stays in iFinder."
     },
     "list": {
       "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",
@@ -7175,7 +7187,8 @@
       "deleteConfirm": "Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.",
       "deleteTitle": "Delete project",
       "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it.",
-      "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder."
+      "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.",
+      "ifinderManage": "This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. Sharing and deleting it are done in iFinder."
     },
     "preview": {
       "edit": "Edit text",
@@ -7246,7 +7259,8 @@
       "bytesOf": "{{used}} of {{limit}}",
       "items": "Items",
       "itemsOf": "{{used}} of {{limit}}",
-      "storage": "Storage"
+      "storage": "Storage",
+      "documents": "Documents"
     },
     "estimate": {
       "button": "Estimate tokens",
@@ -7350,13 +7364,20 @@
       "ifinder": "iFinder",
       "readOnly": "read-only",
       "ifinderHint": "A smart collection from iFinder. iHub only reads it; change it in iFinder.",
-      "ifinderDetail": "Smart collection from iFinder"
+      "ifinderDetail": "Smart collection from iFinder",
+      "ifinderManageHint": "A smart collection from iFinder. You can rename it and add or remove its documents here."
     },
     "ifinder": {
       "sourceTitle": "Smart collection in iFinder",
       "sourceText": "Its documents stay in iFinder and are read with your own access rights. Add, remove, rename or share them in iFinder.",
       "documentCount_one": "{{count}} document",
-      "documentCount_other": "{{count}} documents"
+      "documentCount_other": "{{count}} documents",
+      "sourceTextManage": "Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share or delete it in iFinder.",
+      "documentCountOf": "{{count}} of {{max}} documents",
+      "rename": "Rename",
+      "renameTitle": "Rename collection",
+      "renameSubtitle": "The name and the description are changed in iFinder too.",
+      "renameHint": "A smart collection has no instructions: it is a list of documents."
     }
   }
 }

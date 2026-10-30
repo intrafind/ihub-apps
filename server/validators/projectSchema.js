@@ -289,9 +289,24 @@ export const userProjectCreateSchema = z
     name: z.string().trim().min(1, 'Name is required').max(MAX_NAME_LENGTH, 'Name is too long'),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
-    defaultAppId: zSafeId.min(1).max(100).optional()
+    defaultAppId: zSafeId.min(1).max(100).optional(),
+    /** `ifinder` creates a smart collection in iFinder (name and description only); omitted is `ihub`. */
+    tier: z.enum(['ihub', 'ifinder']).optional()
   })
   .strict();
+
+/**
+ * What `PATCH /api/projects/:id` accepts for a smart collection of the iFinder
+ * tier: its name and description. Instructions and a default app do not exist
+ * there, and nothing else is ever sent to iFinder.
+ */
+export const ifinderProjectUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
+    description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional()
+  })
+  .strict()
+  .refine(body => Object.keys(body).length > 0, 'Nothing to change');
 
 /** What `PATCH /api/projects/:id` accepts. `defaultAppId: null` clears the default app. */
 export const userProjectUpdateSchema = z
@@ -326,6 +341,18 @@ export const addItemSchema = z
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
     text: z.string().max(MAX_ITEM_TEXT_CHARS).optional()
+  })
+  .strict();
+
+/**
+ * What `POST /api/projects/:id/items` accepts for a smart collection of the
+ * iFinder tier when it adds several documents at once: `{ items: [...] }`, each
+ * one a JSON item of kind `ifinder-document`. One document is the plain
+ * {@link addItemSchema} body.
+ */
+export const ifinderAddItemsSchema = z
+  .object({
+    items: z.array(addItemSchema).min(1).max(MAX_FILES_CEILING)
   })
   .strict();
 

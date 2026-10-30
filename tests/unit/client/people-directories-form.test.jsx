@@ -10,14 +10,9 @@
  *     omitted field takes the sign-in provider's or the preset's value);
  *   - "Use for people search" prefills a new entry that reuses the provider;
  *   - validation, the mapping of server issues onto inputs, and the helpers of
- *     the list page and the certificate upload.
+ *     the list page.
  */
-import { TextDecoder as NodeTextDecoder } from 'util';
 import {
-  certificateExpiryState,
-  certificateNameFromFileName,
-  certificatePayloadFromBytes,
-  commonNameOf,
   createDirectoryForm,
   describeSaveError,
   directoryToForm,
@@ -36,9 +31,6 @@ import {
   withDirectoryEnabled,
   withoutDirectory
 } from '../../../client/src/features/admin/utils/peopleDirectories';
-
-// jsdom does not provide TextDecoder; the browser does.
-if (typeof globalThis.TextDecoder === 'undefined') globalThis.TextDecoder = NodeTextDecoder;
 
 /** The shipped x500.bund.de entry (server/defaults/config/peopleDirectories.json). */
 const X500 = {
@@ -65,7 +57,7 @@ describe('directory ↔ form', () => {
     expect(roundTrip).toEqual(X500);
   });
 
-  test('keeps overrides, service bind, mapping and tlsOptions', () => {
+  test('keeps overrides, service bind, mapping, tlsOptions and the LDAP browser', () => {
     const corp = {
       id: 'corp',
       enabled: true,
@@ -83,7 +75,9 @@ describe('directory ↔ form', () => {
       concurrency: 3,
       requestDelayMs: 100,
       groups: ['*'],
-      dataFlow: 'internal'
+      dataFlow: 'internal',
+      // Not edited on the page; a save must not drop it.
+      browse: { enabled: true, groups: ['admins'], denyAttributes: ['info'] }
     };
     expect(formToDirectory(directoryToForm(corp))).toEqual(corp);
   });
@@ -379,33 +373,89 @@ describe('text helpers', () => {
   });
 });
 
-describe('certificates', () => {
-  test('the name comes from the file name', () => {
-    expect(certificateNameFromFileName('PCA-1-Verwaltung-23.pem')).toBe('pca-1-verwaltung-23');
-    expect(certificateNameFromFileName('Corp Root CA (2024).CRT')).toBe('corp-root-ca-2024');
-    expect(certificateNameFromFileName('.der')).toBe('certificate');
+describe('LDAP browser fields', () => {
+  test('a directory without a browse block stays without one', () => {
+    expect(formToDirectory(directoryToForm(X500)).browse).toBeUndefined();
+    const form = directoryToForm(X500);
+    expect(form.browseEnabled).toBe(false);
+    expect(form.browseGroups).toEqual(['admins']);
+    expect(form.browseBindMode).toBe('directory');
   });
 
-  test('PEM content is sent as text, anything else as base64', () => {
-    const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
-    expect(certificatePayloadFromBytes(new TextEncoder().encode(pem))).toEqual({
-      content: pem,
-      encoding: 'pem'
-    });
-    expect(certificatePayloadFromBytes(new Uint8Array([0x30, 0x82, 0x01, 0xff]))).toEqual({
-      content: 'MIIB/w==',
-      encoding: 'base64'
-    });
+  test('switching the browser off keeps its settings', () => {
+    const stored = {
+      ...X500,
+      browse: {
+        enabled: true,
+        groups: ['ops'],
+        maxResults: 20,
+        base: 'ou=MRI,o=Bund,c=DE',
+        bind: { mode: 'service', dn: 'cn=reader', passwordRef: 'reader' },
+        denyAttributes: ['info']
+      }
+    };
+    const form = directoryToForm(stored);
+    expect(formToDirectory(form)).toEqual(stored);
+    form.browseEnabled = false;
+    expect(formToDirectory(form).browse).toEqual({ ...stored.browse, enabled: false });
   });
 
-  test('expiry state and common name', () => {
-    expect(certificateExpiryState({ expired: true, expiringSoon: true })).toBe('expired');
-    expect(certificateExpiryState({ expiringSoon: true })).toBe('expiringSoon');
-    expect(certificateExpiryState({})).toBe('valid');
-    expect(commonNameOf('C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23')).toBe(
-      'PCA-1-Verwaltung-23'
-    );
-    expect(commonNameOf('CN=x500.bund.de, O=Bund')).toBe('x500.bund.de');
-    expect(commonNameOf('O=No common name')).toBe('O=No common name');
+  test('checks groups, the limit, the own account and attribute names while on', () => {
+    const form = directoryToForm(X500);
+    form.browseEnabled = true;
+    form.browseGroups = [];
+    form.browseMaxResults = '500';
+    form.browseBindMode = 'service';
+    form.browseDenyAttributes = 'info\nnot an attribute';
+    expect(validateDirectoryForm(form).map(error => error.field)).toEqual([
+      'browse.groups',
+      'browse.maxResults',
+      'browse.bind.dn',
+      'browse.bind.passwordRef',
+      'browse.denyAttributes'
+    ]);
+    expect(inputIdForField('browse.bind.passwordRef')).toBe('pd-browse-bind-password-ref');
+    expect(inputIdForField('browse.groups.0')).toBe('pd-browse-groups');
+  });
+});
+
+describe('LDAP browser fields while off', () => {
+  test('a kept browse block is still checked, and a new one that is off is not', () => {
+    // The kept block is saved with the browser off, so the server would refuse
+    // an own account without DN or a limit over 200.
+    const form = directoryToForm({ ...X500, browse: { enabled: true, groups: ['admins'] } });
+    form.browseBindMode = 'service';
+    form.browseMaxResults = '500';
+    form.browseEnabled = false;
+    expect(validateDirectoryForm(form).map(error => error.field)).toEqual([
+      'browse.maxResults',
+      'browse.bind.dn',
+      'browse.bind.passwordRef'
+    ]);
+
+    const fresh = directoryToForm(X500);
+    fresh.browseBindMode = 'service';
+    fresh.browseDenyAttributes = 'not an attribute';
+    expect(validateDirectoryForm(fresh)).toEqual([]);
+    expect(formToDirectory(fresh).browse).toBeUndefined();
+  });
+});
+
+describe('trusted certificates', () => {
+  test('are edited one name per line and checked against the store name pattern', () => {
+    const form = directoryToForm(X500);
+    expect(form.tlsCa).toBe('pca-1-verwaltung-23');
+    form.tlsCa = 'pca-1-verwaltung-23\ncorp-root\n';
+    expect(formToDirectory(form).tlsCa).toEqual(['pca-1-verwaltung-23', 'corp-root']);
+    form.tlsCa = 'corp-root.pem';
+    expect(validateDirectoryForm(form)).toEqual([
+      {
+        field: 'tlsCa',
+        message: expect.objectContaining({
+          key: 'admin.peopleDirectories.errors.tlsCaPattern',
+          values: { name: 'corp-root.pem' }
+        })
+      }
+    ]);
   });
 });

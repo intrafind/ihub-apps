@@ -26,7 +26,8 @@ import {
 } from '../hooks/useProjects';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
-import { isIFinderProject, projectDisplayName } from '../utils/projectView';
+import { canManageCollection, isIFinderProject, projectDisplayName } from '../utils/projectView';
+import RenameCollectionDialog from '../components/RenameCollectionDialog';
 
 /**
  * The banner of a project whose owner is gone (spec 1 §7.1): members keep
@@ -54,12 +55,16 @@ function ReadOnlyBanner() {
 }
 
 /**
- * The banner of a smart collection from iFinder: iHub shows it and lets a chat
- * use it, and nothing here changes it.
+ * The banner of a smart collection from iFinder: where it lives, and what iHub
+ * does with it. The owner adds and removes documents here (the membership only:
+ * a document is never deleted from iFinder), and a chat can use it. Where this
+ * installation cannot serialize writes to a collection, the banner says it is
+ * read-only here and why.
  *
+ * @param {{editable: boolean}} props
  * @returns {JSX.Element}
  */
-function IFinderBanner() {
+function IFinderBanner({ editable }) {
   const { t } = useTranslation();
   return (
     <div
@@ -67,12 +72,17 @@ function IFinderBanner() {
       className="mt-4 flex items-start gap-2 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/20 dark:border-teal-800 px-4 py-3 text-sm text-teal-900 dark:text-teal-100"
       data-testid="project-ifinder-banner"
     >
-      <Icon name="lock" size="sm" className="mt-0.5 flex-none" />
+      <Icon name={editable ? 'magnifying-glass' : 'lock'} size="sm" className="mt-0.5 flex-none" />
       <p>
-        {t(
-          'projects.page.ifinderReadOnly',
-          'This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.'
-        )}
+        {editable
+          ? t(
+              'projects.page.ifinderManage',
+              'This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. Sharing and deleting it are done in iFinder.'
+            )
+          : t(
+              'projects.page.ifinderReadOnly',
+              'This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.'
+            )}
       </p>
     </div>
   );
@@ -115,6 +125,7 @@ function ProjectPageContent({ projectId }) {
   const { project, setProject, loading, error, reload } = useProject(projectId);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [renaming, setRenaming] = useState(false);
 
   const backToList = notice => {
     invalidateProjectsList();
@@ -176,11 +187,16 @@ function ProjectPageContent({ projectId }) {
   }
 
   const permissions = project.permissions || {};
-  // A smart collection from iFinder is read-only whoever looks, and none of the
-  // pieces of a stored user project (members, catalog, instructions, chats) apply.
+  // A smart collection from iFinder is changed by its owner only (rename, add and
+  // remove documents), and only where the installation can serialize those writes
+  // (`config.ifinder.writable`). None of the pieces of a stored user project
+  // (members, catalog, instructions, chats) apply to it.
   const isIFinder = isIFinderProject(project);
   const isUserProject = project.ownership === 'user' && !isIFinder;
-  const editable = isUserProject && permissions.canEdit === true && !permissions.readOnly;
+  const collectionEditable = canManageCollection(project, config);
+  const editable = isIFinder
+    ? collectionEditable
+    : isUserProject && permissions.canEdit === true && !permissions.readOnly;
   const readOnlyOwnerGone =
     isUserProject && (permissions.readOnly === true || project.owner?.active === false);
   // An admin project available to everyone: added from the catalog, and
@@ -204,7 +220,7 @@ function ProjectPageContent({ projectId }) {
                 {projectDisplayName(project, language)}
               </h1>
               {isIFinder ? (
-                <ProjectTierBadge project={project} />
+                <ProjectTierBadge project={project} readOnly={!collectionEditable} />
               ) : (
                 <ProjectRoleBadge project={project} />
               )}
@@ -215,6 +231,17 @@ function ProjectPageContent({ projectId }) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {collectionEditable && (
+              <button
+                type="button"
+                onClick={() => setRenaming(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                data-testid="rename-collection-button"
+              >
+                <Icon name="pencil" size="sm" />
+                {t('projects.ifinder.rename', 'Rename')}
+              </button>
+            )}
             {isUserProject && permissions.canDelete && (
               <button
                 type="button"
@@ -229,7 +256,7 @@ function ProjectPageContent({ projectId }) {
         </div>
 
         {readOnlyOwnerGone && <ReadOnlyBanner />}
-        {isIFinder && <IFinderBanner />}
+        {isIFinder && <IFinderBanner editable={collectionEditable} />}
         {project.ownership === 'admin' && (
           <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             {project.role === 'catalog'
@@ -277,7 +304,7 @@ function ProjectPageContent({ projectId }) {
           </div>
           {/* The side panel: one card of compact rows; editing opens a dialog. */}
           {isIFinder ? (
-            <IFinderProjectCard project={project} />
+            <IFinderProjectCard project={project} config={config} editable={collectionEditable} />
           ) : (
             <div className={`${PANEL_CARD} self-start min-w-0`} data-testid="project-side-panel">
               <ProjectSettingsCard
@@ -317,6 +344,19 @@ function ProjectPageContent({ projectId }) {
         </div>
       </div>
 
+      {renaming && (
+        <RenameCollectionDialog
+          project={project}
+          language={language}
+          onClose={() => setRenaming(false)}
+          onSaved={saved => {
+            setRenaming(false);
+            // The answer carries the documents with their titles.
+            setProject(saved);
+            invalidateProjectsList();
+          }}
+        />
+      )}
       <ConfirmDialog
         isOpen={confirmDelete}
         title={t('projects.page.deleteTitle', 'Delete project')}

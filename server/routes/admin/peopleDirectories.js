@@ -12,7 +12,6 @@ import {
   sendNotFound
 } from '../../utils/responseHelpers.js';
 import {
-  CERTIFICATE_NAME_PATTERN,
   PEOPLE_DIRECTORY_DEFAULTS,
   PEOPLE_DIRECTORY_LIMITS,
   peopleDirectoriesFileSchema
@@ -26,27 +25,14 @@ import {
 } from '../../services/peopleDirectory/PeopleDirectoryService.js';
 import { testDirectory } from '../../services/peopleDirectory/peopleDirectoryRunner.js';
 import { clearUnitsCache } from '../../services/peopleDirectory/LdapDirectory.js';
-import {
-  CertificateInputError,
-  deleteCertificate,
-  describeCertificate,
-  listCertificates,
-  parseCertificateInput,
-  saveCertificate
-} from '../../services/peopleDirectory/certStore.js';
 
 /**
- * Admin API for people directories (`contents/config/peopleDirectories.json`)
- * and their certificate store (`contents/config/certs/`).
+ * Admin API for people directories (`contents/config/peopleDirectories.json`).
  *
  *   GET    /api/admin/people-directories                       the file, with per-directory summaries
  *   PUT    /api/admin/people-directories                       replace the file (Zod-validated)
  *   GET    /api/admin/people-directories/presets               presets and their mappings
  *   POST   /api/admin/people-directories/test                  test a saved or an unsaved entry
- *   GET    /api/admin/people-directories/certificates          the trust anchors
- *   POST   /api/admin/people-directories/certificates/preview  parse an upload without saving
- *   POST   /api/admin/people-directories/certificates          add a trust anchor
- *   DELETE /api/admin/people-directories/certificates/:name    remove an unused trust anchor
  *
  * Every route is behind `adminAuth`, which refuses delegated and machine
  * principals (personal API keys, OAuth clients, agents) before a body is read
@@ -133,20 +119,6 @@ function findIdConflict(directories) {
     if (conflict) return { directoryId: directory.id, ...conflict };
   }
   return null;
-}
-
-/**
- * Which directories use each trust anchor.
- * @returns {Map<string, string[]>}
- */
-function certificateUsage() {
-  const usage = new Map();
-  for (const directory of getConfiguredDirectories()) {
-    for (const name of directory?.tlsCa || []) {
-      usage.set(name, [...(usage.get(name) || []), directory.id]);
-    }
-  }
-  return usage;
 }
 
 export default function registerAdminPeopleDirectoriesRoutes(app) {
@@ -350,154 +322,4 @@ export default function registerAdminPeopleDirectoriesRoutes(app) {
       return sendFailedOperationError(res, 'test people directory', error);
     }
   });
-
-  /**
-   * @swagger
-   * /api/admin/people-directories/certificates:
-   *   get:
-   *     summary: List trust anchors
-   *     description: The certificates in the people directory certificate store, with subject, validity, SHA-256 fingerprint and the directories that use each.
-   *     tags: [Admin]
-   *     security:
-   *       - adminAuth: []
-   *     responses:
-   *       200:
-   *         description: The certificates
-   */
-  app.get(
-    buildServerPath('/api/admin/people-directories/certificates'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const usage = certificateUsage();
-        const certificates = (await listCertificates()).map(certificate => ({
-          ...certificate,
-          usedBy: usage.get(certificate.name) || []
-        }));
-        res.json({ certificates });
-      } catch (error) {
-        return sendFailedOperationError(res, 'list certificates', error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/people-directories/certificates/preview:
-   *   post:
-   *     summary: Parse a certificate without saving it
-   *     description: Shows subject and SHA-256 fingerprint, so the admin can compare them with the publisher's before saving. Private keys are refused.
-   *     tags: [Admin]
-   *     security:
-   *       - adminAuth: []
-   *     responses:
-   *       200:
-   *         description: The parsed certificate
-   *       400:
-   *         description: Not exactly one certificate, or a private key
-   */
-  app.post(
-    buildServerPath('/api/admin/people-directories/certificates/preview'),
-    adminAuth,
-    (req, res) => {
-      try {
-        const { x509 } = parseCertificateInput(req.body?.content, req.body?.encoding);
-        res.json({ certificate: describeCertificate(x509) });
-      } catch (error) {
-        if (error instanceof CertificateInputError) return sendBadRequest(res, error.message);
-        return sendFailedOperationError(res, 'read certificate', error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/people-directories/certificates:
-   *   post:
-   *     summary: Add a trust anchor
-   *     tags: [Admin]
-   *     security:
-   *       - adminAuth: []
-   *     responses:
-   *       201:
-   *         description: Saved
-   *       400:
-   *         description: Invalid name or content, or a private key
-   *       409:
-   *         description: A certificate with this name exists
-   */
-  app.post(
-    buildServerPath('/api/admin/people-directories/certificates'),
-    adminAuth,
-    async (req, res) => {
-      const { name, content, encoding } = req.body || {};
-      try {
-        const certificate = await saveCertificate(name, content, encoding);
-        logger.info('Trust anchor added', {
-          component: 'AdminPeopleDirectories',
-          userId: req.user?.id,
-          name,
-          fingerprint256: certificate.fingerprint256
-        });
-        res.status(201).json({ certificate: { ...certificate, usedBy: [] } });
-      } catch (error) {
-        if (error instanceof CertificateInputError) {
-          if (error.code === 'exists') return res.status(409).json({ error: error.message });
-          return sendBadRequest(res, error.message);
-        }
-        return sendFailedOperationError(res, 'save certificate', error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/people-directories/certificates/{name}:
-   *   delete:
-   *     summary: Remove a trust anchor
-   *     description: Refused while a directory uses it.
-   *     tags: [Admin]
-   *     security:
-   *       - adminAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: name
-   *         required: true
-   *         schema:
-   *           type: string
-   *     responses:
-   *       204:
-   *         description: Removed
-   *       404:
-   *         description: No such certificate
-   *       409:
-   *         description: A directory uses it
-   */
-  app.delete(
-    buildServerPath('/api/admin/people-directories/certificates/:name'),
-    adminAuth,
-    async (req, res) => {
-      const { name } = req.params;
-      if (!CERTIFICATE_NAME_PATTERN.test(name))
-        return sendBadRequest(res, 'Invalid certificate name');
-      const usedBy = certificateUsage().get(name) || [];
-      if (usedBy.length > 0) {
-        return res.status(409).json({
-          error: `The certificate is used by ${usedBy.join(', ')}. Remove it from those directories first.`,
-          usedBy
-        });
-      }
-      try {
-        if (!(await deleteCertificate(name))) return sendNotFound(res, 'Certificate');
-        logger.info('Trust anchor removed', {
-          component: 'AdminPeopleDirectories',
-          userId: req.user?.id,
-          name
-        });
-        res.status(204).end();
-      } catch (error) {
-        return sendFailedOperationError(res, 'remove certificate', error);
-      }
-    }
-  );
 }

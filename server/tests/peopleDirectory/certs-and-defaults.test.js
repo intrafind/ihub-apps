@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * People directory search (#3026): the certificate store, the shipped BSI
+ * People directory search (#3026): loading trust anchors, the shipped BSI
  * root, and the shipped defaults (the disabled x500bund entry and the "People
  * search" app).
  *
@@ -11,7 +11,7 @@
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { X509Certificate, generateKeyPairSync } from 'node:crypto';
+import { X509Certificate } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -118,75 +118,23 @@ describe('certificate store', { skip: !hasOpenssl() && 'openssl CLI not availabl
     certs = generateCertificates('store.test');
   });
 
-  it('describes a PEM certificate with subject, fingerprint and expiry', () => {
-    const { x509 } = certStore.parseCertificateInput(certs.rootPem);
-    const described = certStore.describeCertificate(x509);
-    assert.equal(described.subjectCN, 'Test Root CA');
-    assert.equal(described.selfSigned, true);
-    assert.equal(described.ca, true);
-    assert.match(described.fingerprint256, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
-    // The generated root is valid for two days: within the 90-day warning.
-    assert.equal(described.expiringSoon, true);
-    assert.equal(described.expired, false);
-  });
-
-  it('accepts DER as base64', () => {
-    const der = new X509Certificate(certs.rootPem).raw.toString('base64');
-    const { pem } = certStore.parseCertificateInput(der, 'base64');
+  it('loads named trust anchors from contents/config/certs', async () => {
+    const dir = path.join(contentsDir, 'config', 'certs');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'test-root.pem'), certs.rootPem);
+    fs.writeFileSync(path.join(dir, 'broken.pem'), 'not a certificate');
+    const [anchor] = await certStore.loadTrustAnchors(['test-root']);
     assert.equal(
-      new X509Certificate(pem).fingerprint256,
+      new X509Certificate(anchor).fingerprint256,
       new X509Certificate(certs.rootPem).fingerprint256
     );
-  });
-
-  it('rejects private keys in PEM and DER, bundles and non-certificates', () => {
-    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-    const pkcs8Pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
-    const pkcs8Der = privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
-    for (const [content, encoding] of [
-      [pkcs8Pem],
-      [certs.rootPem + certs.rootKey],
-      [privateKey.export({ type: 'pkcs1', format: 'pem' })],
-      [pkcs8Der, 'base64']
-    ]) {
-      assert.throws(
-        () => certStore.parseCertificateInput(content, encoding),
-        error =>
-          error instanceof certStore.CertificateInputError && /private key/.test(error.message)
-      );
-    }
-    assert.throws(
-      () => certStore.parseCertificateInput(certs.rootPem + certs.intermediatePem),
-      /more than one certificate/
-    );
-    assert.throws(() => certStore.parseCertificateInput('hello'), certStore.CertificateInputError);
-    assert.throws(() => certStore.parseCertificateInput(''), certStore.CertificateInputError);
-  });
-
-  it('stores, lists, loads and removes a trust anchor', async () => {
-    const saved = await certStore.saveCertificate('test-root', certs.rootPem);
-    assert.equal(saved.name, 'test-root');
-    assert.ok(fs.existsSync(path.join(contentsDir, 'config', 'certs', 'test-root.pem')));
-    await assert.rejects(certStore.saveCertificate('test-root', certs.rootPem), { code: 'exists' });
-    assert.deepEqual(
-      (await certStore.listCertificates()).map(certificate => certificate.name),
-      ['test-root']
-    );
-    assert.deepEqual(await certStore.loadTrustAnchors(['test-root']), [
-      new X509Certificate(certs.rootPem).toString()
-    ]);
     await assert.rejects(certStore.loadTrustAnchors(['missing']), { code: 'trust_anchor_missing' });
-    assert.equal(await certStore.deleteCertificate('test-root'), true);
-    assert.equal(await certStore.deleteCertificate('test-root'), false);
+    await assert.rejects(certStore.loadTrustAnchors(['broken']), { code: 'trust_anchor_missing' });
   });
 
-  it('rejects certificate names with path characters', async () => {
+  it('never reads outside the store for a name with path characters', async () => {
     for (const name of ['../platform', 'a/b', 'A-Root', 'x.pem', '', '..']) {
-      await assert.rejects(
-        certStore.saveCertificate(name, certs.rootPem),
-        certStore.CertificateInputError
-      );
-      await assert.rejects(certStore.readCertificatePem(name), certStore.CertificateInputError);
+      await assert.rejects(certStore.loadTrustAnchors([name]), { code: 'trust_anchor_missing' });
     }
     const parsed = peopleDirectorySchema.safeParse({
       id: 'corp',

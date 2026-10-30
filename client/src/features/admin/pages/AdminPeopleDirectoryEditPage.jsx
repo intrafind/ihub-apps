@@ -20,6 +20,7 @@ import VisibilitySection from '../components/people-directories/VisibilitySectio
 import ModelFacingSection from '../components/people-directories/ModelFacingSection';
 import LimitsSection from '../components/people-directories/LimitsSection';
 import MappingSection from '../components/people-directories/MappingSection';
+import BrowseSection from '../components/people-directories/BrowseSection';
 import DirectoryTestPanel from '../components/people-directories/DirectoryTestPanel';
 import {
   CALLOUT_CLASS,
@@ -30,7 +31,6 @@ import {
   SECONDARY_BUTTON_CLASS
 } from '../components/people-directories/formStyles';
 import {
-  fetchDirectoryCertificates,
   fetchPeopleDirectories,
   fetchPeopleDirectoryPresets,
   savePeopleDirectories
@@ -79,8 +79,6 @@ function AdminPeopleDirectoryEditPage() {
   const [notFound, setNotFound] = useState(false);
   const [data, setData] = useState(null);
   const [presetsData, setPresetsData] = useState(null);
-  const [certificates, setCertificates] = useState([]);
-  const [certificatesError, setCertificatesError] = useState(null);
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState(null);
   const [initialForm, setInitialForm] = useState(null);
@@ -99,15 +97,6 @@ function AdminPeopleDirectoryEditPage() {
   useEffect(() => {
     if (errors.length > 0 || saveError) problemsRef.current?.focus();
   }, [errors, saveError]);
-
-  const loadCertificates = useCallback(async () => {
-    try {
-      setCertificates(await fetchDirectoryCertificates());
-      setCertificatesError(null);
-    } catch (err) {
-      setCertificatesError(getAdminApiErrorMessage(err));
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +138,6 @@ function AdminPeopleDirectoryEditPage() {
       }
     };
     void load();
-    void loadCertificates();
     fetchAdminGroups()
       .then(response => {
         if (cancelled) return;
@@ -217,6 +205,17 @@ function AdminPeopleDirectoryEditPage() {
         'Delay between requests (ms)'
       ),
       groups: t('admin.peopleDirectories.visibility.groups', 'Groups'),
+      browse:
+        {
+          groups: t('admin.peopleDirectories.browse.groups', 'Who may browse'),
+          maxResults: t('admin.peopleDirectories.browse.maxResults', 'Maximum entries per search'),
+          base: t('admin.peopleDirectories.browse.base', 'Browse base'),
+          bind: t('admin.peopleDirectories.browse.bind', 'Account for browsing'),
+          denyAttributes: t(
+            'admin.peopleDirectories.browse.denyAttributes',
+            'Further attributes to withhold'
+          )
+        }[tail] ?? t('admin.peopleDirectories.browse.title', 'LDAP browser'),
       dataFlow: t('admin.peopleDirectories.visibility.dataFlow', 'Data flow'),
       name: `${t('admin.peopleDirectories.model.name', 'Name')}${tail ? ` (${tail.toUpperCase()})` : ''}`,
       description: `${t('admin.peopleDirectories.model.descriptionLabel', 'Description')}${
@@ -483,14 +482,7 @@ function AdminPeopleDirectoryEditPage() {
           presets={presets}
         />
         <AccessSection form={form} update={update} provider={provider} transport={transport} />
-        <NetworkSection
-          form={form}
-          update={update}
-          transport={transport}
-          certificates={certificates}
-          certificatesError={certificatesError}
-          onReloadCertificates={loadCertificates}
-        />
+        <NetworkSection form={form} update={update} transport={transport} />
         <VisibilitySection form={form} update={update} availableGroups={groups} />
         <ModelFacingSection form={form} update={update} />
         <LimitsSection
@@ -506,6 +498,13 @@ function AdminPeopleDirectoryEditPage() {
           presetLabel={presetLabel}
           fields={fields}
           baseDnHint={baseDnHint}
+        />
+        <BrowseSection
+          form={form}
+          update={update}
+          availableGroups={groups}
+          baseDnHint={form.baseDn || provider?.baseDn || ''}
+          transport={transport}
         />
       </form>
 

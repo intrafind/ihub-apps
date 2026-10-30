@@ -8,7 +8,9 @@
  * Two fields carry the whole feature: `conversationId`, so a chat maps to one
  * iFinder conversation instead of creating a new one per turn, and
  * `lastParentId`, so the next message threads onto the previous answer.
- * `baseUrl` routes feedback; `title` and `profileId` are bookkeeping.
+ * `baseUrl` routes feedback; `searchProfile` (and, for a conversation an
+ * iFinder iAssistant set up, `profileId`) are pinned at creation; `title` is
+ * bookkeeping.
  *
  * The state used to live only in a per-process `Map`, which made it a
  * per-worker fact: with `WORKERS > 1` and non-sticky routing, turn 2 of a chat

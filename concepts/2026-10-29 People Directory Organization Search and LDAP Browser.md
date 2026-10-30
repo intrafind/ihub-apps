@@ -1,6 +1,7 @@
 # People directory: organization search, and an admin LDAP browser
 
-Status: draft for review. Date: 2026-10-29.
+Status: part 1 draft for review; part 2 implemented (see
+`docs/people-directory-search.md`, "LDAP browser (for admins)"). Date: 2026-10-29.
 
 Two independent parts that share the LDAP connection layer. They can be
 planned and built separately; part 1 first.
@@ -513,3 +514,31 @@ audit log's normal retention, and the documentation says so.
   `ldapBrowse` is added without touching existing apps.
 - The exact audit record fields, following `AuditLogService`.
 - Whether the admin connection test (`testDirectory`) also exercises browse.
+
+## Built (part 2)
+
+What the builder chose for the open points:
+
+- **Schema:** `browse` is optional and strict. `groups` defaults to `["admins"]`
+  and refuses `"*"`; only signed-in users can browse. `maxResults` defaults to
+  50, at most 200. An empty directory `groups` already meant "nobody", so a
+  browse-only directory needs nothing new.
+- **Filter parser:** ldapts' `FilterParser`. The parsed filter object is sent,
+  never the text. Filters longer than 1,000 characters, unparseable filters and
+  extensible matches without an attribute type are argument errors.
+- **Tool group:** `ldapBrowse` in `isToolSelected`; a browse tool marker has
+  `browse: true` and is never selected by the directory id or
+  `peopleDirectories`. Access is decided by the action (`BROWSE_ACTIONS`), not
+  by the marker, in the listing, `mayRunTool` and the runner.
+- **MCP gateway:** the browse tools are not exposed there at all.
+- **Audit:** `logAudit` with `action: "read"`, `resource: "ldapBrowse"`, the
+  directory id, and a JSON summary (tool, filter, base, scope, dn, attributes,
+  entry count, truncated, error code). Refused calls are audited as failures.
+- **Admin test:** not exercised; the configuration step shows the browse
+  settings and their problems.
+- **Admin UI:** added after all, at the user's request: an "LDAP browser"
+  section in the directory editor (on/off, groups without "Everyone", base,
+  result limit, account, extra denied attributes). Switching it off keeps
+  the settings.
+- **Order:** built before part 1, which still applies on top.
+

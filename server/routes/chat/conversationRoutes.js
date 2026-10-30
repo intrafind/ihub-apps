@@ -40,21 +40,21 @@ function resolveBaseUrl(app) {
 
 /**
  * The search profile an app's conversations search, resolved the way the
- * adapter does when it creates one: the iAssistant profile's own search
- * profile first, then the configured one (app → model → service defaults).
+ * adapter does when it creates one: the named iFinder iAssistant's, none when
+ * the app searches all of the user's profiles, or the configured one (app →
+ * model → service defaults) unless the user does not have it.
  * Never throws — without a profile the history is returned as iFinder sent it.
  */
 async function resolveConversationSearchProfile(app, { user, baseUrl }) {
   try {
+    const appConfig = app?.iassistant || {};
     const modelConfig = preferredModelConfig(app);
     const serviceConfig = iAssistantService.getConfig();
-    const { searchProfile } = await iAssistantProfileResolver.resolveSearchProfile({
-      profileId:
-        app?.iassistant?.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
+    const { searchProfile } = await iAssistantProfileResolver.resolveScope({
+      assistantId: appConfig.assistantId || modelConfig.assistantId,
+      allSearchProfiles: appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false,
       configuredSearchProfile:
-        app?.iassistant?.searchProfile ||
-        modelConfig.searchProfile ||
-        serviceConfig.defaultSearchProfile,
+        appConfig.searchProfile || modelConfig.searchProfile || serviceConfig.defaultSearchProfile,
       user,
       baseUrl
     });
@@ -91,12 +91,12 @@ async function resolveConversationSearchProfile(app, { user, baseUrl }) {
 export async function conversationSearchProfile(app, { chatId, conversationId, user, baseUrl }) {
   if (isValidId(chatId)) {
     const state = await conversationStateManager.loadState(chatId, { ownerId: user?.id ?? null });
-    if (
-      state?.conversationId === conversationId &&
-      typeof state.searchProfile === 'string' &&
-      state.searchProfile
-    ) {
-      return state.searchProfile;
+    if (state?.conversationId === conversationId) {
+      // A conversation that searches all of the user's profiles has none.
+      if (state.searchScope === 'all') return undefined;
+      if (typeof state.searchProfile === 'string' && state.searchProfile) {
+        return state.searchProfile;
+      }
     }
   }
   return resolveConversationSearchProfile(app, { user, baseUrl });

@@ -3,6 +3,7 @@
 
 import logger from '../../utils/logger.js';
 import { throttledRun } from '../../requestThrottler.js';
+import { logAudit } from '../AuditLogService.js';
 import { DiagnosticsReport, STATUS } from '../integrations/integrationDiagnostics.js';
 import { DirectoryConnectionError, openDirectoryConnection } from './connection.js';
 import {
@@ -13,12 +14,14 @@ import {
   searchPeople,
   searchResult
 } from './LdapDirectory.js';
+import { MAX_FILTER_LENGTH, browseChildren, browseRead, browseSearch } from './LdapBrowser.js';
 import { mapEntryToPerson } from './mapping.js';
 import { ToolArgumentError } from './query.js';
 import {
+  BROWSE_ACTIONS,
   findDirectory,
   hostOf,
-  mayUseDirectory,
+  mayUseDirectoryTool,
   resolveDirectory
 } from './PeopleDirectoryService.js';
 
@@ -61,8 +64,56 @@ function inDirectoryQueue(resolved, fn, queueId = resolved.id) {
 const OPERATIONS = {
   search_people: searchPeople,
   get_person: getPerson,
-  list_units: listUnits
+  list_units: listUnits,
+  browse_search: browseSearch,
+  browse_read: browseRead,
+  browse_children: browseChildren
 };
+
+/** How many entries, people or units a result holds, for the log. */
+function resultCount(result) {
+  for (const key of ['results', 'units', 'entries', 'children']) {
+    if (Array.isArray(result?.[key])) return result[key].length;
+  }
+  return result?.error ? 0 : 1;
+}
+
+/** Most requested attribute names written to one audit record. */
+const MAX_AUDITED_ATTRIBUTES = 50;
+
+/**
+ * A model-supplied argument as the audit record holds it: text cut at the
+ * filter limit, lists cut at {@link MAX_AUDITED_ATTRIBUTES}. Refused calls are
+ * audited before their arguments are checked, so nothing here is trusted.
+ */
+function auditable(value) {
+  if (Array.isArray(value)) return value.slice(0, MAX_AUDITED_ATTRIBUTES).map(auditable);
+  if (typeof value === 'string') return value.slice(0, MAX_FILTER_LENGTH);
+  return typeof value === 'number' || typeof value === 'boolean' || value === null
+    ? value
+    : String(value).slice(0, MAX_FILTER_LENGTH);
+}
+
+/**
+ * The audit record of an LDAP browser call: who asked what of which directory,
+ * and how many entries came back — never the values. Filters are written as
+ * sent (up to the filter limit); they can hold names or e-mail addresses.
+ */
+function auditBrowse(user, directoryId, action, params, outcome) {
+  const asked = { tool: action };
+  for (const key of ['filter', 'base', 'scope', 'dn', 'attributes']) {
+    if (params[key] !== undefined) asked[key] = auditable(params[key]);
+  }
+  logAudit({
+    action: 'read',
+    resource: 'ldapBrowse',
+    resourceId: directoryId,
+    summary: JSON.stringify({ ...asked, ...outcome }),
+    result: outcome.error ? 'failure' : 'success',
+    source: 'web',
+    actor: user || { id: 'unknown' }
+  });
+}
 
 /**
  * Run a directory tool for the user in the call's context.
@@ -76,20 +127,30 @@ const OPERATIONS = {
 export async function runPeopleDirectoryTool(tool, params = {}, deps = {}) {
   const { id: directoryId, action } = tool._peopleDirectory || {};
   const operation = OPERATIONS[action];
+  const browse = BROWSE_ACTIONS.includes(action);
   const raw = findDirectory(directoryId);
   // The last guard: the listing already left the tool out for this user.
-  if (!operation || !raw || raw.enabled === false || !mayUseDirectory(params.user, directoryId)) {
+  if (
+    !operation ||
+    !raw ||
+    raw.enabled === false ||
+    !mayUseDirectoryTool(params.user, { id: directoryId, action })
+  ) {
     logger.warn('People directory tool refused', {
       component: COMPONENT,
       directoryId,
       action,
       userId: params.user?.id || null
     });
+    if (browse) auditBrowse(params.user, directoryId, action, params, { error: 'access_denied' });
     throw new Error(`Tool ${tool.id} is not available`);
   }
 
   const resolved = resolveDirectory(raw);
-  if (resolved.problems.length > 0) {
+  if (
+    resolved.problems.length > 0 ||
+    (browse && (!resolved.browse || resolved.browse.problems.length > 0))
+  ) {
     return {
       directory: directoryId,
       error: { code: 'configuration', message: MODEL_ERROR_MESSAGES.default }
@@ -99,20 +160,21 @@ export async function runPeopleDirectoryTool(tool, params = {}, deps = {}) {
   const startedAt = Date.now();
   try {
     const result = await inDirectoryQueue(resolved, () => operation(resolved, params, deps));
-    logger.info('People directory search', {
+    logger.info(browse ? 'LDAP browser call' : 'People directory search', {
       component: COMPONENT,
       directoryId,
       action,
       userId: params.user?.id || null,
-      resultCount: Array.isArray(result?.results)
-        ? result.results.length
-        : Array.isArray(result?.units)
-          ? result.units.length
-          : result?.error
-            ? 0
-            : 1,
+      resultCount: resultCount(result),
       durationMs: Date.now() - startedAt
     });
+    if (browse) {
+      auditBrowse(params.user, directoryId, action, params, {
+        entries: resultCount(result),
+        truncated: result?.truncated === true,
+        ...(result?.error && { error: result.error.code })
+      });
+    }
     // The query is personal data: only at debug level.
     logger.debug('People directory query', {
       component: COMPONENT,
@@ -123,6 +185,11 @@ export async function runPeopleDirectoryTool(tool, params = {}, deps = {}) {
     });
     return result;
   } catch (error) {
+    if (browse) {
+      auditBrowse(params.user, directoryId, action, params, {
+        error: error?.code || 'directory_error'
+      });
+    }
     if (error instanceof ToolArgumentError) {
       return { directory: directoryId, error: { code: error.code, message: error.message } };
     }
@@ -192,13 +259,16 @@ export async function testDirectory(raw, { query, deps = {}, unsaved = false } =
     ...extra
   });
 
+  const browseProblems = (resolved.browse?.problems || []).map(
+    problem => `LDAP browser: ${problem}`
+  );
   report.add({
     id: 'configuration',
     label: 'Effective configuration',
     status:
       resolved.problems.length > 0
         ? STATUS.FAIL
-        : resolved.warnings.length > 0
+        : resolved.warnings.length > 0 || browseProblems.length > 0
           ? STATUS.WARN
           : STATUS.OK,
     message:
@@ -218,6 +288,16 @@ export async function testDirectory(raw, { query, deps = {}, unsaved = false } =
       searchAttributes: resolved.searchAttributes,
       tlsCa: resolved.tlsCa,
       ignoredTlsOptionKeys: resolved.ignoredTlsOptionKeys,
+      ldapBrowser: resolved.browse
+        ? {
+            base: resolved.browse.base || null,
+            groups: resolved.browse.groups,
+            bind: resolved.browse.ownBind
+              ? `own account ${resolved.browse.bind?.dn || resolved.browse.bind?.mode}`
+              : 'the directory bind',
+            maxResults: resolved.browse.maxResults
+          }
+        : 'off',
       mapping: Object.fromEntries(
         Object.entries(resolved.mapping).map(([field, sources]) => [
           field,
@@ -225,7 +305,7 @@ export async function testDirectory(raw, { query, deps = {}, unsaved = false } =
         ])
       )
     },
-    hints: [...resolved.problems, ...resolved.warnings]
+    hints: [...resolved.problems, ...resolved.warnings, ...browseProblems]
   });
   if (resolved.problems.length > 0) {
     return finish(false, 'The directory configuration is incomplete.');

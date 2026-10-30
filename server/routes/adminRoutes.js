@@ -35,6 +35,7 @@ import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
 import registerIntegrationTestRoutes from './admin/integrationTest.js';
+import registerAdminIFinderAssistantsRoutes from './admin/iFinderAssistants.js';
 import registerAdminOfficeIntegrationRoutes from './admin/officeIntegration.js';
 import registerAdminBrowserExtensionRoutes from './admin/browserExtension.js';
 import registerAdminCopilotAgentRoutes from './admin/copilotAgent.js';
@@ -90,6 +91,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);
   registerIntegrationTestRoutes(app);
+  registerAdminIFinderAssistantsRoutes(app);
   registerAdminOfficeIntegrationRoutes(app);
   registerAdminBrowserExtensionRoutes(app);
   registerAdminCopilotAgentRoutes(app);

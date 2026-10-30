@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { formatBytes } from '../../admin/utils/systemResourcesFormat';
-import { projectUsage } from '../utils/projectView';
+import { isIFinderProject, projectUsage } from '../utils/projectView';
 
 const BAR_COLORS = {
   ok: 'bg-indigo-500',
@@ -69,6 +69,19 @@ function ProjectUsageBar({ project, config, className = '' }) {
           limit: formatBytes(usage.bytes.limit)
         })
       : formatBytes(usage.bytes.used);
+  // A smart collection holds ids, not files: one bar, its documents against
+  // iFinder's cap, and no storage.
+  if (isIFinderProject(project)) {
+    return (
+      <div className={`grid grid-cols-1 gap-3 ${className}`} data-testid="project-usage">
+        <QuotaBar
+          label={t('projects.usage.documents', 'Documents')}
+          value={itemsValue}
+          state={usage.items}
+        />
+      </div>
+    );
+  }
   return (
     <div
       className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${className}`}

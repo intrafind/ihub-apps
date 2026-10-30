@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import IntegrationTestResults from '../IntegrationTestResults';
 import AdminLoadError from '../AdminLoadError';
-import CertificateChain from './CertificateChain';
 import PersonResultsTable from './PersonResultsTable';
 import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS, PRIMARY_BUTTON_CLASS } from './formStyles';
 import { testPeopleDirectory } from '../../../../api/peopleDirectoriesAdminApi';
@@ -16,8 +15,7 @@ import { getAdminApiErrorMessage } from '../../../../api/adminApi';
  * The test panel of the directory editor. It sends the form as it stands —
  * saved or not — to `POST /admin/people-directories/test`, with an optional
  * name for a sample search, and shows each step (resolve, network check,
- * connect, StartTLS, bind, search, mapping), the certificate chain when
- * verification failed, and the mapped people.
+ * connect, StartTLS, bind, search, mapping) and the mapped people.
  *
  * It sits outside the editor's `<form>`, so Enter in the name field runs the
  * test and never saves.
@@ -68,9 +66,6 @@ function DirectoryTestPanel({ buildDirectory, fields }) {
       label: t(`admin.peopleDirectories.test.steps.${step.id}`, step.label || step.id)
     }))
   };
-  const chainSteps = (result?.steps || []).filter(
-    step => Array.isArray(step?.details?.certificateChain) && step.details.certificateChain.length
-  );
   const summary = result?.summary;
 
   return (
@@ -163,14 +158,6 @@ function DirectoryTestPanel({ buildDirectory, fields }) {
             title={t('admin.peopleDirectories.test.resultTitle', 'Connection test')}
             result={localized}
           />
-          {chainSteps.map(step => (
-            <CertificateChain
-              key={step.id}
-              chain={step.details.certificateChain}
-              missingIssuer={step.details.missingIssuer}
-              defaultOpen={step.status !== 'ok'}
-            />
-          ))}
           {Array.isArray(result.results) && (
             <PersonResultsTable results={result.results} fields={fields} />
           )}

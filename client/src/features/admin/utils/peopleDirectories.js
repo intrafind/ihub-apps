@@ -26,11 +26,13 @@ export const DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 /**
  * Ids a directory cannot take (as on the server): `peopledirectories` selects
- * every directory, `new` is this editor's create route, and the others are
+ * every directory, `ldapbrowse` every LDAP browser, `new` is this editor's
+ * create route, and the others are
  * tool id prefixes the server routes elsewhere.
  */
 export const RESERVED_DIRECTORY_IDS = [
   'peopledirectories',
+  'ldapbrowse',
   'new',
   'app',
   'workflow',
@@ -39,8 +41,15 @@ export const RESERVED_DIRECTORY_IDS = [
   'a2a'
 ];
 
-/** Name of a trust anchor in the certificate store. */
+/** Name of a trust anchor: `contents/config/certs/<name>.pem` on the server. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
+
+/** The admin LDAP browser's result limit: default and upper bound, as on the server. */
+export const BROWSE_MAX_RESULTS_DEFAULT = 50;
+export const BROWSE_MAX_RESULTS_LIMIT = 200;
+
+/** An LDAP attribute name, as the server schema checks it. */
+const ATTRIBUTE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
 
 /** The shipped "People search" app, offered for enabling with the first directory. */
 export const PEOPLE_SEARCH_APP_ID = 'people-directory';
@@ -126,6 +135,15 @@ export const FIELD_INPUT_IDS = {
   requestDelayMs: 'pd-request-delay-ms',
   groups: 'pd-groups',
   dataFlow: 'pd-data-flow-internal',
+  browse: 'pd-browse-enabled',
+  'browse.groups': 'pd-browse-groups',
+  'browse.maxResults': 'pd-browse-max-results',
+  'browse.base': 'pd-browse-base',
+  // Error links go to a control that is always rendered while browse is on.
+  'browse.bind': 'pd-browse-bind-mode-directory',
+  'browse.bind.dn': 'pd-browse-bind-dn',
+  'browse.bind.passwordRef': 'pd-browse-bind-password-ref',
+  'browse.denyAttributes': 'pd-browse-deny-attributes',
   name: 'pd-name',
   description: 'pd-description'
 };
@@ -284,7 +302,7 @@ export function directoryToForm(directory = {}) {
     attributeMapping: mapping,
     units: directory.units === true,
     allowPlaintext: directory.allowPlaintext === true,
-    tlsCa: [...asList(directory.tlsCa)],
+    tlsCa: asList(directory.tlsCa).join('\n'),
     allowedHosts: asList(directory.allowedHosts).join('\n'),
     maxResults: numberText(directory.maxResults),
     timeoutMs: numberText(directory.timeoutMs),
@@ -293,8 +311,65 @@ export function directoryToForm(directory = {}) {
     groups: Array.isArray(directory.groups) ? [...directory.groups] : ['authenticated'],
     dataFlow: directory.dataFlow === 'external' ? 'external' : 'internal',
     name: withFormLanguages(directory.name),
-    description: withFormLanguages(directory.description)
+    description: withFormLanguages(directory.description),
+    ...browseToForm(directory.browse)
   };
+}
+
+/**
+ * The LDAP browser fields of the form. `hasBrowse` remembers that the
+ * directory had a `browse` block, so switching the browser off keeps its
+ * settings instead of dropping them.
+ *
+ * @param {Object|undefined} browse - Stored `browse` block
+ * @returns {Object} Form fields
+ */
+function browseToForm(browse) {
+  const bind = browse?.bind;
+  let browseBindMode = 'directory';
+  if (bind) browseBindMode = bind.mode === 'service' ? 'service' : 'anonymous';
+  return {
+    hasBrowse: Boolean(browse),
+    browseEnabled: browse?.enabled === true,
+    browseGroups: Array.isArray(browse?.groups) ? [...browse.groups] : ['admins'],
+    browseMaxResults: numberText(browse?.maxResults),
+    browseBase: browse?.base ?? '',
+    browseBindMode,
+    browseBindDn: bind?.dn ?? '',
+    browseBindPasswordRef: bind?.passwordRef ?? '',
+    browseDenyAttributes: asList(browse?.denyAttributes).join('\n')
+  };
+}
+
+/**
+ * The stored `browse` block of a form, or undefined when the directory never
+ * had one and the browser stays off.
+ *
+ * @param {Object} form
+ * @returns {Object|undefined}
+ */
+function formToBrowse(form) {
+  if (!form.browseEnabled && !form.hasBrowse) return undefined;
+  const browse = {
+    enabled: Boolean(form.browseEnabled),
+    groups: [...(form.browseGroups || [])]
+  };
+  const maxResults = trimmed(form.browseMaxResults);
+  if (maxResults !== '') browse.maxResults = Number(maxResults);
+  const base = trimmed(form.browseBase);
+  if (base) browse.base = base;
+  if (form.browseBindMode === 'anonymous') {
+    browse.bind = { mode: 'anonymous' };
+  } else if (form.browseBindMode === 'service') {
+    browse.bind = {
+      mode: 'service',
+      dn: trimmed(form.browseBindDn),
+      passwordRef: trimmed(form.browseBindPasswordRef)
+    };
+  }
+  const denyAttributes = parseList(form.browseDenyAttributes);
+  if (denyAttributes.length > 0) browse.denyAttributes = denyAttributes;
+  return browse;
 }
 
 /**
@@ -350,7 +425,7 @@ export function formToDirectory(form) {
 
   if (form.units) directory.units = true;
   if (form.allowPlaintext) directory.allowPlaintext = true;
-  const tlsCa = parseList((form.tlsCa || []).join(','));
+  const tlsCa = parseList(form.tlsCa);
   if (tlsCa.length > 0) directory.tlsCa = tlsCa;
   const allowedHosts = parseList(form.allowedHosts);
   if (allowedHosts.length > 0) directory.allowedHosts = allowedHosts;
@@ -362,6 +437,8 @@ export function formToDirectory(form) {
 
   directory.groups = [...(form.groups || [])];
   directory.dataFlow = form.dataFlow === 'external' ? 'external' : 'internal';
+  const browse = formToBrowse(form);
+  if (browse) directory.browse = browse;
 
   const name = withoutEmptyTexts(form.name);
   if (name) directory.name = name;
@@ -446,6 +523,16 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
     }
   }
 
+  const badCa = parseList(form.tlsCa).find(name => !CERTIFICATE_NAME_PATTERN.test(name));
+  if (badCa) {
+    add(
+      'tlsCa',
+      'admin.peopleDirectories.errors.tlsCaPattern',
+      '"{{name}}" is not a certificate name: use lower-case letters, digits and "-", without ".pem".',
+      { name: badCa }
+    );
+  }
+
   const filter = trimmed(form.personFilter);
   if (filter && !(filter.startsWith('(') && filter.endsWith(')'))) {
     add(
@@ -467,6 +554,57 @@ export function validateDirectoryForm(form, { isNew = false, otherIds = [], limi
         'admin.peopleDirectories.errors.limitRange',
         'Enter a whole number from {{min}} to {{max}}.',
         { min, max }
+      );
+    }
+  }
+
+  // The browse block is saved while the browser is on, and kept while it is
+  // off (formToBrowse), so its fields are checked whenever it is sent.
+  if (form.browseEnabled && (form.browseGroups || []).length === 0) {
+    add(
+      'browse.groups',
+      'admin.peopleDirectories.errors.browseGroupsRequired',
+      'Choose who may use the LDAP browser.'
+    );
+  }
+  if (form.browseEnabled || form.hasBrowse) {
+    const maxResults = trimmed(form.browseMaxResults);
+    if (maxResults !== '') {
+      const value = Number(maxResults);
+      if (!Number.isInteger(value) || value < 1 || value > BROWSE_MAX_RESULTS_LIMIT) {
+        add(
+          'browse.maxResults',
+          'admin.peopleDirectories.errors.limitRange',
+          'Enter a whole number from {{min}} to {{max}}.',
+          { min: 1, max: BROWSE_MAX_RESULTS_LIMIT }
+        );
+      }
+    }
+    if (form.browseBindMode === 'service') {
+      if (!trimmed(form.browseBindDn)) {
+        add(
+          'browse.bind.dn',
+          'admin.peopleDirectories.errors.bindDnRequired',
+          'Enter the bind DN.'
+        );
+      }
+      if (!trimmed(form.browseBindPasswordRef)) {
+        add(
+          'browse.bind.passwordRef',
+          'admin.peopleDirectories.errors.passwordRefRequired',
+          'Choose the credential that holds the password.'
+        );
+      }
+    }
+    const badAttribute = parseList(form.browseDenyAttributes).find(
+      name => !ATTRIBUTE_NAME_PATTERN.test(name)
+    );
+    if (badAttribute) {
+      add(
+        'browse.denyAttributes',
+        'admin.peopleDirectories.errors.attributeName',
+        '"{{name}}" is not an LDAP attribute name.',
+        { name: badAttribute }
       );
     }
   }
@@ -645,108 +783,4 @@ export function toolIdsFor(id, units) {
   const ids = [`${prefix}__search_people`, `${prefix}__get_person`];
   if (units) ids.push(`${prefix}__list_units`);
   return ids;
-}
-
-/**
- * A certificate name from an uploaded file name: lower-cased, extension
- * dropped, every other character than a-z, 0-9 and "-" turned into "-".
- *
- * @param {string} fileName - e.g. "PCA-1-Verwaltung-23.pem"
- * @returns {string} e.g. "pca-1-verwaltung-23"
- */
-export function certificateNameFromFileName(fileName) {
-  const name = String(fileName ?? '')
-    .replace(/\.(pem|crt|cer|der)$/i, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64)
-    .replace(/-+$/, '');
-  return name || 'certificate';
-}
-
-/**
- * Base64 of raw bytes, in chunks so a large file does not overflow the
- * argument list of `String.fromCharCode`.
- *
- * @param {Uint8Array} bytes
- * @returns {string}
- */
-export function bytesToBase64(bytes) {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
-/**
- * The request payload for an uploaded certificate file: PEM text as it is, any
- * other content (DER) as base64. The extension does not decide it, because
- * `.crt` and `.cer` files come in both encodings.
- *
- * @param {Uint8Array} bytes - File content
- * @returns {{content: string, encoding: 'pem'|'base64'}}
- */
-export function certificatePayloadFromBytes(bytes) {
-  const text = new TextDecoder('utf-8').decode(bytes);
-  if (text.includes('-----BEGIN')) return { content: text, encoding: 'pem' };
-  return { content: bytesToBase64(bytes), encoding: 'base64' };
-}
-
-/**
- * Read an uploaded certificate file into the request payload.
- *
- * @param {File} file
- * @returns {Promise<{content: string, encoding: 'pem'|'base64'}>}
- */
-export async function readCertificateFile(file) {
-  const buffer = await file.arrayBuffer();
-  return certificatePayloadFromBytes(new Uint8Array(buffer));
-}
-
-/**
- * The expiry state of a certificate from the store.
- *
- * @param {{expired?: boolean, expiringSoon?: boolean}} certificate
- * @returns {'expired'|'expiringSoon'|'valid'}
- */
-export function certificateExpiryState(certificate) {
-  if (certificate?.expired) return 'expired';
-  if (certificate?.expiringSoon) return 'expiringSoon';
-  return 'valid';
-}
-
-/**
- * The common name (CN) of a distinguished name as the server prints it —
- * one "type=value" per line ("C=DE\nO=PKI-1-Verwaltung\nCN=PCA-1-Verwaltung-23")
- * or comma-separated — or the whole text when it has no CN.
- *
- * @param {string} subject
- * @returns {string} e.g. "PCA-1-Verwaltung-23"
- */
-export function commonNameOf(subject) {
-  const text = String(subject ?? '').trim();
-  const match = /(?:^|[\n,+])\s*CN=([^\n,+]+)/i.exec(text);
-  return match ? match[1].trim() : text;
-}
-
-/**
- * A date from the server as a local date, or the raw text when it does not parse.
- *
- * @param {string} value - e.g. "Dec 31 23:59:59 2032 GMT" or an ISO date
- * @param {string} language - UI language
- * @returns {string}
- */
-export function formatCertificateDate(value, language) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(language || undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
 }

@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../../api/adminApi';
+
+const INPUT_CLASS =
+  'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
 
 /**
  * IAssistantSection - iAssistant integration configuration card for the App form.
@@ -9,7 +14,32 @@ import { useTranslation } from 'react-i18next';
  * only ever reads/writes `app.iassistant` via the passed-in onChange.
  */
 function IAssistantSection({ app, onChange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // The iAssistants iFinder shows the signed-in admin; loaded on request,
+  // because opening the app editor should not call iFinder.
+  const [assistants, setAssistants] = useState(null);
+  const [loadingAssistants, setLoadingAssistants] = useState(false);
+  const [assistantsError, setAssistantsError] = useState('');
+
+  const assistantId = app.iassistant?.assistantId ?? '';
+  const usesAssistant = assistantId.trim() !== '';
+  const allSearchProfiles = app.iassistant?.allSearchProfiles === true;
+  const selectedAssistant = assistants?.find(assistant => assistant.id === assistantId);
+
+  const loadAssistants = async () => {
+    setLoadingAssistants(true);
+    setAssistantsError('');
+    try {
+      const response = await makeAdminApiCall(
+        `/admin/integrations/ifinder/assistants?lang=${encodeURIComponent(i18n.language || 'en')}`
+      );
+      setAssistants(response.data?.assistants ?? []);
+    } catch (err) {
+      setAssistantsError(getAdminApiErrorMessage(err));
+    } finally {
+      setLoadingAssistants(false);
+    }
+  };
 
   const handleIAssistantChange = updates => {
     onChange({
@@ -52,6 +82,77 @@ function IAssistantSection({ app, onChange }) {
           {/* iAssistant settings - only shown when enabled */}
           {app.iassistant?.enabled && (
             <div className="space-y-4 pl-1">
+              {/* iFinder iAssistant */}
+              <div>
+                <label
+                  htmlFor="iassistant-assistant-id"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('admin.apps.edit.iassistantAssistantId', 'iFinder iAssistant')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t(
+                    'admin.apps.edit.iassistantAssistantIdDesc',
+                    'An iAssistant from iFinder. It sets both the conversation profile and the search profile, and only users who have its search profile can use it. Leave empty to set the profiles below.'
+                  )}
+                </p>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    id="iassistant-assistant-id"
+                    type="text"
+                    list="iassistant-assistant-options"
+                    value={assistantId}
+                    onChange={e => handleIAssistantChange({ assistantId: e.target.value.trim() })}
+                    placeholder="legal-advisor"
+                    className={`${INPUT_CLASS} mt-0`}
+                  />
+                  <datalist id="iassistant-assistant-options">
+                    {(assistants ?? []).map(assistant => (
+                      <option key={assistant.id} value={assistant.id}>
+                        {assistant.name}
+                      </option>
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    onClick={loadAssistants}
+                    disabled={loadingAssistants}
+                    className="shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-60"
+                  >
+                    {loadingAssistants
+                      ? t('admin.apps.edit.iassistantAssistantLoading', 'Loading…')
+                      : t('admin.apps.edit.iassistantAssistantLoad', 'Load from iFinder')}
+                  </button>
+                </div>
+                {assistantsError && (
+                  <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">
+                    {t('admin.apps.edit.iassistantAssistantLoadFailed', {
+                      defaultValue: 'The iAssistants could not be loaded: {{error}}',
+                      error: assistantsError
+                    })}
+                  </p>
+                )}
+                {assistants && assistants.length === 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t(
+                      'admin.apps.edit.iassistantAssistantNoneVisible',
+                      'iFinder shows you no iAssistants. You can still enter an ID.'
+                    )}
+                  </p>
+                )}
+                {selectedAssistant && (
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                    {selectedAssistant.name} —{' '}
+                    {t('admin.apps.edit.iassistantAssistantProfiles', {
+                      defaultValue:
+                        'Conversation profile: {{conversationProfile}} · Search profile: {{searchProfile}}',
+                      conversationProfile: selectedAssistant.conversationProfileId || '–',
+                      searchProfile: selectedAssistant.searchProfileId || '–'
+                    })}
+                  </p>
+                )}
+              </div>
+
               {/* Profile ID */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -68,8 +169,14 @@ function IAssistantSection({ app, onChange }) {
                   value={app.iassistant?.profileId ?? ''}
                   onChange={e => handleIAssistantChange({ profileId: e.target.value })}
                   placeholder="iassistant-workspace"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  disabled={usesAssistant}
+                  className={INPUT_CLASS}
                 />
+                {usesAssistant && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t('admin.apps.edit.iassistantAssistantOverrides', 'Set by the iAssistant.')}
+                  </p>
+                )}
               </div>
 
               {/* Search Profile */}
@@ -88,8 +195,43 @@ function IAssistantSection({ app, onChange }) {
                   value={app.iassistant?.searchProfile ?? ''}
                   onChange={e => handleIAssistantChange({ searchProfile: e.target.value })}
                   placeholder="searchprofile-standard"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  disabled={usesAssistant || allSearchProfiles}
+                  className={INPUT_CLASS}
                 />
+                {usesAssistant && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t('admin.apps.edit.iassistantAssistantOverrides', 'Set by the iAssistant.')}
+                  </p>
+                )}
+              </div>
+
+              {/* All search profiles of the user */}
+              <div className="flex items-start gap-3">
+                <input
+                  id="iassistant-all-search-profiles"
+                  type="checkbox"
+                  checked={allSearchProfiles}
+                  disabled={usesAssistant}
+                  onChange={e => handleIAssistantChange({ allSearchProfiles: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-60"
+                />
+                <div>
+                  <label
+                    htmlFor="iassistant-all-search-profiles"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t(
+                      'admin.apps.edit.iassistantAllSearchProfiles',
+                      "Search all of the user's search profiles"
+                    )}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.apps.edit.iassistantAllSearchProfilesDesc',
+                      'Sends no search profile, so iFinder searches everything the user may see through any of their search profiles. Requires iFinder 6.9 or later.'
+                    )}
+                  </p>
+                </div>
               </div>
 
               {/* Extra Context */}

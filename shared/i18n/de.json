@@ -3264,6 +3264,16 @@
         "iassistantProfileIdDesc": "Das iAssistant-Profil, das für diese App verwendet werden soll (z.B. iassistant-workspace)",
         "iassistantSearchProfile": "Suchprofil",
         "iassistantSearchProfileDesc": "Das Suchprofil, das für den Abruf mit iFinder verwendet werden soll (z.B. searchprofile-standard)",
+        "iassistantAssistantId": "iFinder-iAssistant",
+        "iassistantAssistantIdDesc": "Ein iAssistant aus iFinder. Er legt Konversationsprofil und Suchprofil fest und kann nur von Benutzern verwendet werden, die sein Suchprofil haben. Leer lassen, um die Profile unten festzulegen.",
+        "iassistantAssistantLoad": "Aus iFinder laden",
+        "iassistantAssistantLoading": "Wird geladen…",
+        "iassistantAssistantLoadFailed": "Die iAssistants konnten nicht geladen werden: {{error}}",
+        "iassistantAssistantNoneVisible": "iFinder zeigt Ihnen keine iAssistants. Sie können trotzdem eine ID eingeben.",
+        "iassistantAssistantProfiles": "Konversationsprofil: {{conversationProfile}} · Suchprofil: {{searchProfile}}",
+        "iassistantAssistantOverrides": "Vom iAssistant festgelegt.",
+        "iassistantAllSearchProfiles": "In allen Suchprofilen des Benutzers suchen",
+        "iassistantAllSearchProfilesDesc": "Sendet kein Suchprofil, sodass iFinder alles durchsucht, was der Benutzer über eines seiner Suchprofile sehen darf. Erfordert iFinder 6.9 oder neuer.",
         "iassistantExtraContext": "Zusätzlicher Kontext",
         "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Unterstützt Prompt-Variablen wie {{user_name}}, {{user_email}}, {{date}} sowie eigene globale Variablen. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
@@ -4357,44 +4367,28 @@
         "error": "Die App konnte nicht aktiviert werden: {{error}}",
         "text": "Auch die App „Personensuche“ aktivieren? Benutzer können dann im Chat nach Personen fragen; sie durchsucht jedes Verzeichnis, das sie verwenden dürfen."
       },
-      "certificates": {
-        "ca": "CA",
-        "compareFingerprint": "Vergleichen Sie den SHA-256-Fingerabdruck vor dem Speichern mit dem, den der Herausgeber veröffentlicht (für die Verwaltungs-PKI: die Fingerabdruck-Seite des BSI). Speichern Sie kein Zertifikat, dessen Fingerabdruck Sie nicht bestätigen können.",
-        "confirm": "Ich habe den Fingerabdruck mit dem des Herausgebers verglichen, und er stimmt überein.",
-        "empty": "Der Speicher ist leer.",
-        "expired": "Abgelaufen",
-        "expiresIn_one": "Läuft in {{count}} Tag ab",
-        "expiresIn_other": "Läuft in {{count}} Tagen ab",
-        "file": "Zertifikatsdatei (PEM oder DER)",
-        "fileHelp": ".pem, .crt, .cer oder .der mit einem Zertifikat. Dateien mit einem privaten Schlüssel werden abgelehnt.",
-        "fingerprint": "SHA-256-Fingerabdruck",
-        "inUse": "In Verwendung – entfernen Sie es zuerst aus diesen Verzeichnissen.",
-        "inUseError": "Das Zertifikat „{{name}}“ wird noch verwendet von: {{directories}}.",
-        "intro": "Vertrauensanker für Verzeichnisse, deren Serverzertifikat von einer privaten CA stammt. Ein Verzeichnis vertraut nur den Zertifikaten, die in seinem Abschnitt „Netzwerk“ ausgewählt sind; nichts hier gilt global.",
-        "issuer": "Aussteller",
-        "listTitle": "Zertifikate im Speicher",
-        "loadError": "Der Zertifikatsspeicher konnte nicht geladen werden",
-        "name": "Name im Speicher",
-        "nameHelp": "Unter diesem Namen nennen Verzeichnisse das Zertifikat in „tlsCa“.",
-        "nameInvalid": "Verwenden Sie 1 bis 64 Kleinbuchstaben, Ziffern und „-“.",
-        "nameTaken": "Ein Zertifikat mit diesem Namen gibt es schon.",
-        "reading": "Zertifikat wird gelesen …",
-        "remove": "Entfernen",
-        "removeConfirm": "„{{name}}“ aus dem Zertifikatsspeicher entfernen?",
-        "removeTitle": "Zertifikat entfernen",
-        "removed": "Zertifikat „{{name}}“ entfernt.",
-        "save": "Zertifikat speichern",
-        "saved": "Zertifikat „{{name}}“ gespeichert.",
-        "saving": "Wird gespeichert …",
-        "selfSigned": "Selbstsigniert (Wurzel)",
-        "serialNumber": "Seriennummer",
-        "subject": "Inhaber",
-        "unused": "kein Verzeichnis",
-        "uploadError": "Zertifikat nicht angenommen",
-        "uploadTitle": "Zertifikat hinzufügen",
-        "usedBy": "Verwendet von",
-        "validity": "Gültig",
-        "validityRange": "{{from}} bis {{to}}"
+      "browse": {
+        "auditNote": "Jeder Browser-Aufruf wird mit dem verwendeten Filter ins Audit-Log geschrieben, nie mit den gelieferten Werten. Die App LDAP-Browser wird deaktiviert ausgeliefert: Schalten Sie sie unter Apps ein und geben Sie sie nur Administratorgruppen.",
+        "base": "Browse-Basis",
+        "baseHelp": "Jede DN, die der Browser liest, muss hier liegen. Leer lassen für die Basis-DN, also das ganze Verzeichnis; einen Zweig setzen, um einzuschränken, was Administratoren sehen.",
+        "bind": "Konto zum Browsen",
+        "bindAnonymousHelp": "Nur, was das Verzeichnis anonymen Clients zeigt.",
+        "bindDirectory": "Das Konto des Verzeichnisses",
+        "bindDirectoryHelp": "Das Konto unter Zugang. Der Browser kann alles lesen, was es lesen kann.",
+        "bindDirectoryWarning": "Mit dem Konto des Verzeichnisses hat der Browser die volle Reichweite des Personensuche-Kontos. Verwenden Sie ein eigenes Konto, wenn dieses Konto mehr lesen kann, als Administratoren sehen sollen.",
+        "bindService": "Ein eigenes Konto",
+        "bindServiceHelp": "Ein Nur-Lese-Konto mit genau der Reichweite, die Administratoren haben sollen.",
+        "denyAttributes": "Weitere zurückgehaltene Attribute",
+        "denyAttributesHelp": "Ein Attributname pro Zeile. Passwörter, LAPS- und BitLocker-Geheimnisse, Zertifikate und Fotos werden immer zurückgehalten; ergänzen Sie Attribute, in denen Ihr Verzeichnis weitere Geheimnisse speichert. Zurückgehaltene Attribute können auch nicht in einem Filter vorkommen.",
+        "description": "Administratoren können in normaler Sprache nach dem Verzeichnis fragen und sehen die rohen Einträge: Attribute, Zweige, Gruppenmitglieder. Getrennt von der Personensuche, die nur zugeordnete Felder liefert.",
+        "enabled": "LDAP-Browser anbieten",
+        "enabledHelp": "Fügt die Tools {{tools}} hinzu. Nur Apps, die „ldapBrowse“ auflisten, etwa die App LDAP-Browser, erhalten sie.",
+        "groups": "Wer browsen darf",
+        "groupsHelp": "Angemeldete Benutzer in einer dieser Gruppen. Getrennt von den Gruppen des Verzeichnisses unter Sichtbarkeit: keine gewährt die andere.",
+        "maxResults": "Höchstzahl Einträge pro Suche",
+        "maxResultsHelp": "1 bis {{max}}; leer für {{default}}.",
+        "offKept": "Der LDAP-Browser ist aus. Seine Einstellungen unten bleiben erhalten, bis Sie ihn wieder einschalten.",
+        "title": "LDAP-Browser"
       },
       "edit": {
         "backToList": "Zurück zu den Personenverzeichnissen",
@@ -4416,9 +4410,11 @@
         "unsavedTitle": "Ungespeicherte Änderungen"
       },
       "errors": {
+        "attributeName": "„{{name}}“ ist kein LDAP-Attributname.",
         "authProviderRequired": "Wählen Sie einen Anmeldeanbieter.",
         "baseDnRequired": "Geben Sie den Basis-DN ein.",
         "bindDnRequired": "Geben Sie den Bind-DN ein.",
+        "browseGroupsRequired": "Wählen Sie, wer den LDAP-Browser verwenden darf.",
         "idPattern": "Verwenden Sie 2 bis 32 Kleinbuchstaben, Ziffern und „-“, beginnend mit einem Buchstaben oder einer Ziffer.",
         "idRequired": "Geben Sie eine ID ein.",
         "idReserved": "„{{id}}“ ist reserviert.",
@@ -4426,6 +4422,7 @@
         "limitRange": "Geben Sie eine ganze Zahl von {{min}} bis {{max}} ein.",
         "passwordRefRequired": "Wählen Sie die Zugangsdaten, die das Passwort enthalten.",
         "personFilterPattern": "Ein LDAP-Filter in Klammern, z. B. (objectClass=person).",
+        "tlsCaPattern": "„{{name}}“ ist kein Zertifikatsname: Kleinbuchstaben, Ziffern und „-“ verwenden, ohne „.pem“.",
         "urlPattern": "Verwenden Sie ldaps://host:636 oder ldap://host:389, ohne Pfad.",
         "urlRequired": "Geben Sie die URL des Verzeichnisses ein."
       },
@@ -4466,6 +4463,8 @@
       "list": {
         "add": "Verzeichnis hinzufügen",
         "allOff": "Alle Verzeichnisse sind aus, daher verlässt kein Suchbegriff iHub. Schalten Sie eines ein, um es den Apps anzubieten.",
+        "browse": "LDAP-Browser",
+        "browseHint": "Administratoren in den Browse-Gruppen können mit dem LDAP-Browser rohe Einträge lesen.",
         "delete": "Löschen",
         "deleteConfirm": "„{{name}}“ löschen? Apps verlieren seine Tools sofort.",
         "deleteLabel": "{{name}} löschen",
@@ -4522,16 +4521,11 @@
         "allowedHosts": "Erlaubte Hosts mit privater Adresse",
         "allowedHostsHelp": "Ein Host pro Zeile. iHub lehnt einen Verzeichnis-Host ab, der zu einer privaten, Loopback- oder Link-Local-Adresse auflöst, sofern er nicht hier oder in der plattformweiten SSRF-Freigabeliste steht. Der Host eines wiederverwendeten Anmeldeanbieters ist immer erlaubt.",
         "description": "Wie die Verbindung geschützt ist und welche Server iHub erreichen darf.",
-        "manageCertificates": "Zertifikatsspeicher verwalten (öffnet in neuem Tab)",
         "plaintextRefused": "Dieses Verzeichnis verwendet ldap:// ohne StartTLS. iHub lehnt die Verbindung ab, bis Klartext hier zugelassen ist – besser wechseln Sie zu ldaps:// oder StartTLS.",
         "plaintextWarning": "Ohne TLS gehen die Suchbegriffe und die Einträge, die das Verzeichnis liefert – Namen, Telefonnummern, E-Mail-Adressen –, im Klartext über das Netzwerk. Verwenden Sie ldaps://host:636 oder ldap://host:389 mit StartTLS, wann immer der Server es unterstützt. Das Passwort eines Dienstkontos wird nie im Klartext gesendet.",
-        "reloadCertificates": "Zertifikate neu laden",
         "title": "Netzwerk",
         "tlsCa": "Vertrauenswürdige Zertifikate",
-        "tlsCaEmpty": "Der Zertifikatsspeicher ist leer.",
-        "tlsCaHelp": "Wenn Sie hier Zertifikate auswählen, prüfen nur diese das Serverzertifikat. Lassen Sie alle leer, um den üblichen öffentlichen Wurzelzertifikaten zu vertrauen. Die Prüfung bleibt eingeschaltet, außer der Host steht auf der SSL-Whitelist der Plattform (ssl.ignoreInvalidCertificates mit ssl.domainWhitelist): Dann ist sie auch für dieses Verzeichnis ausgeschaltet, unabhängig von der Auswahl hier.",
-        "tlsCaLoadError": "Der Zertifikatsspeicher konnte nicht geladen werden: {{error}}",
-        "tlsCaMissing": "Nicht im Speicher",
+        "tlsCaHelp": "Nur für eine Zertifizierungsstelle, der der iHub-Server nicht schon vertraut. Ein Name pro Zeile: die Datei contents/config/certs/<name>.pem auf dem Server. Wenn gesetzt, prüfen nur diese Zertifikate das Serverzertifikat. Leer lassen, um den öffentlichen Wurzelzertifikaten und dem Zertifikatsspeicher des Betriebssystems des Servers zu vertrauen. Die Prüfung bleibt aktiv, außer der Host steht auf der SSL-Whitelist der Plattform.",
         "transport": "Transport"
       },
       "presets": {
@@ -4572,17 +4566,10 @@
         "urlHelp": "ldaps://host:636 für TLS. ldap://host:389 braucht StartTLS – oder unter „Netzwerk“ zugelassenen Klartext, was nicht empfohlen ist."
       },
       "subtitle": "LDAP-Verzeichnisse, in denen das Modell nach Personen suchen kann – das eigene und externe wie x500.bund.de. Jedes aktivierte Verzeichnis wird zu nur lesenden Tools, die Apps verwenden können.",
-      "tabs": {
-        "aria": "Bereiche der Personenverzeichnisse",
-        "certificates": "Zertifikate",
-        "directories": "Verzeichnisse"
-      },
       "test": {
-        "chainTitle": "Vom Server gesendete Zertifikatskette ({{count}})",
         "couldNotRun": "Der Test konnte nicht laufen",
         "description": "Verbindet sich mit den Einstellungen, wie sie auf dieser Seite stehen – gespeichert oder nicht –, und sucht nach einem Namen. Es wird nichts gespeichert.",
         "failed": "Test fehlgeschlagen",
-        "missingIssuer": "Dem Aussteller „{{issuer}}“ wird nicht vertraut. Besorgen Sie sein Zertifikat beim Herausgeber, vergleichen Sie den Fingerabdruck, laden Sie es im Tab „Zertifikate“ hoch und wählen Sie es unter „Netzwerk → Vertrauenswürdige Zertifikate“ aus.",
         "noResults": "Die Probesuche hat niemanden gefunden.",
         "passed": "Test bestanden",
         "query": "Gesuchter Name (optional)",
@@ -5600,7 +5587,8 @@
       "answer": "Antwort",
       "search": "Suche",
       "doc_lookup": "Dokumentensuche",
-      "context": "Kontext"
+      "context": "Kontext",
+      "task": "Aufgabe"
     },
     "assess": {
       "started": "Analyse des aktuellen Wissens",
@@ -5647,6 +5635,9 @@
     "finalize": {
       "started": "Antwort wird fertiggestellt...",
       "completed": "Antwort fertig"
+    },
+    "task": {
+      "created": "Hintergrundaufgabe gestartet. Ihr Ergebnis erscheint im iFinder Workspace, sobald sie fertig ist"
     }
   },
   "setup": {
@@ -6968,7 +6959,8 @@
       "submitPages_other": "{{count}} Seiten hinzufügen",
       "linkChangeProject": "Ändern",
       "linkPublishedDetail": "Für alle veröffentlicht",
-      "linkFromAppsDetail": "Gehört zu einer Ihrer Apps"
+      "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
+      "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar."
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -7002,7 +6994,13 @@
       "creating": "Wird angelegt…",
       "submit": "Projekt anlegen",
       "subtitle": "Ein Projekt hält Dokumente, Anweisungen und Chats zusammen. Es bleibt privat, bis Sie es teilen.",
-      "title": "Neues Projekt"
+      "title": "Neues Projekt",
+      "tier": "Wo es liegen soll",
+      "tierIhub": "In iHub",
+      "tierIhubHint": "Dateien, Webseiten und Text, mit Anweisungen und Freigabe.",
+      "tierIfinder": "Als Smart Collection in iFinder",
+      "tierIfinderHint": "Eine Liste von iFinder-Dokumenten, die Sie lesen dürfen. Sie erscheint auch in iFinder.",
+      "submitCollection": "Collection erstellen"
     },
     "errors": {
       "accessChanged": "Ihr Zugriff auf dieses Projekt hat sich inzwischen geändert. Laden Sie die Seite neu.",
@@ -7022,7 +7020,19 @@
       "storageUnavailable": "Projekte sind auf dieser Installation nicht verfügbar.",
       "unsupportedType": "Dieser Dateityp wird nicht unterstützt.",
       "unsupportedTypeWith": "Dieser Dateityp wird nicht unterstützt. Unterstützt: {{types}}.",
-      "userProjectsDisabled": "Benutzerprojekte sind ausgeschaltet."
+      "userProjectsDisabled": "Benutzerprojekte sind ausgeschaltet.",
+      "quotaCollectionDocuments": "Eine Smart Collection enthält höchstens {{limit}} Dokumente; diese hat bereits {{used}}.",
+      "documentNotReadable": "Sie dürfen dieses Dokument in iFinder nicht lesen, es kann deshalb keiner Collection hinzugefügt werden.",
+      "ifinderWritesDisabled": "Smart Collections von iHub aus zu ändern ist auf dieser Installation abgeschaltet. Ändern Sie sie in iFinder.",
+      "ifinderForbidden": "iFinder erlaubt Ihrem Konto nicht, Smart Collections zu ändern.",
+      "tierNotAvailable": "Smart Collections aus iFinder sind für Sie nicht verfügbar.",
+      "ifinderUnavailable": "iFinder ist nicht erreichbar. Versuchen Sie es gleich noch einmal.",
+      "ifinderRejected": "iFinder hat die Änderung nicht akzeptiert.",
+      "collectionBusy": "Die Collection wird gerade geändert. Versuchen Sie es gleich noch einmal.",
+      "ifinderWritePartial": "iFinder meldete einen Fehler, nachdem ein Teil der Änderung durchgelaufen war: {{done}} erledigt, {{not}} nicht. Laden Sie die Collection neu und versuchen Sie es erneut.",
+      "ifinderWriteNone": "iFinder meldete einen Fehler, es wurde nichts geändert. Versuchen Sie es gleich noch einmal.",
+      "ifinderWriteUnknown": "iFinder hat nicht geantwortet, es ist daher nicht bekannt, ob die Änderung durchgelaufen ist. Laden Sie die Collection neu, um es zu sehen.",
+      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente."
     },
     "form": {
       "description": "Beschreibung",
@@ -7084,7 +7094,9 @@
       "title": "Dokumente",
       "tokens": "~{{tokens}} Tokens",
       "selectAll": "Alle Elemente auswählen",
-      "selectItem": "{{name}} auswählen"
+      "selectItem": "{{name}} auswählen",
+      "collectionFull": "Eine Smart Collection enthält so viele Dokumente, wie iFinder erlaubt.",
+      "removeFromCollectionConfirm": "„{{name}}“ aus der Collection entfernen? Das Dokument bleibt in iFinder."
     },
     "list": {
       "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",
@@ -7140,7 +7152,8 @@
       "deleteConfirm": "„{{name}}“ mit allen Dokumenten löschen? Die Chats bleiben erhalten, außerhalb des Projekts. Das lässt sich nicht rückgängig machen.",
       "deleteTitle": "Projekt löschen",
       "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt.",
-      "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um."
+      "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um.",
+      "ifinderManage": "Dies ist eine Smart Collection aus iFinder. Fügen Sie Dokumente hinzu, die Sie lesen dürfen, oder entfernen Sie sie hier: Nur die Liste ändert sich, nie das Dokument. Die Collection ändert sich auch in iFinder. Teilen und Löschen erfolgt in iFinder."
     },
     "preview": {
       "edit": "Text bearbeiten",
@@ -7211,7 +7224,8 @@
       "bytesOf": "{{used}} von {{limit}}",
       "items": "Elemente",
       "itemsOf": "{{used}} von {{limit}}",
-      "storage": "Speicher"
+      "storage": "Speicher",
+      "documents": "Dokumente"
     },
     "estimate": {
       "button": "Tokens schätzen",
@@ -7315,13 +7329,20 @@
       "ifinder": "iFinder",
       "readOnly": "nur lesbar",
       "ifinderHint": "Eine Smart Collection aus iFinder. iHub liest sie nur; ändern Sie sie in iFinder.",
-      "ifinderDetail": "Smart Collection aus iFinder"
+      "ifinderDetail": "Smart Collection aus iFinder",
+      "ifinderManageHint": "Eine Smart Collection aus iFinder. Sie können sie hier umbenennen und Dokumente hinzufügen oder entfernen."
     },
     "ifinder": {
       "sourceTitle": "Smart Collection in iFinder",
       "sourceText": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Hinzufügen, Entfernen, Umbenennen oder Teilen geschieht in iFinder.",
       "documentCount_one": "{{count}} Dokument",
-      "documentCount_other": "{{count}} Dokumente"
+      "documentCount_other": "{{count}} Dokumente",
+      "sourceTextManage": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Sie können die Collection hier umbenennen und Dokumente hinzufügen oder entfernen; die Änderung wird in iFinder vorgenommen. Teilen oder löschen Sie sie in iFinder.",
+      "documentCountOf": "{{count}} von {{max}} Dokumenten",
+      "rename": "Umbenennen",
+      "renameTitle": "Collection umbenennen",
+      "renameSubtitle": "Name und Beschreibung werden auch in iFinder geändert.",
+      "renameHint": "Eine Smart Collection hat keine Anweisungen: Sie ist eine Liste von Dokumenten."
     }
   }
 }

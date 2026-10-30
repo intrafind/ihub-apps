@@ -75,7 +75,7 @@ function cacheUnits(resolved, value) {
  * @param {Object} deps
  * @param {(client: Object) => Promise<*>} work
  */
-async function withConnection(resolved, deps, work) {
+export async function withConnection(resolved, deps, work) {
   const connect = deps.connect || openDirectoryConnection;
   const { client } = await connect(resolved, deps.connectOptions);
   try {
@@ -255,6 +255,48 @@ export function prepareSearch(resolved, args = {}) {
 }
 
 /**
+ * One search with a size limit. A size limit hit — the one sent, or the
+ * server's own (result code 4) — is a partial result, not an error; a time
+ * limit or a timeout is a {@link DirectoryConnectionError}.
+ *
+ * @param {Object} client - Open ldapts client
+ * @param {string} base
+ * @param {Object} options - ldapts search options, with `sizeLimit` and `timeLimit`
+ * @returns {Promise<{entries: Object[], truncated: boolean}>}
+ * @throws {DirectoryConnectionError}
+ */
+export async function boundedSearch(client, base, options) {
+  let entries;
+  let truncated = false;
+  client.lastSearchResultCode = null;
+  try {
+    ({ searchEntries: entries } = await client.search(base, options));
+    // Result code 4: the server's own size limit cut the answer short.
+    if (client.lastSearchResultCode === SIZE_LIMIT_EXCEEDED) truncated = true;
+  } catch (error) {
+    if (error instanceof SizeLimitExceededError) {
+      // Result code 4 without entries: a partial result, not an error.
+      entries = [];
+      truncated = true;
+    } else if (error instanceof TimeLimitExceededError) {
+      throw new DirectoryConnectionError(
+        'The directory stopped the search because it took too long. Narrow the search.',
+        { code: 'time_limit', step: 'search', cause: error }
+      );
+    } else if (isTimeoutError(error)) {
+      throw new DirectoryConnectionError('The directory did not answer the search in time.', {
+        code: 'timeout',
+        step: 'search',
+        cause: error
+      });
+    } else {
+      throw error;
+    }
+  }
+  return { entries, truncated };
+}
+
+/**
  * Run a prepared search on an open connection.
  *
  * @param {Object} resolved
@@ -280,39 +322,13 @@ export async function runSearch(resolved, client, prepared) {
     base = unit.dn;
   }
 
-  let entries;
-  let truncated = false;
-  client.lastSearchResultCode = null;
-  try {
-    ({ searchEntries: entries } = await client.search(base, {
-      scope: 'sub',
-      filter: prepared.filter,
-      attributes: prepared.attributes,
-      sizeLimit: prepared.sizeLimit,
-      timeLimit: timeLimitSeconds(resolved.timeoutMs)
-    }));
-    // Result code 4: the server's own size limit cut the answer short.
-    if (client.lastSearchResultCode === SIZE_LIMIT_EXCEEDED) truncated = true;
-  } catch (error) {
-    if (error instanceof SizeLimitExceededError) {
-      // Result code 4 without entries: a partial result, not an error.
-      entries = [];
-      truncated = true;
-    } else if (error instanceof TimeLimitExceededError) {
-      throw new DirectoryConnectionError(
-        'The directory stopped the search because it took too long. Narrow the search.',
-        { code: 'time_limit', step: 'search', cause: error }
-      );
-    } else if (isTimeoutError(error)) {
-      throw new DirectoryConnectionError('The directory did not answer the search in time.', {
-        code: 'timeout',
-        step: 'search',
-        cause: error
-      });
-    } else {
-      throw error;
-    }
-  }
+  let { entries, truncated } = await boundedSearch(client, base, {
+    scope: 'sub',
+    filter: prepared.filter,
+    attributes: prepared.attributes,
+    sizeLimit: prepared.sizeLimit,
+    timeLimit: timeLimitSeconds(resolved.timeoutMs)
+  });
 
   if (entries.length > prepared.effectiveMaxResults) {
     entries = entries.slice(0, prepared.effectiveMaxResults);
