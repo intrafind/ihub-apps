@@ -114,5 +114,10 @@
   },
   "allowEmptyContent": false,
   "requiredIntegrations": ["ifinder"],
+  "integrations": {
+    "ifinder": {
+      "scopePicker": "inline"
+    }
+  },
   "enabled": true
 }

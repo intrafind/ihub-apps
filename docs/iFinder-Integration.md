@@ -460,6 +460,14 @@ The documents each search found are listed in the chat's tool activity, like web
 
 The research behaviour lives in the system prompt, so an admin can adapt it — for example to name the ticket system or the custom `cust.*` fields of their deployment.
 
+### Choosing the search profile per chat
+
+Users pick where to search. In the iFinder Search app a **Search in: … ▾** picker sits next to the model selector (`integrations.ifinder.scopePicker: "inline"`); in other apps with iFinder tools the **+** menu has an iFinder row under **Use in this chat** that shows the current profile and opens a submenu, and a chip under the composer shows where the next question goes. The list is the user's own search profiles with their display names, the same list `iFinder_listProfiles` reads, narrowed to `iFinder.allowedSearchProfiles` when an admin sets one.
+
+The choice is saved with the chat and restored when the chat is reopened. It binds the model: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFacetValues` and `iFinder_discover` search the picked profile even when the model passes another `searchProfile`. iHub sets the scope on the tool call after the model's arguments, the same way it sets the user and the chat id, and tells the model the profile is fixed; `iFinder_listProfiles` is not offered in such a chat. Without a pick, a profile the model names itself is checked the same way: one the user does not have, or one outside the allow-list, is refused with a message listing the profiles that are available.
+
+The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With `iFinder.allowUserSearchProfileChange: false`, or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
+
 ### Example User Interactions
 
 1. **"Show my latest tickets"**
@@ -598,7 +606,9 @@ Test your iFinder configuration:
 | Setting          | Environment Variable     | Platform Config                | Default                           | Description                                                                    |
 | ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
 | Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
-| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID                                                      |
+| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `searchprofile-standard`          | Default search profile ID; the config value wins over the environment variable |
+| Allowed Profiles | -                        | `iFinder.allowedSearchProfiles` | `[]` (all of the user's)         | Search profiles users may pick per chat, and the tools may search              |
+| Profile Change   | -                        | `iFinder.allowUserSearchProfileChange` | `true`                    | `false` pins every chat to the default search profile                          |
 | Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
 | Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKeyRef`        | -                                 | JWT signing private key (PEM format, env var) or credential ref (Admin > Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
 | Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
@@ -789,6 +799,10 @@ cached per user for five minutes.
 - When iFinder cannot be asked (`source: 'configured-default'`), only the
   configured default is reported. iFinder 6.9 answers 403 to a user without the
   feature `fi_ifinder_allow`.
+- `iFinder.allowedSearchProfiles` narrows the list; the default stays.
+- In a chat whose search profile is fixed (picked by the user, pinned by the
+  app or by `allowUserSearchProfileChange: false`) the tool is not offered;
+  called anyway it answers with that one profile and `fixed: true`.
 
 ### iFinder.discover
 

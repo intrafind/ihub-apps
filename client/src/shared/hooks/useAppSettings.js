@@ -47,6 +47,11 @@ import { useUIConfig } from '../contexts/UIConfigContext';
  *   header color is not changed. The admin app editor's test panel uses it so a
  *   test starts from the app's own defaults, as a new user would see it.
  */
+/** Whether a value is a stored scope map (`{ [integrationId]: scopeId }`). */
+function isScopeMap(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function useAppSettings(
   appId,
   app,
@@ -72,6 +77,10 @@ function useAppSettings(
   const [hostContextFlags, setHostContextFlags] = useState({});
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageQuality, setImageQuality] = useState('Medium');
+  // The scope picked per integration (#3050), `{ ifinder: 'contracts' }`.
+  // Empty means each integration's default; `useIntegrationScopes` checks a
+  // value against what the integration still offers.
+  const [integrationScopes, setIntegrationScopes] = useState({});
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -175,7 +184,8 @@ function useAppSettings(
       enabledTools: app.tools || [],
       websearchEnabled: app.websearch?.enabledByDefault ?? false,
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
-      imageQuality: app.imageGeneration?.quality || 'Medium'
+      imageQuality: app.imageGeneration?.quality || 'Medium',
+      integrationScopes: {}
     };
 
     // Set initial states
@@ -191,6 +201,7 @@ function useAppSettings(
     setWebsearchEnabled(initialState.websearchEnabled);
     setImageAspectRatio(initialState.imageAspectRatio);
     setImageQuality(initialState.imageQuality);
+    setIntegrationScopes(initialState.integrationScopes);
 
     // Load saved settings and override defaults if available
     const savedSettings = isolated ? null : loadAppSettings(settingsAppId);
@@ -224,6 +235,8 @@ function useAppSettings(
       if (savedSettings.imageAspectRatio !== undefined)
         setImageAspectRatio(savedSettings.imageAspectRatio);
       if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
+      if (isScopeMap(savedSettings.integrationScopes))
+        setIntegrationScopes(savedSettings.integrationScopes);
     }
 
     // The chat's own settings are the last word. Only the keys it actually
@@ -244,6 +257,10 @@ function useAppSettings(
         setWebsearchEnabled(chatSettings.websearchEnabled);
       if (chatSettings.imageAspectRatio) setImageAspectRatio(chatSettings.imageAspectRatio);
       if (chatSettings.imageQuality) setImageQuality(chatSettings.imageQuality);
+      // Where the chat searched and whom it asked: a reopened chat continues
+      // there, not in the app's default.
+      if (isScopeMap(chatSettings.integrationScopes))
+        setIntegrationScopes(chatSettings.integrationScopes);
       // The model the chat last used, but only if the app still allows it —
       // the same guard the browser-saved selection gets above.
       if (chatSettings.modelId) {
@@ -270,7 +287,8 @@ function useAppSettings(
         websearchEnabled,
         hostContextFlags,
         imageAspectRatio,
-        imageQuality
+        imageQuality,
+        integrationScopes
       });
     }
   }, [
@@ -289,7 +307,8 @@ function useAppSettings(
     websearchEnabled,
     hostContextFlags,
     imageAspectRatio,
-    imageQuality
+    imageQuality,
+    integrationScopes
   ]);
 
   // Settings object for easy passing to components
@@ -306,7 +325,8 @@ function useAppSettings(
     websearchEnabled,
     hostContextFlags,
     imageAspectRatio,
-    imageQuality
+    imageQuality,
+    integrationScopes
   };
 
   // Setters object for easy passing to components
@@ -323,7 +343,8 @@ function useAppSettings(
     setWebsearchEnabled,
     setHostContextFlags,
     setImageAspectRatio,
-    setImageQuality
+    setImageQuality,
+    setIntegrationScopes
   };
 
   return {

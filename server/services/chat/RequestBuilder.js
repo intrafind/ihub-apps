@@ -11,6 +11,7 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
+import { getScopeProvider } from '../integrations/scopes/index.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 import { matchesModelFilter, modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import {
@@ -83,6 +84,46 @@ export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled
     appId: app.id
   });
   return true;
+}
+
+/**
+ * Bind the turn to the scopes the user picked (#3050): drop the tools that
+ * would only let the model look for another scope, and tell it the scope is
+ * fixed, so an app prompt or skill that says "switch profiles when a search
+ * finds nothing" does not send it after a tool it no longer has.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Array} tools - The turn's tools
+ * @param {Object<string, string>} integrationScopes - `{ [integrationId]: scopeId }`
+ * @returns {Array} the tools to send
+ */
+export function applyIntegrationScopes(llmMessages, tools, integrationScopes) {
+  if (!integrationScopes || typeof integrationScopes !== 'object') return tools;
+  const hidden = new Set();
+  const notes = [];
+  for (const [integrationId, scopeId] of Object.entries(integrationScopes)) {
+    const provider = getScopeProvider(integrationId);
+    if (!provider || !scopeId) continue;
+    for (const toolId of provider.hiddenToolsWhenScoped || []) hidden.add(toolId);
+    if (typeof provider.describeForModel === 'function')
+      notes.push(provider.describeForModel(scopeId));
+  }
+  const scopedTools = hidden.size ? tools.filter(tool => !hidden.has(tool.id)) : tools;
+  // Only for a turn that can use the integration's tools at all.
+  if (notes.length && scopedTools.length) {
+    const systemMessage = llmMessages.find(m => m.role === 'system');
+    const notice = notes.join('\n');
+    if (systemMessage && typeof systemMessage.content === 'string') {
+      if (!systemMessage.content.includes(notice)) {
+        systemMessage.content = systemMessage.content
+          ? `${systemMessage.content}\n\n${notice}`
+          : notice;
+      }
+    } else if (!systemMessage) {
+      llmMessages.unshift({ role: 'system', content: notice });
+    }
+  }
+  return scopedTools;
 }
 
 /**
@@ -343,6 +384,7 @@ class RequestBuilder {
     chatId,
     preparationId = null,
     projectId = null,
+    integrationScopes = null,
     attachedProjectIds = []
   }) {
     try {
@@ -641,7 +683,11 @@ class RequestBuilder {
         websearchEnabled,
         activeSkills
       };
-      const tools = await getToolsForApp(app, language, context);
+      const tools = applyIntegrationScopes(
+        llmMessages,
+        await getToolsForApp(app, language, context),
+        integrationScopes
+      );
       const nativeWebSearch = resolveAppNativeWebSearch(
         app,
         model.provider,
@@ -727,7 +773,9 @@ class RequestBuilder {
         // The UI language, for providers that write in it when the request
         // itself has no text to take a language from (iAssistant skills).
         language,
-        appConfig: documentIds ? { ...turnApp, documentIds } : turnApp
+        appConfig: documentIds ? { ...turnApp, documentIds } : turnApp,
+        // The scopes the route checked; the iAssistant adapter reads its own.
+        integrationScopes: integrationScopes || {}
       };
 
       return {
@@ -743,7 +791,8 @@ class RequestBuilder {
           responseFormat: outputFormat,
           responseSchema: app.outputSchema,
           llmOptions,
-          userFileData
+          userFileData,
+          integrationScopes: integrationScopes || {}
         }
       };
     } catch (error) {

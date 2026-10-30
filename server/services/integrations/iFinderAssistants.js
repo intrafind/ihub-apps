@@ -58,12 +58,15 @@ class IFinderAssistants {
   constructor() {
     /** @type {Map<string, { value: Object, expiresAt: number }>} */
     this.cache = new Map();
+    /** @type {Map<string, { value: Array, expiresAt: number }>} lists, per user and language */
+    this.listCache = new Map();
     this.fetch = throttledFetch;
   }
 
   /** Drop every cached read. Called from the config reload hooks. */
   reset() {
     this.cache.clear();
+    this.listCache.clear();
   }
 
   /**
@@ -109,14 +112,22 @@ class IFinderAssistants {
    * @param {Object} params.user
    * @param {string} params.baseUrl
    * @param {string} [params.language] - sent as Accept-Language
+   * @param {number} [params.ttlMs] - cache the list this long (per user and
+   *   language); without it every call reads iFinder
    * @param {AbortSignal} [params.signal]
    * @returns {Promise<Array<ReturnType<typeof toAssistant>>>}
    */
-  async listAssistants({ user, baseUrl, language, signal }) {
+  async listAssistants({ user, baseUrl, language, ttlMs, signal }) {
     if (!user?.id || user.id === 'anonymous') {
       throw new Error('iFinder iAssistants can only be listed for a signed-in user');
     }
     if (!baseUrl) throw new Error('No iFinder base URL configured');
+
+    const key = `${baseUrl}::${user.id}::${language || ''}`;
+    if (ttlMs) {
+      const cached = this.listCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
+    }
 
     const assistants = [];
     let cursor = null;
@@ -143,6 +154,7 @@ class IFinderAssistants {
       component: 'IFinderAssistants',
       count: assistants.length
     });
+    if (ttlMs) this.listCache.set(key, { value: assistants, expiresAt: Date.now() + ttlMs });
     return assistants;
   }
 

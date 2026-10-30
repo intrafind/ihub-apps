@@ -473,3 +473,74 @@ test('the iAssistants list is read page by page in the requested language', asyn
     iFinderAssistants.fetch = originalFetch;
   }
 });
+
+// ── the chat's iAssistant scope (#3050) ────────────────────────────────────
+
+const { default: conversationApiService } =
+  await import('../services/integrations/ConversationApiService.js');
+
+test('a turn in the scope its conversation runs in continues that conversation', async () => {
+  conversationStateManager.setState('chat-wire-scope-same', {
+    conversationId: 'conv-scope-1',
+    lastParentId: 'msg-1',
+    profileId: 'iassistant-legal',
+    assistantId: 'legal-advisor',
+    searchProfile: 'searchprofile-legal',
+    searchScope: 'profile',
+    ownerId: user.id
+  });
+
+  const request = await adapter.createCompletionRequest(
+    model,
+    [{ role: 'user', content: 'Und weiter?' }],
+    null,
+    chatOptions('chat-wire-scope-same', {
+      integrationScopes: { iassistant: 'assistant:legal-advisor' }
+    })
+  );
+
+  assert.match(request.url, /conversations\/conv-scope-1\/messages$/);
+});
+
+test('a changed scope starts a new conversation with the picked iAssistant', async () => {
+  conversationStateManager.setState('chat-wire-scope-changed', {
+    conversationId: 'conv-scope-old',
+    lastParentId: 'msg-1',
+    profileId: 'iassistant-workspace',
+    searchProfile: 'searchprofile-standard',
+    searchScope: 'profile',
+    ownerId: user.id
+  });
+  const originalCreate = conversationApiService.createConversation;
+  const originalGet = iFinderAssistants.getAssistant;
+  const created = [];
+  conversationApiService.createConversation = async params => {
+    created.push(params);
+    return { id: 'conv-scope-new', title: null };
+  };
+  iFinderAssistants.getAssistant = async ({ assistantId }) => ({
+    id: assistantId,
+    name: 'HR',
+    description: null,
+    conversationProfileId: 'iassistant-hr',
+    searchProfileId: 'searchprofile-hr'
+  });
+  try {
+    const request = await adapter.createCompletionRequest(
+      model,
+      [{ role: 'user', content: 'Urlaubsregelung?' }],
+      null,
+      chatOptions('chat-wire-scope-changed', { integrationScopes: { iassistant: 'assistant:hr' } })
+    );
+
+    assert.equal(created.length, 1);
+    assert.equal(created[0].searchProfile, 'searchprofile-hr');
+    assert.match(request.url, /conversations\/conv-scope-new\/messages$/);
+    assert.equal(request.body.message.profile_id, 'iassistant-hr');
+    const state = conversationStateManager.getState('chat-wire-scope-changed');
+    assert.equal(state.scopeId, 'assistant:hr');
+  } finally {
+    conversationApiService.createConversation = originalCreate;
+    iFinderAssistants.getAssistant = originalGet;
+  }
+});

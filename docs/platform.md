@@ -1108,6 +1108,11 @@ plaintext in `platform.json`. See
 | `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
 | `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
 | `searchProfileApplication` | String | `"ifinder"`     | iFinder application whose search profile assignments iHub reads for a user (`searchprofile.applications`); see [iAssistant Integration](#iassistant-integration) |
+| `defaultSearchProfile`   | String  | `""`              | Search profile the `iFinder_*` tools search until the user picks another one in the chat. When empty, `IFINDER_SEARCH_PROFILE` and then `searchprofile-standard` apply |
+| `allowedSearchProfiles`  | Array   | `[]`              | Which of the user's search profiles the chat picker offers and the tools may search. Empty offers every profile the user has; the default is always allowed |
+| `allowUserSearchProfileChange` | Boolean | `true`     | `false` pins every chat to `defaultSearchProfile`: neither the user nor the model can pick another profile |
+
+These search settings belong to iFinder search; iAssistant has its own under [`iAssistant`](#iassistant-integration). Both run on the connection above. Users pick the search profile per chat in the chat input (see [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask)); the server checks the pick against the user's profiles (read as for `iFinder_listProfiles`) and the allow-list on every turn, and the pick binds every `iFinder_*` call of the chat.
 
 ### `jwtSubjectField` supported values
 

@@ -180,9 +180,12 @@ class IFinderSearchProfiles {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      throw new Error(
+      const error = new Error(
         `Reading the iFinder search profiles failed (${response.status}): ${errorText.slice(0, 200)}`
       );
+      // 403 is a user without `fi_ifinder_allow`; callers tell it apart.
+      error.status = response.status;
+      throw error;
     }
 
     const profiles = parseSearchProfiles(await response.json());

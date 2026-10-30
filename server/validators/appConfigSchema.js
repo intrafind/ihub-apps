@@ -458,6 +458,39 @@ const iAssistantConfigSchema = z
   })
   .optional();
 
+// Where the chat input offers an integration's scope and which scope the app
+// starts with or pins (#3050). A scope is where the integration searches (an
+// iFinder search profile id) or whom it asks (`assistant:<id>`, `configured`,
+// `all` for iAssistant). A pinned scope is the only one the app's chats use.
+const integrationScopeId = z
+  .string()
+  .min(1, 'Scope cannot be empty')
+  .max(256, 'Scope cannot exceed 256 characters')
+
+  .regex(/^[^\u0000-\u001f\u007f]+$/, 'Scope cannot contain control characters');
+
+const integrationScopeSettingsSchema = z
+  .object({
+    scopePicker: z.enum(['inline', 'menu', 'hidden']).optional(),
+    defaultScope: integrationScopeId.optional(),
+    pinnedScope: integrationScopeId.optional()
+  })
+  .strict();
+
+const appIntegrationsSchema = z
+  .object({
+    ifinder: integrationScopeSettingsSchema.optional(),
+    iassistant: integrationScopeSettingsSchema
+      .extend({
+        // Offer "all my search profiles" (iFinder 6.9+) beside the iAssistants.
+        allowAllSearchProfiles: z.boolean().optional()
+      })
+      .strict()
+      .optional()
+  })
+  .strict()
+  .optional();
+
 // Base app config schema without refinements
 const baseAppConfigSchema = z.object({
   // Required fields
@@ -554,6 +587,8 @@ const baseAppConfigSchema = z.object({
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,
+  // Per-integration chat settings: the scope picker (#3050)
+  integrations: appIntegrationsSchema,
 
   // Inheritance fields
   allowInheritance: z.boolean().optional().prefault(false),

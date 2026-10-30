@@ -3508,7 +3508,17 @@
         "ifinderSetupTitle": "iFinder konfigurieren mit:",
         "providerIssuer": "Issuer-URL des Providers",
         "ifinderSetupHelp": "Das Token, das iHub sendet, muss zusätzlich die fa_*-Claims tragen, die iFinder liest – entweder als angeforderte Scopes oder über einen Claim-Mapper beim Provider. Der Verbindungstest unten zeigt, welche vorhanden sind."
-      }
+      },
+      "searchSection": "iFinder-Sucheinstellungen",
+      "defaultSearchProfile": "Standard-Suchprofil",
+      "defaultSearchProfileHelp": "Das Suchprofil, in dem ein Chat sucht, bis der Benutzer ein anderes wählt.",
+      "allowedSearchProfiles": "Suchprofile, die Benutzer wählen dürfen",
+      "allowedSearchProfilesPlaceholder": "Alle Profile des Benutzers",
+      "allowedSearchProfilesHelp": "Eine Suchprofil-ID pro Zeile. Leer bietet jedes Profil an, das der Benutzer in iFinder hat.",
+      "allowUserSearchProfileChange": "Benutzer dürfen das Suchprofil ändern",
+      "allowUserSearchProfileChangeHelp": "Aus: Jeder Chat sucht im Standard-Suchprofil, und weder der Benutzer noch das Modell kann ein anderes wählen.",
+      "iAssistantDefaultSearchProfile": "Standard-Suchprofil",
+      "iAssistantDefaultSearchProfileHelp": "Das Suchprofil, in dem iAssistant-Konversationen suchen, wenn weder die App noch das Modell eines nennt."
     },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
@@ -7393,6 +7403,17 @@
       "renameTitle": "Collection umbenennen",
       "renameSubtitle": "Name und Beschreibung werden auch in iFinder geändert.",
       "renameHint": "Eine Smart Collection hat keine Anweisungen: Sie ist eine Liste von Dokumenten."
+    }
+  },
+  "integrationScopes": {
+    "menuTitle": "In diesem Chat verwenden",
+    "searchIn": "Suchen in",
+    "ask": "Fragen",
+    "fixed": "Von der App festgelegt",
+    "hint": {
+      "forbidden": "Ihr Konto darf die Liste hier nicht lesen, daher wird nur die Voreinstellung angeboten.",
+      "noProfiles": "Keiner Ihrer eigenen Einträge wird hier angeboten, daher wird nur die Voreinstellung aufgeführt.",
+      "unavailable": "Die Liste konnte nicht geladen werden, daher wird nur die Voreinstellung angeboten."
     }
   }
 }
