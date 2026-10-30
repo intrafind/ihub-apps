@@ -105,7 +105,7 @@ Before configuring iFinder and iAssistant integration, ensure you have:
 - Administrative access to both iFinder and iAssistant configurations
 
 **Authentication Requirements:**
-- **Recommended (keyless):** enable `iFinder.useOidcKeyPair` so iHub signs tokens
+- **Recommended (keyless):** enable **Sign with iHub's OIDC key pair** (`useOidcKeyPair`) in the iFinder installation so iHub signs tokens
   with its own OIDC key and iFinder verifies them via iHub's JWKS endpoint — no
   key pair to generate or exchange. See
   [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
@@ -149,7 +149,7 @@ ls contents/config/
 
 # Confirm default files are present
 ls contents/config/platform.json
-ls contents/tools/
+ls contents/config/integrations.json
 ls contents/models/
 ls contents/apps/
 ```
@@ -190,19 +190,24 @@ removes JWT key management entirely: iHub signs the iFinder token with the same
 RSA key it uses for its OIDC server, and iFinder validates it by fetching iHub's
 public key from `/.well-known/jwks.json`.
 
-**iHub side** (Admin → iFinder Integration, or `platform.json`):
+**iHub side:** set `oauth.issuer` in `platform.json` (**Admin → Authentication → OAuth Server**), then install iFinder under **Admin → Integrations → Installed → iFinder** with **Sign with iHub's OIDC key pair** ticked. The installation in `contents/config/integrations.json`:
 
 ```json
 {
-  "oauth": { "issuer": "https://your-ihub-instance.com" },
-  "iFinder": {
-    "enabled": true,
-    "baseUrl": "https://your-ifinder-instance.com",
-    "useOidcKeyPair": true,
-    "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email"
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://your-ifinder-instance.com",
+        "useOidcKeyPair": true,
+        "audience": "ifinder-api",
+        "defaultScope": "fa_index_read",
+        "jwtSubjectField": "email"
+      }
+    }
+  ]
 }
 ```
 
@@ -246,11 +251,12 @@ export IFINDER_SEARCH_PROFILE="searchprofile-standard"
 export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"
-
-# Optional iFinder settings
-export IFINDER_TIMEOUT=30000
-export IFINDER_DOWNLOAD_DIR="/tmp/ifinder-downloads"
 ```
+
+`IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` win over the installation's base URL and
+private key; `IFINDER_SEARCH_PROFILE` applies only while the installation's default
+search profile is empty. Timeout and download directory have no environment variable:
+they are advanced fields of the installation.
 
 **Method 2: Configuration File**
 Add to your startup script or `.env` file:
@@ -263,49 +269,69 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"' >> .env
 ```
 
-### 2. Platform Configuration
+### 2. The iFinder Installation
 
-Set the non-secret fields from **Admin > Integrations > iFinder**, or add
-them directly to `contents/config/platform.json`. The private key itself is
-never stored inline: create a "Secret"-type credential under **Admin >
-Credentials** holding the PEM key, then reference it via `privateKeyRef`
-(the admin UI does this for you when you pick the credential from the
-**Private Key** field):
+iFinder is a built-in installed integration. Open **Admin → Integrations →
+Installed**, pick **iFinder** in the catalog and **Install** (later **Edit**).
+The private key itself is never stored inline: create a "Secret"-type
+credential under **Admin → Credentials** holding the PEM key, then pick it in
+the **Private key** field of the wizard; the installation stores a
+`privateKeyRef` pointing at it. The installation is written to
+`contents/config/integrations.json`, which reloads automatically:
 
 ```json
 {
-  "iFinder": {
-    "baseUrl": "https://your-ifinder-instance.com",
-    "defaultSearchProfile": "searchprofile-standard",
-    "privateKeyRef": "ifinder",
-    "endpoints": {
-      "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
-      "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
-    },
-    "timeout": 30000,
-    "downloadDir": "/tmp/ifinder-downloads",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
-    "tokenExpirationSeconds": 3600
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://your-ifinder-instance.com",
+        "authMode": "ihubSigned",
+        "useOidcKeyPair": false,
+        "privateKeyRef": "ifinder",
+        "jwtSubjectField": "email",
+        "defaultSearchProfile": "searchprofile-standard",
+        "algorithm": "RS256",
+        "issuer": "ihub-apps",
+        "audience": "ifinder-api",
+        "defaultScope": "fa_index_read",
+        "tokenExpirationSeconds": 3600,
+        "timeout": 30000,
+        "downloadDir": "/tmp/ifinder-downloads"
+      }
+    }
+  ]
 }
 ```
 
-**Configuration Parameters:**
+**Installation fields** (`values`; advanced fields are folded away in the wizard):
 
-| Parameter | Description | Required | Default |
+| Field | Description | Required | Default |
 |-----------|-------------|----------|---------|
-| `baseUrl` | iFinder instance URL | Yes | - |
-| `defaultSearchProfile` | Default search profile ID | Yes | - |
-| `privateKeyRef` | ID of a "Secret" credential (Admin > Credentials) holding the RSA private key (PEM format). `IFINDER_PRIVATE_KEY` env var takes precedence when set | Yes (unless env var is set) | - |
-| `timeout` | Request timeout (ms) | No | 30000 |
-| `algorithm` | JWT signing algorithm | No | RS256 |
-| `issuer` | JWT issuer claim | No | ihub-apps |
-| `audience` | JWT audience claim | No | ifinder-api |
-| `defaultScope` | JWT scope claim | No | fa_index_read |
-| `tokenExpirationSeconds` | JWT token TTL | No | 3600 |
+| `baseUrl` | iFinder instance URL (`IFINDER_API_URL` wins when set) | Yes | - |
+| `authMode` | `ihubSigned` (iHub signs the token) or `oidcTokenExchange` (shared OIDC provider), see [Shared OIDC Provider](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange) | No | `ihubSigned` |
+| `useOidcKeyPair` | Sign with iHub's OIDC key pair (keyless, recommended) | No | `false` |
+| `privateKeyRef` | Credential (Admin → Credentials, type Secret) holding the RSA private key (PEM format). `IFINDER_PRIVATE_KEY` takes precedence when set; ignored with `useOidcKeyPair` | Yes (unless env var or `useOidcKeyPair`) | - |
+| `jwtSubjectField` | User attribute sent as the token subject: `email`, `id`, `username`, `name` | No | `email` |
+| `defaultSearchProfile` | Default search profile ID | Yes | `searchprofile-standard` |
+| `allowedSearchProfiles` | Search profiles users may pick and the tools may search; empty offers all of the user's | No | `[]` |
+| `allowUserSearchProfileChange` | `false` pins every chat to the default profile | No | `true` |
+| `searchProfileApplication` | iFinder application whose profile assignments are read (advanced) | No | `ifinder` |
+| `algorithm` | JWT signing algorithm (advanced) | No | `RS256` |
+| `issuer` | JWT issuer claim (advanced) | No | `ihub-apps` |
+| `audience` | JWT audience claim (advanced) | No | `ifinder-api` |
+| `defaultScope` | JWT scope claim (advanced) | No | `fa_index_read` |
+| `tokenExpirationSeconds` | JWT token TTL (advanced) | No | `3600` |
+| `tokenExchangeProvider`, `tokenExchangeGrant`, `tokenExchangeAudience`, `tokenExchangeScopeIndexRead`, `tokenExchangeScopeAssistant`, `tokenExchangeScopeSmartCollections`, `tokenExchangeExtraScopes` | The `oidcTokenExchange` settings, see [Configure iHub](ifinder-oidc-jwt.md#configure-ihub) | With `oidcTokenExchange` | - |
+| `timeout` | Request timeout (ms, advanced) | No | `30000` |
+| `downloadDir` | Download directory (advanced) | No | `/tmp/ifinder-downloads` |
+| `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | API paths (advanced); change only for a non-standard deployment | No | the public API paths |
+
+The installation's own switch (`enabled`) turns the integration on and off.
+Installations that configured iFinder in `platform.json` are moved here by
+migration V192 on the first start.
 
 ### 3. Search Profile Configuration
 
@@ -323,55 +349,50 @@ Contact your iFinder administrator to set up appropriate search profiles with pr
 
 ### 1. Environment Variables Setup
 
-Configure iAssistant-specific settings:
+The only iAssistant environment variable is the default conversation profile, which
+applies while the installation's **Default conversation profile** is empty:
 
 ```bash
-# iAssistant RAG service URL
-export IASSISTANT_BASE_URL="https://your-iassistant-instance.com"
-
-# Default iAssistant configuration
-export IASSISTANT_PROFILE_ID="searchprofile-standard"
-export IASSISTANT_SEARCH_MODE="multiword"
-export IASSISTANT_TIMEOUT=45000
+export IASSISTANT_PROFILE_ID="iassistant-workspace"
 ```
 
-### 2. Platform Configuration
+### 2. The iAssistant Installation
 
-Add iAssistant configuration to `contents/config/platform.json`:
+iAssistant runs on the iFinder connection and has no base URL of its own. Install it
+under **Admin → Integrations → Installed → iAssistant** after iFinder; the wizard's
+**iFinder installation** field names the `ifinder` installation it uses. In
+`contents/config/integrations.json`:
 
 ```json
 {
-  "iAssistant": {
-    "baseUrl": "https://your-iassistant-instance.com",
-    "endpoint": "/api/v2/rag",
-    "defaultProfileId": "searchprofile-standard",
-    "defaultSearchMode": "multiword",
-    "defaultSearchDistance": "",
-    "defaultFilter": [
-      {
-        "key": "application.keyword",
-        "values": ["PDF", "DOCX", "TXT"],
-        "isNegated": false
-      }
-    ],
-    "defaultSearchFields": {},
-    "timeout": 45000,
-    "streaming": true
+  "id": "iassistant",
+  "definition": "com.intrafind/iassistant",
+  "enabled": true,
+  "values": {
+    "connection": "ifinder",
+    "defaultProfileId": "iassistant-workspace",
+    "defaultSearchProfile": "searchprofile-standard",
+    "verifySearchProfileAccess": true,
+    "groundedOnly": false
   }
 }
 ```
 
-**Configuration Parameters:**
+**Installation fields:**
 
-| Parameter | Description | Required | Default |
+| Field | Description | Required | Default |
 |-----------|-------------|----------|---------|
-| `baseUrl` | iAssistant instance URL | Yes | - |
-| `endpoint` | RAG API endpoint path | No | /api/v2/rag |
-| `defaultProfileId` | Default search profile | Yes | - |
-| `defaultSearchMode` | Search mode (multiword, phrase, etc.) | No | multiword |
-| `defaultFilter` | Default document filters | No | [] |
-| `timeout` | Request timeout (ms) | No | 45000 |
-| `streaming` | Enable streaming responses | No | true |
+| `connection` | The iFinder installation (`ifinder`) whose base URL and token the iAssistant uses | Yes | `ifinder` |
+| `defaultProfileId` | Conversation profile used when an app does not set its own `iassistant.profileId` (`IASSISTANT_PROFILE_ID` applies when empty) | No | - |
+| `defaultSearchProfile` | iFinder search profile used when neither the app nor the model names one | No | `searchprofile-standard` |
+| `verifySearchProfileAccess` | Check the search profile against the user's profiles in iFinder, and use the user's default when they do not have it | No | `true` |
+| `groundedOnly` | Answer only from the retrieved documents; an app's `iassistant.groundedOnly` overrides it | No | `false` |
+| `searchProfileCacheTtlMs` | How long a user's search profile list is cached (advanced) | No | `300000` |
+
+The iAssistant is used through the `iassistant-conversation` model; there is no
+iAssistant-specific request timeout (see
+[Platform → Request timeouts](platform.md#request-timeouts)). Per-app overrides are
+described in [Apps → iAssistant Configuration](apps.md#iassistant-configuration).
 
 ### 3. Profile ID Encoding
 
@@ -385,61 +406,25 @@ echo -n "searchprofile-standard" | base64
 
 ## Tool Configuration
 
-### 1. Enable iFinder Tools
+### 1. The iFinder Tools
 
-The iFinder tools should already be configured in `contents/tools/iFinder.json`. Verify the configuration:
-
-```json
-{
-  "id": "iFinder",
-  "name": {
-    "en": "iFinder Document Management",
-    "de": "iFinder Dokumentenverwaltung"
-  },
-  "description": {
-    "en": "Comprehensive document search, content retrieval, and management for the iFinder system",
-    "de": "Umfassende Dokumentensuche, Inhaltsabruf und -verwaltung für das iFinder-System"
-  },
-  "script": "iFinder.js",
-  "functions": {
-    "search": {
-      "description": {
-        "en": "Search for documents in the iFinder system",
-        "de": "Nach Dokumenten im iFinder-System suchen"
-      },
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string",
-            "description": {
-              "en": "Search query to find documents",
-              "de": "Suchanfrage zum Finden von Dokumenten"
-            }
-          },
-          "maxResults": {
-            "type": "integer",
-            "default": 10,
-            "minimum": 1,
-            "maximum": 100
-          }
-        },
-        "required": ["query"]
-      }
-    }
-  }
-}
-```
+The iFinder tools are the **actions** of the `ifinder` installation; there is no
+`contents/tools/iFinder.json` any more (migration V192 removes it). They keep their
+tool ids, so group tool grants (`permissions.tools` in `groups.json`) that name
+`iFinder` or `iFinder_*` keep working. An app gets the tools by binding the
+installation under `integrations`, naming the actions it wants without the
+`iFinder_` prefix (see [Application Setup](#application-setup)).
 
 ### 2. Tool Method Reference
 
-**iFinder Tool Methods:**
+**iFinder actions:**
 
-| Method | Purpose | Parameters | Response |
+| Action (tool id) | Purpose | Parameters | Response |
 |--------|---------|------------|----------|
-| `search` | Find documents | query, maxResults, searchProfile | Search results with metadata |
-| `getContent` | Retrieve document text | documentId, maxLength | Full document content |
-| `getMetadata` | Get document info | documentId | Document metadata only |
+| `search` (`iFinder_search`) | Find documents | query, maxResults, searchProfile, filter, sort | Search results with metadata |
+| `getContent` (`iFinder_getContent`) | Retrieve document text | documentId, maxLength | Full document content |
+| `getMetadata` (`iFinder_getMetadata`) | Get document info | documentId | Document metadata only |
+| `getFields`, `getFacetValues`, `listProfiles`, `discover` | The discovery surface | see [iFinder Integration](iFinder-Integration.md#available-tools) | |
 
 ## Application Setup
 
@@ -447,7 +432,9 @@ The iFinder tools should already be configured in `contents/tools/iFinder.json`.
 
 **Example: Enterprise Knowledge Chat (using iFinder tools)**
 
-Create `contents/apps/enterprise-knowledge-chat.json`:
+The app binds the `ifinder` installation and names the actions it offers. The binding is
+also the requirement: users get the app only while the installation exists and is
+enabled. Create `contents/apps/enterprise-knowledge-chat.json`:
 
 ```json
 {
@@ -468,10 +455,9 @@ Create `contents/apps/enterprise-knowledge-chat.json`:
     "de": "Sie sind ein Unternehmenswissensassistent mit Zugang zu Firmendokumenten, Richtlinien und Verfahren über iFinder. Geben Sie genaue, hilfreiche Antworten basierend auf abgerufenen Informationen. Zitieren Sie immer Quellen."
   },
   "preferredModel": "gpt-4o",
-  "tools": [
-    "iFinder.search",
-    "iFinder.getContent"
-  ],
+  "integrations": {
+    "ifinder": { "actions": ["search", "getContent"] }
+  },
   "messagePlaceholder": {
     "en": "Ask about company policies, procedures, or any enterprise information...",
     "de": "Fragen Sie nach Unternehmensrichtlinien, Verfahren oder anderen Unternehmensinformationen..."
@@ -526,9 +512,10 @@ Create `contents/apps/research-assistant.json`:
     "de": "Sie sind ein umfassender Recherche-Assistent mit Zugang zu Websuche und Unternehmenswissen über iFinder. Unterscheiden Sie immer zwischen internen und externen Quellen."
   },
   "preferredModel": "gpt-4o",
+  "integrations": {
+    "ifinder": { "actions": ["search", "getContent"] }
+  },
   "tools": [
-    "iFinder.search",
-    "iFinder.getContent",
     "braveSearch",
     "enhancedWebSearch"
   ],
@@ -545,89 +532,95 @@ Create `contents/apps/research-assistant.json`:
 ```bash
 # iFinder Configuration
 IFINDER_API_URL=https://ifinder.company.com
-IFINDER_SEARCH_PROFILE=searchprofile-standard
 IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"
-
-# iAssistant Configuration  
-IASSISTANT_BASE_URL=https://iassistant.company.com
 ```
 
-**Platform Configuration (contents/config/platform.json):**
+**Installations (contents/config/integrations.json):**
 
-With `IFINDER_PRIVATE_KEY` set as above, no `privateKeyRef` is needed here —
-the environment variable always takes precedence:
+With `IFINDER_PRIVATE_KEY` set as above, no `privateKeyRef` is needed — the
+environment variable always takes precedence. iAssistant has no base URL of its own;
+it uses the iFinder connection:
 
 ```json
 {
-  "serverName": "Company iHub Apps",
-  "iFinder": {
-    "baseUrl": "https://ifinder.company.com",
-    "defaultSearchProfile": "searchprofile-standard",
-    "timeout": 30000
-  },
-  "iAssistant": {
-    "baseUrl": "https://iassistant.company.com", 
-    "defaultProfileId": "searchprofile-standard",
-    "streaming": true,
-    "timeout": 45000
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://ifinder.company.com",
+        "defaultSearchProfile": "searchprofile-standard",
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "iassistant",
+      "definition": "com.intrafind/iassistant",
+      "enabled": true,
+      "values": {
+        "connection": "ifinder",
+        "defaultProfileId": "iassistant-workspace",
+        "defaultSearchProfile": "searchprofile-standard"
+      }
+    }
+  ]
 }
 ```
 
 ### 2. Advanced Multi-Profile Setup
 
-**Platform Configuration** (`privateKeyRef` points at a "Secret" credential
-created under Admin > Credentials; omit it and set `IFINDER_PRIVATE_KEY`
-instead if you prefer the environment variable):
+**iFinder installation values** (`privateKeyRef` points at a "Secret" credential
+created under Admin → Credentials; omit it and set `IFINDER_PRIVATE_KEY`
+instead if you prefer the environment variable). The installation names the
+search profiles users may pick per chat; an app pins one of them:
 ```json
 {
-  "iFinder": {
+  "id": "ifinder",
+  "definition": "com.intrafind/ifinder",
+  "enabled": true,
+  "values": {
     "baseUrl": "https://ifinder.company.com",
-    "defaultSearchProfile": "searchprofile-standard",
     "privateKeyRef": "ifinder",
-    "profiles": {
-      "hr": "searchprofile-hr-docs",
-      "technical": "searchprofile-tech-docs", 
-      "policies": "searchprofile-policies",
-      "public": "searchprofile-public"
-    },
-    "timeout": 30000
-  },
-  "iAssistant": {
-    "baseUrl": "https://iassistant.company.com",
-    "defaultProfileId": "searchprofile-standard",
-    "profileMappings": {
-      "hr": "aHItZG9jcw==",
-      "technical": "dGVjaC1kb2Nz", 
-      "policies": "cG9saWNpZXM=",
-      "public": "cHVibGlj"
-    },
-    "streaming": true
+    "defaultSearchProfile": "searchprofile-standard",
+    "allowedSearchProfiles": [
+      "searchprofile-standard",
+      "searchprofile-hr-docs",
+      "searchprofile-tech-docs",
+      "searchprofile-policies"
+    ],
+    "allowUserSearchProfileChange": true
   }
 }
 ```
 
-**Application Using Specific Profiles:**
+**Application Pinned to One Profile:**
 ```json
 {
   "id": "hr-assistant",
   "name": {"en": "HR Assistant"},
   "preferredModel": "gpt-4o",
-  "tools": [
-    "iFinder.search",
-    "iFinder.getContent"
-  ]
+  "integrations": {
+    "ifinder": {
+      "actions": ["search", "getContent"],
+      "pinnedScope": "searchprofile-hr-docs"
+    }
+  }
 }
 ```
 
 ### 3. Production Security Configuration
 
-**Platform Configuration with Enhanced Security:**
+**iFinder installation values with a short token lifetime** (the advanced token
+fields of the wizard):
 ```json
 {
-  "iFinder": {
+  "id": "ifinder",
+  "definition": "com.intrafind/ifinder",
+  "enabled": true,
+  "values": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
     "privateKeyRef": "ifinder",
@@ -636,66 +629,55 @@ instead if you prefer the environment variable):
     "audience": "ifinder-api-production",
     "tokenExpirationSeconds": 1800,
     "defaultScope": "fa_index_read",
-    "timeout": 25000,
-    "retries": 3,
-    "rateLimiting": {
-      "enabled": true,
-      "requestsPerMinute": 60,
-      "burstLimit": 10
-    }
-  },
-  "iAssistant": {
-    "baseUrl": "https://iassistant.company.com",
-    "defaultProfileId": "searchprofile-standard", 
-    "streaming": true,
-    "timeout": 40000,
-    "maxConcurrentRequests": 5,
-    "rateLimiting": {
-      "enabled": true,
-      "requestsPerMinute": 30
-    }
+    "timeout": 25000
   }
 }
 ```
 
+Rate limits are not a setting of the installation; use the platform's
+`rateLimit` settings or a gateway in front of iFinder.
+
 ### 4. Development/Testing Configuration
 
-**Development Platform Configuration** (a separate credential, e.g.
-`ifinder_dev`, keeps the dev key distinct from production — there is no
-per-environment env var name; `IFINDER_PRIVATE_KEY` is the only one read):
+**Development installations** (a separate credential, e.g. `ifinder_dev`, keeps the
+dev key distinct from production — there is no per-environment env var name;
+`IFINDER_PRIVATE_KEY` is the only one read). Request logging is a platform setting
+(`logging.level` in `platform.json`), not an installation field:
 ```json
 {
-  "iFinder": {
-    "baseUrl": "https://ifinder-dev.company.com",
-    "defaultSearchProfile": "searchprofile-test",
-    "privateKeyRef": "ifinder_dev",
-    "timeout": 60000,
-    "debug": true,
-    "mockResponses": false
-  },
-  "iAssistant": {
-    "baseUrl": "https://iassistant-dev.company.com",
-    "defaultProfileId": "searchprofile-test",
-    "streaming": true,
-    "debug": true,
-    "timeout": 60000,
-    "logRequests": true,
-    "logResponses": true
-  },
-  "debug": {
-    "logLevel": "debug",
-    "enableRequestLogging": true,
-    "enableResponseLogging": true
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://ifinder-dev.company.com",
+        "defaultSearchProfile": "searchprofile-test",
+        "privateKeyRef": "ifinder_dev",
+        "timeout": 60000
+      }
+    },
+    {
+      "id": "iassistant",
+      "definition": "com.intrafind/iassistant",
+      "enabled": true,
+      "values": {
+        "connection": "ifinder",
+        "defaultProfileId": "iassistant-test",
+        "defaultSearchProfile": "searchprofile-test"
+      }
+    }
+  ]
 }
 ```
 
 ## Testing and Validation
 
-> **Use the built-in diagnostics first.** **Admin → iFinder Integration → Test iFinder** /
-> **Test iAssistant** performs every check below in one run — DNS, TLS, JWT generation, JWKS
-> reachability and a real API request — and shows the decoded token, the URLs used and what to check
-> for each failure. See [Connection Diagnostics](#0-start-here-connection-diagnostics). The manual
+> **Use the built-in diagnostics first.** The **Test** button of the iFinder and iAssistant
+> installations under **Admin → Integrations → Installed** (also in the install wizard, before
+> anything is saved) performs every check below in one run — DNS, TLS, JWT generation, JWKS
+> reachability and a real API request — and shows the decoded token claims, the URLs used and what
+> to check for each failure. See [Connection Diagnostics](#0-start-here-connection-diagnostics). The manual
 > commands in this section remain useful for verifying reachability **from the iFinder host**, which
 > iHub cannot do for you.
 
@@ -766,8 +748,8 @@ Use a JWT decoder tool to verify token structure:
    - Test download functionality
 
 **Test iAssistant (Workspace) Integration:**
-1. Configure iAssistant Workspace (Conversation API) in platform settings
-2. Create a test app with `iassistant-conversation` provider model
+1. Install iAssistant under **Admin → Integrations → Installed**
+2. Create a test app with the `iassistant-conversation` model that binds the installation (`"integrations": { "iassistant": { "actions": [] } }`)
 3. Test conversational question answering:
    - Ask questions about known documents
    - Verify response quality and source attribution
@@ -811,8 +793,9 @@ Use a JWT decoder tool to verify token structure:
 
 ### 0. Start Here: Connection Diagnostics
 
-Before digging through logs, run the built-in diagnostics under **Admin → iFinder Integration →
-Test iFinder** / **Test iAssistant**. Instead of a single pass/fail message it walks the whole
+Before digging through logs, run the built-in diagnostics: **Test** on the iFinder and on the
+iAssistant installation under **Admin → Integrations → Installed** (the install wizard has the same
+button, for values that are not saved yet). Instead of a single pass/fail message it walks the whole
 connection path and reports what it observed at every step, so you can see exactly where it breaks:
 
 | Step                       | What it proves                                                                                         |
@@ -829,18 +812,11 @@ connection path and reports what it observed at every step, so you can see exact
 
 Every failing step lists concrete things to check. Expand a step to see the raw observations as JSON.
 
-#### Diagnostics Options
-
-Expand **Diagnostics options** above the buttons for:
-
-- **Test as email / username / domain** — mint the test JWT for a specific user instead of your own
-  admin account. Use this to confirm how the subject claim is built, for example whether iFinder
-  expects `DOMAIN\username` rather than an email address.
-- **Include the signed JWT** — returns the token itself plus a ready-to-run `curl` command. The token
-  is a working credential for the tested user, so treat it like a password. Without this option the
-  `curl` command references `$TOKEN` and is safe to share.
-- **Run conversation round-trip** — additionally creates and deletes an ephemeral iAssistant
-  conversation, which verifies write access rather than only authentication.
+The test runs as your own account: the JWT is minted for the signed-in admin, and the token itself
+is never returned. To see how the subject claim is built for another kind of user, sign in as such a
+user and run the test, or compare the **JWT generation** step's subject with the **User identity
+sent to iFinder** field. The iAssistant test additionally lists the conversation profiles iAssistant
+offers and checks that the configured default profile is among them.
 
 #### Reading the Two Classic Failures
 
@@ -859,19 +835,21 @@ the JWKS, a subject in the wrong format, or clock skew on the iHub server.
 The same checks are available over the API:
 
 ```bash
-curl -X POST https://ihub.example.com/api/admin/integrations/ifinder/_test \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"includeToken": false, "user": {"username": "jdoe", "domain": "EXAMPLE"}}'
+curl -X POST https://ihub.example.com/api/admin/integrations/installed/ifinder/_test \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST https://ihub.example.com/api/admin/integrations/installed/iassistant/_test \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-The search term and the search profile are not accepted as parameters: the diagnostics
-deliberately exercise the configured profile with a fixed query, so that no value from the
-request can influence which URL iHub contacts. To test a different profile, change the
-**Default Search Profile** setting.
+Without a body the saved installation is tested; a body in the shape of an installation
+(`values`, `enabled`, …) tests those values instead of the saved ones, which is what the
+wizard does. The search term and the search profile are not accepted as parameters: the
+diagnostics deliberately exercise the configured profile with a fixed query, so that no value
+from the request can influence which URL iHub contacts. To test a different profile, change the
+**Default search profile** field.
 
-The response contains `success`, a `summary` of step counts, and the ordered `steps` array with
-`status` (`ok` / `warn` / `fail` / `skip`), `message`, `details`, and `hints` per step.
+The response's `result` contains `success`, a `summary` of step counts, and the ordered `steps`
+array with `status` (`ok` / `warn` / `fail` / `skip`), `message`, `details`, and `hints` per step.
 
 ### 1. Common Connection Issues
 
@@ -1093,6 +1071,7 @@ export IFINDER_API_URL="https://internal-ifinder.company.com"
 # Secure configuration files
 chmod 600 .env
 chmod 600 contents/config/platform.json
+chmod 600 contents/config/integrations.json
 chown app:app contents/config/
 
 # Secure private keys
@@ -1118,33 +1097,11 @@ chown root:app /secure/path/ifinder_key.pem
 
 ### 1. Request Optimization
 
-**Concurrent Request Limits:**
-```json
-{
-  "iAssistant": {
-    "maxConcurrentRequests": 5,
-    "requestQueue": {
-      "maxSize": 50,
-      "timeoutMs": 30000
-    }
-  }
-}
-```
-
-**Timeout Optimization:**
-```json
-{
-  "iFinder": {
-    "timeout": 25000,
-    "retries": 2,
-    "retryDelay": 1000
-  },
-  "iAssistant": {
-    "timeout": 40000,
-    "streamingTimeout": 60000
-  }
-}
-```
+**Timeouts:** the iFinder installation's **Request timeout (ms)** (`timeout`, advanced, default
+`30000`) bounds every iFinder tool call. An iAssistant turn has no timeout of its own; it is
+bounded by the model's `connectTimeoutMs` and `streamIdleTimeoutMs` (see
+[Platform → Request timeouts](platform.md#request-timeouts)). There are no retry or concurrency
+settings.
 
 ### 2. Caching Strategies
 
@@ -1177,19 +1134,8 @@ chown root:app /secure/path/ifinder_key.pem
 
 ### 3. Resource Management
 
-**Memory Optimization:**
-```json
-{
-  "iFinder": {
-    "maxContentLength": 50000,
-    "streamBufferSize": 8192
-  },
-  "iAssistant": {
-    "maxResponseLength": 100000,
-    "streamChunkSize": 1024
-  }
-}
-```
+**Memory:** the length of a document's text returned to the model is bounded per call by the
+`maxLength` parameter of `iFinder_getContent`; there is no installation-wide setting.
 
 **Connection Pooling:**
 ```json

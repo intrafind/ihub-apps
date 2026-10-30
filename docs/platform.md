@@ -1069,60 +1069,57 @@ For key generation instructions see [JWT Key Generation](ifinder-jwt-key-generat
 
 ## iFinder Integration
 
-Configures integration with the IntraFind iFinder enterprise search platform. When enabled, iHub Apps generates signed JWT tokens to authenticate requests to iFinder on behalf of users.
+iFinder is no longer configured in `platform.json`. It is a [built-in installed integration](integrations.md#built-in-integrations): the `ifinder` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → Installed → iFinder** (**Install**, later **Edit**; **Test** checks the connection). Migration V192 moves an existing `iFinder` block of `platform.json` into that installation, keeping `enabled`. The installation's values are documented in [iFinder Integration → Configuration](iFinder-Integration.md#configuration); in short:
 
 ```json
 {
-  "iFinder": {
-    "enabled": false,
-    "baseUrl": "https://ifinder.company.com",
-    "privateKeyRef": "ifinder",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "tokenExpirationSeconds": 3600,
-    "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email"
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://ifinder.company.com",
+        "authMode": "ihubSigned",
+        "useOidcKeyPair": false,
+        "privateKeyRef": "ifinder",
+        "jwtSubjectField": "email",
+        "defaultSearchProfile": "searchprofile-standard"
+      }
+    }
+  ]
 }
 ```
 
-`privateKeyRef` points at a `secret`-type profile in the central credential
-store (`contents/config/credentials.json`, managed under Admin >
-Credentials); the admin UI's iFinder page writes this field for you when you
-pick a credential there. Set the `IFINDER_PRIVATE_KEY` environment variable
-instead to skip the credential store entirely — it takes precedence over
-`privateKeyRef` when set. Either way, no key material is ever stored as
-plaintext in `platform.json`. See
-[JWT Key Generation](ifinder-jwt-key-generation.md).
-
 | Field                    | Type    | Default           | Description                                                                             |
 | ------------------------ | ------- | ----------------- | --------------------------------------------------------------------------------------- |
-| `enabled`                | Boolean | `false`           | Enable the iFinder integration                                                          |
-| `baseUrl`                | String  | `""`              | Base URL of the iFinder instance                                                        |
-| `privateKeyRef`          | String  | `""`              | ID of a `secret` credential (Admin > Credentials) holding the RSA/EC private key (PEM). Ignored if `IFINDER_PRIVATE_KEY` is set |
-| `algorithm`              | String  | `"RS256"`         | JWT signing algorithm                                                                   |
-| `issuer`                 | String  | `"ihub-apps"`     | JWT `iss` claim value                                                                   |
-| `audience`               | String  | `"ifinder-api"`   | JWT `aud` claim value                                                                   |
-| `tokenExpirationSeconds` | Number  | `3600`            | Lifetime of generated JWT tokens in seconds                                             |
-| `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
+| `enabled` (installation) | Boolean | `true`            | The installation's own switch                                                           |
+| `baseUrl`                | String  | `""`              | Base URL of the iFinder instance; `IFINDER_API_URL` wins when set                       |
+| `authMode`               | String  | `"ihubSigned"`    | `ihubSigned` (iHub signs the token) or `oidcTokenExchange` (a shared OIDC provider issues it, with the `tokenExchange*` fields; see [Shared OIDC Provider](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange)) |
+| `useOidcKeyPair`         | Boolean | `false`           | Sign with iHub's OIDC key pair, verified by iFinder through JWKS (recommended)          |
+| `privateKeyRef`          | String  | `""`              | Credential (Admin → Credentials) holding the RSA/EC private key (PEM), picked in the wizard. Ignored if `IFINDER_PRIVATE_KEY` is set or with `useOidcKeyPair` |
+| `algorithm`, `issuer`, `audience`, `tokenExpirationSeconds`, `defaultScope` | | `"RS256"`, `"ihub-apps"`, `"ifinder-api"`, `3600`, `"fa_index_read"` | Advanced token settings for `ihubSigned` |
 | `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
-| `searchProfileApplication` | String | `"ifinder"`     | iFinder application whose search profile assignments iHub reads for a user (`searchprofile.applications`); see [iAssistant Integration](#iassistant-integration) |
-| `defaultSearchProfile`   | String  | `""`              | Search profile the `iFinder_*` tools search until the user picks another one in the chat. When empty, `IFINDER_SEARCH_PROFILE` and then `searchprofile-standard` apply |
+| `searchProfileApplication` | String | `"ifinder"`     | iFinder application whose search profile assignments iHub reads for a user (`searchprofile.applications`); advanced; see [iAssistant Integration](#iassistant-integration) |
+| `defaultSearchProfile`   | String  | `"searchprofile-standard"` | Search profile the `iFinder_*` tools search until the user picks another one in the chat. When empty, `IFINDER_SEARCH_PROFILE` and then `searchprofile-standard` apply |
 | `allowedSearchProfiles`  | Array   | `[]`              | Which of the user's search profiles the chat picker offers and the tools may search. Empty offers every profile the user has; the default is always allowed |
 | `allowUserSearchProfileChange` | Boolean | `true`     | `false` pins every chat to `defaultSearchProfile`: neither the user nor the model can pick another profile |
+| `timeout`, `downloadDir`, `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | | | Advanced: request timeout, download directory, API paths |
 
-These search settings belong to iFinder search; iAssistant has its own under [`iAssistant`](#iassistant-integration). Both run on the connection above. Users pick the search profile per chat in the chat input (see [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask)); the server checks the pick against the user's profiles (read as for `iFinder_listProfiles`) and the allow-list on every turn, and the pick binds every `iFinder_*` call of the chat.
+No key material is ever stored in a config file: the private key is a credential in the central credential store (`contents/config/credentials.json`), or the `IFINDER_PRIVATE_KEY` environment variable. See [JWT Key Generation](ifinder-jwt-key-generation.md).
+
+The search settings belong to iFinder search; iAssistant has its own in the [`iassistant` installation](#iassistant-integration). Both run on the connection above. Users pick the search profile per chat in the chat input (see [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask)); the server checks the pick against the user's profiles (read as for `iFinder_listProfiles`) and the allow-list on every turn, and the pick binds every `iFinder_*` call of the chat. Apps get the `iFinder_*` tools by binding the installation, see [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 
 ### `jwtSubjectField` supported values
 
-The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
+The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field of `integrations.json`, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
 
 Resolution is **strict**: the configured field is the only one consulted. If the authenticated user has no value for it, token generation fails with an error naming the setting and the missing field. It does not fall back to another identifier — a valid token for the wrong subject is worse than no token, because iFinder keys its user mapping on `sub` and the mismatch is invisible on both sides.
 
-Accepted forms:
+The wizard offers `email`, `id`, `username` and `name`; the other forms are set in `integrations.json`. Accepted forms:
 
 - `"email"` (default) — `user.email`.
+- `"id"` — `user.id`; `"name"` — the display name.
 - `"username"` — `user.username`. For LDAP this is the directory login name (`sAMAccountName` when `usernameAttribute` is set to it), for NTLM the Windows account name.
 - `"domain\\username"` — `user.domain + "\\" + user.username`, for NTLM/AD setups. Requires a domain on the user: NTLM takes it from the handshake, LDAP from the provider's `domain` field or by detecting it from the Active Directory `msDS-PrincipalName` attribute. See [LDAP and NTLM Authentication](ldap-ntlm-authentication.md).
 - **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`. A placeholder with no value is an error too, rather than leaving a hole in the subject.
@@ -1133,11 +1130,15 @@ For integration details see [iFinder Integration](iFinder-Integration.md).
 
 ## iAssistant Integration
 
-Configures the global connection to an IntraFind iAssistant service. Individual apps can override these settings via their `iassistant` property.
+iAssistant is no longer configured in `platform.json` either. It is the built-in `iassistant` installation in `contents/config/integrations.json`, managed under **Admin → Integrations → Installed → iAssistant**, and runs on the iFinder installation its `connection` field names. Individual apps can override these settings via their `iassistant` property, and an app on the iAssistant model binds the installation (`"integrations": { "iassistant": { "actions": [] } }`; see [Apps → iAssistant Configuration](apps.md#iassistant-configuration)). Migration V192 moves an existing `iAssistant` block into the installation.
 
 ```json
 {
-  "iAssistant": {
+  "id": "iassistant",
+  "definition": "com.intrafind/iassistant",
+  "enabled": true,
+  "values": {
+    "connection": "ifinder",
     "defaultProfileId": "iassistant-workspace",
     "defaultSearchProfile": "searchprofile-standard",
     "verifySearchProfileAccess": true,
@@ -1148,13 +1149,14 @@ Configures the global connection to an IntraFind iAssistant service. Individual 
 
 | Field                       | Type    | Default                    | Description                                                                                                                         |
 | --------------------------- | ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `defaultProfileId`          | String  | `""`                       | Conversation profile used when an app does not set its own `iassistant.profileId`                                                   |
+| `connection`                | String  | `"ifinder"`                | The iFinder installation whose base URL and token the iAssistant uses                                                               |
+| `defaultProfileId`          | String  | `""`                       | Conversation profile used when an app does not set its own `iassistant.profileId`; `IASSISTANT_PROFILE_ID` applies while it is empty |
 | `defaultSearchProfile`      | String  | `"searchprofile-standard"` | iFinder search profile used when neither the app nor the model names one                                                            |
 | `verifySearchProfileAccess` | Boolean | `true`                     | Check the configured search profile against the user's search profiles in iFinder, and use the user's default when they do not have it |
-| `searchProfileCacheTtlMs`   | Number  | `300000`                   | How long a user's search profile list is cached                                                                                     |
+| `searchProfileCacheTtlMs`   | Number  | `300000`                   | How long a user's search profile list is cached (advanced)                                                                          |
 | `groundedOnly`              | Boolean | `false`                    | Installation-wide default for grounded-only answering; an app's `iassistant.groundedOnly` overrides it in either direction          |
 
-The base URL is not configured here — iAssistant reuses `iFinder.baseUrl`.
+The base URL is not configured here — iAssistant reuses the iFinder installation's `baseUrl`. The installation is enabled only while the iFinder installation is.
 
 ### Conversation profile vs. search profile
 
@@ -1169,7 +1171,7 @@ Search profiles are assigned per user in iFinder, while the configured one appli
 - otherwise uses the user's default search profile in iFinder, as iFinder's own searchbar does for a profile the user does not have;
 - keeps the configured search profile when the list cannot be read (for example iFinder 6.9 answers 403 to a user without the feature `fi_ifinder_allow`) or is empty. The check never turns a working setup into a broken one; it logs at debug level.
 
-iFinder assigns search profiles per *application*, and the list is read for one of them: `iFinder.searchProfileApplication`, by default `ifinder`, the application of the iFinder searchbar (and of its own iAssistant). If your installation assigns the profiles of its iAssistant apps under another application, set it to that application. Otherwise a profile assigned only there counts as missing, and the conversation searches the user's default profile instead. Ragtime itself does not check the assignment of a profile it is given — only the user's document permissions — so switching is a choice of corpus, not a security boundary. A switch is logged as a warning naming both profiles; turn the check off with `verifySearchProfileAccess: false` to always send the configured profile.
+iFinder assigns search profiles per *application*, and the list is read for one of them: the iFinder installation's `searchProfileApplication`, by default `ifinder`, the application of the iFinder searchbar (and of its own iAssistant). If your installation assigns the profiles of its iAssistant apps under another application, set it to that application. Otherwise a profile assigned only there counts as missing, and the conversation searches the user's default profile instead. Ragtime itself does not check the assignment of a profile it is given — only the user's document permissions — so switching is a choice of corpus, not a security boundary. A switch is logged as a warning naming both profiles; turn the check off with `verifySearchProfileAccess: false` to always send the configured profile.
 
 The conversation profile does not name a search profile: it selects a workflow and its tuning, not a corpus. iFinder pairs the two in an *iAssistant* (`/public-api/v0/assistants`), which is a separate entity.
 

@@ -476,8 +476,8 @@ These optional fields work for all app types:
 | `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
 | `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
-| `requiredIntegrations` | Array | - | Integrations (Admin → Integrations) the app needs. `ifinder` (iFinder integration switched on) or `peopleDirectories` (at least one enabled people directory). While one is off, users do not get the app, exactly like `requiredFeatures`. The shipped `iassistant`, `ifinder-search` (iFinder) and `people-directory` (People directories) apps use it |
-| `integrations` | Object | - | Per-integration chat settings: where the user picks the integration's scope and which scope the app starts with or pins. See [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask) |
+| `requiredIntegrations` | Array | - | Integrations the app needs that are not installations: only `peopleDirectories` (at least one enabled people directory). While it is off, users do not get the app, exactly like `requiredFeatures`. The shipped `people-directory` app uses it. For iFinder and iAssistant, bind the installation under `integrations` instead; `ifinder` is no longer accepted here |
+| `integrations` | Object | - | The installed integrations (Admin → Integrations → Installed) the app offers, the actions it offers of each, and the chat settings for the integration's scope. The shipped `ifinder-search` and `iassistant` apps use it. See [Integrations](#integrations-binding-an-installed-integration) |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -533,7 +533,8 @@ Each app is defined with the following essential properties:
 | `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `requiredFeatures`      | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled |
-| `requiredIntegrations`  | Array   | Optional. Integrations the app needs (`ifinder`, `peopleDirectories`). While one is off, users do not get the app, as if it were disabled |
+| `requiredIntegrations`  | Array   | Optional. Integrations the app needs that are not installations (only `peopleDirectories`). While it is off, users do not get the app, as if it were disabled |
+| `integrations`          | Object  | Optional. Installed integrations the app binds, with their actions and scope settings. See [Integrations](#integrations-binding-an-installed-integration) below |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
 | `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
@@ -552,7 +553,7 @@ Each app is defined with the following essential properties:
 | `iassistant`            | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below |
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
-| `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `tools`                 | Array   | Optional. Array of tool identifiers available in this app. The iFinder tools are not listed here: an app gets them by binding the `ifinder` installation under `integrations` |
 | `toolChoice`            | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
 | `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
@@ -1154,7 +1155,7 @@ Requirements and behavior:
 
 #### iAssistant Configuration
 
-The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the global `iAssistant` settings in `platform.json`.
+The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the settings of the `iassistant` installation (**Admin → Integrations → Installed → iAssistant**, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The app also binds that installation under `integrations` (`"iassistant": { "actions": [] }`, see [Integrations](#integrations-binding-an-installed-integration)); the shipped `iassistant` app shows both.
 
 ```json
 "iassistant": {
@@ -1180,7 +1181,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | Property                    | Type   | Description                                                                                      |
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
-| `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
+| `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the iFinder installation's base URL               |
 | `iassistant.profileId`      | String | iAssistant *conversation* profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
 | `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
@@ -1194,7 +1195,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.allSearchProfiles` | Boolean | Send no search profile, so iFinder searches across every search profile the user has (iFinder 6.9+). Default: `false` |
 | `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
 | `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
-| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
+| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to the installation's **Answer only from retrieved documents** (`groundedOnly`); `false` turns that default off for this app |
 | `iassistant.tools`          | Array  | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools |
 | `iassistant.labels`         | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels |
 | `iassistant.scope`          | String | OAuth scope requested in the iFinder JWT for this app                                            |
@@ -1220,7 +1221,7 @@ This is carried as a prompt instruction prepended to `extraContext`, because the
 
 `profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
 
-The search profile comes from `searchProfile`, then the model's, then `iAssistant.defaultSearchProfile`. Because search profiles are assigned per user in iFinder, iHub checks it against the search profiles of the requesting user before creating a conversation and uses the user's default profile when they do not have it (`iAssistant.verifySearchProfileAccess`, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The resolved profile is pinned for the life of the conversation.
+The search profile comes from `searchProfile`, then the model's, then the installation's `defaultSearchProfile`. Because search profiles are assigned per user in iFinder, iHub checks it against the search profiles of the requesting user before creating a conversation and uses the user's default profile when they do not have it (the installation's `verifySearchProfileAccess`, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The resolved profile is pinned for the life of the conversation.
 
 **An iFinder iAssistant (`assistantId`):** iFinder pairs a conversation profile with a search profile in an *iAssistant* (Admin UI of iFinder → iAssistants). Naming one takes both profiles from iFinder, so the pairing is maintained in one place. iFinder offers a user only the iAssistants whose search profile they have; a user without it gets the message that the iAssistant is not available to them instead of an answer from another corpus. In **Admin → Apps → Edit → iAssistant**, **Load from iFinder** lists the iAssistants iFinder shows *you*; others can be entered by ID. Both profiles are pinned for the life of a conversation.
 
@@ -1287,16 +1288,40 @@ is no longer accepted — see [Models](models.md#model-thinking-configuration).
 - `customResponseRenderer`: Specify a custom component for rendering AI responses
 - `outputSchema`: JSON schema defining the required structure of the AI response
 
+### Integrations: binding an installed integration
+
+An app offers an [installed integration](integrations.md) (**Admin → Integrations → Installed**) by binding it under `integrations`, keyed by the installation id. **Admin → Apps → Edit → Installed integrations** writes this object; in JSON:
+
+```json
+"integrations": {
+  "ifinder": { "actions": ["search", "getContent"] },
+  "open-data-portal": { "actions": ["search_datasets"], "defaultScope": "stadt-norderstedt" }
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `actions` | Array | all of the installation's actions | The actions the app offers the model, by name. `[]` binds the installation without tools, for the scope picker only |
+| `scopePicker`, `defaultScope`, `pinnedScope`, `allowAllSearchProfiles` | | | The scope settings, see [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask) |
+
+The binding is also the requirement: the app is offered to users only while every installation it binds exists and is enabled. Otherwise users do not get the app, as with a `requiredFeatures` entry that is off, and **Admin → Apps** names the missing installation.
+
+**iFinder.** The seven iFinder tools (`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_discover`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`) are the actions of the built-in `ifinder` installation and are not listed in `tools`. The action names are the tool ids without the `iFinder_` prefix: `"ifinder": { "actions": ["search", "getContent"] }` offers two of them, `"ifinder": {}` all seven, `"ifinder": { "actions": [] }` none (the chat still gets the search profile picker). The tools keep their ids in the chat and in group tool grants (`permissions.tools`).
+
+**iAssistant.** An app on the iAssistant model (`preferredModel: "iassistant-conversation"`) binds `"iassistant": { "actions": [] }`: the installation has no tools, the binding ties the app to it and carries the scope settings. The `iassistant` object of the app holds the per-app overrides, see [iAssistant Configuration](#iassistant-configuration).
+
+Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and listed the `iFinder_*` tools in `tools`; migration V192 rewrites both into the binding. `requiredIntegrations` now only knows `peopleDirectories`, and the schema rejects `ifinder` in it.
+
 ### Integration scopes: where to search and whom to ask
 
 An integration can offer *scopes* the user picks per chat: where it searches, or whom it asks. Today two integrations do:
 
 | Integration | `integrations` key | Scopes | Offered to |
 |---|---|---|---|
-| iFinder | `ifinder` | The user's iFinder search profiles, with their display names ("Search in: Contracts") | Apps with `iFinder_*` tools, while the iFinder integration is on |
+| iFinder | `ifinder` | The user's iFinder search profiles, with their display names ("Search in: Contracts") | Apps that bind the `ifinder` installation, while it is enabled |
 | iAssistant | `iassistant` | `assistant:<id>` — an iFinder iAssistant the user can see; `configured` — the app's own conversation and search profile (when the app names no iAssistant); `all` — all of the user's search profiles, when allowed | Chats whose model is an iAssistant (`iassistant-conversation`) |
 
-The picked scope is saved with the chat and restored when the chat is reopened. It is binding: every `iFinder_*` call of the chat searches the picked profile, whatever `searchProfile` the model passes, and the model is told the profile is fixed (`iFinder_listProfiles` is not offered then). Changing an iAssistant scope mid-chat continues in a new iFinder conversation, because iFinder fixes the profiles of a conversation when it is created. The server checks the scope on every turn against what the integration offers the user and the admin allow-list (`iFinder.allowedSearchProfiles`, see [Platform → iFinder](platform.md)); a scope the user may not use refuses the turn with `403 INTEGRATION_SCOPE_NOT_ALLOWED`.
+The picked scope is saved with the chat and restored when the chat is reopened. It is binding: every `iFinder_*` call of the chat searches the picked profile, whatever `searchProfile` the model passes, and the model is told the profile is fixed (`iFinder_listProfiles` is not offered then). Changing an iAssistant scope mid-chat continues in a new iFinder conversation, because iFinder fixes the profiles of a conversation when it is created. The server checks the scope on every turn against what the integration offers the user and the admin allow-list (the iFinder installation's **Offered search profiles**, `allowedSearchProfiles`, see [Platform → iFinder](platform.md#ifinder-integration)); a scope the user may not use refuses the turn with `403 INTEGRATION_SCOPE_NOT_ALLOWED`.
 
 ```json
 "integrations": {
@@ -1308,7 +1333,7 @@ The picked scope is saved with the chat and restored when the chat is reopened. 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `scopePicker` | `menu` \| `hidden` | `menu` | `menu`: a row under **Use in this chat** in the "+" menu with a submenu, and a chip under the composer showing the scope in use. Picking a scope closes the menu. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
-| `defaultScope` | String | the platform default | The scope a new chat starts with, when the user has it |
+| `defaultScope` | String | the installation's default | The scope a new chat starts with, when the user has it |
 | `pinnedScope` | String | - | The only scope the app's chats use. The picker shows it but offers nothing else, and the server applies it whatever the request says |
 | `allowAllSearchProfiles` | Boolean | the app's `iassistant.allSearchProfiles` | `iassistant` only: offer "All my search profiles" (iFinder 6.9+) |
 

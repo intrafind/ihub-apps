@@ -643,8 +643,8 @@ drawn from an attached private project.
 
 ### The iFinder tier: smart collections
 
-With `platform.projects.tierPolicy` set to `both` or `ifinder`, **iFinder** configured
-(**Admin → Integrations → iFinder**) and **User Projects** switched on, the user's iFinder
+With `platform.projects.tierPolicy` set to `both` or `ifinder`, **iFinder** installed and enabled
+(**Admin → Integrations → Installed**) and **User Projects** switched on, the user's iFinder
 smart collections are listed under **Projects** as projects marked **iFinder**. Their owner can
 **create** a collection from iHub, **rename** it, **add** iFinder documents to it and **remove**
 them again (the membership only, never the document). Sharing, deleting a collection, any other kind

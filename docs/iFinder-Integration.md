@@ -29,9 +29,15 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 
 ## Configuration
 
+iFinder is a [built-in installed integration](integrations.md#built-in-integrations):
+it is configured under **Admin → Integrations → Installed → iFinder** (**Install**,
+later **Edit**), and its settings are stored as the `ifinder` installation in
+`contents/config/integrations.json`, not in `platform.json`. The installation's
+own switch enables or disables the integration; **Test** checks the connection.
+
 > **Who issues the iFinder token.** By default iHub signs the token itself
-> (`iFinder.authMode: "ihubSigned"`, with a private key or the iHub OIDC key
-> pair). When iHub and iFinder share one OIDC provider, iHub can instead exchange
+> (**Authentication** = *JWT signed by iHub*, `authMode: "ihubSigned"`, with a
+> private key or the iHub OIDC key pair). When iHub and iFinder share one OIDC provider, iHub can instead exchange
 > each user's sign-in token at that provider (`"oidcTokenExchange"`); no key is
 > needed then. See [Shared OIDC Provider (Token Exchange)](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange).
 
@@ -46,53 +52,76 @@ IFINDER_SEARCH_PROFILE=your-default-search-profile
 IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"
-# Takes precedence over a credential selected in Admin > Integrations > iFinder.
-
-# Optional: Advanced Configuration
-IFINDER_TIMEOUT=30000
-IFINDER_DOWNLOAD_DIR=/tmp/ifinder-downloads
+# Takes precedence over the credential selected in the installation.
 ```
 
 **Important Notes:**
 
+- **IFINDER_API_URL** and **IFINDER_PRIVATE_KEY** win over the installation's base URL and private key when set
 - **IFINDER_PRIVATE_KEY**: Must be in PEM format for RS256 JWT signing
 - **Line breaks**: Use actual newlines or `\n` escapes - the system will convert them automatically
-- **Search Profile**: This is the default profile ID used for all searches
+- **Search Profile**: `IFINDER_SEARCH_PROFILE` applies only while the installation's **Default search profile** is empty
+- Request timeout and download directory are advanced settings of the installation (`timeout`, `downloadDir`); there is no environment variable for them
 
-### 2. Platform Configuration
+### 2. The iFinder Installation
 
-Alternatively, configure iFinder from **Admin > Integrations > iFinder** — the
-base URL, search profile and other settings are stored in `platform.json`,
-but the private key itself is never stored there in plaintext. Select or
-create a credential (Admin > Credentials, type "Secret", pasting the PEM key
-as its value) and pick it from the **Private Key** field; iHub stores a
-`privateKeyRef` pointing at it:
+Open **Admin → Integrations → Installed**, pick **iFinder** in the catalog and
+**Install** (or **Edit** the existing installation). The wizard asks for the
+connection, the authentication and the search settings; advanced fields are
+folded away. The private key is never stored in a config file: create a
+credential (Admin → Credentials, type "Secret", pasting the PEM key as its
+value) and pick it in the **Private key** field; the installation stores a
+`privateKeyRef` pointing at it.
+
+| Field | Key | Default | Description |
+| --- | --- | --- | --- |
+| iFinder base URL | `baseUrl` | - | The iFinder instance. `IFINDER_API_URL` wins over it when set |
+| Authentication | `authMode` | `ihubSigned` | `ihubSigned` (iHub signs the token) or `oidcTokenExchange` (a shared OIDC provider issues it, see [Shared OIDC Provider](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange)) |
+| Sign with iHub's OIDC key pair | `useOidcKeyPair` | `false` | Keyless signing with the iHub OIDC key, verified by iFinder through JWKS (recommended) |
+| Private key | `privateKeyRef` | - | Credential holding the PEM private key; ignored with `useOidcKeyPair`. `IFINDER_PRIVATE_KEY` wins over it |
+| User identity sent to iFinder | `jwtSubjectField` | `email` | Which user attribute becomes the token's `sub` (`email`, `id`, `username`, `name`) |
+| Signing algorithm, JWT issuer, JWT audience, Token lifetime, Token scope | `algorithm`, `issuer`, `audience`, `tokenExpirationSeconds`, `defaultScope` | `RS256`, `ihub-apps`, `ifinder-api`, `3600`, `fa_index_read` | Advanced token settings for `ihubSigned` |
+| OIDC provider for token exchange, grant, audience, scopes | `tokenExchangeProvider`, `tokenExchangeGrant`, `tokenExchangeAudience`, `tokenExchangeScopeIndexRead`, `tokenExchangeScopeAssistant`, `tokenExchangeScopeSmartCollections`, `tokenExchangeExtraScopes` | - | The `oidcTokenExchange` settings, see [Configure iHub](ifinder-oidc-jwt.md#configure-ihub) |
+| Default search profile | `defaultSearchProfile` | `searchprofile-standard` | The profile the tools search until the user picks another one |
+| Offered search profiles | `allowedSearchProfiles` | `[]` (all of the user's) | Which of the user's profiles the chat picker offers and the tools may search |
+| Users may change the search profile | `allowUserSearchProfileChange` | `true` | `false` pins every chat to the default profile |
+| Search profile application | `searchProfileApplication` | `ifinder` | The iFinder application whose profile assignments are read for a user (advanced) |
+| Request timeout (ms), Download directory | `timeout`, `downloadDir` | `30000`, `/tmp/ifinder-downloads` | Advanced |
+| Search, Document, Fields, Facets endpoint path | `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | the iFinder public API paths | Advanced; change only for a non-standard deployment |
+
+The installation in `contents/config/integrations.json` looks like this (the
+file reloads automatically):
 
 ```json
 {
-  "iFinder": {
-    "baseUrl": "https://your-ifinder-instance.com",
-    "defaultSearchProfile": "your-default-search-profile",
-    "privateKeyRef": "ifinder",
-    "endpoints": {
-      "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
-      "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
-    },
-    "timeout": 30000,
-    "downloadDir": "/tmp/ifinder-downloads",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
-    "tokenExpirationSeconds": 3600
-  }
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://your-ifinder-instance.com",
+        "authMode": "ihubSigned",
+        "useOidcKeyPair": false,
+        "privateKeyRef": "ifinder",
+        "jwtSubjectField": "email",
+        "defaultSearchProfile": "your-default-search-profile",
+        "allowedSearchProfiles": [],
+        "allowUserSearchProfileChange": true
+      }
+    }
+  ]
 }
 ```
+
+Installations that configured iFinder in `platform.json` are moved here by
+migration V192 on the first start, which also removes `contents/tools/iFinder.json`
+and rewrites the apps (see [Binding the tools to an app](#binding-the-tools-to-an-app)).
 
 ### 3. JWT Configuration
 
 > **Recommended: keyless authentication.** Instead of generating and exchanging
-> an RSA key pair, enable `iFinder.useOidcKeyPair`. iHub then signs the iFinder
+> an RSA key pair, enable **Sign with iHub's OIDC key pair** (`useOidcKeyPair`). iHub then signs the iFinder
 > JWT with its built-in OIDC signing key and iFinder verifies it by fetching the
 > public key from iHub's JWKS endpoint — no `privateKey`/`IFINDER_PRIVATE_KEY`
 > and no manual key upload into iFinder. See
@@ -146,6 +175,27 @@ The iFinder integration exposes these functions under the `iFinder.` namespace
 
 The last four are the **discovery** surface; see
 [Discovering what is searchable](#discovering-what-is-searchable).
+
+### Binding the tools to an app
+
+The tools are the actions of the `ifinder` installation, so an app does not list
+them in `tools`. It binds the installation under `integrations`, naming the
+actions it wants (the tool ids without the `iFinder_` prefix), or none for all
+of them:
+
+```json
+"integrations": {
+  "ifinder": { "actions": ["search", "getContent", "getMetadata"] }
+}
+```
+
+`"actions": []` binds the installation without tools, which still gives the chat
+the search profile picker. The binding is also the requirement: the app is
+offered to users only while the installation exists and is enabled, and
+**Admin → Apps** names a missing one. **Admin → Apps → Edit → Installed
+integrations** writes the object. Group tool grants (`permissions.tools` in
+`groups.json`) still name the tools by their ids, `iFinder` or `iFinder_*`. See
+[Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 
 ### iFinder.search
 
@@ -437,7 +487,7 @@ Here are the 3 most recent contracts:
 
 ### iFinder Search App
 
-The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled but requires the iFinder integration (`requiredIntegrations: ["ifinder"]`): users see the app only while **Admin > Integrations > iFinder** is switched on.
+The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled and binds the `ifinder` installation (`"integrations": { "ifinder": { "scopePicker": "menu" } }`): users see the app only while the installation under **Admin → Integrations → Installed** exists and is enabled.
 
 It handles two kinds of requests:
 
@@ -455,18 +505,18 @@ The documents each search found are listed in the chat's tool activity, like web
 **App configuration:**
 
 - **App ID**: `ifinder-search`
-- **Tools**: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`, `iFinder_discover`
+- **Integration**: the `ifinder` installation with all seven actions (`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`, `iFinder_discover`)
 - **Skills**: `ifinder-search` — the full query syntax and troubleshooting table, loaded on demand when the `skills` feature is on. Without it the system prompt carries the essentials (search in several steps, query vs. filter, the `.keyword` rule, sorting).
 
 The research behaviour lives in the system prompt, so an admin can adapt it — for example to name the ticket system or the custom `cust.*` fields of their deployment.
 
 ### Choosing the search profile per chat
 
-Users pick where to search. In every app with iFinder tools, the iFinder Search app included, the **+** menu has an iFinder row under **Use in this chat** that shows the current profile and opens a submenu; picking a profile closes the menu, and a chip under the composer shows where the next question goes. The iAssistant is picked the same way. The list is the user's own search profiles with their display names, the same list `iFinder_listProfiles` reads, narrowed to `iFinder.allowedSearchProfiles` when an admin sets one.
+Users pick where to search. In every app with iFinder tools, the iFinder Search app included, the **+** menu has an iFinder row under **Use in this chat** that shows the current profile and opens a submenu; picking a profile closes the menu, and a chip under the composer shows where the next question goes. The iAssistant is picked the same way. The list is the user's own search profiles with their display names, the same list `iFinder_listProfiles` reads, narrowed to the installation's **Offered search profiles** (`allowedSearchProfiles`) when an admin sets one.
 
 The choice is saved with the chat and restored when the chat is reopened. It binds the model: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFacetValues` and `iFinder_discover` search the picked profile even when the model passes another `searchProfile`. iHub sets the scope on the tool call after the model's arguments, the same way it sets the user and the chat id, and tells the model the profile is fixed; `iFinder_listProfiles` is not offered in such a chat. Without a pick, a profile the model names itself is checked the same way: one the user does not have, or one outside the allow-list, is refused with a message listing the profiles that are available.
 
-The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With `iFinder.allowUserSearchProfileChange: false`, or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
+The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With the installation's **Users may change the search profile** off (`allowUserSearchProfileChange: false`), or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
 
 ### Example User Interactions
 
@@ -571,7 +621,7 @@ the two in sync when changing either.
 
 - **Cause**: Network issues or slow iFinder instance
 - **Solution**:
-  - Increase `IFINDER_TIMEOUT` environment variable
+  - Raise the installation's **Request timeout (ms)** (advanced setting)
   - Check network connectivity to iFinder instance
 
 #### "Document not found: doc123456"
@@ -603,16 +653,18 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-| Setting          | Environment Variable     | Platform Config                | Default                           | Description                                                                    |
+The settings live in the `ifinder` installation (**Admin → Integrations → Installed → iFinder**, `values` in `contents/config/integrations.json`); the full list is under [Configuration](#2-the-ifinder-installation).
+
+| Setting          | Environment Variable     | Installation Field             | Default                           | Description                                                                    |
 | ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
-| Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
-| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `searchprofile-standard`          | Default search profile ID; the config value wins over the environment variable |
-| Allowed Profiles | -                        | `iFinder.allowedSearchProfiles` | `[]` (all of the user's)         | Search profiles users may pick per chat, and the tools may search              |
-| Profile Change   | -                        | `iFinder.allowUserSearchProfileChange` | `true`                    | `false` pins every chat to the default search profile                          |
-| Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
-| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKeyRef`        | -                                 | JWT signing private key (PEM format, env var) or credential ref (Admin > Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
-| Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
-| Download Dir     | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory                                                       |
+| Base URL         | `IFINDER_API_URL`        | `baseUrl`                      | -                                 | iFinder instance URL; the environment variable wins over the field             |
+| Search Profile   | `IFINDER_SEARCH_PROFILE` | `defaultSearchProfile`         | `searchprofile-standard`          | Default search profile ID; the field wins over the environment variable        |
+| Allowed Profiles | -                        | `allowedSearchProfiles`        | `[]` (all of the user's)          | Search profiles users may pick per chat, and the tools may search              |
+| Profile Change   | -                        | `allowUserSearchProfileChange` | `true`                            | `false` pins every chat to the default search profile                          |
+| Keyless (OIDC)   | -                        | `useOidcKeyPair`               | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
+| Private Key      | `IFINDER_PRIVATE_KEY`    | `privateKeyRef`                | -                                 | JWT signing private key (PEM format, env var) or credential (Admin → Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
+| Timeout          | -                        | `timeout`                      | `30000`                           | Request timeout (milliseconds), advanced                                       |
+| Download Dir     | -                        | `downloadDir`                  | `/tmp/ifinder-downloads`          | Local download directory, advanced                                             |
 
 ### Error Codes
 
@@ -623,7 +675,7 @@ Test your iFinder configuration:
 | `403`       | Access denied              | Check user permissions in iFinder         |
 | `404`       | Document not found         | Verify document ID or search for document |
 | `413`       | Content too large          | Reduce `maxLength` parameter              |
-| `ETIMEDOUT` | Request timed out          | Increase `IFINDER_TIMEOUT` setting        |
+| `ETIMEDOUT` | Request timed out          | Raise the installation's request timeout  |
 
 ## Best Practices
 
@@ -789,17 +841,17 @@ listing lives on the administration API, which an end-user token cannot reach.
 The list is read, as the user, from the configuration action of iFinder's
 internal search API (`GET /internal-api/v2/search?action=getconfiguration`),
 which is where the iFinder searchbar gets the profiles it offers. iFinder
-assigns profiles per application; the list is read for
-`iFinder.searchProfileApplication` (default `ifinder`, the searchbar's). It is
+assigns profiles per application; the list is read for the installation's
+`searchProfileApplication` (default `ifinder`, the searchbar's). It is
 cached per user for five minutes.
 
-- `isDefault` marks the configured `iFinder.defaultSearchProfile`. It is always
+- `isDefault` marks the installation's `defaultSearchProfile`. It is always
   listed; `available: false` means the user does not have it.
 - `isUserDefault` marks the user's own default profile in iFinder.
 - When iFinder cannot be asked (`source: 'configured-default'`), only the
   configured default is reported. iFinder 6.9 answers 403 to a user without the
   feature `fi_ifinder_allow`.
-- `iFinder.allowedSearchProfiles` narrows the list; the default stays.
+- The installation's `allowedSearchProfiles` narrows the list; the default stays.
 - In a chat whose search profile is fixed (picked by the user, pinned by the
   app or by `allowUserSearchProfileChange: false`) the tool is not offered;
   called anyway it answers with that one profile and `fixed: true`.

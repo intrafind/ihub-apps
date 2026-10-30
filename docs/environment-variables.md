@@ -84,9 +84,14 @@ IHUB_PLATFORM__SWAGGER__ENABLED=false
 # SSL – ignore invalid certificates (platform.json → ssl.ignoreInvalidCertificates)
 IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES=true
 
-# iFinder integration base URL (platform.json → iFinder.baseUrl)
-IHUB_PLATFORM__I_FINDER__BASE_URL=https://ifinder.example.com
 ```
+
+The iFinder and iAssistant settings are not in `platform.json`: they are the
+`ifinder` and `iassistant` installations in `contents/config/integrations.json`
+(Admin → Integrations → Installed), which the `IHUB_*` mapping does not cover.
+Use `IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` for them; they win over the
+installation's base URL and private key (see
+[iFinder Integration](iFinder-Integration.md#configuration)).
 
 ### UI configuration
 
@@ -143,7 +148,7 @@ metadata:
 type: Opaque
 stringData:
   OPENAI_API_KEY: "sk-..."
-  IHUB_PLATFORM__I_FINDER__BASE_URL: "https://ifinder.internal"
+  IFINDER_API_URL: "https://ifinder.internal"
 ```
 
 ---
