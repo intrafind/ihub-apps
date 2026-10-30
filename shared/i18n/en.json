@@ -7450,5 +7450,38 @@
       "noProfiles": "None of your own entries is offered here, so only the default is listed.",
       "unavailable": "The list could not be loaded, so only the default is offered."
     }
+  },
+  "chatArtifacts": {
+    "title": "Artifacts",
+    "open": "Artifacts",
+    "openPanel": "Preview and download as ZIP",
+    "close": "Close artifacts",
+    "count_one": "{{count}} file",
+    "count_other": "{{count}} files",
+    "loading": "Loading the files of this chat…",
+    "loadFailed": "The files of this chat could not be loaded.",
+    "empty": "This chat has no files yet. Files, pictures and documents the assistant creates appear here.",
+    "listLabel": "Files of this chat",
+    "previewLabel": "Preview",
+    "selectAll": "Select all",
+    "selectNamed": "Select {{name}}",
+    "fromAnswer": "Answer {{number}}",
+    "download": "Download",
+    "downloadNamed": "Download {{name}}",
+    "downloadFailed": "The download failed. Please try again.",
+    "downloadSelected": "Download selected (.zip)",
+    "downloadAll": "Download all (.zip)",
+    "copy": "Copy",
+    "copied": "Copied to the clipboard.",
+    "copyFailed": "The content could not be copied.",
+    "zipPreparing": "Preparing the ZIP archive…",
+    "zipTooMany": "Too many files for one ZIP archive. Select fewer files.",
+    "zipTooLarge": "The files are too large for one ZIP archive. Select fewer files.",
+    "zipFailed": "The ZIP archive could not be created. Please try again.",
+    "previewLoading": "Loading preview…",
+    "previewFailed": "The preview could not be loaded.",
+    "previewTruncated": "Showing the first {{size}}. Download the file to see all of it.",
+    "noPreview": "There is no preview for this file type. Download it to open it.",
+    "codeOf": "Content of {{name}}"
   }
 }

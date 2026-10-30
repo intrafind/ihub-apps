@@ -97,6 +97,44 @@ export const fetchChatArtifact = async (chatId, artifactId) => {
 };
 
 /**
+ * Descriptors of everything a chat produced, newest first — the index the
+ * Artifacts panel lists. Never payloads.
+ *
+ * @param {string} chatId - Chat id.
+ * @returns {Promise<{ items: Object[] }>} the response body
+ */
+export const fetchChatArtifacts = async chatId => {
+  if (!chatId) {
+    throw new Error('Missing required parameters');
+  }
+  return handleApiResponse(
+    () => apiClient.get(`/chats/${encodeURIComponent(chatId)}/artifacts`),
+    null, // never cached — every answer can add to it
+    null
+  );
+};
+
+/**
+ * Several of a chat's artifacts as one ZIP archive, or all of them when no
+ * ids are given.
+ *
+ * @param {string} chatId - Chat id.
+ * @param {string[]} [artifactIds] - Ids to pack; omitted packs every artifact.
+ * @returns {Promise<Blob>} the archive
+ */
+export const downloadChatArtifactsZip = async (chatId, artifactIds) => {
+  if (!chatId) {
+    throw new Error('Missing required parameters');
+  }
+  const response = await apiClient.post(
+    `/chats/${encodeURIComponent(chatId)}/artifacts/zip`,
+    Array.isArray(artifactIds) ? { artifactIds } : {},
+    { responseType: 'blob' }
+  );
+  return response.data;
+};
+
+/**
  * Rename a chat. The server caps the title and marks it as user-set so no later
  * turn derives a title over it; an empty title clears that mark instead.
  *

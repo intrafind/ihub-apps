@@ -7415,5 +7415,38 @@
       "noProfiles": "Keiner Ihrer eigenen Einträge wird hier angeboten, daher wird nur die Voreinstellung aufgeführt.",
       "unavailable": "Die Liste konnte nicht geladen werden, daher wird nur die Voreinstellung angeboten."
     }
+  },
+  "chatArtifacts": {
+    "title": "Artefakte",
+    "open": "Artefakte",
+    "openPanel": "Vorschau und Download als ZIP",
+    "close": "Artefakte schließen",
+    "count_one": "{{count}} Datei",
+    "count_other": "{{count}} Dateien",
+    "loading": "Die Dateien dieses Chats werden geladen…",
+    "loadFailed": "Die Dateien dieses Chats konnten nicht geladen werden.",
+    "empty": "Dieser Chat hat noch keine Dateien. Dateien, Bilder und Dokumente, die der Assistent erstellt, erscheinen hier.",
+    "listLabel": "Dateien dieses Chats",
+    "previewLabel": "Vorschau",
+    "selectAll": "Alle auswählen",
+    "selectNamed": "{{name}} auswählen",
+    "fromAnswer": "Antwort {{number}}",
+    "download": "Herunterladen",
+    "downloadNamed": "{{name}} herunterladen",
+    "downloadFailed": "Der Download ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "downloadSelected": "Auswahl herunterladen (.zip)",
+    "downloadAll": "Alle herunterladen (.zip)",
+    "copy": "Kopieren",
+    "copied": "In die Zwischenablage kopiert.",
+    "copyFailed": "Der Inhalt konnte nicht kopiert werden.",
+    "zipPreparing": "Das ZIP-Archiv wird erstellt…",
+    "zipTooMany": "Zu viele Dateien für ein ZIP-Archiv. Bitte weniger Dateien auswählen.",
+    "zipTooLarge": "Die Dateien sind zu groß für ein ZIP-Archiv. Bitte weniger Dateien auswählen.",
+    "zipFailed": "Das ZIP-Archiv konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+    "previewLoading": "Vorschau wird geladen…",
+    "previewFailed": "Die Vorschau konnte nicht geladen werden.",
+    "previewTruncated": "Angezeigt werden die ersten {{size}}. Laden Sie die Datei herunter, um alles zu sehen.",
+    "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter, um sie zu öffnen.",
+    "codeOf": "Inhalt von {{name}}"
   }
 }

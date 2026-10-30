@@ -11,7 +11,15 @@ import {
   clearConversationId
 } from '../../../utils/chatId';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { deleteChat, fetchAppDetails, fetchChat, keepChat } from '../../../api';
+import {
+  deleteChat,
+  downloadChatArtifactsZip,
+  fetchAppDetails,
+  fetchChat,
+  fetchChatArtifact,
+  fetchChatArtifacts,
+  keepChat
+} from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -19,6 +27,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import ShareDialog from '../../chat/components/ShareDialog';
+import ArtifactsPanel from '../../chat/components/ArtifactsPanel';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
@@ -311,6 +320,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // server's answer (feature on, admin switch on, storage up) and needs a
   // durable chat.
   const [showShare, setShowShare] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   const auth = useOptionalAuth();
   // A short link belongs to the signed-in user who creates it.
   const signedOut = auth ? auth.isAuthenticated !== true : false;
@@ -898,6 +908,31 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // shareable nor start one below.
   const chatShareReady =
     chatShareOffered && Boolean(chatId) && messages.some(message => !message.isGreeting);
+
+  // The Artifacts panel lists what the stored chat produced, so it is offered
+  // once an answer brought a picture or a file. A chat that is not stored has
+  // nothing to list (the server answers 404, read as "no files").
+  const artifactsAvailable =
+    chatPersistence &&
+    Boolean(chatId) &&
+    messages.some(
+      message =>
+        message.artifacts?.length > 0 ||
+        message.generatedFiles?.length > 0 ||
+        message.images?.length > 0
+    );
+  const artifactSource = useMemo(
+    () => ({
+      list: () =>
+        fetchChatArtifacts(chatId).catch(error => {
+          if (error?.status === 404 || error?.response?.status === 404) return { items: [] };
+          throw error;
+        }),
+      fetchBlob: id => fetchChatArtifact(chatId, id),
+      zip: ids => downloadChatArtifactsZip(chatId, ids)
+    }),
+    [chatId]
+  );
 
   // `/apps/:appId` always opens a new durable chat, so once this one has been
   // started the URL has to name it — otherwise a reload would leave it for a
@@ -3033,6 +3068,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         hideParametersButton={!showVariablesPanel}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled || chatShareReady}
+        onOpenArtifacts={() => setShowArtifacts(true)}
+        showArtifactsButton={artifactsAvailable}
         conversationTitle={conversationTitle}
         showCompareModeToggle={compareModeFeatureEnabled && chatModels.length >= 2}
         compareModeActive={compareModeActive}
@@ -3402,6 +3439,17 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             onClose={() => setUsageGuideViewerOpen(false)}
           />
         </Suspense>
+      )}
+      {showArtifacts && artifactsAvailable && (
+        <ArtifactsPanel
+          isOpen
+          onClose={() => setShowArtifacts(false)}
+          source={artifactSource}
+          zipName={
+            conversationTitle || getLocalizedContent(app?.name, currentLanguage) || 'artifacts'
+          }
+          messages={messages}
+        />
       )}
       {showShare && (
         <ShareDialog
