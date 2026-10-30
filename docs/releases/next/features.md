@@ -417,3 +417,16 @@ is unchanged.
 - The connection test runs the exchange for the admin and shows `iss`, `aud`, `sub`, the scopes
   and which `fa_*` claims the token carries.
 - See [Shared OIDC Provider (Token Exchange)](../../ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange).
+
+## Chat: Collapse, Expand and Pin the Input Parameters
+
+The input parameters beside the chat can now be collapsed to a narrow strip, expanded again and
+pinned. Unpinned, the panel collapses each time a message is sent, so the conversation gets the
+room; pinned, it stays open.
+
+- A chat always opens with the panel expanded. Expanding it again lasts until the next message.
+- The pin button in the panel's header switches between the two; the choice is remembered per app
+  in the browser.
+- Admins set where it starts per app under **Admin → Apps → (app) → Variables → Pin the input
+  parameters by default** (`variablesPanel.pinned`). Unset, the panel is pinned, as before.
+- See [Apps → Variables Panel](../../apps.md#variables-panel).
