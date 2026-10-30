@@ -133,8 +133,10 @@ describe('tools of system skills', () => {
     const tools = systemSkillToolsFor(skills);
     assert.deepEqual(tools.map(t => [t.id, t.skillName]).sort(), [
       ['create_docx', 'docx'],
+      ['create_file', 'files'],
       ['create_pdf', 'pdf'],
       ['create_pptx', 'pptx'],
+      ['create_zip', 'files'],
       ['preview_pdf', 'pdf']
     ]);
     assert.ok(tools.every(t => t.isSystemSkillTool));

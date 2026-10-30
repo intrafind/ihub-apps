@@ -557,7 +557,11 @@ export const platformConfigSchema = z
       .object({
         enabled: z.boolean().prefault(true),
         maxBytes: z.number().prefault(10485760),
-        maxPerBatch: z.number().prefault(8)
+        maxPerBatch: z.number().prefault(8),
+        // One ZIP archive: a download of several artifacts, or one the
+        // `create_zip` tool builds. Files in it, and bytes before compression.
+        maxZipFiles: z.number().prefault(200),
+        maxZipBytes: z.number().prefault(104857600)
       })
       .passthrough()
       .prefault({}),

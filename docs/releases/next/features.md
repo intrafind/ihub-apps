@@ -458,3 +458,25 @@ the app allows it.
 - **Per app:** `integrations.ifinder` and `integrations.iassistant` set where the picker appears
   (`scopePicker`: `inline`, `menu`, `hidden`), the scope a new chat starts with (`defaultScope`),
   or a scope the app's chats always use (`pinnedScope`).
+
+## Code, Data and Text Files, and ZIP Archives on Request
+
+A new system skill, **`files`**, lets the model hand the user any text file as a download: source
+code (JavaScript, TypeScript, Python, Java, SQL, shell scripts, CSS, …), JSON, YAML, CSV,
+Markdown or plain text. It can also pack several files, or a whole generated project, into one
+ZIP archive. Each file appears as a download card below the answer, with the right extension.
+
+- **Enable it** like the other document skills: turn on **Skills** under Features and add `files`
+  to an app's skills.
+- **ZIP on request:** asked for "the whole project as a ZIP", the model packs the files it
+  created in the chat into one archive, keeping folders such as `src/index.ts`.
+- **ZIP download API:** `POST /api/chats/:chatId/artifacts/zip` (and the same route of a shared
+  chat) returns several or all of a chat's artifacts as one ZIP. The Artifacts panel in the chat
+  that uses it follows in a later update.
+- **Limits:** `platform.json → artifacts.maxZipFiles` (default 200) and `artifacts.maxZipBytes`
+  (default 100 MB) bound one archive; a migration adds both at their defaults.
+- **Safe to download:** generated code is always served as plain text, never as a script or a
+  web page, and file names and paths inside an archive cannot point outside it.
+
+See [Document and file generation](../../pdf-generation.md#the-files-skill) and
+[Artifacts](../../artifacts.md).

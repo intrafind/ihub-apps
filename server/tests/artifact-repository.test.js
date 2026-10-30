@@ -328,12 +328,16 @@ describe("the policy is the installation's, not the producer's", () => {
     assert.deepEqual(artifactSettings({}), {
       enabled: true,
       maxBytes: 10485760,
-      maxPerBatch: 8
+      maxPerBatch: 8,
+      maxZipFiles: 200,
+      maxZipBytes: 104857600
     });
     assert.deepEqual(artifactSettings({ artifacts: { enabled: false, maxBytes: 0 } }), {
       enabled: false,
       maxBytes: 0,
-      maxPerBatch: 8
+      maxPerBatch: 8,
+      maxZipFiles: 200,
+      maxZipBytes: 104857600
     });
   });
 });
