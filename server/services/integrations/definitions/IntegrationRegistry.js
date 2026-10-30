@@ -5,9 +5,11 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import logger from '../../../utils/logger.js';
+import { announceConfigChange } from '../../../configSync.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
 import { resolveAndValidatePath } from '../../../utils/pathSecurity.js';
 import {
+  INTEGRATION_ID_PATTERN,
   validateIntegrationDefinition,
   dirNameToDefinitionId,
   definitionIdToDirName
@@ -31,6 +33,8 @@ import { parseOpenApiText } from '../../tools/openApiText.js';
  */
 
 const COMPONENT = 'IntegrationRegistry';
+/** Cache key the cluster announcement travels under (see `_announce`). */
+export const INTEGRATIONS_CONFIG_KEY = 'config/integrations.json';
 const DEFINITION_FILE = 'integration.json';
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 
@@ -59,9 +63,19 @@ export class IntegrationRegistry {
     return this.contentsDirOverride || getContentsPath('integration-definitions');
   }
 
-  /** Load both trees (idempotent; concurrent callers share one load). */
+  /**
+   * Load both trees. Concurrent callers share one load; a caller that arrives
+   * while a load runs gets one more load after it, so a write made during the
+   * running load is seen.
+   */
   async reload() {
-    if (this.loading) return this.loading;
+    if (this.loading) {
+      this.pending ??= this.loading.then(() => {
+        this.pending = null;
+        return this.reload();
+      });
+      return this.pending;
+    }
     this.loading = (async () => {
       const entries = new Map();
       for (const entry of await this._loadTree(this.shippedDir, 'shipped')) {
@@ -127,25 +141,70 @@ export class IntegrationRegistry {
     if (validation.data.protocol.type === 'mcp-stdio') {
       throw new Error('Local (stdio) integrations cannot be installed from a registry');
     }
-    const dir = path.join(this.contentsDir, definitionIdToDirName(id));
-    await fs.rm(dir, { recursive: true, force: true });
-    await fs.mkdir(dir, { recursive: true });
-    for (const [relPath, content] of Object.entries(files)) {
-      const target = await resolveAndValidatePath(relPath, dir);
-      if (!target) throw new Error(`Path traversal detected in integration file: ${relPath}`);
-      await fs.mkdir(path.dirname(target), { recursive: true });
-      const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-      await fs.writeFile(target, text, 'utf8');
+    const dir = await this._installedDir(id);
+    // Written to a staging folder first: a bad companion path, a failed write
+    // or an unreadable OpenAPI document must not have deleted the working
+    // folder already. Dot-prefixed, so a leftover is never loaded.
+    const staging = path.join(this.contentsDir, `.staging-${process.pid}-${Date.now()}`);
+    await fs.mkdir(staging, { recursive: true });
+    try {
+      for (const [relPath, content] of Object.entries(files)) {
+        const target = await resolveAndValidatePath(relPath, staging);
+        if (!target) throw new Error(`Path traversal detected in integration file: ${relPath}`);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+        await fs.writeFile(target, text, 'utf8');
+      }
+      const { type, document } = validation.data.protocol;
+      if (type === 'openapi' && !isHttpUrl(document)) {
+        await this._readDocument(staging, document);
+      }
+      await fs.rm(dir, { recursive: true, force: true });
+      await fs.rename(staging, dir);
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true });
+      throw error;
     }
     await this.reload();
+    this._announce();
     return this.get(id);
+  }
+
+  /**
+   * Tell the other workers. The registry is a per-process singleton, so a
+   * folder written here is unknown to them until they reload it; the
+   * announcement travels under the installed-integrations key, whose change
+   * hook (server.js) reloads the registry and re-syncs what derives from it.
+   */
+  _announce() {
+    announceConfigChange(INTEGRATIONS_CONFIG_KEY);
   }
 
   /** Remove an installed definition folder. */
   async removeInstalled(id) {
-    const dir = path.join(this.contentsDir, definitionIdToDirName(id));
+    const dir = await this._installedDir(id);
     await fs.rm(dir, { recursive: true, force: true });
     await this.reload();
+    this._announce();
+  }
+
+  /**
+   * The folder of an installed definition, from an id that must match the
+   * id grammar and resolve inside the contents tree.
+   */
+  async _installedDir(id) {
+    if (!INTEGRATION_ID_PATTERN.test(id || '')) {
+      throw new Error(`Invalid integration definition id: ${id}`);
+    }
+    // The id grammar leaves no separators or ".." for the folder name; the
+    // containment check is the second lock (the contents tree may not exist
+    // yet, so no realpath here).
+    const root = path.resolve(this.contentsDir);
+    const dir = path.resolve(root, definitionIdToDirName(id));
+    if (!dir.startsWith(root + path.sep)) {
+      throw new Error(`Invalid integration definition id: ${id}`);
+    }
+    return dir;
   }
 
   async _loadTree(root, source) {

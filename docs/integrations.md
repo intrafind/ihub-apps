@@ -1,6 +1,6 @@
 # Integrations
 
-An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**; the MCP servers, A2A agents and the built-in connectors (iFinder, Jira, cloud storage) keep their own pages until they move onto the same model (see the [concept](../concepts/2026-10-20%20Unified%20Integrations/README.md)).
+An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**; the MCP servers, A2A agents and the built-in connectors (iFinder, Jira, cloud storage) keep their own pages until they move onto the same model (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
 
 The first catalog integration is the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs). It ships with iHub and is also published in the [iHub Marketplace](marketplace.md).
 
@@ -39,7 +39,7 @@ Installed instances can be tested, edited, disabled and removed from the **Insta
 
 The same object carries the scope settings of the built-in `ifinder` and `iassistant` integrations (`scopePicker`, `defaultScope`, `pinnedScope`).
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action*. The tools menu shows one switch per installation (the instance id is the tool reference, like an MCP server's id), on by default. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action*. The tools menu shows one switch per installation (the instance id is the tool reference, like an MCP server's id), on by default. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs
 
@@ -47,7 +47,7 @@ Only the `openapi` protocol has an adapter in this release. For it, the definiti
 
 1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is *service account*;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
-3. serializes array parameters as the document says (`style`/`explode`), or as a JSON list for RPC-style APIs such as CKAN;
+3. serializes array parameters as the document says (`form` style: repeated, or comma-joined for `explode: false`; `spaceDelimited` and `pipeDelimited` are not supported), or as a JSON list for RPC-style APIs such as CKAN;
 4. performs the request through the SSRF guard with the usual size caps and `hideFields`;
 5. unwraps the **response envelope** (`{ success, result, error }`) so the model sees `result`, or a structured `{ error, type, message }`;
 6. adds a `portalUrl` to every hit the definition's **sources** mapping lists, so each answer cites the records it used.
@@ -80,7 +80,9 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
       "title": { "en": "Search" }, "description": { "en": "…as the model should read it…" },
       "defaults": { "rows": { "value": "{maxRows}", "mode": "cap" } },
       "hideFields": ["help", "result.items[].internalId"],
-      "guidance": { "en": "When to use it." }, "examples": [{ "en": "Example question" }] }
+      "guidance": { "en": "When to use it." }, "examples": [{ "en": "Example question" }] },
+    { "name": "list_groups", "operationId": "listGroups", "sideEffect": "read", "dataFlow": "external",
+      "title": { "en": "List groups" }, "description": { "en": "…" } }
   ],
   "scopes": { "action": "list_groups", "label": { "en": "Group" }, "map": { "id": "name", "name": "title" },
               "applyAs": { "search.fq": { "value": "group:{id}", "mode": "append" } } },

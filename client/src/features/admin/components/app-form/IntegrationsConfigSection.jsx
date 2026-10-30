@@ -213,6 +213,9 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                               type="checkbox"
                               className={`${CHECKBOX_CLASS} mt-0.5`}
                               checked={selected.includes(action.name)}
+                              // An empty list means "all": the last action
+                              // stays; unbind the installation instead.
+                              disabled={selected.length === 1 && selected.includes(action.name)}
                               onChange={e =>
                                 toggleAction(item.id, action.name, e.target.checked, allNames)
                               }

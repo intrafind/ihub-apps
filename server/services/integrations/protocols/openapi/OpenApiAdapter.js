@@ -265,9 +265,19 @@ function addSourceUrls(mapping, value, values) {
       ? [listed]
       : [];
   for (const hit of hits) {
-    if (!hit || typeof hit !== 'object' || hit.portalUrl) continue;
-    const url = fillTemplate(mapping.urlTemplate, { ...values, ...hit }, { encode: false });
+    if (!hit || typeof hit !== 'object') continue;
+    // The hit comes from the remote system: its fields are URL-encoded into
+    // the template and never override an install value such as the base URL,
+    // and a `portalUrl` it carries itself is replaced.
+    const encodedHit = Object.fromEntries(
+      Object.entries(hit).map(([key, v]) => [
+        key,
+        typeof v === 'string' || typeof v === 'number' ? encodeURIComponent(v) : v
+      ])
+    );
+    const url = fillTemplate(mapping.urlTemplate, { ...encodedHit, ...values }, { encode: false });
     if (isHttpUrl(url)) hit.portalUrl = url;
+    else delete hit.portalUrl;
   }
   return value;
 }

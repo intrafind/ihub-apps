@@ -169,6 +169,9 @@ export async function runIntegrationTool(tool, params = {}) {
   if (resolved.instance.enabled === false) {
     throw new Error(`Integration ${instanceId} is disabled`);
   }
+  if (!userMayUse(resolved.instance, params.user)) {
+    throw new Error(`Integration ${instanceId} is not available to this user`);
+  }
   const action = resolved.definition.actions.find(a => a.name === actionName);
   if (!action) throw new Error(`Integration ${instanceId} has no action ${actionName}`);
 

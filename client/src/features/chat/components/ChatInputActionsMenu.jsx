@@ -14,7 +14,7 @@ import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import { boundIntegrationRefs } from '../../../shared/hooks/useAppSettings';
+import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
 import {
   currentScopeOf,
   scopeActionLabel,

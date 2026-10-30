@@ -46,7 +46,7 @@ function languageOf(req) {
 
 function definitionIdOf(req, res) {
   // Definition ids may carry one "/", so they travel URL-encoded.
-  const id = decodeURIComponent(req.params.definitionId || '');
+  const id = req.params.definitionId || '';
   if (!INTEGRATION_ID_PATTERN.test(id)) {
     sendBadRequest(res, 'Invalid definition id');
     return null;

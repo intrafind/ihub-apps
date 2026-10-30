@@ -593,6 +593,19 @@ if (cluster.isPrimary && workerCount > 1) {
       const { syncIntegrationScopeProviders } =
         await import('./services/integrations/integrationTools.js');
       await syncIntegrationScopeProviders();
+      // Another worker installed, changed or removed an integration or a
+      // definition: refresh what this worker derives from them.
+      const { registerConfigChangeHook, ALL_ENTRIES } = await import('./configSync.js');
+      const { INTEGRATIONS_CONFIG_KEY } =
+        await import('./services/integrations/definitions/IntegrationRegistry.js');
+      const { invalidate } =
+        await import('./services/integrations/protocols/openapi/OpenApiAdapter.js');
+      registerConfigChangeHook(async ({ entries }) => {
+        if (!entries.includes(INTEGRATIONS_CONFIG_KEY) && !entries.includes(ALL_ENTRIES)) return;
+        await integrationRegistry.reload();
+        invalidate();
+        await syncIntegrationScopeProviders();
+      });
     } catch (error) {
       logger.warn({
         component: 'Server',

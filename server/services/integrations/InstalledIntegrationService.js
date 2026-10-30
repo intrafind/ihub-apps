@@ -60,6 +60,8 @@ function nowIso() {
 export class InstalledIntegrationService {
   constructor({ registry = integrationRegistry } = {}) {
     this.registry = registry;
+    /** Tail of the change queue (see `_serialize`). */
+    this._queue = Promise.resolve();
   }
 
   /** The whole file, validated, with defaults. */
@@ -296,69 +298,100 @@ export class InstalledIntegrationService {
     }
   }
 
+  /**
+   * Run one change at a time. Every change is a read-modify-write of the
+   * whole file, so two admins saving at once would otherwise lose one save.
+   */
+  _serialize(fn) {
+    const run = this._queue.then(fn, fn);
+    this._queue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
   /** Create an instance. `payload.secrets` holds sensitive field values. */
-  async create(payload, { language = 'en' } = {}) {
-    const config = this._readConfigForWrite();
-    if (config.installed.some(inst => inst.id === payload?.id)) {
-      throw new IntegrationError(`An integration with id "${payload.id}" exists`, {
-        status: 409,
-        code: 'DUPLICATE_ID'
-      });
-    }
-    const { instance, secretsToStore } = await this._prepare(payload);
-    await this._storeSecrets(secretsToStore, language);
-    config.installed.push(instance);
-    await this.writeConfig(config);
-    await this._afterChange(instance.id);
-    return instance;
+  create(payload, { language = 'en' } = {}) {
+    return this._serialize(async () => {
+      if (this.get(payload?.id)) {
+        throw new IntegrationError(`An integration with id "${payload.id}" exists`, {
+          status: 409,
+          code: 'DUPLICATE_ID'
+        });
+      }
+      const { instance, secretsToStore } = await this._prepare(payload);
+      await this._storeSecrets(secretsToStore, language);
+      const config = this._readConfigForWrite();
+      if (config.installed.some(inst => inst.id === instance.id)) {
+        throw new IntegrationError(`An integration with id "${instance.id}" exists`, {
+          status: 409,
+          code: 'DUPLICATE_ID'
+        });
+      }
+      config.installed.push(instance);
+      await this.writeConfig(config);
+      await this._afterChange(instance.id);
+      return instance;
+    });
   }
 
   /** Replace an instance (the id cannot change). */
-  async update(id, payload, { language = 'en' } = {}) {
-    const config = this._readConfigForWrite();
-    const index = config.installed.findIndex(inst => inst.id === id);
-    if (index < 0)
-      throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-    const existing = config.installed[index];
-    if (payload?.id && payload.id !== id) {
-      throw new IntegrationError('The instance id cannot change', { code: 'ID_CHANGE' });
-    }
-    const { instance, secretsToStore } = await this._prepare({ ...payload, id }, { existing });
-    await this._storeSecrets(secretsToStore, language);
-    if (
-      existing.auth?.credentialRef &&
-      existing.auth.credentialRef !== instance.auth?.credentialRef
-    ) {
-      await this._removeManagedCredential(existing);
-    }
-    config.installed[index] = instance;
-    await this.writeConfig(config);
-    await this._afterChange(instance.id);
-    return instance;
+  update(id, payload, { language = 'en' } = {}) {
+    return this._serialize(async () => {
+      const existing = this.get(id);
+      if (!existing)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      if (payload?.id && payload.id !== id) {
+        throw new IntegrationError('The instance id cannot change', { code: 'ID_CHANGE' });
+      }
+      const { instance, secretsToStore } = await this._prepare({ ...payload, id }, { existing });
+      await this._storeSecrets(secretsToStore, language);
+      const config = this._readConfigForWrite();
+      const index = config.installed.findIndex(inst => inst.id === id);
+      if (index < 0)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      config.installed[index] = instance;
+      await this.writeConfig(config);
+      // Only once the file points elsewhere: a failed write must leave the
+      // credential the file still names.
+      if (
+        existing.auth?.credentialRef &&
+        existing.auth.credentialRef !== instance.auth?.credentialRef
+      ) {
+        await this._removeManagedCredential(existing);
+      }
+      await this._afterChange(instance.id);
+      return instance;
+    });
   }
 
-  async setEnabled(id, enabled) {
-    const config = this._readConfigForWrite();
-    const instance = config.installed.find(inst => inst.id === id);
-    if (!instance)
-      throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-    instance.enabled = Boolean(enabled);
-    instance.updatedAt = nowIso();
-    await this.writeConfig(config);
-    await this._afterChange(instance.id);
-    return instance;
+  setEnabled(id, enabled) {
+    return this._serialize(async () => {
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      instance.enabled = Boolean(enabled);
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id);
+      return instance;
+    });
   }
 
-  async remove(id) {
-    const config = this._readConfigForWrite();
-    const instance = config.installed.find(inst => inst.id === id);
-    if (!instance)
-      throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-    config.installed = config.installed.filter(inst => inst.id !== id);
-    await this.writeConfig(config);
-    await this._removeManagedCredential(instance);
-    await this._afterChange(instance.id);
-    return instance;
+  remove(id) {
+    return this._serialize(async () => {
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      config.installed = config.installed.filter(inst => inst.id !== id);
+      await this.writeConfig(config);
+      await this._removeManagedCredential(instance);
+      await this._afterChange(instance.id);
+      return instance;
+    });
   }
 
   /** Instances that use a definition (the marketplace refuses to uninstall while any exist). */

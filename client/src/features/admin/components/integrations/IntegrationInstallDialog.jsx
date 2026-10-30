@@ -79,7 +79,27 @@ function detailText(err) {
  * @param {() => void} props.onClose
  * @param {(instance: Object) => void} props.onSaved
  */
-function IntegrationInstallDialog({ definitionId, instanceId, takenIds = [], onClose, onSaved }) {
+/**
+ * The edited translation merged into the stored label object; `undefined`
+ * when nothing is left.
+ */
+function mergedLabel(stored, lang, text) {
+  const next = { ...(stored || {}) };
+  if (text) next[lang] = text;
+  else delete next[lang];
+  return Object.keys(next).length ? next : undefined;
+}
+
+/** Stable default: a fresh `[]` per render would re-run the load effect every render. */
+const NO_TAKEN_IDS = [];
+
+function IntegrationInstallDialog({
+  definitionId,
+  instanceId,
+  takenIds = NO_TAKEN_IDS,
+  onClose,
+  onSaved
+}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language || 'en';
   const isEdit = Boolean(instanceId);
@@ -150,7 +170,11 @@ function IntegrationInstallDialog({ definitionId, instanceId, takenIds = [], onC
           authMode: instance?.auth?.mode || def.defaultAuthMode || def.authModes?.[0] || 'none',
           secret: '',
           allowedGroups: instance?.allowedGroups || [],
-          checkedActions: checked
+          checkedActions: checked,
+          // Kept as stored and sent back: other languages of the label and
+          // the per-action overrides have no editor here yet.
+          storedLabel: instance?.label && typeof instance.label === 'object' ? instance.label : {},
+          overrides: instance?.actions?.overrides || {}
         });
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
@@ -194,12 +218,12 @@ function IntegrationInstallDialog({ definitionId, instanceId, takenIds = [], onC
     const payload = {
       id: form.id.trim(),
       definition: definition.id,
-      label: form.label.trim() ? { [lang]: form.label.trim() } : undefined,
+      label: mergedLabel(form.storedLabel, lang, form.label.trim()),
       enabled: form.enabled,
       values,
       auth: { mode: form.authMode },
       allowedGroups: form.allowedGroups,
-      actions: { enabled, disabled, overrides: {} }
+      actions: { enabled, disabled, overrides: form.overrides || {} }
     };
     if (form.authMode === 'service-account' && secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };

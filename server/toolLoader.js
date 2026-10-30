@@ -654,8 +654,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
     // A people directory's own `groups` hold on top of the app's selection.
+    // An installed integration's tools come only through `app.integrations`
+    // (below), where the installation's groups and the binding's action list
+    // are checked; an `app.tools` reference to one does not bypass that.
     appTools = filterDirectoryToolsForUser(
-      allTools.filter(t => isToolSelected(t, app.tools)),
+      allTools.filter(t => !t._integration && isToolSelected(t, app.tools)),
       context.user
     );
 

@@ -329,7 +329,10 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
   // Siblings of integration.json; a `?ref=<branch>` of a GitHub Contents URL
   // belongs to every sibling too.
   const [itemPath, query = ''] = itemUrl.split('?');
-  const baseUrl = itemPath.replace(/\/[^/]*$/, '');
+  // The catalog may name the raw base of the folder (`source.rawBase`, as the
+  // GitHub registries do); otherwise the folder is where integration.json is.
+  const rawBase = typeof item.source?.rawBase === 'string' ? item.source.rawBase : '';
+  const baseUrl = rawBase ? rawBase.replace(/\/$/, '') : itemPath.replace(/\/[^/]*$/, '');
   const { throttledFetch } = await import('../../requestThrottler.js');
   const files = { 'integration.json': definition };
   for (const relativePath of companions) {

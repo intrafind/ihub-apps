@@ -24,8 +24,9 @@ actions as tools.
 - **Marketplace:** the new item type **Integrations** installs definitions from a registry. The
   official marketplace publishes the first one with an example app.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
-  and files, query DataStore tables, on GovData, the German state and city portals, data.gov and
-  internal CKAN catalogs. Tested against six live portals.
+  and the list of files with their formats and download links (the files' contents are not read
+  in this release), query DataStore tables, on GovData, the German state and city portals,
+  data.gov and internal CKAN catalogs. Tested against six live portals.
 
 See [Integrations](../../integrations.md).
 
