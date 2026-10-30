@@ -54,6 +54,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { describeCause, userAbortCause } from '../../services/chat/abortCause.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
 import {
   sendNotFound,
   sendFailedOperationError,
@@ -226,6 +227,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           items:
    *             type: string
    *           description: List of tool IDs to enable for this request
+   *         integrationScopes:
+   *           type: object
+   *           additionalProperties:
+   *             type: string
+   *           description: |
+   *             The scope picked per integration for this chat, e.g.
+   *             `{ "ifinder": "contracts", "iassistant": "assistant:legal" }`
+   *             (see `GET /api/integrations/scopes`). Checked against what the
+   *             integration offers the user; it binds the integration's tools,
+   *             whatever the model asks for. Left out, the chat's stored scopes
+   *             apply.
    *         imageAspectRatio:
    *           type: string
    *           description: Aspect ratio for image generation (e.g. "16:9")
@@ -844,7 +856,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           mcpAppContext,
           voiceMode,
           projectId: requestedProjectId,
-          projects: requestedProjects
+          projects: requestedProjects,
+          integrationScopes: requestedScopes
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -1039,6 +1052,35 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const promptMessage = chatVariables
           ? { ...newMessage, variables: chatVariables }
           : newMessage;
+
+        // Where the chat's integrations search and whom they ask (#3050): the
+        // scopes this turn names, or else the ones the chat was answered with,
+        // checked against what each integration offers this user. A pinned
+        // scope replaces the request's; one the user may not use refuses the
+        // turn rather than quietly searching somewhere else.
+        const scopeResolution = chatApp
+          ? await resolveChatScopes({
+              requested:
+                requestedScopes !== undefined
+                  ? requestedScopes
+                  : access.chat?.settings?.integrationScopes,
+              user: req.user,
+              app: chatApp,
+              model: findByIdCaseInsensitive(
+                configCache.getModels()?.data || [],
+                modelId || chatApp.preferredModel
+              ),
+              language: clientLanguage
+            })
+          : { ok: true, scopes: {} };
+        if (!scopeResolution.ok) {
+          return res.status(403).json({
+            error: scopeResolution.message,
+            code: scopeResolution.code,
+            integrationId: scopeResolution.integrationId
+          });
+        }
+        const integrationScopes = scopeResolution.scopes;
         conversation =
           chatApp?.sendChatHistory === false || sendChatHistory === false
             ? [promptMessage]
@@ -1088,7 +1130,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             enabledTools,
             websearchEnabled,
             imageAspectRatio,
-            imageQuality
+            imageQuality,
+            integrationScopes
           })
         };
 
@@ -1134,7 +1177,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           user: req.user,
           chatId,
           projectId: chatProjects.containerId,
-          attachedProjectIds: chatProjects.attachedIds
+          attachedProjectIds: chatProjects.attachedIds,
+          integrationScopes
         };
 
         // Resolve the SSE sink once, up front. In cluster mode the stream for

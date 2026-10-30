@@ -31,7 +31,9 @@ export const RESERVED_TOOL_CONTEXT_KEYS = Object.freeze([
   'passthrough',
   'runId',
   '_fileData',
-  '_chatHistory'
+  '_chatHistory',
+  // The scopes the user picked for the chat (#3050), which bind the tools.
+  'integrationScopes'
 ]);
 
 const RESERVED = new Set(RESERVED_TOOL_CONTEXT_KEYS);

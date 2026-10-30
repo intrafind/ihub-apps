@@ -624,8 +624,16 @@ export const platformConfigSchema = z
     // services/integrations/iFinderTokenProvider.js). `scopeMap` maps the
     // iHub-side scopes (`fa_index_read`, `fa_iassistant`, ...) to the provider's
     // scope strings; an empty value passes the scope through unchanged.
+    // The search settings (#3050) sit beside the shared connection:
+    // `defaultSearchProfile` (what a chat searches until the user picks
+    // another), `allowedSearchProfiles` (which of the user's profiles may be
+    // offered; empty for all) and `allowUserSearchProfileChange` (false pins
+    // every chat to the default).
     iFinder: z
       .object({
+        defaultSearchProfile: z.string().optional(),
+        allowedSearchProfiles: z.array(z.string().min(1)).optional(),
+        allowUserSearchProfileChange: z.boolean().optional(),
         authMode: z.enum(['ihubSigned', 'oidcTokenExchange']).prefault('ihubSigned'),
         tokenExchange: z
           .object({

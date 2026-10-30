@@ -134,6 +134,13 @@ class IFinderService {
         // The iFinder application whose search profile assignments
         // listProfiles reads (`searchprofile.applications`).
         searchProfileApplication: iFinderConfig.searchProfileApplication || 'ifinder',
+        // Which of the user's profiles may be offered and searched; empty
+        // offers all of them. The default profile is always allowed.
+        allowedSearchProfiles: Array.isArray(iFinderConfig.allowedSearchProfiles)
+          ? iFinderConfig.allowedSearchProfiles.filter(id => typeof id === 'string' && id)
+          : [],
+        // false pins every chat (and the model) to the default profile.
+        allowUserSearchProfileChange: iFinderConfig.allowUserSearchProfileChange !== false,
         downloadDir:
           iFinderConfig.downloadDir || config.IFINDER_DOWNLOAD_DIR || '/tmp/ifinder-downloads',
         timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
@@ -1003,7 +1010,12 @@ class IFinderService {
       );
     }
 
-    const profiles = (userProfiles || []).map(profile => ({
+    // The admin allow-list narrows what is offered; the default always stays.
+    const allowed = profile =>
+      cfg.allowedSearchProfiles.length === 0 ||
+      cfg.allowedSearchProfiles.includes(profile.id) ||
+      profile.id === defaultProfile;
+    const profiles = (userProfiles || []).filter(allowed).map(profile => ({
       id: profile.id,
       name: profile.name,
       isDefault: profile.id === defaultProfile,

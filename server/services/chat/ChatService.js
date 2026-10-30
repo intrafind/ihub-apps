@@ -477,7 +477,8 @@ class ChatService {
       llmOptions = {},
       userFileData,
       promptSources = [],
-      knowledgeScope = null
+      knowledgeScope = null,
+      integrationScopes = {}
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
@@ -734,6 +735,7 @@ class ChatService {
           chatStored: Boolean(persist),
           user,
           app,
+          integrationScopes,
           userFileData,
           streaming,
           buildLogData: log,
@@ -784,8 +786,9 @@ class ChatService {
         seams,
         channel,
         // `language` is a default the tool may use; explicit model-provided
-        // args of the same name win, while chatId/user/appConfig can never be
-        // overridden by the model.
+        // args of the same name win, while chatId/user/appConfig — and the
+        // scopes the user picked for the chat (`integrationScopes`, #3050) —
+        // can never be overridden by the model.
         //
         // An MCP tool of a server with MCP Apps enabled hands back its raw
         // result on the shared `info` object, where `chatToolSeam` builds the
@@ -803,6 +806,7 @@ class ChatService {
               chatId,
               user,
               appConfig: app,
+              integrationScopes,
               // The user's timezone, for the scheduling tools' defaults. Only
               // when known: a value the model put in `args` could only pick a
               // default timezone, which the schedule itself can name anyway.
@@ -1440,7 +1444,11 @@ class ChatService {
         ],
         executeTool: (call, { toolId, args, signal }) =>
           pageReads.admit(toolId) ||
-          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app }, { signal })
+          this.runTool(
+            toolId,
+            { language, ...args, chatId, user, appConfig: app, integrationScopes: {} },
+            { signal }
+          )
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

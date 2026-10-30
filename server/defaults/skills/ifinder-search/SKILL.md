@@ -186,7 +186,10 @@ Do not guess at an index you have not looked at.
 1. **`iFinder_listProfiles()`** — which search profiles the user may search
    with, and which one is their default. A profile scopes the corpus; the wrong
    one is the difference between 4 hits and 4,000. A profile marked
-   `available: false` is configured but not assigned to this user.
+   `available: false` is configured but not assigned to this user. When the
+   user picked the search profile for the chat (the system prompt says it is
+   fixed, or `iFinder_listProfiles` answers `fixed: true`), every call searches
+   that profile: skip this step and do not pass another `searchProfile`.
 2. **`iFinder_discover({ searchProfile })`** — one probe returning total
    document count, top facet values, sample titles and the field catalog. This
    is the fastest way to see what a profile actually contains.
@@ -313,18 +316,18 @@ returns the long tail.
 
 ## When a search disappoints
 
-| Symptom                                 | Likely cause                                    | Fix                                        |
-| --------------------------------------- | ----------------------------------------------- | ------------------------------------------ |
-| 0 hits with a filter                    | `.keyword` missing, or on a field that has none | `iFinder_getFields`, then re-filter        |
-| 0 hits, exact value                     | wrong spelling or casing                        | `iFinder_getFacetValues` on that field     |
-| 0 hits, plausible query                 | wrong search profile                            | `iFinder_listProfiles`, then retry         |
-| far too many hits                       | topic-only query                                | move criteria into `filter`                |
-| right topic, wrong docs                 | ranking skewed by filter terms in the query     | move them to `filter`                      |
-| a known document missing                | the user cannot read it                         | say so; do not retry                       |
-| sort ignored                            | sorting on an analyzed text field               | use the `.keyword` variant                 |
-| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it              | re-run without it and compare `totalFound` |
-| a German compound finds nothing         | analyzer stopped at the surface form            | `MODE/c&` or `MODE/s&`                     |
-| a name or code matches too loosely      | lemma or compound expansion                     | `MODE/e&`                                  |
+| Symptom                                 | Likely cause                                     | Fix                                        |
+| --------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
+| 0 hits with a filter                    | `.keyword` missing, or on a field that has none  | `iFinder_getFields`, then re-filter        |
+| 0 hits, exact value                     | wrong spelling or casing                         | `iFinder_getFacetValues` on that field     |
+| 0 hits, plausible query                 | wrong search profile (unless fixed for the chat) | `iFinder_listProfiles`, then retry         |
+| far too many hits                       | topic-only query                                 | move criteria into `filter`                |
+| right topic, wrong docs                 | ranking skewed by filter terms in the query      | move them to `filter`                      |
+| a known document missing                | the user cannot read it                          | say so; do not retry                       |
+| sort ignored                            | sorting on an analyzed text field                | use the `.keyword` variant                 |
+| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it               | re-run without it and compare `totalFound` |
+| a German compound finds nothing         | analyzer stopped at the surface form             | `MODE/c&` or `MODE/s&`                     |
+| a name or code matches too loosely      | lemma or compound expansion                      | `MODE/e&`                                  |
 
 Never report "there are no documents about X" after one failed query. Confirm
 the profile and the field names first — the common case is a query fault, not an

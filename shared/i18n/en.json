@@ -3209,7 +3209,17 @@
         "ifinderSetupTitle": "Configure iFinder with:",
         "providerIssuer": "issuer URL of the provider",
         "ifinderSetupHelp": "The token iHub sends must also carry the fa_* claims iFinder reads, either as requested scopes or added by a claim mapper on the provider. The connection test below shows which ones are present."
-      }
+      },
+      "searchSection": "iFinder Search Settings",
+      "defaultSearchProfile": "Default search profile",
+      "defaultSearchProfileHelp": "The search profile a chat searches until the user picks another one.",
+      "allowedSearchProfiles": "Search profiles users may pick",
+      "allowedSearchProfilesPlaceholder": "All of the user's profiles",
+      "allowedSearchProfilesHelp": "One search profile id per line. Empty offers every profile the user has in iFinder.",
+      "allowUserSearchProfileChange": "Users may change the search profile",
+      "allowUserSearchProfileChangeHelp": "Off: every chat searches the default search profile, and neither the user nor the model can pick another.",
+      "iAssistantDefaultSearchProfile": "Default search profile",
+      "iAssistantDefaultSearchProfileHelp": "The search profile iAssistant conversations search when neither the app nor the model names one."
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
@@ -7420,6 +7430,17 @@
       "renameTitle": "Rename collection",
       "renameSubtitle": "The name and the description are changed in iFinder too.",
       "renameHint": "A smart collection has no instructions: it is a list of documents."
+    }
+  },
+  "integrationScopes": {
+    "menuTitle": "Use in this chat",
+    "searchIn": "Search in",
+    "ask": "Ask",
+    "fixed": "Set by the app",
+    "hint": {
+      "forbidden": "Your account may not read its list here, so only the default is offered.",
+      "noProfiles": "None of your own entries is offered here, so only the default is listed.",
+      "unavailable": "The list could not be loaded, so only the default is offered."
     }
   }
 }
