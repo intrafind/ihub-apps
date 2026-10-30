@@ -14,6 +14,7 @@ import conversationApiService from '../services/integrations/ConversationApiServ
 import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
 import iAssistantProfileResolver from '../services/integrations/iAssistantProfileResolver.js';
+import { AssistantNotAvailableError } from '../services/integrations/iFinderAssistants.js';
 import { composeExtraContext } from '../services/integrations/iAssistantGrounding.js';
 import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
@@ -27,6 +28,21 @@ import { iAssistantSourceFrame } from '../services/sources/producers/ifinder.js'
 function toStringArray(value) {
   if (!Array.isArray(value)) return [];
   return value.map(entry => String(entry ?? '').trim()).filter(Boolean);
+}
+
+/**
+ * The UI language as the `fallback_language` the Conversation API accepts: a
+ * BCP 47 tag of at most 35 characters. iFinder answers a malformed tag with
+ * 400, so anything else is left out and the deployment's own fallback applies.
+ *
+ * @param {*} language - the language of the iHub request, e.g. `de` or `en-US`
+ * @returns {string|undefined}
+ */
+export function toFallbackLanguage(language) {
+  if (typeof language !== 'string') return undefined;
+  const tag = language.trim().replace(/_/g, '-');
+  if (!tag || tag.length > 35) return undefined;
+  return /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/.test(tag) ? tag : undefined;
 }
 
 /**
@@ -128,6 +144,13 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
 
     return {
       baseUrl: appConfig.baseUrl || modelConfig.baseUrl || serviceConfig.baseUrl,
+      // An iFinder iAssistant supplies both the conversation profile and the
+      // search profile; when one is named, the two below are only fallbacks.
+      assistantId: appConfig.assistantId || modelConfig.assistantId || undefined,
+      // Send no search profile, so iFinder (6.9+) retrieves across every
+      // search profile the user has. `??` so an app can turn a model's
+      // setting off.
+      allSearchProfiles: appConfig.allSearchProfiles ?? modelConfig.allSearchProfiles ?? false,
       profileId: appConfig.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
       // What the app/model/platform configured. The iAssistant profile gets
       // asked first at conversation-creation time and wins when it answers —
@@ -166,6 +189,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     }
 
     const config = this.resolveConfig(model, options);
+    const fallbackLanguage = toFallbackLanguage(options.language);
     // The durable read, not the cache-only `getState`: a chat whose first turn
     // landed on another worker (or before a restart) must thread onto the same
     // remote conversation instead of silently starting a second one.
@@ -176,7 +200,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       logger.info('Creating new conversation', {
         component: 'IAssistantConversationAdapter',
         chatId,
-        profileId: config.profileId
+        profileId: config.profileId,
+        assistantId: config.assistantId
       });
 
       // Build labels array - include "ihub" and app ID
@@ -193,20 +218,37 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         }
       }
 
-      // Ask the iAssistant profile which search profile it belongs to, and
-      // fall back to the configured one. Done here rather than in
+      // Which profiles the conversation uses: the named iFinder iAssistant's,
+      // no search profile at all, or the configured search profile checked
+      // against the ones the user has in iFinder. Done here rather than in
       // resolveConfig because it is a network read, and because the answer is
       // only needed when a conversation is actually created: later turns read
-      // it back off the state, so a profile edited mid-conversation cannot
-      // silently move an existing conversation to a different corpus.
-      const { searchProfile, source: searchProfileSource } =
-        await iAssistantProfileResolver.resolveSearchProfile({
-          profileId: config.profileId,
+      // it back off the state, so a profile assignment changed mid-
+      // conversation cannot silently move an existing conversation to a
+      // different corpus.
+      let scope;
+      try {
+        scope = await iAssistantProfileResolver.resolveScope({
+          assistantId: config.assistantId,
+          allSearchProfiles: config.allSearchProfiles,
+          configuredProfileId: config.profileId,
           configuredSearchProfile: config.configuredSearchProfile,
           user,
           baseUrl: config.baseUrl,
           signal
         });
+      } catch (error) {
+        if (error instanceof AssistantNotAvailableError) {
+          // A user-facing refusal, not a technical failure: iFinder offers
+          // an iAssistant only to users who have its search profile.
+          throw new Error(
+            `The iAssistant "${config.assistantId}" is not available to you in iFinder. ` +
+              'Ask your administrator for access to its search profile.'
+          );
+        }
+        throw error;
+      }
+      const { searchProfile, source: searchProfileSource } = scope;
 
       const createParams = {
         user,
@@ -214,6 +256,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         searchProfile,
         labels,
         ephemeral: config.ephemeral,
+        fallbackLanguage,
         signal
       };
 
@@ -241,12 +284,18 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         lastParentId: null,
         title: conversation.title || null,
         baseUrl: config.baseUrl,
-        profileId: config.profileId,
+        profileId: scope.profileId || null,
+        // Set when an iFinder iAssistant supplied the profiles. Its
+        // conversation profile is then pinned like the search profile.
+        assistantId: scope.assistantId || null,
         // Pinned for the life of the conversation. The remote conversation
         // was created with this scope; later turns must report the same one
         // when they build document access links, or the links point into a
         // profile the conversation never searched.
         searchProfile: searchProfile || null,
+        // `all`: the conversation searches every profile of the user, so no
+        // one profile is the right default for its document links.
+        searchScope: searchProfileSource === 'all-search-profiles' ? 'all' : 'profile',
         // Whose conversation this is. A chat id is a URL path segment, so
         // without an owner on the state a user holding someone else's id
         // would thread their turn onto that user's remote conversation.
@@ -258,13 +307,17 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         component: 'IAssistantConversationAdapter',
         chatId,
         conversationId: conversation.id,
+        profileId: scope.profileId || '(none)',
         searchProfile: searchProfile || '(none)',
         searchProfileSource
       });
     }
 
-    // Build the message send request — conversation API expects plain-text profileId
-    const profileId = config.profileId;
+    // Build the message send request — conversation API expects plain-text
+    // profileId. An iAssistant's conversation profile is pinned on the state
+    // with its search profile; otherwise the configured one applies, so an
+    // admin's profile change reaches running conversations.
+    const profileId = state.assistantId ? state.profileId : config.profileId;
     const authHeader = getIFinderAuthorizationHeader(user, { scope: config.scope });
 
     const url = `${config.baseUrl.replace(/\/+$/, '')}/public-api/rag/api/v0/conversations/${state.conversationId}/messages`;
@@ -273,8 +326,14 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     if (profileId) message.profile_id = profileId;
     if (config.tools && config.tools.length > 0) message.tools = config.tools;
 
-    const body = { message };
+    // `mode` is mandatory since iFinder 6.9. iHub only ever appends: an
+    // edited or regenerated question is a new turn on the conversation. A
+    // request without `mode` is still accepted, but replaces any user message
+    // that follows `parent_id` — the last thing iHub should do silently to a
+    // conversation the user may also have continued in the iFinder Workspace.
+    const body = { message, mode: 'APPEND' };
     if (state.lastParentId) body.parent_id = state.lastParentId;
+    if (fallbackLanguage) body.fallback_language = fallbackLanguage;
 
     const headers = {
       'Content-Type': 'application/json',
@@ -294,7 +353,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       // From the state, so every turn of a conversation reports the profile it
       // was created with. `configuredSearchProfile` is the fallback for state
       // written before this field existed.
-      _searchProfile: state.searchProfile || config.configuredSearchProfile
+      _searchProfile:
+        state.searchScope === 'all'
+          ? undefined
+          : state.searchProfile || config.configuredSearchProfile
     };
   }
 
@@ -310,8 +372,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
    *   ifinder_search_started -> searchStatus (executed queries)
    *   ifinder_search_finished -> searchStatus (hit count, timing, provenance)
    *   generation_stopped -> terminal; the answered message was deleted
+   *   task_created     -> taskId (the turn started a long-running task)
+   *   artifact_groups  -> artifactGroups (artifacts the answer delivered)
    *   response_message_id -> responseMessageId (for parent_id chaining)
-   *   request_message_id  -> requestMessageId
+   *   request_message_id  -> requestMessageId, interveningMessageIds
    *   conversation_title  -> conversationTitle
    *   error            -> error handling
    *   done             -> completion
@@ -325,6 +389,9 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       searchStatus: null,
       responseMessageId: null,
       requestMessageId: null,
+      interveningMessageIds: [],
+      taskId: null,
+      artifactGroups: null,
       conversationTitle: null,
       conversationId: null,
       thinking: [],
@@ -505,6 +572,41 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
           const parsed = this.safeJsonParse(data, data);
           result.requestMessageId =
             parsed.id || parsed.message_id || (typeof parsed === 'string' ? parsed : null);
+          // Messages between `parent_id` and this turn that iHub never
+          // rendered: the answer a long-running task appended in the
+          // meantime, or the ERROR the server recorded for a question that
+          // was never answered. iHub keeps its own history, so they are only
+          // reported.
+          result.interveningMessageIds = toStringArray(parsed.intervening_message_ids);
+          if (result.interveningMessageIds.length > 0) {
+            logger.info('Conversation holds messages iHub has not shown', {
+              component: 'IAssistantConversationAdapter',
+              interveningMessageIds: result.interveningMessageIds
+            });
+          }
+          break;
+        }
+
+        case 'task_created': {
+          // The turn started a long-running task (iFinder 6.9, document
+          // skills). Its outcome arrives later as a message of its own, which
+          // the Workspace shows; the answer that follows here says so.
+          const parsed = this.safeJsonParse(data);
+          result.taskId = typeof parsed.task_id === 'string' ? parsed.task_id : null;
+          if (result.taskId) {
+            result.searchStatus = { event: 'task.created', taskId: result.taskId };
+          }
+          break;
+        }
+
+        case 'artifact_groups': {
+          // Artifacts (e.g. one summary per document) the answer delivered.
+          // Kept on the result; their content is read through the artifacts
+          // endpoints, which iHub does not render yet.
+          const parsed = this.safeJsonParse(data);
+          result.artifactGroups = Array.isArray(parsed.artifact_groups)
+            ? parsed.artifact_groups
+            : null;
           break;
         }
 
@@ -601,6 +703,51 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         error
       });
     }
+  }
+
+  /**
+   * Repair a message the Conversation API refused because the conversation
+   * moved on since iHub last wrote to it (409 `CONVERSATION_ADVANCED`): a
+   * question was asked in the iFinder Workspace, or an earlier iHub turn left
+   * an unanswered question behind. The refusal names the conversation's last
+   * message, so the message is sent once more as an append after it — the
+   * server records an ERROR for a question whose answer is no longer
+   * expected, and refuses with `TURN_IN_PROGRESS` while one is still being
+   * written, which then reaches the user as an error.
+   *
+   * Called by LLMClient with the refused response before it reads the body.
+   *
+   * @param {Response} response - the refused response
+   * @param {Object} request - the request createCompletionRequest built
+   * @returns {Promise<boolean>} true when `request` was revised and should be sent again
+   */
+  async reviseRequestAfterError(response, request) {
+    if (response?.status !== 409 || request?._conflictRevised || !request?.body) return false;
+
+    let conflict;
+    try {
+      conflict = JSON.parse(await response.clone().text());
+    } catch {
+      return false;
+    }
+    const lastMessageId = conflict?.last_message_id;
+    if (conflict?.code !== 'CONVERSATION_ADVANCED' || typeof lastMessageId !== 'string') {
+      return false;
+    }
+    if (!lastMessageId || lastMessageId === request.body.parent_id) return false;
+
+    logger.info('Conversation moved on; appending after its last message', {
+      component: 'IAssistantConversationAdapter',
+      conversationId: request._conversationId,
+      previousParentId: request.body.parent_id || null,
+      lastMessageId
+    });
+    request.body.parent_id = lastMessageId;
+    request._conflictRevised = true;
+    if (request._chatId) conversationStateManager.updateParentId(request._chatId, lastMessageId);
+    // The refused response is not read any further; release its connection.
+    await response.body?.cancel?.().catch(() => {});
+    return true;
   }
 
   /**

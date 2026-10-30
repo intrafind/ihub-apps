@@ -341,8 +341,8 @@
     },
     "listProfiles": {
       "description": {
-        "en": "List the iFinder search profiles this user can reach, derived from the iAssistants the deployment exposes plus the configured default profile. Use it when a question names a corpus (\"the legal documents\") rather than a profile id. A deployment without iAssistants reports only the configured default — that is the upstream API’s limit, not an error.",
-        "de": "Die für diesen Benutzer erreichbaren iFinder-Suchprofile auflisten, abgeleitet aus den iAssistants der Installation plus dem konfigurierten Standardprofil. Nützlich, wenn eine Frage einen Korpus benennt („die juristischen Dokumente“) statt einer Profil-ID. Eine Installation ohne iAssistants meldet nur das konfigurierte Standardprofil — eine Grenze der Upstream-API, kein Fehler."
+        "en": "List the iFinder search profiles this user may search with (id, display name, which one is the user's default) — the same list the iFinder searchbar offers them. Use it when a question names a corpus (\"the legal documents\") rather than a profile id, or when a search in the configured default profile finds nothing. The configured default is always listed; `available: false` means the user does not have it.",
+        "de": "Die iFinder-Suchprofile auflisten, mit denen dieser Benutzer suchen darf (ID, Anzeigename, welches sein Standardprofil ist) — dieselbe Liste, die ihm die iFinder-Suchleiste anbietet. Nützlich, wenn eine Frage einen Korpus benennt („die juristischen Dokumente“) statt einer Profil-ID, oder wenn eine Suche im konfigurierten Standardprofil nichts findet. Das konfigurierte Standardprofil wird immer aufgeführt; `available: false` bedeutet, dass der Benutzer es nicht hat."
       },
       "parameters": {
         "type": "object",

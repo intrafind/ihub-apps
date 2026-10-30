@@ -319,3 +319,33 @@ Also:
   projects.
 
 See [Projects](../../projects.md#the-ifinder-tier-smart-collections).
+
+## iAssistant: Search Profiles per User, iFinder iAssistants in Apps, and iFinder 6.9
+
+Search profiles are assigned per user in iFinder, but an iAssistant app names one search profile
+for everyone. iHub now reads the search profiles of the user before it starts an iAssistant
+conversation — the same list the iFinder searchbar offers them — and uses the user's default
+profile when they do not have the configured one. Before, such a user got a conversation that
+could not find anything.
+
+- **Setting:** `iAssistant.verifySearchProfileAccess` (on by default) in `platform.json`. It
+  replaces `resolveSearchProfileFromProfile`, which read the conversation profile for a search
+  profile that iFinder never publishes there; the update renames the key and keeps its value.
+  `profileCacheTtlMs` becomes `searchProfileCacheTtlMs`.
+- The list is read for one iFinder application, `iFinder.searchProfileApplication` (default
+  `ifinder`, the searchbar's). Set it if your iAssistant profiles are assigned under another
+  application.
+- If iFinder cannot be asked, the configured profile is used as before. iFinder 6.9 refuses the
+  request for users without the feature `fi_ifinder_allow`.
+- **iFinder iAssistants in apps:** an app can name an iFinder iAssistant
+  (`iassistant.assistantId`), which brings its conversation profile and search profile with it.
+  **Admin → Apps → Edit → iAssistant** lists the iAssistants iFinder shows you. Users without
+  the iAssistant's search profile are told it is not available to them.
+- **All search profiles:** with `iassistant.allSearchProfiles`, an app sends no search profile and
+  iFinder 6.9 searches everything the user may see through any of their profiles.
+- **iFinder search tool:** `iFinder_listProfiles` lists the search profiles the user has, with
+  their names and the user's default, instead of only the profiles some iAssistant uses.
+- **iFinder 6.9:** iHub sends each question as an append to the conversation and passes the user's
+  language. When the conversation was continued elsewhere, for example in the iFinder Workspace,
+  the question is added after the last message instead of failing. A background task that a turn
+  starts is shown as a status.

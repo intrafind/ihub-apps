@@ -2970,6 +2970,16 @@
         "iassistantProfileIdDesc": "The iAssistant profile to use for this app (e.g., iassistant-workspace)",
         "iassistantSearchProfile": "Search Profile",
         "iassistantSearchProfileDesc": "The search profile to use for retrieval using iFinder (e.g., searchprofile-standard)",
+        "iassistantAssistantId": "iFinder iAssistant",
+        "iassistantAssistantIdDesc": "An iAssistant from iFinder. It sets both the conversation profile and the search profile, and only users who have its search profile can use it. Leave empty to set the profiles below.",
+        "iassistantAssistantLoad": "Load from iFinder",
+        "iassistantAssistantLoading": "Loading…",
+        "iassistantAssistantLoadFailed": "The iAssistants could not be loaded: {{error}}",
+        "iassistantAssistantNoneVisible": "iFinder shows you no iAssistants. You can still enter an ID.",
+        "iassistantAssistantProfiles": "Conversation profile: {{conversationProfile}} · Search profile: {{searchProfile}}",
+        "iassistantAssistantOverrides": "Set by the iAssistant.",
+        "iassistantAllSearchProfiles": "Search all of the user's search profiles",
+        "iassistantAllSearchProfilesDesc": "Sends no search profile, so iFinder searches everything the user may see through any of their search profiles. Requires iFinder 6.9 or later.",
         "iassistantExtraContext": "Extra Context",
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
@@ -5487,7 +5497,8 @@
       "answer": "Answer",
       "search": "Search",
       "doc_lookup": "Document Lookup",
-      "context": "Context"
+      "context": "Context",
+      "task": "Task"
     },
     "assess": {
       "started": "Analyzing current knowledge",
@@ -5534,6 +5545,9 @@
     "finalize": {
       "started": "Finalizing answer...",
       "completed": "Answer ready"
+    },
+    "task": {
+      "created": "Started a background task. Its result appears in the iFinder Workspace when it is done"
     }
   },
   "setup": {
