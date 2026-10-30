@@ -42,7 +42,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetchInstalledIntegrations();
         if (!cancelled) setInstalled((res.items || []).filter(i => !i.definitionMissing));
@@ -62,7 +62,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     const boundIds = Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !details[id]);
     if (boundIds.length === 0) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const loaded = {};
       await Promise.all(
         boundIds.map(async id => {
