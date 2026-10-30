@@ -134,6 +134,28 @@ describe('project sharing settings', () => {
     assert.equal(configCache.getPlatform().projects.tierPolicy, 'both');
   });
 
+  it('writes the default app of project chats, and clears it', async () => {
+    assert.equal((await drive(route.get, { user: ROOT })).body.defaultAppId, '');
+    const set = await drive(route.put, { user: ROOT, body: { defaultAppId: 'chat' } });
+    assert.equal(set.statusCode, 200, JSON.stringify(set.body));
+    assert.equal(set.body.defaultAppId, 'chat');
+    const stored = JSON.parse(
+      await fs.readFile(path.join(scratch, 'config', 'platform.json'), 'utf8')
+    );
+    assert.equal(stored.projects.defaultAppId, 'chat');
+    assert.equal(stored.projects.tierPolicy, 'both', 'the other settings stay');
+    const { projectsClientConfig } = await import('../services/projects/projectSettings.js');
+    assert.equal(
+      projectsClientConfig({}, configCache.getPlatform()).defaultAppId,
+      'chat',
+      'the client reads it from the platform config'
+    );
+    const cleared = await drive(route.put, { user: ROOT, body: { defaultAppId: '' } });
+    assert.equal(cleared.body.defaultAppId, '');
+    const invalid = await drive(route.put, { user: ROOT, body: { defaultAppId: '../x' } });
+    assert.equal(invalid.statusCode, 400);
+  });
+
   it('refuses an unknown tier policy and an empty body', async () => {
     const unknown = await drive(route.put, { user: ROOT, body: { tierPolicy: 'cloud' } });
     assert.equal(unknown.statusCode, 400);

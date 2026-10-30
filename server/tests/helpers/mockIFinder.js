@@ -186,6 +186,11 @@ export async function startMockIFinder({ tls } = {}) {
     if (!collection || collection.owner.toLowerCase() !== String(sub).toLowerCase()) {
       return send(res, 404);
     }
+    if (req.method === 'DELETE' && !tail) {
+      // The collection goes; its documents are only listed by it.
+      state.collections.delete(id);
+      return send(res, 204);
+    }
     if (req.method === 'PATCH' && !tail) {
       // Every non-null field is written, the owner, the documents and the viewers too.
       for (const field of ['name', 'description', 'owner', 'documents', 'viewers']) {

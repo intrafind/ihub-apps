@@ -282,18 +282,21 @@ export default function registerAdminProjectsRoutes(app) {
    *       The effective `platform.projects.sharing` block (users, groups,
    *       everyone signed in, and the catalog of projects published for everyone
    *       to browse and add) and `tierPolicy` (`ihub`, `both` or `ifinder`:
-   *       whether the user's iFinder smart collections are listed as projects).
-   *       Full admins only.
+   *       whether the user's iFinder smart collections can be added as projects)
+   *       and `defaultAppId` (the app a project chat starts in when the project
+   *       names none). Full admins only.
    *     tags: [Admin Projects]
    *   put:
-   *     summary: Change the sharing audiences and the tier policy
+   *     summary: Change the sharing audiences, the tier policy and the default app
    *     description: Only the fields sent are written; unknown ones are refused.
    *     tags: [Admin Projects]
    */
   app.get(route('/_settings'), ...gate, adminAuth, (req, res) => {
     try {
-      const { sharing, tierPolicy } = projectSettings(configCache.getPlatform() || {});
-      res.json({ sharing, tierPolicy });
+      const { sharing, tierPolicy, defaultAppId } = projectSettings(
+        configCache.getPlatform() || {}
+      );
+      res.json({ sharing, tierPolicy, defaultAppId });
     } catch (error) {
       sendFailedOperationError(res, 'read project settings', error);
     }
@@ -317,6 +320,7 @@ export default function registerAdminProjectsRoutes(app) {
             projects: {
               ...stored,
               ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
+              ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
               ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {})
             }
           };
@@ -330,13 +334,18 @@ export default function registerAdminProjectsRoutes(app) {
         resourceId: 'project-sharing',
         summary: `Updated project settings (${Object.entries({
           ...body.sharing,
-          ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {})
+          ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
+          ...(body.defaultAppId !== undefined
+            ? { defaultAppId: body.defaultAppId || '(none)' }
+            : {})
         })
           .map(([key, value]) => `${key}=${value}`)
           .join(', ')})`
       });
-      const { sharing, tierPolicy } = projectSettings(configCache.getPlatform() || platformConfig);
-      res.json({ sharing, tierPolicy });
+      const { sharing, tierPolicy, defaultAppId } = projectSettings(
+        configCache.getPlatform() || platformConfig
+      );
+      res.json({ sharing, tierPolicy, defaultAppId });
     } catch (error) {
       sendFailedOperationError(res, 'update project settings', error);
     }

@@ -732,6 +732,22 @@ export const fetchProjectPickerPages = async () => {
  * @param {{profile?: string, limit?: number}} [options]
  * @returns {Promise<Array<{documentId: string, title: string, mimeType?: string, url?: string}>>}
  */
+/**
+ * The iFinder search profiles the admin may search in for the item picker.
+ *
+ * @returns {Promise<{profiles: Array<{id: string, name: string, isDefault: boolean}>,
+ *   defaultProfile: string|null, fixed: boolean}>}
+ */
+export const fetchProjectPickerIFinderProfiles = async () => {
+  const response = await makeAdminApiCall('/projects/pickers/ifinder/profiles');
+  const data = response.data || {};
+  return {
+    profiles: Array.isArray(data.profiles) ? data.profiles : [],
+    defaultProfile: data.defaultProfile || null,
+    fixed: data.fixed === true
+  };
+};
+
 export const searchProjectPickerIFinder = async (query, { profile, limit } = {}) => {
   const params = new URLSearchParams({ q: query });
   if (profile) params.set('profile', profile);
@@ -1464,6 +1480,7 @@ export const adminApi = {
   fetchAdminProjectItemText,
   fetchProjectPickerPages,
   searchProjectPickerIFinder,
+  fetchProjectPickerIFinderProfiles,
   checkProjectPickerUrl,
   previewProjectPickerUrl,
   crawlProjectPickerUrl,

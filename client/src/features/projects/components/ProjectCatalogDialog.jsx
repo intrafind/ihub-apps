@@ -11,6 +11,7 @@ import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
 import { projectDisplayName } from '../utils/projectView';
 import { INPUT_CLASS, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
+import SmartCollectionsCatalogSection from './SmartCollectionsCatalogSection';
 
 const ROW_BUTTON =
   'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
@@ -22,14 +23,24 @@ const ROW_BUTTON =
  * in your list and in the chat input's project picker. A project you own or
  * are a member of is in your list already.
  *
+ * Where the viewer's iFinder smart collections are offered, the catalog lists
+ * them too, to add to their projects (`SmartCollectionsCatalogSection`).
+ *
  * Mount it only while open.
  *
  * @param {Object} props
  * @param {() => void} props.onClose
  * @param {() => void} props.onChanged - Called after a project was added or removed.
+ * @param {boolean} [props.catalogEnabled=true] - The catalog of published projects is on.
+ * @param {boolean} [props.collectionsEnabled=false] - The iFinder tier is offered to the viewer.
  * @returns {JSX.Element}
  */
-function ProjectCatalogDialog({ onClose, onChanged }) {
+function ProjectCatalogDialog({
+  onClose,
+  onChanged,
+  catalogEnabled = true,
+  collectionsEnabled = false
+}) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const [query, setQuery] = useState('');
@@ -39,6 +50,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
   const searchRef = useRef(null);
 
   useEffect(() => {
+    if (!catalogEnabled) return undefined;
     let active = true;
     const handle = setTimeout(() => {
       fetchProjectCatalog(query.trim())
@@ -53,7 +65,7 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
       active = false;
       clearTimeout(handle);
     };
-  }, [query, t]);
+  }, [query, t, catalogEnabled]);
 
   const toggle = async project => {
     setBusyId(project.id);
@@ -89,12 +101,14 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
         >
           {t('projects.catalog.dialogTitle', 'Project catalog')}
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t(
-            'projects.catalog.dialogHint',
-            'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
-          )}
-        </p>
+        {catalogEnabled && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t(
+              'projects.catalog.dialogHint',
+              'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
+            )}
+          </p>
+        )}
         <input
           ref={searchRef}
           type="search"
@@ -104,7 +118,15 @@ function ProjectCatalogDialog({ onClose, onChanged }) {
           aria-label={t('projects.catalog.search', 'Search the catalog')}
           className={INPUT_CLASS}
         />
-        {items === null ? (
+        {collectionsEnabled && (
+          <SmartCollectionsCatalogSection query={query} onClose={onClose} onChanged={onChanged} />
+        )}
+        {collectionsEnabled && catalogEnabled && (
+          <h3 className="pt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {t('projects.catalog.publishedTitle', 'Published projects')}
+          </h3>
+        )}
+        {!catalogEnabled ? null : items === null ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {t('common.loading', 'Loading...')}
           </p>

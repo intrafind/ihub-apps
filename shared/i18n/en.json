@@ -4102,6 +4102,24 @@
         "editDetails": "Edit name and description",
         "availability": "Availability",
         "saved": "Saved."
+      },
+      "defaultApp": {
+        "label": "Default app for project chats",
+        "none": "First app in the list",
+        "help": "A chat in a project starts in the default app of the project; when the project has none, it starts in this app."
+      },
+      "settings": {
+        "title": "Project settings"
+      },
+      "tierPolicy": {
+        "legend": "Where users find their projects",
+        "ihub": "iHub projects only",
+        "ihubHelp": "iFinder smart collections are not offered. This is the default.",
+        "both": "iHub projects and iFinder smart collections",
+        "bothHelp": "Users add their iFinder smart collections to their projects from the catalog, and choose the tier when they create a project.",
+        "ifinder": "iFinder smart collections preferred",
+        "ifinderHelp": "Smart collections can be added like under \"both\". Local projects stay usable and can still be created.",
+        "requirements": "Smart collections also need iFinder configured (Integrations → iFinder), a user with the fi_smartcollections role and iFinder 6.8 or later. Use the iFinder integration test to check them."
       }
     },
     "peopleDirectories": {
@@ -7055,7 +7073,8 @@
       "linkChangeProject": "Change",
       "linkPublishedDetail": "Published for everyone",
       "linkFromAppsDetail": "Comes with one of your apps",
-      "nothingToAdd": "This kind of item is not available here."
+      "nothingToAdd": "This kind of item is not available here.",
+      "ifinderProfile": "Search in"
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -7147,7 +7166,8 @@
         "remove": "Remove item",
         "rename": "Rename",
         "retry": "Retry",
-        "transfer": "Move or copy to…"
+        "transfer": "Move or copy to…",
+        "openInIFinder": "Open in iFinder"
       },
       "add": "Add documents",
       "columns": {
@@ -7191,7 +7211,8 @@
       "selectAll": "Select all items",
       "selectItem": "Select {{name}}",
       "collectionFull": "A smart collection holds as many documents as iFinder allows.",
-      "removeFromCollectionConfirm": "Remove \"{{name}}\" from the collection? The document stays in iFinder."
+      "removeFromCollectionConfirm": "Remove \"{{name}}\" from the collection? The document stays in iFinder.",
+      "openUnavailable": "This document has no link to open it with."
     },
     "list": {
       "emptyText": "Create a project, add your documents and instructions, and start chats that know them.",
@@ -7248,7 +7269,11 @@
       "deleteTitle": "Delete project",
       "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it.",
       "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder.",
-      "ifinderManage": "This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. Sharing and deleting it are done in iFinder."
+      "ifinderManage": "This is a smart collection from iFinder. Add documents you can read or remove them here: only the list changes, never the document. The collection also changes in iFinder. It is shared in iFinder.",
+      "collectionDeleted": "The smart collection of this project was deleted in iFinder. Its chats, default app and instructions are kept here; it has no documents any more. Delete the project when you no longer need it.",
+      "collectionUnavailable": "iFinder could not be reached, so the documents of this smart collection are missing for now.",
+      "deleteStubConfirm": "Remove “{{name}}” from your projects? Its chats are kept, outside the project, and its default app and instructions are deleted.",
+      "deleteCollectionToo": "Also delete the smart collection in iFinder. Its documents stay in iFinder. Without this, the collection stays in iFinder and can be added again."
     },
     "preview": {
       "edit": "Edit text",
@@ -7292,7 +7317,8 @@
       "reset": "Discard changes",
       "saved": "Saved.",
       "saving": "Saving…",
-      "title": "Instructions"
+      "title": "Instructions",
+      "collectionNameLocked": "The name and the description are those of the smart collection, which cannot be changed from here on this installation. Change them in iFinder."
     },
     "transfer": {
       "hint": "Choose who takes the project over. You confirm in the next step.",
@@ -7361,7 +7387,7 @@
     },
     "attach": {
       "title": "Projects for this chat",
-      "hint": "The answers can use the documents of the projects you tick. Their instructions do not apply.",
+      "hint": "The answers can use the documents of the projects you tick. A project’s instructions apply to the chats started in it, not here.",
       "remove": "Remove {{name}} from this chat",
       "full": "A chat can use at most {{max}} projects.",
       "button": "Project"
@@ -7370,7 +7396,7 @@
       "placeholder": "New chat in {{name}}",
       "hint": "The app gets the project’s instructions and documents.",
       "app": "App",
-      "hintAttached": "The answers can use the documents of this project. Its instructions do not apply."
+      "hintAttached": "This chat runs outside the project and uses its documents. The project’s instructions apply to its members’ chats inside it."
     },
     "appSelect": {
       "unavailable": "{{id}} (not available)"
@@ -7408,7 +7434,13 @@
       "browse": "Browse catalog",
       "publishedOffHint": "Published, but the catalog is switched off: nobody finds or uses it through the catalog until an administrator turns it on again.",
       "adminAddedHint": "You added this project to your projects; the administrators keep it up to date. New chat starts a chat with the project attached, and the chat input offers it.",
-      "adminNotAddedHint": "The administrators made this project available to everyone. Add it to your projects to find it in your list and in the chat input."
+      "adminNotAddedHint": "The administrators made this project available to everyone. Add it to your projects to find it in your list and in the chat input.",
+      "publishedTitle": "Published projects",
+      "collectionsTitle": "Your iFinder smart collections",
+      "collectionsHint": "Add a collection to your projects to chat with it, with a default app and instructions of its own. Its documents stay in iFinder.",
+      "collectionsUnavailable": "iFinder could not be reached, so your smart collections are missing from this list.",
+      "noCollectionMatches": "No smart collection matches.",
+      "noCollections": "You have no smart collections in iFinder."
     },
     "picker": {
       "search": "Search projects",
@@ -7425,14 +7457,17 @@
       "readOnly": "read-only",
       "ifinderHint": "A smart collection from iFinder. iHub only reads it; change it in iFinder.",
       "ifinderDetail": "Smart collection from iFinder",
-      "ifinderManageHint": "A smart collection from iFinder. You can rename it and add or remove its documents here."
+      "ifinderManageHint": "A smart collection from iFinder. You can rename it and add or remove its documents here.",
+      "ifinderDeletedDetail": "Smart collection, deleted in iFinder",
+      "collectionDeletedHint": "The smart collection of this project was deleted in iFinder.",
+      "collectionDeleted": "Deleted in iFinder"
     },
     "ifinder": {
       "sourceTitle": "Smart collection in iFinder",
       "sourceText": "Its documents stay in iFinder and are read with your own access rights. Add, remove, rename or share them in iFinder.",
       "documentCount_one": "{{count}} document",
       "documentCount_other": "{{count}} documents",
-      "sourceTextManage": "Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share or delete it in iFinder.",
+      "sourceTextManage": "Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share it in iFinder.",
       "documentCountOf": "{{count}} of {{max}} documents",
       "rename": "Rename",
       "renameTitle": "Rename collection",

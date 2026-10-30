@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
@@ -335,21 +335,123 @@ export function PagePicker({ draft, update, pages }) {
 }
 
 /**
- * One iFinder document, found by a search with the caller's own rights.
+ * The iFinder search profiles the caller may search in, loaded once; null while
+ * loading or without a loader, `{profiles: []}` when they could not be read.
+ *
+ * @param {(() => Promise<Object>)|undefined} fetchProfiles
+ * @returns {{profiles: Array<{id: string, name: string}>, defaultProfile: string|null,
+ *   fixed: boolean}|null}
+ */
+function useIFinderProfiles(fetchProfiles) {
+  const [listing, setListing] = useState(null);
+  useEffect(() => {
+    if (typeof fetchProfiles !== 'function') return undefined;
+    let active = true;
+    fetchProfiles()
+      .then(result => active && setListing(result))
+      .catch(() => active && setListing({ profiles: [], defaultProfile: null, fixed: false }));
+    return () => {
+      active = false;
+    };
+  }, [fetchProfiles]);
+  return listing;
+}
+
+/**
+ * The profile a picker searches in until the user picks another: the one the
+ * profile list names as the user's default. Never empty while the user has a
+ * profile: an empty choice would fall back to the configured default, which
+ * need not be one of theirs.
+ *
+ * @param {ReturnType<typeof useIFinderProfiles>} listing
+ * @returns {string}
+ */
+function initialProfile(listing) {
+  if (!listing || listing.fixed || !listing.profiles?.length) return '';
+  return listing.defaultProfile || listing.profiles[0].id;
+}
+
+/**
+ * Put the profile the picker shows into the draft once the list arrives, so the
+ * search and the stored item use exactly that one.
+ *
+ * @param {ReturnType<typeof useIFinderProfiles>} listing
+ * @param {Object} draft
+ * @param {(changes: Object) => void} update
+ */
+function useInitialProfile(listing, draft, update) {
+  const initial = initialProfile(listing);
+  const current = draft.searchProfile;
+  useEffect(() => {
+    // Only fills an empty choice: a profile the user picked stays theirs.
+    if (initial && !current) update({ searchProfile: initial });
+  }, [initial, current, update]);
+}
+
+/**
+ * Where an iFinder picker searches: the caller's search profiles, as the chat
+ * input offers them. Not shown with a single profile or a fixed one. The draft
+ * holds the profile shown (`useInitialProfile`), which is stored with the item
+ * and read with it.
+ *
+ * @param {Object} props
+ * @param {string} props.id
+ * @param {ReturnType<typeof useIFinderProfiles>} props.listing
+ * @param {string} props.value - The draft's `searchProfile`.
+ * @param {(profile: string) => void} props.onChange
+ * @returns {JSX.Element|null}
+ */
+function IFinderProfileSelect({ id, listing, value, onChange }) {
+  const { t } = useTranslation();
+  if (!listing || listing.fixed || listing.profiles.length < 2) return null;
+  return (
+    <div>
+      <label htmlFor={id} className={LABEL_CLASS}>
+        {t('projects.addItem.ifinderProfile', 'Search in')}
+      </label>
+      <select
+        id={id}
+        value={value || initialProfile(listing)}
+        onChange={e => onChange(e.target.value)}
+        className={INPUT_CLASS}
+      >
+        {listing.profiles.map(profile => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name || profile.id}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * One iFinder document, found by a search with the caller's own rights, in the
+ * search profile they pick (when they have more than one).
  *
  * @param {Object} props
  * @param {Object} props.draft
  * @param {(changes: Object) => void} props.update
- * @param {(query: string) => Promise<Array<Object>>} props.searchIFinder
+ * @param {(query: string, options?: {profile?: string}) => Promise<Array<Object>>} props.searchIFinder
+ * @param {() => Promise<Object>} [props.fetchProfiles] - The caller's search profiles;
+ *   without it the default profile is searched.
  * @param {(error: Error) => string} props.errorMessage
  * @returns {JSX.Element}
  */
-export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessage }) {
+export function IFinderDocumentPicker({
+  draft,
+  update,
+  searchIFinder,
+  fetchProfiles,
+  errorMessage
+}) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
+  const profiles = useIFinderProfiles(fetchProfiles);
+  useInitialProfile(profiles, draft, update);
 
   const search = async () => {
     // Enter in the field reaches here too, not only the (disabled) button.
@@ -357,7 +459,12 @@ export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessa
     setSearching(true);
     setError(null);
     try {
-      setResults(await searchIFinder(query.trim()));
+      setResults(
+        await searchIFinder(
+          query.trim(),
+          draft.searchProfile ? { profile: draft.searchProfile } : undefined
+        )
+      );
     } catch (err) {
       setResults([]);
       setError(errorMessage(err));
@@ -368,6 +475,16 @@ export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessa
 
   return (
     <div className="space-y-3">
+      <IFinderProfileSelect
+        id="project-item-ifinder-profile"
+        listing={profiles}
+        value={draft.searchProfile}
+        onChange={searchProfile => {
+          // A hit of another profile is not offered under this one.
+          setResults(null);
+          update({ searchProfile, documentId: '', documentTitle: '' });
+        }}
+      />
       <label htmlFor="project-item-ifinder-search" className={LABEL_CLASS}>
         {t('projects.addItem.ifinderSearch', 'Search iFinder')}
       </label>
@@ -460,31 +577,43 @@ export function IFinderDocumentPicker({ draft, update, searchIFinder, errorMessa
 }
 
 /**
- * An iFinder search whose matching documents are read whenever the project is used.
+ * An iFinder search whose matching documents are read whenever the project is
+ * used, in the search profile the caller picks (when they have more than one).
  *
- * @param {{draft: Object, update: (changes: Object) => void}} props
+ * @param {{draft: Object, update: (changes: Object) => void,
+ *   fetchProfiles?: () => Promise<Object>}} props
  * @returns {JSX.Element}
  */
-export function IFinderQueryPicker({ draft, update }) {
+export function IFinderQueryPicker({ draft, update, fetchProfiles }) {
   const { t } = useTranslation();
+  const profiles = useIFinderProfiles(fetchProfiles);
+  useInitialProfile(profiles, draft, update);
   return (
-    <div>
-      <label htmlFor="project-item-query" className={LABEL_CLASS}>
-        {t('projects.addItem.query', 'Search query')}
-      </label>
-      <input
-        id="project-item-query"
-        type="text"
-        value={draft.query}
-        onChange={e => update({ query: e.target.value })}
-        className={INPUT_CLASS}
+    <div className="space-y-3">
+      <IFinderProfileSelect
+        id="project-item-query-profile"
+        listing={profiles}
+        value={draft.searchProfile}
+        onChange={searchProfile => update({ searchProfile })}
       />
-      <p className={HINT_CLASS}>
-        {t(
-          'projects.addItem.queryHint',
-          'The documents matching this query are read whenever the project is used.'
-        )}
-      </p>
+      <div>
+        <label htmlFor="project-item-query" className={LABEL_CLASS}>
+          {t('projects.addItem.query', 'Search query')}
+        </label>
+        <input
+          id="project-item-query"
+          type="text"
+          value={draft.query}
+          onChange={e => update({ query: e.target.value })}
+          className={INPUT_CLASS}
+        />
+        <p className={HINT_CLASS}>
+          {t(
+            'projects.addItem.queryHint',
+            'The documents matching this query are read whenever the project is used.'
+          )}
+        </p>
+      </div>
     </div>
   );
 }

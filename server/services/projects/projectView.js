@@ -9,7 +9,7 @@
  * @module services/projects/projectView
  */
 import { getLocalizedContent } from '../../../shared/localize.js';
-import { isIFinderProjectId } from './projectConstants.js';
+import { isCollectionStub, isIFinderProjectId } from './projectConstants.js';
 
 function memberView(member) {
   return {
@@ -129,8 +129,27 @@ export function serializeProject(
           }
         }
       : {}),
-    name: project.name,
-    description: project.description || '',
+    // The stub of a smart collection: the documents live in the collection,
+    // `collection.state` says whether it is there (`ok`), gone (`deleted`) or
+    // could not be asked (`unavailable`, or `unknown` for a reader who is not
+    // its owner). Its name and description are the collection's while it answers.
+    ...(isCollectionStub(project)
+      ? {
+          source: { type: 'smart-collection', collectionId: project.source.collectionId },
+          collection: project.collection || {
+            id: project.source.collectionId,
+            state: 'unknown'
+          }
+        }
+      : {}),
+    name:
+      isCollectionStub(project) && project.collection?.state === 'ok' && project.collection.name
+        ? project.collection.name
+        : project.name,
+    description:
+      isCollectionStub(project) && project.collection?.state === 'ok'
+        ? (project.collection.description ?? project.description ?? '')
+        : project.description || '',
     instructions: project.instructions || '',
     ...(project.ownership === 'admin'
       ? {
