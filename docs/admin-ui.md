@@ -19,7 +19,7 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | **Overview** | Dashboard, What's New |
 | **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
-| **Integrations** | Integrations (Jira, Office 365, Google Drive, Nextcloud, Outlook add-in, browser extension, …), Installed integrations (iFinder, iAssistant, MCP servers, catalog integrations), MCP gateway, A2A agents, Credentials |
+| **Integrations** | Integrations (Jira, Office 365, Google Drive, Nextcloud, Outlook add-in, browser extension, …), Installed integrations (iFinder, iAssistant, MCP servers, remote A2A agents, catalog integrations), MCP gateway, Credentials |
 | **Customization** | UI Customization, Localization, Pages, Short Links |
 | **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
 | **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |

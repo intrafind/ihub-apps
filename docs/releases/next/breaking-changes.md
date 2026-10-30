@@ -42,3 +42,19 @@ nothing reads it any more.
 - Remote A2A agents keep their own page for now; the id-clash rules name installed integrations
   where they named MCP servers.
 
+## Remote A2A Agents Moved From `a2aAgents.json` to Installed Integrations
+
+Migration V194 turns every agent of `contents/config/a2aAgents.json` into an installed integration
+of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
+
+- **Admin page and API:** **Admin → A2A agents** is gone, replaced by **Admin → Integrations →
+  Installed**; the routes `/api/admin/a2a/agents*`, `/api/admin/a2a/test`, `/api/admin/a2a/status`
+  and `/api/admin/a2a/skills` are removed. The inbound side (iHub as an A2A agent) is unchanged.
+- **Apps:** an `app.tools` entry naming an agent (`"langdock"`, `"a2a__langdock"`) or one of its
+  skills (`"a2a__langdock__ask"`) selects nothing any more; the migration turns each into the
+  binding `integrations.langdock` (a skill reference binds the whole agent, because the skill ids
+  behind the slugs are only known from the card). The remote agents picker in the app editor is
+  gone.
+- **Deployments that write `a2aAgents.json`** have to write installations; the field names are
+  listed in `docs/a2a-agents.md`. The `security` block lives in `integrations.json`.
+
