@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
@@ -224,6 +224,86 @@ describe('ArtifactsPanel', () => {
       await screen.findByRole('button', { name: /src\/index\.js.*Answer 2/ })
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /report\.pdf.*Answer 1/ })).toBeInTheDocument();
+  });
+
+  it('numbers a live answer by its run, whose files had other ids before they were stored', async () => {
+    const source = makeSource({
+      list: jest.fn(async () => ({
+        items: [
+          { ...ITEMS[0], runId: 'run-2' },
+          { ...ITEMS[2], runId: 'run-1' }
+        ]
+      }))
+    });
+    const messages = [
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a', runId: 'run-1', artifacts: [{ id: 'other' }] },
+      // As a live turn leaves it: files by their pre-storage ids, no `artifacts`.
+      { role: 'assistant', content: 'b', runId: 'run-2', generatedFiles: [{ id: 'held' }] }
+    ];
+    render(<ArtifactsPanel isOpen onClose={() => {}} source={source} messages={messages} />);
+    expect(
+      await screen.findByRole('button', { name: /src\/index\.js.*Answer 2/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /report\.pdf.*Answer 1/ })).toBeInTheDocument();
+  });
+
+  it('lists again when an answer with a file finishes while it is open', async () => {
+    const source = makeSource({
+      list: jest.fn(async () => ({ items: [{ ...ITEMS[0], runId: 'run-1' }] }))
+    });
+    const first = [{ role: 'assistant', content: 'a', runId: 'run-1', generatedFiles: [{}] }];
+    const { rerender } = render(
+      <ArtifactsPanel isOpen onClose={() => {}} source={source} messages={first} />
+    );
+    await screen.findByRole('list');
+    expect(source.list).toHaveBeenCalledTimes(1);
+
+    // Still streaming: nothing to list yet.
+    const streaming = [
+      ...first,
+      { role: 'assistant', content: '', runId: 'run-2', loading: true, generatedFiles: [{}] }
+    ];
+    rerender(<ArtifactsPanel isOpen onClose={() => {}} source={source} messages={streaming} />);
+    expect(source.list).toHaveBeenCalledTimes(1);
+
+    source.list.mockResolvedValue({
+      items: [
+        { ...ITEMS[1], runId: 'run-2' },
+        { ...ITEMS[0], runId: 'run-1' }
+      ]
+    });
+    const finished = [first[0], { ...streaming[1], loading: false }];
+    rerender(<ArtifactsPanel isOpen onClose={() => {}} source={source} messages={finished} />);
+    expect(await screen.findByRole('button', { name: /^data\.json/ })).toBeInTheDocument();
+    expect(source.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks once more when a finished answer is not stored yet', async () => {
+    jest.useFakeTimers();
+    try {
+      const list = jest
+        .fn()
+        .mockResolvedValueOnce({ items: [] })
+        .mockResolvedValue({ items: [{ ...ITEMS[0], runId: 'run-1' }] });
+      const messages = [{ role: 'assistant', content: 'a', runId: 'run-1', generatedFiles: [{}] }];
+      render(
+        <ArtifactsPanel
+          isOpen
+          onClose={() => {}}
+          source={makeSource({ list })}
+          messages={messages}
+        />
+      );
+      expect(await screen.findByText(/This chat has no files yet/)).toBeInTheDocument();
+      await act(async () => {
+        jest.advanceTimersByTime(1600);
+      });
+      expect(await screen.findByRole('button', { name: /^src\/index\.js/ })).toBeInTheDocument();
+      expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('closes with Escape and with the close button', async () => {

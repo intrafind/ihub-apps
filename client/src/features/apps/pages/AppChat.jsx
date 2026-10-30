@@ -909,11 +909,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const chatShareReady =
     chatShareOffered && Boolean(chatId) && messages.some(message => !message.isGreeting);
 
-  // The Artifacts panel lists what the stored chat produced, so it is offered
-  // once an answer brought a picture or a file. A chat that is not stored has
-  // nothing to list (the server answers 404, read as "no files").
+  // The Artifacts panel lists what the chat produced, so it is offered once an
+  // answer brought a picture or a file. Every chat is stored, an anonymous
+  // visitor's and one on an installation without the history included, and
+  // its artifact routes serve them all; a chat the server does not have
+  // answers 404, read as "no files".
   const artifactsAvailable =
-    chatPersistence &&
     Boolean(chatId) &&
     messages.some(
       message =>

@@ -17,24 +17,41 @@ import {
 } from '../utils/artifactFiles';
 
 /**
- * Which answer of the conversation produced each artifact: its number among
- * the assistant messages, by the artifact ids those messages carry.
+ * Which answer of the conversation produced each artifact, and which finished
+ * answers produced any.
+ *
+ * Keyed by `runId`: a stored descriptor carries the run that made it, and so
+ * does every answer, live or reloaded. An artifact id alone would not do: a
+ * live answer knows its files only by the ids they had before they were
+ * stored. Artifact ids a stored message names are kept as a fallback for a
+ * descriptor without a run.
  *
  * @param {Object[]} messages
- * @returns {Map<string, number>}
+ * @returns {{ byRun: Map<string, number>, byId: Map<string, number>, producedRuns: string[] }}
  */
-function answerNumbers(messages) {
-  const numbers = new Map();
+function answerIndex(messages) {
+  const byRun = new Map();
+  const byId = new Map();
+  const producedRuns = [];
   let answer = 0;
   for (const message of messages || []) {
     if (message?.role !== 'assistant' || message.isGreeting) continue;
     answer += 1;
+    if (message.runId && !byRun.has(message.runId)) byRun.set(message.runId, answer);
     for (const artifact of message.artifacts || []) {
-      if (artifact?.id && !numbers.has(artifact.id)) numbers.set(artifact.id, answer);
+      if (artifact?.id && !byId.has(artifact.id)) byId.set(artifact.id, answer);
     }
+    const produced =
+      message.artifacts?.length > 0 ||
+      message.generatedFiles?.length > 0 ||
+      message.images?.length > 0;
+    if (produced && message.runId && !message.loading) producedRuns.push(message.runId);
   }
-  return numbers;
+  return { byRun, byId, producedRuns };
 }
+
+/** How long to wait before asking once more for an answer's files the list lacks. */
+const RELIST_DELAY_MS = 1500;
 
 function formatDate(value, language) {
   if (!value) return '';
@@ -115,9 +132,10 @@ export default function ArtifactsPanel({
     };
   }, [isOpen]);
 
-  const answers = useMemo(() => answerNumbers(messages), [messages]);
-  // Changes when an answer is stored with new artifacts.
-  const listKey = [...answers.keys()].join(',');
+  const answers = useMemo(() => answerIndex(messages), [messages]);
+  // Changes when an answer that produced a picture or a file has finished,
+  // so a file made while the panel is open shows up in it.
+  const listKey = answers.producedRuns.join(',');
 
   // A new source is a different chat: nothing cached applies to it.
   useEffect(() => {
@@ -127,25 +145,36 @@ export default function ArtifactsPanel({
   useEffect(() => {
     if (!isOpen) return undefined;
     let active = true;
+    let retry = null;
+    const expected = listKey ? listKey.split(',') : [];
     // A refresh keeps the list on screen while it asks again.
     setStatus(previous => (previous === 'ready' ? previous : 'loading'));
-    source
-      .list()
-      .then(result => {
-        if (!active) return;
-        const list = Array.isArray(result?.items) ? result.items : [];
-        setItems(list);
-        setSelected(previous => new Set([...previous].filter(id => list.some(i => i.id === id))));
-        setPreviewId(previous =>
-          list.some(item => item.id === previous) ? previous : list[0]?.id || null
-        );
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (active) setStatus('error');
-      });
+    const load = attempt =>
+      source
+        .list()
+        .then(result => {
+          if (!active) return;
+          const list = Array.isArray(result?.items) ? result.items : [];
+          // An answer that just finished is stored a moment after the client
+          // sees it end: ask once more when its files are not listed yet.
+          const listed = new Set(list.map(item => item.runId).filter(Boolean));
+          if (attempt === 0 && expected.some(runId => !listed.has(runId))) {
+            retry = setTimeout(() => load(1), RELIST_DELAY_MS);
+          }
+          setItems(list);
+          setSelected(previous => new Set([...previous].filter(id => list.some(i => i.id === id))));
+          setPreviewId(previous =>
+            list.some(item => item.id === previous) ? previous : list[0]?.id || null
+          );
+          setStatus('ready');
+        })
+        .catch(() => {
+          if (active) setStatus('error');
+        });
+    load(0);
     return () => {
       active = false;
+      if (retry) clearTimeout(retry);
     };
   }, [isOpen, source, listKey]);
 
@@ -368,7 +397,8 @@ export default function ArtifactsPanel({
               {items.map(item => {
                 const name = artifactDisplayName(item);
                 const look = fileLookOf(item);
-                const answer = answers.get(item.id);
+                const answer =
+                  (item.runId && answers.byRun.get(item.runId)) || answers.byId.get(item.id);
                 const current = item.id === previewId;
                 return (
                   <li
