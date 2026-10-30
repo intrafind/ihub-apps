@@ -44,4 +44,15 @@ describe('app variable schema', () => {
 
     expect(appConfigSchema.safeParse(invalid).success).toBe(false);
   });
+
+  test('keeps the variables panel default, and leaves it unset when not given', () => {
+    const pinned = appConfigSchema.safeParse({ ...app, variablesPanel: { pinned: false } });
+    expect(pinned.success).toBe(true);
+    expect(pinned.data.variablesPanel).toEqual({ pinned: false });
+
+    expect(appConfigSchema.safeParse(app).data.variablesPanel).toBeUndefined();
+    expect(appConfigSchema.safeParse({ ...app, variablesPanel: { pinned: 'no' } }).success).toBe(
+      false
+    );
+  });
 });

@@ -419,6 +419,12 @@
         "message": "Nachricht",
         "attachments": "Anhänge",
         "dropZone": "Dateien hierher ziehen oder zum Auswählen klicken"
+      },
+      "variablesPanel": {
+        "expand": "Eingabeparameter anzeigen",
+        "collapse": "Eingabeparameter ausblenden",
+        "pin": "Anheften: Eingabeparameter geöffnet lassen",
+        "unpin": "Lösen: Eingabeparameter nach jeder Nachricht ausblenden"
       }
     }
   },
@@ -3191,6 +3197,8 @@
         "startForm": "Chats mit einem Formular starten",
         "startFormHelp": "Ein neuer Chat öffnet diese Variablen als Formular statt der Chat-Eingabe, mit einem Nachrichtenfeld, einer Modellauswahl, wenn Nutzer das Modell wählen dürfen, und einer Ablagefläche für Dateien, wenn Uploads aktiviert sind. Beim Absenden wird die Prompt-Vorlage einmal ausgefüllt und als erste Nachricht gesendet; die Unterhaltung geht danach ohne die Vorlage weiter.",
         "startFormSubmitLabel": "Beschriftung der Senden-Schaltfläche",
+        "variablesPanelPinned": "Eingabeparameter standardmäßig anheften",
+        "variablesPanelPinnedHelp": "Angeheftet bleiben die Eingabeparameter neben dem Chat geöffnet. Nicht angeheftet werden sie bei jeder gesendeten Nachricht eingeklappt und lassen sich wieder aufklappen. Nutzer können das Panel selbst ein- und ausklappen und anheften; diese Einstellung legt den Ausgangszustand fest.",
         "ephemeral": "Flüchtiger Chat",
         "ephemeralHelp": "Wenn aktiviert, wird der Chat nie gespeichert. Nachrichten existieren nur, solange der Chat geöffnet ist, und werden verworfen, wenn Sie die App wechseln oder neu laden.",
         "test": "Testen",

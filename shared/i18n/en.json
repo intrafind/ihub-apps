@@ -405,6 +405,12 @@
         "message": "Message",
         "attachments": "Attachments",
         "dropZone": "Drag and drop files here, or click to browse"
+      },
+      "variablesPanel": {
+        "expand": "Show input parameters",
+        "collapse": "Hide input parameters",
+        "pin": "Pin: keep the input parameters open",
+        "unpin": "Unpin: hide the input parameters after each message"
       }
     },
     "authRequired": {
@@ -2900,6 +2906,8 @@
         "startForm": "Start chats with a form",
         "startFormHelp": "A new chat opens with these variables as a form instead of the chat input, with a message field, a model selector when users may pick the model, and a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.",
         "startFormSubmitLabel": "Send button label",
+        "variablesPanelPinned": "Pin the input parameters by default",
+        "variablesPanelPinnedHelp": "Pinned, the input parameters stay open beside the chat. Unpinned, they collapse each time a message is sent and can be expanded again. Users can collapse, expand and pin the panel themselves; this sets where it starts.",
         "ephemeral": "Ephemeral chat",
         "ephemeralHelp": "When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.",
         "test": "Test",

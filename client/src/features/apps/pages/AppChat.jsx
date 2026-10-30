@@ -51,6 +51,8 @@ import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
+import VariablesPanel from '../../chat/components/VariablesPanel';
+import useVariablesPanel from '../../chat/hooks/useVariablesPanel';
 import ChatStartForm from '../../chat/components/ChatStartForm';
 import UsageGuideButton from '../../chat/components/UsageGuideButton';
 import useUsageGuide from '../../chat/hooks/useUsageGuide';
@@ -870,6 +872,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       ? !compareFormSent
       : sentInChatId !== chatId && !messages.some(m => m.role === 'user'));
   const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
+  // Collapsed, expanded and pinned state of that panel beside the chat.
+  const variablesPanel = useVariablesPanel({ app, appId, chatId });
   // Whether the user may pick the model: in the composer, or on the start form.
   const modelSelectionAllowed =
     app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false;
@@ -2349,8 +2353,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           ' ' +
           missingRequiredVars.map(v => getLocalizedContent(v.label, currentLanguage)).join(', ');
         addSystemMessage(errorMessage, true);
-        if (window.innerWidth < 768 && !showParameters) {
-          toggleParameters();
+        if (window.innerWidth < 768) {
+          if (!showParameters) toggleParameters();
+        } else {
+          variablesPanel.expand();
         }
         // Clear pending variables ref on validation failure
         pendingVariablesRef.current = null;
@@ -2606,6 +2612,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     }
     // Clear pending variables ref after successful submission
     pendingVariablesRef.current = null;
+    // Unpinned, the parameters make room for the conversation once sent.
+    if (showVariablesPanel) variablesPanel.collapseAfterSend();
   };
 
   // The first message of a form-started chat: the app's prompt, rendered with
@@ -2692,11 +2700,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   };
 
   const toggleParameters = () => {
-    if (window.innerWidth < 768) {
-      // On mobile, prepare temp variables when opening
-      if (!showParameters) {
-        setTempVariables({ ...variables });
-      }
+    // On desktop the parameters sit beside the chat: the header's toggle
+    // collapses and expands that panel.
+    if (window.innerWidth >= 768) {
+      variablesPanel.toggleCollapsed();
+      return;
+    }
+    // On mobile, prepare temp variables when opening
+    if (!showParameters) {
+      setTempVariables({ ...variables });
     }
     setShowParameters(!showParameters);
   };
@@ -3017,7 +3029,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
-        showParameters={showParameters}
+        showParameters={window.innerWidth >= 768 ? !variablesPanel.collapsed : showParameters}
         hideParametersButton={!showVariablesPanel}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled || chatShareReady}
@@ -3323,18 +3335,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         </div>
 
         {showVariablesPanel && (
-          <div
-            className={`hidden md:block overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0 ${embedded ? 'order-first max-h-60' : 'w-80 lg:w-96'}`}
-          >
-            <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
-              {t('pages.appChat.inputParameters')}
-            </h3>
-            <InputVariables
-              variables={variables}
-              setVariables={setVariables}
-              localizedVariables={localizedVariables}
-            />
-          </div>
+          <VariablesPanel
+            variables={variables}
+            setVariables={setVariables}
+            localizedVariables={localizedVariables}
+            stacked={embedded}
+            collapsed={variablesPanel.collapsed}
+            pinned={variablesPanel.pinned}
+            onToggleCollapsed={variablesPanel.toggleCollapsed}
+            onTogglePinned={variablesPanel.togglePinned}
+          />
         )}
       </div>
       {promptDraft && (
