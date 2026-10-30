@@ -158,15 +158,12 @@ const iAssistantScopes = {
     if (offerAll) {
       scopes.push({ id: ALL_SEARCH_PROFILES_SCOPE, kind: 'all', name: ALL_PROFILES_NAME });
     }
-    if (scopes.length === 0 && setup.assistantId) {
+    const appAssistant = setup.assistantId ? assistantScopeId(setup.assistantId) : null;
+    if (appAssistant && !scopes.some(scope => scope.id === appAssistant)) {
       // iFinder answered, but does not offer the app's own iAssistant to the
-      // user. It stays the only entry: the conversation then reports that.
-      scopes.push({
-        id: assistantScopeId(setup.assistantId),
-        kind: 'assistant',
-        name: setup.assistantId
-      });
-      hint = hint || 'no-profiles';
+      // user. It stays listed, and the default, so the conversation reports
+      // the missing access instead of quietly asking another iAssistant.
+      scopes.unshift({ id: appAssistant, kind: 'assistant', name: setup.assistantId });
     }
 
     const configuredDefault = setup.assistantId

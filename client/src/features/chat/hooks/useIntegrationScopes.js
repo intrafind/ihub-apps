@@ -77,6 +77,14 @@ export default function useIntegrationScopes({ app, modelId, language, selected,
   );
 
   const scopes = useMemo(() => {
+    // Before the list arrives, the chat's stored pick goes out as it is: the
+    // server checks it anyway, and a turn sent now (an auto-sent starter)
+    // would otherwise run unscoped.
+    if (loading) {
+      return Object.fromEntries(
+        Object.entries(selected || {}).filter(([, scopeId]) => typeof scopeId === 'string')
+      );
+    }
     const out = {};
     for (const integration of integrations) {
       if (integration.scopePicker !== 'hidden' && integration.current) {
@@ -84,7 +92,7 @@ export default function useIntegrationScopes({ app, modelId, language, selected,
       }
     }
     return out;
-  }, [integrations]);
+  }, [integrations, loading, selected]);
 
   const setScope = (integrationId, scopeId) => {
     onChange?.({ ...(selected || {}), [integrationId]: scopeId });

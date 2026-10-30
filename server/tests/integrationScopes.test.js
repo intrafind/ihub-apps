@@ -392,6 +392,20 @@ describe('iAssistant scopes', () => {
     assert.ok(!listing.scopes.some(scope => scope.id === 'all'));
   });
 
+  it('keeps the app’s own iAssistant as the default when iFinder does not list it', async () => {
+    const app = { id: 'ask', iassistant: { assistantId: 'contracts-bot' } };
+    const listing = await iAssistantScopes.listScopes({
+      user: USER,
+      app,
+      model: IASSISTANT_MODEL
+    });
+    assert.equal(listing.defaultScope, 'assistant:contracts-bot');
+    assert.deepEqual(
+      listing.scopes.map(scope => scope.id),
+      ['assistant:contracts-bot', 'assistant:legal', 'assistant:hr-bot']
+    );
+  });
+
   it('falls back to the app’s setup when the iAssistants cannot be listed', async () => {
     assistantsAnswer = async () => {
       throw new Error('Listing the iFinder iAssistants failed (500)');
