@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
-import { fetchProject, fetchProjects, fetchProjectsConfig } from '../../../api';
+import { fetchProject, fetchProjectList, fetchProjectsConfig } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { createViewerStore } from './projectStore';
 import { usePolledProject } from './usePolledProject';
@@ -21,7 +21,10 @@ import { usePolledProject } from './usePolledProject';
  */
 
 const configStore = createViewerStore(fetchProjectsConfig);
-const listStore = createViewerStore(() => fetchProjects({ scope: 'all' }), { ttlMs: 15_000 });
+const listStore = createViewerStore(() => fetchProjectList({ scope: 'all' }), { ttlMs: 15_000 });
+
+/** What a consumer gets while the list has not landed. */
+const NO_PROJECTS = Object.freeze([]);
 
 /** Drop the cached project list (after a create, delete, transfer or leave). */
 export const invalidateProjectsList = () => listStore.invalidate();
@@ -99,13 +102,21 @@ export function useProjectsConfig() {
  *
  * @param {{enabled?: boolean}} [options] - `enabled: false` loads nothing (a caller
  *   that only sometimes needs the list).
- * @returns {{projects: Array<Object>, loading: boolean, error: Error|null, reload: () => Promise<Array>}}
+ * @returns {{projects: Array<Object>, warnings: Array<{code: string}>, loading: boolean,
+ *   error: Error|null, reload: () => Promise<Object>}} `warnings`: what the server could not
+ *   include (`IFINDER_UNAVAILABLE`: the iFinder collections are missing from the list).
  */
 export function useMyProjects({ enabled = true } = {}) {
   const { userProjectsEnabled } = useProjectsAvailability();
   const { key } = useViewer();
   const { data, loading, error, reload } = listStore.use(key, userProjectsEnabled && enabled);
-  return { projects: Array.isArray(data) ? data : [], loading, error, reload };
+  return {
+    projects: data?.items || NO_PROJECTS,
+    warnings: data?.warnings || NO_PROJECTS,
+    loading,
+    error,
+    reload
+  };
 }
 
 /**
@@ -124,7 +135,7 @@ export function useUsableProjects() {
   const { key } = useViewer();
   const { data, loading, error, reload } = listStore.use(key, projectsEnabled);
   return {
-    projects: Array.isArray(data) ? data : [],
+    projects: data?.items || NO_PROJECTS,
     loading: gateLoading || loading,
     error,
     available: projectsEnabled,

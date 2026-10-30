@@ -19,6 +19,8 @@
 import configCache from '../../configCache.js';
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { getProjectRepository } from '../projects/ProjectRepository.js';
+import { loadProjectFor } from '../projects/projectLoader.js';
+import logger from '../../utils/logger.js';
 import {
   appAllowsUserProjects,
   appUsesProjects,
@@ -35,6 +37,8 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @property {boolean} write
  * @property {'container'|'app'|'attached'|'workflow'} origin
  * @property {boolean} instructions - Whether its instructions apply to the prompt.
+ * @property {string} [unavailable] - Set on an entry that stands in for a project that could
+ *   not be loaded (`IFINDER_UNAVAILABLE`); its `project` holds no items.
  */
 
 /**
@@ -43,9 +47,14 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @param {Object} options
  * @param {Object} options.appConfig - The app (or node config) with its link fields.
  * @param {Object} options.user - The requesting user with resolved permissions.
+ * @param {boolean} [options.includeUnavailable=false] - Keep a smart collection of the
+ *   iFinder tier that iFinder could not be asked about as an entry flagged `unavailable`
+ *   (an empty stand-in, named as the user last saw it), instead of leaving it out. The
+ *   chat prompt asks for it so the answer can say which collection is missing; the
+ *   tools and workflow nodes work on what can be read and do not.
  * @returns {Promise<ScopeEntry[]>} In order: container, app links, attachments, workflow links.
  */
-export async function resolveProjectScope({ appConfig, user }) {
+export async function resolveProjectScope({ appConfig, user, includeUnavailable = false }) {
   if (!appConfig || !user) return [];
   // The master switch darkens every project, admin ones included: a chat
   // must not inject or search knowledge the Projects API itself refuses.
@@ -89,9 +98,45 @@ export async function resolveProjectScope({ appConfig, user }) {
   // the feature returns. Admin projects linked to apps keep working as long
   // as the master switch is on.
   const userProjectsOn = isUserProjectsConfigured(features) && appAllowsUserProjects(appConfig);
+  // Every project is loaded at once: a smart collection of the iFinder tier is a
+  // round trip to iFinder (with the user's own rights), a stored project a read
+  // of the repository. The scope keeps the order of `wanted`.
+  const loads = await Promise.all(
+    wanted.map(entry => loadProjectFor(user, entry.id, { repository }))
+  );
   const scope = [];
-  for (const entry of wanted) {
-    const project = await repository.get(entry.id);
+  for (const [index, entry] of wanted.entries()) {
+    const loaded = loads[index];
+    if (loaded.status === 'unavailable') {
+      logger.warn(
+        'A project of the iFinder tier could not be loaded for a chat: iFinder is unavailable',
+        {
+          component: 'ProjectScope',
+          projectId: entry.id
+        }
+      );
+      // An iFinder collection is a user project: it stays dark while those are off.
+      if (includeUnavailable && userProjectsOn) {
+        scope.push({
+          project: {
+            id: entry.id,
+            ownership: 'user',
+            tier: 'ifinder',
+            name: loaded.name || '',
+            description: '',
+            instructions: '',
+            items: []
+          },
+          mode: entry.mode,
+          write: false,
+          origin: entry.origin,
+          instructions: false,
+          unavailable: 'IFINDER_UNAVAILABLE'
+        });
+      }
+      continue;
+    }
+    const project = loaded.project;
     if (!project) continue;
     if (project.ownership === 'user' && !userProjectsOn) continue;
     const permissions = permissionsFor(project, user, context);

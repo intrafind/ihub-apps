@@ -157,6 +157,44 @@ export function projectSettings(platformConfig) {
 }
 
 /**
+ * Whether `platform.iFinder` points at an iFinder installation, the way the
+ * iFinder item kinds read it (`kinds/linkKinds.js`).
+ *
+ * @param {Object} [platformConfig] - Platform configuration.
+ * @returns {boolean}
+ */
+export function isIFinderConfigured(platformConfig) {
+  return Boolean(platformConfig?.iFinder?.baseUrl || process.env.IFINDER_API_URL);
+}
+
+/**
+ * Whether the tier policy offers the user's iFinder smart collections as
+ * projects (`both` or `ifinder`). Whether the installation then has iFinder
+ * configured and the Smart Collections API is another question: see
+ * {@link iFinderTierConfigured} and the capability call.
+ *
+ * @param {ReturnType<typeof projectSettings>} settings
+ * @returns {boolean}
+ */
+export function policyOffersIFinder(settings) {
+  return settings?.tierPolicy === 'both' || settings?.tierPolicy === 'ifinder';
+}
+
+/**
+ * Whether the iFinder tier can be offered at all on this installation: the
+ * policy says so and iFinder is configured. The per-user checks (a stable
+ * principal, the capability call) come on top.
+ *
+ * @param {Object} [platformConfig] - Platform configuration.
+ * @returns {boolean}
+ */
+export function iFinderTierConfigured(platformConfig) {
+  return (
+    policyOffersIFinder(projectSettings(platformConfig)) && isIFinderConfigured(platformConfig)
+  );
+}
+
+/**
  * Whether admin projects and their pages are switched on.
  *
  * @param {Object} [featureConfig] - Saved feature flags.
@@ -201,9 +239,13 @@ export function projectsClientConfig(
     enabled,
     userProjects: enabled && isUserProjectsConfigured(featureConfig),
     tierPolicy: settings.tierPolicy,
-    // Phase 1 implements the iHub tier only; the policy is validated and
-    // shown, but every value reads as `ihub` at runtime.
-    tiers: ['ihub'],
+    // The tiers this installation shows. The local tier always stays: its
+    // projects keep working under every policy, and creating projects in the
+    // iFinder tier arrives with the next iteration. The iFinder tier is listed
+    // when the policy offers it and iFinder is configured; whether the
+    // iFinder version has the Smart Collections API is the per-user answer of
+    // `GET /api/projects/_config` (`ifinder.available`).
+    tiers: iFinderTierConfigured(platformConfig) ? ['ihub', 'ifinder'] : ['ihub'],
     limits: settings.limits,
     sharing: settings.sharing,
     retentionDays: settings.retentionDays

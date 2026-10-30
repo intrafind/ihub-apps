@@ -23,7 +23,7 @@ import {
 import { useProjectEstimate } from '../hooks/useProjectEstimate';
 import { useProjectItemActions } from '../hooks/useProjectItemActions';
 import { projectErrorMessage } from '../utils/projectErrors';
-import { canAddItem } from '../utils/projectView';
+import { canAddItem, isIFinderProject } from '../utils/projectView';
 import AddProjectItemDialog from './AddProjectItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
@@ -55,7 +55,9 @@ function userItemApi(errorMessage) {
         fetchProjects(),
         fetchProjectCatalog().catch(() => ({ items: [] }))
       ]);
-      return [...projects, ...(catalog?.items || [])];
+      // A smart collection from iFinder is read-only and has no stored items
+      // to link from.
+      return [...projects.filter(project => !isIFinderProject(project)), ...(catalog?.items || [])];
     },
     fetchLinkSource: projectId => fetchProject(projectId),
     errorMessage
@@ -84,6 +86,10 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
  */
 function ProjectItemsSection({ project, config, editable, setProject, reload }) {
   const { t } = useTranslation();
+  // A smart collection from iFinder: its documents are listed and can be read,
+  // nothing else. The local limits, pins and the token estimate (a request the
+  // server does not take for it) do not apply.
+  const isIFinder = isIFinderProject(project);
   const [adding, setAdding] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const [renaming, setRenaming] = useState(null);
@@ -117,7 +123,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           {t('projects.items.title', 'Documents')}
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          {(project.items || []).length > 0 && (
+          {!isIFinder && (project.items || []).length > 0 && (
             <EstimateTokensButton loading={estimating} onClick={runEstimate} />
           )}
           {editable && (
@@ -150,7 +156,9 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
       {estimate && <ProjectEstimatePanel estimate={estimate} onDismiss={clearEstimate} />}
       {estimate && <div className="mb-4" />}
 
-      {config?.limits && <ProjectUsageBar project={project} config={config} className="mb-4" />}
+      {config?.limits && !isIFinder && (
+        <ProjectUsageBar project={project} config={config} className="mb-4" />
+      )}
 
       {actions.error && (
         <div
@@ -183,6 +191,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           kinds={config?.kinds || []}
           busyItemId={actions.busyItemId}
           readOnly={!editable}
+          hidePinned={isIFinder}
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
           onTogglePinned={actions.togglePinned}

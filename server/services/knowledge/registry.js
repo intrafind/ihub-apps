@@ -41,3 +41,12 @@ export function providerFor(project) {
 }
 
 registerKnowledgeProvider('ihub', new LocalKnowledgeProvider());
+// A smart collection of the iFinder tier is a project whose items are iFinder
+// documents, read with the reader's own rights by the same link-kind fetch as
+// an iFinder document added to a project by hand. The scope is the
+// collection's id list, so nothing here needs a retrieval API of iFinder: the
+// local provider serves it, read-only and searched, never loaded in full.
+registerKnowledgeProvider(
+  'ifinder',
+  new LocalKnowledgeProvider({ readOnly: true, loadAll: false })
+);

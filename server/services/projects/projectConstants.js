@@ -30,11 +30,60 @@ export const MEMBER_ROLES = Object.freeze(['editor', 'user']);
 /** Access levels a route can require. */
 export const ACCESS_LEVELS = Object.freeze(['use', 'edit', 'share', 'own']);
 
-/** The tier policies the setting accepts; only `ihub` is implemented in phase 1. */
+/**
+ * The tier policies the setting accepts. `ihub` offers local projects only;
+ * `both` and `ifinder` also offer the user's iFinder smart collections as
+ * read-only projects (the iFinder tier, iteration 1 of #3024).
+ */
 export const TIER_POLICIES = Object.freeze(['ihub', 'both', 'ifinder']);
 
-/** The storage tiers a project can live in; only `ihub` is written in phase 1. */
+/** The storage tiers a project can live in. `ifinder` projects are read-only for now. */
 export const PROJECT_TIERS = Object.freeze(['ihub', 'ifinder']);
+
+/**
+ * Prefix of the id an iFinder smart collection gets as a project (`ifc_` plus
+ * the collection's UUID). Like `prj_` it is reserved: no admin project may
+ * carry it, so the two namespaces never collide.
+ */
+export const IFINDER_PROJECT_ID_PREFIX = 'ifc_';
+
+const COLLECTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Whether a string is the project id of an iFinder smart collection. Strict on
+ * purpose: the collection id goes into an iFinder URL, so only a UUID passes.
+ *
+ * @param {unknown} id
+ * @returns {boolean}
+ */
+export function isIFinderProjectId(id) {
+  return (
+    typeof id === 'string' &&
+    id.startsWith(IFINDER_PROJECT_ID_PREFIX) &&
+    COLLECTION_ID.test(id.slice(IFINDER_PROJECT_ID_PREFIX.length))
+  );
+}
+
+/**
+ * The project id of a smart collection, or null when `collectionId` is no UUID.
+ *
+ * @param {unknown} collectionId
+ * @returns {string|null}
+ */
+export function ifinderProjectIdOf(collectionId) {
+  const id = typeof collectionId === 'string' ? collectionId.toLowerCase() : '';
+  return COLLECTION_ID.test(id) ? `${IFINDER_PROJECT_ID_PREFIX}${id}` : null;
+}
+
+/**
+ * The smart collection id behind an iFinder project id, or null.
+ *
+ * @param {unknown} projectId
+ * @returns {string|null}
+ */
+export function collectionIdOf(projectId) {
+  return isIFinderProjectId(projectId) ? projectId.slice(IFINDER_PROJECT_ID_PREFIX.length) : null;
+}
 
 /** Most items one project may hold, whatever an admin configures. */
 export const MAX_FILES_CEILING = 50;

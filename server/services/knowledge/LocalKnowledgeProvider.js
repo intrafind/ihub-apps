@@ -63,6 +63,14 @@ export function evictProjectIndex(projectId) {
   }
 }
 
+/**
+ * Items read at the same time when a project's texts are gathered. A link item
+ * is a round trip to its source (an iFinder document is two), a smart
+ * collection holds up to 200 of them, and read one after the other they would
+ * outlast the request that asked.
+ */
+const TEXT_CONCURRENCY = 6;
+
 /** Bytes a text takes inside a JSON document: UTF-8, quotes and escapes included. */
 function serializedBytes(text) {
   return Buffer.byteLength(JSON.stringify(text), 'utf8');
@@ -73,18 +81,34 @@ function hash(value) {
 }
 
 export class LocalKnowledgeProvider extends KnowledgeProvider {
+  /**
+   * @param {Object} [options]
+   * @param {boolean} [options.readOnly=false] - The projects it serves cannot be
+   *   written to: `write` is off and `put` and `remove` refuse. A smart
+   *   collection of the iFinder tier is served this way.
+   * @param {boolean} [options.loadAll=true] - Whether the planner may load every
+   *   document into the prompt. Off, the project is searched, never loaded in
+   *   full: a collection of up to 200 iFinder documents is read when a question
+   *   needs it, not on every turn.
+   */
+  constructor({ readOnly = false, loadAll = true } = {}) {
+    super();
+    this.readOnly = readOnly === true;
+    this.canLoadAll = loadAll !== false;
+  }
+
   get id() {
     return 'local';
   }
 
   capabilities(_project) {
     return {
-      loadAll: true,
+      loadAll: this.canLoadAll,
       iterate: true,
       search: true,
       passages: true,
       preview: 'text',
-      write: true
+      write: !this.readOnly
     };
   }
 
@@ -102,32 +126,54 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
    */
   async texts(project, ctx, { itemIds } = {}) {
     const wanted = itemIds ? new Set(itemIds) : null;
+    const items = (project.items || []).filter(item => !wanted || wanted.has(item.id));
+    // One slot per item, in the project's order, filled by a few readers at a time.
+    const slots = new Array(items.length);
+    let next = 0;
+    const read = async () => {
+      for (;;) {
+        const index = next++;
+        if (index >= items.length) return;
+        slots[index] = await this._textOf(project, items[index], ctx);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(TEXT_CONCURRENCY, items.length) }, () => read())
+    );
     const texts = [];
     const unavailable = [];
-    for (const item of project.items || []) {
-      if (wanted && !wanted.has(item.id)) continue;
-      if (!isUsable(item)) {
-        unavailable.push({
+    for (const slot of slots) {
+      if (slot.text) texts.push(slot.text);
+      else unavailable.push(slot.unavailable);
+    }
+    return { texts, unavailable };
+  }
+
+  /** One item as a text, or as the reason it has none. Never throws. */
+  async _textOf(project, item, ctx) {
+    if (!isUsable(item)) {
+      return {
+        unavailable: {
           document: item.id,
           name: item.name,
           reason: item.status,
           ...(item.error?.code ? { code: item.error.code } : {})
-        });
-        continue;
-      }
-      try {
-        const { text, truncated, failed = [] } = await getItemText(project, item, ctx);
-        texts.push({ item, text, truncated: truncated === true, failed });
-      } catch (error) {
-        unavailable.push({
+        }
+      };
+    }
+    try {
+      const { text, truncated, failed = [] } = await getItemText(project, item, ctx);
+      return { text: { item, text, truncated: truncated === true, failed } };
+    } catch (error) {
+      return {
+        unavailable: {
           document: item.id,
           name: item.name,
           reason: error instanceof KnowledgeError ? error.code : 'ERROR',
           message: error.message
-        });
-      }
+        }
+      };
     }
-    return { texts, unavailable };
   }
 
   /** The cache key of a corpus: its items, by their stored hash where there is one. */
@@ -180,6 +226,14 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     );
     cacheSet(key, index);
     return index;
+  }
+
+  _assertWritable(project) {
+    if (this.readOnly) {
+      throw new KnowledgeError('NOT_SUPPORTED', 'This project is read-only', {
+        projectId: project?.id
+      });
+    }
   }
 
   async list(project, _ctx, { cursor = null, limit = 100 } = {}) {
@@ -317,6 +371,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     ctx,
     { name, text, contentType = 'text/markdown', pinned = false, wait, authorize }
   ) {
+    this._assertWritable(project);
     const service = getProjectService();
     const { item } = await service.addItem(
       project.id,
@@ -328,6 +383,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
   }
 
   async remove(project, ctx, { itemId }) {
+    this._assertWritable(project);
     const service = getProjectService();
     await service.removeItem(project.id, itemId, { user: ctx.user });
     evictProjectIndex(project.id);

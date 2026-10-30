@@ -39,32 +39,39 @@ const mockApi = {
   fetchProjectCatalog: jest.fn()
 };
 jest.mock('../../../client/src/api', () =>
-  Object.fromEntries(
-    [
-      'fetchProject',
-      'fetchProjects',
-      'fetchProjectCatalog',
-      'fetchProjectsConfig',
-      'fetchProjectChats',
-      'updateProject',
-      'deleteProject',
-      'updateProjectItem',
-      'refreshProjectItem',
-      'deleteProjectItem',
-      'addProjectItem',
-      'uploadProjectItem',
-      'fetchProjectItemText',
-      'fetchPickerPages',
-      'searchPickerIFinder',
-      'checkPickerUrl',
-      'fetchPickerCloudProviders',
-      'updateProjectMembers',
-      'fetchProjectShareTargets',
-      'transferProject',
-      'publishProject',
-      'addCatalogProject',
-      'removeCatalogProject'
-    ].map(name => [name, (...args) => mockApi[name](...args)])
+  Object.assign(
+    {
+      // The list store reads `fetchProjectList`; these tests drive it through `fetchProjects`.
+      fetchProjectList: (...args) =>
+        Promise.resolve(mockApi.fetchProjects(...args)).then(items => ({ items, warnings: [] }))
+    },
+    Object.fromEntries(
+      [
+        'fetchProject',
+        'fetchProjects',
+        'fetchProjectCatalog',
+        'fetchProjectsConfig',
+        'fetchProjectChats',
+        'updateProject',
+        'deleteProject',
+        'updateProjectItem',
+        'refreshProjectItem',
+        'deleteProjectItem',
+        'addProjectItem',
+        'uploadProjectItem',
+        'fetchProjectItemText',
+        'fetchPickerPages',
+        'searchPickerIFinder',
+        'checkPickerUrl',
+        'fetchPickerCloudProviders',
+        'updateProjectMembers',
+        'fetchProjectShareTargets',
+        'transferProject',
+        'publishProject',
+        'addCatalogProject',
+        'removeCatalogProject'
+      ].map(name => [name, (...args) => mockApi[name](...args)])
+    )
   )
 );
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({

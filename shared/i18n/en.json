@@ -3885,7 +3885,7 @@
         "idRequired": "The project ID is required.",
         "idInvalid": "Use only letters, numbers, dots, underscores and hyphens.",
         "idTooLong": "At most {{max}} characters.",
-        "idReserved": "IDs starting with \"prj_\" are reserved for user projects.",
+        "idReserved": "IDs starting with \"prj_\" or \"ifc_\" are reserved for user projects and iFinder collections.",
         "nameRequired": "A name is required.",
         "idExists": "A project with this ID already exists."
       },
@@ -4837,7 +4837,13 @@
       "unavailableOne": "unavailable",
       "overBudget": "over budget",
       "openProject": "Open the project",
-      "privateProject": "Private project"
+      "privateProject": "Private project",
+      "ifinderCollection": "iFinder collection",
+      "missingOne": "{{name}} · not available",
+      "missing_one": "{{count}} project not available",
+      "missing_other": "{{count}} projects not available",
+      "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
+      "missingOther": "This answer did not use it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
@@ -7141,7 +7147,8 @@
       "pager": {
         "showing": "Projects {{start}}–{{end}} of {{total}}",
         "perPage": "Per page"
-      }
+      },
+      "ifinderUnavailable": "Your iFinder smart collections could not be loaded right now, so they are missing from this list. Your other projects are shown."
     },
     "members": {
       "everyone": "Everyone signed in",
@@ -7167,7 +7174,8 @@
       "delete": "Delete project",
       "deleteConfirm": "Delete “{{name}}” and all its documents? Its chats are kept, outside the project. This cannot be undone.",
       "deleteTitle": "Delete project",
-      "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it."
+      "readOnly": "The owner of this project is no longer active. It stays readable, but nobody can change it until an administrator transfers it.",
+      "ifinderReadOnly": "This is a smart collection from iFinder. You can read it and use it in chats here; add, remove or rename documents in iFinder."
     },
     "preview": {
       "edit": "Edit text",
@@ -7287,7 +7295,8 @@
     "composer": {
       "placeholder": "New chat in {{name}}",
       "hint": "The app gets the project’s instructions and documents.",
-      "app": "App"
+      "app": "App",
+      "hintAttached": "The answers can use the documents of this project. Its instructions do not apply."
     },
     "appSelect": {
       "unavailable": "{{id}} (not available)"
@@ -7336,6 +7345,18 @@
         "shared": "Shared with me",
         "admin": "From the administrators"
       }
+    },
+    "tier": {
+      "ifinder": "iFinder",
+      "readOnly": "read-only",
+      "ifinderHint": "A smart collection from iFinder. iHub only reads it; change it in iFinder.",
+      "ifinderDetail": "Smart collection from iFinder"
+    },
+    "ifinder": {
+      "sourceTitle": "Smart collection in iFinder",
+      "sourceText": "Its documents stay in iFinder and are read with your own access rights. Add, remove, rename or share them in iFinder.",
+      "documentCount_one": "{{count}} document",
+      "documentCount_other": "{{count}} documents"
     }
   }
 }

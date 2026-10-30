@@ -17,6 +17,8 @@ const mockApi = {
 };
 jest.mock('../../../client/src/api', () => ({
   fetchProjects: (...args) => mockApi.fetchProjects(...args),
+  fetchProjectList: (...args) =>
+    Promise.resolve(mockApi.fetchProjects(...args)).then(items => ({ items, warnings: [] })),
   fetchProjectsConfig: () => Promise.resolve({})
 }));
 const mockFetchSourceContent = jest.fn();

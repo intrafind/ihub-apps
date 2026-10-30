@@ -9,6 +9,7 @@ import DataTablePagination from '../../admin/components/data-table/DataTablePagi
 import CreateProjectDialog from '../components/CreateProjectDialog';
 import ProjectCatalogDialog from '../components/ProjectCatalogDialog';
 import ProjectRoleBadge, { ProjectAudienceBadges } from '../components/ProjectRoleBadge';
+import ProjectTierBadge from '../components/ProjectTierBadge';
 import {
   invalidateProjectsConfig,
   invalidateProjectsList,
@@ -21,6 +22,7 @@ import {
   PROJECT_LIST_FILTERS,
   countProjectGroups,
   filterProjectList,
+  isIFinderProject,
   isInMyProjects,
   memberCountOf,
   projectCreation,
@@ -67,7 +69,11 @@ function ProjectCard({ project, language }) {
             >
               {projectDisplayName(project, language)}
             </Link>
-            <ProjectRoleBadge project={project} />
+            {isIFinderProject(project) ? (
+              <ProjectTierBadge project={project} />
+            ) : (
+              <ProjectRoleBadge project={project} />
+            )}
             <ProjectAudienceBadges project={project} />
           </div>
           {description && (
@@ -81,7 +87,7 @@ function ProjectCard({ project, language }) {
                 count: project.usage?.items ?? 0
               })}
             </span>
-            {project.ownership === 'user' && members > 0 && (
+            {project.ownership === 'user' && !isIFinderProject(project) && members > 0 && (
               <span>{t('projects.list.memberCount', '{{count}} members', { count: members })}</span>
             )}
             {project.ownership === 'user' &&
@@ -116,7 +122,9 @@ export default function ProjectsPage() {
   const language = i18n.language;
   const navigate = useNavigate();
   const { config } = useProjectsConfig();
-  const { projects: allProjects, loading, error } = useMyProjects();
+  const { projects: allProjects, warnings, loading, error } = useMyProjects();
+  // iFinder could not be asked: its collections are missing from the list.
+  const ifinderUnavailable = warnings.some(warning => warning.code === 'IFINDER_UNAVAILABLE');
   // Projects an admin created are linked to apps and managed by admins: a user
   // cannot start a chat in one, so they are not listed here — unless the
   // viewer added one made available to everyone from the catalog.
@@ -235,6 +243,22 @@ export default function ProjectsPage() {
             >
               <Icon name="x" size="sm" />
             </button>
+          </div>
+        )}
+
+        {ifinderUnavailable && (
+          <div
+            role="status"
+            className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+            data-testid="projects-ifinder-warning"
+          >
+            <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
+            <span>
+              {t(
+                'projects.list.ifinderUnavailable',
+                'Your iFinder smart collections could not be loaded right now, so they are missing from this list. Your other projects are shown.'
+              )}
+            </span>
           </div>
         )}
 

@@ -23,6 +23,7 @@ import {
   isActiveUser,
   permissionsFor,
   projectAccessRequired,
+  refuseIFinderWrite,
   usersDb
 } from '../middleware/projectAccess.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -62,10 +63,16 @@ import {
 } from '../services/projects/projectAccess.js';
 import {
   PROJECTS_FEATURE,
+  iFinderTierConfigured,
   isUserProjectsConfigured,
   projectSettings,
   projectsClientConfig
 } from '../services/projects/projectSettings.js';
+import { isIFinderProjectId } from '../services/projects/projectConstants.js';
+import {
+  availabilityFor,
+  listCollectionProjects
+} from '../services/projects/ifinder/IFinderTier.js';
 import { enabledItemKinds } from '../services/projects/kinds/registry.js';
 import { ACCEPTED_TYPES } from '../services/projects/extractText.js';
 import { estimateProject } from '../services/projects/projectEstimate.js';
@@ -159,8 +166,10 @@ function allowedTargetsFor(settings, user) {
 
 function serializeFor(project, user, context, options = {}) {
   const permissions = permissionsFor(project, user, context);
+  // The owner of a smart collection is the caller, known to iFinder, not to the
+  // local users database the check reads.
   const ownerActive =
-    project.ownership === 'user' && project.owner?.id
+    project.ownership === 'user' && project.owner?.id && !isIFinderProjectId(project.id)
       ? isActiveUser(context.users, project.owner.id)
       : true;
   return serializeProject(project, permissions, {
@@ -258,6 +267,14 @@ const CHATS_PAGE_MAX = 100;
 export default function registerProjectRoutes(app) {
   const gate = [requireFeature(PROJECTS_FEATURE)];
   const route = suffix => buildServerPath(`/api/projects${suffix}`);
+  // A smart collection of the iFinder tier (`ifc_…`) is read-only: no write
+  // reaches any route below, whatever that route checks, and routes added later
+  // inherit it. Reads pass on to `projectAccessRequired`, which loads the
+  // collection with the caller's own rights.
+  app.use(route('/:projectId'), (req, res, next) => {
+    if (refuseIFinderWrite(req, res, req.params.projectId)) return;
+    next();
+  });
   // `/api/projects/pickers/*` must be registered before `/:projectId`.
   registerProjectPickerRoutes(app);
 
@@ -282,8 +299,21 @@ export default function registerProjectRoutes(app) {
         storageAvailable: repo.isAvailable()
       });
       const used = base.userProjects ? await repo.countOwned(String(req.user.id)) : 0;
+      // The iFinder tier is per user: the policy and the iFinder configuration
+      // are the installation's, the principal and the Smart Collections API
+      // (the capability call) are the caller's.
+      const ifinder = { available: false, readOnly: true };
+      if (base.userProjects && iFinderTierConfigured(platform)) {
+        const availability = await availabilityFor(req.user);
+        ifinder.available = availability.offered;
+        if (!availability.offered) {
+          ifinder.reason = availability.reason;
+          if (availability.unavailable) ifinder.unavailable = true;
+        }
+      }
       res.json({
         ...base,
+        ifinder,
         userProjects: {
           enabled: base.userProjects,
           canCreate: base.userProjects && mayCreateProjects(req.user),
@@ -446,8 +476,30 @@ export default function registerProjectRoutes(app) {
         return res.json({ items: [], nextCursor: null });
       }
       const effectiveScope = userProjectsOn ? scope : 'admin';
-      const items = await listProjects(req.user, repo, effectiveScope);
-      res.json({ items, nextCursor: null });
+      // The user's iFinder smart collections are theirs, so they belong to the
+      // "all" and "mine" lists, behind the same switch as the other user
+      // projects. They are asked for beside the local list: a slow iFinder
+      // costs its short timeout, never the local projects.
+      const withCollections = userProjectsOn && (scope === 'all' || scope === 'mine');
+      const [local, collections] = await Promise.all([
+        listProjects(req.user, repo, effectiveScope),
+        withCollections ? listCollectionProjects(req.user) : null
+      ]);
+      let items = local;
+      if (collections?.projects.length) {
+        const context = callerContext(req.user);
+        // Built for this caller from what iFinder sent: nothing from another
+        // user's cache entry can be in it.
+        items = [
+          ...local,
+          ...collections.projects.map(project =>
+            serializeFor(project, req.user, context, { includeItems: false })
+          )
+        ].sort((a, b) =>
+          String(b.lastActivityAt || '').localeCompare(String(a.lastActivityAt || ''))
+        );
+      }
+      res.json({ items, nextCursor: null, warnings: collections?.warnings || [] });
     } catch (error) {
       sendFailedOperationError(res, 'list projects', error);
     }

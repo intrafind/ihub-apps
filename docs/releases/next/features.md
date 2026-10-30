@@ -301,3 +301,34 @@ below the answer, as for PDFs.
   as Word documents do.
 
 See [Document generation](../../pdf-generation.md).
+
+## Projects: Your iFinder Smart Collections as Read-Only Projects
+
+With the tier policy set to `both` or `ifinder` (**platform.json → projects.tierPolicy**, until now
+accepted but ignored), iFinder 6.8 or later configured and **User Projects** switched on (**Admin →
+Platform → Features**), a user's iFinder smart collections appear on the **Projects** page next to their own projects, marked **iFinder · read-only**. Opening
+one lists its documents. A chat can use the collection as knowledge: tick it in the **Project**
+picker of the chat input, or start a chat from its page. Nothing is copied: the documents stay in
+iFinder and are read, searched and cited with the rights of the person asking, like any iFinder
+document in a project. A document the reader may not open is named as unavailable.
+
+- **Read-only:** the page offers no edit, rename, share, delete, instructions, pins, upload or token
+  estimate, and the API refuses every write to such a project. Create, rename, add and remove
+  arrive later.
+- **Only where iFinder can serve it:** the tier is offered when iFinder is configured, the policy
+  allows it and the Smart Collections API answers; an older iFinder never shows it. The user needs
+  the `fi_smartcollections` role in iFinder and a login name iHub can sign for iFinder (the
+  **JWT Subject Field** setting; users without one, and anonymous users, see nothing).
+- **Same identity on both sides:** a collection belongs to the name iHub signs into the iFinder
+  token. iFinder's list matches that name exactly, upper and lower case included, so a collection
+  whose owner differs only in case is missing from the list (it still opens by id). Set the
+  **JWT Subject Field** so it produces the user's iFinder login exactly.
+- **If iFinder is slow or down,** the project list still loads, with a note that the collections
+  are missing. A chat that has a collection attached still answers; the model is told the
+  collection is unavailable and says so, and the answer shows a **not available** notice.
+- **Searched, never loaded in full:** a collection holds up to 200 documents, so a chat searches it
+  instead of putting every document into the prompt.
+- Admin project IDs starting with `ifc_` are now reserved for collections, as `prj_` is for user
+  projects.
+
+See [Projects](../../projects.md#the-ifinder-tier-smart-collections).

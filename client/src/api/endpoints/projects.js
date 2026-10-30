@@ -45,16 +45,33 @@ const call = request => handleApiResponse(request, null, null, false);
 export const fetchProjectsConfig = () => call(() => apiClient.get(`${PROJECTS_PATH}/_config`));
 
 /**
+ * The projects the caller may use, with what the server had to say about the
+ * list: owned, shared with them, admin projects reached through their apps and,
+ * when the installation offers the iFinder tier, the caller's smart collections
+ * (read-only, `tier: 'ifinder'`).
+ *
+ * @param {{scope?: 'all'|'mine'|'shared'|'admin'}} [options]
+ * @returns {Promise<{items: Array<Object>, warnings: Array<{code: string, tier?: string}>}>}
+ *   `items`: project summaries (no items), newest activity first. `warnings`:
+ *   `IFINDER_UNAVAILABLE` when iFinder could not be asked, so its collections are
+ *   missing from an otherwise complete list.
+ */
+export const fetchProjectList = async ({ scope = 'all' } = {}) => {
+  const data = await call(() => apiClient.get(PROJECTS_PATH, { params: { scope } }));
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    warnings: Array.isArray(data?.warnings) ? data.warnings : []
+  };
+};
+
+/**
  * The projects the caller may use: owned, shared with them, and admin
  * projects reached through their apps.
  *
  * @param {{scope?: 'all'|'mine'|'shared'|'admin'}} [options]
  * @returns {Promise<Array<Object>>} Project summaries (no items), newest activity first.
  */
-export const fetchProjects = async ({ scope = 'all' } = {}) => {
-  const data = await call(() => apiClient.get(PROJECTS_PATH, { params: { scope } }));
-  return Array.isArray(data?.items) ? data.items : [];
-};
+export const fetchProjects = async options => (await fetchProjectList(options)).items;
 
 /**
  * Create a user project owned by the caller.
