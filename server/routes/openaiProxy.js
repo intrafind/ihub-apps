@@ -31,7 +31,7 @@ import {
   convertResponseFromGeneric,
   convertToolCallsFromGeneric,
   convertToolsToGeneric
-} from '../protocols/toolCalling/index.js';
+} from '../adapters/toolCalling/index.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import {

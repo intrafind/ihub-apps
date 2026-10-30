@@ -8,7 +8,7 @@
  */
 
 import assert from 'assert';
-import { convertGoogleResponseToGeneric } from '../protocols/toolCalling/GoogleConverter.js';
+import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
 
 console.log('Testing tool execution logic with Gemini 3.0 STOP finishReason...');
 

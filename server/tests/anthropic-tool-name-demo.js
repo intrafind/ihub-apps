@@ -6,7 +6,7 @@
  * This shows how tools are properly converted from localized names to Anthropic format
  */
 
-import { convertGenericToolsToAnthropic } from '../protocols/toolCalling/AnthropicConverter.js';
+import { convertGenericToolsToAnthropic } from '../adapters/toolCalling/AnthropicConverter.js';
 import logger from '../utils/logger.js';
 
 logger.info('═══════════════════════════════════════════════════════');

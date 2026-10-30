@@ -20,7 +20,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import adapter from '../protocols/iassistant-conversation.js';
+import adapter from '../adapters/iassistant-conversation.js';
 import conversationApiService from '../services/integrations/ConversationApiService.js';
 import iAssistantProfileResolver from '../services/integrations/iAssistantProfileResolver.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';

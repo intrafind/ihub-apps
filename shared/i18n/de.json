@@ -2668,6 +2668,7 @@
       "logging": "Logging",
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
+      "installedIntegrations": "Installierte Integrationen",
       "mcpServers": "MCP-Server",
       "a2aAgents": "A2A-Agenten",
       "telemetry": "Telemetrie",
@@ -3217,6 +3218,24 @@
         "saved": "App gespeichert",
         "created": "App erstellt",
         "idRequired": "Die App-ID ist erforderlich",
+        "integrations": {
+          "title": "Installierte Integrationen",
+          "desc": "Binde Integrationen ein, die unter Integrationen → Installiert eingerichtet sind. Beschränke sie auf einzelne Aktionen und lege den Startbereich für Nutzer fest.",
+          "none": "Es ist noch keine Integration installiert.",
+          "openCatalog": "Katalog öffnen",
+          "actions": "Aktionen",
+          "noActions": "Diese Installation bietet gerade keine Aktion an.",
+          "defaultScope": "Standard-{{scope}}",
+          "pinnedScope": "Fester {{scope}}",
+          "pinnedHelp": "Legt den Bereich fest; Nutzer können ihn nicht ändern.",
+          "scopeAny": "Nutzer wählen",
+          "scopePicker": "Bereichsauswahl",
+          "picker": {
+            "menu": "Im Menü",
+            "inline": "Neben der Eingabe",
+            "hidden": "Verborgen"
+          }
+        },
         "mcpTools": {
           "title": "MCP-Server",
           "desc": "Wählen Sie die MCP-Server, die diese App verwendet. Benutzer sehen jeden davon im Chat als einen einzigen Eintrag.",
@@ -3525,9 +3544,112 @@
       "iAssistantDefaultSearchProfile": "Standard-Suchprofil",
       "iAssistantDefaultSearchProfileHelp": "Das Suchprofil, in dem iAssistant-Konversationen suchen, wenn weder die App noch das Modell eines nennt."
     },
+    "integrationCatalog": {
+      "title": "Installierte Integrationen",
+      "subtitle": "Installiere eine Integration aus dem Katalog, richte sie auf dein System aus und binde sie an Apps. Jede Installation bringt ihre Aktionen zum Modell.",
+      "install": "Installieren",
+      "reload": "Katalog neu laden",
+      "reloaded": "Katalog neu geladen.",
+      "saved": "Integration \"{{id}}\" gespeichert.",
+      "removed": "Integration \"{{id}}\" entfernt.",
+      "searchPlaceholder": "Katalog durchsuchen",
+      "catalogEmpty": "Keine Definition passt. Integrationen lassen sich auch aus dem Marktplatz installieren.",
+      "installedCount": "{{count}} installiert",
+      "notInstalled": "Nicht installiert",
+      "groupsLine": "Gruppen: {{groups}}",
+      "testResultsFor": "Testergebnisse: {{label}}",
+      "unsupportedProtocol": "Diese Integration nutzt das Protokoll \"{{protocol}}\", das diese Version noch nicht ausführen kann.",
+      "unsupportedShort": "Protokoll noch nicht unterstützt",
+      "tabs": {
+        "installed": "Installiert",
+        "catalog": "Katalog"
+      },
+      "empty": {
+        "title": "Noch nichts installiert",
+        "description": "Wähle eine Integration aus dem Katalog, trage ihre Einstellungen ein und teste sie vor dem Speichern.",
+        "cta": "Katalog öffnen"
+      },
+      "status": {
+        "enabled": "Aktiv",
+        "disabled": "Deaktiviert",
+        "enable": "Aktivieren",
+        "disable": "Deaktivieren",
+        "definitionMissing": "Definition fehlt"
+      },
+      "source": {
+        "shipped": "Mitgeliefert",
+        "installed": "Aus Registry"
+      },
+      "facts": {
+        "protocol": "Protokoll",
+        "signIn": "Anmeldung",
+        "actions": "Aktionen",
+        "publisher": "Herausgeber"
+      },
+      "actions": {
+        "test": "{{id}} testen",
+        "testTitle": "Verbindung testen",
+        "edit": "{{id}} bearbeiten",
+        "enable": "{{id}} aktivieren",
+        "disable": "{{id}} deaktivieren",
+        "remove": "{{id}} entfernen"
+      },
+      "confirmRemove": {
+        "title": "Integration entfernen?",
+        "message": "Apps, die \"{{id}}\" einbinden, verlieren ihre Aktionen. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
+      },
+      "sideEffect": {
+        "read": "lesend",
+        "write": "schreibend",
+        "destructive": "löschend",
+        "unknown": "unbekannt"
+      },
+      "authModes": {
+        "none": "Keine Anmeldung (öffentliche API)",
+        "serviceAccount": "Gemeinsames Dienstkonto (ein Token für alle)",
+        "apiKeyUser": "Jeder Nutzer gibt einen API-Schlüssel ein",
+        "oauthUser": "Jeder Nutzer meldet sich an (OAuth)",
+        "enterpriseManaged": "Unternehmensweit verwaltet (IdP)",
+        "short": {
+          "none": "keine",
+          "service-account": "Dienstkonto",
+          "api-key-user": "Nutzer-API-Schlüssel",
+          "oauth-user": "Nutzer-OAuth",
+          "enterprise-managed": "Unternehmen"
+        }
+      },
+      "wizard": {
+        "installTitle": "Integration installieren",
+        "editTitle": "Integration bearbeiten",
+        "identity": "1 · Name",
+        "instanceId": "ID",
+        "instanceIdHelp": "Apps verweisen über diese ID auf die Installation. Buchstaben, Ziffern, Punkte, Bindestriche.",
+        "label": "Bezeichnung",
+        "labelHelp": "Wird Nutzern im Chat angezeigt, z. B. \"GovData\" oder \"Open Data Norderstedt\".",
+        "settings": "2 · Einstellungen",
+        "advanced": "Erweiterte Einstellungen",
+        "signIn": "3 · Anmeldung",
+        "laterRelease": "(spätere Version)",
+        "secretStored": "Gespeichert. Leer lassen, um es zu behalten.",
+        "who": "4 · Wer darf sie nutzen",
+        "groups": "Gruppen",
+        "groupsHelp": "Leer lassen für alle, die eine App nutzen dürfen, die diese Integration einbindet.",
+        "enabled": "Aktiv",
+        "actions": "5 · Aktionen, die das Modell aufrufen darf",
+        "requires": "Benötigt {{requirement}}",
+        "needsToken": "Benötigt ein gemeinsames Dienstkonto; aus, solange die Anmeldung \"keine\" ist.",
+        "testResults": "Testergebnisse",
+        "test": "Verbindung testen",
+        "testing": "Teste …"
+      }
+    },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
       "cards": {
+        "installed": {
+          "title": "Installierte Integrationen",
+          "description": "Installiere Integrationen aus dem Katalog oder dem Marktplatz (z. B. ein CKAN-Open-Data-Portal), richte sie auf deine Systeme aus und binde ihre Aktionen an Apps."
+        },
         "nextcloud": {
           "title": "Nextcloud",
           "description": "Ermöglichen Sie Benutzern, Dateien aus jeder Nextcloud-Instanz während eines Chats zu durchsuchen und anzuhängen. Verwendet dieselbe `cloudStorage`-Konfiguration wie Office 365 und Google Drive."
@@ -3546,6 +3668,7 @@
         }
       },
       "categories": {
+        "data": "Daten & APIs",
         "directories": "Verzeichnisse"
       }
     },

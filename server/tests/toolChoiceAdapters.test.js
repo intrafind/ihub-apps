@@ -8,16 +8,16 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import OpenAIAdapter from '../protocols/openai.js';
-import OpenAIResponsesAdapter from '../protocols/openai-responses.js';
-import MistralAdapter from '../protocols/mistral.js';
-import VLLMAdapter from '../protocols/vllm.js';
-import AnthropicAdapter from '../protocols/anthropic.js';
-import GoogleAdapter from '../protocols/google.js';
-import BedrockAdapter from '../protocols/bedrock.js';
-import { convertAnthropicToolChoice } from '../protocols/toolCalling/AnthropicConverter.js';
-import { convertGoogleToolChoice } from '../protocols/toolCalling/GoogleConverter.js';
-import { convertBedrockToolChoice } from '../protocols/toolCalling/BedrockConverter.js';
+import OpenAIAdapter from '../adapters/openai.js';
+import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
+import MistralAdapter from '../adapters/mistral.js';
+import VLLMAdapter from '../adapters/vllm.js';
+import AnthropicAdapter from '../adapters/anthropic.js';
+import GoogleAdapter from '../adapters/google.js';
+import BedrockAdapter from '../adapters/bedrock.js';
+import { convertAnthropicToolChoice } from '../adapters/toolCalling/AnthropicConverter.js';
+import { convertGoogleToolChoice } from '../adapters/toolCalling/GoogleConverter.js';
+import { convertBedrockToolChoice } from '../adapters/toolCalling/BedrockConverter.js';
 
 const messages = [{ role: 'user', content: 'test' }];
 const tools = [

@@ -20,8 +20,8 @@
 // adapter registry — loading openai.js first triggers a circular-import TDZ
 // (`Cannot access 'OpenAIAdapter' before initialization`). Going through the
 // registry forces index.js to initialize fully first, matching app runtime.
-import { getAdapter } from '../protocols/index.js';
-import { convertOpenAIResponseToGeneric } from '../protocols/toolCalling/OpenAIConverter.js';
+import { getAdapter } from '../adapters/index.js';
+import { convertOpenAIResponseToGeneric } from '../adapters/toolCalling/OpenAIConverter.js';
 
 const OpenAIAdapter = getAdapter('openai');
 

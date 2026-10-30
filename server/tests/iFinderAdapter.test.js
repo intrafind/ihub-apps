@@ -4,7 +4,7 @@
 /**
  * Tests for iFinder adapter
  */
-import IFinderAdapter from '../protocols/ifinder.js';
+import IFinderAdapter from '../adapters/ifinder.js';
 import logger from '../utils/logger.js';
 
 describe('iFinder Adapter', () => {

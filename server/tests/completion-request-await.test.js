@@ -28,7 +28,7 @@
  * Run directly: `node server/tests/completion-request-await.test.js`.
  */
 
-import { createCompletionRequest } from '../protocols/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import { httpFetch, redactUrlSecrets } from '../utils/httpConfig.js';
 
 let failures = 0;

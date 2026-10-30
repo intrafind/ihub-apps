@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import dotenv from 'dotenv';
-import { createCompletionRequest } from '../protocols/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 

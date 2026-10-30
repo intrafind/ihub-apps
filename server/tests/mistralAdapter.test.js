@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import MistralAdapter from '../protocols/mistral.js';
+import MistralAdapter from '../adapters/mistral.js';
 import logger from '../utils/logger.js';
 
 const model = {

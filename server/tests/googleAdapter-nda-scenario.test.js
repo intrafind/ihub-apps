@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import assert from 'assert';
-import GoogleAdapter from '../protocols/google.js';
+import GoogleAdapter from '../adapters/google.js';
 import logger from '../utils/logger.js';
 
 // This test simulates the exact scenario from the issue:

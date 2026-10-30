@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { up, version, description } from '../migrations/V105__thinking_level_not_budget.js';
-import { BaseAdapter } from '../protocols/BaseAdapter.js';
+import { BaseAdapter } from '../adapters/BaseAdapter.js';
 
 let dir;
 

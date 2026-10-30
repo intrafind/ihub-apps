@@ -6,7 +6,7 @@
  */
 
 import assert from 'assert';
-import { convertGoogleResponseToGeneric } from '../protocols/toolCalling/GoogleConverter.js';
+import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
 import logger from '../utils/logger.js';
 
 logger.info('Testing GoogleConverter Gemini 3 function calling fix...\n');

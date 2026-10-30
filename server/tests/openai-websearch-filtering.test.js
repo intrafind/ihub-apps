@@ -19,8 +19,8 @@
  */
 
 import assert from 'assert';
-import { convertGenericToolsToOpenAI } from '../protocols/toolCalling/OpenAIConverter.js';
-import { convertGenericToolsToOpenaiResponses } from '../protocols/toolCalling/OpenAIResponsesConverter.js';
+import { convertGenericToolsToOpenAI } from '../adapters/toolCalling/OpenAIConverter.js';
+import { convertGenericToolsToOpenaiResponses } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
 
 console.log('Testing OpenAI provider-specific tool filtering...\n');
 

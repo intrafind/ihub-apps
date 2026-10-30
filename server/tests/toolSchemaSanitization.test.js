@@ -21,13 +21,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import * as OpenAIConverter from '../protocols/toolCalling/OpenAIConverter.js';
-import * as OpenAIResponsesConverter from '../protocols/toolCalling/OpenAIResponsesConverter.js';
-import * as AnthropicConverter from '../protocols/toolCalling/AnthropicConverter.js';
-import * as MistralConverter from '../protocols/toolCalling/MistralConverter.js';
-import * as GoogleConverter from '../protocols/toolCalling/GoogleConverter.js';
-import * as VLLMConverter from '../protocols/toolCalling/VLLMConverter.js';
-import { convertGenericToolsToBedrock } from '../protocols/toolCalling/BedrockConverter.js';
+import * as OpenAIConverter from '../adapters/toolCalling/OpenAIConverter.js';
+import * as OpenAIResponsesConverter from '../adapters/toolCalling/OpenAIResponsesConverter.js';
+import * as AnthropicConverter from '../adapters/toolCalling/AnthropicConverter.js';
+import * as MistralConverter from '../adapters/toolCalling/MistralConverter.js';
+import * as GoogleConverter from '../adapters/toolCalling/GoogleConverter.js';
+import * as VLLMConverter from '../adapters/toolCalling/VLLMConverter.js';
+import { convertGenericToolsToBedrock } from '../adapters/toolCalling/BedrockConverter.js';
 
 /** Every converter that exports its own `sanitizeSchema`. */
 const CONVERTERS = [

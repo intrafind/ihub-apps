@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 
 // Through the registry: openai.js pulls in ModelDiscoveryService, which imports
 // the registry, so loading the adapter file first trips a circular import.
-import { getAdapter } from '../protocols/index.js';
+import { getAdapter } from '../adapters/index.js';
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 const messages = [{ role: 'user', content: 'test' }];

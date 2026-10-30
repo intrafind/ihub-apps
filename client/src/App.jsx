@@ -157,6 +157,9 @@ const AdminCopilotAgentPage = lazyWithRetry(
 const AdminNextcloudEmbedPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminNextcloudEmbedPage')
 );
+const AdminInstalledIntegrationsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminInstalledIntegrationsPage')
+);
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
@@ -770,6 +773,10 @@ function App() {
             <Route
               path="integrations"
               element={<LazyAdminRoute component={AdminIntegrationsPage} />}
+            />
+            <Route
+              path="integrations/installed"
+              element={<LazyAdminRoute component={AdminInstalledIntegrationsPage} />}
             />
             <Route
               path="integrations/jira"

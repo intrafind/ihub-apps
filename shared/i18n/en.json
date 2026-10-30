@@ -2377,6 +2377,7 @@
       "logging": "Logging",
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
+      "installedIntegrations": "Installed integrations",
       "mcpServers": "MCP servers",
       "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
@@ -2926,6 +2927,24 @@
         "saved": "App saved",
         "created": "App created",
         "idRequired": "App ID is required",
+        "integrations": {
+          "title": "Installed integrations",
+          "desc": "Bind integrations installed under Integrations → Installed. Narrow them to some actions, and set the scope users start with.",
+          "none": "No integration is installed yet.",
+          "openCatalog": "Open the catalog",
+          "actions": "Actions",
+          "noActions": "This installation offers no action right now.",
+          "defaultScope": "Default {{scope}}",
+          "pinnedScope": "Pinned {{scope}}",
+          "pinnedHelp": "Fixes the scope; users cannot change it.",
+          "scopeAny": "users pick",
+          "scopePicker": "Scope picker",
+          "picker": {
+            "menu": "In the menu",
+            "inline": "Next to the input",
+            "hidden": "Hidden"
+          }
+        },
         "mcpTools": {
           "title": "MCP servers",
           "desc": "Choose the MCP servers this app uses. Users see each one as a single entry in the chat.",
@@ -3234,9 +3253,112 @@
       "iAssistantDefaultSearchProfile": "Default search profile",
       "iAssistantDefaultSearchProfileHelp": "The search profile iAssistant conversations search when neither the app nor the model names one."
     },
+    "integrationCatalog": {
+      "title": "Installed integrations",
+      "subtitle": "Install an integration from the catalog, point it at your system and bind it to apps. Each installation brings its actions to the model.",
+      "install": "Install",
+      "reload": "Reload catalog",
+      "reloaded": "Catalog reloaded.",
+      "saved": "Integration \"{{id}}\" saved.",
+      "removed": "Integration \"{{id}}\" removed.",
+      "searchPlaceholder": "Search the catalog",
+      "catalogEmpty": "No definitions match. Integrations can also be installed from the Marketplace.",
+      "installedCount": "{{count}} installed",
+      "notInstalled": "Not installed",
+      "groupsLine": "Groups: {{groups}}",
+      "testResultsFor": "Test results: {{label}}",
+      "unsupportedProtocol": "This integration uses the protocol \"{{protocol}}\", which this release cannot run yet.",
+      "unsupportedShort": "Protocol not supported yet",
+      "tabs": {
+        "installed": "Installed",
+        "catalog": "Catalog"
+      },
+      "empty": {
+        "title": "Nothing installed yet",
+        "description": "Pick an integration from the catalog, enter its settings and test it before you save.",
+        "cta": "Open the catalog"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "enable": "Enable",
+        "disable": "Disable",
+        "definitionMissing": "Definition missing"
+      },
+      "source": {
+        "shipped": "Shipped",
+        "installed": "From registry"
+      },
+      "facts": {
+        "protocol": "Protocol",
+        "signIn": "Sign-in",
+        "actions": "Actions",
+        "publisher": "Publisher"
+      },
+      "actions": {
+        "test": "Test {{id}}",
+        "testTitle": "Test connection",
+        "edit": "Edit {{id}}",
+        "enable": "Enable {{id}}",
+        "disable": "Disable {{id}}",
+        "remove": "Remove {{id}}"
+      },
+      "confirmRemove": {
+        "title": "Remove integration?",
+        "message": "Apps that bind \"{{id}}\" lose its actions. A stored service-account token is deleted with it."
+      },
+      "sideEffect": {
+        "read": "read",
+        "write": "write",
+        "destructive": "destructive",
+        "unknown": "unknown"
+      },
+      "authModes": {
+        "none": "No sign-in (public API)",
+        "serviceAccount": "Shared service account (one token for everyone)",
+        "apiKeyUser": "Each user enters an API key",
+        "oauthUser": "Each user signs in (OAuth)",
+        "enterpriseManaged": "Enterprise-managed (IdP)",
+        "short": {
+          "none": "none",
+          "service-account": "service account",
+          "api-key-user": "user API key",
+          "oauth-user": "user OAuth",
+          "enterprise-managed": "enterprise"
+        }
+      },
+      "wizard": {
+        "installTitle": "Install integration",
+        "editTitle": "Edit integration",
+        "identity": "1 · Name",
+        "instanceId": "ID",
+        "instanceIdHelp": "Apps refer to the installation by this id. Letters, digits, dots, hyphens.",
+        "label": "Label",
+        "labelHelp": "Shown to users in the chat, e.g. \"GovData\" or \"Open Data Norderstedt\".",
+        "settings": "2 · Settings",
+        "advanced": "Advanced settings",
+        "signIn": "3 · Sign-in",
+        "laterRelease": "(later release)",
+        "secretStored": "Stored. Leave empty to keep it.",
+        "who": "4 · Who may use it",
+        "groups": "Groups",
+        "groupsHelp": "Leave empty for everyone who may use an app that binds this integration.",
+        "enabled": "Enabled",
+        "actions": "5 · Actions the model may call",
+        "requires": "Requires {{requirement}}",
+        "needsToken": "Needs a shared service account; off while sign-in is \"none\".",
+        "testResults": "Test results",
+        "test": "Test connection",
+        "testing": "Testing…"
+      }
+    },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
       "cards": {
+        "installed": {
+          "title": "Installed integrations",
+          "description": "Install integrations from the catalog or the marketplace (e.g. a CKAN open data portal), point them at your systems and bind their actions to apps."
+        },
         "nextcloud": {
           "title": "Nextcloud",
           "description": "Let users browse and attach files from any Nextcloud instance during a chat. Same `cloudStorage` config surface as Office 365 and Google Drive."
@@ -3255,6 +3377,7 @@
         }
       },
       "categories": {
+        "data": "Data & APIs",
         "directories": "Directories"
       }
     },

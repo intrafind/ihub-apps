@@ -99,6 +99,19 @@ function AdminIntegrationsPage() {
 
   const integrations = [
     {
+      id: 'installed-integrations',
+      title: t('admin.integrations.cards.installed.title', 'Installed integrations'),
+      description: t(
+        'admin.integrations.cards.installed.description',
+        'Install integrations from the catalog or the marketplace (e.g. a CKAN open data portal), point them at your systems and bind their actions to apps.'
+      ),
+      icon: 'link',
+      color: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400',
+      href: '/admin/integrations/installed',
+      status: 'available',
+      category: t('admin.integrations.categories.data', 'Data & APIs')
+    },
+    {
       id: 'outlook',
       title: t('admin.integrations.cards.outlook.title', 'Outlook Add-in'),
       description: t(
