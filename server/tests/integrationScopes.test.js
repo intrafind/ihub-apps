@@ -522,3 +522,20 @@ describe('model guidance and chat settings', () => {
     assert.equal(normalizeChatSettings({ integrationScopes: ['contracts'] }), null);
   });
 });
+
+describe('chat request schema', () => {
+  it('keeps integrationScopes in the validated body', async () => {
+    const { chatPostSchema } = await import('../validators/index.js');
+    const body = chatPostSchema.body.parse({
+      messages: [],
+      integrationScopes: { ifinder: 'contracts', iassistant: 'assistant:legal' }
+    });
+    assert.deepEqual(body.integrationScopes, {
+      ifinder: 'contracts',
+      iassistant: 'assistant:legal'
+    });
+    assert.throws(() =>
+      chatPostSchema.body.parse({ messages: [], integrationScopes: { ifinder: 42 } })
+    );
+  });
+});

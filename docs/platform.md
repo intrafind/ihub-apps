@@ -1108,7 +1108,7 @@ plaintext in `platform.json`. See
 | `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
 | `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
 | `searchProfileApplication` | String | `"ifinder"`     | iFinder application whose search profile assignments iHub reads for a user (`searchprofile.applications`); see [iAssistant Integration](#iassistant-integration) |
-| `defaultSearchProfile`   | String  | `"searchprofile-standard"` | Search profile the `iFinder_*` tools search until the user picks another one in the chat. When empty, `IFINDER_SEARCH_PROFILE` and then `searchprofile-standard` apply |
+| `defaultSearchProfile`   | String  | `""`              | Search profile the `iFinder_*` tools search until the user picks another one in the chat. When empty, `IFINDER_SEARCH_PROFILE` and then `searchprofile-standard` apply |
 | `allowedSearchProfiles`  | Array   | `[]`              | Which of the user's search profiles the chat picker offers and the tools may search. Empty offers every profile the user has; the default is always allowed |
 | `allowUserSearchProfileChange` | Boolean | `true`     | `false` pins every chat to `defaultSearchProfile`: neither the user nor the model can pick another profile |
 

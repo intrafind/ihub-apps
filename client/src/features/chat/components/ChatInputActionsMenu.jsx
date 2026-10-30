@@ -588,7 +588,11 @@ function ChatInputActionsMenu({
                   const integrationName = scopeDisplayName(integration, i18n.language);
                   const action = scopeActionLabel(integration, t);
                   const current = scopeDisplayName(currentScopeOf(integration), i18n.language);
-                  const canPick = !integration.fixed && integration.scopes.length > 1;
+                  // Not while a turn runs: it was sent with the scope shown.
+                  const canPick =
+                    !integration.fixed &&
+                    integration.scopes.length > 1 &&
+                    !(disabled || isProcessing);
                   const expanded = canPick && openScopeMenu === integration.id;
                   const hint = scopeHint(integration, t);
                   const toggle = () => {
