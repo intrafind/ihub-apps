@@ -172,6 +172,26 @@ function presentValue(value) {
 }
 
 /**
+ * The presented values of one attribute: at most
+ * {@link MAX_VALUES_PER_ATTRIBUTE}, and only while the entry's budget lasts.
+ * @param {Array} values
+ * @param {{left: number}} budget - Characters left for the entry; reduced here
+ * @returns {string[]}
+ */
+function presentValues(values, budget) {
+  const kept = [];
+  for (const value of values.slice(0, MAX_VALUES_PER_ATTRIBUTE)) {
+    const presented = presentValue(value);
+    // The value, its quotes and a comma.
+    const cost = presented.length + 3;
+    if (cost > budget.left) break;
+    budget.left -= cost;
+    kept.push(presented);
+  }
+  return kept;
+}
+
+/**
  * An entry as the model sees it: `{ dn, attributes, omitted?, cut? }`, every
  * value a list, denied attributes left out and named in `omitted`.
  *
@@ -188,7 +208,7 @@ export function presentEntry(entry, deny = new Set()) {
   const attributes = {};
   const omitted = [];
   const cut = [];
-  let budget = MAX_RESPONSE_LENGTH;
+  const budget = { left: MAX_RESPONSE_LENGTH };
   for (const [name, raw] of Object.entries(entry || {})) {
     if (name === 'dn') continue;
     if (isDeniedAttribute(name, deny)) {
@@ -196,15 +216,7 @@ export function presentEntry(entry, deny = new Set()) {
       continue;
     }
     const values = Array.isArray(raw) ? raw : [raw];
-    const kept = [];
-    for (const value of values.slice(0, MAX_VALUES_PER_ATTRIBUTE)) {
-      const presented = presentValue(value);
-      // The value, its quotes and a comma.
-      const cost = presented.length + 3;
-      if (cost > budget) break;
-      budget -= cost;
-      kept.push(presented);
-    }
+    const kept = presentValues(values, budget);
     if (kept.length < values.length) {
       kept.push(`… (${values.length - kept.length} more values)`);
       cut.push(name);
