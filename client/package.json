@@ -1,7 +1,7 @@
 {
   "name": "ihub-apps-client",
   "private": true,
-  "version": "5.6.3",
+  "version": "5.6.4",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {
