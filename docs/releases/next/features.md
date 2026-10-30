@@ -215,7 +215,7 @@ administration, x500.bund.de. The model picks the directory by its description a
 several in one answer; every hit names the directory it came from.
 
 - **Admin → Integrations → People directories** lists the directories, with an editor, a
-  connection test that shows each step and the mapped results, and a Certificates tab.
+  connection test that shows each step and the mapped results.
 - **Use for people search** on an LDAP sign-in provider creates the company directory in one
   click. Searching needs the provider's bind account.
 - x500.bund.de ships as a disabled entry. It connects over LDAPS and trusts the Verwaltungs-PKI
@@ -225,7 +225,13 @@ several in one answer; every hit names the directory it came from.
   appears for users as soon as one directory is switched on under **Admin → Integrations →
   People directories**; until then users do not get it (`requiredIntegrations`).
 - Each directory has its own groups, on top of the tool permissions. Plain-text LDAP, private
-  addresses and untrusted certificates are refused unless allowed explicitly.
+  addresses and untrusted certificates are refused unless allowed explicitly. A private CA is
+  trusted through the server's certificate store, or per directory by naming a PEM file in
+  `contents/config/certs/`.
+- **LDAP browser for admins:** with the LDAP browser switched on in a directory's editor, admins
+  ask in plain words and see the raw entries — attributes, branch layout, group members.
+  Passwords and other secrets are withheld and cannot be used in a filter, and every call goes to
+  the audit log. The **LDAP browser** app ships disabled.
 
 See [People Directory Search](../../people-directory-search.md).
 

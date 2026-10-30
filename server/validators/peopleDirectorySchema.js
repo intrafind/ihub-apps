@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { PEOPLE_DIRECTORIES_REFERENCE } from '../utils/toolSelection.js';
+import { LDAP_BROWSE_REFERENCE, PEOPLE_DIRECTORIES_REFERENCE } from '../utils/toolSelection.js';
 import {
   FORBIDDEN_ATTRIBUTES,
   MAPPED_PERSON_FIELDS,
@@ -13,7 +13,9 @@ import {
  * Schema for `contents/config/peopleDirectories.json`: the directories iHub
  * searches for people. Every enabled directory becomes the tools
  * `<id>__search_people`, `<id>__get_person` and, with `units`, `<id>__list_units`
- * (see services/peopleDirectory/PeopleDirectoryService.js).
+ * (see services/peopleDirectory/PeopleDirectoryService.js); with `browse` on,
+ * also the admin LDAP browser tools `<id>__browse_search`, `<id>__browse_read`
+ * and `<id>__browse_children` (services/peopleDirectory/LdapBrowser.js).
  *
  * Secrets are never stored here: a service bind names a credential profile
  * (`passwordRef`), and the schema refuses anything else that looks like a
@@ -30,12 +32,14 @@ export const PEOPLE_DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 /**
  * Ids a directory cannot take: `peopledirectories` selects every directory,
+ * `ldapbrowse` every LDAP browser,
  * `new` is the admin editor's create route, and `app__`, `workflow_`,
  * `source_`, `knowledge_` and `a2a__` tool ids are routed (or hidden) by
  * prefix before a directory tool would be reached.
  */
 export const RESERVED_DIRECTORY_IDS = [
   PEOPLE_DIRECTORIES_REFERENCE.toLowerCase(),
+  LDAP_BROWSE_REFERENCE.toLowerCase(),
   'new',
   'app',
   'workflow',
@@ -60,6 +64,10 @@ export const PEOPLE_DIRECTORY_LIMITS = Object.freeze({
   concurrency: 10,
   requestDelayMs: 60000
 });
+
+/** The admin LDAP browser's default and highest result limit per search. */
+export const LDAP_BROWSE_DEFAULTS = Object.freeze({ maxResults: 50 });
+export const LDAP_BROWSE_LIMITS = Object.freeze({ maxResults: 200 });
 
 const localizedStringSchema = z.record(
   z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Invalid language code format'),
@@ -140,6 +148,46 @@ const bindSchema = z.discriminatedUnion('mode', [
     })
     .strict()
 ]);
+
+/**
+ * The admin LDAP browser of a directory: raw entries for admins, off unless
+ * switched on. It shares the directory's connection, and by default its bind.
+ *
+ * - `groups`: who may browse, separate from the directory's `groups`. Never
+ *   `*`: raw directory content is not for every caller.
+ * - `base`: the DN the browser is confined to; the directory's base DN when
+ *   left out.
+ * - `bind`: a separate (ideally read-only) account for browsing.
+ * - `denyAttributes`: attributes withheld on top of the built-in list.
+ */
+const browseSchema = z
+  .object({
+    enabled: z.boolean().prefault(false),
+    groups: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .refine(group => group !== '*', {
+            message: 'The LDAP browser is never open to every caller; name groups'
+          })
+      )
+      .prefault(['admins']),
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .max(LDAP_BROWSE_LIMITS.maxResults)
+      .prefault(LDAP_BROWSE_DEFAULTS.maxResults),
+    base: z.string().trim().min(1).max(1024).optional(),
+    bind: bindSchema.optional(),
+    denyAttributes: z
+      .array(z.string().regex(ATTRIBUTE_NAME, 'Not an LDAP attribute name'))
+      .max(64)
+      .optional()
+  })
+  .strict();
 
 /**
  * Whether a value is a usable `ldap://` or `ldaps://` URL: a host, an optional
@@ -233,6 +281,7 @@ export const peopleDirectorySchema = z
     // every caller, anonymous ones included; an empty list closes it.
     groups: z.array(z.string().trim().min(1)).prefault(['authenticated']),
     dataFlow: z.enum(['internal', 'external']).prefault('internal'),
+    browse: browseSchema.optional(),
     name: localizedStringSchema.optional(),
     description: localizedStringSchema.optional()
   })

@@ -233,6 +233,9 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   // Likewise for skills of remote A2A agents (#2546): iHub is their client,
   // not a proxy that hands its agent credentials to inbound callers.
   if (tool._a2a) return false;
+  // The admin LDAP browser returns raw directory entries; it stays in iHub's
+  // own chat, where its calls are audited per admin.
+  if (tool._peopleDirectory?.browse) return false;
   return toolVisibleInSet(tool.id, visibleToolIds, undefined, undefined, tool._peopleDirectory?.id);
 }
 

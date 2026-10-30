@@ -54,7 +54,6 @@ const DYNAMIC_KEYS = [
 ];
 // Strings that are the same word in both languages.
 const SAME_IN_BOTH = new Set([
-  'admin.peopleDirectories.certificates.ca',
   'admin.peopleDirectories.fields.fax',
   'admin.peopleDirectories.fields.name',
   'admin.peopleDirectories.form.id',

@@ -25,7 +25,8 @@ function hostOf(url) {
 /**
  * The Directories tab: one row per directory with its name, id, source,
  * directory type, groups, an enabled switch that saves at once, badges for
- * plain-text transport and external data flow, and edit and delete actions.
+ * plain-text transport, external data flow and the LDAP browser, and edit and
+ * delete actions.
  *
  * @param {Object} props
  * @param {Array<Object>} props.directories - Stored directories
@@ -95,6 +96,18 @@ function DirectoryList({ directories, effective, presetLabel, togglingId, onTogg
                       )}
                     >
                       {t('admin.peopleDirectories.list.external', 'External')}
+                    </DirectoryBadge>
+                  )}
+                  {(directory.browse?.enabled === true || info.browse === true) && (
+                    <DirectoryBadge
+                      tone="warning"
+                      icon="server"
+                      title={t(
+                        'admin.peopleDirectories.list.browseHint',
+                        'Admins in the browse groups can read raw entries with the LDAP browser.'
+                      )}
+                    >
+                      {t('admin.peopleDirectories.list.browse', 'LDAP browser')}
                     </DirectoryBadge>
                   )}
                   {problems.length > 0 && (

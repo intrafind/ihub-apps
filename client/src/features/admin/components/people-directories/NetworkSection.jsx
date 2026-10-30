@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import Icon from '../../../../shared/components/Icon';
 import FormSection from './FormSection';
-import DirectoryBadge from './DirectoryBadge';
 import TransportBadge from './TransportBadge';
 import {
   CALLOUT_CLASS,
   CHECKBOX_CLASS,
   HELP_CLASS,
   LABEL_CLASS,
-  MONO_INPUT_CLASS,
-  SECONDARY_BUTTON_CLASS
+  MONO_INPUT_CLASS
 } from './formStyles';
-import { certificateExpiryState } from '../../utils/peopleDirectories';
 
 /**
  * Editor section "Network": transport security, hosts allowed on private
- * addresses, and the trust anchors that verify the server certificate.
+ * addresses, and the trust anchors (`tlsCa`) that verify the server certificate.
  *
  * Plain `ldap://` without StartTLS is refused unless `allowPlaintext` is set:
  * search terms and the records returned are personal data. A service bind is
@@ -29,26 +24,9 @@ import { certificateExpiryState } from '../../utils/peopleDirectories';
  * @param {Object} props.form - Form state
  * @param {(patch: Object) => void} props.update - Merge a patch into the form
  * @param {'ldaps'|'starttls'|'plaintext'|'unknown'} props.transport - Connection security
- * @param {Array<Object>} props.certificates - The certificate store
- * @param {string|null} props.certificatesError - Why the store could not be loaded
- * @param {() => void} props.onReloadCertificates - Load the store again (after an upload in another tab)
  */
-function NetworkSection({
-  form,
-  update,
-  transport,
-  certificates,
-  certificatesError,
-  onReloadCertificates
-}) {
+function NetworkSection({ form, update, transport }) {
   const { t } = useTranslation();
-  const storeNames = new Set(certificates.map(c => c.name));
-  const missing = form.tlsCa.filter(name => !storeNames.has(name));
-
-  const toggleCa = (name, checked) =>
-    update({
-      tlsCa: checked ? [...form.tlsCa, name] : form.tlsCa.filter(entry => entry !== name)
-    });
 
   return (
     <FormSection
@@ -121,112 +99,27 @@ function NetworkSection({
         </p>
       </div>
 
-      <fieldset id="pd-tls-ca" aria-describedby="pd-tls-ca-help">
-        <legend className={LABEL_CLASS}>
+      <div>
+        <label htmlFor="pd-tls-ca" className={LABEL_CLASS}>
           {t('admin.peopleDirectories.network.tlsCa', 'Trusted certificates')}
-        </legend>
-        <p id="pd-tls-ca-help" className={`${HELP_CLASS} mt-0 mb-2`}>
+        </label>
+        <textarea
+          id="pd-tls-ca"
+          rows={2}
+          spellCheck={false}
+          value={form.tlsCa}
+          onChange={e => update({ tlsCa: e.target.value })}
+          placeholder="pca-1-verwaltung-23"
+          aria-describedby="pd-tls-ca-help"
+          className={MONO_INPUT_CLASS}
+        />
+        <p id="pd-tls-ca-help" className={HELP_CLASS}>
           {t(
             'admin.peopleDirectories.network.tlsCaHelp',
-            "When you pick certificates here, only they verify the server's certificate. Leave all unchecked to trust the usual public roots. Verification stays on unless the host is on the platform's SSL whitelist (ssl.ignoreInvalidCertificates with ssl.domainWhitelist): then it is switched off for this directory too, whatever you pick here."
+            "Only for a CA that the iHub server does not trust already. One name per line: the file contents/config/certs/<name>.pem on the server. When set, only these certificates verify the server's certificate. Leave empty to use the public roots and the server's operating system certificate store. Verification stays on unless the host is on the platform's SSL whitelist."
           )}
         </p>
-        {certificatesError && (
-          <p className="text-sm text-red-800 dark:text-red-300">
-            {t(
-              'admin.peopleDirectories.network.tlsCaLoadError',
-              'The certificate store could not be loaded: {{error}}',
-              { error: certificatesError }
-            )}
-          </p>
-        )}
-        {certificates.length === 0 && missing.length === 0 && !certificatesError ? (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t('admin.peopleDirectories.network.tlsCaEmpty', 'The certificate store is empty.')}
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {certificates.map(certificate => {
-              const id = `pd-tls-ca-${certificate.name}`;
-              const expiry = certificateExpiryState(certificate);
-              return (
-                <li key={certificate.name} className="flex items-start gap-3">
-                  <input
-                    id={id}
-                    type="checkbox"
-                    checked={form.tlsCa.includes(certificate.name)}
-                    onChange={e => toggleCa(certificate.name, e.target.checked)}
-                    className={`${CHECKBOX_CLASS} mt-0.5`}
-                  />
-                  <label htmlFor={id} className="text-sm text-gray-900 dark:text-gray-100">
-                    <span className="font-mono">{certificate.name}</span>
-                    {certificate.subjectCN && (
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {' '}
-                        — {certificate.subjectCN}
-                      </span>
-                    )}
-                  </label>
-                  {expiry === 'expired' && (
-                    <DirectoryBadge tone="danger" icon="exclamation-triangle">
-                      {t('admin.peopleDirectories.certificates.expired', 'Expired')}
-                    </DirectoryBadge>
-                  )}
-                  {expiry === 'expiringSoon' && (
-                    <DirectoryBadge tone="warning" icon="exclamation-triangle">
-                      {t(
-                        'admin.peopleDirectories.certificates.expiresIn',
-                        'Expires in {{count}} days',
-                        { count: certificate.daysUntilExpiry }
-                      )}
-                    </DirectoryBadge>
-                  )}
-                </li>
-              );
-            })}
-            {missing.map(name => {
-              const id = `pd-tls-ca-${name}`;
-              return (
-                <li key={name} className="flex items-start gap-3">
-                  <input
-                    id={id}
-                    type="checkbox"
-                    checked
-                    onChange={e => toggleCa(name, e.target.checked)}
-                    className={`${CHECKBOX_CLASS} mt-0.5`}
-                  />
-                  <label
-                    htmlFor={id}
-                    className="text-sm font-mono text-gray-900 dark:text-gray-100"
-                  >
-                    {name}
-                  </label>
-                  <DirectoryBadge tone="danger" icon="exclamation-triangle">
-                    {t('admin.peopleDirectories.network.tlsCaMissing', 'Not in the store')}
-                  </DirectoryBadge>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Link
-            to="/admin/integrations/people-directories?tab=certificates"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-blue-700 dark:text-blue-300 underline hover:no-underline"
-          >
-            {t(
-              'admin.peopleDirectories.network.manageCertificates',
-              'Manage the certificate store (opens in a new tab)'
-            )}
-          </Link>
-          <button type="button" onClick={onReloadCertificates} className={SECONDARY_BUTTON_CLASS}>
-            <Icon name="refresh" size="sm" />
-            {t('admin.peopleDirectories.network.reloadCertificates', 'Reload certificates')}
-          </button>
-        </div>
-      </fieldset>
+      </div>
     </FormSection>
   );
 }
