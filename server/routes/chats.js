@@ -8,6 +8,7 @@
  *   GET    /api/chats/:chatId                    chat metadata + stored transcript
  *   GET    /api/chats/:chatId/artifacts             what this chat's turns produced
  *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
+ *   POST   /api/chats/:chatId/artifacts/zip          several (or all) of them as one ZIP
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
  *   PATCH  /api/chats/:chatId    { temporary: false }  keep a temporary chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
@@ -55,6 +56,8 @@ import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
+import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import {
   canKeepChatHistory,
   isChatHistoryConfigured,
@@ -194,6 +197,23 @@ async function resolveOwnerId(user) {
  *   is set for every read that does not rest on ownership (an admin's or a
  *   project member's), so the owner's side effects can be skipped.
  */
+/**
+ * Download name of a chat's artifact archive: its title, made file-safe.
+ *
+ * @param {Object|null} chat
+ * @returns {string}
+ */
+function zipNameFor(chat) {
+  const title = typeof chat?.title === 'string' ? chat.title : '';
+  const base = title
+    .replaceAll(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+    .replaceAll(/^[.\s]+|[.\s]+$/g, '');
+  return `${base || 'chat'} - artifacts.zip`;
+}
+
 async function loadOwnedChat(chatId, user, repository, intent = 'read') {
   const auth = await authorizeChat(chatId, user, { repository, intent });
   if (!auth.ok || !auth.chat) return null;
@@ -364,6 +384,32 @@ export default function registerChatRoutes(app) {
     }
   });
 
+  // Several artifacts as one ZIP: `{ artifactIds?: string[] }`, every one of
+  // the chat's when omitted. A POST because the selection can be long; it
+  // changes nothing. Authorized exactly like the single-artifact read below.
+  app.post(buildServerPath('/api/chats/:chatId/artifacts/zip'), authRequired, async (req, res) => {
+    try {
+      const { chatId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+      const scope = repository.artifactScope(chatId);
+      const artifacts = getArtifactRepository();
+      return await sendArtifactsZip(res, {
+        repository: artifacts,
+        scope,
+        descriptors: await artifacts.list(scope),
+        artifactIds: req.body?.artifactIds,
+        archiveName: zipNameFor(access.chat)
+      });
+    } catch (error) {
+      if (res.headersSent) return res.destroy(error);
+      return sendChatStorageError(res, error, 'zip chat artifacts');
+    }
+  });
+
   app.get(
     buildServerPath('/api/chats/:chatId/artifacts/:artifactId'),
     authRequired,
@@ -391,7 +437,8 @@ export default function registerChatRoutes(app) {
         // is a fresh uuid, so the bytes behind this URL cannot change.
         // `private` because the response is owner-scoped and a shared cache
         // holding it would serve one user's content to another.
-        res.setHeader('Content-Type', artifact.mimeType);
+        // A source file goes out as `text/plain` (see `servedMediaType`).
+        res.setHeader('Content-Type', servedMediaType(artifact.mimeType));
         res.setHeader('Content-Length', String(body.length));
         res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
         // Nothing here is a document to open in the browser's context; the

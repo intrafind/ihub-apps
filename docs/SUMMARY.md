@@ -53,7 +53,7 @@
     - [Remote A2A Agents as Tools](a2a-agents.md)
     - [People Directory Search](people-directory-search.md)
     - [Ask User Tool](ask-user-tool.md)
-    - [Document Generation (PDF, Word, PowerPoint) & System Skills](pdf-generation.md)
+    - [Document and File Generation (PDF, Word, PowerPoint, Code, ZIP) & System Skills](pdf-generation.md)
     - [Document Templates (Corporate Design)](document-templates.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)

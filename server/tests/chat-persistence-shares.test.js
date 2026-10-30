@@ -40,8 +40,11 @@ import {
 import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { fingerprint } from '../services/UserFingerprint.js';
-import registerChatShareRoutes, { downloadName } from '../routes/chatShares.js';
+import registerChatShareRoutes from '../routes/chatShares.js';
+import { downloadName } from '../services/artifacts/artifactZip.js';
 import registerChatRoutes from '../routes/chats.js';
+import { PassThrough } from 'node:stream';
+import JSZip from 'jszip';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
 const GRACE = { id: 'user-grace', name: 'Grace Hopper', email: 'grace@example.com' };
@@ -131,6 +134,13 @@ const artifactHandlers = handlersFor(
   shareRoutes,
   'get',
   '/api/shares/:shareId/artifacts/:artifactId'
+);
+const shareZipHandlers = handlersFor(shareRoutes, 'post', '/api/shares/:shareId/artifacts/zip');
+const chatZipHandlers = handlersFor(chatRoutes, 'post', '/api/chats/:chatId/artifacts/zip');
+const chatArtifactHandlers = handlersFor(
+  chatRoutes,
+  'get',
+  '/api/chats/:chatId/artifacts/:artifactId'
 );
 const revokeHandlers = handlersFor(shareRoutes, 'delete', '/api/shares/:shareId');
 const lookupHandlers = handlersFor(shareRoutes, 'get', '/api/users/lookup');
@@ -801,6 +811,167 @@ describe('artifacts through a share', () => {
       user: GRACE
     });
     assert.equal(grace.statusCode, 200);
+  });
+});
+
+/**
+ * A response double the ZIP routes can stream into: a writable that also
+ * answers `status`/`json`/`setHeader`, and resolves with what was written.
+ */
+async function driveZip(handlers, { params = {}, body = {}, user } = {}) {
+  const sink = new PassThrough();
+  const chunks = [];
+  sink.on('data', chunk => chunks.push(chunk));
+  const res = Object.assign(sink, { statusCode: 200, body: null, headers: {} });
+  res.status = code => {
+    res.statusCode = code;
+    return res;
+  };
+  res.json = value => {
+    res.body = value;
+    sink.end();
+    return res;
+  };
+  res.setHeader = (name, value) => {
+    res.headers[String(name).toLowerCase()] = value;
+    return res;
+  };
+  const finished = new Promise(resolve => sink.on('end', resolve));
+  const req = { params, query: {}, body, headers: {}, user, ip: '127.0.0.1', method: 'POST' };
+  for (const handler of handlers) {
+    let advanced = false;
+    await handler(req, res, () => {
+      advanced = true;
+    });
+    if (!advanced) break;
+  }
+  if (!sink.writableEnded) sink.end();
+  await finished;
+  if (res.statusCode === 200 && res.body === null) {
+    const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+    res.files = {};
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (!entry.dir) res.files[name] = await entry.async('string');
+    }
+  }
+  return res;
+}
+
+/** Store a text file artifact against a chat. */
+async function seedFile(chatId, name, content, mimeType = 'text/javascript') {
+  const repository = getChatRepository();
+  return repository.artifactStore().put(repository.artifactScope(chatId), {
+    kind: 'code',
+    mimeType,
+    data: Buffer.from(content).toString('base64'),
+    name
+  });
+}
+
+describe('artifacts as one ZIP', () => {
+  it('packs every artifact of the owner’s chat, folders kept', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    await seedFile(chatId, 'src/index.js', 'one');
+    await seedFile(chatId, 'src/index.js', 'two');
+    await seedArtifact(chatId, 'pic');
+
+    const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['content-type'], 'application/zip');
+    assert.match(
+      res.headers['content-disposition'],
+      /^attachment; filename="A shared chat - artifacts\.zip"/
+    );
+    assert.deepEqual(res.files, {
+      'src/index.js': 'one',
+      'src/index (2).js': 'two',
+      'pic.png': 'png-bytes-pic'
+    });
+  });
+
+  it('packs a selection, and answers 404 for an id outside the chat', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const a = await seedFile(chatId, 'a.py', 'print(1)', 'text/x-python');
+    await seedFile(chatId, 'b.py', 'print(2)', 'text/x-python');
+    const elsewhere = await seedFile(await seedChat(ADA, { turns: 0 }), 'c.py', 'x');
+
+    const one = await driveZip(chatZipHandlers, {
+      params: { chatId },
+      body: { artifactIds: [a.id] },
+      user: ADA
+    });
+    assert.deepEqual(one.files, { 'a.py': 'print(1)' });
+
+    const foreign = await driveZip(chatZipHandlers, {
+      params: { chatId },
+      body: { artifactIds: [a.id, elsewhere.id] },
+      user: ADA
+    });
+    assert.equal(foreign.statusCode, 404);
+
+    const malformed = await driveZip(chatZipHandlers, {
+      params: { chatId },
+      body: { artifactIds: 'all' },
+      user: ADA
+    });
+    assert.equal(malformed.statusCode, 400);
+  });
+
+  it('is the owner’s alone, like every chat route', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    await seedFile(chatId, 'a.js', 'x');
+    const res = await driveZip(chatZipHandlers, { params: { chatId }, user: GRACE });
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('keeps to the configured limits', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    await seedFile(chatId, 'a.js', 'x');
+    await seedFile(chatId, 'b.js', 'y');
+    platform.artifacts = { maxZipFiles: 1 };
+    configCache.setCacheEntry('config/platform.json', platform);
+    try {
+      const res = await driveZip(chatZipHandlers, { params: { chatId }, user: ADA });
+      assert.equal(res.statusCode, 413);
+      assert.equal(res.body.code, 'too-many-files');
+    } finally {
+      delete platform.artifacts;
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
+  });
+
+  it('through a share packs only what the snapshot named', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const shared = await seedArtifact(chatId, 'shared');
+    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const later = await seedArtifact(chatId, 'later');
+
+    const all = await driveZip(shareZipHandlers, {
+      params: { shareId: share.id },
+      user: ANONYMOUS
+    });
+    assert.equal(all.statusCode, 200);
+    assert.deepEqual(all.files, { 'shared.png': 'png-bytes-shared' });
+    assert.equal(all.headers['x-robots-tag'], 'noindex, nofollow');
+
+    const beyond = await driveZip(shareZipHandlers, {
+      params: { shareId: share.id },
+      body: { artifactIds: [shared.id, later.id] },
+      user: ANONYMOUS
+    });
+    assert.equal(beyond.statusCode, 404);
+  });
+
+  it('serves a source file as plain text, never as script', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const file = await seedFile(chatId, 'evil.js', 'alert(1)');
+    const res = await drive(chatArtifactHandlers, {
+      params: { chatId, artifactId: file.id },
+      user: ADA
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8');
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
   });
 });
 

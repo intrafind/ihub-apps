@@ -136,13 +136,22 @@ browser something executable.
 | Kind       | Media types                                                             |
 | ---------- | ----------------------------------------------------------------------- |
 | `image`    | `png`, `jpeg`, `webp`, `gif`, `avif`, `bmp`, `heic`, `heif`              |
-| `document` | `text/markdown`, `text/plain`, `text/csv`, `application/json`, `application/pdf` |
+| `document` | `text/markdown`, `text/plain`, `text/csv`, `application/json`, `application/pdf`, Word, PowerPoint |
+| `code`     | Text files from `create_file`: `text/javascript`, `application/typescript`, `text/x-python`, `application/json`, `application/yaml`, `text/csv`, `text/markdown`, `application/sql`, `text/x-sh`, `text/css`, … (the list is `TEXT_FILE_TYPES` in `shared/generatedFiles.js`) |
+| `archive`  | `application/zip` |
 
 Anything else is stored and served as `application/octet-stream` with
 `X-Content-Type-Options: nosniff`. Two absences are deliberate:
 `image/svg+xml` is not an image here and `text/html` is not a document — both
 are documents that can run script, and `nosniff` does not help when the type is
 honest.
+
+**Code is served as text.** A `code` artifact keeps its own type in the
+metadata, but goes out as `text/plain; charset=utf-8` (Markdown, CSV and JSON
+keep their own type, also labelled UTF-8), always with `nosniff`. Served under
+its own type, a `.js` or `.css` artifact on a same-origin URL would be a script
+or a stylesheet a page of this origin could load. A file named `.html` or
+`.svg` is recorded as `text/plain` in the first place.
 
 **Adding a kind** is an entry in `ARTIFACT_KINDS` (`artifactPolicy.js`) plus a
 renderer on the client. Nothing in the storage path, the caps, the endpoints,
@@ -159,9 +168,12 @@ takes effect without a restart:
 | `enabled`     | `true`     | Master switch for every producer; `false` stores nothing      |
 | `maxBytes`    | `10485760` | Largest single artifact, in bytes of content; `<= 0` uncapped |
 | `maxPerBatch` | `8`        | Artifacts one producer records in one go; `<= 0` uncapped     |
+| `maxZipFiles` | `200`      | Files in one ZIP archive (download or `create_zip`); `<= 0` uncapped |
+| `maxZipBytes` | `104857600` | Content bytes in one ZIP archive, before compression; `<= 0` uncapped |
 
 Migration V106 seeds the block into existing installations at its defaults, so
-an upgrade changes nothing on its own.
+an upgrade changes nothing on its own. Migration V190 adds the two ZIP limits
+the same way.
 
 The settings live here rather than under `chats` precisely because a workflow
 reading its own limits must not have to reach into the chat settings to find
@@ -190,6 +202,19 @@ Today the surface is the chat's, because chats are the only producer:
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one, as its own media type              |
 | `GET /api/shares/:shareId/artifacts`           | Through a [share](chat-sharing.md): the ones its snapshot named |
 | `GET /api/shares/:shareId/artifacts/:artifactId` | The bytes of one of those; `?download=1` attaches    |
+| `POST /api/chats/:chatId/artifacts/zip`        | Several of the chat's artifacts as one ZIP           |
+| `POST /api/shares/:shareId/artifacts/zip`      | Several of a share's artifacts as one ZIP            |
+
+The ZIP routes take `{ "artifactIds": ["…", "…"] }`, or no body for every
+artifact the caller may read (oldest first). They are authorized exactly like
+the single-artifact route of the same scope; through a share, only the ids its
+snapshot named can be packed, and any other id answers `404` like an unknown
+one. Names keep their folders (`src/index.js`), paths are normalized so nothing
+lands outside the archive, and a path used twice gets a ` (2)` suffix. An
+artifact without a name is packed as `<kind>-<id>.<ext>`. The limits are checked
+on the recorded sizes before a byte is read; over them the answer is `413` with
+`code: "too-many-files"` or `"too-large"`. The response is
+`Content-Disposition: attachment` and never cached.
 
 The listing never carries payloads — it is the index, and the bytes are a
 separate request per entry. It walks the artifact keys rather than the

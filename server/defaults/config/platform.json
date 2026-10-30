@@ -497,7 +497,9 @@
   "artifacts": {
     "enabled": true,
     "maxBytes": 10485760,
-    "maxPerBatch": 8
+    "maxPerBatch": 8,
+    "maxZipFiles": 200,
+    "maxZipBytes": 104857600
   },
   "workflowState": {
     "retentionDays": 30,

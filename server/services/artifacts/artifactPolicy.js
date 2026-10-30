@@ -17,6 +17,7 @@
  * @module services/artifacts/artifactPolicy
  */
 import configCache from '../../configCache.js';
+import { TEXT_FILE_MEDIA_TYPES, ZIP_MEDIA_TYPE } from '../../../shared/generatedFiles.js';
 
 /**
  * Largest single artifact stored, in bytes of base64, when
@@ -37,6 +38,19 @@ export const DEFAULT_MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 export const DEFAULT_MAX_ARTIFACTS_PER_BATCH = 8;
 
 /**
+ * Most files one ZIP archive holds — a download of a chat's artifacts, or an
+ * archive `create_zip` builds — when `platform.artifacts.maxZipFiles` says
+ * nothing.
+ */
+export const DEFAULT_MAX_ZIP_FILES = 200;
+
+/**
+ * Most bytes of content one ZIP archive packs, before compression, when
+ * `platform.artifacts.maxZipBytes` says nothing.
+ */
+export const DEFAULT_MAX_ZIP_BYTES = 100 * 1024 * 1024;
+
+/**
  * What an artifact may be, and the media types each kind may be served as.
  *
  * The type comes from whatever produced the artifact — a model response, a
@@ -47,6 +61,11 @@ export const DEFAULT_MAX_ARTIFACTS_PER_BATCH = 8;
  * - `image/svg+xml` is not an image here. SVG is a document that can run
  *   script, and `nosniff` does not help when the type is honest.
  * - `text/html` is not a document here, for the same reason.
+ *
+ * `code` holds the text files a tool writes (source code, JSON, YAML, …).
+ * Whatever type it is recorded under, it is served as `text/plain` (see
+ * {@link servedMediaType}): `text/javascript` or `text/css` on a same-origin
+ * URL would be a script or a stylesheet a page of this origin could load.
  *
  * Adding a kind is an entry here plus a renderer on the client; nothing in
  * the storage path is kind-specific.
@@ -78,7 +97,9 @@ export const ARTIFACT_KINDS = new Map([
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ])
-  ]
+  ],
+  ['code', new Set(TEXT_FILE_MEDIA_TYPES)],
+  ['archive', new Set([ZIP_MEDIA_TYPE])]
 ]);
 
 /** The kind an artifact is stored as when the producer names none. */
@@ -92,7 +113,17 @@ export const DEFAULT_ARTIFACT_KIND = 'image';
 const MEDIA_TYPE_ALIASES = new Map([
   ['image/jpg', 'image/jpeg'],
   ['text/x-markdown', 'text/markdown'],
-  ['application/markdown', 'text/markdown']
+  ['application/markdown', 'text/markdown'],
+  ['application/javascript', 'text/javascript'],
+  ['application/x-javascript', 'text/javascript'],
+  ['text/x-typescript', 'application/typescript'],
+  ['text/yaml', 'application/yaml'],
+  ['text/x-yaml', 'application/yaml'],
+  ['application/x-yaml', 'application/yaml'],
+  ['text/xml', 'application/xml'],
+  ['text/x-sql', 'application/sql'],
+  ['application/x-sh', 'text/x-sh'],
+  ['application/x-zip-compressed', 'application/zip']
 ]);
 
 /** Served instead of a type this server is not willing to name. */
@@ -124,6 +155,24 @@ export function artifactMediaType(kind, mimeType) {
 }
 
 /**
+ * The `Content-Type` an artifact of this media type is served with.
+ *
+ * Text other than Markdown, CSV and JSON goes out as `text/plain`: a source
+ * file is something to read or download, and served under its own type it
+ * would be a script (`text/javascript`), a stylesheet (`text/css`) or an XML
+ * document a browser renders. Text is labelled UTF-8, which is how every
+ * producer here writes it.
+ *
+ * @param {string} mimeType - The type the artifact is recorded under.
+ * @returns {string}
+ */
+export function servedMediaType(mimeType) {
+  if (!TEXT_FILE_MEDIA_TYPES.includes(mimeType)) return mimeType;
+  const passive = ['text/plain', 'text/markdown', 'text/csv', 'application/json'];
+  return `${passive.includes(mimeType) ? mimeType : 'text/plain'}; charset=utf-8`;
+}
+
+/**
  * Read a numeric setting, keeping zero and negative values — both are
  * meaningful ("disable this rule") and must survive as written.
  *
@@ -143,17 +192,22 @@ function readNumber(value, fallback) {
  * still stores its transcript, a workflow still runs, and what they produced
  * is exactly what it was before this store existed: visible while the client
  * is looking at it and gone afterwards. `maxBytes` and `maxPerBatch` of zero
- * or less remove their cap.
+ * or less remove their cap. `maxZipFiles` and `maxZipBytes` bound one ZIP
+ * archive (a download of several artifacts, or one `create_zip` builds); zero
+ * or less removes their cap too.
  *
  * @param {Object} [platformConfig] - Platform configuration.
- * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number}}
+ * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number,
+ *   maxZipFiles: number, maxZipBytes: number}}
  */
 export function artifactSettings(platformConfig) {
   const artifacts = platformConfig?.artifacts || {};
   return {
     enabled: artifacts.enabled !== false,
     maxBytes: readNumber(artifacts.maxBytes, DEFAULT_MAX_ARTIFACT_BYTES),
-    maxPerBatch: readNumber(artifacts.maxPerBatch, DEFAULT_MAX_ARTIFACTS_PER_BATCH)
+    maxPerBatch: readNumber(artifacts.maxPerBatch, DEFAULT_MAX_ARTIFACTS_PER_BATCH),
+    maxZipFiles: readNumber(artifacts.maxZipFiles, DEFAULT_MAX_ZIP_FILES),
+    maxZipBytes: readNumber(artifacts.maxZipBytes, DEFAULT_MAX_ZIP_BYTES)
   };
 }
 
@@ -164,7 +218,7 @@ export function artifactSettings(platformConfig) {
  * storage off does not have to restart the server for the next run to honour
  * it.
  *
- * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number}}
+ * @returns {ReturnType<typeof artifactSettings>}
  */
 export function artifactPolicy() {
   // `getPlatform()` returns the config itself, not a `{ data }` cache entry.
