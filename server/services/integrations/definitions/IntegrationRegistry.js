@@ -198,13 +198,17 @@ export class IntegrationRegistry {
     const definition = validation.data;
     const expectedDir = definitionIdToDirName(definition.id);
     if (expectedDir !== dirName) {
-      logger.warn('Integration definition folder does not match its id', {
+      // Everything else (install, uninstall, the marketplace) addresses the
+      // folder by the id; a definition loaded from elsewhere could never be
+      // removed again.
+      logger.warn('Skipping integration definition: folder does not match its id', {
         component: COMPONENT,
         file,
         id: definition.id,
         expectedDir,
         actualDir: dirName
       });
+      return null;
     }
     const entry = { definition, source, dir, id: definition.id };
     if (definition.protocol.type === 'openapi') {

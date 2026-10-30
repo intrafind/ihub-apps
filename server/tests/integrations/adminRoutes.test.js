@@ -76,6 +76,7 @@ const runCalls = [];
 jest.unstable_mockModule('../../services/tools/OpenApiToolRunner.js', () => ({
   parseOpenApiText: text => JSON.parse(text),
   invalidateSpecCache: () => {},
+  invalidateToolsWithPrefix: () => {},
   getOpenApiToolParameters: async () => ({
     type: 'object',
     properties: { q: { type: 'string' }, rows: { type: 'integer' } },

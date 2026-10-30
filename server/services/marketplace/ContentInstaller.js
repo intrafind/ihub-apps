@@ -326,12 +326,15 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
     value => typeof value === 'string' && value && !/^https?:\/\//i.test(value)
   );
   const companions = [...new Set([...listed, ...referenced])];
-  const baseUrl = itemUrl.replace(/\/[^/]*$/, '');
+  // Siblings of integration.json; a `?ref=<branch>` of a GitHub Contents URL
+  // belongs to every sibling too.
+  const [itemPath, query = ''] = itemUrl.split('?');
+  const baseUrl = itemPath.replace(/\/[^/]*$/, '');
   const { throttledFetch } = await import('../../requestThrottler.js');
   const files = { 'integration.json': definition };
   for (const relativePath of companions) {
     if (relativePath === 'integration.json') continue;
-    const companionUrl = `${baseUrl}/${relativePath}`;
+    const companionUrl = `${baseUrl}/${relativePath}${query ? `?${query}` : ''}`;
     const res = await throttledFetch('marketplace-installer', companionUrl, {
       headers: {
         Accept: 'text/plain, application/json, application/vnd.github.raw+json',
@@ -341,9 +344,28 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders) {
     if (!res.ok) {
       throw new Error(`Companion file '${relativePath}' could not be fetched (HTTP ${res.status})`);
     }
-    files[relativePath] = await res.text();
+    files[relativePath] = unwrapGitHubContent(await res.text());
   }
   return { files };
+}
+
+/**
+ * The GitHub Contents API wraps a file in `{ content: <base64>, encoding }`;
+ * a raw host returns the file itself. Returns the file either way.
+ * @param {string} text
+ * @returns {string}
+ */
+function unwrapGitHubContent(text) {
+  if (!text.startsWith('{')) return text;
+  try {
+    const wrapper = JSON.parse(text);
+    if (wrapper && typeof wrapper.content === 'string' && wrapper.encoding === 'base64') {
+      return Buffer.from(wrapper.content.replaceAll('\n', ''), 'base64').toString('utf8');
+    }
+  } catch {
+    // Not JSON: the file itself.
+  }
+  return text;
 }
 
 /**
@@ -700,7 +722,17 @@ class ContentInstaller {
       throw new Error(`skill '${name}' is a system skill of iHub and cannot be replaced`);
     }
     if (type === 'integration') {
-      await integrationRegistry.writeInstalled(dirNameToDefinitionId(name), content.files);
+      const definitionId = dirNameToDefinitionId(name);
+      await integrationRegistry.writeInstalled(definitionId, content.files);
+      // Installations of a re-installed definition keep cached parameter
+      // schemas of the old document otherwise.
+      const [{ default: installedIntegrationService }, { invalidate }] = await Promise.all([
+        import('../integrations/InstalledIntegrationService.js'),
+        import('../integrations/protocols/openapi/OpenApiAdapter.js')
+      ]);
+      for (const instance of installedIntegrationService.instancesOf(definitionId)) {
+        invalidate(instance.id);
+      }
       return;
     }
     if (type === 'skill') {

@@ -8,6 +8,21 @@ import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFil
 import { useUIConfig } from '../contexts/UIConfigContext';
 
 /**
+ * The installed integrations an app binds (`app.integrations[<instanceId>]`,
+ * #3061). Their actions are tools the model gets by the instance id, so the
+ * id is a tool reference like an MCP server's. The built-in `ifinder` and
+ * `iassistant` keys only carry scope settings and are no tools.
+ *
+ * @param {Object} app
+ * @returns {string[]}
+ */
+export function boundIntegrationRefs(app) {
+  const bindings = app?.integrations;
+  if (!bindings || typeof bindings !== 'object') return [];
+  return Object.keys(bindings).filter(id => id !== 'ifinder' && id !== 'iassistant');
+}
+
+/**
  * Custom hook for managing app settings across chat and canvas modes
  * Provides shared state management for model, style, output format, etc.
  *
@@ -181,7 +196,7 @@ function useAppSettings(
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingLevel: app.thinking?.level ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: app.tools || [],
+      enabledTools: [...(app.tools || []), ...boundIntegrationRefs(app)],
       websearchEnabled: app.websearch?.enabledByDefault ?? false,
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
       imageQuality: app.imageGeneration?.quality || 'Medium',

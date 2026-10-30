@@ -11,6 +11,33 @@ import {
 const localize = name => (typeof name === 'object' ? name?.en : name) || '';
 
 describe('groupToolsByMcpServer', () => {
+  test('folds the actions of an installed integration into one toggle named after it', () => {
+    const tools = [
+      {
+        id: 'open-data-portal__search_datasets',
+        _integration: { instanceId: 'open-data-portal', instanceLabel: 'GovData' }
+      },
+      {
+        id: 'open-data-portal__get_dataset',
+        _integration: { instanceId: 'open-data-portal', instanceLabel: 'GovData' }
+      },
+      { id: 'braveSearch' }
+    ];
+
+    // The app binds the installation by its id, the reference the server's
+    // isToolSelected reads for every action of it.
+    const { grouped, individual } = groupToolsByMcpServer(
+      ['open-data-portal', 'braveSearch'],
+      tools,
+      localize
+    );
+
+    expect(grouped).toEqual([
+      { id: 'integration-open-data-portal', name: 'GovData', matchedTools: ['open-data-portal'] }
+    ]);
+    expect(individual).toEqual(['braveSearch']);
+  });
+
   const excalidrawTools = [
     {
       id: 'excalidraw__read_me',

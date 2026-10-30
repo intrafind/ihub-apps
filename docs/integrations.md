@@ -39,7 +39,7 @@ Installed instances can be tested, edited, disabled and removed from the **Insta
 
 The same object carries the scope settings of the built-in `ifinder` and `iassistant` integrations (`scopePicker`, `defaultScope`, `pinnedScope`).
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action*; the usual per-chat tool switches apply. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action*. The tools menu shows one switch per installation (the instance id is the tool reference, like an MCP server's id), on by default. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it.
 
 ## How an action runs
 
@@ -90,7 +90,7 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
 }
 ```
 
-Field types: `string` (with optional `suggestions` and `pattern`), `number` (`min`, `max`), `boolean`, `enum` (`choices` with localized labels), `url`, `secret` (always sensitive, stored in the credential store), `file`, `directory`. `scope: "user"` fields are reserved for per-user connections. The schema is `server/validators/integrationDefinitionSchema.js`; the sources mapping is the [declared-sources format](answer-sources.md) with `urlTemplate` on top.
+A service account's secret goes into a header (`kind: header` with `header` and `valuePrefix`, `bearer`, or `basic`); a secret in a query parameter is not supported. Field types: `string` (with optional `suggestions` and `pattern`), `number` (`min`, `max`), `boolean`, `enum` (`choices` with localized labels), `url`, `secret` (always sensitive, stored in the credential store), `file`, `directory`. `scope: "user"` fields are reserved for per-user connections. The schema is `server/validators/integrationDefinitionSchema.js`; the sources mapping is the [declared-sources format](answer-sources.md) with `urlTemplate` on top.
 
 To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document and the icon are fetched even when not listed). See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
 

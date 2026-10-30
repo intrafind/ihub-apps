@@ -78,6 +78,23 @@ export class InstalledIntegrationService {
     return result.data;
   }
 
+  /**
+   * The file for a change. An invalid file is an error here, not an empty
+   * configuration: writing the fallback back would erase every installation.
+   */
+  _readConfigForWrite() {
+    const data = configCache.get(INTEGRATIONS_FILE)?.data;
+    if (!data) return emptyConfig();
+    const result = validateIntegrationsConfig(data);
+    if (!result.success) {
+      throw new IntegrationError(
+        'integrations.json is invalid; fix the file before changing installations',
+        { status: 500, code: 'INVALID_CONFIG', details: result.errors }
+      );
+    }
+    return result.data;
+  }
+
   async writeConfig(config) {
     const result = validateIntegrationsConfig(config);
     if (!result.success) {
@@ -281,7 +298,7 @@ export class InstalledIntegrationService {
 
   /** Create an instance. `payload.secrets` holds sensitive field values. */
   async create(payload, { language = 'en' } = {}) {
-    const config = this.readConfig();
+    const config = this._readConfigForWrite();
     if (config.installed.some(inst => inst.id === payload?.id)) {
       throw new IntegrationError(`An integration with id "${payload.id}" exists`, {
         status: 409,
@@ -292,13 +309,13 @@ export class InstalledIntegrationService {
     await this._storeSecrets(secretsToStore, language);
     config.installed.push(instance);
     await this.writeConfig(config);
-    await this._afterChange();
+    await this._afterChange(instance.id);
     return instance;
   }
 
   /** Replace an instance (the id cannot change). */
   async update(id, payload, { language = 'en' } = {}) {
-    const config = this.readConfig();
+    const config = this._readConfigForWrite();
     const index = config.installed.findIndex(inst => inst.id === id);
     if (index < 0)
       throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
@@ -316,31 +333,31 @@ export class InstalledIntegrationService {
     }
     config.installed[index] = instance;
     await this.writeConfig(config);
-    await this._afterChange();
+    await this._afterChange(instance.id);
     return instance;
   }
 
   async setEnabled(id, enabled) {
-    const config = this.readConfig();
+    const config = this._readConfigForWrite();
     const instance = config.installed.find(inst => inst.id === id);
     if (!instance)
       throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
     instance.enabled = Boolean(enabled);
     instance.updatedAt = nowIso();
     await this.writeConfig(config);
-    await this._afterChange();
+    await this._afterChange(instance.id);
     return instance;
   }
 
   async remove(id) {
-    const config = this.readConfig();
+    const config = this._readConfigForWrite();
     const instance = config.installed.find(inst => inst.id === id);
     if (!instance)
       throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
     config.installed = config.installed.filter(inst => inst.id !== id);
     await this.writeConfig(config);
     await this._removeManagedCredential(instance);
-    await this._afterChange();
+    await this._afterChange(instance.id);
     return instance;
   }
 
@@ -361,34 +378,26 @@ export class InstalledIntegrationService {
     });
     const adapter = getProtocolAdapter(definition.protocol.type);
     const inlineSecret = secretsToStore[0]?.value;
+    // An inline secret is resolved for this one test and written nowhere; the
+    // resolver travels with the call, so concurrent tests cannot see it.
+    const resolveSecret = inlineSecret ? () => inlineSecret : undefined;
     const probeInstance = inlineSecret
-      ? { ...instance, auth: { ...instance.auth, credentialRef: `__inline__` } }
+      ? { ...instance, auth: { ...instance.auth, credentialRef: '__inline__' } }
       : instance;
-    if (inlineSecret) {
-      // Resolve the inline secret without writing it anywhere.
-      const credentialService = (await import('../CredentialService.js')).default;
-      const original = credentialService.resolveSecret;
-      credentialService.resolveSecret = ref =>
-        ref === '__inline__' ? inlineSecret : original.call(credentialService, ref);
-      try {
-        return await adapter.test({
-          definition,
-          instance: probeInstance,
-          document,
-          security: this.security(),
-          language
-        });
-      } finally {
-        credentialService.resolveSecret = original;
-      }
-    }
-    return adapter.test({ definition, instance, document, security: this.security(), language });
+    return adapter.test({
+      definition,
+      instance: probeInstance,
+      document,
+      security: this.security(),
+      language,
+      resolveSecret
+    });
   }
 
-  async _afterChange() {
+  async _afterChange(instanceId) {
     try {
       const { invalidate } = await import('./protocols/openapi/OpenApiAdapter.js');
-      invalidate();
+      invalidate(instanceId);
       const { syncIntegrationScopeProviders } = await import('./integrationTools.js');
       await syncIntegrationScopeProviders();
     } catch (error) {

@@ -173,10 +173,11 @@ const HTTP_HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~{}-]+$/; // `{}` allows a {fi
  * the sensitive install field that holds it; `header` may be a template.
  */
 const serviceAccountAuthSchema = z.object({
-  kind: z.enum(['header', 'bearer', 'basic', 'query']).prefault('header'),
+  // A secret in a query parameter is not supported: it would land in access
+  // logs on both ends.
+  kind: z.enum(['header', 'bearer', 'basic']).prefault('header'),
   header: z.string().regex(HTTP_HEADER_NAME).optional(),
   valuePrefix: z.string().max(64).optional(),
-  queryParam: identifierSchema.optional(),
   field: identifierSchema.optional(),
   fields: z.array(identifierSchema).optional()
 });

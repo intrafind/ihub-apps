@@ -76,6 +76,12 @@ jest.unstable_mockModule('../services/integrations/InstalledIntegrationService.j
   }
 }));
 
+/** Per-instance cache invalidations the installer requested. */
+const invalidated = [];
+jest.unstable_mockModule('../services/integrations/protocols/openapi/OpenApiAdapter.js', () => ({
+  invalidate: instanceId => invalidated.push(instanceId)
+}));
+
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');
 const { default: integrationRegistry } =
   await import('../services/integrations/definitions/IntegrationRegistry.js');
@@ -144,6 +150,7 @@ describe('ContentInstaller: integration definitions', () => {
     state.instances = [];
     state.items = [];
     state.files = {};
+    invalidated.length = 0;
     // The registry singleton keeps the previous test's entries in memory.
     await integrationRegistry.reload();
   });
@@ -166,6 +173,15 @@ describe('ContentInstaller: integration definitions', () => {
     const entry = integrationRegistry.get('org.example/service');
     expect(entry).toMatchObject({ source: 'installed' });
     expect(entry.document.paths['/search'].get.operationId).toBe('search');
+  });
+
+  test('re-installing a definition drops the cached schemas of its installations', async () => {
+    publish(definition);
+    state.instances = [{ id: 'service-prod' }, { id: 'service-test' }];
+
+    await contentInstaller.install('reg', 'integration', FOLDER, 'admin');
+
+    expect(invalidated).toEqual(['service-prod', 'service-test']);
   });
 
   test('rejects a definition that fails the schema', async () => {

@@ -4,7 +4,7 @@
 import {
   runOpenApiTool,
   getOpenApiToolParameters,
-  invalidateSpecCache
+  invalidateToolsWithPrefix
 } from '../../../tools/OpenApiToolRunner.js';
 import credentialService from '../../../CredentialService.js';
 import logger from '../../../../utils/logger.js';
@@ -43,13 +43,22 @@ function isHttpUrl(value) {
   }
 }
 
+/** The credential store, the default source of a service account's secret. */
+const storedSecret = ref => credentialService.resolveSecret(ref);
+
 /**
  * Resolve the installation's base URL, static headers and the auth header.
- * Secrets are read from the credential store here and never stored.
+ * Secrets are read from the credential store here (or from `resolveSecret`,
+ * which the test of an unsaved instance passes for its inline secret) and
+ * never stored.
  */
-function resolveRequestSettings(definition, instance, values) {
+function resolveRequestSettings(definition, instance, values, resolveSecret = storedSecret) {
   const protocol = definition.protocol;
-  const baseUrl = fillTemplate(protocol.baseUrl, values).replace(/\/+$/, '');
+  // "{baseUrl}{apiPath}" with a URL that ends in "/" and a path that starts
+  // with one gives an interior "//", which many portals answer with 404.
+  const baseUrl = fillTemplate(protocol.baseUrl, values)
+    .replace(/(^[a-z][a-z0-9+.-]*:\/\/[^/]+)|\/{2,}/gi, (match, origin) => origin || '/')
+    .replace(/\/+$/, '');
   if (!isHttpUrl(baseUrl)) {
     throw new Error(`Integration ${instance.id}: base URL "${baseUrl}" is not an http(s) URL`);
   }
@@ -64,7 +73,7 @@ function resolveRequestSettings(definition, instance, values) {
   if (mode === 'service-account') {
     const ref = instance.auth?.credentialRef;
     if (!ref) throw new Error(`Integration ${instance.id}: service account without credential`);
-    const secret = credentialService.resolveSecret(ref);
+    const secret = resolveSecret(ref);
     const account = definition.auth.serviceAccount || {};
     const kind = account.kind || 'header';
     const prefix = account.valuePrefix || '';
@@ -282,14 +291,15 @@ export async function run({
   action,
   args = {},
   context = {},
-  security
+  security,
+  resolveSecret
 }) {
   const values = effectiveValues(definition, instance);
   const callArgs = { ...args };
   applyActionDefaults(callArgs, action.defaults, values);
   applyScope(callArgs, definition.scopes, action.name, context.scope, values);
 
-  const settings = resolveRequestSettings(definition, instance, values);
+  const settings = resolveRequestSettings(definition, instance, values, resolveSecret);
   const tool = buildRunnerTool(definition, instance, document, action, settings, security);
   const raw = await runOpenApiTool(tool, callArgs, {});
 
@@ -319,7 +329,14 @@ export async function run({
  * health action (or the first read action without required parameters) and
  * report in the shape `IntegrationTestResults` renders.
  */
-export async function test({ definition, instance, document, security, language = 'en' }) {
+export async function test({
+  definition,
+  instance,
+  document,
+  security,
+  language = 'en',
+  resolveSecret
+}) {
   const steps = [];
   const started = Date.now();
   const push = (id, label, status, message, extra = {}) =>
@@ -328,7 +345,7 @@ export async function test({ definition, instance, document, security, language 
   let values;
   try {
     values = effectiveValues(definition, instance);
-    const settings = resolveRequestSettings(definition, instance, values);
+    const settings = resolveRequestSettings(definition, instance, values, resolveSecret);
     push('settings', 'Request settings', 'ok', settings.baseUrl, {
       details: { baseUrl: settings.baseUrl, headers: Object.keys(settings.headers) }
     });
@@ -353,6 +370,7 @@ export async function test({ definition, instance, document, security, language 
       instance,
       document,
       action,
+      resolveSecret,
       args: { ...(health?.args || {}) },
       security
     });
@@ -452,8 +470,11 @@ export async function listScopes({ definition, instance, document, security }) {
   return out;
 }
 
-/** Drop cached operation schemas for an installation (after its config changed). */
+/**
+ * Drop the cached operation schemas of one installation (after its config or
+ * its definition changed), or of every installation when no id is given.
+ * Only the `<instanceId>__*` entries go; other OpenAPI tools keep theirs.
+ */
 export function invalidate(instanceId) {
-  invalidateSpecCache();
-  void instanceId;
+  invalidateToolsWithPrefix(instanceId ? toolIdFor(instanceId, '') : '');
 }

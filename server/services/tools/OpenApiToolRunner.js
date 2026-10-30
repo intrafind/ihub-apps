@@ -536,4 +536,26 @@ export function invalidateSpecCache(toolId) {
   oauthCache.clear();
 }
 
-export default { runOpenApiTool, getOpenApiToolParameters, invalidateSpecCache };
+/**
+ * Drop the cached parameter schemas of every tool whose id starts with
+ * `prefix` (an installed integration's `<instanceId>__`). An empty prefix
+ * drops them all, together with the parsed specs; OAuth tokens stay.
+ * @param {string} prefix
+ */
+export function invalidateToolsWithPrefix(prefix) {
+  if (!prefix) {
+    specCache.clear();
+    paramCache.clear();
+    return;
+  }
+  for (const key of [...paramCache.keys()]) {
+    if (key.startsWith(prefix)) paramCache.delete(key);
+  }
+}
+
+export default {
+  runOpenApiTool,
+  getOpenApiToolParameters,
+  invalidateSpecCache,
+  invalidateToolsWithPrefix
+};

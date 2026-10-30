@@ -1891,8 +1891,9 @@ class ConfigCache {
   }
 
   /**
-   * The tool references (`app.tools`) of an app the user may access, or an
-   * empty list when the app is unknown or not available to them.
+   * The tool references (`app.tools`, plus the installed integrations the
+   * app binds) of an app the user may access, or an empty list when the app
+   * is unknown or not available to them.
    * @param {object} user
    * @param {object} platformConfig
    * @param {string} appId
@@ -1901,7 +1902,18 @@ class ConfigCache {
   async getAppToolRefsForUser(user, platformConfig, appId) {
     const { data: apps = [] } = await this.getAppsForUser(user, platformConfig);
     const app = findByIdCaseInsensitive(apps || [], appId);
-    return Array.isArray(app?.tools) ? app.tools : [];
+    const refs = Array.isArray(app?.tools) ? [...app.tools] : [];
+    // An installed integration the app binds (`app.integrations[<instanceId>]`,
+    // #3061) is referenced by the instance id, like an MCP server by its id.
+    if (app?.integrations && typeof app.integrations === 'object') {
+      const installed = new Set(
+        (this.getIntegrations().data?.installed || []).map(instance => instance.id)
+      );
+      for (const id of Object.keys(app.integrations)) {
+        if (installed.has(id)) refs.push(id);
+      }
+    }
+    return refs;
   }
 
   /**

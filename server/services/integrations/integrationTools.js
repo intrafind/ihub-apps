@@ -58,7 +58,12 @@ function toolFromAction(resolved, action, language) {
     description: `${action.description || title}${guidance}`,
     parameters: action.parameters,
     type: 'integration',
-    _integration: { instanceId: instance.id, action: action.name, definition: definition.id },
+    _integration: {
+      instanceId: instance.id,
+      instanceLabel: label,
+      action: action.name,
+      definition: definition.id
+    },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
     readOnly: action.sideEffect === 'read',
@@ -197,6 +202,7 @@ export async function runIntegrationTool(tool, params = {}) {
 /** `${instanceId}:${scopeId}` → display name, from the last listing. */
 const scopeNames = new Map();
 const registeredInstanceIds = new Set();
+const SCOPE_LISTING_TTL_MS = 60_000;
 
 function scopeProviderFor(resolved) {
   const { instance, definition, label } = resolved;
@@ -204,7 +210,11 @@ function scopeProviderFor(resolved) {
   const adapter = getProtocolAdapter(definition.protocol.type);
   const scopeLabel = localized(definition.scopes.label, 'en', 'Scope');
 
+  // The listing is one request to the system; it is asked for on every chat
+  // turn (validateScope) and every menu opening, so it is kept for a minute.
+  let listing = null;
   async function listRaw() {
+    if (listing && Date.now() - listing.at < SCOPE_LISTING_TTL_MS) return listing.scopes;
     const scopes = await adapter.listScopes({
       definition,
       instance,
@@ -212,6 +222,7 @@ function scopeProviderFor(resolved) {
       security: resolved.security
     });
     for (const scope of scopes) scopeNames.set(`${instanceId}:${scope.id}`, scope.name);
+    listing = { at: Date.now(), scopes };
     return scopes;
   }
 
