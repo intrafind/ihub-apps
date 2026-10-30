@@ -109,6 +109,37 @@ describe('IntegrationRegistry', () => {
     await expect(fs.stat(path.join(contentsDir, 'org.new__thing'))).rejects.toThrow();
   });
 
+  it('keeps the previous folder when a re-install fails before or during the swap', async () => {
+    const registry = new IntegrationRegistry({ shippedDir, contentsDir });
+    await registry.reload();
+    const files = version => ({
+      'integration.json': definition('org.new/thing', { version }),
+      'api.json': doc,
+      'README.md': `# ${version}`
+    });
+    await registry.writeInstalled('org.new/thing', files('1.0.0'));
+    const dir = path.join(contentsDir, 'org.new__thing');
+
+    // The new document does not parse: nothing is touched.
+    await expect(
+      registry.writeInstalled('org.new/thing', { ...files('2.0.0'), 'api.json': 'not json {' })
+    ).rejects.toThrow();
+    expect(await fs.readFile(path.join(dir, 'README.md'), 'utf8')).toBe('# 1.0.0');
+
+    // The swap itself fails after the old folder was moved aside: it comes back.
+    registry._swapIn = async () => {
+      throw new Error('disk full');
+    };
+    await expect(registry.writeInstalled('org.new/thing', files('2.0.0'))).rejects.toThrow(
+      'disk full'
+    );
+    expect(await fs.readFile(path.join(dir, 'README.md'), 'utf8')).toBe('# 1.0.0');
+    await registry.reload();
+    expect(registry.get('org.new/thing').definition.version).toBe('1.0.0');
+    const leftovers = (await fs.readdir(contentsDir)).filter(name => name.startsWith('.'));
+    expect(leftovers).toEqual([]);
+  });
+
   it('refuses a mismatching id, a stdio protocol and path traversal in companions', async () => {
     const registry = new IntegrationRegistry({ shippedDir, contentsDir });
     await registry.reload();

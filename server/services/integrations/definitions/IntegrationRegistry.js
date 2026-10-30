@@ -143,9 +143,13 @@ export class IntegrationRegistry {
     }
     const dir = await this._installedDir(id);
     // Written to a staging folder first: a bad companion path, a failed write
-    // or an unreadable OpenAPI document must not have deleted the working
-    // folder already. Dot-prefixed, so a leftover is never loaded.
-    const staging = path.join(this.contentsDir, `.staging-${process.pid}-${Date.now()}`);
+    // or an unreadable OpenAPI document must not have touched the working
+    // folder. The working folder is moved aside, not deleted, until the
+    // staging folder is in place, so a failed swap restores it. Both helper
+    // folders are dot-prefixed, so a leftover is never loaded.
+    const stamp = `${process.pid}-${Date.now()}`;
+    const staging = path.join(this.contentsDir, `.staging-${stamp}`);
+    const backup = path.join(this.contentsDir, `.backup-${stamp}`);
     await fs.mkdir(staging, { recursive: true });
     try {
       for (const [relPath, content] of Object.entries(files)) {
@@ -159,12 +163,19 @@ export class IntegrationRegistry {
       if (type === 'openapi' && !isHttpUrl(document)) {
         await this._readDocument(staging, document);
       }
-      await fs.rm(dir, { recursive: true, force: true });
-      await fs.rename(staging, dir);
     } catch (error) {
       await fs.rm(staging, { recursive: true, force: true });
       throw error;
     }
+    const hadPrevious = await this._moveAside(dir, backup);
+    try {
+      await this._swapIn(staging, dir);
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true });
+      if (hadPrevious) await fs.rename(backup, dir);
+      throw error;
+    }
+    if (hadPrevious) await fs.rm(backup, { recursive: true, force: true });
     await this.reload();
     this._announce();
     return this.get(id);
@@ -186,6 +197,22 @@ export class IntegrationRegistry {
     await fs.rm(dir, { recursive: true, force: true });
     await this.reload();
     this._announce();
+  }
+
+  /** Move the working folder to `backup`; false when there was none. */
+  async _moveAside(dir, backup) {
+    try {
+      await fs.rename(dir, backup);
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+
+  /** Put the staged folder in place (a seam for the swap-failure test). */
+  async _swapIn(staging, dir) {
+    await fs.rename(staging, dir);
   }
 
   /**
