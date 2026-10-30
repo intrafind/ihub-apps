@@ -359,8 +359,8 @@ each user's sign-in token at that provider for an iFinder token. The default, iH
 is unchanged.
 
 - Grant types: RFC 8693 token exchange (Zitadel, Keycloak) and On-Behalf-Of (Entra ID), with an
-  optional separate exchange client, audience and a scope map from `fa_*` scopes to provider
-  scopes.
+  audience and a scope map from `fa_*` scopes to provider scopes. The exchange uses the client
+  ID and secret already configured for the provider; no new credentials are needed.
 - Scheduled tasks, personal API keys and workflows keep working while the user is signed out:
   iHub keeps the provider's refresh token, encrypted. Add `offline_access` to the provider's
   scopes.

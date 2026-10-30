@@ -337,8 +337,6 @@
     "tokenExchange": {
       "oidcProvider": "",
       "grantType": "tokenExchange",
-      "clientId": "",
-      "clientSecretRef": "",
       "audience": "",
       "scopeMap": {
         "fa_index_read": "",

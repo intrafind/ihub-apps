@@ -631,8 +631,6 @@ export const platformConfigSchema = z
           .object({
             oidcProvider: z.string().prefault(''),
             grantType: z.enum(['tokenExchange', 'entraObo']).prefault('tokenExchange'),
-            clientId: z.string().prefault(''),
-            clientSecretRef: z.string().prefault(''),
             audience: z.string().prefault(''),
             scopeMap: z.record(z.string(), z.string()).prefault({}),
             extraScopes: z.array(z.string()).prefault([])

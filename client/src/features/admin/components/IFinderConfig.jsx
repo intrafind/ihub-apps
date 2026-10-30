@@ -17,8 +17,6 @@ const AUTH_MODES = ['ihubSigned', 'oidcTokenExchange'];
 const DEFAULT_TOKEN_EXCHANGE = {
   oidcProvider: '',
   grantType: 'tokenExchange',
-  clientId: '',
-  clientSecretRef: '',
   audience: '',
   scopeMap: { fa_index_read: '', fa_iassistant: '', fi_smartcollections: '' },
   extraScopes: []

@@ -468,7 +468,6 @@ provider (token exchange)*, then:
 |---|---|---|
 | OIDC provider | `iFinder.tokenExchange.oidcProvider` | Name of the provider under Admin > Authentication that iFinder shares |
 | Grant type | `iFinder.tokenExchange.grantType` | `tokenExchange` (RFC 8693: Zitadel, Keycloak) or `entraObo` (Entra On-Behalf-Of) |
-| Exchange client ID / secret | `iFinder.tokenExchange.clientId`, `clientSecretRef` | Optional. Empty uses the provider's sign-in client. The secret is a credential store reference |
 | Audience | `iFinder.tokenExchange.audience` | iFinder's client or project id at the provider (RFC 8693 only) |
 | Scope map | `iFinder.tokenExchange.scopeMap` | Maps the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `fi_smartcollections` for Smart Collections, `iFinder.defaultScope` otherwise) to provider scopes. An empty value sends the scope unchanged |
 | Additional scopes | `iFinder.tokenExchange.extraScopes` | Sent with every exchange |
@@ -482,8 +481,6 @@ provider (token exchange)*, then:
   "tokenExchange": {
     "oidcProvider": "zitadel",
     "grantType": "tokenExchange",
-    "clientId": "",
-    "clientSecretRef": "",
     "audience": "312345678901234567",
     "scopeMap": { "fa_index_read": "", "fa_iassistant": "", "fi_smartcollections": "" },
     "extraScopes": []
@@ -492,10 +489,13 @@ provider (token exchange)*, then:
 ```
 
 The key, issuer, algorithm, expiry and **JWT Subject Field** settings do not
-apply in this mode: the provider signs the token and sets its subject. iHub
-authenticates at the token endpoint with `client_secret_post` (client id and
-secret in the form body), the same way it signs users in; make sure the client
-allows that method. The token endpoint is called through the iHub proxy and SSL
+apply in this mode: the provider signs the token and sets its subject. No new
+credentials are needed: iHub refreshes and exchanges with the client ID and
+secret configured for the provider under Admin > Authentication, so that client
+must be allowed to exchange for the iFinder audience. iHub authenticates at the
+token endpoint with `client_secret_post` (client id and secret in the form
+body), the same way it signs users in; make sure the client allows that
+method. The token endpoint is called through the iHub proxy and SSL
 settings, so a provider with a private CA works once its host is in
 `ssl.domainWhitelist`.
 

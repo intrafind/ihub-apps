@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import Icon from '../../../shared/components/Icon';
-import { CredentialRefSelect } from './OpenApiToolEditor';
 
 const INPUT_CLASS =
   'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
@@ -25,7 +24,6 @@ export default function IFinderTokenExchangeSettings({
   scopeMapEntries,
   setScopeMapEntries
 }) {
-  const selected = oidcProviders.find(provider => provider.name === settings.oidcProvider);
   const isObo = settings.grantType === 'entraObo';
 
   const updateEntry = (index, key, value) => {
@@ -65,7 +63,7 @@ export default function IFinderTokenExchangeSettings({
               )
             : t(
                 'admin.iFinder.tokenExchange.providerHelp',
-                'The provider iHub and iFinder share. Its sign-in tokens are kept (encrypted) and exchanged for iFinder tokens. Add "offline_access" to its scopes so background runs keep working.'
+                'The provider iHub and iFinder share. Its sign-in tokens are kept (encrypted) and exchanged for iFinder tokens with the client ID and secret configured for it under Admin > Authentication. Add "offline_access" to its scopes so background runs keep working.'
               )}
         </p>
       </div>
@@ -96,63 +94,31 @@ export default function IFinderTokenExchangeSettings({
         </select>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="iFinderExchangeClientId" className={LABEL_CLASS}>
-            {t('admin.iFinder.tokenExchange.clientId', 'Exchange client ID')}
-          </label>
-          <input
-            id="iFinderExchangeClientId"
-            type="text"
-            value={settings.clientId}
-            onChange={e => onChange('clientId', e.target.value)}
-            className={INPUT_CLASS}
-            placeholder={selected?.clientId || ''}
-          />
-          <p className={HELP_CLASS}>
-            {t(
-              'admin.iFinder.tokenExchange.clientIdHelp',
-              'Leave empty to exchange with the sign-in client of the provider.'
-            )}
-          </p>
-        </div>
-        <div>
-          <label htmlFor="iFinderExchangeAudience" className={LABEL_CLASS}>
-            {t('admin.iFinder.tokenExchange.audience', 'Audience')}
-          </label>
-          <input
-            id="iFinderExchangeAudience"
-            type="text"
-            value={settings.audience}
-            onChange={e => onChange('audience', e.target.value)}
-            className={INPUT_CLASS}
-            disabled={isObo}
-            placeholder={isObo ? '' : 'ifinder'}
-          />
-          <p className={HELP_CLASS}>
-            {isObo
-              ? t(
-                  'admin.iFinder.tokenExchange.audienceObo',
-                  'Not used by On-Behalf-Of: Entra takes the audience from the scope (api://<ifinder-app-id>/.default).'
-                )
-              : t(
-                  'admin.iFinder.tokenExchange.audienceHelp',
-                  'The client or project id of iFinder at the provider. The issued token carries it as "aud".'
-                )}
-          </p>
-        </div>
+      <div>
+        <label htmlFor="iFinderExchangeAudience" className={LABEL_CLASS}>
+          {t('admin.iFinder.tokenExchange.audience', 'Audience')}
+        </label>
+        <input
+          id="iFinderExchangeAudience"
+          type="text"
+          value={settings.audience}
+          onChange={e => onChange('audience', e.target.value)}
+          className={INPUT_CLASS}
+          disabled={isObo}
+          placeholder={isObo ? '' : 'ifinder'}
+        />
+        <p className={HELP_CLASS}>
+          {isObo
+            ? t(
+                'admin.iFinder.tokenExchange.audienceObo',
+                'Not used by On-Behalf-Of: Entra takes the audience from the scope (api://<ifinder-app-id>/.default).'
+              )
+            : t(
+                'admin.iFinder.tokenExchange.audienceHelp',
+                'The client or project id of iFinder at the provider. The issued token carries it as "aud".'
+              )}
+        </p>
       </div>
-
-      <CredentialRefSelect
-        value={settings.clientSecretRef}
-        onChange={id => onChange('clientSecretRef', id)}
-        types={['secret', 'oauth2']}
-        label={t('admin.iFinder.tokenExchange.clientSecretRef', 'Exchange client secret')}
-        help={t(
-          'admin.iFinder.tokenExchange.clientSecretRefHelp',
-          'Leave empty to use the client secret of the sign-in client.'
-        )}
-      />
 
       <div>
         <span className={LABEL_CLASS}>

@@ -9,7 +9,7 @@
  * the new settings so they are visible and editable in platform.json:
  *
  *  - `iFinder.authMode: "ihubSigned"` — iHub keeps signing the tokens, as before
- *  - `iFinder.tokenExchange` — provider, grant type, client override, audience
+ *  - `iFinder.tokenExchange` — provider, grant type, audience
  *    and scope map of the exchange; all empty, so nothing changes until an
  *    admin selects the `oidcTokenExchange` mode
  *
@@ -33,8 +33,6 @@ export async function up(ctx) {
   ctx.setDefault(platform, 'iFinder.authMode', 'ihubSigned');
   ctx.setDefault(platform, 'iFinder.tokenExchange.oidcProvider', '');
   ctx.setDefault(platform, 'iFinder.tokenExchange.grantType', 'tokenExchange');
-  ctx.setDefault(platform, 'iFinder.tokenExchange.clientId', '');
-  ctx.setDefault(platform, 'iFinder.tokenExchange.clientSecretRef', '');
   ctx.setDefault(platform, 'iFinder.tokenExchange.audience', '');
   ctx.setDefault(platform, 'iFinder.tokenExchange.scopeMap', {
     fa_index_read: '',

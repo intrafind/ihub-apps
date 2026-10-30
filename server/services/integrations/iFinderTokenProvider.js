@@ -180,12 +180,10 @@ export function resolveExchangeSettings(platform = configCache.getPlatform() || 
     displayName: provider.displayName || provider.name,
     tokenURL: provider.tokenURL,
     grantType,
-    // The exchanging client; it defaults to the login client.
-    clientId: exchange.clientId || provider.clientId,
-    clientSecretRef: exchange.clientSecretRef || provider.clientSecretRef,
-    // The login client refreshes the login tokens: the refresh token was issued to it.
-    loginClientId: provider.clientId,
-    loginClientSecretRef: provider.clientSecretRef,
+    // The provider's login client both refreshes the sign-in (the refresh
+    // token was issued to it) and exchanges it.
+    clientId: provider.clientId,
+    clientSecretRef: provider.clientSecretRef,
     audience: exchange.audience || '',
     scopeMap: exchange.scopeMap && typeof exchange.scopeMap === 'object' ? exchange.scopeMap : {},
     extraScopes: Array.isArray(exchange.extraScopes) ? exchange.extraScopes : [],
@@ -391,11 +389,11 @@ function reauthorizationError(settings, cause) {
   );
 }
 
-function resolveClientSecret(ref, label) {
+function resolveClientSecret(ref) {
   const secret = ref ? credentialService.tryResolveSecret(ref) : undefined;
   if (!secret) {
     throw configurationError(
-      `The ${label} client secret for the iFinder token exchange could not be resolved from the credential store.`
+      'The client secret of the OIDC provider used for the iFinder token exchange could not be resolved from the credential store.'
     );
   }
   return secret;
@@ -425,7 +423,7 @@ async function refreshLoginTokens(settings, refreshToken, clientSecret) {
     result = await postForm(settings.tokenURL, {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      client_id: settings.loginClientId,
+      client_id: settings.clientId,
       client_secret: clientSecret
     });
   } catch (error) {
@@ -470,7 +468,7 @@ async function refreshUnderLock(user, settings, staleAccessToken) {
     settings.providerName
   );
   const lockPath = tokenFile.replace(/\.json$/, '.lock');
-  const clientSecret = resolveClientSecret(settings.loginClientSecretRef, 'sign-in');
+  const clientSecret = resolveClientSecret(settings.clientSecretRef);
 
   return withFileLock(
     lockPath,
@@ -616,9 +614,11 @@ async function exchange(settings, subjectToken, scope) {
     );
   }
   if (!settings.clientId) {
-    throw configurationError('The iFinder token exchange has no client ID.');
+    throw configurationError(
+      'The OIDC provider used for the iFinder token exchange has no client ID.'
+    );
   }
-  const clientSecret = resolveClientSecret(settings.clientSecretRef, 'exchange');
+  const clientSecret = resolveClientSecret(settings.clientSecretRef);
   const { response, data } = await postForm(
     settings.tokenURL,
     buildExchangeParams(settings, subjectToken, scope, clientSecret)

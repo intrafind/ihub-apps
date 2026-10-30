@@ -50,10 +50,7 @@ const {
 
 const SERVICE = 'oidc-login';
 const PROVIDER = 'zitadel';
-const SECRETS = {
-  'login-secret': 'login-secret-value',
-  'exchange-secret': 'exchange-secret-value'
-};
+const SECRETS = { 'login-secret': 'login-secret-value' };
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-ifinder-exchange-'));
 let platform = {};
@@ -117,8 +114,6 @@ function exchangePlatform(overrides = {}) {
       tokenExchange: {
         oidcProvider: PROVIDER,
         grantType: 'tokenExchange',
-        clientId: '',
-        clientSecretRef: '',
         audience: 'ifinder-project',
         scopeMap: { fa_index_read: '', fa_iassistant: '' },
         extraScopes: [],
@@ -226,8 +221,6 @@ describe('exchange request shape', () => {
   it('Entra OBO: jwt-bearer grant with assertion and on_behalf_of', async () => {
     platform = exchangePlatform({
       grantType: 'entraObo',
-      clientId: 'exchange-client',
-      clientSecretRef: 'exchange-secret',
       audience: '',
       scopeMap: { fa_index_read: 'api://ifinder/.default' }
     });
@@ -240,8 +233,8 @@ describe('exchange request shape', () => {
       assertion: 'login-at',
       requested_token_use: 'on_behalf_of',
       scope: 'api://ifinder/.default',
-      client_id: 'exchange-client',
-      client_secret: 'exchange-secret-value'
+      client_id: 'ihub-login',
+      client_secret: 'login-secret-value'
     });
   });
 
