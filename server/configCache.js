@@ -408,10 +408,6 @@ const CONFIG_LOADERS = {
     label: 'installations',
     count: data => Object.keys(data.installations || {}).length
   },
-  'config/a2aAgents.json': {
-    label: 'A2A agents',
-    count: data => (data.agents || []).length
-  },
   'config/integrations.json': {
     label: 'installed integrations',
     count: data => (data.installed || []).length
@@ -493,7 +489,6 @@ class ConfigCache {
       'config/features.json',
       'config/registries.json',
       'config/installations.json',
-      'config/a2aAgents.json',
       'config/integrations.json',
       'config/peopleDirectories.json',
       'config/credentials.json',
@@ -1563,21 +1558,6 @@ class ConfigCache {
     const cached = this.get('config/installations.json');
     if (!cached || !cached.data) {
       return { data: { installations: {} }, etag: null };
-    }
-    return cached;
-  }
-
-  /**
-   * Get the remote A2A agents configuration (outbound A2A client, #2546).
-   * @returns {{ data: { agents: Array, security: Object }, etag: string|null }}
-   */
-  getA2aAgents() {
-    const cached = this.get('config/a2aAgents.json');
-    if (!cached || !cached.data) {
-      return {
-        data: { agents: [], security: { blockPrivateIps: true, allowedHosts: [] } },
-        etag: null
-      };
     }
     return cached;
   }

@@ -219,19 +219,6 @@ export async function loadConfiguredTools(language = null) {
   return localized;
 }
 
-/**
- * Discover the skills of all configured remote A2A agents as tools via
- * A2aClientManager (ids `a2a__<agentId>__<skill>`, marked with `_a2a`).
- */
-export async function discoverA2aTools() {
-  try {
-    return await a2aClientManager.listAllTools();
-  } catch (error) {
-    logger.error('Error discovering A2A agent tools', { component: 'ToolLoader', error });
-    return [];
-  }
-}
-
 /** Agent ids whose id clash has been logged, so each is reported once. */
 const reportedA2aIdConflicts = new Set();
 
@@ -255,9 +242,12 @@ export const MAX_SKILL_NAME_ENUM = 100;
  */
 function guardA2aAgentIds(a2aTools, otherTools) {
   if (!a2aTools.length) return a2aTools;
+  // The agents are installations themselves; only the other installations
+  // (MCP servers, catalog integrations) can take an agent's id.
+  const agentIds = new Set(a2aTools.map(tool => tool._a2a?.agentId).filter(Boolean));
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: installedIntegrationRefs(),
+    mcpServers: installedIntegrationRefs().filter(ref => !agentIds.has(ref.id)),
     peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   for (const [agentId, conflict] of conflicts) {
@@ -314,18 +304,17 @@ async function discoverIntegrationTools(language) {
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  // Installed integrations include the MCP servers (their tools keep `_mcp`).
-  const [integrationTools, discoveredA2aTools] = await Promise.all([
-    discoverIntegrationTools(language),
-    discoverA2aTools()
-  ]);
-  const a2aTools = guardA2aAgentIds(discoveredA2aTools, [...configured, ...integrationTools]);
-  const directoryTools = discoverDirectoryTools(language, [
-    ...configured,
-    ...integrationTools,
-    ...a2aTools
-  ]);
-  const discovered = [...integrationTools, ...a2aTools, ...directoryTools];
+  // Installed integrations include the MCP servers and the remote A2A agents
+  // (their tools keep `_mcp` and `_a2a`).
+  const discoveredIntegrationTools = await discoverIntegrationTools(language);
+  const otherTools = discoveredIntegrationTools.filter(t => !t._a2a);
+  const a2aTools = guardA2aAgentIds(
+    discoveredIntegrationTools.filter(t => t._a2a),
+    [...configured, ...otherTools]
+  );
+  const integrationTools = [...otherTools, ...a2aTools];
+  const directoryTools = discoverDirectoryTools(language, [...configured, ...integrationTools]);
+  const discovered = [...integrationTools, ...directoryTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {

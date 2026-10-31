@@ -40,7 +40,6 @@ import registerAdminBrowserExtensionRoutes from './admin/browserExtension.js';
 import registerAdminCopilotAgentRoutes from './admin/copilotAgent.js';
 import registerAdminNextcloudEmbedRoutes from './admin/nextcloudEmbed.js';
 import registerAdminMcpGatewayRoutes from './admin/mcpGateway.js';
-import registerAdminA2aAgentsRoutes from './admin/a2aAgents.js';
 import registerAdminIntegrationsRoutes from './admin/integrations.js';
 import registerAdminPeopleDirectoriesRoutes from './admin/peopleDirectories.js';
 import registerAdminDocumentTemplatesRoutes from './admin/documentTemplates.js';
@@ -96,7 +95,6 @@ export default async function registerAdminRoutes(app) {
   registerAdminCopilotAgentRoutes(app);
   registerAdminNextcloudEmbedRoutes(app);
   registerAdminMcpGatewayRoutes(app);
-  registerAdminA2aAgentsRoutes(app);
   registerAdminIntegrationsRoutes(app);
   registerAdminPeopleDirectoriesRoutes(app);
   registerAdminDocumentTemplatesRoutes(app);

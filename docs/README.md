@@ -62,7 +62,7 @@ New here? Start with [Getting Started](GETTING_STARTED.md), then take the tour i
 
 - [Tool Calling](tool-calling.md) - LLM tool/function calling
 - [MCP Integration](mcp-integration.md) - MCP servers as installed integrations, MCP Apps, per-user sign-in, MCP gateway
-- [Remote A2A Agents as Tools](a2a-agents.md) - Use remote A2A agents as tools
+- [Remote A2A Agents as Tools](a2a-agents.md) - Remote A2A agents as installed integrations whose skills are tools
 - [Ask User Tool](ask-user-tool.md) - Interactive user prompts
 - [Structured Output](structured-output.md) - Structured LLM responses
 - [Tools (Legacy)](tools.md) - Legacy tool integration

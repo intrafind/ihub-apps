@@ -734,8 +734,9 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
   const platform = configCache.getPlatform() || {};
   const others = {
     tools: otherTools,
+    // MCP servers and A2A agents are installed integrations.
     mcpServers: installedIntegrationRefs(),
-    a2aAgents: configCache.getA2aAgents?.()?.data?.agents || []
+    a2aAgents: []
   };
   const tools = [];
   const seen = new Set();

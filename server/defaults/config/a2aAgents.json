@@ -1,7 +1,0 @@
-{
-  "agents": [],
-  "security": {
-    "blockPrivateIps": true,
-    "allowedHosts": []
-  }
-}
