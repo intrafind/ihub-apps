@@ -446,9 +446,10 @@ export class InstalledIntegrationService {
   /**
    * Test an unsaved or saved instance. `payload` is validated like a create,
    * except that the id may already exist; a secret may be provided inline or
-   * the stored credential is used.
+   * the stored credential is used. `req` is the admin's request, for connectors
+   * whose test shows request-derived values (the Jira redirect URI).
    */
-  async test(payload, { language = 'en', user } = {}) {
+  async test(payload, { language = 'en', user, req } = {}) {
     const existing = payload?.id ? this.get(payload.id) : null;
     const { instance, definition, document, secretsToStore } = await this._prepare(payload, {
       existing
@@ -468,6 +469,7 @@ export class InstalledIntegrationService {
       security: this.security(),
       language,
       user,
+      req,
       resolveSecret
     });
   }

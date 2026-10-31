@@ -21,53 +21,78 @@ The JIRA Connector provides comprehensive integration with Atlassian JIRA, enabl
 
 ## Configuration
 
-### Environment Variables
-
-```bash
-# JIRA OAuth Configuration
-JIRA_BASE_URL=https://your-company.atlassian.net
-JIRA_OAUTH_CLIENT_ID=your-oauth-client-id-from-console
-JIRA_OAUTH_CLIENT_SECRET=your-oauth-client-secret-from-console
-JIRA_OAUTH_REDIRECT_URI=https://ihub.company.com/api/integrations/jira/callback
-
-# For development:
-# JIRA_OAUTH_REDIRECT_URI=http://localhost:5173/api/integrations/jira/callback
-
-# Security Configuration
-TOKEN_ENCRYPTION_KEY=your-256-bit-encryption-key-in-hex
-```
+Jira is the built-in installed integration **Atlassian Jira** (`com.intrafind/jira`), installed
+once as `jira` under **Admin → Integrations → Installed**. The installation holds the OAuth app's
+client id and secret and the redirect URI; every user then connects their own Atlassian account
+once (OAuth 2.0 with PKCE), and all calls run as that user. Nothing about Jira lives in
+`platform.json` any more (migration V196 moved it), and there is no separate Jira page under
+**Admin → Integrations**.
 
 ### Atlassian OAuth Application Setup
 
-1. **Go to Atlassian Developer Console**: 
-   - Navigate to [https://developer.atlassian.com/console/myapps/](https://developer.atlassian.com/console/myapps/)
-   - Sign in with your Atlassian account
+1. **Go to the Atlassian Developer Console**:
+   [https://developer.atlassian.com/console/myapps/](https://developer.atlassian.com/console/myapps/)
+   and sign in.
+2. **Create an OAuth 2.0 (3LO) app**: "Create" → "OAuth 2.0 integration", for example
+   "iHub Apps Jira Integration".
+3. **Authorization**: add the callback URL
+   `https://<your iHub>/api/integrations/jira/callback` (development:
+   `http://localhost:5173/api/integrations/jira/callback`).
+4. **Permissions**: `read:jira-user`, `read:jira-work`, `write:jira-work` and `offline_access`
+   (required for refresh tokens).
+5. **Copy the client id and the client secret** for the installation below.
 
-2. **Create OAuth 2.0 (3LO) App**:
-   - Click "Create" → "OAuth 2.0 integration"
-   - **App Type**: OAuth 2.0 (3LO)
-   - **App Name**: iHub Apps JIRA Integration
-   - **App Description**: AI-powered JIRA integration for iHub Apps
+The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassian.com/authorize`,
+`https://auth.atlassian.com/oauth/token`); API calls go to
+`https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/` with the user's cloud id.
 
-3. **Configure Authorization**:
-   - **Callback URL**: Add your redirect URI
-     - Development: `http://localhost:5173/api/integrations/jira/callback`
-     - Production: `https://your-domain.com/api/integrations/jira/callback`
-   - **Permissions/Scopes**: 
-     - `read:jira-user` - Access user profile information
-     - `read:jira-work` - Read issues, projects, comments
-     - `write:jira-work` - Create/update issues, add comments
-     - `offline_access` - Required for refresh tokens
+### The installation
 
-4. **Save Credentials**:
-   - Copy the **Client ID** → `JIRA_OAUTH_CLIENT_ID`
-   - Copy the **Client Secret** → `JIRA_OAUTH_CLIENT_SECRET`
+1. Store the client secret as a credential of type **secret** under **Admin → Integrations →
+   Credentials**.
+2. Open **Admin → Integrations → Installed → Atlassian Jira** and fill in:
+   - **OAuth client ID** (`clientId`)
+   - **OAuth client secret** (`clientSecretRef`): the credential from step 1
+   - **Redirect URI** (`redirectUri`): the callback URL registered in the Atlassian app. Empty
+     means it is derived from each request as the browser sees it: scheme and host from the
+     `X-Forwarded-Proto` / `X-Forwarded-Host` headers of a trusted proxy (else the request's
+     own), the base path (`X-Forwarded-Prefix`), then `/api/integrations/jira/callback` — for
+     example `https://ihub.example.com/ihub/api/integrations/jira/callback`. The authorize
+     redirect and the token exchange send the same derived value. Set the field when the derived
+     URL is not the one registered in the Atlassian app (an unusual proxy setup).
+   - **Jira site URL** (`siteUrl`): your Atlassian Cloud site, for reference and links
+3. **Test** checks the client id and secret, the redirect URI (for an empty field it shows the
+   URL derived from your own request, which is the one to register), that `auth.atlassian.com` is
+   reachable through the outbound proxy, and lists how many users are connected. The OAuth flow
+   itself needs a browser, so each user connects from the chat or from **Settings →
+   Integrations**.
+4. Enable the installation and save; no restart is needed. **Groups** on the installation limit
+   who may use Jira at all.
 
-5. **Important OAuth2 Settings**:
-   - The integration uses Atlassian's centralized OAuth endpoints:
-     - Authorization: `https://auth.atlassian.com/authorize`
-     - Token: `https://auth.atlassian.com/oauth/token`
-   - API calls use: `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/`
+The installation's **Connections** button lists the users who connected their Atlassian account
+and lets an admin disconnect one (the tokens are deleted). The "users connected" count on the
+installed list follows connects and disconnects as they happen and is re-counted from the token
+files in the background at most every 30 seconds, so every cluster worker shows the same number.
+
+### Apps
+
+An app binds the installation under **Admin → Apps → Edit → Installed integrations**, or in
+JSON:
+
+```json
+"integrations": { "jira": { "actions": ["searchTickets", "getTicket"] } }
+```
+
+Leave `actions` out for all six. The tools keep their ids (`jira_searchTickets`,
+`jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`,
+`jira_getAttachment`), so group tool grants and prompts are unchanged. A `tools` entry naming
+`jira` or `jira_*` selects nothing: the binding is the only way in. An app that binds Jira is
+offered only while the installation is enabled.
+
+### Environment variables
+
+`TOKEN_ENCRYPTION_KEY` (the key the token store encrypts user tokens with) still applies. The
+former `JIRA_*` variables are not read; the installation is the configuration.
 
 ## Usage
 
@@ -139,8 +164,8 @@ Download ticket attachments.
 
 ### OAuth 2.0 Flow Details
 
-1. **Initial Request**: User attempts to use JIRA tool without connection
-2. **Auth Prompt**: System shows connection prompt with "Connect to JIRA" button
+1. **Initial Request**: User attempts to use a Jira tool without a connection (the app binds the `jira` installation)
+2. **Auth Prompt**: System shows connection prompt with "Connect to JIRA" button (also under **Settings → Integrations**)
 3. **OAuth Initiation**: 
    - Generates PKCE code verifier and challenge for enhanced security
    - Redirects to: `https://auth.atlassian.com/authorize`
@@ -210,9 +235,13 @@ server/
 ├── routes/integrations/jira.js             # Jira-specific routes + provider config for the shared OAuth routes
 └── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
+server/
+├── defaults/integration-definitions/com.intrafind__jira/   # The built-in definition (fields, actions)
+└── services/integrations/protocols/native/connectors/jira/ # The connector behind the installation
+
 contents/
-├── tools/*.json                            # Tool configuration (one file per tool)
-└── integrations/jira/                      # Token storage (encrypted)
+├── config/integrations.json                # The `jira` installation (client id, secret reference, redirect URI)
+└── integrations/jira/                      # Token storage (encrypted), one file per user
 ```
 
 ## Troubleshooting
@@ -224,7 +253,8 @@ contents/
 **"JIRA OAuth configuration incomplete"**
 - Ensure all environment variables are set correctly
 - Verify OAuth app is created in Atlassian Developer Console (not JIRA instance)
-- Check that redirect URI matches exactly (including protocol and port)
+- Check that redirect URI matches exactly (including protocol and port); with an empty
+  **Redirect URI** field, **Test** on the installation shows the URL derived from your request
 
 **404 Error on Authorization**
 - ❌ Wrong: `https://your-site.atlassian.net/oauth/authorize`

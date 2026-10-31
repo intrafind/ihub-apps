@@ -1,0 +1,70 @@
+{
+  "searchTickets": {
+    "type": "object",
+    "properties": {
+      "jql": {
+        "type": "string",
+        "description": "JQL query (e.g. 'assignee = currentUser() AND status = Open ORDER BY updated DESC')"
+      },
+      "maxResults": {
+        "type": "integer",
+        "default": 50,
+        "minimum": 1,
+        "maximum": 100,
+        "description": "Maximum number of issues to return"
+      }
+    },
+    "required": ["jql"]
+  },
+  "getTicket": {
+    "type": "object",
+    "properties": {
+      "issueKey": { "type": "string", "description": "Issue key, e.g. 'PROJ-123'" },
+      "includeComments": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include the comments"
+      }
+    },
+    "required": ["issueKey"]
+  },
+  "addComment": {
+    "type": "object",
+    "properties": {
+      "issueKey": { "type": "string", "description": "Issue key, e.g. 'PROJ-123'" },
+      "comment": { "type": "string", "description": "The comment text" }
+    },
+    "required": ["issueKey", "comment"]
+  },
+  "getTransitions": {
+    "type": "object",
+    "properties": {
+      "issueKey": { "type": "string", "description": "Issue key, e.g. 'PROJ-123'" }
+    },
+    "required": ["issueKey"]
+  },
+  "transitionTicket": {
+    "type": "object",
+    "properties": {
+      "issueKey": { "type": "string", "description": "Issue key, e.g. 'PROJ-123'" },
+      "transitionId": {
+        "type": "string",
+        "description": "Id or name of the transition (see jira_getTransitions)"
+      },
+      "comment": { "type": "string", "description": "Optional comment added with the transition" }
+    },
+    "required": ["issueKey", "transitionId"]
+  },
+  "getAttachment": {
+    "type": "object",
+    "properties": {
+      "attachmentId": { "type": "string", "description": "Attachment id" },
+      "returnBase64": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the content base64-encoded (for image analysis)"
+      }
+    },
+    "required": ["attachmentId"]
+  }
+}

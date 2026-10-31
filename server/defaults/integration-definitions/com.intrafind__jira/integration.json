@@ -1,0 +1,195 @@
+{
+  "id": "com.intrafind/jira",
+  "version": "1.0.0",
+  "name": {
+    "en": "Atlassian Jira",
+    "de": "Atlassian Jira"
+  },
+  "description": {
+    "en": "Search, read and update Jira Cloud issues as the signed-in user. Every user connects their own Atlassian account once (OAuth 2.0); iHub holds the OAuth app's client id and secret. Comments and status changes ask for confirmation.",
+    "de": "Jira-Cloud-Vorgänge als angemeldeter Benutzer suchen, lesen und ändern. Jeder Benutzer verbindet sein Atlassian-Konto einmal (OAuth 2.0); iHub hält Client-ID und Secret der OAuth-App. Kommentare und Statuswechsel fragen nach Bestätigung."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["ticketing", "productivity"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/JIRA_INTEGRATION.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "jira"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "jira"
+  },
+  "auth": {
+    "modes": ["oauth-user"],
+    "oauthUser": {
+      "field": "clientSecretRef",
+      "connectPath": "/api/integrations/jira/auth",
+      "statusPath": "/api/integrations/jira/status",
+      "disconnectPath": "/api/integrations/jira/disconnect"
+    }
+  },
+  "install": [
+    {
+      "key": "clientId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "OAuth client ID",
+        "de": "OAuth-Client-ID"
+      },
+      "description": {
+        "en": "The client ID of your OAuth 2.0 (3LO) app in the Atlassian developer console (developer.atlassian.com/console/myapps).",
+        "de": "Die Client-ID Ihrer OAuth-2.0-(3LO-)App in der Atlassian-Entwicklerkonsole (developer.atlassian.com/console/myapps)."
+      }
+    },
+    {
+      "key": "clientSecretRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "required": true,
+      "title": {
+        "en": "OAuth client secret",
+        "de": "OAuth-Client-Secret"
+      },
+      "description": {
+        "en": "A credential of type secret holding the app's client secret.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret der App."
+      }
+    },
+    {
+      "key": "redirectUri",
+      "type": "url",
+      "title": {
+        "en": "Redirect URI",
+        "de": "Redirect-URI"
+      },
+      "description": {
+        "en": "The callback URL registered in the Atlassian app: https://<your iHub>/api/integrations/jira/callback. Empty: derived from each request as the browser sees it (scheme and host from the trusted proxy's X-Forwarded-* headers, the base path, then /api/integrations/jira/callback); Test shows the resulting URL. Set it when the derived URL is not the one registered.",
+        "de": "Die in der Atlassian-App eingetragene Callback-URL: https://<Ihr iHub>/api/integrations/jira/callback. Leer: aus jeder Anfrage abgeleitet, wie der Browser sie sieht (Schema und Host aus den X-Forwarded-*-Headern des vertrauten Proxys, der Basispfad, dann /api/integrations/jira/callback); der Test zeigt die resultierende URL. Setzen, wenn die abgeleitete URL nicht die eingetragene ist."
+      }
+    },
+    {
+      "key": "siteUrl",
+      "type": "url",
+      "title": {
+        "en": "Jira site URL",
+        "de": "Jira-Site-URL"
+      },
+      "description": {
+        "en": "Your Atlassian Cloud site (https://your-company.atlassian.net), for reference and links. API calls go through api.atlassian.com with the user's cloud id.",
+        "de": "Ihre Atlassian-Cloud-Site (https://ihre-firma.atlassian.net), zur Orientierung und für Links. API-Aufrufe laufen über api.atlassian.com mit der Cloud-ID des Benutzers."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "instructions": {
+    "en": "Jira holds the organisation's tickets. Search with JQL before answering questions about issues, name the issue keys you used, and read an issue in full before commenting on or transitioning it. Comments and status changes are shown to the user for confirmation.",
+    "de": "Jira enthält die Vorgänge der Organisation. Suche mit JQL, bevor du Fragen zu Vorgängen beantwortest, nenne die verwendeten Vorgangsschlüssel und lies einen Vorgang vollständig, bevor du ihn kommentierst oder seinen Status änderst. Kommentare und Statuswechsel werden dem Benutzer zur Bestätigung angezeigt."
+  },
+  "actions": [
+    {
+      "name": "searchTickets",
+      "toolId": "jira_searchTickets",
+      "title": {
+        "en": "Search issues",
+        "de": "Vorgänge suchen"
+      },
+      "description": {
+        "en": "Search and list Jira issues with a JQL query.",
+        "de": "Jira-Vorgänge mit einer JQL-Abfrage suchen und auflisten."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "examples": [
+        {
+          "en": "Which open bugs are assigned to me?",
+          "de": "Welche offenen Bugs sind mir zugewiesen?"
+        },
+        {
+          "en": "Show the issues updated this week in project DEMO",
+          "de": "Zeige die diese Woche geänderten Vorgänge in Projekt DEMO"
+        }
+      ],
+      "connection": "user"
+    },
+    {
+      "name": "getTicket",
+      "toolId": "jira_getTicket",
+      "title": {
+        "en": "Read an issue",
+        "de": "Vorgang lesen"
+      },
+      "description": {
+        "en": "Read one issue in full: fields, description, comments and attachments.",
+        "de": "Einen Vorgang vollständig lesen: Felder, Beschreibung, Kommentare und Anhänge."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "user"
+    },
+    {
+      "name": "addComment",
+      "toolId": "jira_addComment",
+      "title": {
+        "en": "Add a comment",
+        "de": "Kommentar hinzufügen"
+      },
+      "description": {
+        "en": "Add a comment to an issue, after the user confirms it.",
+        "de": "Einen Kommentar zu einem Vorgang hinzufügen, nach Bestätigung durch den Benutzer."
+      },
+      "sideEffect": "write",
+      "dataFlow": "external",
+      "connection": "user"
+    },
+    {
+      "name": "getTransitions",
+      "toolId": "jira_getTransitions",
+      "title": {
+        "en": "List status transitions",
+        "de": "Statusübergänge auflisten"
+      },
+      "description": {
+        "en": "List the status transitions an issue allows right now.",
+        "de": "Die Statusübergänge auflisten, die ein Vorgang gerade erlaubt."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "user"
+    },
+    {
+      "name": "transitionTicket",
+      "toolId": "jira_transitionTicket",
+      "title": {
+        "en": "Change the status",
+        "de": "Status ändern"
+      },
+      "description": {
+        "en": "Move an issue to another status, optionally with a comment, after the user confirms it.",
+        "de": "Einen Vorgang in einen anderen Status setzen, optional mit Kommentar, nach Bestätigung durch den Benutzer."
+      },
+      "sideEffect": "write",
+      "dataFlow": "external",
+      "connection": "user"
+    },
+    {
+      "name": "getAttachment",
+      "toolId": "jira_getAttachment",
+      "title": {
+        "en": "Read an attachment",
+        "de": "Anhang lesen"
+      },
+      "description": {
+        "en": "Download an issue attachment, as text or as base64 for image analysis.",
+        "de": "Einen Anhang eines Vorgangs herunterladen, als Text oder als Base64 zur Bildanalyse."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "user"
+    }
+  ]
+}

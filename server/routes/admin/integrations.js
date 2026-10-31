@@ -236,7 +236,8 @@ export default function registerAdminIntegrationsRoutes(app) {
         const payload = { ...(req.body || {}), definition: id, id: req.body?.id || 'draft' };
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
-          user: req.user
+          user: req.user,
+          req
         });
         logAudit({
           req,
@@ -497,7 +498,8 @@ export default function registerAdminIntegrationsRoutes(app) {
         const payload = req.body && Object.keys(req.body).length ? { ...req.body, id } : existing;
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
-          user: req.user
+          user: req.user,
+          req
         });
         logAudit({
           req,
