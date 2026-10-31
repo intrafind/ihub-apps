@@ -2721,6 +2721,9 @@
           "openCatalog": "Open the catalog",
           "actions": "Actions",
           "noActions": "This installation offers no action right now.",
+          "notInstalled": "Not installed",
+          "notInstalledHelp": "This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.",
+          "unbind": "Unbind",
           "defaultScope": "Default {{scope}}",
           "pinnedScope": "Pinned {{scope}}",
           "pinnedHelp": "Fixes the scope; users cannot change it.",
@@ -2985,8 +2988,13 @@
       },
       "confirmRemove": {
         "title": "Remove integration?",
-        "message": "Apps that bind \"{{id}}\" lose its actions. A stored service-account token is deleted with it."
+        "message": "Apps that bind \"{{id}}\" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it."
       },
+      "confirmDisable": {
+        "title": "Disable integration?",
+        "message": "Apps that bind \"{{id}}\" are hidden from users while it is disabled."
+      },
+      "boundApps": "Bound by: {{apps}}",
       "sideEffect": {
         "read": "read",
         "write": "write",

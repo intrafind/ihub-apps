@@ -1116,7 +1116,7 @@ The JWT `sub` claim identifies the authenticated user to iFinder. It is **always
 
 Resolution is **strict**: the configured field is the only one consulted. If the authenticated user has no value for it, token generation fails with an error naming the setting and the missing field. It does not fall back to another identifier — a valid token for the wrong subject is worse than no token, because iFinder keys its user mapping on `sub` and the mismatch is invisible on both sides.
 
-The wizard offers `email`, `id`, `username` and `name`; the other forms are set in `integrations.json`. Accepted forms:
+The field is free text; the wizard suggests `email`, `username`, `id`, `name` and `domain\username`, and a template is typed as is. Accepted forms:
 
 - `"email"` (default) — `user.email`.
 - `"id"` — `user.id`; `"name"` — the display name.

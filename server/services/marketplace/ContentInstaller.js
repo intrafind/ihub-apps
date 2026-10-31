@@ -836,14 +836,21 @@ class ContentInstaller {
       const definitionId = dirNameToDefinitionId(name);
       await integrationRegistry.writeInstalled(definitionId, content.files);
       // Installations of a re-installed definition keep cached parameter
-      // schemas of the old document otherwise.
-      const [{ default: installedIntegrationService }, { invalidate }] = await Promise.all([
+      // schemas of the old document otherwise, and their scope providers
+      // keep the old definition until they are registered again.
+      const [
+        { default: installedIntegrationService },
+        { invalidate },
+        { syncIntegrationScopeProviders }
+      ] = await Promise.all([
         import('../integrations/InstalledIntegrationService.js'),
-        import('../integrations/protocols/openapi/OpenApiAdapter.js')
+        import('../integrations/protocols/openapi/OpenApiAdapter.js'),
+        import('../integrations/integrationTools.js')
       ]);
       for (const instance of installedIntegrationService.instancesOf(definitionId)) {
         invalidate(instance.id);
       }
+      await syncIntegrationScopeProviders();
       return;
     }
     if (type === 'skill') {
