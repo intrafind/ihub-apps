@@ -6,21 +6,20 @@
  *
  * The list is the user's own, as iFinder's searchbar offers it
  * (`iFinderSearchProfiles`, read as the user), narrowed to the admin's
- * allow-list (`iFinder.allowedSearchProfiles`). When it cannot be read — a
+ * allow-list (the iFinder installation's "Offered search profiles"). When it cannot be read — a
  * user without the feature `fi_ifinder_allow` gets 403, or iFinder is down —
  * the configured default and the allow-list are offered instead, never an
  * empty list.
  *
  * A scope is fixed when the app pins one (`integrations.ifinder.pinnedScope`)
- * or the installation does not let users change the profile
- * (`iFinder.allowUserSearchProfileChange: false`, which pins the default).
+ * or the installation does not let users change the profile ("Users may
+ * change the search profile" off, which pins the default).
  *
  * {@link resolveToolSearchProfile} is what binds the `iFinder_*` tools: the
  * chat's scope wins over whatever `searchProfile` the model passes.
  */
 import iFinderService from '../iFinderService.js';
 import iFinderSearchProfiles from '../iFinderSearchProfiles.js';
-import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { appScopeSettings, pickDefaultScope } from './common.js';
 
@@ -82,8 +81,9 @@ const iFinderScopes = {
   },
 
   appliesTo({ app }) {
-    if (configCache.getPlatform()?.iFinder?.enabled !== true) return false;
-    return Array.isArray(app?.tools) && app.tools.some(id => String(id).startsWith(TOOL_PREFIX));
+    if (!iFinderService.getConfig().enabled) return false;
+    // The app binds the iFinder installation (its actions come from there).
+    return Boolean(app?.integrations?.[INTEGRATION_ID]);
   },
 
   /**

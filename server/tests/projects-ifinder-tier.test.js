@@ -23,6 +23,7 @@
  *    collection is searched, never loaded in full.
  */
 import fs from 'node:fs/promises';
+import { installationsFor } from './helpers/installedIFinder.js';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
@@ -184,6 +185,10 @@ function setPlatform({ tierPolicy = 'both', iFinder = { baseUrl: ifinder.url } }
   platform.projects = { tierPolicy, limits: { maxProjectsPerUser: 0 } };
   platform.iFinder = { ...iFinder, ...(iFinder.baseUrl ? { jwtSubjectField: 'email' } : {}) };
   configCache.setCacheEntry('config/platform.json', platform);
+  configCache.setCacheEntry(
+    'config/integrations.json',
+    installationsFor({ iFinder: platform.iFinder })
+  );
   iFinderService.resetConfig();
 }
 
@@ -548,7 +553,7 @@ describe('opening a collection', () => {
     );
     const search = ifinder.calls('search')[0];
     assert.equal(search.sub, ADA.email, "titles are fetched with the reader's own rights");
-    assert.equal(search.scope, 'fi_index_read', 'a document search needs no collections role');
+    assert.equal(search.scope, 'fa_index_read', 'a document search needs no collections role');
     assert.equal(search.query.query_logging, undefined, 'the lookup stays out of the query log');
   });
 

@@ -127,41 +127,59 @@ matters here is the **issuer URL** (below).
 
 ### Option A — Admin UI (recommended)
 
-1. Open **Admin → iFinder Integration**.
-2. Enable the integration and set the **iFinder Base URL**.
-3. Tick **"Use iHub OIDC Keypair for JWT signing"**.
-4. Confirm the **Effective OAuth Issuer URL** shown below the toggle is your
-   iHub public URL (see the important note below about setting it explicitly).
-5. Set the **JWT Audience** (default `ifinder-api`), **Default Scope**
-   (e.g. `fa_index_read`), and the **JWT Subject Field** that matches the
-   identity iFinder expects (usually `email`).
-6. Save. The UI prints the exact iFinder configuration to paste on the iFinder
-   side (also shown in [Step 2](#step-2--configure-ifinder)).
+1. Set `oauth.issuer` to your iHub public URL under **Admin → Authentication →
+   OAuth Server** (see the important note below) and restart the server.
+2. Open **Admin → Integrations → Installed**, pick **iFinder** in the catalog
+   and **Install** (or **Edit** the existing installation).
+3. Set the **iFinder base URL** and leave **Authentication** at *JWT signed by
+   iHub*.
+4. Tick **Sign with iHub's OIDC key pair**. The **Private key** field is not
+   used then and can stay empty.
+5. Under the advanced settings, check the **JWT audience** (default
+   `ifinder-api`) and **Token scope** (`fa_index_read`); set **User identity
+   sent to iFinder** to the identity iFinder expects (usually *E-mail*).
+6. **Test**, then **Install** / **Save**. The iFinder side is configured as in
+   [Step 2](#step-2--configure-ifinder).
 
-When keyless mode is on, the private key, algorithm, and issuer text fields
-disappear — they are no longer used.
+While keyless mode is on, the private key, the signing algorithm and the JWT
+issuer fields are ignored — the OIDC key and the OAuth issuer URL are used.
 
-### Option B — `platform.json`
+### Option B — `integrations.json`
+
+The installation lives in `contents/config/integrations.json`; the issuer stays
+in `platform.json`:
+
+```json
+{
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://your-ifinder-instance.com",
+        "authMode": "ihubSigned",
+        "useOidcKeyPair": true,
+        "audience": "ifinder-api",
+        "defaultScope": "fa_index_read",
+        "jwtSubjectField": "email",
+        "tokenExpirationSeconds": 3600
+      }
+    }
+  ]
+}
+```
 
 ```json
 {
   "oauth": {
     "issuer": "https://your-ihub-instance.com"
-  },
-  "iFinder": {
-    "enabled": true,
-    "baseUrl": "https://your-ifinder-instance.com",
-    "useOidcKeyPair": true,
-    "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email",
-    "tokenExpirationSeconds": 3600
   }
 }
 ```
 
-`platform.json` changes to the `iFinder` block are picked up automatically. The
-`oauth.issuer` change (server behavior/auth) requires a **server restart**.
+Changes to `integrations.json` are picked up automatically. The `oauth.issuer`
+change (server behavior/auth) requires a **server restart**.
 
 ### ⚠️ Important: set the OAuth Issuer URL explicitly
 
@@ -250,9 +268,9 @@ pins the issuer.
 
 ### From iHub
 
-- In **Admin → iFinder Integration**, click **Test iFinder** (and **Test
-  iAssistant**). A green result means iHub could reach iFinder and the token was
-  accepted.
+- Under **Admin → Integrations → Installed**, click **Test** on the iFinder
+  installation (and on the iAssistant installation). A green result means iHub
+  could reach iFinder and the token was accepted.
 - Confirm the endpoints iFinder will read are reachable and, for RS256, return a
   key:
 
@@ -318,15 +336,16 @@ integration.
 If you already run iFinder with a manually exchanged key pair, switch over like
 this:
 
-1. **iHub:** set `oauth.issuer` to your public URL, enable
-   `iFinder.useOidcKeyPair`, and save. You can leave the old `privateKeyRef`
-   (or `IFINDER_PRIVATE_KEY`) in place — it is ignored while keyless mode is on.
+1. **iHub:** set `oauth.issuer` to your public URL, then tick **Sign with
+   iHub's OIDC key pair** (`useOidcKeyPair`) in the iFinder installation and
+   save. You can leave the old **Private key** credential (or
+   `IFINDER_PRIVATE_KEY`) in place — it is ignored while keyless mode is on.
 2. **iFinder:** replace the `public-key-location` configuration with
    `issuer-uri` (or `jwk-set-uri`) as shown in [Step 2](#step-2--configure-ifinder).
 3. **Restart** iFinder (and iHub, since `oauth.issuer` is an auth setting) and
    run the connection test.
 4. Once verified, you can remove the old public key file from iFinder and delete
-   the `IFINDER_PRIVATE_KEY` env var / `iFinder.privateKeyRef` credential from iHub.
+   the `IFINDER_PRIVATE_KEY` env var / the installation's **Private key** credential from iHub.
 
 Because iFinder now trusts iHub's OIDC signing key, no future key rotation
 requires touching iFinder — new keys are discovered through JWKS.
@@ -337,23 +356,23 @@ requires touching iFinder — new keys are discovered through JWKS.
 
 ## Configuration Reference
 
-### iHub Apps — `platform.json`
+### iHub Apps — the `ifinder` installation and `platform.json`
 
 | Setting | Where | Purpose | Required for keyless |
 |---|---|---|---|
-| `iFinder.enabled` | iFinder block | Enables the integration | Yes |
-| `iFinder.baseUrl` | iFinder block | iFinder / iAssistant instance URL | Yes |
-| `iFinder.useOidcKeyPair` | iFinder block | Sign with the iHub OIDC RSA key and advertise via JWKS | **Yes — set `true`** |
-| `oauth.issuer` | oauth block | Absolute URL stamped into the token `iss`; must equal iFinder `issuer-uri` | **Yes — must be a URL** |
-| `iFinder.audience` | iFinder block | `aud` claim (default `ifinder-api`) | Optional |
-| `iFinder.defaultScope` | iFinder block | `scope` claim (e.g. `fa_index_read`) | Optional |
-| `iFinder.jwtSubjectField` | iFinder block | Which user field becomes `sub` (`email`, `username`, `domain\\username`, or a `${user.field}` template) | Recommended |
-| `iFinder.tokenExpirationSeconds` | iFinder block | Token TTL (default `3600`) | Optional |
-| `platform.jwt.algorithm` | jwt block | Must be `RS256` (default) so JWKS is populated | Yes (default) |
+| `enabled` | installation (its switch) | Enables the integration | Yes |
+| `baseUrl` | installation values | iFinder / iAssistant instance URL | Yes |
+| `useOidcKeyPair` | installation values (**Sign with iHub's OIDC key pair**) | Sign with the iHub OIDC RSA key and advertise via JWKS | **Yes — set `true`** |
+| `oauth.issuer` | `platform.json`, oauth block | Absolute URL stamped into the token `iss`; must equal iFinder `issuer-uri` | **Yes — must be a URL** |
+| `audience` | installation values, advanced | `aud` claim (default `ifinder-api`) | Optional |
+| `defaultScope` | installation values, advanced (**Token scope**) | `scope` claim (e.g. `fa_index_read`) | Optional |
+| `jwtSubjectField` | installation values (**User identity sent to iFinder**) | Which user field becomes `sub`: `email`, `username`, `id`, `name`, `domain\\username`, or a `${user.field}` template | Recommended |
+| `tokenExpirationSeconds` | installation values, advanced | Token TTL (default `3600`) | Optional |
+| `jwt.algorithm` | `platform.json`, jwt block | Must be `RS256` (default) so JWKS is populated | Yes (default) |
 
 Settings that are **ignored** while `useOidcKeyPair` is `true`:
-`iFinder.privateKeyRef`, `IFINDER_PRIVATE_KEY`,
-`iFinder.algorithm`, and `iFinder.issuer` (the OIDC issuer URL is used instead).
+the installation's `privateKeyRef`, `IFINDER_PRIVATE_KEY`, `algorithm`, and
+`issuer` (the OIDC issuer URL is used instead).
 
 ### iFinder — Spring Boot
 
@@ -423,7 +442,7 @@ provider issues the iFinder token.
 |---|---|---|
 | Who issues the iFinder token | iHub (private key or OIDC key pair) | The shared OIDC provider |
 | iFinder `issuer-uri` | iHub (`oauth.issuer`) or the key you deployed | The provider |
-| `sub` in the token | `iFinder.jwtSubjectField` | The provider's user claim, the same iFinder sees for its own logins |
+| `sub` in the token | The installation's `jwtSubjectField` | The provider's user claim, the same iFinder sees for its own logins |
 | `fa_*` claims | `scope` claim set by iHub | Scopes iHub requests, or added by a claim mapper on the provider |
 | Who can use iFinder | Every signed-in user | Users who signed in to iHub through that provider |
 
@@ -461,34 +480,40 @@ iHub-signed tokens.
 
 ### Configure iHub
 
-In **Admin > Integrations > iFinder**, set **Token issuer** to *Shared OIDC
-provider (token exchange)*, then:
+In the iFinder installation (**Admin → Integrations → Installed → iFinder →
+Edit**), set **Authentication** to *OIDC token exchange*, then:
 
-| Field | `platform.json` | Purpose |
+| Field | Installation value | Purpose |
 |---|---|---|
-| OIDC provider | `iFinder.tokenExchange.oidcProvider` | Name of the provider under Admin > Authentication that iFinder shares |
-| Grant type | `iFinder.tokenExchange.grantType` | `tokenExchange` (RFC 8693: Zitadel, Keycloak) or `entraObo` (Entra On-Behalf-Of) |
-| Audience | `iFinder.tokenExchange.audience` | iFinder's client or project id at the provider (RFC 8693 only) |
-| Scope map | `iFinder.tokenExchange.scopeMap` | Maps the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `fi_smartcollections` for Smart Collections, `iFinder.defaultScope` otherwise) to provider scopes. An empty value sends the scope unchanged |
-| Additional scopes | `iFinder.tokenExchange.extraScopes` | Sent with every exchange |
+| OIDC provider for token exchange | `tokenExchangeProvider` | Name of the provider under Admin → Authentication that iFinder shares |
+| Token exchange grant | `tokenExchangeGrant` | `tokenExchange` (RFC 8693: Zitadel, Keycloak) or `entraObo` (Entra On-Behalf-Of) |
+| Token exchange audience | `tokenExchangeAudience` | iFinder's client or project id at the provider (RFC 8693 only) |
+| Provider scope for `fa_index_read`, `fa_iassistant`, `fi_smartcollections` | `tokenExchangeScopeIndexRead`, `tokenExchangeScopeAssistant`, `tokenExchangeScopeSmartCollections` | Map the scopes iHub asks for (`fa_index_read` for search, `fa_iassistant` for iAssistant, `fi_smartcollections` for Smart Collections, the **Token scope** otherwise) to provider scopes. An empty value sends the scope unchanged |
+| Extra scopes for the exchange | `tokenExchangeExtraScopes` | A list, sent with every exchange |
+
+All but the provider are advanced settings. In `contents/config/integrations.json`:
 
 ```json
-"iFinder": {
+{
+  "id": "ifinder",
+  "definition": "com.intrafind/ifinder",
   "enabled": true,
-  "baseUrl": "https://ifinder.example.com",
-  "defaultScope": "fa_index_read",
-  "authMode": "oidcTokenExchange",
-  "tokenExchange": {
-    "oidcProvider": "zitadel",
-    "grantType": "tokenExchange",
-    "audience": "312345678901234567",
-    "scopeMap": { "fa_index_read": "", "fa_iassistant": "", "fi_smartcollections": "" },
-    "extraScopes": []
+  "values": {
+    "baseUrl": "https://ifinder.example.com",
+    "defaultScope": "fa_index_read",
+    "authMode": "oidcTokenExchange",
+    "tokenExchangeProvider": "zitadel",
+    "tokenExchangeGrant": "tokenExchange",
+    "tokenExchangeAudience": "312345678901234567",
+    "tokenExchangeScopeIndexRead": "",
+    "tokenExchangeScopeAssistant": "",
+    "tokenExchangeScopeSmartCollections": "",
+    "tokenExchangeExtraScopes": []
   }
 }
 ```
 
-The key, issuer, algorithm, expiry and **JWT Subject Field** settings do not
+The key, issuer, algorithm, expiry and **User identity sent to iFinder** settings do not
 apply in this mode: the provider signs the token and sets its subject. No new
 credentials are needed: iHub refreshes and exchanges with the client ID and
 secret configured for the provider under Admin > Authentication, so that client
@@ -568,15 +593,15 @@ Entra does not support RFC 8693; choose the grant type **On-Behalf-Of**.
    rejects.
 2. Expose an API on the iFinder app registration and give the iHub registration
    an API permission for it, with admin consent.
-3. Map the iHub scope to iFinder's `.default` scope: in the scope map set
-   `fa_index_read` (and `fa_iassistant`) to `api://<ifinder-app-id>/.default`.
+3. Map the iHub scope to iFinder's `.default` scope: set **Provider scope for
+   `fa_index_read`** (and for `fa_iassistant`) to `api://<ifinder-app-id>/.default`.
    Audience is not used.
 4. Provide the `fa_*` claims as app roles of the iFinder app registration
    assigned to the users or groups, or as optional claims.
 
 ### Verify
 
-**Admin > Integrations > iFinder > Test connection** runs the exchange for your
+**Test** on the iFinder installation (**Admin → Integrations → Installed**) runs the exchange for your
 own account (you must have signed in through the selected provider), decodes
 the token without verifying it, and shows `iss`, `aud`, `sub`, the scope claim
 and which of the expected `fa_*` claims are present. It then calls the iFinder

@@ -94,8 +94,11 @@ const iAssistantScopes = {
   // A scope is whom the integration asks ("ask …").
   action: 'ask',
 
-  appliesTo({ model }) {
-    return model?.provider === 'iassistant-conversation';
+  appliesTo({ app, model }) {
+    if (!iAssistantService.getConfig().enabled) return false;
+    return (
+      model?.provider === 'iassistant-conversation' || Boolean(app?.integrations?.[INTEGRATION_ID])
+    );
   },
 
   async listScopes({ user, app, model, language, signal }) {

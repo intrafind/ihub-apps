@@ -185,7 +185,7 @@ function singleFlight(key, load) {
 export function principalOf(user) {
   if (!user || !canHoldProjects(user)) return null;
   try {
-    const subject = resolveJwtSubject(user, configCache.getPlatform()?.iFinder || {});
+    const subject = resolveJwtSubject(user, iFinderService.getConfig());
     return subject.trim() ? subject : null;
   } catch {
     return null;
@@ -198,12 +198,8 @@ export function principalOf(user) {
  * another.
  */
 function tenantKey() {
-  const settings = configCache.getPlatform()?.iFinder || {};
-  const source = [
-    iFinderService.getConfig().baseUrl,
-    settings.issuer || '',
-    settings.audience || ''
-  ].join('\u0000');
+  const settings = iFinderService.getConfig();
+  const source = [settings.baseUrl, settings.issuer || '', settings.audience || ''].join('\u0000');
   return createHash('sha256').update(source).digest('hex').slice(0, 16);
 }
 

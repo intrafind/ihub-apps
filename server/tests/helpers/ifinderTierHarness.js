@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { collectionDocument, generatePrivateKeyPem, startMockIFinder } from './mockIFinder.js';
+import { installationsFor } from './installedIFinder.js';
 
 export const GROUP = ['authenticated'];
 
@@ -141,6 +142,10 @@ export async function createHarness({ users: userList }) {
       platform.projects = { tierPolicy, limits: { maxProjectsPerUser: 0 } };
       platform.iFinder = { ...iFinder, ...(iFinder.baseUrl ? { jwtSubjectField: 'email' } : {}) };
       configCache.setCacheEntry('config/platform.json', platform);
+      configCache.setCacheEntry(
+        'config/integrations.json',
+        installationsFor({ iFinder: platform.iFinder })
+      );
       iFinderService.resetConfig();
     },
     /** The registered handlers of one route, by method and the end of its path. */

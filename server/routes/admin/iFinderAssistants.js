@@ -12,10 +12,9 @@
  */
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import configCache from '../../configCache.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import iFinderAssistants from '../../services/integrations/iFinderAssistants.js';
-import { isIFinderConfigured } from '../../services/integrations/iAssistantModelActivation.js';
+import { isIFinderConfigured } from '../../services/integrations/ifinderConfig.js';
 import { sendErrorResponse } from '../../utils/responseHelpers.js';
 import logger from '../../utils/logger.js';
 
@@ -76,8 +75,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
     buildServerPath('/api/admin/integrations/ifinder/assistants'),
     adminAuth,
     async (req, res) => {
-      const iFinder = configCache.getPlatform()?.iFinder;
-      if (!isIFinderConfigured(iFinder)) {
+      if (!isIFinderConfigured()) {
         return sendErrorResponse(res, 409, 'The iFinder integration is not configured');
       }
 

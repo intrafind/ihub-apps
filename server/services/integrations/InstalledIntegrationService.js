@@ -26,14 +26,7 @@ import { effectiveValues, instanceLabel, localized } from './definitions/install
 export const INTEGRATIONS_FILE = 'config/integrations.json';
 const CREDENTIALS_FILE = 'config/credentials.json';
 const COMPONENT = 'InstalledIntegrationService';
-const RESERVED_INSTANCE_IDS = new Set([
-  'a2a',
-  'app',
-  'workflow',
-  'knowledge',
-  'ifinder',
-  'iassistant'
-]);
+const RESERVED_INSTANCE_IDS = new Set(['a2a', 'app', 'workflow', 'knowledge']);
 /**
  * Tool ids with these prefixes are routed elsewhere before the tool list is
  * consulted (`workflow_*` to the workflow runner in `runTool`) or classified
@@ -203,6 +196,21 @@ export class InstalledIntegrationService {
         { code: 'INVALID_ID' }
       );
     }
+    // A built-in's fixed id (`ifinder`, `iassistant`) belongs to that built-in:
+    // its config is read by that id, so another definition installed under it
+    // would receive the built-in's per-user tokens.
+    const claimedBy = this.registry
+      .list()
+      .find(
+        e =>
+          e.definition.singleton?.instanceId === instance.id &&
+          e.definition.id !== instance.definition
+      );
+    if (claimedBy) {
+      throw new IntegrationError(`"${instance.id}" is reserved for ${claimedBy.definition.id}`, {
+        code: 'INVALID_ID'
+      });
+    }
     const entry = this.registry.get(instance.definition);
     if (!entry) {
       throw new IntegrationError(`Unknown integration definition "${instance.definition}"`, {
@@ -211,6 +219,12 @@ export class InstalledIntegrationService {
       });
     }
     const definition = entry.definition;
+    if (definition.singleton && instance.id !== definition.singleton.instanceId) {
+      throw new IntegrationError(
+        `"${definition.id}" is installed once, as "${definition.singleton.instanceId}"`,
+        { code: 'SINGLETON_ID' }
+      );
+    }
     if (!getProtocolAdapter(definition.protocol.type)) {
       throw new IntegrationError(
         `Protocol "${definition.protocol.type}" has no adapter in this release`,
@@ -343,7 +357,7 @@ export class InstalledIntegrationService {
       }
       config.installed.push(instance);
       await this.writeConfig(config);
-      await this._afterChange(instance.id);
+      await this._afterChange(instance.id, { before: null, after: instance });
       return instance;
     });
   }
@@ -373,7 +387,7 @@ export class InstalledIntegrationService {
       ) {
         await this._removeManagedCredential(existing);
       }
-      await this._afterChange(instance.id);
+      await this._afterChange(instance.id, { before: existing, after: instance });
       return instance;
     });
   }
@@ -384,10 +398,11 @@ export class InstalledIntegrationService {
       const instance = config.installed.find(inst => inst.id === id);
       if (!instance)
         throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const before = { ...instance };
       instance.enabled = Boolean(enabled);
       instance.updatedAt = nowIso();
       await this.writeConfig(config);
-      await this._afterChange(instance.id);
+      await this._afterChange(instance.id, { before, after: instance });
       return instance;
     });
   }
@@ -401,7 +416,7 @@ export class InstalledIntegrationService {
       config.installed = config.installed.filter(inst => inst.id !== id);
       await this.writeConfig(config);
       await this._removeManagedCredential(instance);
-      await this._afterChange(instance.id);
+      await this._afterChange(instance.id, { before: instance, after: null });
       return instance;
     });
   }
@@ -416,7 +431,7 @@ export class InstalledIntegrationService {
    * except that the id may already exist; a secret may be provided inline or
    * the stored credential is used.
    */
-  async test(payload, { language = 'en' } = {}) {
+  async test(payload, { language = 'en', user } = {}) {
     const existing = payload?.id ? this.get(payload.id) : null;
     const { instance, definition, document, secretsToStore } = await this._prepare(payload, {
       existing
@@ -435,14 +450,24 @@ export class InstalledIntegrationService {
       document,
       security: this.security(),
       language,
+      user,
       resolveSecret
     });
   }
 
-  async _afterChange(instanceId) {
+  async _afterChange(instanceId, { before = null, after = null } = {}) {
     try {
       const { invalidate } = await import('./protocols/openapi/OpenApiAdapter.js');
       invalidate(instanceId);
+      // A native connector may react to its installation changing (the
+      // iFinder connector switches the iAssistant model on after setup).
+      const definitionId = (after || before)?.definition;
+      const entry = definitionId ? this.registry.get(definitionId) : null;
+      if (entry?.definition.protocol.type === 'native') {
+        const { getConnector } = await import('./protocols/native/connectors/index.js');
+        const connector = getConnector(entry.definition.protocol.module);
+        await connector?.onChanged?.({ before, after, definition: entry.definition });
+      }
       const { syncIntegrationScopeProviders } = await import('./integrationTools.js');
       await syncIntegrationScopeProviders();
     } catch (error) {

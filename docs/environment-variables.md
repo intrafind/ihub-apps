@@ -84,9 +84,21 @@ IHUB_PLATFORM__SWAGGER__ENABLED=false
 # SSL – ignore invalid certificates (platform.json → ssl.ignoreInvalidCertificates)
 IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES=true
 
-# iFinder integration base URL (platform.json → iFinder.baseUrl)
-IHUB_PLATFORM__I_FINDER__BASE_URL=https://ifinder.example.com
 ```
+
+The iFinder and iAssistant settings are not in `platform.json`: they are the
+`ifinder` and `iassistant` installations in `contents/config/integrations.json`
+(Admin → Integrations → Installed), which the `IHUB_*` mapping does not cover.
+Use `IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` for them; they win over the
+installation's base URL and private key (see
+[iFinder Integration](iFinder-Integration.md#configuration)).
+
+`IHUB_PLATFORM__I_FINDER__*` and `IHUB_PLATFORM__I_ASSISTANT__*` variables from
+before the move (for example `IHUB_PLATFORM__I_FINDER__BASE_URL`,
+`IHUB_PLATFORM__I_FINDER__ENABLED`, `IHUB_PLATFORM__I_FINDER__DEFAULT_SEARCH_PROFILE`)
+are read once more by migration V192, which writes their values into the two
+installations. Afterwards they do nothing: the server logs a warning for each
+one it still finds, and the setting is edited on the installation instead.
 
 ### UI configuration
 
@@ -143,7 +155,7 @@ metadata:
 type: Opaque
 stringData:
   OPENAI_API_KEY: "sk-..."
-  IHUB_PLATFORM__I_FINDER__BASE_URL: "https://ifinder.internal"
+  IFINDER_API_URL: "https://ifinder.internal"
 ```
 
 ---

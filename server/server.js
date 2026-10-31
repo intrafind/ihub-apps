@@ -604,6 +604,9 @@ if (cluster.isPrimary && workerCount > 1) {
         invalidate();
         await syncIntegrationScopeProviders();
       });
+      // The built-in native connectors (iFinder, iAssistant) register
+      // themselves on import; definitions that name them load next.
+      await import('./services/integrations/protocols/native/connectors/register.js');
       await integrationRegistry.reload();
       await syncIntegrationScopeProviders();
     } catch (error) {

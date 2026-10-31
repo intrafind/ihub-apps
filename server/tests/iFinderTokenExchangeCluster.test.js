@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+const { stubInstallations } = await import('./helpers/installedIFinder.js');
 
 for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY']) {
   delete process.env[name];
@@ -147,6 +148,7 @@ async function runWorker() {
     }
   };
   configCache.getPlatform = () => platform;
+  stubInstallations(configCache, () => platform);
   const user = { id: 'alice', authMode: 'oidc', provider: 'zitadel' };
 
   process.on('message', async msg => {

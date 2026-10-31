@@ -31,8 +31,20 @@
   "defaultLanguage": "en",
   "requestBodyLimitMB": 50,
   "cors": {
-    "origin": ["http://localhost:3000", "http://localhost:5173", "${ALLOWED_ORIGINS}"],
-    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    "origin": [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "${ALLOWED_ORIGINS}"
+    ],
+    "methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS",
+      "HEAD",
+      "PATCH"
+    ],
     "allowedHeaders": [
       "Content-Type",
       "Authorization",
@@ -90,7 +102,9 @@
   },
   "anonymousAuth": {
     "enabled": true,
-    "defaultGroups": ["anonymous"]
+    "defaultGroups": [
+      "anonymous"
+    ]
   },
   "proxyAuth": {
     "enabled": false,
@@ -124,10 +138,16 @@
         "authorizationURL": "https://auth.intrafind.cloud/auth/realms/intrafind/protocol/openid-connect/auth",
         "tokenURL": "https://auth.intrafind.cloud/auth/realms/intrafind/protocol/openid-connect/token",
         "userInfoURL": "https://auth.intrafind.cloud/auth/realms/intrafind/protocol/openid-connect/userinfo",
-        "scope": ["openid", "profile", "email"],
+        "scope": [
+          "openid",
+          "profile",
+          "email"
+        ],
         "callbackURL": "/api/auth/oidc/auth.intrafind.cloud/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": ["users"],
+        "defaultGroups": [
+          "users"
+        ],
         "pkce": true,
         "autoRedirect": false
       },
@@ -139,10 +159,16 @@
         "authorizationURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/auth",
         "tokenURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/token",
         "userInfoURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/userinfo",
-        "scope": ["openid", "profile", "email"],
+        "scope": [
+          "openid",
+          "profile",
+          "email"
+        ],
         "callbackURL": "/api/auth/oidc/keycloak/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": ["users"],
+        "defaultGroups": [
+          "users"
+        ],
         "pkce": true,
         "autoRedirect": false
       },
@@ -154,10 +180,16 @@
         "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
         "tokenURL": "https://www.googleapis.com/oauth2/v4/token",
         "userInfoURL": "https://www.googleapis.com/oauth2/v2/userinfo",
-        "scope": ["openid", "profile", "email"],
+        "scope": [
+          "openid",
+          "profile",
+          "email"
+        ],
         "callbackURL": "/api/auth/oidc/google/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": ["google-users"],
+        "defaultGroups": [
+          "google-users"
+        ],
         "pkce": true,
         "autoRedirect": false
       },
@@ -169,10 +201,17 @@
         "authorizationURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/authorize",
         "tokenURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/token",
         "userInfoURL": "https://graph.microsoft.com/v1.0/me",
-        "scope": ["openid", "profile", "email", "User.Read"],
+        "scope": [
+          "openid",
+          "profile",
+          "email",
+          "User.Read"
+        ],
         "callbackURL": "/api/auth/oidc/microsoft/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": ["microsoft-users"],
+        "defaultGroups": [
+          "microsoft-users"
+        ],
         "pkce": true,
         "autoRedirect": false
       },
@@ -184,10 +223,16 @@
         "authorizationURL": "https://${AUTH0_DOMAIN}/authorize",
         "tokenURL": "https://${AUTH0_DOMAIN}/oauth/token",
         "userInfoURL": "https://${AUTH0_DOMAIN}/userinfo",
-        "scope": ["openid", "profile", "email"],
+        "scope": [
+          "openid",
+          "profile",
+          "email"
+        ],
         "callbackURL": "/api/auth/oidc/auth0/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": ["auth0-users"],
+        "defaultGroups": [
+          "auth0-users"
+        ],
         "pkce": true,
         "autoRedirect": false
       }
@@ -204,7 +249,9 @@
         "baseDn": "dc=example,dc=org",
         "adminDn": "cn=admin,dc=example,dc=org",
         "adminPasswordRef": "ldap_corporate-ldap",
-        "defaultGroups": ["ldap-users"]
+        "defaultGroups": [
+          "ldap-users"
+        ]
       },
       {
         "name": "active-directory",
@@ -214,7 +261,9 @@
         "baseDn": "dc=example,dc=com",
         "adminDn": "svc-ihub@example.com",
         "adminPasswordRef": "ldap_active-directory",
-        "defaultGroups": ["ad-users"]
+        "defaultGroups": [
+          "ad-users"
+        ]
       }
     ]
   },
@@ -226,29 +275,11 @@
     "debug": false,
     "getUserInfo": true,
     "getGroups": true,
-    "defaultGroups": ["ntlm-users"],
+    "defaultGroups": [
+      "ntlm-users"
+    ],
     "sessionTimeoutMinutes": 480,
     "generateJwtToken": true
-  },
-  "iFinder": {
-    "enabled": true,
-    "baseUrl": "${IFINDER_API_URL}",
-    "privateKeyRef": "ifinder",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "defaultScope": "",
-    "tokenExpirationSeconds": 3600,
-    "timeout": 30000,
-    "downloadDir": "contents/data/downloads/ifinder-downloads",
-    "defaultSearchProfile": "${IFINDER_SEARCH_PROFILE}",
-    "endpoints": {
-      "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
-      "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}",
-      "facets": "/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search",
-      "autocomplete": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_autocomplete",
-      "indexing": "/public-api/indexing/api/v0/docs"
-    }
   },
   "rateLimit": {
     "default": {

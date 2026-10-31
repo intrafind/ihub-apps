@@ -163,7 +163,7 @@ function IntegrationInstallDialog({
         }
         setSecretStored(Boolean(instance?.auth?.credentialRef));
         setForm({
-          id: instance?.id || proposeInstanceId(def.id, takenIds),
+          id: instance?.id || def.singleton?.instanceId || proposeInstanceId(def.id, takenIds),
           label: pickText(instance?.label, lang) || '',
           enabled: instance ? instance.enabled !== false : true,
           values,
@@ -348,7 +348,7 @@ function IntegrationInstallDialog({
                     id="integration-instance-id"
                     className={`${INPUT_CLASS} font-mono`}
                     value={form.id}
-                    disabled={isEdit}
+                    disabled={isEdit || Boolean(definition.singleton)}
                     onChange={e => setForm(prev => ({ ...prev, id: e.target.value }))}
                     pattern="[a-zA-Z0-9._-]+"
                     required

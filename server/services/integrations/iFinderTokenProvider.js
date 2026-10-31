@@ -4,7 +4,7 @@
 /**
  * The bearer token for every call from iHub to iFinder and iAssistant.
  *
- * Two modes, picked by `platform.iFinder.authMode`:
+ * Two modes, picked by the iFinder installation's `authMode`:
  *
  *  - `ihubSigned` (default): iHub signs the token itself (`utils/iFinderJwt.js`),
  *    exactly as it always has.
@@ -27,6 +27,7 @@
  */
 import jwt from 'jsonwebtoken';
 import configCache from '../../configCache.js';
+import { getIFinderConfig } from './ifinderConfig.js';
 import tokenStorageService from '../TokenStorageService.js';
 import credentialService from '../CredentialService.js';
 import { tokenStorageIdFor } from '../mcp/mcpUserTokens.js';
@@ -107,7 +108,7 @@ function configurationError(message) {
 }
 
 /**
- * @param {Object} [iFinderConfig] - `platform.iFinder`
+ * @param {Object} [iFinderConfig] - the iFinder connection (`getIFinderConfig()`)
  * @returns {'ihubSigned'|'oidcTokenExchange'}
  */
 export function getAuthMode(iFinderConfig) {
@@ -122,8 +123,7 @@ export function getAuthMode(iFinderConfig) {
  * @param {Object} [platform]
  * @returns {string|null}
  */
-export function getExchangeProviderName(platform = configCache.getPlatform() || {}) {
-  const iFinder = platform.iFinder || {};
+export function getExchangeProviderName(platform, iFinder = getIFinderConfig()) {
   if (getAuthMode(iFinder) !== IFINDER_AUTH_MODES.OIDC_TOKEN_EXCHANGE) return null;
   return iFinder.tokenExchange?.oidcProvider || null;
 }
@@ -136,8 +136,8 @@ export function getExchangeProviderName(platform = configCache.getPlatform() || 
  * @param {Object} [platform]
  * @returns {boolean}
  */
-export function shouldStoreLoginTokens(providerName, platform) {
-  return Boolean(providerName) && getExchangeProviderName(platform) === providerName;
+export function shouldStoreLoginTokens(providerName, platform, iFinder = getIFinderConfig()) {
+  return Boolean(providerName) && getExchangeProviderName(platform, iFinder) === providerName;
 }
 
 /** The OIDC providers configured on this installation, enabled or not. */
@@ -152,13 +152,15 @@ function oidcProviders(platform) {
  * @returns {Object}
  * @throws {Error} A configuration error naming what is missing
  */
-export function resolveExchangeSettings(platform = configCache.getPlatform() || {}) {
-  const iFinder = platform.iFinder || {};
+export function resolveExchangeSettings(
+  platform = configCache.getPlatform() || {},
+  iFinder = getIFinderConfig()
+) {
   const exchange = iFinder.tokenExchange || {};
   const providerName = exchange.oidcProvider;
   if (!providerName) {
     throw configurationError(
-      'iFinder token exchange has no OIDC provider selected. Choose one under Admin > Integrations > iFinder.'
+      'iFinder token exchange has no OIDC provider selected. Name one on the iFinder installation under Admin > Integrations > Installed.'
     );
   }
   const provider = oidcProviders(platform).find(entry => entry.name === providerName);
@@ -731,7 +733,7 @@ async function getExchangedToken(user, options, platform) {
  */
 export async function getAuthorizationHeader(user, options = {}) {
   const platform = configCache.getPlatform() || {};
-  if (getAuthMode(platform.iFinder) === IFINDER_AUTH_MODES.IHUB_SIGNED) {
+  if (getAuthMode(getIFinderConfig()) === IFINDER_AUTH_MODES.IHUB_SIGNED) {
     return getIFinderAuthorizationHeader(user, options);
   }
   return `Bearer ${await getExchangedToken(user, options, platform)}`;

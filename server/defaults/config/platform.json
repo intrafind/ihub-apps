@@ -321,40 +321,6 @@
   "cookieSettings": {
     "disableSecure": false
   },
-  "iFinder": {
-    "enabled": false,
-    "baseUrl": "",
-    "useOidcKeyPair": false,
-    "privateKeyRef": "",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "tokenExpirationSeconds": 3600,
-    "defaultScope": "fa_index_read",
-    "jwtSubjectField": "email",
-    "searchProfileApplication": "ifinder",
-    "defaultSearchProfile": "",
-    "allowedSearchProfiles": [],
-    "allowUserSearchProfileChange": true,
-    "authMode": "ihubSigned",
-    "tokenExchange": {
-      "oidcProvider": "",
-      "grantType": "tokenExchange",
-      "audience": "",
-      "scopeMap": {
-        "fa_index_read": "",
-        "fa_iassistant": "",
-        "fi_smartcollections": ""
-      },
-      "extraScopes": []
-    }
-  },
-  "iAssistant": {
-    "defaultProfileId": "",
-    "defaultSearchProfile": "searchprofile-standard",
-    "verifySearchProfileAccess": true,
-    "groundedOnly": false
-  },
   "copilotAgent": {
     "enabled": false,
     "appId": "",

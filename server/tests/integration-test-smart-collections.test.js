@@ -36,7 +36,8 @@ async function run(user, { exchange = false } = {}) {
 
 before(async () => {
   harness = await createHarness({ users: [ADA, MIXED] });
-  ({ runSmartCollectionsStep } = await import('../routes/admin/integrationTest.js'));
+  ({ runSmartCollectionsStep } =
+    await import('../services/integrations/builtins/iFinderDiagnostics.js'));
   ({ DiagnosticsReport, STATUS } =
     await import('../services/integrations/integrationDiagnostics.js'));
 });

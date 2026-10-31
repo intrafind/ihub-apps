@@ -39,7 +39,13 @@ import { getContentsPath } from './contentsPath.js';
  */
 // `integration-definitions/` are shipped catalog entries the IntegrationRegistry
 // reads in place; a copy under contents/ would shadow every later update.
-export const IMPORT_ONLY_DEFAULT_FILES = ['sources/', 'integration-definitions/'];
+// `tools/iFinder.json` is retired (the iFinder built-in integration owns the
+// tools since V192) and is kept only for the older migrations that read it.
+export const IMPORT_ONLY_DEFAULT_FILES = [
+  'sources/',
+  'integration-definitions/',
+  'tools/iFinder.json'
+];
 
 /**
  * Whether a path relative to server/defaults falls under an import-only entry.
