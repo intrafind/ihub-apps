@@ -28,7 +28,12 @@
  * ["drawio"]` → `integrations.drawio`), and a tool reference by prefixed id
  * (`drawio__create_diagram`) becomes a binding narrowed to that action.
  *
- * `config/mcpServers.json` is removed; nothing reads it any more.
+ * `config/mcpServers.json` is removed; nothing reads it any more. A server
+ * whose id another, non-MCP installation already holds (an integration
+ * installed from the catalog) is not moved: it is written to
+ * `config/mcpServers.unmigrated.json` with a warning, for the admin to install
+ * under a free id. An MCP installation under the id is a re-run and is left
+ * as is.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,6 +43,8 @@ export const version = '193';
 export const description = 'mcp_servers_installed_integrations';
 
 const MCP_FILE = 'config/mcpServers.json';
+/** Servers the migration could not move, for the admin to re-install by hand. */
+const UNMIGRATED_FILE = 'config/mcpServers.unmigrated.json';
 const INTEGRATIONS_FILE = 'config/integrations.json';
 const GENERIC_DEFINITION = 'com.intrafind/mcp-server';
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -344,9 +351,18 @@ export async function up(ctx, { shippedDefinitions } = {}) {
   }
 
   let migrated = 0;
+  const skipped = [];
   for (const server of servers) {
-    if (integrations.installed.some(inst => inst.id === server.id)) {
-      ctx.log(`MCP server "${server.id}" is already an installed integration; left as is`);
+    const holder = integrations.installed.find(inst => inst.id === server.id);
+    if (holder) {
+      if (isMcpInstallation(holder)) {
+        ctx.log(`MCP server "${server.id}" is already an installed integration; left as is`);
+      } else {
+        // Another installation (an integration installed from the catalog)
+        // holds the id. The server cannot take it; it is kept in a side file
+        // below instead of being lost with mcpServers.json.
+        skipped.push(server);
+      }
       continue;
     }
     const instance = instanceFrom(server, shipped, {
@@ -376,11 +392,20 @@ export async function up(ctx, { shippedDefinitions } = {}) {
 
   if (hadFile || migrated > 0) await ctx.writeJson(INTEGRATIONS_FILE, integrations);
 
-  // Apps reference the installations by binding, not by tool reference.
-  const refs = servers.map(server => ({ id: server.id, toolPrefix: server.toolPrefix }));
-  // Installations that already existed (a re-run, or a hand-made install) count too.
+  // Apps reference the installations by binding, not by tool reference. A
+  // skipped server keeps its old references: nothing may bind the installation
+  // that holds its id.
+  const skippedIds = new Set(skipped.map(server => server.id));
+  const refs = servers
+    .filter(server => !skippedIds.has(server.id))
+    .map(server => ({ id: server.id, toolPrefix: server.toolPrefix }));
+  // MCP installations that already existed (a re-run, or a hand-made install) count too.
   for (const inst of integrations.installed) {
-    if (!refs.some(ref => ref.id === inst.id)) {
+    if (
+      isMcpInstallation(inst) &&
+      !skippedIds.has(inst.id) &&
+      !refs.some(ref => ref.id === inst.id)
+    ) {
       refs.push({ id: inst.id, toolPrefix: inst.values?.toolPrefix });
     }
   }
@@ -397,8 +422,26 @@ export async function up(ctx, { shippedDefinitions } = {}) {
     }
   }
 
+  if (skipped.length) {
+    await ctx.writeJson(UNMIGRATED_FILE, {
+      ...(mcp.security ? { security: mcp.security } : {}),
+      servers: skipped
+    });
+    ctx.warn(
+      `${skipped.length} MCP server(s) not migrated because an installed integration already has the id: ${skipped
+        .map(server => `"${server.id}"`)
+        .join(
+          ', '
+        )}. Kept in ${UNMIGRATED_FILE}; install each under a free id and bind it to its apps.`
+    );
+  }
   if (hadFile) {
     await ctx.deleteFile(MCP_FILE);
     ctx.log(`${MCP_FILE} removed: MCP servers are installed integrations now`);
   }
+}
+
+/** Whether an installation is an MCP server (shipped `mcp/<id>` or the generic definition). */
+function isMcpInstallation(inst) {
+  return inst.definition === GENERIC_DEFINITION || String(inst.definition || '').startsWith('mcp/');
 }
