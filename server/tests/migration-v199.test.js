@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -17,11 +17,9 @@ import {
   ACTIONS_BY_FILE,
   SHIPPED_HASHES
 } from '../migrations/V199__ihub_tools_installed_integration.js';
+import { IHUB_TOOL_FILE_IDS } from '../services/integrations/protocols/native/connectors/ihub/index.js';
 
-const TOOLS_DIR = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../services/integrations/protocols/native/connectors/ihub/tools'
-);
+const TOOLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults/tools');
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const shipped = id => JSON.parse(readFileSync(path.join(TOOLS_DIR, `${id}.json`), 'utf8'));
 
@@ -50,10 +48,7 @@ describe('V199 iHub tools → installed integration', () => {
   it('declares its version', () => assert.equal(version, '199'));
 
   it('knows every tool file the connector ships, with its hash as shipped', () => {
-    const ids = readdirSync(TOOLS_DIR)
-      .filter(file => file.endsWith('.json'))
-      .map(file => file.slice(0, -'.json'.length))
-      .sort();
+    const ids = [...IHUB_TOOL_FILE_IDS].sort();
     assert.deepEqual(Object.keys(SHIPPED_HASHES).sort(), ids);
     for (const id of ids) {
       assert.equal(contentHash(shipped(id), sha256), SHIPPED_HASHES[id], id);

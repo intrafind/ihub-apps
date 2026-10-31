@@ -9,18 +9,53 @@
  * `app.tools: ["ask_user"]`, group grants and the loop's own rules
  * (`isInteractiveTool`, the scheduling gate, the memory tools) keep working.
  *
- * The tool definitions are the former `contents/tools/<id>.json` files, kept
- * in `./tools/` as data: each action's parameters, model-facing description
+ * The tool definitions are the shipped `server/defaults/tools/<id>.json`
+ * files, read as data: each action's parameters, model-facing description
  * and flags come from there, and `run` delegates to the implementation in
  * `server/tools/<script>.js` exactly as the tool loader did (defaults from
- * the schema applied, `method` picked for function-style tools).
+ * the schema applied, `method` picked for function-style tools). The files
+ * stay in `server/defaults/tools/` because released config migrations (V087,
+ * V160, V173) read them through `ctx.readDefaultJson` while upgrading an
+ * older install; V199 removes the copies from `contents/tools/`.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { getLocalizedString } from '../../../../../../utils/localize.js';
 
-const TOOLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'tools');
+const TOOLS_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  '..',
+  '..',
+  'defaults',
+  'tools'
+);
+
+/** The file-level tool ids (`evidence`, not `evidence_collect`) the installation owns. */
+export const IHUB_TOOL_FILE_IDS = Object.freeze([
+  'ask_user',
+  'create_task',
+  'delete_scheduled_task',
+  'evidence',
+  'get_task_run',
+  'knowledge',
+  'list_scheduled_tasks',
+  'list_task_runs',
+  'list_tasks',
+  'mark_task_done',
+  'read_inbox',
+  'read_memory',
+  'run_scheduled_task_now',
+  'schedule_task',
+  'update_scheduled_task',
+  'write_artifact',
+  'write_inbox',
+  'write_memory'
+]);
 
 /** Flags of a tool file that other code reads from the loaded tool. */
 const CARRIED_FLAGS = ['requiresUserInput', 'isAgentTool', 'passthrough', 'requiresApproval'];
@@ -32,9 +67,8 @@ const CARRIED_FLAGS = ['requiresUserInput', 'isAgentTool', 'passthrough', 'requi
  */
 function loadToolDefinitions() {
   const tools = new Map();
-  for (const file of readdirSync(TOOLS_DIR).sort()) {
-    if (!file.endsWith('.json')) continue;
-    const tool = JSON.parse(readFileSync(path.join(TOOLS_DIR, file), 'utf8'));
+  for (const id of IHUB_TOOL_FILE_IDS) {
+    const tool = JSON.parse(readFileSync(path.join(TOOLS_DIR, `${id}.json`), 'utf8'));
     if (tool.functions && typeof tool.functions === 'object') {
       for (const [fn, cfg] of Object.entries(tool.functions)) {
         const { functions: _functions, ...base } = tool;
@@ -59,14 +93,6 @@ const TOOLS = loadToolDefinitions();
 
 /** The ids of iHub's own tools, as the definition's actions name them. */
 export const IHUB_TOOL_IDS = Object.freeze([...TOOLS.keys()]);
-
-/** The file-level tool ids (`evidence`, not `evidence_collect`), for the migration and tests. */
-export const IHUB_TOOL_FILE_IDS = Object.freeze(
-  readdirSync(TOOLS_DIR)
-    .filter(file => file.endsWith('.json'))
-    .map(file => file.slice(0, -'.json'.length))
-    .sort()
-);
 
 function localizedText(value, language) {
   if (typeof value === 'string') return value;
