@@ -65,9 +65,9 @@ Exit: an admin installs Confluence Data Center from the catalog, scopes it to a 
 ## Open questions for the team
 
 1. ~~**Name on the sidebar**: "Integrations" (this concept) or "Connectors" (Claude, Microsoft, Glean)?~~ Decided 2026-10-20: "Integration" and "Connection" everywhere; "MCP server" and "tool" leave the end-user UI.
-2. **Shared OAuth connections**: forbid entirely (Langdock: only via an app's pre-selected connection) or allow an admin to share their own OAuth connection with a group for service-like use?
-3. **Web search as an integration row** in the picker, or keep the dedicated switch? Concept says row, with the same look as today.
+2. ~~**Shared OAuth connections**: forbid entirely (Langdock: only via an app's pre-selected connection) or allow an admin to share their own OAuth connection with a group for service-like use?~~ Decided 2026-10-31: forbidden in this epic. A later "service connection" an admin creates deliberately for an app can cover the service-account case with explicit consent.
+3. ~~**Web search as an integration row** in the picker, or keep the dedicated switch? Concept says row, with the same look as today.~~ Decided 2026-10-31: an integration row with today's look.
 4. ~~**Sources**~~: resolved by projects (2026-10-22): knowledge lives in projects, which consume integrations through their `files` and `search` capabilities.
 5. ~~**Clean break of admin routes** vs aliases, per CLAUDE.md.~~ Decided 2026-10-20: clean break for `/api/admin/mcp/servers` and `/api/admin/a2a/agents`; stable OAuth callbacks. The release notes for the phase that ships it carry a breaking-change entry in `docs/releases/next/breaking-changes.md`.
-6. **Community registry**: do we ever show the public MCP registry to customers, or only our curated catalog plus their own registries?
-7. **Tools admin routes**: clean break for `/api/admin/tools` versus an alias to custom integrations (decision 8 in the product concept). Recommendation: clean break.
+6. ~~**Community registry**: do we ever show the public MCP registry to customers, or only our curated catalog plus their own registries?~~ Decided 2026-10-31: not shown by default. An admin can add the public MCP registry as a registry like any other, with `trustCode` off.
+7. ~~**Tools admin routes**: clean break for `/api/admin/tools` versus an alias to custom integrations (decision 8 in the product concept). Recommendation: clean break.~~ Decided 2026-10-31: clean break, like the MCP and A2A admin routes.
