@@ -9,6 +9,7 @@ import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 import IntegrationTestResults from '../IntegrationTestResults';
 import GroupMultiSelect from '../GroupMultiSelect';
 import ConfigFieldInput, { pickText } from './ConfigFieldInput';
+import { buildActionsPolicy, isAllowlist } from './actionsPolicy';
 import { fieldApplies, secretFieldForMode } from '../../../../shared/utils/configFieldWhen';
 import {
   CALLOUT_CLASS,
@@ -183,7 +184,10 @@ function IntegrationInstallDialog({
           // Kept as stored and sent back: other languages of the label and
           // the per-action overrides have no editor here yet.
           storedLabel: instance?.label && typeof instance.label === 'object' ? instance.label : {},
-          overrides: instance?.actions?.overrides || {}
+          overrides: instance?.actions?.overrides || {},
+          // The stored policy: sent back unchanged while no actions are known,
+          // and it decides whether an allowlist stays one (`buildActionsPolicy`).
+          storedActions: instance?.actions || null
         });
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
@@ -226,12 +230,6 @@ function IntegrationInstallDialog({
       if (field && !fieldApplies(field, form.values, form.authMode)) continue;
       values[key] = value;
     }
-    const defaultOn = new Set(
-      knownActions.filter(a => a.enabledByDefault !== false).map(a => a.name)
-    );
-    const names = knownActions.map(a => a.name);
-    const enabled = ['*', ...names.filter(n => form.checkedActions.has(n) && !defaultOn.has(n))];
-    const disabled = names.filter(n => !form.checkedActions.has(n) && defaultOn.has(n));
     const payload = {
       id: form.id.trim(),
       definition: definition.id,
@@ -240,7 +238,12 @@ function IntegrationInstallDialog({
       values,
       auth: { mode: form.authMode },
       allowedGroups: form.allowedGroups,
-      actions: { enabled, disabled, overrides: form.overrides || {} }
+      actions: buildActionsPolicy({
+        knownActions,
+        checkedActions: form.checkedActions,
+        stored: form.storedActions,
+        overrides: form.overrides || {}
+      })
     };
     if (secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };
@@ -267,16 +270,18 @@ function IntegrationInstallDialog({
     try {
       const result = await testIntegrationDraft(definition.id, buildPayload());
       setTestResult(result);
-      // Dynamic actions: the test listed the server's tools; offer them, all
-      // on unless the admin already switched some off.
+      // Dynamic actions: the test listed the server's tools; offer them. A
+      // tool seen for the first time starts as the tested policy has it (the
+      // stored allowlist or denylist, sent with the draft), so a tool the
+      // admin switched off before the server went down stays off.
       if (definition.dynamicActions && Array.isArray(result?.actions) && result.actions.length) {
         setKnownActions(result.actions);
         setForm(prev => {
           const known = new Set(result.actions.map(a => a.name));
           const kept = [...prev.checkedActions].filter(name => known.has(name));
           const fresh = result.actions
-            .map(a => a.name)
-            .filter(name => !knownActions.some(a => a.name === name));
+            .filter(a => !knownActions.some(k => k.name === a.name) && a.enabled !== false)
+            .map(a => a.name);
           return { ...prev, checkedActions: new Set([...kept, ...fresh]) };
         });
       }
@@ -537,15 +542,25 @@ function IntegrationInstallDialog({
               </legend>
               {definition.dynamicActions && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {knownActions.length === 0
+                  {knownActions.length === 0 && form.storedActions
                     ? t(
-                        'admin.integrationCatalog.wizard.dynamicActionsEmpty',
-                        'The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.'
+                        'admin.integrationCatalog.wizard.dynamicActionsUnavailable',
+                        'The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.'
                       )
-                    : t(
-                        'admin.integrationCatalog.wizard.dynamicActionsHint',
-                        'These are the tools the server lists; a tool the server adds later is on by default.'
-                      )}
+                    : knownActions.length === 0
+                      ? t(
+                          'admin.integrationCatalog.wizard.dynamicActionsEmpty',
+                          'The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.'
+                        )
+                      : isAllowlist(form.storedActions)
+                        ? t(
+                            'admin.integrationCatalog.wizard.dynamicActionsAllowlistHint',
+                            'These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.'
+                          )
+                        : t(
+                            'admin.integrationCatalog.wizard.dynamicActionsHint',
+                            'These are the tools the server lists; a tool the server adds later is on by default.'
+                          )}
                 </p>
               )}
               <ul className="divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">

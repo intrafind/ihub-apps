@@ -238,5 +238,24 @@ export async function resetRegistration(instance) {
   return true;
 }
 
-/** The manager is re-initialized from the installations by the reload hook; nothing is cached here. */
+/** Nothing is cached here: the manager is rebuilt from the installations (see {@link onChanged}). */
 export function invalidate() {}
+
+/**
+ * An MCP definition changed — re-installed from a registry on this worker,
+ * or announced by another worker — so the server configs projected from it
+ * (endpoint, headers, MCP Apps setting) may differ: the manager is rebuilt
+ * from the installations. Like the reload hook for `integrations.json`, this
+ * connects nothing eagerly; a connection whose settings changed is dropped
+ * and the next use reconnects (the eager `connectAll` of the singleton
+ * worker is a startup matter, `server.js`). Concurrent runs are serialized
+ * by the manager module.
+ *
+ * `manager.js` is imported here, not at the top: it reads the installed
+ * integration service, which reaches this adapter through the protocol
+ * index, and a static import would close that cycle.
+ */
+export async function onChanged() {
+  const { initializeMcpFromInstallations } = await import('./manager.js');
+  await initializeMcpFromInstallations();
+}

@@ -185,6 +185,12 @@ export const configFieldSchema = z
     injectAs: z.enum(CONFIG_FIELD_INJECTIONS).optional(),
     /** Hidden behind "Advanced" in the wizard. */
     advanced: z.boolean().prefault(false),
+    /**
+     * `url` fields: keep a trailing slash instead of stripping it. For an
+     * endpoint that is used verbatim (an MCP server URL, an OAuth issuer),
+     * where the slash is part of the identity other state is bound to.
+     */
+    keepTrailingSlash: z.boolean().optional(),
     /** `credential` fields: the credential types offered (any when empty). */
     credentialTypes: z.array(z.string().min(1).max(64)).optional(),
     /** `instance` fields: the definition the referenced installation must have. */
@@ -195,6 +201,9 @@ export const configFieldSchema = z
   .transform(field => ({ ...field, sensitive: field.sensitive ?? field.type === 'secret' }))
   .refine(field => field.type !== 'enum' || (field.choices && field.choices.length > 0), {
     message: 'an enum field needs choices'
+  })
+  .refine(field => field.keepTrailingSlash === undefined || field.type === 'url', {
+    message: 'keepTrailingSlash applies to url fields only'
   })
   .refine(field => !(field.sensitive && field.default !== undefined), {
     message: 'a sensitive field cannot have a default value'

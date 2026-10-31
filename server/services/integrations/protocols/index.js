@@ -22,7 +22,10 @@
  * the definition), `supportedAuthModes`, `discoverTools(resolved, language)`
  * (ready-made tool objects instead of `discoverActions` → `toolFromAction`),
  * `status(instance)`, `listConnections` / `disconnectUser` /
- * `resetRegistration` (per-user sign-in), `invalidate(instanceId)`.
+ * `resetRegistration` (per-user sign-in), `invalidate(instanceId)` (drop
+ * what is cached for one installation), `onChanged({ definitionIds? })`
+ * (definitions were reloaded: re-derive whatever the adapter keeps from them,
+ * see {@link notifyDefinitionsChanged}).
  *
  * `openapi`, `native`, `mcp` and `a2a` have adapters; the other protocol
  * types validate but cannot be installed.
@@ -32,8 +35,33 @@ import * as openapi from './openapi/OpenApiAdapter.js';
 import * as native from './native/NativeAdapter.js';
 import * as mcp from './mcp/McpAdapter.js';
 import * as a2a from './a2a/A2aAdapter.js';
+import logger from '../../../utils/logger.js';
 
 const adapters = { openapi, native, mcp, a2a };
+
+/**
+ * Tell every adapter that definitions changed: a definition was (re-)installed
+ * from a registry on this worker (`ContentInstaller`), or another worker
+ * announced one and the registry was reloaded (`server.js`). The reload hook
+ * for `integrations.json` does not cover this: a definition update changes no
+ * installation. A failing adapter is logged; the others are still told.
+ *
+ * @param {{ definitionIds?: string[] }} [context] - the changed definitions, when known
+ */
+export async function notifyDefinitionsChanged(context = {}) {
+  for (const [type, adapter] of Object.entries(adapters)) {
+    if (typeof adapter.onChanged !== 'function') continue;
+    try {
+      await adapter.onChanged(context);
+    } catch (error) {
+      logger.warn('Protocol adapter could not follow a definition change', {
+        component: 'IntegrationProtocols',
+        protocol: type,
+        error: error.message
+      });
+    }
+  }
+}
 
 /**
  * @param {string} protocolType
@@ -48,4 +76,4 @@ export function supportedProtocols() {
   return Object.keys(adapters);
 }
 
-export default { getProtocolAdapter, supportedProtocols };
+export default { getProtocolAdapter, supportedProtocols, notifyDefinitionsChanged };

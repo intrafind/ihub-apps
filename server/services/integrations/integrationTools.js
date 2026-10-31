@@ -120,7 +120,13 @@ export async function discoverIntegrationTools(language = null) {
   return tools;
 }
 
-function userMayUse(instance, user) {
+/**
+ * Whether the installation's `allowedGroups` admit the user (every user when
+ * the list is empty). Holds on top of every tool grant and app binding.
+ * @param {object} instance
+ * @param {object} user
+ */
+export function userMayUse(instance, user) {
   const allowed = instance.allowedGroups || [];
   if (allowed.length === 0) return true;
   const groups = Array.isArray(user?.groups) ? user.groups : [];

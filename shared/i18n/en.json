@@ -3039,7 +3039,9 @@
         "test": "Test connection",
         "testing": "Testing…",
         "dynamicActionsEmpty": "The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.",
-        "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default."
+        "dynamicActionsUnavailable": "The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.",
+        "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default.",
+        "dynamicActionsAllowlistHint": "These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on."
       },
       "connections": {
         "title": "Connected users",
