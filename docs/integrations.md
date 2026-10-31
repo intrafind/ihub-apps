@@ -1,8 +1,8 @@
 # Integrations
 
-An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**, including the built-in iFinder, iAssistant and web search integrations; the MCP servers, A2A agents and the remaining built-in connectors (Jira, cloud storage) keep their own pages until they move onto the same model (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
+An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**, including the built-in iFinder, iAssistant, web search and Jira integrations; the MCP servers, A2A agents and the remaining built-in connectors (cloud storage) keep their own pages until they move onto the same model (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
 
-The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the [built-in integrations](#built-in-integrations) **iFinder**, **iAssistant** and **Web search**.
+The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the [built-in integrations](#built-in-integrations) **iFinder**, **iAssistant**, **Web search** and **Atlassian Jira**.
 
 ## Three records
 
@@ -26,6 +26,8 @@ A definition's folder name is its id with the one `/` replaced by `__`: `org.cka
 The iAssistant installation has no base URL of its own: its `connection` field names the iFinder installation it runs on. The fields of both installations are described in [iFinder Integration](iFinder-Integration.md#configuration) and [iFinder & iAssistant Admin Guide](ifinder-iassistant-admin-guide.md).
 
 **Web search** (`com.intrafind/web-search`, installation `websearch`) is the third built-in: it holds the Brave and Staan API keys as credential references, the default search engine and the groups that may search, and its actions are the search tools `braveSearch`, `staanSearch`, `qwantSearch` and the page reader `read_url` (same ids as before). Apps do not bind it; they switch web search on in their own `websearch` settings, and an app with web search on requires the installation like a bound one. See [Web Tools](web-tools.md).
+
+**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through `/api/integrations/jira/auth` (from the chat prompt or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
 
 ### MCP servers
 

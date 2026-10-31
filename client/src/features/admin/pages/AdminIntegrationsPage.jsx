@@ -16,7 +16,6 @@ import { fetchPeopleDirectories } from '../../../api/peopleDirectoriesAdminApi';
  *
  * Status detection looks at platform.json:
  *   - Cloud storage provider entries → cloudStorage.providers[id].enabled
- *   - Jira → jira.clientId present
  *   - Outlook / Nextcloud Embed → corresponding feature flag in platform.features
  *   - People directories → at least one enabled entry in peopleDirectories.json
  *     (`GET /admin/people-directories`)
@@ -74,9 +73,6 @@ function AdminIntegrationsPage() {
         if (p.enabled === false) return 'disabled';
         return p.clientId || p.clientSecret ? 'connected' : 'available';
       }
-      case 'jira':
-        if (platform.jira?.enabled === false) return 'disabled';
-        return platform.jira?.clientId ? 'connected' : 'available';
       case 'outlook':
         return platform.features?.outlookAddIn || platform.officeIntegration?.enabled
           ? 'connected'
@@ -94,7 +90,6 @@ function AdminIntegrationsPage() {
 
   const productivity = t('admin.integrations.categories.productivity', 'Productivity');
   const storage = t('admin.integrations.categories.storage', 'Cloud Storage');
-  const ticketing = t('admin.integrations.categories.ticketing', 'Ticketing');
   const directories = t('admin.integrations.categories.directories', 'Directories');
 
   const integrations = [
@@ -203,19 +198,6 @@ function AdminIntegrationsPage() {
       category: storage
     },
     {
-      id: 'jira',
-      title: t('admin.integrations.cards.jira.title', 'Atlassian Jira'),
-      description: t(
-        'admin.integrations.cards.jira.description',
-        'OAuth credentials so iHub apps can read and create Jira tickets on behalf of the signed-in user.'
-      ),
-      icon: 'ticket',
-      color: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400',
-      href: '/admin/integrations/jira',
-      status: statusFor('jira'),
-      category: ticketing
-    },
-    {
       id: 'people-directories',
       title: t('admin.integrations.cards.peopleDirectories.title', 'People directories'),
       description: t(
@@ -251,7 +233,7 @@ function AdminIntegrationsPage() {
           'Connect iHub to the systems your users already work with — mail, docs, ticketing — and ship the iHub UI inside their browser.'
         )}
         integrations={integrationsEnabled ? integrations : []}
-        categoryOrder={[productivity, storage, ticketing, directories]}
+        categoryOrder={[productivity, storage, directories]}
         searchPlaceholder={t('admin.integrations.searchPlaceholder', 'Search integrations…')}
       />
     </>

@@ -77,3 +77,19 @@ Qwant) into the installed integration `websearch` and the credentials
   missing, and the installation's groups apply to them.
 - **Deployments that write `providers.json` or the tool files themselves** have to write the
   installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.
+
+## Jira Configuration Moved Out of `platform.json`
+
+Migration V196 moves `platform.jira` into the installed integration `jira`
+(`contents/config/integrations.json`) and removes the block; `PUT /api/admin/configs/platform`
+no longer carries a `jira` key.
+
+- **Admin page:** **Admin → Integrations → Jira** (`/admin/integrations/jira`) is gone; use
+  **Admin → Integrations → Installed → Atlassian Jira**. The user-facing routes
+  `/api/integrations/jira/*` (auth, callback, status, refresh, disconnect, attachment, test) are
+  unchanged.
+- **Apps:** `tools: ["jira"]` or `["jira_searchTickets", …]` selects nothing any more; the
+  migration turns such entries into the binding `integrations.jira`. A tool file with
+  `"script": "jira.js"` is deleted.
+- **Deployments that write `platform.json` themselves** have to write the installation instead
+  (`values.clientId`, `values.clientSecretRef`, `values.redirectUri`, `values.siteUrl`).

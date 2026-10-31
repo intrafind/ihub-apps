@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import configCache from '../../configCache.js';
+import { getJiraConfig, isJiraConfigured } from './jiraConfig.js';
 import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
 
@@ -26,12 +26,11 @@ class JiraService {
   }
 
   /**
-   * Get the current Jira configuration from platform config.
-   * @returns {Object} Jira config with baseUrl, clientId, clientSecret, redirectUri, enabled
+   * The Jira settings of the installed integration `jira` (see jiraConfig.js).
+   * @returns {Object} Jira config with baseUrl, clientId, clientSecretRef, redirectUri, enabled
    */
   getConfig() {
-    const platform = configCache.getPlatform() || {};
-    return platform.jira || {};
+    return getJiraConfig();
   }
 
   /**
@@ -39,8 +38,7 @@ class JiraService {
    * @returns {boolean} True if enabled and has required OAuth credentials
    */
   isConfigured() {
-    const jiraConfig = this.getConfig();
-    return Boolean(jiraConfig.enabled && jiraConfig.clientId && jiraConfig.clientSecretRef);
+    return isJiraConfigured(this.getConfig());
   }
 
   /**

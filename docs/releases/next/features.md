@@ -118,3 +118,22 @@ The search engines and the page reader are the built-in integration **Web search
 - **Migrated for you:** migration V195 moves the provider keys into credentials, creates the
   installation and retires the four tool files. `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still
   apply when no credential is referenced.
+
+## Jira Is an Installed Integration
+
+Atlassian Jira is the built-in integration **Atlassian Jira** under **Admin → Integrations →
+Installed**, and no longer a page of its own under **Admin → Integrations**.
+
+- **One place for the OAuth app:** the installation `jira` holds the client id, the client secret
+  as a credential reference, the redirect URI and the site URL; **Test** checks them and the route
+  to `auth.atlassian.com`, and **Connections** lists the users who connected their Atlassian
+  account and disconnects one.
+- **Apps bind instead of listing tools:** an app binds `integrations.jira` and picks actions by
+  name; the six tools keep their ids (`jira_searchTickets` and friends). An app that binds Jira is
+  offered only while the installation is enabled, and the installation's groups decide who may use
+  it.
+- **Users connect as before:** the "Connect to Jira" prompt in the chat and **Settings →
+  Integrations** are unchanged, and existing connections keep working.
+- **Migrated for you:** migration V196 moves `platform.jira` into the installation (keeping its
+  enabled state), retires a hand-written tool file for `tools/jira.js` and rewrites `tools: ["jira"]`
+  into the binding.

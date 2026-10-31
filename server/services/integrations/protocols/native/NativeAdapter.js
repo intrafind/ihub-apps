@@ -210,6 +210,38 @@ export function scopeProvider(resolved) {
   return connector?.scopeProvider ? connector.scopeProvider(resolved) : null;
 }
 
+/** The connector of a definition when it is already loaded (sync callers), or null. */
+function loadedConnector(definition) {
+  return definition.protocol.type === 'script'
+    ? loadedScriptConnector(definition)
+    : getConnector(definition.protocol.module);
+}
+
+/** Live status of an installation, when its connector reports one. */
+export function status(instance) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return null;
+  const connector = loadedConnector(definition);
+  return connector?.status ? connector.status(instance) : null;
+}
+
+/** The users who connected their own account, for connectors that sign users in. */
+export async function listConnections(instance) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return [];
+  const connector = await connectorFor(definition);
+  return connector.listConnections ? connector.listConnections(instance) : [];
+}
+
+/** Disconnect one user from an installation whose connector signs users in. */
+export async function disconnectUser(instance, userId) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return { removed: false, unknownServer: true };
+  const connector = await connectorFor(definition);
+  if (!connector.disconnectUser) return { removed: false, unsupported: true };
+  return connector.disconnectUser(instance, userId);
+}
+
 export function invalidate(instanceId) {
   for (const connector of listConnectors()) connector.invalidate?.(instanceId);
   for (const loading of scriptConnectors.values()) {

@@ -1482,22 +1482,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
   // Determine which integrations this app uses
   const appIntegrations = useMemo(() => {
-    if (!app?.tools) return [];
-
     const integrations = [];
-
-    // Check for JIRA tools
-    if (app.tools.includes('jira')) {
+    // Jira signs every user in: the app binds the `jira` installation.
+    if (app?.integrations?.jira) {
       integrations.push('jira');
     }
-
-    // Future integrations can be detected here
-    // if (app.tools.some(tool => tool.startsWith('microsoft_'))) {
-    //   integrations.push('microsoftGraph');
-    // }
-
     return integrations;
-  }, [app?.tools]);
+  }, [app?.integrations]);
 
   // Monitor messages for integration authentication errors
   useEffect(() => {

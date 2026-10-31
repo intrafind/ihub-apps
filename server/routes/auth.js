@@ -22,6 +22,7 @@ import {
   teamsClientConfig
 } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
+import { isJiraConfigured } from '../services/integrations/jiraConfig.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
@@ -774,9 +775,7 @@ export default function registerAuthRoutes(app) {
         : { enabled: false, providers: [] },
       // Expose Jira integration status (no secrets)
       jira: {
-        enabled: Boolean(
-          platform.jira?.enabled && platform.jira?.clientId && platform.jira?.clientSecret
-        )
+        enabled: isJiraConfigured()
       },
       // UI hints for the pre-auth gate (no sensitive data)
       gateUI: (() => {
