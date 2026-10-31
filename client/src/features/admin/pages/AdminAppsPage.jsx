@@ -87,7 +87,10 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
   const bound =
     app.integrations && typeof app.integrations === 'object' ? Object.keys(app.integrations) : [];
   const missingIntegrations = [];
-  for (const id of [...required, ...bound]) {
+  // iAssistant runs on the iFinder connection; the server hides the app while
+  // that installation is off (missingAppIntegrations), so say so here too.
+  const connection = app.integrations?.iassistant ? ['ifinder'] : [];
+  for (const id of new Set([...required, ...bound, ...connection])) {
     if (integrationStatus[id] === true) continue;
     const name =
       INTEGRATION_NAMES[id] ||
