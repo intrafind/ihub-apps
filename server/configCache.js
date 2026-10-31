@@ -1899,6 +1899,14 @@ class ConfigCache {
       });
     }
 
+    // An installation's own groups hold on top of every grant, `*` included:
+    // a tool the user could not run is not listed.
+    if (tools.some(tool => tool._integration)) {
+      const { filterIntegrationToolsForUser } =
+        await import('./services/integrations/integrationTools.js');
+      tools = filterIntegrationToolsForUser(tools, user);
+    }
+
     // A people directory's own `groups` hold on top of every grant, `*` included.
     tools = filterDirectoryToolsForUser(tools, user);
 
