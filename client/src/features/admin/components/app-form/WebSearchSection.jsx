@@ -256,10 +256,13 @@ function WebSearchSection({ app, onChange }) {
               {/* Required: hide the app while the websearch installation is off */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.apps.edit.websearchRequired', 'Required')}
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  </span>
+                  <p
+                    id="websearch-required-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
                     {t(
                       'admin.apps.edit.websearchRequiredDesc',
                       'Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.'
@@ -267,8 +270,13 @@ function WebSearchSection({ app, onChange }) {
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer ml-4">
+                  <span className="sr-only">
+                    {t('admin.apps.edit.websearchRequired', 'Required')}
+                  </span>
                   <input
+                    id="websearch-required"
                     type="checkbox"
+                    aria-describedby="websearch-required-desc"
                     checked={app.websearch?.required ?? false}
                     onChange={e => handleWebSearchChange({ required: e.target.checked })}
                     className="sr-only peer"
