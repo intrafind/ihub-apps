@@ -4,30 +4,14 @@
 import { promises as fs } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import SwaggerParser from '@apidevtools/swagger-parser';
-// js-yaml v5 is ESM-only with named exports — a default import throws
-// "does not provide an export named 'default'" at module load time.
-import { load as parseYaml, JSON_SCHEMA } from 'js-yaml';
+import { parseOpenApiText } from './openApiText.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { throttledRun } from '../../requestThrottler.js';
 import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
 
-/**
- * Parse an OpenAPI document body that may be JSON or YAML. Probes for the
- * leading `{`/`[` to choose JSON, otherwise falls back to YAML. Uses
- * `JSON_SCHEMA` so only JSON-compatible types (strings, numbers, booleans,
- * null, arrays, objects) are constructed — no custom YAML tags can produce
- * unexpected types from operator-supplied input. `json: true` makes duplicate
- * keys take the last value (matches JSON semantics).
- */
-export function parseOpenApiText(text) {
-  const trimmed = (text || '').trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return JSON.parse(text);
-  }
-  return parseYaml(text, { schema: JSON_SCHEMA, json: true });
-}
+export { parseOpenApiText };
 
 /**
  * Generic OpenAPI HTTP tool runner (issue #1462).
@@ -183,7 +167,7 @@ export async function getOpenApiToolParameters(tool) {
   for (const param of parameters) {
     if (!param || !param.name) continue;
     properties[param.name] = jsonSchemaForParam(param);
-    paramMap[param.name] = { in: param.in };
+    paramMap[param.name] = { in: param.in, style: param.style, explode: param.explode };
     if (param.required) required.push(param.name);
   }
 
@@ -337,6 +321,37 @@ function getHeader(headers, name) {
 }
 
 /**
+ * Append one query parameter. Arrays follow the OpenAPI `style`/`explode` of
+ * the parameter (the default `form` + `explode: true` repeats the name once
+ * per element; `explode: false` joins with commas) unless the tool fixes an
+ * `arrayStyle`: `repeat`, `comma` or `json-list` (one value holding a JSON
+ * array, which is what CKAN-style RPC APIs expect). Objects are sent as JSON.
+ */
+function appendQueryValue(query, name, value, placement, arrayStyle = 'openapi') {
+  if (Array.isArray(value)) {
+    let style = arrayStyle;
+    if (style === 'openapi') {
+      const explode = placement?.explode !== undefined ? placement.explode : true;
+      const form = !placement?.style || placement.style === 'form';
+      style = form && explode ? 'repeat' : 'comma';
+    }
+    if (style === 'json-list') {
+      query.append(name, JSON.stringify(value));
+    } else if (style === 'comma') {
+      query.append(name, value.map(v => String(v)).join(','));
+    } else {
+      for (const v of value) query.append(name, typeof v === 'object' ? JSON.stringify(v) : v);
+    }
+    return;
+  }
+  if (value !== null && typeof value === 'object') {
+    query.append(name, JSON.stringify(value));
+    return;
+  }
+  query.append(name, value);
+}
+
+/**
  * Build the request URL + init for a tool call.
  */
 async function buildRequest(tool, params) {
@@ -376,7 +391,7 @@ async function buildRequest(tool, params) {
     if (placement.in === 'path') {
       resolvedPath = resolvedPath.replace(`{${name}}`, encodeURIComponent(value));
     } else if (placement.in === 'query') {
-      query.append(name, value);
+      appendQueryValue(query, name, value, placement, tool.openapi.arrayStyle);
     } else if (placement.in === 'header') {
       headers[name] = String(value);
     } else if (placement.in === 'body') {
@@ -521,4 +536,26 @@ export function invalidateSpecCache(toolId) {
   oauthCache.clear();
 }
 
-export default { runOpenApiTool, getOpenApiToolParameters, invalidateSpecCache };
+/**
+ * Drop the cached parameter schemas of every tool whose id starts with
+ * `prefix` (an installed integration's `<instanceId>__`). An empty prefix
+ * drops them all, together with the parsed specs; OAuth tokens stay.
+ * @param {string} prefix
+ */
+export function invalidateToolsWithPrefix(prefix) {
+  if (!prefix) {
+    specCache.clear();
+    paramCache.clear();
+    return;
+  }
+  for (const key of [...paramCache.keys()]) {
+    if (key.startsWith(prefix)) paramCache.delete(key);
+  }
+}
+
+export default {
+  runOpenApiTool,
+  getOpenApiToolParameters,
+  invalidateSpecCache,
+  invalidateToolsWithPrefix
+};

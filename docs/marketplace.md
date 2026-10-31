@@ -58,8 +58,9 @@ or model JSON, or a skill's `SKILL.md`.
 ## Installing, updating and removing
 
 - **Install** fetches the item, validates it against the same schema the admin editors use, and
-  writes it to `contents/` (`apps/`, `models/`, `prompts/`, `workflows/` or `skills/<name>/`). The
-  item's id must equal its catalog name. The installation is recorded in
+  writes it to `contents/` (`apps/`, `models/`, `prompts/`, `workflows/`, `skills/<name>/` or
+  `integration-definitions/<name>/`). The item's id must equal its catalog name (for an
+  integration, the definition's folder name: its id with the `/` replaced by `__`). The installation is recorded in
   `contents/config/installations.json` together with the version, the registry and the admin who
   installed it, and written to the audit log.
 - **Model configurations never carry API keys.** An installed model uses the key of its provider
@@ -70,7 +71,14 @@ or model JSON, or a skill's `SKILL.md`.
 - **Update** replaces the installed item with the catalog's current version. An update is offered
   when the catalog's `version` differs from the installed one. Local edits to the item are
   overwritten — **Detach** it first if you want to keep them.
-- **Uninstall** deletes the item's files and the installation record.
+- **Uninstall** deletes the item's files and the installation record. An integration definition
+  cannot be uninstalled while an installed instance of it exists (**Admin → Integrations →
+  Installed**); remove the instance first.
+- **Integrations** are definition folders (an `integration.json` with its OpenAPI document, icon
+  and README as companions). Installing one makes it available in the catalog under **Admin →
+  Integrations → Installed**, where **Set up integration** opens the install wizard; the
+  installation itself (URL, sign-in, groups, actions) is created there, so one definition can be
+  installed several times. See [Integrations](integrations.md).
 - **Detach** keeps the files but removes the installation record. The item is then maintained by
   hand like anything an admin created, and the marketplace shows it as **Local copy**.
 
@@ -108,11 +116,13 @@ stored encrypted with the other platform secrets.
 
 A registry is a `catalog.json` that lists the items and where to fetch each one from — a path
 relative to the catalog, a file in a GitHub repository, or an absolute URL. Every item carries a
-`type` (`app`, `model`, `prompt`, `skill` or `workflow`), a `name`, a display name, a description,
+`type` (`app`, `model`, `prompt`, `skill`, `workflow` or `integration`), a `name`, a display name, a description,
 a version and optional author, category, tags, license and `licenseUrl`. The schema is described
 in [Configuration Validation → Catalog Schema](configuration-validation.md#9-catalog-schema-catalogschemajs);
 the [ihub-marketplace](https://github.com/intrafind/ihub-marketplace) repository is a complete
-example, including a script that regenerates the catalog from its content folders.
+example, including a script that regenerates the catalog from its content folders. Items of type
+`integration` and `skill` may list companion files in `source.companions`; for an integration the
+OpenAPI document and the icon named in the definition are fetched even when not listed.
 
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.

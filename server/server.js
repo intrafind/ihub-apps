@@ -584,6 +584,35 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.setConfigCache(configCache);
     // Reconfigure logger to pick up logging settings from platform config
     logger.reconfigureLogger();
+    // Installed integrations (#3061): load the definition catalog and offer
+    // their scopes (publishers, search profiles) to the chat from the start.
+    try {
+      const { default: integrationRegistry, INTEGRATIONS_CONFIG_KEY } =
+        await import('./services/integrations/definitions/IntegrationRegistry.js');
+      const { syncIntegrationScopeProviders } =
+        await import('./services/integrations/integrationTools.js');
+      const { registerConfigChangeHook, ALL_ENTRIES } = await import('./configSync.js');
+      const { invalidate } =
+        await import('./services/integrations/protocols/openapi/OpenApiAdapter.js');
+      // Another worker installed, changed or removed an integration or a
+      // definition: refresh what this worker derives from them. Registered
+      // before the first load, so a load that fails here still leaves this
+      // worker following later changes.
+      registerConfigChangeHook(async ({ entries }) => {
+        if (!entries.includes(INTEGRATIONS_CONFIG_KEY) && !entries.includes(ALL_ENTRIES)) return;
+        await integrationRegistry.reload();
+        invalidate();
+        await syncIntegrationScopeProviders();
+      });
+      await integrationRegistry.reload();
+      await syncIntegrationScopeProviders();
+    } catch (error) {
+      logger.warn({
+        component: 'Server',
+        message: 'Installed integrations could not be initialized',
+        error: error.message
+      });
+    }
   } catch (error) {
     logger.error({
       component: 'Server',

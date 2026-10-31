@@ -23,7 +23,9 @@ import { z } from 'zod';
 const catalogSourceSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('relative'),
-    path: z.string()
+    path: z.string(),
+    /** Relative paths of companion files next to the main file (skills, integrations) */
+    companions: z.array(z.string()).optional()
   }),
   z.object({
     type: z.literal('github'),
@@ -47,7 +49,7 @@ const catalogSourceSchema = z.discriminatedUnion('type', [
  */
 const catalogItemSchema = z.object({
   /** Discriminator for which iHub content type this item represents */
-  type: z.enum(['app', 'model', 'prompt', 'skill', 'workflow']),
+  type: z.enum(['app', 'model', 'prompt', 'skill', 'workflow', 'integration']),
   /** Unique machine-readable name used as the file/directory identifier on disk */
   name: z.string().min(1).max(100),
   /** Human-readable localized display names keyed by language code */

@@ -387,6 +387,10 @@ const CONFIG_LOADERS = {
     label: 'A2A agents',
     count: data => (data.agents || []).length
   },
+  'config/integrations.json': {
+    label: 'installed integrations',
+    count: data => (data.installed || []).length
+  },
   'config/peopleDirectories.json': {
     label: 'people directories',
     count: data => (data.directories || []).length
@@ -466,6 +470,7 @@ class ConfigCache {
       'config/installations.json',
       'config/mcpServers.json',
       'config/a2aAgents.json',
+      'config/integrations.json',
       'config/peopleDirectories.json',
       'config/credentials.json',
       'config/agents.json',
@@ -1025,10 +1030,12 @@ class ConfigCache {
       return apps;
     }
 
-    // Only enabled apps whose required features and integrations are all on.
-    // The ETag changes with the apps they hide: features.json and platform.json
-    // have their own ETags, and a client holding the old list must not get a
-    // 304 once a feature or an integration flips.
+    // Only enabled apps whose required features and integrations are all on
+    // (`requiredIntegrations`, and every installation bound under
+    // `app.integrations`). The ETag changes with the apps they hide:
+    // features.json, platform.json and integrations.json have their own ETags,
+    // and a client holding the old list must not get a 304 once a feature or
+    // an integration flips.
     const features = this.getFeatures();
     const integrationContext = this.getIntegrationContext();
     const isAvailable = app =>
@@ -1226,12 +1233,13 @@ class ConfigCache {
    * The config an integration check (integrationRegistry) reads: the platform
    * config and the people directories. Tolerates a cache that is not loaded yet.
    *
-   * @returns {{platform: Object, peopleDirectories: Object}}
+   * @returns {{platform: Object, peopleDirectories: Object, installedIntegrations: Array}}
    */
   getIntegrationContext() {
     return {
       platform: this.get('config/platform.json')?.data || {},
-      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {}
+      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {},
+      installedIntegrations: this.get('config/integrations.json')?.data?.installed || []
     };
   }
 
@@ -1566,6 +1574,21 @@ class ConfigCache {
   }
 
   /**
+   * Get the installed integrations (instances of catalog definitions, #3061).
+   * @returns {{ data: { installed: Array, security: Object }, etag: string|null }}
+   */
+  getIntegrations() {
+    const cached = this.get('config/integrations.json');
+    if (!cached || !cached.data) {
+      return {
+        data: { installed: [], security: { blockPrivateIps: true, allowedHosts: [] } },
+        etag: null
+      };
+    }
+    return cached;
+  }
+
+  /**
    * Get the people directories (`contents/config/peopleDirectories.json`).
    * The file is validated when an admin saves it; a hand-edited entry is
    * checked again when its tools are built (see
@@ -1848,10 +1871,31 @@ class ConfigCache {
       // are callable in that app whatever the group grants say, so they are
       // listed too — otherwise the menu cannot name them or tell which MCP
       // server they belong to.
-      const appToolRefs = appId
-        ? await this.getAppToolRefsForUser(user, platformConfig, appId)
-        : [];
-      tools = tools.filter(tool => granted.has(tool) || isToolSelected(tool, appToolRefs));
+      const app = appId ? await this.getAppForUserById(user, platformConfig, appId) : null;
+      const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
+      // An installed integration's tools are listed as the chat gets them
+      // (`getIntegrationToolsForApp`): only when the app binds the
+      // installation, the user is in its groups and the binding allows the
+      // action — never through the instance id alone.
+      let appIntegrationTools = new Set();
+      if (app?.integrations && typeof app.integrations === 'object') {
+        const { getIntegrationToolsForApp } =
+          await import('./services/integrations/integrationTools.js');
+        appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
+      }
+      tools = tools.filter(tool => {
+        if (granted.has(tool)) return true;
+        if (tool._integration) return appIntegrationTools.has(tool);
+        return isToolSelected(tool, appToolRefs);
+      });
+    }
+
+    // An installation's own groups hold on top of every grant, `*` included:
+    // a tool the user could not run is not listed.
+    if (tools.some(tool => tool._integration)) {
+      const { filterIntegrationToolsForUser } =
+        await import('./services/integrations/integrationTools.js');
+      tools = filterIntegrationToolsForUser(tools, user);
     }
 
     // A people directory's own `groups` hold on top of every grant, `*` included.
@@ -1871,17 +1915,16 @@ class ConfigCache {
   }
 
   /**
-   * The tool references (`app.tools`) of an app the user may access, or an
-   * empty list when the app is unknown or not available to them.
+   * An app the user may access, by id (case-insensitive), or null when the
+   * app is unknown or not available to them.
    * @param {object} user
    * @param {object} platformConfig
    * @param {string} appId
-   * @returns {Promise<string[]>}
+   * @returns {Promise<object|null>}
    */
-  async getAppToolRefsForUser(user, platformConfig, appId) {
+  async getAppForUserById(user, platformConfig, appId) {
     const { data: apps = [] } = await this.getAppsForUser(user, platformConfig);
-    const app = findByIdCaseInsensitive(apps || [], appId);
-    return Array.isArray(app?.tools) ? app.tools : [];
+    return findByIdCaseInsensitive(apps || [], appId) || null;
   }
 
   /**

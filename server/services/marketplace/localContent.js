@@ -17,13 +17,20 @@
  * @module services/marketplace/localContent
  */
 
+import integrationRegistry from '../integrations/definitions/IntegrationRegistry.js';
+import { definitionIdToDirName } from '../../validators/integrationDefinitionSchema.js';
+
 /** Loaded items per marketplace type, including disabled ones. */
 const LOADED_ITEMS = {
   app: cc => cc.getApps(true).data,
   model: cc => cc.getModels(true).data,
   prompt: cc => cc.getPrompts(true).data,
   workflow: cc => cc.getWorkflows(true).data,
-  skill: cc => cc.getSkills().data
+  skill: cc => cc.getSkills().data,
+  // Definitions are not in the ConfigCache; the registry lists shipped and
+  // installed ones, keyed like marketplace items by their folder name.
+  integration: () =>
+    integrationRegistry.list().map(entry => ({ name: definitionIdToDirName(entry.id) }))
 };
 
 /**
@@ -37,7 +44,7 @@ export function getLocalContentIds(cc) {
   const ids = {};
   for (const [type, load] of Object.entries(LOADED_ITEMS)) {
     const items = load(cc);
-    const key = type === 'skill' ? 'name' : 'id';
+    const key = type === 'skill' || type === 'integration' ? 'name' : 'id';
     ids[type] = new Set((Array.isArray(items) ? items : []).map(item => item?.[key]));
   }
   return ids;

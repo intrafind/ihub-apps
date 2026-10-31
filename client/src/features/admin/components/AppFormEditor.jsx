@@ -7,6 +7,7 @@ import StarterPromptsSection from './app-form/StarterPromptsSection';
 import UsageGuideSection from './app-form/UsageGuideSection';
 import ToolsConfigSection from './app-form/ToolsConfigSection';
 import McpToolsConfigSection from './app-form/McpToolsConfigSection';
+import IntegrationsConfigSection from './app-form/IntegrationsConfigSection';
 import SkillsConfigSection from './app-form/SkillsConfigSection';
 import WorkflowsConfigSection from './app-form/WorkflowsConfigSection';
 import AppsConfigSection from './app-form/AppsConfigSection';
@@ -242,6 +243,12 @@ function AppFormEditor({
               selectedTools={app.tools || []}
               onToolsChange={tools => handleInputChange('tools', tools)}
               onMcpToolIdsChange={setMcpToolIds}
+            />
+
+            {/* Installed integrations (#3061) */}
+            <IntegrationsConfigSection
+              integrations={app.integrations}
+              onChange={value => handleInputChange('integrations', value)}
             />
 
             {/* Workflows Configuration */}

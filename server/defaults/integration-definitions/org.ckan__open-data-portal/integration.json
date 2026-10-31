@@ -1,0 +1,449 @@
+{
+  "$schema": "https://ihub.intrafind.com/schemas/integration/v1.json",
+  "id": "org.ckan/open-data-portal",
+  "version": "1.0.0",
+  "name": { "en": "CKAN Open Data Portal", "de": "CKAN Open-Data-Portal" },
+  "description": {
+    "en": "Find datasets, read their metadata (publisher, license, formats, coverage), query tabular data in the DataStore and get resource files from any CKAN-based open data portal (GovData, state and city portals, data.europa.eu, internal data catalogs).",
+    "de": "Datensätze finden, Metadaten lesen (Herausgeber, Lizenz, Formate, Abdeckung), tabellarische Daten im DataStore abfragen und Ressourcen von jedem CKAN-basierten Open-Data-Portal abrufen (GovData, Landes- und Stadtportale, data.europa.eu, interne Datenkataloge)."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "url": "https://www.intrafind.com",
+    "verification": "intrafind"
+  },
+  "categories": ["open-data", "data", "public-sector", "research"],
+  "docsUrl": "https://docs.ckan.org/en/2.11/api/",
+  "license": "LicenseRef-iHub-Apps",
+  "runs": "cloud",
+  "trusted": true,
+  "protocol": {
+    "type": "openapi",
+    "document": "ckan-openapi.json",
+    "baseUrl": "{baseUrl}{apiPath}",
+    "responseEnvelope": {
+      "success": "success",
+      "result": "result",
+      "error": "error.message",
+      "errorType": "error.__type"
+    },
+    "arrayParameterStyle": "json-list"
+  },
+  "auth": {
+    "modes": ["none", "service-account"],
+    "default": "none",
+    "serviceAccount": { "kind": "header", "header": "{tokenHeader}", "field": "apiToken" }
+  },
+  "install": [
+    {
+      "key": "baseUrl",
+      "type": "url",
+      "title": { "en": "Portal URL", "de": "Portal-URL" },
+      "description": {
+        "en": "Root of the CKAN site, including a path prefix if there is one, e.g. https://demo.ckan.org or https://www.govdata.de/ckan",
+        "de": "Wurzel der CKAN-Site, mit Pfadpräfix falls vorhanden, z. B. https://demo.ckan.org oder https://www.govdata.de/ckan"
+      },
+      "required": true,
+      "injectAs": "urlVariable"
+    },
+    {
+      "key": "apiPath",
+      "type": "string",
+      "title": { "en": "API path", "de": "API-Pfad" },
+      "description": {
+        "en": "Defaults to /api/3/action. data.europa.eu uses /api/hub/search/ckan and supports only search_datasets.",
+        "de": "Standard /api/3/action. data.europa.eu nutzt /api/hub/search/ckan und unterstützt nur search_datasets."
+      },
+      "default": "/api/3/action",
+      "pattern": "^/[A-Za-z0-9/_.-]*$",
+      "injectAs": "urlVariable",
+      "advanced": true
+    },
+    {
+      "key": "tokenHeader",
+      "type": "string",
+      "title": { "en": "API token header", "de": "Header für den API-Token" },
+      "description": {
+        "en": "Authorization (CKAN 2.10+ default), X-CKAN-API-Key (older portals), or the portal's custom apitoken_header_name.",
+        "de": "Authorization (Standard ab CKAN 2.10), X-CKAN-API-Key (ältere Portale) oder der im Portal konfigurierte apitoken_header_name."
+      },
+      "suggestions": ["Authorization", "X-CKAN-API-Key"],
+      "pattern": "^[A-Za-z0-9-]+$",
+      "default": "Authorization",
+      "advanced": true
+    },
+    {
+      "key": "apiToken",
+      "type": "secret",
+      "title": { "en": "API token", "de": "API-Token" },
+      "description": {
+        "en": "Only for private datasets. Created in CKAN under User › API tokens. Choose the sign-in mode \"Shared service account\" to use it.",
+        "de": "Nur für private Datensätze. In CKAN unter Benutzer › API-Tokens erstellen. Dafür den Anmeldemodus \"Gemeinsames Dienstkonto\" wählen."
+      },
+      "injectAs": "header"
+    },
+    {
+      "key": "defaultFilter",
+      "type": "string",
+      "title": { "en": "Default filter (fq)", "de": "Standardfilter (fq)" },
+      "description": {
+        "en": "Solr filter added to every search, e.g. organization:stadt-norderstedt or res_format:CSV",
+        "de": "Solr-Filter, der jeder Suche hinzugefügt wird, z. B. organization:stadt-norderstedt oder res_format:CSV"
+      }
+    },
+    {
+      "key": "includePrivate",
+      "type": "boolean",
+      "title": { "en": "Include private datasets", "de": "Private Datensätze einbeziehen" },
+      "description": {
+        "en": "Needs an API token with access to them.",
+        "de": "Benötigt einen API-Token mit Zugriff darauf."
+      },
+      "default": false
+    },
+    {
+      "key": "datastoreSql",
+      "type": "boolean",
+      "title": {
+        "en": "Allow SQL queries on the DataStore",
+        "de": "SQL-Abfragen auf den DataStore erlauben"
+      },
+      "description": {
+        "en": "Offers the query_datastore_sql action. The portal must have ckan.datastore.sqlsearch.enabled.",
+        "de": "Bietet die Aktion query_datastore_sql an. Das Portal muss ckan.datastore.sqlsearch.enabled gesetzt haben."
+      },
+      "default": false,
+      "advanced": true
+    },
+    {
+      "key": "maxRows",
+      "type": "number",
+      "title": { "en": "Results per search", "de": "Treffer pro Suche" },
+      "description": {
+        "en": "Upper limit for the rows a search returns to the model.",
+        "de": "Obergrenze für die Treffer, die eine Suche an das Modell liefert."
+      },
+      "default": 10,
+      "min": 1,
+      "max": 50
+    },
+    {
+      "key": "metadataProfile",
+      "type": "enum",
+      "title": { "en": "Metadata profile", "de": "Metadatenprofil" },
+      "description": {
+        "en": "How to read extras and format values. DCAT-AP.de portals use URIs for formats and licenses.",
+        "de": "Wie extras und Formatwerte gelesen werden. DCAT-AP.de-Portale verwenden URIs für Formate und Lizenzen."
+      },
+      "choices": [
+        { "value": "ckan", "label": { "en": "Plain CKAN", "de": "Standard-CKAN" } },
+        {
+          "value": "dcat-ap-de",
+          "label": {
+            "en": "DCAT-AP.de (GovData and German portals)",
+            "de": "DCAT-AP.de (GovData und deutsche Portale)"
+          }
+        }
+      ],
+      "default": "ckan",
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "scopes", "sources"],
+  "scopes": {
+    "action": "list_organizations",
+    "label": { "en": "Publisher", "de": "Herausgeber" },
+    "map": { "id": "name", "name": "title" },
+    "paging": { "offset": "offset", "limit": "limit", "size": 25 },
+    "applyAs": { "search_datasets.fq": { "value": "organization:{id}", "mode": "append" } },
+    "strict": false
+  },
+  "sources": {
+    "search_datasets": {
+      "kind": "item",
+      "list": "results",
+      "fields": {
+        "id": "id",
+        "title": "title",
+        "snippet": "notes",
+        "publishedDate": "metadata_modified"
+      },
+      "urlTemplate": "{baseUrl}/dataset/{name}",
+      "query": "q"
+    },
+    "get_dataset": {
+      "kind": "item",
+      "fields": {
+        "id": "id",
+        "title": "title",
+        "snippet": "notes",
+        "publishedDate": "metadata_modified"
+      },
+      "urlTemplate": "{baseUrl}/dataset/{name}"
+    },
+    "get_resource": {
+      "kind": "document",
+      "fields": {
+        "id": "id",
+        "title": "name",
+        "url": "url",
+        "type": "format",
+        "snippet": "description"
+      }
+    }
+  },
+  "health": { "action": "search_datasets", "args": { "rows": 0 } },
+  "actions": [
+    {
+      "name": "search_datasets",
+      "operationId": "package_search",
+      "title": { "en": "Search datasets", "de": "Datensätze suchen" },
+      "description": {
+        "en": "Full-text and faceted search over the portal's datasets. Returns count, results[] (title, notes, organization, tags, resources with format and download url, portalUrl) and search_facets.",
+        "de": "Volltext- und Facettensuche über die Datensätze des Portals. Liefert count, results[] (title, notes, organization, tags, resources mit Format und Download-URL, portalUrl) und search_facets."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "defaults": {
+        "rows": { "value": "{maxRows}", "mode": "cap" },
+        "fq": { "value": "{defaultFilter}", "mode": "append" },
+        "include_private": { "value": "{includePrivate}", "mode": "fixed" }
+      },
+      "hideFields": [
+        "help",
+        "result.facets",
+        "result.results[].extras",
+        "result.results[].relationships_as_subject",
+        "result.results[].relationships_as_object",
+        "result.results[].creator_user_id",
+        "result.results[].author_email",
+        "result.results[].maintainer_email",
+        "result.results[].owner_org",
+        "result.results[].organization.image_url",
+        "result.results[].organization.created",
+        "result.results[].organization.approval_status",
+        "result.results[].organization.is_organization",
+        "result.results[].organization.state",
+        "result.results[].organization.type",
+        "result.results[].resources[].hash",
+        "result.results[].resources[].cache_url",
+        "result.results[].resources[].cache_last_updated",
+        "result.results[].resources[].mimetype_inner",
+        "result.results[].resources[].position",
+        "result.results[].resources[].url_type",
+        "result.results[].resources[].state",
+        "result.results[].resources[].package_id",
+        "result.results[].tags[].id",
+        "result.results[].tags[].vocabulary_id",
+        "result.results[].tags[].state"
+      ],
+      "guidance": {
+        "en": "Use for every 'which datasets exist about …' question. Put the topic in q, restrict with fq (organization:, tags:, res_format:, license_id:). Ask for facets (organization, res_format, tags) when the user wants an overview. Cite datasets as links to their portalUrl.",
+        "de": "Für jede Frage 'welche Datensätze gibt es zu …'. Thema in q, Einschränkung über fq (organization:, tags:, res_format:, license_id:). Facetten (organization, res_format, tags) anfordern, wenn der Nutzer einen Überblick will. Datensätze als Link auf ihre portalUrl zitieren."
+      },
+      "examples": [
+        {
+          "en": "Which datasets about parking does the city publish?",
+          "de": "Welche Datensätze zu Parkplätzen veröffentlicht die Stadt?"
+        },
+        {
+          "en": "Show the ten newest datasets with CSV files.",
+          "de": "Zeig die zehn neuesten Datensätze mit CSV-Dateien."
+        }
+      ]
+    },
+    {
+      "name": "get_dataset",
+      "operationId": "package_show",
+      "title": { "en": "Get dataset", "de": "Datensatz abrufen" },
+      "description": {
+        "en": "One dataset with all metadata: license, maintainer, update dates, extras (temporal and spatial coverage) and its resources (files or APIs) with format, size and download url.",
+        "de": "Ein Datensatz mit allen Metadaten: Lizenz, Betreuer, Aktualisierungsdaten, extras (zeitliche und räumliche Abdeckung) und seine Ressourcen (Dateien oder APIs) mit Format, Größe und Download-URL."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "hideFields": [
+        "help",
+        "result.relationships_as_subject",
+        "result.relationships_as_object",
+        "result.creator_user_id",
+        "result.resources[].hash",
+        "result.resources[].cache_url",
+        "result.resources[].cache_last_updated"
+      ],
+      "guidance": {
+        "en": "Use after a search to answer about license, maintainer, update dates, coverage and the list of files.",
+        "de": "Nach einer Suche verwenden, um Lizenz, Betreuer, Aktualisierungsdaten, Abdeckung und die Dateiliste zu beantworten."
+      },
+      "examples": [
+        {
+          "en": "Which license does the dataset have and when was it last updated?",
+          "de": "Welche Lizenz hat der Datensatz und wann wurde er zuletzt aktualisiert?"
+        },
+        {
+          "en": "Which files belong to it and in which formats?",
+          "de": "Welche Dateien gehören dazu und in welchen Formaten?"
+        }
+      ]
+    },
+    {
+      "name": "get_resource",
+      "operationId": "resource_show",
+      "title": { "en": "Get resource", "de": "Ressource abrufen" },
+      "description": {
+        "en": "One file or API endpoint of a dataset: format, size, url, datastore_active. Use the url for downloads.",
+        "de": "Eine Datei oder ein API-Endpunkt eines Datensatzes: Format, Größe, URL, datastore_active. Die URL für Downloads verwenden."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "hideFields": ["help"]
+    },
+    {
+      "name": "search_resources",
+      "operationId": "resource_search",
+      "title": { "en": "Search resources", "de": "Ressourcen suchen" },
+      "description": {
+        "en": "Find files across datasets by field, e.g. format:GeoJSON or name:temperature.",
+        "de": "Dateien datensatzübergreifend nach Feld finden, z. B. format:GeoJSON oder name:temperature."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "enabledByDefault": false,
+      "hideFields": ["help"]
+    },
+    {
+      "name": "list_organizations",
+      "operationId": "organization_list",
+      "title": { "en": "List publishers", "de": "Herausgeber auflisten" },
+      "description": {
+        "en": "The organizations that publish on this portal, with their dataset counts.",
+        "de": "Die Organisationen, die auf diesem Portal veröffentlichen, mit ihrer Anzahl an Datensätzen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "defaults": {
+        "all_fields": { "value": true, "mode": "fixed" },
+        "sort": { "value": "package_count desc", "mode": "default" }
+      },
+      "hideFields": [
+        "help",
+        "result[].image_url",
+        "result[].image_display_url",
+        "result[].approval_status",
+        "result[].is_organization",
+        "result[].state",
+        "result[].type"
+      ],
+      "examples": [
+        {
+          "en": "Who publishes data on this portal and how much?",
+          "de": "Wer veröffentlicht Daten auf diesem Portal und wie viele?"
+        }
+      ]
+    },
+    {
+      "name": "get_organization",
+      "operationId": "organization_show",
+      "title": { "en": "Get publisher", "de": "Herausgeber abrufen" },
+      "description": {
+        "en": "One publishing organization, optionally with its datasets (include_datasets).",
+        "de": "Eine veröffentlichende Organisation, optional mit ihren Datensätzen (include_datasets)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "hideFields": ["help"]
+    },
+    {
+      "name": "list_groups",
+      "operationId": "group_list",
+      "title": { "en": "List categories", "de": "Kategorien auflisten" },
+      "description": {
+        "en": "Thematic groups (categories) of the portal.",
+        "de": "Thematische Gruppen (Kategorien) des Portals."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "defaults": { "all_fields": { "value": true, "mode": "fixed" } },
+      "hideFields": ["help"]
+    },
+    {
+      "name": "list_tags",
+      "operationId": "tag_list",
+      "title": { "en": "Search tags", "de": "Schlagwörter suchen" },
+      "description": {
+        "en": "Tags of the portal, optionally filtered by a prefix (query).",
+        "de": "Schlagwörter des Portals, optional nach Präfix gefiltert (query)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "enabledByDefault": false,
+      "hideFields": ["help"]
+    },
+    {
+      "name": "describe_datastore",
+      "operationId": "datastore_info",
+      "title": { "en": "Describe table", "de": "Tabelle beschreiben" },
+      "description": {
+        "en": "Column names, types and row count of a resource with datastore_active = true. Call before query_datastore so filters and sort use real column names.",
+        "de": "Spaltennamen, Typen und Zeilenzahl einer Ressource mit datastore_active = true. Vor query_datastore aufrufen, damit Filter und Sortierung echte Spaltennamen verwenden."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "hideFields": ["help"]
+    },
+    {
+      "name": "query_datastore",
+      "operationId": "datastore_search",
+      "title": { "en": "Query table rows", "de": "Tabellenzeilen abfragen" },
+      "description": {
+        "en": "Rows of a tabular resource: full-text q, exact filters as a JSON object, fields, sort, limit and offset. Prefer fields and limit to keep answers small; total says how many rows exist.",
+        "de": "Zeilen einer tabellarischen Ressource: Volltext q, exakte Filter als JSON-Objekt, fields, sort, limit und offset. fields und limit nutzen, um Antworten klein zu halten; total nennt die Gesamtzahl der Zeilen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "defaults": { "limit": { "value": 20, "mode": "default" } },
+      "hideFields": ["help", "result._links"],
+      "examples": [
+        {
+          "en": "How many active licenses are there per license type?",
+          "de": "Wie viele aktive Lizenzen gibt es je Lizenztyp?"
+        },
+        {
+          "en": "List the five newest entries sorted by issue date.",
+          "de": "Liste die fünf neuesten Einträge nach Ausstellungsdatum."
+        }
+      ]
+    },
+    {
+      "name": "query_datastore_sql",
+      "operationId": "datastore_search_sql",
+      "title": { "en": "SQL query on table", "de": "SQL-Abfrage auf Tabelle" },
+      "description": {
+        "en": "Read-only SELECT against DataStore tables. The table name is the resource id in double quotes. For aggregations (GROUP BY, count, sum) the plain query cannot express.",
+        "de": "Lesendes SELECT auf DataStore-Tabellen. Der Tabellenname ist die Ressourcen-ID in doppelten Anführungszeichen. Für Aggregationen (GROUP BY, count, sum), die die einfache Abfrage nicht kann."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "enabledByDefault": false,
+      "requires": { "install.datastoreSql": true },
+      "hideFields": ["help"]
+    },
+    {
+      "name": "portal_status",
+      "operationId": "status_show",
+      "title": { "en": "Portal status", "de": "Portalstatus" },
+      "description": {
+        "en": "Portal name, CKAN version and installed extensions (e.g. datastore, dcat).",
+        "de": "Portalname, CKAN-Version und installierte Erweiterungen (z. B. datastore, dcat)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "enabledByDefault": false,
+      "hideFields": ["help"]
+    }
+  ],
+  "instructions": {
+    "en": "You answer questions about an open data portal built on CKAN. A dataset (package) has a title, a description (notes), a publisher (organization), tags, a license and one or more resources (files or APIs) with a format and a url. Start with search_datasets; use get_dataset for details; use describe_datastore and query_datastore only for resources with datastore_active = true. Quote the license by its title, link every dataset you mention by its portalUrl, and never invent download URLs. If a portal uses DCAT-AP.de, formats and licenses may be URIs: show their last path segment as the label.",
+    "de": "Du beantwortest Fragen zu einem Open-Data-Portal auf CKAN-Basis. Ein Datensatz (package) hat Titel, Beschreibung (notes), Herausgeber (organization), Schlagwörter, Lizenz und eine oder mehrere Ressourcen (Dateien oder APIs) mit Format und url. Beginne mit search_datasets; nutze get_dataset für Details; describe_datastore und query_datastore nur für Ressourcen mit datastore_active = true. Nenne die Lizenz mit ihrem Titel, verlinke jeden genannten Datensatz über seine portalUrl und erfinde keine Download-URLs. Bei DCAT-AP.de-Portalen können Formate und Lizenzen URIs sein: zeige das letzte Pfadsegment als Bezeichnung."
+  }
+}

@@ -37,7 +37,9 @@ import { getContentsPath } from './contentsPath.js';
  * every start. Paths are relative to server/defaults; an entry ending in `/`
  * excludes a whole directory.
  */
-export const IMPORT_ONLY_DEFAULT_FILES = ['sources/'];
+// `integration-definitions/` are shipped catalog entries the IntegrationRegistry
+// reads in place; a copy under contents/ would shadow every later update.
+export const IMPORT_ONLY_DEFAULT_FILES = ['sources/', 'integration-definitions/'];
 
 /**
  * Whether a path relative to server/defaults falls under an import-only entry.
