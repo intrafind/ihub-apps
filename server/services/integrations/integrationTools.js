@@ -127,6 +127,22 @@ function userMayUse(instance, user) {
   return groups.some(g => allowed.includes(g));
 }
 
+/**
+ * Drop the integration tools of installations whose groups exclude the user
+ * (or whose installation is gone or disabled). An installation's groups hold
+ * on top of every tool grant: `runIntegrationTool` refuses such a call, so
+ * the listing must not offer it either.
+ * @param {Array} tools
+ * @param {object} user
+ */
+export function filterIntegrationToolsForUser(tools, user) {
+  return tools.filter(tool => {
+    if (!isIntegrationTool(tool)) return true;
+    const instance = installedIntegrationService.get(tool._integration.instanceId);
+    return Boolean(instance) && instance.enabled !== false && userMayUse(instance, user);
+  });
+}
+
 /** The installation ids an app binds (keys of `app.integrations` that are installed). */
 export function boundInstanceIds(app) {
   const bindings = app?.integrations;

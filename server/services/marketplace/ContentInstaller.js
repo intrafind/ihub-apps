@@ -391,8 +391,16 @@ export function sharesCredentialScope(url, trustedUrls) {
     } catch {
       continue;
     }
-    if (known.host === target.host) return true;
-    if (GITHUB_HOSTS.has(known.hostname) && GITHUB_HOSTS.has(target.hostname)) return true;
+    // Same host *and* scheme: a catalog must not move the credentials from
+    // https to plain http, where they would travel in the clear.
+    if (known.protocol === target.protocol && known.host === target.host) return true;
+    if (
+      target.protocol === 'https:' &&
+      GITHUB_HOSTS.has(known.hostname) &&
+      GITHUB_HOSTS.has(target.hostname)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -774,20 +782,33 @@ class ContentInstaller {
       await integrationRegistry.writeInstalled(definitionId, content.files);
       // Installations of a re-installed definition keep cached parameter
       // schemas of the old document otherwise, and their scope providers
-      // keep the old definition until they are registered again.
-      const [
-        { default: installedIntegrationService },
-        { invalidate },
-        { syncIntegrationScopeProviders }
-      ] = await Promise.all([
-        import('../integrations/InstalledIntegrationService.js'),
-        import('../integrations/protocols/openapi/OpenApiAdapter.js'),
-        import('../integrations/integrationTools.js')
-      ]);
-      for (const instance of installedIntegrationService.instancesOf(definitionId)) {
-        invalidate(instance.id);
+      // keep the old definition until they are registered again. The
+      // definition is on disk at this point, so a failing refresh is logged
+      // and the install still records itself (as `_afterChange` does).
+      try {
+        const [
+          { default: installedIntegrationService },
+          { invalidate },
+          { syncIntegrationScopeProviders }
+        ] = await Promise.all([
+          import('../integrations/InstalledIntegrationService.js'),
+          import('../integrations/protocols/openapi/OpenApiAdapter.js'),
+          import('../integrations/integrationTools.js')
+        ]);
+        for (const instance of installedIntegrationService.instancesOf(definitionId)) {
+          invalidate(instance.id);
+        }
+        await syncIntegrationScopeProviders();
+      } catch (error) {
+        logger.warn(
+          'Installed integration definition written, but its installations could not be refreshed',
+          {
+            component: COMPONENT,
+            definitionId,
+            error: error.message
+          }
+        );
       }
-      await syncIntegrationScopeProviders();
       return;
     }
     if (type === 'skill') {
