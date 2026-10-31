@@ -105,6 +105,11 @@ export function missingAppIntegrations(app, context = {}) {
       if (!isInstalledIntegrationEnabled(key, context) && !missing.includes(key)) missing.push(key);
     }
   }
+  // Web search is switched on in the app's own settings; its tools belong to
+  // the `websearch` installation, so that installation is a requirement too.
+  if (app?.websearch?.enabled && !isInstalledIntegrationEnabled('websearch', context)) {
+    if (!missing.includes('websearch')) missing.push('websearch');
+  }
   return missing;
 }
 

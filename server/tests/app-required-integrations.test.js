@@ -43,6 +43,28 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(areAppIntegrationsEnabled({ id: 'chat' }, {}), true);
   });
 
+  it('needs the websearch installation when web search is on', () => {
+    const app = { id: 'web', websearch: { enabled: true } };
+    assert.equal(areAppIntegrationsEnabled(app, { installedIntegrations: [] }), false);
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'websearch', enabled: false }]
+      }),
+      false
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(app, { installedIntegrations: [{ id: 'websearch' }] }),
+      true
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(
+        { id: 'plain', websearch: { enabled: false } },
+        { installedIntegrations: [] }
+      ),
+      true
+    );
+  });
+
   it('follows the ifinder installation', () => {
     const bound = { id: 'x', integrations: { ifinder: {} } };
     assert.equal(areAppIntegrationsEnabled(bound, {}), false);

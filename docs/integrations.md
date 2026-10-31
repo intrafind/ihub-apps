@@ -1,8 +1,8 @@
 # Integrations
 
-An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**, including the built-in iFinder and iAssistant integrations; the MCP servers, A2A agents and the remaining built-in connectors (Jira, cloud storage) keep their own pages until they move onto the same model (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
+An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations → Installed**, including the built-in iFinder, iAssistant and web search integrations; the MCP servers, A2A agents and the remaining built-in connectors (Jira, cloud storage) keep their own pages until they move onto the same model (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).
 
-The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the two [built-in integrations](#built-in-integrations) **iFinder** and **iAssistant**.
+The catalog ships with the **CKAN Open Data Portal** (GovData, the German state and city portals, data.gov, internal data catalogs), which is also published in the [iHub Marketplace](marketplace.md), and with the [built-in integrations](#built-in-integrations) **iFinder**, **iAssistant** and **Web search**.
 
 ## Three records
 
@@ -24,6 +24,8 @@ A definition's folder name is its id with the one `/` replaced by `__`: `org.cka
 - Their actions keep their historical tool ids: the iFinder actions are the tools `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_discover`, `iFinder_getFields`, `iFinder_getFacetValues` and `iFinder_listProfiles`, not `ifinder__search`. Group tool grants (`permissions.tools` in `groups.json`) that name `iFinder` or `iFinder_*` keep working.
 
 The iAssistant installation has no base URL of its own: its `connection` field names the iFinder installation it runs on. The fields of both installations are described in [iFinder Integration](iFinder-Integration.md#configuration) and [iFinder & iAssistant Admin Guide](ifinder-iassistant-admin-guide.md).
+
+**Web search** (`com.intrafind/web-search`, installation `websearch`) is the third built-in: it holds the Brave and Staan API keys as credential references, the default search engine and the groups that may search, and its actions are the search tools `braveSearch`, `staanSearch`, `qwantSearch` and the page reader `read_url` (same ids as before). Apps do not bind it; they switch web search on in their own `websearch` settings, and an app with web search on requires the installation like a bound one. See [Web Tools](web-tools.md).
 
 ### MCP servers
 

@@ -58,3 +58,22 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
 - **Deployments that write `a2aAgents.json`** have to write installations; the field names are
   listed in `docs/a2a-agents.md`. The `security` block lives in `integrations.json`.
 
+## Web Search Keys Moved From `providers.json` to the `websearch` Installation
+
+Migration V195 moves the `websearch` entries of `contents/config/providers.json` (Brave, Staan,
+Qwant) into the installed integration `websearch` and the credentials
+`integration-websearch-brave` / `integration-websearch-staan`, and deletes the tool files
+`braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from
+`contents/tools/`.
+
+- **Admin page and API:** the **Web Search Providers** category on **Admin → Providers** and
+  `POST /api/admin/providers/{id}/websearch-test` are gone; use the installation and
+  `POST /api/admin/integrations/installed/websearch/_test`. A provider with
+  `category: "websearch"` can no longer be created.
+- **Tools:** the four tools are no longer listed under **Admin → Tools** and cannot be disabled
+  there; switch the installation's actions off instead. A `tools` entry naming one of them selects
+  nothing (the migration removes such entries).
+- **Apps with web search on** are hidden while the `websearch` installation is disabled or
+  missing, and the installation's groups apply to them.
+- **Deployments that write `providers.json` or the tool files themselves** have to write the
+  installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.

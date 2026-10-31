@@ -49,28 +49,6 @@
       "category": "llm",
       "apiType": "openai",
       "baseUrl": "https://openrouter.ai/api/v1"
-    },
-    {
-      "id": "brave",
-      "name": "Brave Search",
-      "description": "Brave web search API for privacy-focused search results",
-      "enabled": true,
-      "category": "websearch"
-    },
-    {
-      "id": "staan",
-      "name": "Staan Search",
-      "description": "Staan (staan.ai) web search API — European search index, requires an API key",
-      "enabled": true,
-      "category": "websearch"
-    },
-    {
-      "id": "qwant",
-      "name": "Qwant Search",
-      "description": "Qwant web search API — privacy-focused, no API key required",
-      "enabled": true,
-      "category": "websearch",
-      "requiresApiKey": false
     }
   ]
 }

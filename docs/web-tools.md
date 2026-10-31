@@ -6,6 +6,8 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
+The search engines and the page reader are the built-in installed integration **Web search** (`com.intrafind/web-search`), installed once as `websearch` under **Admin → Integrations → Installed** (see [Integrations](integrations.md)). The installation holds the engines' API keys and the default engine; a fresh install ships it enabled, and migration V195 creates it on an existing one. Apps only switch web search on in their own settings.
+
 ### Search Providers
 
 | Provider | Type | Best For |
@@ -53,7 +55,7 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"`, `"staan"` or `"qwant"`. `"auto"` picks Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise |
+| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"`, `"staan"` or `"qwant"`. `"auto"` takes the `websearch` installation's **Default search engine**; when that is `auto` too, it picks Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
@@ -87,11 +89,22 @@ The system automatically selects the best search tool at runtime based on the mo
 │    "brave" → Brave Search                        │
 │    "staan" → Staan Search                        │
 │    "qwant" → Qwant Search                        │
-│    "auto"  → Brave if a Brave API key is set,    │
+│    "auto"  → the websearch installation's        │
+│              default engine; when that is        │
+│              "auto" too:                         │
+│              Brave if a Brave API key is set,    │
 │              else Staan if a Staan key is set,   │
 │              else Qwant (needs no key)           │
 └─────────────────────────────────────────────────┘
 ```
+
+The script-backed search tools and the page reader are the actions of the
+`websearch` installation. The resolution above only happens while that
+installation exists and is enabled; an installation that is off offers no
+search tool and no page reader, and **Admin → Apps** names it as missing for
+every app with `websearch.enabled: true`. The installation's **groups**
+(`allowedGroups`) apply as well: a user outside them gets no search tool and no
+page reader, whatever the app says.
 
 Whenever one of these script-backed search tools is offered — including when a
 provider turns native search down and the loop falls back to it — the page
@@ -107,14 +120,18 @@ not offered next to **Google** native search. Gemini drops every function
 declaration next to `google_search`; combining the two is a preview feature for
 Gemini 3 models only and requires the server-side tool calls to be circulated
 back through the conversation, which the adapter does not do yet. An admin can
-switch the reader off by disabling the tool under **Admin → Tools**.
+switch the reader off by switching the installation's **Web page reader**
+action off under **Admin → Integrations → Installed → Web search**.
 
 `"auto"` exists so an install without a Brave subscription still gets working
-web search. It walks the keyed engines first, in registration order, so an
+web search. It asks the installation for its **Default search engine** first,
+so one setting changes the engine for every app on `"auto"` at once. When that
+is `auto` as well, it walks the keyed engines in registration order, so an
 install that already had a Brave key keeps using it and does not change engine
-on upgrade. A named provider is always honoured as configured — even when it is
-unconfigured — so the resulting error names the engine the admin actually chose
-rather than silently answering from a different one.
+on upgrade. A named provider — in the app or as the installation default — is
+always honoured as configured, even when it is unconfigured, so the resulting
+error names the engine the admin actually chose rather than silently answering
+from a different one.
 
 ### Admin UI Configuration
 
@@ -126,13 +143,20 @@ Web search settings can be configured through the admin panel:
 4. Configure provider, result limits, and content extraction settings
 5. Save changes — no server restart required
 
+The app only switches web search on. The engines themselves — their API keys,
+the default engine and who may use them — are set on the `websearch`
+installation under **Admin → Integrations → Installed → Web search** (see
+[API Key Setup](#api-key-setup)). An app with web search on requires that
+installation: when it is missing or disabled, **Admin → Apps** names it as
+missing for the app, and the app offers no search.
+
 ### User Toggle
 
 When web search is enabled for an app, users see a toggle in the chat input's **+** menu to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
 
 While web search is on, a highlighted **Web search** chip next to the **+** button says so; one click on it turns web search off.
 
-In the model picker of a web search app, a globe marks the models web search works with, and is greyed out on the others — for example a model whose provider has no native search, while native search is off for it and no script-backed provider is usable (a named Brave or Staan provider without an API key, or a disabled search tool). The server reports what is usable per app on `GET /api/apps/:appId` as `websearchAvailability` (`{ native: [providers], script: boolean }`).
+In the model picker of a web search app, a globe marks the models web search works with, and is greyed out on the others — for example a model whose provider has no native search, while native search is off for it and no script-backed provider is usable (a named Brave or Staan provider without an API key, or the `websearch` installation switched off). The server reports what is usable per app on `GET /api/apps/:appId` as `websearchAvailability` (`{ native: [providers], script: boolean }`).
 
 ### Multi-Step Research
 
@@ -264,7 +288,20 @@ Apps that previously used websearch tool IDs in their `tools` array are automati
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
 
-No manual action is required — the migration runs automatically.
+Migration V195 then moves the engines into the `websearch` installation:
+
+- Moves the Brave and Staan API keys from `providers.json` into the credentials
+  `integration-websearch-brave` / `integration-websearch-staan` (they were
+  already encrypted, so they are carried over as they are) and removes the
+  `websearch` entries from `providers.json`
+- Creates the installation `websearch` (definition `com.intrafind/web-search`)
+  referencing those credentials, or updates an existing one
+- Deletes the shipped tool files `braveSearch.json`, `staanSearch.json`,
+  `qwantSearch.json` and `read_url.json` from `contents/tools/` — the tools now
+  belong to the installation and keep their ids
+- Strips these four tool ids from every app's `tools` array
+
+No manual action is required — the migrations run automatically.
 
 ## Answer Source Attribution
 
@@ -299,26 +336,40 @@ badge.
 
 ### API Key Setup
 
-Brave Search and Staan Search each require an API key. **Qwant requires none** —
-it is listed under **Admin → Providers → Web Search Providers** as "No API key
-required" and works as soon as an app selects it.
+Brave Search and Staan Search each require an API key. **Qwant requires none**
+and works as soon as an app selects it. The keys belong to the `websearch`
+installation — there is no web search category under **Admin → Providers** any
+more, and the keys are not in `providers.json`.
 
-#### Admin Panel (Recommended)
+#### Installation and Credentials (Recommended)
 
-1. Navigate to **Admin → Providers**
-2. Find your provider under **Web Search Providers**:
-   - **Brave Search**: Click "Configure" and enter your Brave API key
-   - **Staan Search**: Click "Configure" and enter your staan.ai API key
-   - **Qwant Search**: nothing to configure
-3. Save changes — no server restart required
+1. Store each key as a credential of type **secret** under **Admin →
+   Integrations → Credentials** (one for Brave, one for Staan)
+2. Open **Admin → Integrations → Installed → Web search** (the installation
+   `websearch`, definition `com.intrafind/web-search`) and fill in its fields:
+   - **Brave Search API key** (`braveCredentialRef`): the Brave credential
+   - **Staan API key** (`staanCredentialRef`): the Staan credential
+   - **Default search engine** (`defaultProvider`): `auto`, `brave`, `staan`
+     or `qwant` — what an app's `websearch.provider: "auto"` resolves to (see
+     [How Provider Resolution Works](#how-provider-resolution-works))
+   - **Qwant**: nothing to configure
+3. Save — no server restart required. **Test** on the installation runs one
+   live search (see [Connectivity Test](#connectivity-test-admin-ui))
 
-API keys are encrypted at rest using AES-256-GCM.
+The installation's **groups** restrict who gets web search at all, and the
+installation can be switched off as a whole, which takes the search tools and
+the page reader away from every app.
+
+Credentials are encrypted at rest using AES-256-GCM. On an upgrade, migration
+V195 moves the keys that were stored under **Admin → Providers** into the
+credentials `integration-websearch-brave` and `integration-websearch-staan` and
+references them from the installation, so nothing has to be re-entered.
 
 #### Environment Variables (Fallback)
 
 Set `BRAVE_SEARCH_API_KEY` or `STAAN_API_KEY` as a real environment variable (or in the `.env` file of a source checkout). The shipped `config.env` of the binary distribution no longer lists them.
 
-The system checks admin panel configuration first, then falls back to environment variables.
+The environment variable applies when the installation references no credential for that engine; a referenced credential wins.
 
 ### Search Language
 
@@ -358,31 +409,32 @@ A model can still override the language for one search by passing the tool's
 
 Whether a search provider *can be reached from this server* is a separate
 question from whether it is configured correctly, and for Qwant it is the one
-that usually decides the outcome. **Admin → Providers → Web Search Providers**
-answers it directly:
+that usually decides the outcome. The **Test** button of the `websearch`
+installation — on its row under **Admin → Integrations → Installed**, and in
+the installation wizard — answers it directly. It reports two steps:
 
-- **Test** on a provider row runs one live search and fills in the
-  **Connectivity** column. **Test All** covers every web search provider too.
-- **Configure → Connectivity Test** does the same on the provider's own page,
-  with an optional custom query, so a configuration can be saved and checked
-  in one place.
+- **API keys**: which engines have a key (Brave, Staan; Qwant needs none),
+  whether from a credential or from the environment variable.
+- **Search with …**: one live search with the installation's default engine
+  (the first keyed engine, else Qwant, when the default is `auto`). A default
+  engine without a key fails this step straight away.
 
-Each test issues one real search and **bypasses the result cache**, so it
-reports the provider's behaviour right now rather than replaying an earlier
-success. The verdict names what to do next:
+The search **bypasses the result cache**, so it reports the engine's behaviour
+right now rather than replaying an earlier success. The verdict names what to
+do next, with remediation hints:
 
 | Result | Means | Next step |
 |--------|-------|-----------|
-| **All OK** | The provider answered with results | Nothing — search works from this server |
-| **Partial** | It answered, but returned nothing, or rate-limited the request | Try a broader query, or wait and retest |
-| **Blocked** | Bot protection (DataDome) refused this server's IP | Change egress, or use Brave — see below |
-| **Failed** | No API key, a rejected key, or the request never arrived | Fix the key, or check proxy/TLS settings |
+| **OK** | The engine answered with results | Nothing — search works from this server |
+| **Warning** | It answered, but returned nothing, or rate-limited the request | Try again later, or retest |
+| **Blocked** | Bot protection (DataDome) refused this server's IP | Change egress, or use Brave or Staan — see below |
+| **Failed** | No API key, a rejected key, or the request never arrived | Fix the credential, or check proxy/TLS settings |
 
-A **Blocked** result is deliberately not labelled a failure. It means the
+A **Blocked** result is deliberately not a configuration problem. It means the
 request reached Qwant and Qwant declined to answer *this IP address*; no setting
-on the page will change that, and retrying will not either. The panel shows the
-endpoint and the egress route (the outbound proxy, or `direct`) used for the
-request, because that is the variable in play.
+on the installation will change that, and retrying will not either. The hints
+point at the egress IP and the outbound proxy's exit address, because that is
+the variable in play.
 
 The same check is available without the UI:
 
@@ -420,6 +472,15 @@ Three safeguards apply to every native search call:
 The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
 
 ## Tools Reference
+
+The three search tools and the page reader are the **actions** of the
+`websearch` installation, not tool files: `braveSearch`, `staanSearch`,
+`qwantSearch` and `read_url` keep their ids, but there is no
+`contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`,
+`read_url.json`) any more, and they are not listed under **Admin → Tools**.
+They are switched on and off, and restricted to groups, on the installation
+under **Admin → Integrations → Installed → Web search**. Their throttling is
+unchanged (Brave: one request at a time, 1100 ms apart).
 
 ### Brave Search (`braveSearch`)
 
@@ -542,7 +603,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: Shipped as `contents/tools/read_url.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
+**Availability**: The **Web page reader** action of the `websearch` installation (there is no `contents/tools/read_url.json`), offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Switch the action off on the installation to stop offering it; an installation that is off, or closed to the user's groups, offers it to nobody. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
@@ -650,26 +711,30 @@ The web content extractor includes protection against Server-Side Request Forger
 - Content length limits prevent memory issues
 - User-Agent headers for responsible web crawling
 - SSRF protection blocks access to internal networks
-- API keys encrypted at rest in the admin panel
+- API keys encrypted at rest in the credential store (**Admin → Integrations → Credentials**)
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"BRAVE_SEARCH_API_KEY is not set"**
-   - Configure the key via Admin → Providers → Brave Search (recommended)
+   - Store the key as a **secret** credential under Admin → Integrations → Credentials and
+     reference it in the **Brave Search API key** field of the `websearch` installation
+     (Admin → Integrations → Installed → Web search) (recommended)
    - Or set the `BRAVE_SEARCH_API_KEY` environment variable and restart the server
-   - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key.
-     `"auto"` already does this on an install with no Brave key
+   - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key, or set
+     the installation's **Default search engine** to Qwant. `"auto"` already does this on an
+     install with no Brave key
 
 2. **Qwant search fails with `QWANT_CAPTCHA`**
    - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
      so this is about where the server sends its traffic from, not how it is
      configured, and no retry or setting will clear it
-   - Confirm it for the host with **Admin → Providers → Qwant Search → Test**,
+   - Confirm it for the host with **Test** on the `websearch` installation
+     (Admin → Integrations → Installed) while Qwant is its default engine,
      or `node tests/manual/manual-test-qwant-search.js`
    - Route outbound search traffic through an egress IP Qwant accepts, or
-     configure Brave Search for that install
+     configure Brave or Staan Search for that install
 
 3. **"Failed to extract content"**
    - Check if the URL is accessible
@@ -682,6 +747,11 @@ The web content extractor includes protection against Server-Side Request Forger
 
 5. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
+   - Migration V195 moves the Brave and Staan keys from **Admin → Providers** into the
+     credentials `integration-websearch-brave` / `integration-websearch-staan` and creates the
+     `websearch` installation; check that it exists and is enabled under **Admin → Integrations
+     → Installed** (**Admin → Apps** names it as missing otherwise) and that its groups include
+     the user
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 

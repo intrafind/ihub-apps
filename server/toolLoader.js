@@ -27,6 +27,7 @@ import {
 } from './services/peopleDirectory/PeopleDirectoryService.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
+import { getWebSearchConfig, isWebSearchEnabled } from './services/search/websearchConfig.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
@@ -394,10 +395,19 @@ export const WEBSEARCH_TOOL_IDS = Object.freeze({
  */
 export function resolveWebsearchToolId(
   provider = 'auto',
-  { braveConfigured = isBraveSearchConfigured, staanConfigured = isStaanSearchConfigured } = {}
+  {
+    braveConfigured = isBraveSearchConfigured,
+    staanConfigured = isStaanSearchConfigured,
+    defaultProvider = () => getWebSearchConfig().defaultProvider
+  } = {}
 ) {
   if (provider && provider !== 'auto') {
     return WEBSEARCH_TOOL_IDS[provider] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  }
+  // "auto" first asks the web search installation for its default engine.
+  const installationDefault = defaultProvider();
+  if (installationDefault && installationDefault !== 'auto') {
+    return WEBSEARCH_TOOL_IDS[installationDefault] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
   }
   if (braveConfigured()) return WEBSEARCH_TOOL_IDS.brave;
   if (staanConfigured()) return WEBSEARCH_TOOL_IDS.staan;
@@ -418,8 +428,9 @@ export function resolveWebsearchToolId(
 export async function describeWebSearchAvailability(app) {
   if (!app?.websearch?.enabled) return null;
   const toolId = resolveWebsearchToolId(app.websearch.provider);
-  const tools = await loadConfiguredTools();
-  const installed = tools.some(t => t.id === toolId && t.enabled !== false);
+  // The search tools belong to the `websearch` installation (Admin →
+  // Integrations → Installed); an installation that is off offers none.
+  const installed = isWebSearchEnabled();
   const configured =
     toolId === WEBSEARCH_TOOL_IDS.brave
       ? isBraveSearchConfigured()
@@ -587,8 +598,16 @@ function withPageReader(searchTool, allTools) {
  * @returns {Array} No tools, the search tool followed by the page reader, or — with
  *   native search on a provider in {@link NATIVE_SEARCH_WITH_PAGE_READER} — the reader alone
  */
-function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model, user) {
   if (!app.websearch?.enabled) return [];
+  // The tools come from the `websearch` installation: off, or closed to the
+  // user's groups, means no search tool and no page reader.
+  const installation = getWebSearchConfig();
+  if (!installation.enabled) return [];
+  if (installation.allowedGroups.length) {
+    const groups = Array.isArray(user?.groups) ? user.groups : [];
+    if (!groups.some(g => installation.allowedGroups.includes(g))) return [];
+  }
 
   const { enabledByDefault = false } = app.websearch;
 
@@ -677,7 +696,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     context.modelProvider,
     allTools,
     context.websearchEnabled,
-    context.model
+    context.model,
+    context.user
   );
   // An app may also list the page reader in `tools` — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));

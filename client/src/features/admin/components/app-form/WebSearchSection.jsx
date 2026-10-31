@@ -81,7 +81,7 @@ function WebSearchSection({ app, onChange }) {
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.websearchProviderDesc',
-                    'Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.'
+                    'Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.'
                   )}
                 </p>
               </div>

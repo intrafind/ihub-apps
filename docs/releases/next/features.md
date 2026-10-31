@@ -100,3 +100,21 @@ published through a registry instead of only built in. Two guard rails: a regist
 an integration only when an admin marked it as **trusted for code** (**Admin → Marketplace →
 Manage Registries**), and the catalog must carry a hash for every code file, which the install
 checks. The Catalog tab and the install wizard say when an integration runs code on the server.
+
+## Web Search Is an Installed Integration
+
+The search engines and the page reader are the built-in integration **Web search** under
+**Admin → Integrations → Installed**, and no longer a category on the Providers page.
+
+- **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
+  as credential references, the **default search engine** every app on `auto` uses, and the
+  groups that may search. Qwant still needs no key.
+- **Test:** the installation's **Test** reports which engines have a key and runs one live search
+  with the default engine, with the same verdicts and hints as the former connectivity test.
+- **Apps unchanged:** an app still switches web search on in its own settings and may name an
+  engine; the tools keep their ids (`braveSearch`, `staanSearch`, `qwantSearch`, `read_url`). An
+  app with web search on is offered only while the installation is enabled, and **Admin → Apps**
+  names it when it is missing.
+- **Migrated for you:** migration V195 moves the provider keys into credentials, creates the
+  installation and retires the four tool files. `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still
+  apply when no credential is referenced.

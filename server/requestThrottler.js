@@ -18,6 +18,20 @@ import { recordRateLimitHit } from './telemetry/metrics.js';
 import { isClusterBusActive, request, respondInPrimary } from './clusterBus.js';
 import logger from './utils/logger.js';
 
+/**
+ * Throttle settings of ids that have no tool file any more (the built-in web
+ * search tools): `id → { concurrency?, requestDelayMs? }`, registered by their
+ * connector at import.
+ */
+const throttleHints = new Map();
+
+/** Register the concurrency and delay of an id (a tool id or provider id). */
+export function registerThrottleHints(id, hints) {
+  if (typeof id === 'string' && id && hints && typeof hints === 'object') {
+    throttleHints.set(id, hints);
+  }
+}
+
 const lastCompleted = new Map(); // id -> timestamp when last request finished
 
 const queues = new Map(); // id -> array of pending tasks
@@ -34,6 +48,8 @@ function getConcurrency(id = 'default') {
   const { data: models = [] } = configCache.getModels() || {};
   const { data: tools } = configCache.getTools();
   const model = models.find(m => m.id === id);
+  const hint = throttleHints.get(id);
+  if (hint && typeof hint.concurrency === 'number') return normalizeLimit(hint.concurrency);
   if (model && typeof model.concurrency === 'number') return normalizeLimit(model.concurrency);
   const tool = tools.find(t => t.id === id);
   if (tool && typeof tool.concurrency === 'number') return normalizeLimit(tool.concurrency);
@@ -46,6 +62,8 @@ function getDelay(id = 'default') {
   const { data: models = [] } = configCache.getModels() || {};
   const { data: tools } = configCache.getTools();
   const model = models.find(m => m.id === id);
+  const hint = throttleHints.get(id);
+  if (hint && typeof hint.requestDelayMs === 'number') return hint.requestDelayMs;
   if (model && typeof model.requestDelayMs === 'number') return model.requestDelayMs;
   const tool = tools.find(t => t.id === id);
   if (tool && typeof tool.requestDelayMs === 'number') return tool.requestDelayMs;

@@ -1080,23 +1080,23 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
-- **Type**: Server-side execution
+- **Type**: Server-side execution — an action of the built-in **Web search** installation (`websearch`, **Admin → Integrations → Installed**), not a tool file in `contents/tools/`; the same holds for `staanSearch`, `qwantSearch` and the page reader `read_url`. None of them appears under **Admin → Tools**
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
   - `maxResults` (number, optional): Maximum results to return (default: configured by app's `websearch.maxResults`, max: 10)
   - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
-- **Authentication**: Configure via **Admin Panel → Providers → Brave Search** or set `BRAVE_SEARCH_API_KEY` environment variable
+- **Authentication**: Reference a **secret** credential from the `websearch` installation (**Admin → Integrations → Installed → Web search → Brave Search API key**) or set the `BRAVE_SEARCH_API_KEY` environment variable
 - **Configuration**:
-  - **Admin Panel Method** (Recommended):
-    1. Navigate to Admin → Providers
-    2. Find "Brave Search" under "Web Search Providers"
-    3. Click "Configure" and enter your API key
-    4. Save changes — no server restart required
+  - **Installation Method** (Recommended):
+    1. Store the key as a credential of type **secret** under Admin → Integrations → Credentials
+    2. Open Admin → Integrations → Installed → **Web search**
+    3. Pick that credential in the **Brave Search API key** field (Staan: **Staan API key**)
+    4. Save changes — no server restart required; **Test** runs one live search
   - **Environment Variable Method**:
-    - Set the `BRAVE_SEARCH_API_KEY` environment variable
+    - Set the `BRAVE_SEARCH_API_KEY` environment variable (`STAAN_API_KEY` for Staan)
     - Restart the server for changes to take effect
-  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
+  - **Fallback**: A referenced credential wins; the environment variable applies when the installation references none
 - **Returns**: Array of search results with:
   - `title`: Page title
   - `url`: Page URL
@@ -1139,14 +1139,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
 - **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
-- **Otherwise** → Brave Search
+- **Otherwise** → the engine named by `provider`; for `"auto"`, the `websearch` installation's **Default search engine**, and when that is `auto` too, Brave if it has a key, then Staan, else Qwant
 
 **Key properties**:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Provider: `"auto"` or `"brave"` |
+| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, `"staan"` or `"qwant"` |
 | `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI/Anthropic models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
@@ -1154,7 +1154,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 | `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials referenced by the `websearch` installation, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips these ids from `app.tools`.
 
 ### `iFinder`
 

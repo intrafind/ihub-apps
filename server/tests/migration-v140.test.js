@@ -81,16 +81,27 @@ async function scratch(name) {
   return fs.mkdtemp(path.join(baseDir, `${name}-`));
 }
 
-// V157 renamed the page reader's tool id (and its shipped file) from
-// webContentExtractor to read_url. NEW_PARAMETERS still keys it by the
-// migration-era id, so map it to the current shipped filename here.
-const SHIPPED_FILE = { webContentExtractor: 'read_url' };
+// The web tools ship as actions of the built-in web search connector now
+// (V195); NEW_PARAMETERS still keys them by the migration-era tool ids, so
+// map those to the connector's action names here.
+const CONNECTOR_ACTION = {
+  braveSearch: 'brave',
+  qwantSearch: 'qwant',
+  staanSearch: 'staan',
+  webContentExtractor: 'readUrl'
+};
 
 async function readDefault(id) {
-  const file = SHIPPED_FILE[id] || id;
-  return JSON.parse(
-    await fs.readFile(new URL(`../defaults/tools/${file}.json`, import.meta.url), 'utf8')
+  const parameters = JSON.parse(
+    await fs.readFile(
+      new URL(
+        '../services/integrations/protocols/native/connectors/websearch/parameters.json',
+        import.meta.url
+      ),
+      'utf8'
+    )
   );
+  return parameters[CONNECTOR_ACTION[id] || id];
 }
 
 describe('V140 — web tool filters and page reader offset', () => {
