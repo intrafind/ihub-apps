@@ -143,14 +143,45 @@ async function linkContent(project, item, { user, format, followed = false }) {
 }
 
 /**
+ * The iFinder provider's details of an iFinder document item, or `{}`.
+ *
+ * @param {Object} item
+ * @param {Object} user
+ * @returns {Promise<Object>}
+ */
+async function ifinderDetails(item, user) {
+  if (item.kind !== 'ifinder-document' || !item.ref?.documentId) return {};
+  if (!hasSourceProvider('ifinder')) return {};
+  try {
+    const ifinder = await getSourceProvider('ifinder');
+    const details = await ifinder.metadata({
+      ref: {
+        id: item.ref.documentId,
+        ...(item.ref.searchProfile ? { scope: item.ref.searchProfile } : {})
+      },
+      user
+    });
+    const { title: _title, ...rest } = details || {};
+    return Object.fromEntries(Object.entries(rest).filter(([, value]) => value != null));
+  } catch {
+    return {};
+  }
+}
+
+/**
  * @param {{ref: {id: string, scope?: string}, user: Object}} request
  */
 async function metadata({ ref, user }) {
   const { project, item } = await load({ ref, user });
   const doc = docOf(project, item);
+  // An iFinder document's own details (file, author, path, its deep link) come
+  // from iFinder with the reader's rights, as for a citation of it in a chat.
+  // Best effort: without them the item's details still answer.
+  const ifinder = await ifinderDetails(item, user);
   return {
+    ...ifinder,
     title: item.name,
-    filename: item.name,
+    filename: ifinder.filename || item.name,
     project: {
       id: project.id,
       name: typeof project.name === 'string' ? project.name : project.name?.en || project.id

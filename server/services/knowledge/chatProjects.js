@@ -132,8 +132,9 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
   const context = callerContext(req.user);
   const usable = async (id, { container = false } = {}) => {
     if (!isProjectId(id) && !isIFinderProjectId(id)) return false;
-    // A smart collection of the iFinder tier is attached, never a container:
-    // its permission block has `canHoldChats: false`.
+    // A smart collection of the iFinder tier without a stub (`ifc_…`) is
+    // attached, never a container: its permission block has `canHoldChats:
+    // false`. Its stub, a stored project of the owner, holds chats.
     const { project } = await loadProjectFor(req.user, id, { repository });
     if (!project) return false;
     // A container holds chats, which its members may read: only a user

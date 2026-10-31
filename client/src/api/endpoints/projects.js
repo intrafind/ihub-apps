@@ -103,10 +103,17 @@ export const updateProject = (projectId, changes) =>
  * Delete a project (owner only). Its chats survive, outside the project.
  *
  * @param {string} projectId
+ * @param {{deleteCollection?: boolean}} [options] - For the project of a smart
+ *   collection: delete the collection in iFinder too (its documents stay there).
  * @returns {Promise<void>}
  */
-export const deleteProject = async projectId => {
-  await call(() => apiClient.delete(projectPath(projectId)));
+export const deleteProject = async (projectId, { deleteCollection = false } = {}) => {
+  await call(() =>
+    apiClient.delete(
+      projectPath(projectId),
+      deleteCollection ? { params: { deleteCollection: 'true' } } : undefined
+    )
+  );
 };
 
 /**
@@ -262,6 +269,28 @@ export const transferProject = (projectId, ownerId) =>
  * @returns {Promise<{enabled: boolean, items: Array<Object>}>} Each item with
  *   `subscribed` (the caller added it to their list).
  */
+/**
+ * The caller's iFinder smart collections, each saying whether it is in their
+ * projects already (`added`, `projectId`). `available: false` while the iFinder
+ * tier is not offered to them.
+ *
+ * @returns {Promise<{available: boolean, items: Array<{collectionId: string, name: string,
+ *   description: string, documentCount: number, updatedAt: string|null, added: boolean,
+ *   projectId?: string}>, warnings: Array<Object>}>}
+ */
+export const fetchSmartCollections = () =>
+  call(() => apiClient.get(`${PROJECTS_PATH}/_collections`));
+
+/**
+ * Add one of the caller's smart collections to their projects. The project
+ * keeps its default app, instructions and chats; the documents stay in iFinder.
+ *
+ * @param {{collectionId: string, instructions?: string, defaultAppId?: string}} body
+ * @returns {Promise<Object>} The new project.
+ */
+export const addSmartCollection = body =>
+  call(() => apiClient.post(`${PROJECTS_PATH}/_collections`, body));
+
 export const fetchProjectCatalog = (query = '') =>
   call(() => apiClient.get(`${PROJECTS_PATH}/_catalog`, { params: { q: query } }));
 
@@ -340,6 +369,23 @@ export const fetchPickerPages = async () => {
  * @param {{profile?: string, limit?: number}} [options]
  * @returns {Promise<Array<{documentId: string, title: string, mimeType?: string, url?: string}>>}
  */
+/**
+ * The iFinder search profiles the caller may search in, as the chat input
+ * offers them.
+ *
+ * @returns {Promise<{profiles: Array<{id: string, name: string, isDefault: boolean}>,
+ *   defaultProfile: string|null, fixed: boolean, hint?: string}>}
+ */
+export const fetchPickerIFinderProfiles = async () => {
+  const data = await call(() => apiClient.get(`${PROJECTS_PATH}/pickers/ifinder/profiles`));
+  return {
+    profiles: Array.isArray(data?.profiles) ? data.profiles : [],
+    defaultProfile: data?.defaultProfile || null,
+    fixed: data?.fixed === true,
+    ...(data?.hint ? { hint: data.hint } : {})
+  };
+};
+
 export const searchPickerIFinder = async (query, { profile, limit } = {}) => {
   const params = { q: query, ...(profile ? { profile } : {}), ...(limit ? { limit } : {}) };
   const data = await call(() =>

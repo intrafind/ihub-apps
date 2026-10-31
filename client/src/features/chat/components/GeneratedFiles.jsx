@@ -7,61 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
-import { generatedFileKind } from '../../../../../shared/generatedFiles.js';
-
-function formatBytes(bytes) {
-  const n = Number(bytes);
-  if (!Number.isFinite(n) || n <= 0) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/** Icon and colours of a card, by file type. */
-const FILE_LOOKS = {
-  'application/pdf': {
-    icon: 'document-text',
-    className: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-  },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-    icon: 'document-text',
-    className: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-  },
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
-    icon: 'presentation-chart-bar',
-    className: 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-  }
-};
-
-/** Look of a text file or an archive, by artifact kind. */
-const KIND_LOOKS = {
-  code: {
-    icon: 'code-bracket',
-    className: 'bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200'
-  },
-  archive: {
-    icon: 'archive-box',
-    className: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-  }
-};
-
-/**
- * Look of a card: an office document by its own type, a text file or an
- * archive by its kind.
- */
-function lookOf(mimeType) {
-  return (
-    FILE_LOOKS[mimeType] || KIND_LOOKS[generatedFileKind(mimeType)] || FILE_LOOKS['application/pdf']
-  );
-}
-
-/** The name a file is saved under: its last path segment (`src/index.js` → `index.js`). */
-function saveName(name) {
-  const base = String(name || '')
-    .split('/')
-    .pop();
-  return base || 'file';
-}
+import { fileLookOf, formatBytes, saveName } from '../utils/artifactFiles';
 
 function blobOfBase64(data, mimeType) {
   const binary = atob(data);
@@ -100,7 +46,7 @@ function GeneratedFileCard({ file, chatId }) {
     }
   };
 
-  const look = lookOf(file.mimeType);
+  const look = fileLookOf(file);
   const details = [
     file.pages
       ? t('chatMessage.generatedFiles.pages', '{{count}} pages', { count: file.pages })

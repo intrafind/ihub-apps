@@ -435,6 +435,25 @@ describe('AnswerSources', () => {
     expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
   });
 
+  test('a click anywhere on a cited row opens the panel; its link still opens the source', () => {
+    let open;
+    function Probe() {
+      open = useSourcesState().open;
+      return null;
+    }
+    renderWithCited();
+    render(<Probe />);
+    const row = within(screen.getByRole('list', { name: 'Cited in this answer' }))
+      .getByText('Docs')
+      .closest('li');
+    // The link keeps its own action: with a modifier key the browser handles it.
+    fireEvent.click(within(row).getByRole('link'), { ctrlKey: true });
+    expect(open).toBeNull();
+    fireEvent.click(row);
+    expect(open).toEqual({ messageKey: 'msg-1', focus: 2 });
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument();
+  });
+
   test('a source without a link opens the panel from its title', () => {
     const items = [{ ...minutes, markers: ['r:1'] }];
     const content = 'See the minutes <cite type="r">1</cite>.';

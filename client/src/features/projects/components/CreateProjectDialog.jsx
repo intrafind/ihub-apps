@@ -17,8 +17,8 @@ import { LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dia
  *
  * Where the caller can use the iFinder tier and this installation can change
  * smart collections (`ifinderWritable`), they also pick where the project lives:
- * in iHub, or as a smart collection in iFinder, which has a name and a
- * description and no instructions.
+ * in iHub, or as a smart collection in iFinder (the name and the description go
+ * to iFinder; the instructions and the default app stay with its project here).
  *
  * Mount it only while open, so every opening starts empty.
  *
@@ -121,7 +121,6 @@ function CreateProjectDialog({ onClose, onCreated, ifinderWritable = false }) {
             form={form}
             errors={errors}
             idPrefix="create-project"
-            hideInstructions={tier === 'ifinder'}
             onChange={(field, value) => setForm(prev => ({ ...prev, [field]: value }))}
           />
           {error && (
