@@ -93,6 +93,13 @@ Use `IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` for them; they win over the
 installation's base URL and private key (see
 [iFinder Integration](iFinder-Integration.md#configuration)).
 
+`IHUB_PLATFORM__I_FINDER__*` and `IHUB_PLATFORM__I_ASSISTANT__*` variables from
+before the move (for example `IHUB_PLATFORM__I_FINDER__BASE_URL`,
+`IHUB_PLATFORM__I_FINDER__ENABLED`, `IHUB_PLATFORM__I_FINDER__DEFAULT_SEARCH_PROFILE`)
+are read once more by migration V192, which writes their values into the two
+installations. Afterwards they do nothing: the server logs a warning for each
+one it still finds, and the setting is edited on the installation instead.
+
 ### UI configuration
 
 ```bash

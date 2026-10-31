@@ -16,15 +16,25 @@ export function effectiveValues(definition, instance) {
   const values = {};
   for (const field of definition.install || []) {
     if (field.sensitive || field.scope !== 'admin') continue;
-    if (field.default !== undefined) values[field.key] = field.default;
+    if (field.default !== undefined) values[field.key] = normalizeValue(field, field.default);
   }
   for (const [key, value] of Object.entries(instance?.values || {})) {
     if (value === undefined || value === null || value === '') continue;
     const field = (definition.install || []).find(f => f.key === key);
     if (field?.sensitive) continue;
-    values[key] = value;
+    values[key] = normalizeValue(field, value);
   }
   return values;
+}
+
+/**
+ * A URL is joined with paths in templates (`{baseUrl}{apiPath}`,
+ * `{baseUrl}/dataset/{name}`), so a trailing slash an admin typed would give
+ * an interior `//`. It goes here, once, for every use of the value.
+ */
+function normalizeValue(field, value) {
+  if (field?.type === 'url' && typeof value === 'string') return value.replace(/\/+$/, '');
+  return value;
 }
 
 /**

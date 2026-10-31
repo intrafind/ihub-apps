@@ -21,7 +21,7 @@ const { loadTools, getToolsForApp, runTool } = await import('../../toolLoader.js
 const { isToolSelected } = await import('../../utils/toolSelection.js');
 const { syncIntegrationScopeProviders } =
   await import('../../services/integrations/integrationTools.js');
-const { getScopeProvider, resolveChatScopes } =
+const { getScopeProvider, resolveChatScopes, applicableScopeProviders } =
   await import('../../services/integrations/scopes/index.js');
 
 let server;
@@ -293,5 +293,46 @@ describe('integration tools', () => {
       scopeId: 'city',
       fixed: true
     });
+  });
+
+  it('offers no scope picker to a user outside the installation groups', async () => {
+    const provider = getScopeProvider('restricted');
+    assert.ok(provider);
+    const app = { id: 'open-data', integrations: { restricted: {} } };
+    const outsider = { id: 'u', groups: ['users'] };
+    const member = { id: 'm', groups: ['data-team'] };
+
+    assert.equal(provider.appliesTo({ app, user: outsider }), false);
+    assert.equal(provider.appliesTo({ app, user: member }), true);
+    assert.deepEqual(
+      applicableScopeProviders({ app, user: outsider }).map(p => p.id),
+      []
+    );
+    assert.deepEqual(
+      applicableScopeProviders({ app, user: member }).map(p => p.id),
+      ['restricted']
+    );
+
+    const listing = await provider.listScopes({ app, user: outsider });
+    assert.deepEqual(listing.scopes, []);
+    assert.equal(listing.hint, 'forbidden');
+    assert.deepEqual(await provider.validateScope({ scopeId: 'city', app, user: outsider }), {
+      ok: true,
+      scopeId: null,
+      fixed: false
+    });
+    // A pick from an outsider binds nothing, so no "limited to" note follows.
+    const resolved = await resolveChatScopes({
+      requested: { restricted: 'city' },
+      user: outsider,
+      app
+    });
+    assert.deepEqual(resolved, { ok: true, scopes: {} });
+    const forMember = await resolveChatScopes({
+      requested: { restricted: 'city' },
+      user: member,
+      app
+    });
+    assert.deepEqual(forMember, { ok: true, scopes: { restricted: 'city' } });
   });
 });
