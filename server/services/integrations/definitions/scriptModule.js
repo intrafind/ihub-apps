@@ -39,7 +39,7 @@ export function checkScriptCodeFiles(definition, files) {
   const moduleFile = definition.protocol.module;
   const extra = Object.keys(files)
     .filter(file => CODE_FILE_PATTERN.test(file) && file !== moduleFile)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   if (extra.length) {
     const error = new Error(
       `Integration ${definition.id}: a script integration carries one code file, its module ` +
