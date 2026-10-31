@@ -52,6 +52,8 @@ verbatim, trailing slash included, so per-user sign-ins and client registrations
 - **Deployments that write `mcpServers.json`** (Helm values, templates, scripts) have to write
   installations; the field names are listed in `docs/mcp-integration.md`. The `security` block
   (`blockPrivateIps`, `allowedHosts`) lives in `integrations.json`.
+- **A server whose id another, non-MCP installation already holds** (an integration installed from
+  the catalog) is not moved: it is kept in `contents/config/mcpServers.unmigrated.json` with a
+  warning in the log. Install it under a free id and bind it to its apps.
 - Remote A2A agents keep their own page for now; the id-clash rules name installed integrations
   where they named MCP servers.
-

@@ -36,16 +36,16 @@ Two kinds of definition install an MCP server:
   generic definition **MCP server** (`com.intrafind/mcp-server`). Its install
   fields:
 
-  | Field | Shown for | Purpose |
-  |-------|-----------|---------|
-  | `transport` | always | `streamableHttp` (default), `sse`, `websocket` or `stdio` |
-  | `url` | HTTP and WebSocket transports | The server endpoint |
-  | `headers` (advanced) | `streamableHttp`, `sse` | Non-secret headers, one `Name: value` per line |
-  | `command`, `args`, `env` (advanced), `cwd` (advanced) | `stdio` | The child process; `env` takes one `KEY=value` per line |
-  | `toolPrefix` (advanced) | always | Prefix of the tool ids, default `<id>__` |
-  | `timeoutMs` (advanced) | always | Per-call timeout, default `30000` |
-  | `appsEnabled` (advanced) | always | Render interactive views (MCP Apps), default on |
-  | `reconnectEnabled`, `reconnectMaxRetries`, `reconnectInitialDelayMs`, `reconnectMaxDelayMs`, `reconnectGrowthFactor` (advanced) | always | Reconnect with exponential backoff (defaults: on, 5, 1000, 30000, 1.5) |
+  | Field                                                                                                                           | Shown for                     | Purpose                                                                |
+  | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------- |
+  | `transport`                                                                                                                     | always                        | `streamableHttp` (default), `sse`, `websocket` or `stdio`              |
+  | `url`                                                                                                                           | HTTP and WebSocket transports | The server endpoint                                                    |
+  | `headers` (advanced)                                                                                                            | `streamableHttp`, `sse`       | Non-secret headers, one `Name: value` per line                         |
+  | `command`, `args`, `env` (advanced), `cwd` (advanced)                                                                           | `stdio`                       | The child process; `env` takes one `KEY=value` per line                |
+  | `toolPrefix` (advanced)                                                                                                         | always                        | Prefix of the tool ids, default `<id>__`                               |
+  | `timeoutMs` (advanced)                                                                                                          | always                        | Per-call timeout, default `30000`                                      |
+  | `appsEnabled` (advanced)                                                                                                        | always                        | Render interactive views (MCP Apps), default on                        |
+  | `reconnectEnabled`, `reconnectMaxRetries`, `reconnectInitialDelayMs`, `reconnectMaxDelayMs`, `reconnectGrowthFactor` (advanced) | always                        | Reconnect with exponential backoff (defaults: on, 5, 1000, 30000, 1.5) |
 
   The sign-in fields are listed under [Authentication](#authentication).
   A field appears only when it applies (a `when` clause on the transport or
@@ -72,12 +72,12 @@ every integration, MCP servers included (see [Security](#security)).
 
 ### Transports
 
-| Transport | When to use |
-|-----------|-------------|
+| Transport        | When to use                                                                                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `streamableHttp` | **Recommended.** Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via `Mcp-Session-Id` + `Last-Event-ID`, so a reconnect resumes the stream rather than replaying in-flight requests. |
-| `sse` | Legacy SSE transport for older MCP servers. Disable if you call non-idempotent tools — reconnect *replays* requests, which can cause duplicate side effects. |
-| `stdio` | Local MCP server invoked as a child process. iHub does not invoke a shell — args go straight to `execve`. |
-| `websocket` | Less common. Supported for parity. |
+| `sse`            | Legacy SSE transport for older MCP servers. Disable if you call non-idempotent tools — reconnect _replays_ requests, which can cause duplicate side effects.                                                        |
+| `stdio`          | Local MCP server invoked as a child process. iHub does not invoke a shell — args go straight to `execve`.                                                                                                           |
+| `websocket`      | Less common. Supported for parity.                                                                                                                                                                                  |
 
 `streamableHttp` and `sse` accept optional non-secret `headers` sent with
 every request — a scope or account id some vendors expect next to the key.
@@ -260,7 +260,11 @@ call:
 {
   "error": "MCP_AUTH_REQUIRED",
   "message": "Connect Okta directory to use this tool: /api/mcp/oauth/authorize?serverId=okta",
-  "authRequired": { "serverId": "okta", "serverName": "Okta directory", "connectUrl": "/api/mcp/oauth/authorize?serverId=okta" }
+  "authRequired": {
+    "serverId": "okta",
+    "serverName": "Okta directory",
+    "connectUrl": "/api/mcp/oauth/authorize?serverId=okta"
+  }
 }
 ```
 
@@ -406,7 +410,10 @@ Installed integrations** writes it. All of the installation's enabled tools
 by default, or some of them by action name:
 
 ```jsonc
-{ "id": "whiteboard", "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view"] } } }
+{
+  "id": "whiteboard",
+  "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view"] } }
+}
 ```
 
 Listing a server id or a prefixed tool id in `app.tools` (`["drawio"]`,
@@ -442,8 +449,20 @@ In `integrations.json` the installations look like this:
 ```jsonc
 {
   "installed": [
-    { "id": "drawio", "definition": "mcp/drawio", "enabled": false, "values": {}, "auth": { "mode": "none" } },
-    { "id": "excalidraw", "definition": "mcp/excalidraw", "enabled": false, "values": {}, "auth": { "mode": "none" } }
+    {
+      "id": "drawio",
+      "definition": "mcp/drawio",
+      "enabled": false,
+      "values": {},
+      "auth": { "mode": "none" }
+    },
+    {
+      "id": "excalidraw",
+      "definition": "mcp/excalidraw",
+      "enabled": false,
+      "values": {},
+      "auth": { "mode": "none" }
+    }
   ]
 }
 ```
@@ -451,7 +470,10 @@ In `integrations.json` the installations look like this:
 An app binds them, all tools or some:
 
 ```jsonc
-{ "id": "whiteboard", "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view", "read_me"] } } }
+{
+  "id": "whiteboard",
+  "integrations": { "drawio": {}, "excalidraw": { "actions": ["create_view", "read_me"] } }
+}
 ```
 
 Both servers can also be self-hosted (`jgraph/drawio-mcp` on Docker Hub, or
@@ -466,7 +488,11 @@ views (MCP Apps)**, advanced, on by default). When on, iHub advertises the
 extension in `initialize`:
 
 ```json
-{ "capabilities": { "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } } } }
+{
+  "capabilities": {
+    "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } }
+  }
+}
 ```
 
 When off the extension is not advertised, no view renders, and a
@@ -479,11 +505,11 @@ in the wizard marks each tool that renders a view.
 
 `_meta.ui.visibility` decides who may call a tool:
 
-| Visibility | Offered to the model | Callable by the server's views |
-|------------|----------------------|--------------------------------|
-| omitted / `["model", "app"]` | yes | yes |
-| `["model"]` | yes | no |
-| `["app"]` | **never** | yes |
+| Visibility                   | Offered to the model | Callable by the server's views |
+| ---------------------------- | -------------------- | ------------------------------ |
+| omitted / `["model", "app"]` | yes                  | yes                            |
+| `["model"]`                  | yes                  | no                             |
+| `["app"]`                    | **never**            | yes                            |
 
 App-only tools (Excalidraw's `save_checkpoint`, for example) are hidden from
 the model even when MCP Apps are disabled. The installation's actions
@@ -532,19 +558,19 @@ happily render a view whose declaration is incomplete.
 
 #### What a view can do
 
-| Method | iHub behaviour |
-|--------|----------------|
-| `ui/initialize` | Host info, capabilities and context: theme, style variables, locale, time zone, `inline`/`fullscreen` display modes, container size, the tool definition |
+| Method                                                           | iHub behaviour                                                                                                                                                                                |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/initialize`                                                  | Host info, capabilities and context: theme, style variables, locale, time zone, `inline`/`fullscreen` display modes, container size, the tool definition                                      |
 | `ui/notifications/tool-input` / `tool-result` / `tool-cancelled` | The call's arguments, then its full `CallToolResult` (`structuredContent` and `_meta` included — the model only ever sees `content`), or a cancellation when the call failed without a result |
-| `tools/call` | Proxied to the view's own server, subject to visibility |
-| `resources/read` | Proxied to the view's own server |
-| `ui/open-link` | Opens `http(s)` links in a new tab (`noopener`) |
-| `ui/message` | Posts the text as the user's next chat message; refused while a turn is running |
-| `ui/update-model-context` | The latest update per view is added to the next turn's prompt as an `<mcp_app_context>` block (text and structured content; never stored or shown) |
-| `ui/request-display-mode` | `inline` or `fullscreen` (a full-window overlay with a close button); `pip` is not offered |
-| `ui/notifications/size-changed` | Inline views grow with their content, up to 720 px |
-| `ui/notifications/host-context-changed` | Sent on theme, language, width and display-mode changes |
-| `ui/resource-teardown` | Sent when the view is removed |
+| `tools/call`                                                     | Proxied to the view's own server, subject to visibility                                                                                                                                       |
+| `resources/read`                                                 | Proxied to the view's own server                                                                                                                                                              |
+| `ui/open-link`                                                   | Opens `http(s)` links in a new tab (`noopener`)                                                                                                                                               |
+| `ui/message`                                                     | Posts the text as the user's next chat message; refused while a turn is running                                                                                                               |
+| `ui/update-model-context`                                        | The latest update per view is added to the next turn's prompt as an `<mcp_app_context>` block (text and structured content; never stored or shown)                                            |
+| `ui/request-display-mode`                                        | `inline` or `fullscreen` (a full-window overlay with a close button); `pip` is not offered                                                                                                    |
+| `ui/notifications/size-changed`                                  | Inline views grow with their content, up to 720 px                                                                                                                                            |
+| `ui/notifications/host-context-changed`                          | Sent on theme, language, width and display-mode changes                                                                                                                                       |
+| `ui/resource-teardown`                                           | Sent when the view is removed                                                                                                                                                                 |
 
 Requests are rate-limited per view, and the server logs every call a view
 makes (`component: McpApps`).
@@ -693,47 +719,47 @@ as disabled installations with the ids `drawio` and `excalidraw`, so on most
 installations the catalog shows them as installed — enable them in the
 **Installed** list instead.
 
-| Server | Category | Endpoint | Authentication |
-|--------|----------|----------|----------------|
-| Microsoft Learn | Documentation | `https://learn.microsoft.com/api/mcp` | none |
-| Context7 | Documentation | `https://mcp.context7.com/mcp` | none |
-| DeepWiki | Documentation | `https://mcp.deepwiki.com/mcp` | none |
-| Astro Docs | Documentation | `https://mcp.docs.astro.build/mcp` | none |
-| GitHub | Development & operations | `https://api.githubcopilot.com/mcp/` | Bearer token |
-| Sentry | Development & operations | `https://mcp.sentry.dev/mcp` | `Authorization: Sentry-Bearer <key>` |
-| Postman | Development & operations | `https://mcp.postman.com/minimal` | Bearer token |
-| Cloudflare | Development & operations | `https://mcp.cloudflare.com/mcp` | Bearer token |
-| Supabase | Development & operations | `https://mcp.supabase.com/mcp` | Bearer token |
-| Neon | Development & operations | `https://mcp.neon.tech/mcp` | Bearer token |
-| Render | Development & operations | `https://mcp.render.com/mcp` | Bearer token |
-| Buildkite | Development & operations | `https://mcp.buildkite.com/direct` | Bearer token |
-| Honeycomb | Development & operations | `https://mcp.honeycomb.io/mcp` | Bearer token |
-| PagerDuty | Development & operations | `https://mcp.pagerduty.com/mcp` | `Authorization: Token token=<key>` |
-| Braintrust | Development & operations | `https://api.braintrust.dev/mcp` | Bearer token |
-| Atlassian (Jira & Confluence) | Productivity | `https://mcp.atlassian.com/v2/mcp` | Basic (email + API token) |
-| Linear | Productivity | `https://mcp.linear.app/mcp` | Bearer token |
-| monday.com | Productivity | `https://mcp.monday.com/mcp` | Bearer token |
-| Coda | Productivity | `https://coda.io/apis/mcp` | Bearer token |
-| draw.io | Design & diagrams | `https://mcp.draw.io/mcp` | none |
-| Excalidraw | Design & diagrams | `https://mcp.excalidraw.com/mcp` | none |
-| Sanity | Content & media | `https://mcp.sanity.io` | Bearer token |
-| Cloudinary | Content & media | `https://asset-management.mcp.cloudinary.com/mcp` | `cloudinary-url: <key>` |
-| Wix | Content & media | `https://mcp.wix.com/mcp` | `Authorization: <key>` + `wix-account-id` |
-| Zapier | Automation & web | `https://mcp.zapier.com/api/v1/connect` | Bearer token |
-| Apify | Automation & web | `https://mcp.apify.com` | Bearer token |
-| Browser Use | Automation & web | `https://api.browser-use.com/v3/mcp` | `X-Browser-Use-API-Key: <key>` |
-| superglue | Automation & web | `https://api.superglue.cloud/mcp` | Bearer token |
-| Close | Sales & support | `https://mcp.close.com/mcp` | `Close-API-Key: <key>` + `Close-Scope` |
-| Intercom | Sales & support | `https://mcp.intercom.com/mcp` | Bearer token |
-| Fireflies.ai | Sales & support | `https://api.fireflies.ai/mcp` | Bearer token |
-| Modjo | Sales & support | `https://api.mcp.modjo.ai/v1/mcp` | Bearer token |
-| PostHog | Analytics | `https://mcp.posthog.com/mcp` | Bearer token |
-| Hugging Face | Data & research | `https://huggingface.co/mcp` | none |
-| Google Maps | Data & research | `https://mapstools.googleapis.com/mcp` | `X-Goog-Api-Key: <key>` |
-| Statista | Data & research | `https://api.statista.ai/v1/mcp` | `x-api-key: <key>` |
-| PRIMAMCP | Data & research | `https://mcp.planitprima.com/mcp` | Bearer token |
-| Stripe | Finance & payments | `https://mcp.stripe.com` | Bearer token |
-| Debitura | Finance & payments | `https://mcp.debitura.com/mcp` | Bearer token |
+| Server                        | Category                 | Endpoint                                          | Authentication                            |
+| ----------------------------- | ------------------------ | ------------------------------------------------- | ----------------------------------------- |
+| Microsoft Learn               | Documentation            | `https://learn.microsoft.com/api/mcp`             | none                                      |
+| Context7                      | Documentation            | `https://mcp.context7.com/mcp`                    | none                                      |
+| DeepWiki                      | Documentation            | `https://mcp.deepwiki.com/mcp`                    | none                                      |
+| Astro Docs                    | Documentation            | `https://mcp.docs.astro.build/mcp`                | none                                      |
+| GitHub                        | Development & operations | `https://api.githubcopilot.com/mcp/`              | Bearer token                              |
+| Sentry                        | Development & operations | `https://mcp.sentry.dev/mcp`                      | `Authorization: Sentry-Bearer <key>`      |
+| Postman                       | Development & operations | `https://mcp.postman.com/minimal`                 | Bearer token                              |
+| Cloudflare                    | Development & operations | `https://mcp.cloudflare.com/mcp`                  | Bearer token                              |
+| Supabase                      | Development & operations | `https://mcp.supabase.com/mcp`                    | Bearer token                              |
+| Neon                          | Development & operations | `https://mcp.neon.tech/mcp`                       | Bearer token                              |
+| Render                        | Development & operations | `https://mcp.render.com/mcp`                      | Bearer token                              |
+| Buildkite                     | Development & operations | `https://mcp.buildkite.com/direct`                | Bearer token                              |
+| Honeycomb                     | Development & operations | `https://mcp.honeycomb.io/mcp`                    | Bearer token                              |
+| PagerDuty                     | Development & operations | `https://mcp.pagerduty.com/mcp`                   | `Authorization: Token token=<key>`        |
+| Braintrust                    | Development & operations | `https://api.braintrust.dev/mcp`                  | Bearer token                              |
+| Atlassian (Jira & Confluence) | Productivity             | `https://mcp.atlassian.com/v2/mcp`                | Basic (email + API token)                 |
+| Linear                        | Productivity             | `https://mcp.linear.app/mcp`                      | Bearer token                              |
+| monday.com                    | Productivity             | `https://mcp.monday.com/mcp`                      | Bearer token                              |
+| Coda                          | Productivity             | `https://coda.io/apis/mcp`                        | Bearer token                              |
+| draw.io                       | Design & diagrams        | `https://mcp.draw.io/mcp`                         | none                                      |
+| Excalidraw                    | Design & diagrams        | `https://mcp.excalidraw.com/mcp`                  | none                                      |
+| Sanity                        | Content & media          | `https://mcp.sanity.io`                           | Bearer token                              |
+| Cloudinary                    | Content & media          | `https://asset-management.mcp.cloudinary.com/mcp` | `cloudinary-url: <key>`                   |
+| Wix                           | Content & media          | `https://mcp.wix.com/mcp`                         | `Authorization: <key>` + `wix-account-id` |
+| Zapier                        | Automation & web         | `https://mcp.zapier.com/api/v1/connect`           | Bearer token                              |
+| Apify                         | Automation & web         | `https://mcp.apify.com`                           | Bearer token                              |
+| Browser Use                   | Automation & web         | `https://api.browser-use.com/v3/mcp`              | `X-Browser-Use-API-Key: <key>`            |
+| superglue                     | Automation & web         | `https://api.superglue.cloud/mcp`                 | Bearer token                              |
+| Close                         | Sales & support          | `https://mcp.close.com/mcp`                       | `Close-API-Key: <key>` + `Close-Scope`    |
+| Intercom                      | Sales & support          | `https://mcp.intercom.com/mcp`                    | Bearer token                              |
+| Fireflies.ai                  | Sales & support          | `https://api.fireflies.ai/mcp`                    | Bearer token                              |
+| Modjo                         | Sales & support          | `https://api.mcp.modjo.ai/v1/mcp`                 | Bearer token                              |
+| PostHog                       | Analytics                | `https://mcp.posthog.com/mcp`                     | Bearer token                              |
+| Hugging Face                  | Data & research          | `https://huggingface.co/mcp`                      | none                                      |
+| Google Maps                   | Data & research          | `https://mapstools.googleapis.com/mcp`            | `X-Goog-Api-Key: <key>`                   |
+| Statista                      | Data & research          | `https://api.statista.ai/v1/mcp`                  | `x-api-key: <key>`                        |
+| PRIMAMCP                      | Data & research          | `https://mcp.planitprima.com/mcp`                 | Bearer token                              |
+| Stripe                        | Finance & payments       | `https://mcp.stripe.com`                          | Bearer token                              |
+| Debitura                      | Finance & payments       | `https://mcp.debitura.com/mcp`                    | Bearer token                              |
 
 Endpoints and credential requirements are the vendors' and change over
 time. **Test connection** in the install wizard shows at once whether a
@@ -750,12 +776,12 @@ The gateway needs **two** things switched on (both on Admin → MCP gateway):
 1. `platform.mcpServer.enabled: true` — mounts the `/mcp` endpoints.
 2. `platform.oauth.enabled.authz: true` — the OAuth authorization server.
    The gateway accepts **only** OAuth bearer tokens, so without this no
-   client can ever authenticate. The admin page's *OAuth authorization
-   server* toggle sets this together with `oauth.enabled.clients`,
+   client can ever authenticate. The admin page's _OAuth authorization
+   server_ toggle sets this together with `oauth.enabled.clients`,
    `oauth.authorizationCodeEnabled` and `oauth.refreshTokenEnabled`.
 
-Optionally enable `platform.oauth.dcr.enabled: true` (*Dynamic client
-registration* toggle) so MCP clients such as Claude can register their
+Optionally enable `platform.oauth.dcr.enabled: true` (_Dynamic client
+registration_ toggle) so MCP clients such as Claude can register their
 OAuth client automatically instead of an admin creating one by hand.
 
 > ⚠️ **Restart required:** OAuth configuration is read at startup (see
@@ -829,7 +855,7 @@ every user.
 
 This is what stops Claude registering a client per connection. Claude
 picks its identity in a fixed order: pre-registered credentials → CIMD,
-but *only* when the authorization-server metadata advertises both
+but _only_ when the authorization-server metadata advertises both
 `client_id_metadata_document_supported: true` and `none` in
 `token_endpoint_auth_methods_supported` → dynamic registration. The MCP
 specification (2025-11-25) makes CIMD a SHOULD and DCR a
@@ -852,18 +878,18 @@ Claude Code's document, as a shape reference:
 Turn it on under **Admin → MCP gateway → Client identification**, or in
 `platform.oauth.cimd`:
 
-| Field | Default | Purpose |
-|-------|---------|---------|
-| `enabled` | `false` | Advertise and accept URL client IDs |
-| `allowedClientHosts` | `["claude.ai"]` | Trust policy; `*.example.com` for subdomains, `*` for any HTTPS client (not recommended) |
-| `blockedClientHosts` | `[]` | Hosts refused even while allowed above, checked before any network call |
-| `approvalMode` | `"approval"` | `approval` — each client waits for an administrator; `auto` — the host allowlist is the whole decision |
-| `allowedGroups` | `[]` | Who may connect such a client (empty = everyone) |
-| `allowedScopes` | `[]` | Grantable scopes (empty = the DCR default list) |
-| `allowedApps` / `allowedModels` / `allowedPrompts` | `[]` | Optional narrowing on top of the user's own permissions |
-| `tokenExpirationMinutes` | `oauth.defaultTokenExpirationMinutes` | Access-token lifetime for CIMD clients |
-| `cacheMaxSeconds` | `86400` | Upper bound for document caching |
-| `fetchTimeoutMs` | `5000` | Metadata fetch timeout |
+| Field                                              | Default                               | Purpose                                                                                                |
+| -------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `enabled`                                          | `false`                               | Advertise and accept URL client IDs                                                                    |
+| `allowedClientHosts`                               | `["claude.ai"]`                       | Trust policy; `*.example.com` for subdomains, `*` for any HTTPS client (not recommended)               |
+| `blockedClientHosts`                               | `[]`                                  | Hosts refused even while allowed above, checked before any network call                                |
+| `approvalMode`                                     | `"approval"`                          | `approval` — each client waits for an administrator; `auto` — the host allowlist is the whole decision |
+| `allowedGroups`                                    | `[]`                                  | Who may connect such a client (empty = everyone)                                                       |
+| `allowedScopes`                                    | `[]`                                  | Grantable scopes (empty = the DCR default list)                                                        |
+| `allowedApps` / `allowedModels` / `allowedPrompts` | `[]`                                  | Optional narrowing on top of the user's own permissions                                                |
+| `tokenExpirationMinutes`                           | `oauth.defaultTokenExpirationMinutes` | Access-token lifetime for CIMD clients                                                                 |
+| `cacheMaxSeconds`                                  | `86400`                               | Upper bound for document caching                                                                       |
+| `fetchTimeoutMs`                                   | `5000`                                | Metadata fetch timeout                                                                                 |
 
 Guarantees worth knowing:
 
@@ -886,7 +912,7 @@ Guarantees worth knowing:
   `http://localhost:53421/callback` at authorize time, since a native app
   cannot reserve a port in advance. Same scheme, same loopback host, same
   path — nothing else is relaxed, and `localhost` and `127.0.0.1` are not
-  interchangeable. The consent screen warns when *every* registered
+  interchangeable. The consent screen warns when _every_ registered
   redirect URI is loopback.
 - **Token exchange and refresh never depend on a live fetch.** The
   authorization code already binds `client_id`, `redirect_uri` and the
@@ -897,7 +923,7 @@ Guarantees worth knowing:
 ##### Governing individual clients
 
 One host publishes several different clients. Claude web, Claude Desktop,
-Claude Code and Cowork all live under `claude.ai` with *different*
+Claude Code and Cowork all live under `claude.ai` with _different_
 `client_id` URLs, so a host is the wrong unit for "only this group may
 use Claude Code". Governance therefore works per `client_id`.
 
@@ -905,7 +931,7 @@ The split that makes this work: **identity from the document, policy from
 the record.** `client_name`, `redirect_uris`, `grant_types` and
 `token_endpoint_auth_method` are still read from the document on every
 authorization and never stored — the "nothing stored" property of CIMD is
-about identity and is untouched. What *is* stored, in the existing
+about identity and is untouched. What _is_ stored, in the existing
 `contents/config/oauth-clients.json` and keyed by the exact document URL,
 is the set of administrator decisions: whether the client is approved,
 whether it is blocked, and the resource policy that applies to it. Such a
@@ -935,18 +961,18 @@ active = cimd.enabled
 ```
 
 Under **Admin → OAuth → Clients**, metadata-document clients are real
-rows — the *Client metadata* kind badge, `Identified as: <displayName> · <host>`,
+rows — the _Client metadata_ kind badge, `Identified as: <displayName> · <host>`,
 document URL, connection count, first seen, last used — with these actions:
 
-| Action | Effect |
-|--------|--------|
-| **Approve** | `approvalState: 'approved'`, `active: true`. The next authorization goes through; consent is still required. |
-| **Block** / **Unblock** | `active: false` / `true`. Blocking **also revokes every connection the client has**, because a block that leaves live refresh tokens behind is not a block. |
-| **Revoke all connections** | Deletes every consent entry and every refresh token for the client, across all users, in one action. Users can reconnect unless the client is blocked. |
-| **Edit policy** | Per-client `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts`, grantable `scopes` and `tokenExpirationMinutes`. Identity fields are read-only. |
+| Action                     | Effect                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Approve**                | `approvalState: 'approved'`, `active: true`. The next authorization goes through; consent is still required.                                                  |
+| **Block** / **Unblock**    | `active: false` / `true`. Blocking **also revokes every connection the client has**, because a block that leaves live refresh tokens behind is not a block.   |
+| **Revoke all connections** | Deletes every consent entry and every refresh token for the client, across all users, in one action. Users can reconnect unless the client is blocked.        |
+| **Edit policy**            | Per-client `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts`, grantable `scopes` and `tokenExpirationMinutes`. Identity fields are read-only. |
 
 **The approval gate.** With the shipped default (`approvalMode:
-"approval"`), passing the host allowlist makes a client *eligible*, not
+"approval"`), passing the host allowlist makes a client _eligible_, not
 allowed. The first authorization by a `client_id` with no record is
 refused with a page naming the client and telling the user to ask an
 administrator, and the client appears at the top of the Clients page as
@@ -969,14 +995,14 @@ token endpoints, and on the REST API (`/api/*`) — a delegated token issued to 
 metadata-document client is resolved through the same policy everywhere, so
 there is no surface on which a blocked or unapproved client keeps working.
 
-| Change | Takes effect |
-|--------|--------------|
-| Client blocked or deleted, CIMD disabled, host removed or blocked, approval withdrawn | Next `/mcp` or `/api/*` request — at most one access-token lifetime |
-| `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts` narrowed | Next `/mcp` or `/api/*` request — at most one access-token lifetime |
-| Grantable `scopes` narrowed | Next token refresh; the dropped scopes are not re-issued |
-| An administrator revokes a connection | Next refresh; an access token already issued lives out its lifetime |
-| A **local** user leaves a group | Next refresh — the group snapshot is re-read from the user store |
-| An **OIDC / proxy** user leaves a group | Next interactive sign-in, or when an administrator revokes the connection |
+| Change                                                                                | Takes effect                                                              |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Client blocked or deleted, CIMD disabled, host removed or blocked, approval withdrawn | Next `/mcp` or `/api/*` request — at most one access-token lifetime       |
+| `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts` narrowed            | Next `/mcp` or `/api/*` request — at most one access-token lifetime       |
+| Grantable `scopes` narrowed                                                           | Next token refresh; the dropped scopes are not re-issued                  |
+| An administrator revokes a connection                                                 | Next refresh; an access token already issued lives out its lifetime       |
+| A **local** user leaves a group                                                       | Next refresh — the group snapshot is re-read from the user store          |
+| An **OIDC / proxy** user leaves a group                                               | Next interactive sign-in, or when an administrator revokes the connection |
 
 That last row is inherent rather than an oversight: iHub does not hold the
 identity provider's group graph and cannot poll it. The mitigations are an
@@ -1011,7 +1037,7 @@ the MCP client ecosystem uses DCR), so the policy is deliberately narrow:
 
 Auto-registered clients appear in **Admin → OAuth clients** like any
 other client and can be narrowed (`allowedApps`, `allowedGroups`, …),
-suspended, or deleted there. They carry the *Dynamic* kind badge, and the
+suspended, or deleted there. They carry the _Dynamic_ kind badge, and the
 list hides them behind the kind filter by default so hand-made service
 accounts stay readable.
 
@@ -1019,7 +1045,7 @@ The kind badge says how a client was provisioned, not what the users who
 connect through it may do: **Static** (configured by an administrator),
 **Personal** (created by a user for their own use), **Dynamic** (registered
 through DCR) or **Client metadata** (identified by a client metadata
-document). The kind filter offers each of them, plus *Without dynamic*.
+document). The kind filter offers each of them, plus _Without dynamic_.
 
 If DCR stays disabled, create the client manually at
 `/admin/oauth/clients` and configure its id/secret in the MCP client.
@@ -1029,7 +1055,7 @@ If DCR stays disabled, create the client manually at
 Claude — like most MCP clients — registers on **every fresh connection**
 rather than once per deployment. Without de-duplication each user adds
 another indistinguishable record and `maxClients` (default 100) becomes a
-cap on *users*: the 101st person to connect is told
+cap on _users_: the 101st person to connect is told
 `Dynamic client registration limit reached`.
 
 A registration with `token_endpoint_auth_method: "none"` is therefore
@@ -1064,18 +1090,18 @@ on the client.
 
 Nothing is pruned automatically — deleting a client invalidates its
 users' consent memory and refresh tokens. **Admin → OAuth → Clients**
-offers *Remove unused dynamic clients*, which deletes dynamic records
+offers _Remove unused dynamic clients_, which deletes dynamic records
 whose `lastUsed` (or, when never used, `createdAt`) is older than the
 number of days you enter.
 
 ### Scopes
 
-| Scope | Grants |
-|-------|--------|
-| `mcp:tools:read` | `tools/list` |
-| `mcp:tools:call` | `tools/call` for iHub-native tools |
-| `mcp:apps:invoke` | Invoke iHub apps as MCP tools |
-| `mcp:workflows:run` | Run iHub workflows as MCP tools |
+| Scope                | Grants                              |
+| -------------------- | ----------------------------------- |
+| `mcp:tools:read`     | `tools/list`                        |
+| `mcp:tools:call`     | `tools/call` for iHub-native tools  |
+| `mcp:apps:invoke`    | Invoke iHub apps as MCP tools       |
+| `mcp:workflows:run`  | Run iHub workflows as MCP tools     |
 | `mcp:resources:read` | `resources/list` + `resources/read` |
 
 Scopes are advertised in `/.well-known/openid-configuration` only when
@@ -1089,10 +1115,10 @@ models / workflows via the existing OAuth client `allowedApps` / etc.
 
 ```jsonc
 {
-  "tools": true,      // iHub-native tools
-  "apps": true,       // apps as MCP tools (input schema from app.variables)
-  "workflows": true,  // workflows as MCP tools (input schema from start node)
-  "resources": false  // sources/skills as MCP resources (opt-in)
+  "tools": true, // iHub-native tools
+  "apps": true, // apps as MCP tools (input schema from app.variables)
+  "workflows": true, // workflows as MCP tools (input schema from start node)
+  "resources": false // sources/skills as MCP resources (opt-in)
 }
 ```
 
@@ -1140,8 +1166,8 @@ callers with the matching scope.
 
 ### Who sees which tool
 
-Scopes decide what a token may *do*; group permissions decide what it may
-*see*. Both have to line up, and the tool list is default-deny — a tool the
+Scopes decide what a token may _do_; group permissions decide what it may
+_see_. Both have to line up, and the tool list is default-deny — a tool the
 caller has no grant for is never listed, even with `mcp:tools:read`.
 
 A caller sees a tool when either of these holds:
@@ -1191,7 +1217,7 @@ By default the gateway is stateful: an `initialize` request receives a
 session id, echoed by the client on subsequent requests as
 `Mcp-Session-Id`. A session is bound to the authenticating user;
 subsequent requests on the same session with a token belonging to a
-*different* user are rejected with 403 to prevent resource leakage
+_different_ user are rejected with 403 to prevent resource leakage
 between concurrent OAuth clients.
 
 `DELETE /mcp` (with `Mcp-Session-Id` header) tears down a session
@@ -1202,11 +1228,11 @@ abandons without a `DELETE` are swept after an hour of inactivity.
 Requests the gateway cannot map to a live session get the status the MCP
 spec prescribes, so clients can recover on their own:
 
-| Situation | Response |
-| --- | --- |
+| Situation                                                              | Response                                                                              |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `Mcp-Session-Id` is unknown, expired, or was opened on another replica | `404` `Session not found` — the client starts a new session with a fresh `initialize` |
-| POST that is not `initialize` and carries no session id | `400 Bad Request: Mcp-Session-Id header is required` |
-| `GET /mcp` outside a session | `405 Method Not Allowed` — there is no server-initiated SSE stream to attach to |
+| POST that is not `initialize` and carries no session id                | `400 Bad Request: Mcp-Session-Id header is required`                                  |
+| `GET /mcp` outside a session                                           | `405 Method Not Allowed` — there is no server-initiated SSE stream to attach to       |
 
 #### Stateless mode (load-balanced deployments)
 
@@ -1273,8 +1299,8 @@ curl https://ihub.example.com/.well-known/agent-card.json
 
 ### Connections — who is connected to what
 
-A **connection** is a grant: *this user allowed this client these scopes
-on this date*. It is the unit that stays meaningful whatever the client
+A **connection** is a grant: _this user allowed this client these scopes
+on this date_. It is the unit that stays meaningful whatever the client
 did to identify itself — one client record can serve every user, and a
 CIMD client has no record at all.
 
@@ -1291,7 +1317,7 @@ stores; nothing new is persisted.
   **Admin → OAuth → Clients** shows a connection count per client, and
   **Admin → Users → (user)** lists that person's connections.
 
-Disconnecting deletes the consent record *and* revokes every refresh
+Disconnecting deletes the consent record _and_ revokes every refresh
 token for the pair, so the client has to send the user through sign-in
 and consent again. An access token it already holds is stateless and
 keeps working until it expires — at most `tokenExpirationMinutes`, which
@@ -1311,12 +1337,12 @@ downstream audit consumers.
 The authorization server records four events of its own through
 `logAudit`, visible under **Admin → Audit log**:
 
-| Resource | Action | When |
-|----------|--------|------|
-| `oauthConnection` | `create` | A user grants a client access on the consent screen |
-| `oauthConnection` | `delete` | A user or an admin revokes a connection |
-| `oauthClient` | `create` | A dynamic registration, whether new or de-duplicated |
-| `oauthCimd` | `delete` (`failure`) | A client metadata document was refused — host not allowed, or the document is invalid |
+| Resource          | Action               | When                                                                                  |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------- |
+| `oauthConnection` | `create`             | A user grants a client access on the consent screen                                   |
+| `oauthConnection` | `delete`             | A user or an admin revokes a connection                                               |
+| `oauthClient`     | `create`             | A dynamic registration, whether new or de-duplicated                                  |
+| `oauthCimd`       | `delete` (`failure`) | A client metadata document was refused — host not allowed, or the document is invalid |
 
 ## Migration from MCP_SERVER_URL
 
@@ -1342,7 +1368,12 @@ carried over verbatim, trailing slash included. The
 `auth` block becomes the sign-in mode (credential references kept),
 `allowedTools` becomes `actions.enabled`, the `security` block is merged,
 apps that listed the server or its tools in `tools` get an `integrations`
-binding instead, and `mcpServers.json` is deleted. Per-user tokens and OAuth
+binding instead, and `mcpServers.json` is deleted. A server whose id another,
+non-MCP installation already holds (an integration installed from the catalog)
+is not moved: the migration writes it to
+`contents/config/mcpServers.unmigrated.json` and logs a warning; install it
+under a free id and bind it to its apps, whose old references to the server
+select nothing. Per-user tokens and OAuth
 client registrations stay valid, since transport, URL and auth settings are
 preserved. Manage the servers under **Admin → Integrations → Installed**
 from then on.
@@ -1358,7 +1389,7 @@ Checklist on the iHub side (all on **Admin → MCP gateway**):
    **Dynamic client registration** on as well if other MCP clients that
    do not support CIMD need to connect.
    Trusting the host is not the last word: with **New clients** set to
-   *Require approval* (the default), each Claude surface — web, Desktop,
+   _Require approval_ (the default), each Claude surface — web, Desktop,
    Claude Code, Cowork — publishes its own `client_id` and is approved
    separately. The first person to try one is told to ask an
    administrator, and the client turns up on **Admin → OAuth → Clients**
@@ -1455,7 +1486,7 @@ Troubleshooting:
 - `400 invalid_client_metadata: Dynamic client registration limit reached`
   → `oauth.dcr.maxClients` (default 100) is full. Repeat registrations of
   software already on file still succeed; this only blocks a genuinely new
-  client. Raise the cap, or run *Remove unused dynamic clients* on
+  client. Raise the cap, or run _Remove unused dynamic clients_ on
   **Admin → OAuth → Clients**.
 - `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`
   scope; check the scopes on the OAuth client and re-authorize.
@@ -1476,13 +1507,13 @@ Troubleshooting:
     has no push channel" and carries on, so tools still list and run.
     Sign-in works, tools work, and a `405` shows up once per connection —
     nothing to fix.
-  - **Wrong transport.** A client configured for the *legacy SSE*
+  - **Wrong transport.** A client configured for the _legacy SSE_
     transport but pointed at `/mcp`. It needs a GET stream and cannot
     recover from the `405`. Point it at `/mcp/sse`, or reconfigure it as
     a Streamable HTTP (`http`) client on `/mcp`.
   - **Header stripped in transit.** A reverse proxy dropping the
     `Mcp-Session-Id` request header. The give-away is `405` with
-    `hadSessionHeader: false` *after* a successful `initialize`, usually
+    `hadSessionHeader: false` _after_ a successful `initialize`, usually
     together with `400 … header is required` on the following POSTs.
     Allow `Mcp-Session-Id` and `MCP-Protocol-Version` through the proxy.
 
@@ -1503,10 +1534,10 @@ the MCP gateway — no separate credential or scope.
 
 ### Agent Card
 
-| URL | Contents |
-|-----|----------|
-| `/.well-known/agent-card.json` | The agent: `url` (`<base>/a2a`), `protocolVersion: "0.3.0"`, capabilities, security schemes. Public. |
-| `/a2a/.well-known/agent-card.json` | The same card, gateway-scoped. |
+| URL                                                 | Contents                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/agent-card.json`                      | The agent: `url` (`<base>/a2a`), `protocolVersion: "0.3.0"`, capabilities, security schemes. Public.                |
+| `/a2a/.well-known/agent-card.json`                  | The same card, gateway-scoped.                                                                                      |
 | `/a2a/skills/<skillId>/.well-known/agent-card.json` | A card bound to one skill: its `url` is `<base>/a2a/skills/<skillId>` and every message sent there runs that skill. |
 
 The public card lists **no skills**: which apps and workflows a caller may use
@@ -1517,23 +1548,23 @@ name, description, tags and the apps' starter prompts as `examples`.
 
 `securitySchemes` on the card:
 
-| Scheme | How to call |
-|--------|-------------|
+| Scheme   | How to call                                                                                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `oauth2` | iHub's authorization server (`/.well-known/oauth-authorization-server`): authorization code + PKCE for users, client credentials for services; scopes `mcp:apps:invoke`, `mcp:workflows:run` |
-| `bearer` | `Authorization: Bearer <token>` — an OAuth access token or a personal API key |
-| `apiKey` | `X-API-Key: <personal API key>` — for clients built against an API-key scheme; iHub treats it as the bearer token |
+| `bearer` | `Authorization: Bearer <token>` — an OAuth access token or a personal API key                                                                                                                |
+| `apiKey` | `X-API-Key: <personal API key>` — for clients built against an API-key scheme; iHub treats it as the bearer token                                                                            |
 
 ### Methods
 
 JSON-RPC 2.0 over `POST /a2a` (or `POST /a2a/skills/<skillId>`):
 
-| Method | Behaviour |
-|--------|-----------|
-| `message/send` | Runs a skill and returns the finished **Task** (`status.state: completed`, the answer as a text `artifact` and as `status.message`). With `configuration.blocking: false` the submitted task is returned at once and the client polls `tasks/get`. |
-| `message/stream` | The same over Server-Sent Events: the Task, a `status-update` (`working`), `artifact-update` events with the answer as it streams (`append: true`, `lastChunk: true` on the last), then a final `status-update`. Each SSE `data:` line is a JSON-RPC response with the request's `id`. |
-| `tasks/get` | A task the caller created (`historyLength` trims the history). Works on every worker: tasks are stored on the storage provider (`a2a-tasks`) for 24 hours. |
-| `tasks/cancel` | Aborts a running task (`canceled`); a finished task answers `-32002`. |
-| `agent/getAuthenticatedExtendedCard` | The caller's Agent Card with skills. |
+| Method                               | Behaviour                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `message/send`                       | Runs a skill and returns the finished **Task** (`status.state: completed`, the answer as a text `artifact` and as `status.message`). With `configuration.blocking: false` the submitted task is returned at once and the client polls `tasks/get`.                                     |
+| `message/stream`                     | The same over Server-Sent Events: the Task, a `status-update` (`working`), `artifact-update` events with the answer as it streams (`append: true`, `lastChunk: true` on the last), then a final `status-update`. Each SSE `data:` line is a JSON-RPC response with the request's `id`. |
+| `tasks/get`                          | A task the caller created (`historyLength` trims the history). Works on every worker: tasks are stored on the storage provider (`a2a-tasks`) for 24 hours.                                                                                                                             |
+| `tasks/cancel`                       | Aborts a running task (`canceled`); a finished task answers `-32002`.                                                                                                                                                                                                                  |
+| `agent/getAuthenticatedExtendedCard` | The caller's Agent Card with skills.                                                                                                                                                                                                                                                   |
 
 `tasks/resubscribe` and push notifications (`tasks/pushNotificationConfig/*`)
 are not supported and answer `-32004` / `-32003`. Messages carry `text` parts
