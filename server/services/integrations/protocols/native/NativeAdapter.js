@@ -19,25 +19,39 @@ import { toolIdFor, actionEnabled, testResult } from '../common.js';
 import { getConnector, listConnectors } from './connectors/index.js';
 
 /**
- * Connector modules of `script` definitions, loaded from the definition
- * folder: `<dir>/<module>` → the connector. A re-installed folder has a new
- * module mtime, which is part of the import URL, so the fresh code is loaded.
+ * Connector modules of `script` definitions, one entry per module file:
+ * `<dir>/<module>` → `{ key, definitionId, loading }`, where `key` is
+ * `file@version@mtime` and `loading` the promise of the connector (with
+ * `__loaded` set once it resolved, for the sync callers). A re-installed
+ * folder has a new module mtime, which is part of the import URL, so the
+ * fresh code is loaded, and it takes the file's one entry, so the previous
+ * version is no longer served (Node keeps the old module instance in its
+ * own cache; nothing here points at it any more).
+ *
+ * The connector is bundled into one file (see `definitions/scriptModule.js`):
+ * only the entry module's URL carries the cache-buster.
  */
 const scriptConnectors = new Map();
 
-/** Connector of a `script` definition, loaded once per folder and module version. */
-async function loadScriptConnector(definition) {
+/** `<dir>/<module>` of a `script` definition, or null when the folder is unknown. */
+function scriptModuleFile(definition) {
   const entry = integrationRegistry.get(definition.id);
-  if (!entry?.dir) {
-    throw new Error(`Integration ${definition.id}: definition folder is unknown`);
-  }
+  if (!entry?.dir) return null;
   const file = path.resolve(entry.dir, definition.protocol.module);
   if (!file.startsWith(path.resolve(entry.dir) + path.sep)) {
     throw new Error(`Integration ${definition.id}: module path leaves the definition folder`);
   }
+  return file;
+}
+
+/** Connector of a `script` definition, loaded once per folder and module version. */
+async function loadScriptConnector(definition) {
+  const file = scriptModuleFile(definition);
+  if (!file) throw new Error(`Integration ${definition.id}: definition folder is unknown`);
   const stat = await fs.stat(file);
   const key = `${file}@${definition.version}@${stat.mtimeMs}`;
-  if (scriptConnectors.has(key)) return scriptConnectors.get(key);
+  const current = scriptConnectors.get(file);
+  if (current?.key === key) return current.loading;
   const loading = (async () => {
     const url = `${pathToFileURL(file).href}?v=${encodeURIComponent(`${definition.version}-${stat.mtimeMs}`)}`;
     const module = await import(url);
@@ -50,16 +64,23 @@ async function loadScriptConnector(definition) {
     logger.info('Loaded integration connector module', {
       component: 'NativeAdapter',
       definition: definition.id,
-      module: definition.protocol.module
+      module: definition.protocol.module,
+      version: definition.version,
+      replaced: current?.key
     });
     return { ...connector, id: connector.id || definition.id };
   })();
-  scriptConnectors.set(key, loading);
+  const entry = { key, definitionId: definition.id, loading };
+  scriptConnectors.set(file, entry);
   loading.then(
     connector => {
       loading.__loaded = connector;
     },
-    () => scriptConnectors.delete(key)
+    () => {
+      // A module that does not load has no entry; the previous version is
+      // gone with it, as the installation is broken until it is fixed.
+      if (scriptConnectors.get(file) === entry) scriptConnectors.delete(file);
+    }
   );
   return loading;
 }
@@ -72,13 +93,64 @@ export async function getConnectorFor(definition) {
 
 /** The already loaded connector of a `script` definition, or null (sync callers). */
 function loadedScriptConnector(definition) {
-  const entry = integrationRegistry.get(definition.id);
-  if (!entry?.dir) return null;
-  const file = path.resolve(entry.dir, definition.protocol.module);
-  for (const [key, value] of scriptConnectors) {
-    if (key.startsWith(`${file}@`) && value.__loaded) return value.__loaded;
+  let file = null;
+  try {
+    file = scriptModuleFile(definition);
+  } catch {
+    return null;
   }
-  return null;
+  return (file && scriptConnectors.get(file)?.loading.__loaded) || null;
+}
+
+/** The loaded script connector modules, for diagnostics and tests: `[{ definitionId, file, key }]`. */
+export function loadedScriptModules() {
+  return [...scriptConnectors].map(([file, { key, definitionId }]) => ({
+    definitionId,
+    file,
+    key
+  }));
+}
+
+/**
+ * Definitions were reloaded (a re-install, another worker's announcement):
+ * load the connectors of the changed `script` definitions, so the new module
+ * serves the next action and its own scope provider is registered, and drop
+ * the modules of definitions that are gone. Then the scope providers are
+ * synced, because `scopeProvider` below only sees a loaded connector. A
+ * module that does not load is logged and leaves the others alone.
+ *
+ * @param {{ definitionIds?: string[] }} [context] - the changed definitions; all `script` definitions when absent
+ */
+export async function onChanged({ definitionIds } = {}) {
+  const changed = definitionIds
+    ? definitionIds.map(id => integrationRegistry.get(id)?.definition || { id })
+    : [
+        ...integrationRegistry.list().map(entry => entry.definition),
+        ...[...scriptConnectors.values()]
+          .filter(entry => !integrationRegistry.get(entry.definitionId))
+          .map(entry => ({ id: entry.definitionId }))
+      ];
+  for (const definition of changed) {
+    if (!definition.protocol) {
+      for (const [file, entry] of scriptConnectors) {
+        if (entry.definitionId === definition.id) scriptConnectors.delete(file);
+      }
+      continue;
+    }
+    if (definition.protocol.type !== 'script') continue;
+    await loadScriptConnector(definition).catch(error => {
+      logger.warn('Integration connector module could not be loaded', {
+        component: 'NativeAdapter',
+        definition: definition.id,
+        module: definition.protocol.module,
+        error: error.message
+      });
+    });
+  }
+  // Dynamic: integrationTools reaches this adapter through the protocol
+  // index, and a static import would close that cycle.
+  const { syncIntegrationScopeProviders } = await import('../../integrationTools.js');
+  await syncIntegrationScopeProviders();
 }
 
 const LOCALIZED_KEYS = new Set(['description', 'title']);
@@ -201,7 +273,11 @@ export async function listScopes() {
   return [];
 }
 
-/** The chat scope provider of an installation, when the connector has one. */
+/**
+ * The chat scope provider of an installation, when the connector has one.
+ * Sync, so a `script` connector must be loaded first: `getConnectorFor`,
+ * which `syncIntegrationScopeProviders` awaits before asking, and `onChanged`.
+ */
 export function scopeProvider(resolved) {
   const connector =
     resolved.definition.protocol.type === 'script'
@@ -244,7 +320,7 @@ export async function disconnectUser(instance, userId) {
 
 export function invalidate(instanceId) {
   for (const connector of listConnectors()) connector.invalidate?.(instanceId);
-  for (const loading of scriptConnectors.values()) {
+  for (const { loading } of scriptConnectors.values()) {
     loading.__loaded?.invalidate?.(instanceId);
   }
 }
