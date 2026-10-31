@@ -1331,7 +1331,14 @@ the migration runs, the env var is ignored.
 server of `contents/config/mcpServers.json` into
 `contents/config/integrations.json` as an installation with the same id — a
 server whose endpoint matches a shipped `mcp/<id>` definition installs that
-definition, every other one the generic `com.intrafind/mcp-server`. The
+definition, provided the definition offers the server's sign-in mode and the
+server's `toolPrefix` is empty or the default `<id>__`; every other one
+installs the generic `com.intrafind/mcp-server` (a custom `toolPrefix` is kept
+as an install value there, since only the generic definition declares that
+field — installed as `mcp/<id>` the prefix would be lost on the first edit and
+the tool ids would change). The migration log names every server that fell
+back to the generic definition and why. The endpoint and the OAuth URLs are
+carried over verbatim, trailing slash included. The
 `auth` block becomes the sign-in mode (credential references kept),
 `allowedTools` becomes `actions.enabled`, the `security` block is merged,
 apps that listed the server or its tools in `tools` get an `integrations`
