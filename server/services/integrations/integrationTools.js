@@ -243,13 +243,25 @@ function scopeProviderFor(resolved) {
     id: instanceId,
     name: label,
     action: 'search',
-    appliesTo: ({ app }) => Boolean(app?.integrations?.[instanceId]),
+    // A user outside the installation's groups gets none of its tools, so
+    // the scope picker and the "limited to" note would be about nothing.
+    appliesTo: ({ app, user }) =>
+      Boolean(app?.integrations?.[instanceId]) && userMayUse(instance, user),
     describeForModel: scopeId => {
       if (!scopeId || scopeId === ALL_SCOPE_ID) return null;
       const name = scopeNames.get(`${instanceId}:${scopeId}`) || scopeId;
       return `${label}: ${scopeLabel} limited to "${name}".`;
     },
-    async listScopes({ app }) {
+    async listScopes({ app, user }) {
+      if (!userMayUse(instance, user)) {
+        return {
+          scopes: [],
+          defaultScope: null,
+          fixed: false,
+          source: 'integration',
+          hint: 'forbidden'
+        };
+      }
       const settings = appScopeSettings(app, instanceId);
       let scopes;
       let hint;
@@ -278,7 +290,9 @@ function scopeProviderFor(resolved) {
       );
       return { scopes, defaultScope, fixed: false, source: 'integration', hint };
     },
-    async validateScope({ scopeId, app }) {
+    async validateScope({ scopeId, app, user }) {
+      // Nothing to bind: the user gets no tool of this installation.
+      if (!userMayUse(instance, user)) return { ok: true, scopeId: null, fixed: false };
       const settings = appScopeSettings(app, instanceId);
       if (settings.pinnedScope) return { ok: true, scopeId: settings.pinnedScope, fixed: true };
       if (!scopeId) return { ok: true, scopeId: settings.defaultScope || null, fixed: false };
