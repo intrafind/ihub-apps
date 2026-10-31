@@ -502,7 +502,9 @@ describe('ProjectPage – owner', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(mockApi.deleteProject).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
-    await waitFor(() => expect(mockApi.deleteProject).toHaveBeenCalledWith('prj_a'));
+    await waitFor(() =>
+      expect(mockApi.deleteProject).toHaveBeenCalledWith('prj_a', { deleteCollection: false })
+    );
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/projects'));
   });
 

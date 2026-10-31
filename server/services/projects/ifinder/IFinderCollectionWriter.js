@@ -43,7 +43,7 @@ import smartCollections, {
   summarizeCollection
 } from '../../integrations/SmartCollectionsService.js';
 import { ProjectError } from '../projectErrors.js';
-import { collectionIdOf } from '../projectConstants.js';
+import { collectionIdOf, ifinderProjectIdOf } from '../projectConstants.js';
 import { getItemKind, isItemKindEnabled } from '../kinds/registry.js';
 import { iFinderTierConfigured, projectSettings } from '../projectSettings.js';
 import { collectionWriteSupport, withCollectionLock } from './collectionLock.js';
@@ -288,6 +288,30 @@ export async function renameCollection(user, projectId, { name, description }) {
   return projectOfCollection(user, collection);
 }
 
+// --- delete -----------------------------------------------------------------------
+
+/**
+ * Delete a collection in iFinder, as its owner. A collection that is gone
+ * already counts as deleted. The documents stay in iFinder.
+ *
+ * @param {Object} user
+ * @param {string} collectionId
+ * @returns {Promise<void>}
+ */
+export async function deleteCollection(user, collectionId) {
+  if (!collectionIdOf(ifinderProjectIdOf(collectionId))) {
+    throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
+  }
+  await lockedWrite(user, collectionId, async () => {
+    try {
+      await smartCollections.remove({ user, id: collectionId });
+    } catch (error) {
+      if (error?.code !== SMART_COLLECTIONS_ERRORS.NOT_FOUND) throw error;
+    }
+  });
+  noteCollectionWritten(user, collectionId, { deleted: true });
+}
+
 // --- add --------------------------------------------------------------------------
 
 /**
@@ -521,4 +545,10 @@ export async function removeDocuments(user, projectId, itemIds) {
   return { project: await projectOfCollection(user, outcome.collection), removed: outcome.removed };
 }
 
-export default { createCollection, renameCollection, addDocuments, removeDocuments };
+export default {
+  createCollection,
+  renameCollection,
+  deleteCollection,
+  addDocuments,
+  removeDocuments
+};

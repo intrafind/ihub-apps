@@ -374,28 +374,30 @@ export const fetchAdminProjectStats = async () => {
 };
 
 /**
- * Who users may share their projects with (full admins only).
+ * The project settings an admin edits on the projects page (full admins only):
+ * who users may share their projects with, and the tier policy (whether the
+ * users' iFinder smart collections are listed as projects).
  *
- * @returns {Promise<{allowUsers: boolean, allowGroups: boolean, allowEveryone: boolean,
- *   allowCatalog: boolean}>}
+ * @returns {Promise<{sharing: {allowUsers: boolean, allowGroups: boolean,
+ *   allowEveryone: boolean, allowCatalog: boolean}, tierPolicy: 'ihub'|'both'|'ifinder'}>}
  */
-export const fetchProjectSharingSettings = async () => {
+export const fetchProjectSettings = async () => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`);
-  return response.data.sharing;
+  return response.data;
 };
 
 /**
- * Change who users may share their projects with; only the fields sent change.
+ * Change the sharing audiences and/or the tier policy; only the fields sent change.
  *
- * @param {Object} sharing
- * @returns {Promise<Object>} The effective sharing settings.
+ * @param {{sharing?: Object, tierPolicy?: 'ihub'|'both'|'ifinder'}} settings
+ * @returns {Promise<{sharing: Object, tierPolicy: string}>} The effective settings.
  */
-export const saveProjectSharingSettings = async sharing => {
+export const saveProjectSettings = async settings => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`, {
     method: 'PUT',
-    body: { sharing }
+    body: settings
   });
-  return response.data.sharing;
+  return response.data;
 };
 
 /**
@@ -730,6 +732,22 @@ export const fetchProjectPickerPages = async () => {
  * @param {{profile?: string, limit?: number}} [options]
  * @returns {Promise<Array<{documentId: string, title: string, mimeType?: string, url?: string}>>}
  */
+/**
+ * The iFinder search profiles the admin may search in for the item picker.
+ *
+ * @returns {Promise<{profiles: Array<{id: string, name: string, isDefault: boolean}>,
+ *   defaultProfile: string|null, fixed: boolean}>}
+ */
+export const fetchProjectPickerIFinderProfiles = async () => {
+  const response = await makeAdminApiCall('/projects/pickers/ifinder/profiles');
+  const data = response.data || {};
+  return {
+    profiles: Array.isArray(data.profiles) ? data.profiles : [],
+    defaultProfile: data.defaultProfile || null,
+    fixed: data.fixed === true
+  };
+};
+
 export const searchProjectPickerIFinder = async (query, { profile, limit } = {}) => {
   const params = new URLSearchParams({ q: query });
   if (profile) params.set('profile', profile);
@@ -1462,6 +1480,7 @@ export const adminApi = {
   fetchAdminProjectItemText,
   fetchProjectPickerPages,
   searchProjectPickerIFinder,
+  fetchProjectPickerIFinderProfiles,
   checkProjectPickerUrl,
   previewProjectPickerUrl,
   crawlProjectPickerUrl,

@@ -229,7 +229,11 @@ function withOverlay(listed, tenant, principal) {
   const written = overlays.valuesWithPrefix(keyFor(tenant, principal, 'overlay', ''));
   if (written.length === 0) return listed;
   const merged = new Map(listed.map(summary => [summary.id, summary]));
-  for (const summary of written) merged.set(summary.id, summary);
+  for (const summary of written) {
+    // A collection deleted from iHub: gone at once, though the search lags.
+    if (summary.deleted) merged.delete(summary.id);
+    else merged.set(summary.id, summary);
+  }
   return [...merged.values()].sort((a, b) =>
     String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
   );
@@ -251,13 +255,14 @@ function withOverlay(listed, tenant, principal) {
  *
  * @param {Object} user - The principal that wrote.
  * @param {string} collectionId
- * @param {{documentIds?: string[], summary?: Object|null}} [options] - `summary` is
- *   the collection as it reads after the write.
+ * @param {{documentIds?: string[], summary?: Object|null, deleted?: boolean}} [options] -
+ *   `summary` is the collection as it reads after the write; `deleted`: the write
+ *   deleted it, so the list leaves it out until the search catches up.
  */
 export function noteCollectionWritten(
   user,
   collectionId,
-  { documentIds = [], summary = null } = {}
+  { documentIds = [], summary = null, deleted = false } = {}
 ) {
   const principal = principalOf(user);
   if (!principal) return;
@@ -270,7 +275,13 @@ export function noteCollectionWritten(
   inflight.delete(listKey);
   inflight.delete(collectionKey);
   for (const id of documentIds) titles.delete(keyFor(tenant, principal, 'title', id));
-  if (summary) {
+  if (deleted) {
+    overlays.set(
+      keyFor(tenant, principal, 'overlay', collectionId),
+      { id: collectionId, deleted: true },
+      TTL.overlay
+    );
+  } else if (summary) {
     names.set(
       keyFor(tenant, principal, 'name', collectionId),
       summary.name || collectionId,

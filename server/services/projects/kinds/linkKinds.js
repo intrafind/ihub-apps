@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { zSafeId, isHttpUrl } from '../../../validators/common.js';
 import { registerItemKind } from './registry.js';
 import { isIFinderConfigured } from '../../integrations/ifinderConfig.js';
+import { ProjectError } from '../projectErrors.js';
 
 /** Default cache lifetime of a link item's text, in seconds (the URL handler's). */
 export const DEFAULT_LINK_TTL_SECONDS = 7200;
@@ -73,6 +74,36 @@ export const pageKind = registerItemKind({
   })
 });
 
+/**
+ * The search profile an iFinder item is read in, checked like a profile picked
+ * in the chat input (`iFinderScopes.validateScope`): the caller's own and within
+ * the admin's allow-list. A profile the installation pins replaces the one sent.
+ * An item without a profile is read in the default and needs no check.
+ *
+ * @param {Object} ref - The checked reference.
+ * @param {{user?: Object}} ctx
+ * @returns {Promise<{ref: Object}|null>}
+ * @throws {ProjectError} `SOURCE_FORBIDDEN` for a profile the caller may not search.
+ */
+async function checkSearchProfile(ref, { user } = {}) {
+  if (!ref?.searchProfile) return null;
+  const { default: iFinderScopes } = await import('../../integrations/scopes/iFinderScopes.js');
+  const check = await iFinderScopes.validateScope({
+    scopeId: ref.searchProfile,
+    user,
+    app: null
+  });
+  if (!check.ok) {
+    throw new ProjectError('SOURCE_FORBIDDEN', check.message, {
+      reason: check.code,
+      available: check.available || []
+    });
+  }
+  return check.scopeId && check.scopeId !== ref.searchProfile
+    ? { ref: { ...ref, searchProfile: check.scopeId } }
+    : null;
+}
+
 export const ifinderDocumentKind = registerItemKind({
   id: 'ifinder-document',
   name: { en: 'iFinder document', de: 'iFinder-Dokument' },
@@ -88,6 +119,7 @@ export const ifinderDocumentKind = registerItemKind({
       maxLength: z.number().int().positive().max(1_000_000).optional()
     })
     .strict(),
+  prepare: checkSearchProfile,
   describe: ref => ({ name: ref.documentId, site: 'iFinder' })
 });
 
@@ -109,6 +141,7 @@ export const ifinderQueryKind = registerItemKind({
       maxLength: z.number().int().positive().max(1_000_000).optional()
     })
     .strict(),
+  prepare: checkSearchProfile,
   describe: ref => ({ name: ref.query || 'iFinder search', site: 'iFinder' })
 });
 

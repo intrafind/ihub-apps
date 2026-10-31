@@ -189,6 +189,55 @@ export const getFileExtension = (language = 'text') => {
   return FILE_EXTENSION_MAP[lang] || 'txt';
 };
 
+/**
+ * The language and the file name of a fenced code block, from its info string
+ * (everything after the opening fence). marked hands the whole string over as
+ * the "language", so a fence that names its file has to be taken apart:
+ *
+ * - ```js title="src/index.js"   (also `filename=` and `file=`, quoted or not)
+ * - ```python:app/main.py
+ *
+ * @param {unknown} info - The info string.
+ * @returns {{ language: string, fileName: string }} The language (lower case,
+ *   `text` when there is none) and the file name as written, or `''`.
+ */
+export const parseCodeInfo = info => {
+  const raw = typeof info === 'string' ? info.trim() : '';
+  const [first = '', ...rest] = raw.split(/\s+/);
+  const colon = first.indexOf(':');
+  const language = (colon >= 0 ? first.slice(0, colon) : first)
+    .toLowerCase()
+    .replace(/[^a-z0-9+#._-]/g, '');
+  const attribute = /\b(?:title|filename|file)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i.exec(
+    rest.join(' ')
+  );
+  const fileName =
+    (attribute && (attribute[1] ?? attribute[2] ?? attribute[3])) ||
+    (colon >= 0 ? first.slice(colon + 1) : '');
+  return { language: language || 'text', fileName: fileName.trim() };
+};
+
+/**
+ * The name a code block downloads under: the file it names, as written (its
+ * last path segment, made file-system safe; `Dockerfile` stays `Dockerfile`),
+ * or `code.<ext>` by its language when it names no file.
+ *
+ * @param {string} fileName - From {@link parseCodeInfo}.
+ * @param {string} language
+ * @returns {string}
+ */
+export const codeDownloadName = (fileName, language) => {
+  const base = String(fileName || '')
+    .split(/[\\/]/)
+    .pop()
+    .replace(/[:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+$/, '')
+    .slice(0, 120);
+  return base || `code.${getFileExtension(language || 'text')}`;
+};
+
 export const isMermaidLanguage = language => {
   if (!language) return false;
   return MERMAID_LANGUAGES.has(language.toLowerCase());

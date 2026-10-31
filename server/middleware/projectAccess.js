@@ -27,7 +27,7 @@ import { sendErrorResponse, sendNotFound } from '../utils/responseHelpers.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
-import { isIFinderProjectId } from '../services/projects/projectConstants.js';
+import { isCollectionStub, isIFinderProjectId } from '../services/projects/projectConstants.js';
 import { loadProjectFor } from '../services/projects/projectLoader.js';
 import {
   ACCESS_LEVELS,
@@ -196,6 +196,45 @@ export function refuseIFinderWriteRoute(req, res, projectId) {
 }
 
 /**
+ * The writes the stub of a smart collection (`isCollectionStub`) takes: those of
+ * a collection (rename, which also sets the default app and the instructions,
+ * add documents, remove one) plus deleting the stub. Members, the catalog,
+ * transfers, pins, refreshes and every other kind of item are refused: the
+ * documents live in the collection. Checked by the route the request matched,
+ * once the project is loaded (a stub has a stored id, so the path guard
+ * cannot tell it apart).
+ */
+export const COLLECTION_STUB_WRITE_ROUTES = Object.freeze([
+  ...IFINDER_WRITE_ROUTES,
+  { method: 'DELETE', route: '/:projectId', path: /^\/?$/ }
+]);
+
+/**
+ * Refuse a write to a collection stub that is not on
+ * {@link COLLECTION_STUB_WRITE_ROUTES}.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {Object} project - The loaded project.
+ * @returns {boolean} True when the request was refused.
+ */
+export function refuseCollectionStubWrite(req, res, project) {
+  if (!isCollectionStub(project) || READ_METHODS.has(req.method)) return false;
+  const template = String(req.route?.path || '');
+  const allowed = COLLECTION_STUB_WRITE_ROUTES.some(
+    entry => entry.method === req.method && template.endsWith(entry.route)
+  );
+  if (allowed) return false;
+  sendErrorResponse(
+    res,
+    403,
+    'A smart collection from iFinder can be renamed, configured, deleted, and have documents added or removed. Everything else is done in iFinder',
+    { details: { code: 'PROJECT_READ_ONLY' } }
+  );
+  return true;
+}
+
+/**
  * The gate.
  *
  * @param {'use'|'edit'|'share'|'own'} level
@@ -258,6 +297,7 @@ export function projectAccessRequired(level) {
         });
         return;
       }
+      if (refuseCollectionStubWrite(req, res, project)) return;
       if (!satisfiesLevel(permissions, level)) {
         sendErrorResponse(res, 403, 'You do not have the required access to this project', {
           details: { code: 'PERMISSION_DENIED', required: level }
