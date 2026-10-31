@@ -7,12 +7,14 @@ import { useTranslation } from 'react-i18next';
 import StreamingMarkdown from '../../../chat/components/StreamingMarkdown';
 import {
   fetchMarketplaceItemDetail,
+  fetchMarketplaceItemFile,
   installMarketplaceItem,
   updateMarketplaceItem,
   uninstallMarketplaceItem,
   detachMarketplaceItem
 } from '../../../../api/adminApi';
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
+import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 
 /**
  * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
@@ -58,8 +60,15 @@ const TYPE_COLORS = {
  * actions. Destructive actions (uninstall, detach) require a confirmation step.
  *
  * Tabs:
- * - Overview: description, tags, and metadata (registry, category, license, install date)
- * - Configuration: raw JSON preview of the item's content
+ * - Overview: description, tags, and metadata (registry, category, license, install date,
+ *   compatibility)
+ * - Content: raw JSON preview of the item's content
+ * - Releases (integrations with a release history): the summary per version and the
+ *   note files, fetched on demand
+ *
+ * An item this server version cannot run (`compatible: false`) keeps its
+ * detail but Install and Update are disabled with the reason. Updating shows
+ * the releases between the installed and the latest version first.
  *
  * @param {Object} props
  * @param {Object} props.item - Initial item data from the browse grid (used as fallback)
@@ -84,6 +93,16 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const isInstalled = item?.installationStatus === 'installed' || hasUpdate;
   // Present on this instance, but not installed from the marketplace
   const isLocal = item?.installationStatus === 'local';
+  // This server version does not satisfy the item's `compatibility.ihub`
+  const incompatible = item?.compatible === false;
+  const hasReleases = item?.type === 'integration' && (item?.releases?.length || 0) > 0;
+  const tabs = hasReleases ? ['overview', 'content', 'releases'] : ['overview', 'content'];
+  const tabLabels = {
+    overview: t('admin.marketplace.detail.tabs.overview', 'Overview'),
+    content: t('admin.marketplace.detail.tabs.content', 'Content'),
+    releases: t('admin.marketplace.detail.tabs.releases', 'Releases')
+  };
+  const loadNoteFile = path => fetchMarketplaceItemFile(item.registryId, item.name, path);
 
   /**
    * Fetches full item detail from server when the panel opens.
@@ -226,7 +245,15 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           {!isInstalled && !isLocal && (
             <button
               onClick={() => handleAction('install')}
-              disabled={actionLoading === 'install'}
+              disabled={actionLoading === 'install' || incompatible}
+              title={
+                incompatible
+                  ? t(
+                      'admin.marketplace.incompatibleShort',
+                      'Not compatible with this iHub version'
+                    )
+                  : undefined
+              }
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
             >
               {actionLoading === 'install' ? '...' : t('admin.marketplace.install', 'Install')}
@@ -234,11 +261,26 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           )}
           {hasUpdate && (
             <button
-              onClick={() => handleAction('update')}
-              disabled={!!actionLoading}
+              onClick={() => setConfirmAction('update')}
+              disabled={!!actionLoading || incompatible}
+              title={
+                incompatible
+                  ? t(
+                      'admin.marketplace.incompatibleShort',
+                      'Not compatible with this iHub version'
+                    )
+                  : undefined
+              }
               className="px-4 py-2 bg-orange-700 text-white rounded-lg hover:bg-orange-800 disabled:opacity-50 text-sm font-medium"
             >
-              {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
+              {actionLoading === 'update'
+                ? '...'
+                : item?.installation?.version
+                  ? t('admin.marketplace.updateTo', 'Update {{from}} → {{to}}', {
+                      from: item.installation.version,
+                      to: item.version
+                    })
+                  : t('admin.marketplace.update', 'Update')}
             </button>
           )}
           {isInstalled && (
@@ -287,6 +329,20 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
 
         {item?.type === 'model' && <MarketplaceModelReviewNotice className="mx-6 mt-3" />}
 
+        {/* Why Install and Update are disabled */}
+        {incompatible && (
+          <p
+            className="mx-6 my-3 text-sm text-amber-700 dark:text-amber-400"
+            data-testid="incompatible-reason"
+          >
+            {t(
+              'admin.marketplace.incompatible',
+              'Needs iHub {{requires}}; this server runs {{version}}.',
+              { requires: item.requires, version: item.serverVersion || '?' }
+            )}
+          </p>
+        )}
+
         {/* Why a local item cannot simply be installed */}
         {isLocal && !confirmAction && (
           <p className="mx-6 my-3 text-sm text-gray-600 dark:text-gray-300">
@@ -297,8 +353,67 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           </p>
         )}
 
+        {/* Update dialog: what changes between the installed and the latest version */}
+        {confirmAction === 'update' && (
+          <div
+            className="mx-6 my-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg"
+            data-testid="update-dialog"
+          >
+            <p className="text-sm font-medium text-orange-900 dark:text-orange-100 mb-1">
+              {t('admin.marketplace.updateTo', 'Update {{from}} → {{to}}', {
+                from: item?.installation?.version || '?',
+                to: item?.version
+              })}
+            </p>
+            {item?.requires && (
+              <p className="text-xs text-orange-800 dark:text-orange-200 mb-2">
+                {t('admin.marketplace.compatibilityLine', 'Compatibility: iHub {{requires}}', {
+                  requires: item.requires
+                })}
+              </p>
+            )}
+            <p className="text-sm text-orange-800 dark:text-orange-200 mb-3">
+              {t(
+                'admin.marketplace.confirmUpdate',
+                'The installed files are replaced with the catalog version; local edits are lost.'
+              )}
+            </p>
+            {hasReleases && (
+              <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-md">
+                <IntegrationReleaseNotes
+                  releases={releasesBetween(
+                    item.releases,
+                    item.installation?.version,
+                    item.version
+                  )}
+                  loadFile={loadNoteFile}
+                  emptyText={t(
+                    'admin.marketplace.noReleasesBetween',
+                    'The catalog lists no release notes between these versions.'
+                  )}
+                />
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleAction('update')}
+                disabled={!!actionLoading}
+                className="px-3 py-1.5 bg-orange-700 text-white rounded-sm text-sm disabled:opacity-50"
+              >
+                {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
+              </button>
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-sm text-sm"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Destructive action confirmation inline panel */}
-        {confirmAction && (
+        {confirmAction && confirmAction !== 'update' && (
           <div className="mx-6 my-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
               {confirmAction === 'replace'
@@ -336,7 +451,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
 
         {/* Tab navigation */}
         <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
-          {['overview', 'content'].map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -347,7 +462,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
               }`}
               aria-current={activeTab === tab ? 'page' : undefined}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tabLabels[tab]}
             </button>
           ))}
         </div>
@@ -456,10 +571,40 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                     </span>
                     <span className="text-gray-900 dark:text-white">
                       {new Date(item.installation.installedAt).toLocaleDateString()}
+                      {item.installation.version ? ` · v${item.installation.version}` : ''}
+                    </span>
+                  </div>
+                )}
+                {item?.requires && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {t('admin.marketplace.detail.compatibility', 'Compatibility')}
+                    </span>
+                    <span
+                      className={
+                        incompatible
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-gray-900 dark:text-white'
+                      }
+                    >
+                      {t('admin.marketplace.detail.compatibilityValue', 'iHub {{requires}}', {
+                        requires: item.requires
+                      })}
                     </span>
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Releases tab - the definition's release history with notes on demand */}
+          {!loading && activeTab === 'releases' && (
+            <div className="p-6">
+              <IntegrationReleaseNotes
+                releases={item.releases}
+                loadFile={loadNoteFile}
+                installedVersion={item?.installation?.version}
+              />
             </div>
           )}
 

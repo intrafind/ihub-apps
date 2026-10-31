@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -37,21 +37,28 @@ function definitionIdFromParam(value) {
   return value ? value.replace('__', '/') : null;
 }
 
-function Pill({ tone = 'gray', children }) {
+function Pill({ tone = 'gray', title, children }) {
   const tones = {
     green: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
     yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
     red: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
     blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    orange: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
     gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
   };
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${tones[tone] || tones.gray}`}
+      title={title}
     >
       {children}
     </span>
   );
+}
+
+/** Where the marketplace shows the item of a definition, for the update badge. */
+function marketplaceLinkFor(definitionId) {
+  return `/admin/marketplace?type=integration&q=${encodeURIComponent(definitionId.replace('/', '__'))}`;
 }
 
 /**
@@ -340,6 +347,50 @@ function AdminInstalledIntegrationsPage() {
                           )}
                         </Pill>
                       )}
+                      {item.definitionVersion && (
+                        <Pill
+                          tone="gray"
+                          title={
+                            item.currentVersion && item.currentVersion !== item.definitionVersion
+                              ? t(
+                                  'admin.integrationCatalog.status.definitionVersion',
+                                  'Definition on disk: v{{version}}',
+                                  { version: item.currentVersion }
+                                )
+                              : undefined
+                          }
+                        >
+                          <span className="font-mono" data-testid="installed-version">
+                            v{item.definitionVersion}
+                          </span>
+                        </Pill>
+                      )}
+                      {item.incompatible && (
+                        <Pill tone="red" title={item.incompatibleReason || undefined}>
+                          {t('admin.integrationCatalog.status.incompatible', 'Incompatible')}
+                        </Pill>
+                      )}
+                      {item.updateAvailable && item.latestVersion && (
+                        <Link
+                          to={marketplaceLinkFor(item.definition)}
+                          className="inline-flex"
+                          data-testid="update-badge"
+                        >
+                          <Pill
+                            tone="orange"
+                            title={t(
+                              'admin.integrationCatalog.status.updateAvailableTitle',
+                              'Open the marketplace to update'
+                            )}
+                          >
+                            {t(
+                              'admin.integrationCatalog.status.updateAvailable',
+                              'Update to v{{version}} available',
+                              { version: item.latestVersion }
+                            )}
+                          </Pill>
+                        </Link>
+                      )}
                       {item.auth?.mode && item.auth.mode !== 'none' && (
                         <Pill tone="blue">
                           {t(
@@ -388,6 +439,18 @@ function AdminInstalledIntegrationsPage() {
                         </>
                       )}
                     </p>
+                    {item.incompatible && item.incompatibleReason && (
+                      <p
+                        className="mt-1 text-xs text-red-700 dark:text-red-400"
+                        data-testid="incompatible-reason"
+                      >
+                        {t(
+                          'admin.integrationCatalog.incompatibleReason',
+                          'This installation offers no actions: its definition {{reason}}.',
+                          { reason: item.incompatibleReason }
+                        )}
+                      </p>
+                    )}
                     {item.allowedGroups?.length > 0 && (
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         {t('admin.integrationCatalog.groupsLine', 'Groups: {{groups}}', {
@@ -416,7 +479,7 @@ function AdminInstalledIntegrationsPage() {
                       type="button"
                       className={SECONDARY_BUTTON_CLASS}
                       onClick={() => runTest(item)}
-                      disabled={busy === item.id || item.definitionMissing}
+                      disabled={busy === item.id || item.definitionMissing || item.incompatible}
                       aria-label={t('admin.integrationCatalog.actions.test', 'Test {{id}}', {
                         id: item.id
                       })}
@@ -430,7 +493,7 @@ function AdminInstalledIntegrationsPage() {
                       onClick={() =>
                         setDialog({ definitionId: item.definition, instanceId: item.id })
                       }
-                      disabled={item.definitionMissing}
+                      disabled={item.definitionMissing || item.incompatible}
                       aria-label={t('admin.integrationCatalog.actions.edit', 'Edit {{id}}', {
                         id: item.id
                       })}
@@ -517,18 +580,55 @@ function AdminInstalledIntegrationsPage() {
               {filteredCatalog.map(item => (
                 <div
                   key={item.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-5 flex flex-col"
+                  className={`bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-5 flex flex-col ${
+                    item.compatible === false ? 'opacity-60' : ''
+                  }`}
+                  data-testid="catalog-card"
+                  data-compatible={item.compatible === false ? 'false' : 'true'}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                       {item.name}
+                      <span className="ml-2 font-mono text-xs font-normal text-gray-500 dark:text-gray-400">
+                        v{item.version}
+                      </span>
                     </h3>
-                    <Pill tone={item.source === 'installed' ? 'blue' : 'gray'}>
-                      {item.source === 'installed'
-                        ? t('admin.integrationCatalog.source.installed', 'From registry')
-                        : t('admin.integrationCatalog.source.shipped', 'Shipped')}
-                    </Pill>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {item.compatible === false && (
+                        <Pill tone="red" title={item.statusReason || undefined}>
+                          {t('admin.integrationCatalog.status.incompatible', 'Incompatible')}
+                        </Pill>
+                      )}
+                      {item.update?.compatible && (
+                        <Link to={marketplaceLinkFor(item.id)} className="inline-flex">
+                          <Pill tone="orange">
+                            {t(
+                              'admin.integrationCatalog.status.updateAvailable',
+                              'Update to v{{version}} available',
+                              { version: item.update.latestVersion }
+                            )}
+                          </Pill>
+                        </Link>
+                      )}
+                      <Pill tone={item.source === 'installed' ? 'blue' : 'gray'}>
+                        {item.source === 'installed'
+                          ? t('admin.integrationCatalog.source.installed', 'From registry')
+                          : t('admin.integrationCatalog.source.shipped', 'Shipped')}
+                      </Pill>
+                    </div>
                   </div>
+                  {item.compatible === false && item.statusReason && (
+                    <p
+                      className="mt-2 text-xs text-red-700 dark:text-red-400"
+                      data-testid="incompatible-reason"
+                    >
+                      {t(
+                        'admin.integrationCatalog.catalogIncompatible',
+                        'Cannot be installed: {{reason}}.',
+                        { reason: item.statusReason }
+                      )}
+                    </p>
+                  )}
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 flex-1">
                     {item.description}
                   </p>
@@ -545,6 +645,12 @@ function AdminInstalledIntegrationsPage() {
                     <dd>{item.actionCount}</dd>
                     <dt>{t('admin.integrationCatalog.facts.publisher', 'Publisher')}</dt>
                     <dd>{item.publisher?.name || '—'}</dd>
+                    {item.requires && (
+                      <>
+                        <dt>{t('admin.integrationCatalog.facts.compatibility', 'Needs')}</dt>
+                        <dd className="font-mono">iHub {item.requires}</dd>
+                      </>
+                    )}
                   </dl>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -562,14 +668,16 @@ function AdminInstalledIntegrationsPage() {
                     <button
                       type="button"
                       className={PRIMARY_BUTTON_CLASS}
-                      disabled={!item.supported}
+                      disabled={!item.supported || item.compatible === false}
                       title={
-                        item.supported
-                          ? undefined
-                          : t(
-                              'admin.integrationCatalog.unsupportedShort',
-                              'Protocol not supported yet'
-                            )
+                        item.compatible === false
+                          ? item.statusReason || undefined
+                          : item.supported
+                            ? undefined
+                            : t(
+                                'admin.integrationCatalog.unsupportedShort',
+                                'Protocol not supported yet'
+                              )
                       }
                       onClick={() => setDialog({ definitionId: item.id })}
                     >

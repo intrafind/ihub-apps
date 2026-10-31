@@ -48,10 +48,15 @@ Each card shows the item's type, version, tags, author and its state:
 | *(none)*             | Available in the registry, not on this installation                                                         | **Install**                               |
 | **Installed**        | Installed from the marketplace and tracked                                                                   | **Update** (when the catalog has a newer version), **Uninstall**, **Detach** |
 | **Local copy**       | An item with the same id already exists here but was not installed from the marketplace — a shipped default or something an admin created | **Replace local copy** (asks for confirmation) |
+| **Update available** | Installed, and the catalog offers a newer version                                                            | **Update** opens a dialog with what changed |
+| *greyed*             | The item needs an iHub version this server does not have (`compatibility.ihub` or `minVersion` in the catalog); the card says which | **Install** and **Update** are disabled |
 
-Click a card to open its details: description, tags, registry, category and license (linked to the
-license text when the catalog provides one). The **Content** tab previews the item itself — the app
-or model JSON, or a skill's `SKILL.md`.
+Click a card to open its details: description, tags, registry, category, license (linked to the
+license text when the catalog provides one) and, when the item declares one, the iHub version range
+it needs. The **Content** tab previews the item itself — the app or model JSON, or a skill's
+`SKILL.md`. An integration with a release history gets a **Releases** tab: one entry per version
+with its date and summary, and the notes per category (features, fixes, breaking changes) are
+fetched from the registry and rendered when you open them, without installing anything.
 
 ![Marketplace item details with description, tags, registry and license](assets/screenshots/admin-marketplace-detail.png)
 
@@ -70,7 +75,17 @@ or model JSON, or a skill's `SKILL.md`.
   the [group permissions](admin-ui.md#managing-groups), and it can be edited in its admin page.
 - **Update** replaces the installed item with the catalog's current version. An update is offered
   when the catalog's `version` differs from the installed one. Local edits to the item are
-  overwritten — **Detach** it first if you want to keep them.
+  overwritten — **Detach** it first if you want to keep them. For an integration, the dialog
+  lists the releases between the installed and the catalog version (newest first) with their
+  summaries, the compatibility line, and opens each release's notes on request. **Admin →
+  Integrations → Installed** shows an **Update to vX available** badge on every installation of a
+  definition with a newer compatible catalog version, and the admin dashboard counts them.
+- **Compatibility** is enforced on install and update: an item whose `compatibility.ihub` (or the
+  short form `minVersion`, read as `>=minVersion`) this server does not satisfy is refused with
+  `INCOMPATIBLE_IHUB_VERSION`, also when the API is called directly; an integration definition
+  written for a format revision this server does not know is refused with
+  `UNSUPPORTED_DEFINITION_SCHEMA`. See [Integrations → Version, compatibility and release
+  notes](integrations.md#version-compatibility-and-release-notes).
 - **Uninstall** deletes the item's files and the installation record. An integration definition
   cannot be uninstalled while an installed instance of it exists (**Admin → Integrations →
   Installed**); remove the instance first.
@@ -123,7 +138,11 @@ in [Configuration Validation → Catalog Schema](configuration-validation.md#9-c
 the [ihub-marketplace](https://github.com/intrafind/ihub-marketplace) repository is a complete
 example, including a script that regenerates the catalog from its content folders. Items of type
 `integration` and `skill` may list companion files in `source.companions`; for an integration the
-OpenAPI document and the icon named in the definition are fetched even when not listed. An
+OpenAPI document, the icon and the release-note files named in the definition are fetched even
+when not listed. An integration item copies the definition's `version`, `compatibility` and
+`releases` (version, date, summary and note paths), so the marketplace greys an incompatible
+item and shows its release history without downloading the folder; any item may carry
+`minVersion` as the short form of `compatibility.ihub: ">=minVersion"`. An
 integration that brings code (`script` protocol) must list a hash for every code file in
 `source.integrity` (`{ "connector.js": "sha256-<base64 of the SHA-256>" }`); iHub installs it only
 from a registry the admin trusts for code and refuses a file that does not match its hash.
@@ -145,7 +164,8 @@ add skills with are listed under [Skills → API](skills.md#api).
 | Method & path                                                                 | Purpose                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------- |
 | `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters) |
-| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview           |
+| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires` |
+| `GET …/items/integration/:name/_file?path=…`                                  | One Markdown companion file of an integration item (a release's notes), fetched from the registry |
 | `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy) |
 | `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update, uninstall, detach                   |
 | `GET /api/admin/marketplace/installations`                                    | What the marketplace installed              |
