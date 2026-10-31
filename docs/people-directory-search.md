@@ -6,7 +6,7 @@ Each enabled directory becomes its own small set of read-only tools, named and d
 
 The shipped **People search** app (`people-directory`) uses every directory a user may use, including ones added later. It ships enabled but requires the People directories integration (`requiredIntegrations: ["peopleDirectories"]`): users get it as soon as one directory is enabled, and not before. Admin → Apps marks it as hidden until then.
 
-> Microsoft Entra ID is not a directory type yet. The existing `entraPeopleSearch` tool is unchanged; see [Tool Calling](tool-calling.md#entrapeoplesearch).
+> Microsoft Entra ID is not a directory type yet. The Entra people search is the built-in installed integration **Microsoft Entra ID directory** (installation `entra`); see [Tool Calling](tool-calling.md#entrapeoplesearch).
 
 ## Quick start
 

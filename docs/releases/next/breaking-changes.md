@@ -119,3 +119,17 @@ no longer carries a `jira` key.
   `"script": "jira.js"` is deleted.
 - **Deployments that write `platform.json` themselves** have to write the installation instead
   (`values.clientId`, `values.clientSecretRef`, `values.redirectUri`, `values.siteUrl`).
+
+## Entra People Search Tool File Retired
+
+Migration V197 deletes `contents/tools/entraPeopleSearch.json`; the tools belong to the installed
+integration `entra` and are no longer listed under **Admin → Tools**.
+
+- **Apps:** `tools: ["entraPeopleSearch"]` or `["entraPeopleSearch_findUser", …]` selects nothing
+  any more; the migration turns such entries into the binding `integrations.entra`. The example
+  app `examples/apps/people-search.json` binds the installation now, and `examples/config/tools.json`
+  no longer lists the tool; copy the example anew if you installed it by hand.
+- **Environment-only deployments** keep working: the installation is created enabled when
+  `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` are set, and the variables stay
+  the fallback for empty fields. Without them the installation exists disabled until an admin
+  fills it in.
