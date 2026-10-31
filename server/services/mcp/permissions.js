@@ -68,6 +68,29 @@ export async function getVisibleToolIds(user, platform) {
 }
 
 /**
+ * Set of installed-integration ids bound by the apps the user can access
+ * (the keys of `app.integrations`). An installation's tools, and for an MCP
+ * installation the server itself, are reachable through such a binding; the
+ * installation's own `allowedGroups` are checked separately.
+ *
+ * @param {Object} user
+ * @param {Object} platform
+ * @returns {Promise<Set<string>>}
+ */
+export async function getBoundIntegrationIds(user, platform) {
+  const ids = new Set();
+  const apps = await getAccessibleApps(user, platform);
+  for (const app of apps) {
+    const bindings = app?.integrations;
+    if (!bindings || typeof bindings !== 'object' || Array.isArray(bindings)) continue;
+    for (const id of Object.keys(bindings)) {
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+/**
  * True if `toolId` (or its base id) is referenced by any app the user can
  * access. Used by the gateway to decide tool visibility + call permission.
  *

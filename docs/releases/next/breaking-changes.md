@@ -32,7 +32,11 @@ restored from a backup after the upgrade fails validation until the two blocks a
 
 Migration V193 turns every server of `contents/config/mcpServers.json` into an installed
 integration in `contents/config/integrations.json` (same id, same tool ids) and removes the file;
-nothing reads it any more.
+nothing reads it any more. A server whose endpoint is a shipped `mcp/<id>` definition installs
+that definition only when its `toolPrefix` is empty or the default `<id>__`; a server with a
+custom prefix installs the generic `com.intrafind/mcp-server` definition instead, which keeps the
+prefix (the migration log says which servers fell back and why). Endpoint and OAuth URLs are kept
+verbatim, trailing slash included, so per-user sign-ins and client registrations stay valid.
 
 - **Admin page and API:** **Admin → MCP servers** and its catalog dialog are gone, replaced by
   **Admin → Integrations → Installed**. The routes `/api/admin/mcp/servers*`,
@@ -83,10 +87,15 @@ Qwant) into the installed integration `websearch` and the credentials
   `POST /api/admin/integrations/installed/websearch/_test`. A provider with
   `category: "websearch"` can no longer be created.
 - **Tools:** the four tools are no longer listed under **Admin → Tools** and cannot be disabled
-  there; switch the installation's actions off instead. A `tools` entry naming one of them selects
-  nothing (the migration removes such entries).
+  there; switch the installation's actions off instead. A `tools` entry naming one of them (an
+  app's, a workflow node's) still selects it, now from the installation and only while the
+  installation is enabled and its groups include the user. The migration removes `braveSearch`,
+  `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
+  an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
+  named instead (logged per app). `read_url` entries stay.
 - **Apps with web search on** are hidden while the `websearch` installation is disabled or
-  missing, and the installation's groups apply to them.
+  missing, and the installation's groups apply to them — to native search on Google, OpenAI and
+  Anthropic models as well, not only to the script-backed search tools.
 - **Deployments that write `providers.json` or the tool files themselves** have to write the
   installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.
 

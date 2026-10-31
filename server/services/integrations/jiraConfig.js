@@ -15,11 +15,14 @@ import { promises as fs } from 'node:fs';
 import configCache from '../../configCache.js';
 import tokenStorage from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { buildPublicBaseUrl, getForwardedHost } from '../../utils/publicBaseUrl.js';
 
 export const JIRA_INSTANCE_ID = 'jira';
 export const JIRA_DEFINITION_ID = 'com.intrafind/jira';
 /** The token store service name every user's Jira tokens are filed under. */
 export const JIRA_TOKEN_SERVICE = 'jira';
+/** Where Atlassian sends the browser back to, below the deployment's base URL. */
+export const JIRA_CALLBACK_PATH = '/api/integrations/jira/callback';
 
 /** The installed `jira` instance, or null. */
 export function getJiraInstallation() {
@@ -49,6 +52,30 @@ export function jiraConfigFromInstance(instance) {
 
 export function getJiraConfig() {
   return jiraConfigFromInstance(getJiraInstallation());
+}
+
+/**
+ * The redirect URI of one OAuth flow: the configured value, or — when the
+ * installation leaves it empty — derived from the request the way the browser
+ * sees it: scheme and host from the `X-Forwarded-Proto` / `X-Forwarded-Host`
+ * headers of a trusted proxy (else the request's own), the base path
+ * (`X-Forwarded-Prefix`), then `/api/integrations/jira/callback`. The
+ * authorize redirect and the token exchange must send the same value, so both
+ * go through here; the callback arrives at the URL that was derived for the
+ * authorize step, so deriving it again from that request gives the same URL.
+ *
+ * @param {import('express').Request|null|undefined} req
+ * @param {{ redirectUri: string }} [cfg]
+ * @returns {string}
+ */
+export function resolveJiraRedirectUri(req, cfg = getJiraConfig()) {
+  if (cfg.redirectUri) return cfg.redirectUri;
+  if (!req || !getForwardedHost(req)) {
+    throw new Error(
+      'No Jira redirect URI configured and none can be derived from the request (no host)'
+    );
+  }
+  return `${buildPublicBaseUrl(req)}${JIRA_CALLBACK_PATH}`;
 }
 
 /** Enabled, with an OAuth client id and a client secret reference. */

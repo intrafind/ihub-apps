@@ -12,6 +12,12 @@
  * installation owns these tools and their ids stay the same. Apps keep their
  * `websearch` settings; the installation is a requirement of every app that
  * has web search on.
+ *
+ * An app that got web search by listing a search tool in `tools` (the
+ * `deep-researcher` example's `"braveSearch"`) rather than through
+ * `websearch.enabled` keeps it: the reference becomes `websearch: { enabled,
+ * enabledByDefault, provider }` with the engine it named. A `read_url`
+ * reference stays in `tools`: the tool loader serves it from the installation.
  */
 
 export const version = '195';
@@ -23,7 +29,7 @@ const CREDENTIALS_FILE = 'config/credentials.json';
 const INSTANCE_ID = 'websearch';
 const DEFINITION = 'com.intrafind/web-search';
 const TOOL_FILES = ['braveSearch.json', 'staanSearch.json', 'qwantSearch.json', 'read_url.json'];
-const TOOL_IDS = new Set(['braveSearch', 'staanSearch', 'qwantSearch', 'read_url']);
+const SEARCH_TOOL_ENGINES = { braveSearch: 'brave', staanSearch: 'staan', qwantSearch: 'qwant' };
 const KEYED_ENGINES = { brave: 'braveCredentialRef', staan: 'staanCredentialRef' };
 
 export async function precondition(ctx) {
@@ -77,6 +83,38 @@ export function websearchFrom(providers, existingInstance) {
     allowedGroups: existingInstance?.allowedGroups || []
   };
   return { instance, credentials };
+}
+
+/**
+ * An app's `tools` without the search tool references, and the `websearch`
+ * settings that replace them when the app had none.
+ *
+ * @param {object} app
+ * @param {string} defaultProvider - The installation's default engine; among
+ *   several referenced engines it wins, else the first listed does
+ * @returns {{ app: object, engines: string[], provider: string|null }|null}
+ *   null when the app references no search tool
+ */
+export function migrateAppSearchTools(app, defaultProvider = 'auto') {
+  if (!Array.isArray(app?.tools)) return null;
+  const engines = app.tools
+    .filter(ref => SEARCH_TOOL_ENGINES[ref])
+    .map(ref => SEARCH_TOOL_ENGINES[ref]);
+  if (!engines.length) return null;
+  const kept = app.tools.filter(ref => !SEARCH_TOOL_ENGINES[ref]);
+  const next = { ...app, tools: kept };
+  if (!kept.length) delete next.tools;
+  let provider = null;
+  if (app.websearch?.enabled !== true) {
+    provider = engines.includes(defaultProvider) ? defaultProvider : engines[0];
+    next.websearch = {
+      ...(app.websearch && typeof app.websearch === 'object' ? app.websearch : {}),
+      enabled: true,
+      enabledByDefault: true,
+      provider
+    };
+  }
+  return { app: next, engines, provider };
 }
 
 export async function up(ctx) {
@@ -133,18 +171,21 @@ export async function up(ctx) {
     }
   }
 
-  // A tool reference to one of these ids no longer selects anything; web
-  // search is configured in `app.websearch`.
+  // Web search is configured in `app.websearch`. An app that had it only
+  // through a search tool reference gets the equivalent settings, so it keeps
+  // searching with the engine it named; `read_url` stays, the tool loader
+  // serves it from the installation.
+  const defaultProvider = instance.values?.defaultProvider || 'auto';
   for (const file of await ctx.listFiles('apps', '*.json')) {
     const rel = `apps/${file}`;
     const app = await ctx.readJson(rel);
-    if (!Array.isArray(app?.tools)) continue;
-    const kept = app.tools.filter(ref => !TOOL_IDS.has(ref));
-    if (kept.length !== app.tools.length) {
-      const next = { ...app, tools: kept };
-      if (!kept.length) delete next.tools;
-      await ctx.writeJson(rel, next);
-      ctx.log(`${rel}: web search tool references removed from tools`);
-    }
+    const migrated = migrateAppSearchTools(app, defaultProvider);
+    if (!migrated) continue;
+    await ctx.writeJson(rel, migrated.app);
+    ctx.log(
+      migrated.provider
+        ? `${rel}: search tool reference(s) ${migrated.engines.join(', ')} replaced by websearch.enabled with provider "${migrated.provider}"`
+        : `${rel}: search tool reference(s) ${migrated.engines.join(', ')} removed from tools (websearch already enabled)`
+    );
   }
 }

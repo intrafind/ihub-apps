@@ -104,7 +104,19 @@ installation exists and is enabled; an installation that is off offers no
 search tool and no page reader, and **Admin → Apps** names it as missing for
 every app with `websearch.enabled: true`. The installation's **groups**
 (`allowedGroups`) apply as well: a user outside them gets no search tool and no
-page reader, whatever the app says.
+page reader, whatever the app says — and no native search either (see
+[Native Search and the Installation](#native-search-and-the-installation)).
+
+The tools keep the ids they had as tool files, so an app or a **workflow node**
+can still list `braveSearch`, `staanSearch`, `qwantSearch` or `read_url` in its
+`tools` (the shipped `claude-style-agent` and `research-assistant` workflows
+do, and a node's generic `webSearch` falls back to `braveSearch` on a model
+without native search). Such a reference is served from the installation, by
+exact id, after the same enabled and group checks; the installation's own id
+(`websearch`) selects nothing in `tools`. Web search for an *app*, though, is
+configured in `websearch` as above — the migration turns a bare search tool
+reference into those settings (see
+[Migration from Legacy Tool Configuration](#migration-from-legacy-tool-configuration)).
 
 Whenever one of these script-backed search tools is offered — including when a
 provider turns native search down and the loop falls back to it — the page
@@ -299,7 +311,13 @@ Migration V195 then moves the engines into the `websearch` installation:
 - Deletes the shipped tool files `braveSearch.json`, `staanSearch.json`,
   `qwantSearch.json` and `read_url.json` from `contents/tools/` — the tools now
   belong to the installation and keep their ids
-- Strips these four tool ids from every app's `tools` array
+- Removes `braveSearch`, `staanSearch` and `qwantSearch` from every app's
+  `tools` array. An app that had web search only through such a reference (no
+  `websearch.enabled: true`) gets `websearch: { enabled: true,
+  enabledByDefault: true, provider }` with the engine it named — the
+  installation's default engine when several were listed, else the first — so
+  it keeps searching with that engine; the change is logged per app. A
+  `read_url` reference stays: the tool loader serves it from the installation
 
 No manual action is required — the migrations run automatically.
 
@@ -356,9 +374,12 @@ more, and the keys are not in `providers.json`.
 3. Save — no server restart required. **Test** on the installation runs one
    live search (see [Connectivity Test](#connectivity-test-admin-ui))
 
-The installation's **groups** restrict who gets web search at all, and the
-installation can be switched off as a whole, which takes the search tools and
-the page reader away from every app.
+The installation's **groups** restrict who gets web search at all — the
+script-backed search tools, the page reader, a `braveSearch` / `read_url`
+reference in an app's or a workflow node's `tools`, native search on Google,
+OpenAI and Anthropic, and the fallback tool offered when a provider turns
+native search down — and the installation can be switched off as a whole,
+which takes all of these away from every app.
 
 Credentials are encrypted at rest using AES-256-GCM. On an upgrade, migration
 V195 moves the keys that were stored under **Admin → Providers** into the
@@ -466,7 +487,11 @@ Native search is tuned per model in the model configuration (`nativeWebSearch`, 
 Three safeguards apply to every native search call:
 
 - **Search cap.** The app's `websearch.maxSearches` (default 5) or a workflow node's `maxWebSearches` is sent to Anthropic as `max_uses`. Once the cap is reached the model answers with what it has; the refused search reports `max_uses_exceeded` and is not billed.
-- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the `braveSearch` tool instead. The rejection is remembered for 15 minutes per model so later calls skip the failing request.
+- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the `braveSearch` tool instead. The rejection is remembered for 15 minutes per model so later calls skip the failing request. The fallback tool is subject to the `websearch` installation like every other search tool: off, or closed to the user's groups, and the retry runs without web search.
+
+#### Native Search and the Installation
+
+Native search is run by the model's provider, but it is still the app's web search, which belongs to the `websearch` installation: `resolveAppNativeWebSearch` resolves it only while the installation is enabled and its groups (when it has any) include the user. A user outside the groups gets no native search on a Gemini, OpenAI or Anthropic model, just as they get no script-backed search tool on any other — the groups decide who gets web search at all, not which kind. Workflow nodes that list the generic `webSearch` marker resolve native search per node and are not gated by the installation; their fallback to `braveSearch`, and any `braveSearch` / `read_url` they list directly, is.
 - **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
 
 The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).

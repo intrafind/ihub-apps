@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { getJiraConfig, isJiraConfigured } from './jiraConfig.js';
+import { adjustJiraConnectionCount } from './jiraConnectionCount.js';
 import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
 
@@ -44,14 +45,18 @@ class JiraService {
   /**
    * Generate OAuth2 authorization URL for Atlassian Cloud
    * Note: PKCE may not be fully supported by Atlassian Cloud, but we'll try
+   *
+   * `redirectUri` is the one the route resolved for this flow (configured, or
+   * derived from the request — see `resolveJiraRedirectUri`); the token
+   * exchange must send the same value.
    */
-  generateAuthUrl(state, codeVerifier = null) {
+  generateAuthUrl(state, codeVerifier = null, redirectUri = this.getConfig().redirectUri) {
     const jiraConfig = this.getConfig();
     const params = new URLSearchParams({
       audience: 'api.atlassian.com', // Required for Atlassian Cloud
       client_id: jiraConfig.clientId,
       scope: 'read:jira-user read:jira-work write:jira-work offline_access', // offline_access is REQUIRED for refresh tokens
-      redirect_uri: jiraConfig.redirectUri,
+      redirect_uri: redirectUri,
       state: state,
       response_type: 'code',
       access_type: 'offline', // Explicitly request offline access for refresh tokens
@@ -69,9 +74,14 @@ class JiraService {
   }
 
   /**
-   * Exchange authorization code for tokens (Atlassian Cloud)
+   * Exchange authorization code for tokens (Atlassian Cloud). `redirectUri`
+   * must be the value the authorize step sent.
    */
-  async exchangeCodeForTokens(authCode, codeVerifier = null) {
+  async exchangeCodeForTokens(
+    authCode,
+    codeVerifier = null,
+    redirectUri = this.getConfig().redirectUri
+  ) {
     try {
       const jiraConfig = this.getConfig();
       const tokenData = new URLSearchParams({
@@ -79,7 +89,7 @@ class JiraService {
         client_id: jiraConfig.clientId,
         client_secret: credentialService.resolveSecret(jiraConfig.clientSecretRef),
         code: authCode,
-        redirect_uri: jiraConfig.redirectUri
+        redirect_uri: redirectUri
       });
 
       // Add code_verifier only if provided (PKCE may not be supported)
@@ -251,7 +261,10 @@ class JiraService {
         });
       }
 
+      // A refresh rewrites an existing file; only a first store is a new connection.
+      const wasConnected = await this.hasStoredTokens(userId);
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
+      if (!wasConnected) adjustJiraConnectionCount(1);
       logger.info('JIRA tokens stored for user', {
         component: 'JiraService',
         userId,
@@ -261,6 +274,16 @@ class JiraService {
     } catch (error) {
       logger.error('Error storing user tokens', { component: 'JiraService', error });
       throw new Error('Failed to store user tokens');
+    }
+  }
+
+  /** Whether a token file exists for the user, expired or not. */
+  async hasStoredTokens(userId) {
+    try {
+      await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -326,6 +349,7 @@ class JiraService {
     try {
       const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
       if (result) {
+        adjustJiraConnectionCount(-1);
         logger.info('JIRA tokens deleted for user', { component: 'JiraService', userId });
       }
       return result;

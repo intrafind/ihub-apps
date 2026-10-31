@@ -27,7 +27,11 @@ import {
 } from './services/peopleDirectory/PeopleDirectoryService.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
-import { getWebSearchConfig, isWebSearchEnabled } from './services/search/websearchConfig.js';
+import {
+  getWebSearchConfig,
+  isWebSearchEnabled,
+  WEBSEARCH_INSTANCE_ID
+} from './services/search/websearchConfig.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
@@ -373,6 +377,33 @@ export const WEBSEARCH_TOOL_IDS = Object.freeze({
 });
 
 /**
+ * Whether the `websearch` installation offers its tools to a user: it is
+ * installed and enabled, and its groups (`allowedGroups`), when it has any,
+ * include one of the user's. The same checks `runIntegrationTool` makes
+ * before it runs one of the installation's actions, so nothing is offered
+ * that the call would then refuse. Every way web search reaches a model goes
+ * through here: the search tool and page reader of `app.websearch`, a
+ * `braveSearch` / `read_url` reference in `app.tools` or a workflow node,
+ * native search on a provider that runs it itself, and the fallback tool
+ * offered when a provider turns native search down.
+ *
+ * @param {Object} [user] - The acting user (`{ groups }`); none means no groups
+ * @returns {boolean}
+ */
+export function isWebSearchAvailableTo(user) {
+  const installation = getWebSearchConfig();
+  if (!installation.enabled) return false;
+  if (installation.allowedGroups.length === 0) return true;
+  const groups = Array.isArray(user?.groups) ? user.groups : [];
+  return groups.some(g => installation.allowedGroups.includes(g));
+}
+
+/** Whether a loaded tool is an action of the `websearch` installation. */
+function isWebSearchInstallationTool(tool) {
+  return tool?._integration?.instanceId === WEBSEARCH_INSTANCE_ID;
+}
+
+/**
  * Resolve an app's `websearch.provider` onto the script-backed tool to offer.
  *
  * `"auto"` walks the keyed engines in registration order — Brave, then Staan —
@@ -482,10 +513,15 @@ export function resolveNativeWebSearchProvider(modelProvider, { model, maxUses }
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @param {Object} [model] - Full model config (per-model opt-out)
+ * @param {Object} [user] - The acting user; the `websearch` installation's
+ *   groups hold for native search too (see {@link isWebSearchAvailableTo})
  * @returns {{provider: string, maxUses: number, fallback: string} | null}
  */
-export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model) {
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model, user) {
   if (!app?.websearch?.enabled) return null;
+  // Native search is the provider's, but it is still the app's web search:
+  // an installation that is off, or closed to the user, switches it off too.
+  if (!isWebSearchAvailableTo(user)) return null;
 
   const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
 
@@ -545,12 +581,14 @@ function clampToSchema(value, schema) {
 /**
  * Tools to offer instead of a native web search directive the provider turned
  * down (see services/loop/nativeWebSearchFallback.js). Empty when the fallback
- * tool is not installed.
+ * tool is not installed, or when the `websearch` installation is off or closed
+ * to the user: `runIntegrationTool` would refuse the call anyway.
  * @param {{fallback?: string}|null} directive - the rejected directive
- * @param {{app?: Object, language?: string}} [context]
+ * @param {{app?: Object, language?: string, user?: Object}} [context]
  * @returns {Promise<Object[]>}
  */
-export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
+export async function resolveNativeWebSearchFallbackTools(directive, { app, language, user } = {}) {
+  if (!isWebSearchAvailableTo(user)) return [];
   // With an app in hand, fall back to the search provider that app is
   // configured for — an app set to Qwant should not silently answer from Brave
   // just because the model turned native search down.
@@ -602,12 +640,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
   if (!app.websearch?.enabled) return [];
   // The tools come from the `websearch` installation: off, or closed to the
   // user's groups, means no search tool and no page reader.
-  const installation = getWebSearchConfig();
-  if (!installation.enabled) return [];
-  if (installation.allowedGroups.length) {
-    const groups = Array.isArray(user?.groups) ? user.groups : [];
-    if (!groups.some(g => installation.allowedGroups.includes(g))) return [];
-  }
+  if (!isWebSearchAvailableTo(user)) return [];
 
   const { enabledByDefault = false } = app.websearch;
 
@@ -616,7 +649,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
 
   // Native search handles this app/model combination — no search tool needed,
   // but the page reader still is where the provider accepts function tools.
-  const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model);
+  const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model, user);
   if (native) {
     if (!NATIVE_SEARCH_WITH_PAGE_READER.has(native.provider)) return [];
     const reader = allTools.find(t => t.id === READ_URL_TOOL_ID);
@@ -652,8 +685,19 @@ export async function getToolsForApp(app, language = null, context = {}) {
     // An installed integration's tools come only through `app.integrations`
     // (below), where the installation's groups and the binding's action list
     // are checked; an `app.tools` reference to one does not bypass that.
+    //
+    // The one exception is the `websearch` installation, whose actions kept
+    // the tool ids they had as tool files (`braveSearch`, `read_url`, …): a
+    // workflow node, or an app, that lists one of those ids keeps getting the
+    // tool, once the installation's own enabled and group checks pass. The
+    // ids are matched exactly; `websearch` itself selects nothing here.
+    const webSearchOpen = isWebSearchAvailableTo(context.user);
     appTools = filterDirectoryToolsForUser(
-      allTools.filter(t => !t._integration && isToolSelected(t, app.tools)),
+      allTools.filter(t =>
+        t._integration
+          ? webSearchOpen && isWebSearchInstallationTool(t) && app.tools.includes(t.id)
+          : isToolSelected(t, app.tools)
+      ),
       context.user
     );
 

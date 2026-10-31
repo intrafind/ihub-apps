@@ -68,8 +68,8 @@
         "de": "Redirect-URI"
       },
       "description": {
-        "en": "The callback URL registered in the Atlassian app: https://<your iHub>/api/integrations/jira/callback. Empty: derived from the request.",
-        "de": "Die in der Atlassian-App eingetragene Callback-URL: https://<Ihr iHub>/api/integrations/jira/callback. Leer: aus der Anfrage abgeleitet."
+        "en": "The callback URL registered in the Atlassian app: https://<your iHub>/api/integrations/jira/callback. Empty: derived from each request as the browser sees it (scheme and host from the trusted proxy's X-Forwarded-* headers, the base path, then /api/integrations/jira/callback); Test shows the resulting URL. Set it when the derived URL is not the one registered.",
+        "de": "Die in der Atlassian-App eingetragene Callback-URL: https://<Ihr iHub>/api/integrations/jira/callback. Leer: aus jeder Anfrage abgeleitet, wie der Browser sie sieht (Schema und Host aus den X-Forwarded-*-Headern des vertrauten Proxys, der Basispfad, dann /api/integrations/jira/callback); der Test zeigt die resultierende URL. Setzen, wenn die abgeleitete URL nicht die eingetragene ist."
       }
     },
     {
