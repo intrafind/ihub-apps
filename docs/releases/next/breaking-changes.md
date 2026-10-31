@@ -32,7 +32,11 @@ restored from a backup after the upgrade fails validation until the two blocks a
 
 Migration V193 turns every server of `contents/config/mcpServers.json` into an installed
 integration in `contents/config/integrations.json` (same id, same tool ids) and removes the file;
-nothing reads it any more.
+nothing reads it any more. A server whose endpoint is a shipped `mcp/<id>` definition installs
+that definition only when its `toolPrefix` is empty or the default `<id>__`; a server with a
+custom prefix installs the generic `com.intrafind/mcp-server` definition instead, which keeps the
+prefix (the migration log says which servers fell back and why). Endpoint and OAuth URLs are kept
+verbatim, trailing slash included, so per-user sign-ins and client registrations stay valid.
 
 - **Admin page and API:** **Admin → MCP servers** and its catalog dialog are gone, replaced by
   **Admin → Integrations → Installed**. The routes `/api/admin/mcp/servers*`,

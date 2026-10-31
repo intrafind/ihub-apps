@@ -46,6 +46,7 @@
         "de": "Der MCP-Endpunkt, z. B. https://mcp.example.com/mcp"
       },
       "required": true,
+      "keepTrailingSlash": true,
       "when": { "field": "transport", "in": ["streamableHttp", "sse", "websocket"] }
     },
     {
@@ -160,6 +161,7 @@
         "de": "Der Token-Endpunkt des Autorisierungsservers (Client-Credentials-Grant)."
       },
       "required": true,
+      "keepTrailingSlash": true,
       "when": { "authMode": ["oauth-client"] }
     },
     {
@@ -203,6 +205,7 @@
         "de": "Nur wenn der Server ihn nicht ankündigt (RFC 9728)."
       },
       "advanced": true,
+      "keepTrailingSlash": true,
       "when": { "authMode": ["oauth-user"] }
     },
     {

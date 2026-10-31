@@ -19,9 +19,27 @@ import path from 'path';
  * refuse redirects.
  */
 
+/** The installations the per-user servers come from (`config/integrations.json`). */
+function installationsOf(ids, extra = {}) {
+  return {
+    installed: ids.map(id => ({
+      id,
+      definition: 'com.intrafind/mcp-server',
+      values: { url: `https://${id}-mcp.example.com/mcp` },
+      auth: { mode: 'oauth-user' },
+      ...extra
+    }))
+  };
+}
+
+function oktaInstallation(extra = {}) {
+  return installationsOf(['okta'], extra);
+}
+
 const state = {
   platform: { anonymousAuth: { enabled: false }, auth: {} },
-  apps: [{ id: 'assistant', tools: ['okta'] }]
+  apps: [{ id: 'assistant', tools: ['okta'] }],
+  integrations: oktaInstallation()
 };
 
 class FakeUnauthorizedError extends Error {}
@@ -72,8 +90,8 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => state.platform,
     getUI: () => ({ data: { title: { en: 'iHub Apps' } } }),
     getAppsForUser: jest.fn(async () => ({ data: state.apps })),
-    getIntegrations: () => ({ data: { installed: [] } }),
-    get: () => null
+    getIntegrations: () => ({ data: state.integrations }),
+    get: key => (key === 'config/integrations.json' ? { data: state.integrations } : null)
   }
 }));
 
@@ -135,6 +153,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   state.platform = { anonymousAuth: { enabled: false }, auth: {} };
   state.apps = [{ id: 'assistant', tools: ['okta'] }];
+  state.integrations = oktaInstallation();
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
   mcpClientManager.clientStore = new McpOAuthClientStore({ documents: null });
   mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: null });
@@ -286,6 +305,37 @@ describe('GET /api/mcp/oauth/authorize', () => {
     const hidden = await startFlow();
     expect(hidden.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=okta');
     expect(sdk.discoverOAuthServerInfo).not.toHaveBeenCalled();
+  });
+
+  it('lets a user connect a server an accessible app binds through app.integrations', async () => {
+    // Since V193 an app binds the installation; it no longer lists the server in `tools`.
+    state.apps = [{ id: 'assistant', integrations: { okta: { actions: ['search'] } } }];
+    const res = await startFlow();
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('https://okta-mcp.example.com/authorize?');
+    const listed = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
+    expect(listed.body.servers.map(s => s.serverId)).toEqual(['okta']);
+  });
+
+  it("refuses a user the installation's allowedGroups exclude, whatever the apps grant", async () => {
+    state.apps = [{ id: 'assistant', tools: ['okta'], integrations: { okta: {} } }];
+    state.integrations = oktaInstallation({ allowedGroups: ['engineering'] });
+    const hidden = await startFlow();
+    expect(hidden.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=okta');
+    const listed = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
+    expect(listed.body.servers).toEqual([]);
+    // Admins configure and test the server: they always may connect.
+    const admin = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('x-test-user', 'root')
+      .set('x-test-admin', '1');
+    expect(admin.status).toBe(302);
+    expect(admin.headers.location).toContain('https://okta-mcp.example.com/authorize?');
+    // A member of the group connects as before.
+    state.integrations = oktaInstallation({ allowedGroups: ['users'] });
+    const member = await startFlow();
+    expect(member.status).toBe(302);
   });
 
   it('reports discovery and registration failures with stable codes', async () => {
@@ -527,6 +577,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
   beforeEach(async () => {
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'https://ihub.example.com' } };
     state.apps = [{ id: 'assistant', tools: ['evil', 'corp'] }];
+    state.integrations = installationsOf(['evil', 'corp']);
     await mcpClientManager.initialize({ servers: [EVIL, CORP] });
     sdk.discoverOAuthServerInfo.mockImplementation(async serverUrl =>
       String(serverUrl).startsWith('https://evil-mcp')

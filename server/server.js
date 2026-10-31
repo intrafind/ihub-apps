@@ -594,14 +594,19 @@ if (cluster.isPrimary && workerCount > 1) {
       const { registerConfigChangeHook, ALL_ENTRIES } = await import('./configSync.js');
       const { invalidate } =
         await import('./services/integrations/protocols/openapi/OpenApiAdapter.js');
+      const { notifyDefinitionsChanged } =
+        await import('./services/integrations/protocols/index.js');
       // Another worker installed, changed or removed an integration or a
-      // definition: refresh what this worker derives from them. Registered
-      // before the first load, so a load that fails here still leaves this
-      // worker following later changes.
+      // definition: refresh what this worker derives from them — the cached
+      // OpenAPI schemas, the MCP client manager's server configs (the MCP
+      // adapter's `onChanged`), the scope providers. Registered before the
+      // first load, so a load that fails here still leaves this worker
+      // following later changes.
       registerConfigChangeHook(async ({ entries }) => {
         if (!entries.includes(INTEGRATIONS_CONFIG_KEY) && !entries.includes(ALL_ENTRIES)) return;
         await integrationRegistry.reload();
         invalidate();
+        await notifyDefinitionsChanged();
         await syncIntegrationScopeProviders();
       });
       // The built-in native connectors (iFinder, iAssistant) register

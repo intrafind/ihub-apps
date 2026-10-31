@@ -10,9 +10,15 @@
  * registrations (bound to transport, URL and auth block) stay valid:
  *
  * - a server whose endpoint is one of the shipped MCP definitions (the former
- *   built-in catalog, draw.io, Excalidraw) installs that definition;
+ *   built-in catalog, draw.io, Excalidraw) installs that definition, provided
+ *   its sign-in mode is one the definition offers and its `toolPrefix` is
+ *   empty or the default `<id>__` — only the generic definition declares a
+ *   `toolPrefix` field, so a custom prefix would be lost on the first edit and
+ *   the tool ids would change;
  * - any other server installs the generic `com.intrafind/mcp-server`
- *   definition with the transport, auth and tuning settings as install values;
+ *   definition with the transport, auth and tuning settings as install values
+ *   (`toolPrefix` included); the migration log names every server that
+ *   matched a shipped endpoint but fell back, and why;
  * - `auth` maps to the sign-in mode: bearer, basic and header → service
  *   account (credential reference kept), oauth → OAuth client, oauthUser →
  *   per-user OAuth; `allowedTools` → `actions.enabled`;
@@ -129,21 +135,53 @@ function credentialRefOf(auth) {
   );
 }
 
-/** The installation an `mcpServers.json` server becomes. */
-export function instanceFrom(server, shipped = []) {
+/**
+ * The shipped definition a server installs, or null with the reason it falls
+ * back to the generic one although its endpoint is a shipped one.
+ * @returns {{ match: object|null, fallbackReason: string|null }}
+ */
+export function shippedMatchFor(server, shipped = []) {
+  const transport = server.transport || {};
+  const url = normalizeUrl(transport.url);
+  if (!url) return { match: null, fallbackReason: null };
+  const sameEndpoint = shipped.filter(
+    def =>
+      def.url &&
+      normalizeUrl(def.url) === url &&
+      (!def.transportType || def.transportType === transport.type)
+  );
+  if (sameEndpoint.length === 0) return { match: null, fallbackReason: null };
+  const mode = authModeOf(server.auth || { type: 'none' });
+  const match = sameEndpoint.find(def => def.authModes.includes(mode));
+  if (!match) {
+    return {
+      match: null,
+      fallbackReason: `sign-in mode "${mode}" is not offered by ${sameEndpoint.map(d => d.id).join(', ')}`
+    };
+  }
+  const prefix = typeof server.toolPrefix === 'string' ? server.toolPrefix.trim() : '';
+  if (prefix && prefix !== `${server.id}__`) {
+    return {
+      match: null,
+      fallbackReason: `custom toolPrefix "${prefix}" (${match.id} declares no toolPrefix field; the tool ids would change on the first edit)`
+    };
+  }
+  return { match, fallbackReason: null };
+}
+
+/**
+ * The installation an `mcpServers.json` server becomes.
+ * @param {object} server
+ * @param {Array} [shipped] - see {@link loadShippedMcpDefinitions}
+ * @param {{ onFallback?: (reason: string) => void }} [options] - told when the
+ *   server's endpoint is a shipped one but the generic definition is installed
+ */
+export function instanceFrom(server, shipped = [], { onFallback } = {}) {
   const transport = server.transport || {};
   const auth = server.auth || { type: 'none' };
   const mode = authModeOf(auth);
-  const url = normalizeUrl(transport.url);
-  const match =
-    url &&
-    shipped.find(
-      def =>
-        def.url &&
-        normalizeUrl(def.url) === url &&
-        (!def.transportType || def.transportType === transport.type) &&
-        def.authModes.includes(mode)
-    );
+  const { match, fallbackReason } = shippedMatchFor(server, shipped);
+  if (fallbackReason) onFallback?.(fallbackReason);
   const generic = !match;
   const values = {};
 
@@ -184,8 +222,12 @@ export function instanceFrom(server, shipped = []) {
     put(values, 'oauthAuthorizationServer', auth.authorizationServer);
   }
 
-  const prefix = typeof server.toolPrefix === 'string' ? server.toolPrefix.trim() : '';
-  put(values, 'toolPrefix', prefix || undefined);
+  // A matched definition has no `toolPrefix` field; its prefix is empty or
+  // the default (`shippedMatchFor`), so nothing is lost by leaving it out.
+  if (generic) {
+    const prefix = typeof server.toolPrefix === 'string' ? server.toolPrefix.trim() : '';
+    put(values, 'toolPrefix', prefix || undefined);
+  }
 
   const instance = {
     id: server.id,
@@ -307,7 +349,12 @@ export async function up(ctx, { shippedDefinitions } = {}) {
       ctx.log(`MCP server "${server.id}" is already an installed integration; left as is`);
       continue;
     }
-    const instance = instanceFrom(server, shipped);
+    const instance = instanceFrom(server, shipped, {
+      onFallback: reason =>
+        ctx.log(
+          `MCP server "${server.id}" has a shipped endpoint but installs the generic definition: ${reason}`
+        )
+    });
     const now = new Date().toISOString();
     instance.installedAt = now;
     instance.updatedAt = now;
