@@ -21,7 +21,10 @@ actions as tools.
   an answer mentions is linked.
 - **In apps:** **Admin → Apps → Edit → Installed integrations** binds an installation, narrows it
   to some actions and sets the default or pinned scope. An app is offered only while every
-  installation it binds exists and is enabled; **Admin → Apps** names a missing one.
+  installation it binds as **Required** (the default) exists and is enabled; **Admin → Apps**
+  names a missing one. Switch **Required** off and the app stays available without that
+  integration's actions while it is off. Web search is optional by default, since most apps work
+  without it; its own **Required** switch hides the app instead.
 - **Marketplace:** the new item type **Integrations** installs definitions from a registry. The
   official marketplace publishes the first one with an example app.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
@@ -31,7 +34,6 @@ actions as tools.
   Schleswig-Holstein, open.canada.ca and data.boston.gov; data.europa.eu offers only the search.
 
 See [Integrations](../../integrations.md).
-
 
 ## iFinder and iAssistant Are Installed Integrations
 
