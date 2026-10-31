@@ -90,3 +90,20 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
   narrowed to some skills; tool ids (`a2a__<id>__<skill>`) and group grants are unchanged.
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
+
+## Integrations Can Bring Their Own Code
+
+A definition in a registry may ship a connector module (`"protocol": { "type": "script",
+"module": "connector.js" }`) with the same contract as iHub's built-in connectors, so an
+integration that no OpenAPI document can express (Jira, Microsoft 365 and the like) can be
+published through a registry instead of only built in. Two guard rails: a registry delivers such
+an integration only when an admin marked it as **trusted for code** (**Admin → Marketplace →
+Manage Registries**), and the catalog must carry a hash for the code file, which the install
+checks. The Catalog tab and the install wizard say when an integration runs code on the server.
+
+A connector is one bundled file: the module named in the definition is the only code file the
+folder may carry and imports nothing from the folder (esbuild or rollup bundle a multi-file
+connector before it is published). The install refuses a second code file or a relative import
+with a clear message. The reason is that an update from the Marketplace reloads the entry module
+only; a helper file would keep running its old code until a restart. Updating a code-based
+integration takes effect at once, for its actions and for the scopes it offers in the chat.

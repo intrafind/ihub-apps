@@ -480,9 +480,10 @@ export class InstalledIntegrationService {
       // iFinder connector switches the iAssistant model on after setup).
       const definitionId = (after || before)?.definition;
       const entry = definitionId ? this.registry.get(definitionId) : null;
-      if (entry?.definition.protocol.type === 'native') {
-        const { getConnector } = await import('./protocols/native/connectors/index.js');
-        const connector = getConnector(entry.definition.protocol.module);
+      const protocolType = entry?.definition.protocol.type;
+      if (protocolType === 'native' || protocolType === 'script') {
+        const { getConnectorFor } = await import('./protocols/native/NativeAdapter.js');
+        const connector = await getConnectorFor(entry.definition).catch(() => null);
         await connector?.onChanged?.({ before, after, definition: entry.definition });
       }
       const { syncIntegrationScopeProviders } = await import('./integrationTools.js');

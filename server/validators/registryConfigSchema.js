@@ -54,7 +54,13 @@ export const registryConfigSchema = z.object({
   /** Whether the server should periodically re-fetch this registry's catalog */
   autoRefresh: z.boolean().prefault(false),
   /** How often (in hours) to auto-refresh when autoRefresh is enabled (1–168) */
-  refreshIntervalHours: z.number().int().min(1).max(168).optional().prefault(24)
+  refreshIntervalHours: z.number().int().min(1).max(168).optional().prefault(24),
+  /**
+   * Whether integrations from this registry may bring code that runs in the
+   * server process (`script` protocol). Off by default: the admin grants it to
+   * registries whose publisher they trust, such as the IntraFind registry.
+   */
+  trustCode: z.boolean().prefault(false)
 });
 
 /**

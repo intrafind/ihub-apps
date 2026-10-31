@@ -548,6 +548,11 @@ function AdminInstalledIntegrationsPage() {
                   </dl>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {item.runsCode && (
+                        <Pill tone="yellow">
+                          {t('admin.integrationCatalog.runsCode', 'Runs code on this server')}
+                        </Pill>
+                      )}{' '}
                       {item.installedInstances?.length
                         ? t('admin.integrationCatalog.installedCount', '{{count}} installed', {
                             count: item.installedInstances.length

@@ -12,6 +12,7 @@
  */
 
 import { jest } from '@jest/globals';
+import crypto from 'node:crypto';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -27,6 +28,8 @@ const state = {
   instances: [],
   /** The registry's credentials (`getRegistryWithAuth`). */
   auth: { type: 'none' },
+  /** Whether the registry may deliver code (`trustCode`). */
+  trustCode: false,
   /** Every fetch the installer made: `{ url, headers }`. */
   fetches: []
 };
@@ -58,7 +61,8 @@ jest.unstable_mockModule('../services/marketplace/RegistryService.js', () => ({
     getRegistryWithAuth: async () => ({
       id: 'reg',
       source: 'https://registry.example/catalog.json',
-      auth: state.auth
+      auth: state.auth,
+      trustCode: state.trustCode
     }),
     getCachedCatalogAsync: async () => ({ catalog: { items: state.items } }),
     resolveItemUrl: item => `https://registry.example/${item.source.path}`
@@ -177,6 +181,7 @@ describe('ContentInstaller: integration definitions', () => {
     state.items = [];
     state.files = {};
     state.auth = { type: 'none' };
+    state.trustCode = false;
     state.fetches = [];
     invalidated.length = 0;
     adapterNotifications.length = 0;
@@ -222,6 +227,98 @@ describe('ContentInstaller: integration definitions', () => {
       expect(headers).toBeDefined();
       expect(headers.Authorization).toBeUndefined();
     }
+  });
+
+  const connectorSource = `export default { id: 'org.example/script', actions: { ping: { parameters: { type: 'object', properties: {} }, run: async () => 'pong' } } };\n`;
+  const scriptDefinition = {
+    ...definition,
+    id: 'org.example/script',
+    protocol: { type: 'script', module: 'connector.js' },
+    install: [],
+    actions: []
+  };
+  const SCRIPT_FOLDER = 'org.example__script';
+  const publishScript = (integrity, { source = connectorSource, extraFiles = {} } = {}) => {
+    state.items = [
+      {
+        type: 'integration',
+        name: SCRIPT_FOLDER,
+        version: '1.0.0',
+        source: {
+          type: 'relative',
+          path: `integrations/${SCRIPT_FOLDER}/integration.json`,
+          companions: ['connector.js', ...Object.keys(extraFiles)],
+          ...(integrity ? { integrity } : {})
+        }
+      }
+    ];
+    state.files = {
+      [`integrations/${SCRIPT_FOLDER}/integration.json`]: scriptDefinition,
+      [`integrations/${SCRIPT_FOLDER}/connector.js`]: source,
+      [`integrations/${SCRIPT_FOLDER}/icon.svg`]: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      ...Object.fromEntries(
+        Object.entries(extraFiles).map(([name, text]) => [
+          `integrations/${SCRIPT_FOLDER}/${name}`,
+          text
+        ])
+      )
+    };
+  };
+  const sha256 = text =>
+    `sha256-${crypto.createHash('sha256').update(text, 'utf8').digest('base64')}`;
+
+  test('refuses an integration with code from a registry that is not trusted for code', async () => {
+    publishScript({ 'connector.js': sha256(connectorSource) });
+    await expect(
+      contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin')
+    ).rejects.toMatchObject({ code: 'CODE_NOT_TRUSTED' });
+  });
+
+  test('refuses code without a hash, and a hash that does not match', async () => {
+    state.trustCode = true;
+    publishScript();
+    await expect(
+      contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin')
+    ).rejects.toMatchObject({ code: 'CODE_INTEGRITY_REQUIRED' });
+    publishScript({ 'connector.js': sha256('something else') });
+    await expect(
+      contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin')
+    ).rejects.toMatchObject({ code: 'INTEGRITY_MISMATCH' });
+  });
+
+  test('installs code from a trusted registry when the hash matches', async () => {
+    state.trustCode = true;
+    publishScript({ 'connector.js': sha256(connectorSource) });
+    const manifest = await contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin');
+    expect(manifest).toMatchObject({ type: 'integration', itemId: SCRIPT_FOLDER });
+    const written = await fs.readdir(
+      path.join(state.rootDir, 'contents', 'integration-definitions', SCRIPT_FOLDER)
+    );
+    expect(written.sort()).toEqual(['connector.js', 'icon.svg', 'integration.json']);
+    expect(integrationRegistry.get('org.example/script')).toMatchObject({ source: 'installed' });
+  });
+
+  test('refuses a script integration with more than one code file, or a module that imports a sibling', async () => {
+    state.trustCode = true;
+    const helper = "export const lib = 'lib1';\n";
+    publishScript(
+      { 'connector.js': sha256(connectorSource), 'lib.js': sha256(helper) },
+      { extraFiles: { 'lib.js': helper } }
+    );
+    await expect(
+      contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin')
+    ).rejects.toMatchObject({ code: 'SCRIPT_EXTRA_CODE_FILES', message: /lib\.js/ });
+
+    // Only the entry module is imported with a cache-buster, so a sibling
+    // would keep serving its first version after a re-install.
+    const importing = `import { lib } from './lib.js';\n${connectorSource}`;
+    publishScript({ 'connector.js': sha256(importing) }, { source: importing });
+    await expect(
+      contentInstaller.install('reg', 'integration', SCRIPT_FOLDER, 'admin')
+    ).rejects.toMatchObject({ code: 'SCRIPT_RELATIVE_IMPORT', message: /\.\/lib\.js/ });
+    await expect(
+      fs.access(path.join(state.rootDir, 'contents', 'integration-definitions', SCRIPT_FOLDER))
+    ).rejects.toThrow();
   });
 
   test('never sends the registry credentials over plain http, even to the registry host', async () => {
