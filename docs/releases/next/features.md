@@ -108,7 +108,8 @@ The search engines and the page reader are the built-in integration **Web search
 
 - **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
   as credential references, the **default search engine** every app on `auto` uses, and the
-  groups that may search. Qwant still needs no key.
+  groups that may search — these hold for native search on Google, OpenAI and Anthropic models
+  too, so a user outside them gets no web search on any model. Qwant still needs no key.
 - **Test:** the installation's **Test** reports which engines have a key and runs one live search
   with the default engine, with the same verdicts and hints as the former connectivity test.
 - **Apps unchanged:** an app still switches web search on in its own settings and may name an

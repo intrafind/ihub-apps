@@ -92,7 +92,7 @@ export function clearNativeWebSearchFallbackMemo() {
  * imported lazily: it pulls in the whole config and tool stack, which the loop
  * must not depend on at module load.
  * @param {{fallback?: string}|null} directive
- * @param {{app?: Object, language?: string}} [context]
+ * @param {{app?: Object, language?: string, user?: Object}} [context]
  * @returns {Promise<Object[]>}
  */
 export async function resolveNativeWebSearchFallbackTools(directive, context = {}) {
