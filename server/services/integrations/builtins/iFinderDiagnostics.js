@@ -16,7 +16,6 @@ import smartCollections, {
 import { policyOffersIFinder, projectSettings } from '../../projects/projectSettings.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import configCache from '../../../configCache.js';
-import logger from '../../../utils/logger.js';
 import tokenStorageService from '../../../services/TokenStorageService.js';
 import {
   DiagnosticsReport,
