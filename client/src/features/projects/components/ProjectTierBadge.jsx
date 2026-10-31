@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { isIFinderProject } from '../utils/projectView';
+import { collectionState, isIFinderProject } from '../utils/projectView';
 
 /**
  * The tier of a project that does not live in iHub: "iFinder", for a smart
@@ -20,6 +20,23 @@ import { isIFinderProject } from '../utils/projectView';
 function ProjectTierBadge({ project, readOnly: readOnlyOverride }) {
   const { t } = useTranslation();
   if (!isIFinderProject(project)) return null;
+  // The collection behind the project was deleted in iFinder: the project
+  // keeps its chats and settings, and says so.
+  if (collectionState(project) === 'deleted') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+        title={t(
+          'projects.tier.collectionDeletedHint',
+          'The smart collection of this project was deleted in iFinder.'
+        )}
+        data-testid="project-tier-badge"
+      >
+        <Icon name="exclamation-triangle" size="xs" />
+        {t('projects.tier.collectionDeleted', 'Deleted in iFinder')}
+      </span>
+    );
+  }
   const readOnly =
     readOnlyOverride ??
     (project.permissions?.canEdit !== true || project.permissions?.readOnly === true);

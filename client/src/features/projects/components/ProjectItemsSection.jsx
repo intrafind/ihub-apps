@@ -18,6 +18,7 @@ import {
   fetchProjects,
   previewPickerUrl,
   searchPickerIFinder,
+  fetchPickerIFinderProfiles,
   uploadProjectItem
 } from '../../../api';
 import { useProjectEstimate } from '../hooks/useProjectEstimate';
@@ -32,6 +33,7 @@ import AddProjectItemDialog from './AddProjectItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
 import ProjectItemsTable from './ProjectItemsTable';
+import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
 import ProjectItemTextDialog from './ProjectItemTextDialog';
 import ProjectUsageBar from './ProjectUsageBar';
 import RenameItemDialog from './RenameItemDialog';
@@ -47,7 +49,8 @@ function userItemApi(errorMessage) {
     addItem: (...args) => addProjectItem(...args),
     uploadItem: (...args) => uploadProjectItem(...args),
     fetchPages: () => fetchPickerPages(),
-    searchIFinder: query => searchPickerIFinder(query),
+    searchIFinder: (query, options) => searchPickerIFinder(query, options),
+    fetchIFinderProfiles: () => fetchPickerIFinderProfiles(),
     checkUrl: url => checkPickerUrl(url),
     previewUrl: url => previewPickerUrl(url),
     crawlUrl: (url, options) => crawlPickerUrl(url, options),
@@ -105,9 +108,15 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const [renaming, setRenaming] = useState(null);
   const [removing, setRemoving] = useState(null);
   const actions = useProjectItemActions({ projectId: project.id, setProject, reload });
+  const documentActions = useProjectItemDocumentActions(project.id);
   // Stable for the dialogs' effects as long as the language does not change.
   const messageOf = useCallback(err => projectErrorMessage(err, t), [t]);
-  const itemApi = useMemo(() => userItemApi(messageOf), [messageOf]);
+  // A smart collection holds document ids only and reads them in the default
+  // search profile, so its picker searches there and offers no other.
+  const itemApi = useMemo(() => {
+    const api = userItemApi(messageOf);
+    return isIFinder ? { ...api, fetchIFinderProfiles: undefined } : api;
+  }, [messageOf, isIFinder]);
   const roomForMore = canAddItem(project, config);
   const projectId = project.id;
   const estimateCall = useCallback(() => estimateProjectTokens(projectId), [projectId]);
@@ -201,14 +210,20 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         }
         data-testid="project-items-scroll"
       >
+        {documentActions.error && (
+          <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
+            {documentActions.error}
+          </p>
+        )}
         <ProjectItemsTable
           items={project.items || []}
           kinds={config?.kinds || []}
-          busyItemId={actions.busyItemId}
+          busyItemId={actions.busyItemId || documentActions.busyId}
           readOnly={!editable}
           hidePinned={isIFinder}
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
+          onDocumentAction={documentActions.onDocumentAction}
           onTogglePinned={isIFinder ? undefined : actions.togglePinned}
           onRefresh={
             isIFinder
@@ -243,6 +258,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           }}
         />
       )}
+      {documentActions.dialogs}
       <ProjectItemTextDialog
         projectId={project.id}
         item={previewItem}

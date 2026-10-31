@@ -54,6 +54,7 @@ import {
   ACCESS_LEVELS,
   MEMBER_ROLES,
   MEMBER_TARGET_TYPES,
+  isCollectionStub,
   isIFinderProjectId
 } from './projectConstants.js';
 
@@ -273,6 +274,39 @@ function iFinderProjectPermissions(project, user, { writable = true } = {}) {
 }
 
 /**
+ * What a user may do with the stub of a smart collection (`isCollectionStub`):
+ * its owner uses it, holds chats in it, sets its default app and instructions,
+ * renames it (the collection too), adds and removes documents (in the
+ * collection, where writes are possible: the routes check that) and deletes
+ * it. Nobody shares, publishes or transfers it: the documents are read with the
+ * owner's rights, which no one else has. A full admin keeps the compliance read
+ * and delete every user project has, and sees no documents.
+ *
+ * @param {Object} project
+ * @param {Object} user
+ * @param {{isAdmin?: boolean}} [options]
+ * @returns {typeof NO_ACCESS}
+ */
+function collectionStubPermissions(project, user, { isAdmin = false } = {}) {
+  if (isAnonymousUser(user) || !canHoldProjects(user)) return NO_ACCESS;
+  const isOwner = String(project.owner?.id ?? project.ownerId ?? '') === String(user.id);
+  if (!isOwner && !isAdmin) return NO_ACCESS;
+  return {
+    canView: true,
+    canUse: true,
+    canEdit: isOwner,
+    canShare: false,
+    canDelete: true,
+    canTransfer: false,
+    readsAllChats: true,
+    canHoldChats: isOwner,
+    isOwner,
+    role: isOwner ? 'owner' : 'admin',
+    readOnly: !isOwner
+  };
+}
+
+/**
  * What the caller may do with one project.
  *
  * @param {Object|null} project - Stored project (user or admin ownership).
@@ -315,6 +349,7 @@ export function projectPermissions(
   if (isIFinderProjectId(project.id)) {
     return iFinderProjectPermissions(project, user, { writable: ifinderWritable });
   }
+  if (isCollectionStub(project)) return collectionStubPermissions(project, user, { isAdmin });
 
   if (project.ownership === 'admin') {
     // An admin project is configuration: whoever may use the app, workflow

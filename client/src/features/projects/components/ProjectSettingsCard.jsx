@@ -38,9 +38,12 @@ const SAVED_NOTICE_MS = 4000;
  * @param {Object} props.project
  * @param {boolean} props.editable
  * @param {(project: Object) => void} props.onSaved
+ * @param {boolean} [props.nameLocked=false] - The name and the description cannot be
+ *   changed here (a smart collection where this installation cannot change
+ *   collections in iFinder); the instructions and the default app still can.
  * @returns {JSX.Element}
  */
-function ProjectSettingsCard({ project, editable, onSaved }) {
+function ProjectSettingsCard({ project, editable, onSaved, nameLocked = false }) {
   const { t, i18n } = useTranslation();
   const { choices, loading: appsLoading } = useProjectChatApps();
   const [form, setForm] = useState(() => projectFormFrom(project));
@@ -253,6 +256,11 @@ function ProjectSettingsCard({ project, editable, onSaved }) {
                 errors={errors}
                 idPrefix="project-settings"
                 showDefaultApp
+                lockedFields={nameLocked ? ['name', 'description'] : []}
+                lockedHint={t(
+                  'projects.settings.collectionNameLocked',
+                  'The name and the description are those of the smart collection, which cannot be changed from here on this installation. Change them in iFinder.'
+                )}
                 // Read-only while the save is out: the answer resets the draft to
                 // what was saved, which would silently drop an edit made meanwhile.
                 disabled={saving}

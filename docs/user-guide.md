@@ -124,12 +124,21 @@ Hover a message to see its actions:
 - Answers: **Copy** (as text, Markdown or HTML), **Download**, **Open in Canvas** (edit a long text
   together with the model), **Read aloud** when your administrator enabled it, and a star rating
   with an optional comment for feedback.
+- Code blocks in an answer: **Copy** copies the code, **Download** saves it as a file. The file
+  takes the name the block gives (` ```js title="src/index.js" ` or ` ```python:app/main.py `
+  saves `index.js` or `main.py`), otherwise `code.<extension>` by its language.
 
 ### The chat header
 
 Depending on the app: **Clear** the chat, **Export** it (Markdown, PDF, Word, HTML, JSON, …),
 **Share** a read-only link, switch on **Compare mode**, and open the chat **Settings** (model,
 output format, reasoning effort, tools).
+
+Once an answer produced a picture or a file, **Artifacts** lists every file of the chat: generated
+pictures, PDF, Word and PowerPoint documents, code and data files, ZIP archives. Select one to
+preview it (pictures, rendered Markdown, formatted JSON, code), then **Download** or **Copy** it.
+Tick several and choose **Download selected (.zip)**, or **Download all (.zip)** for everything.
+A shared chat offers the same panel for the files it contains.
 
 ### Compare two models
 
