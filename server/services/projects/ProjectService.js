@@ -36,7 +36,11 @@ import './kinds/projectItemKind.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
 import { relinkProjects } from './projectRelink.js';
-import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
+import {
+  MAX_ITEM_TEXT_CHARS,
+  SMART_COLLECTION_SOURCE,
+  isCollectionStub
+} from './projectConstants.js';
 
 const COMPONENT = 'ProjectService';
 /** How often one project's activity is refreshed by chat turns at most. */
@@ -149,6 +153,63 @@ export class ProjectService {
       }
       return project;
     });
+  }
+
+  /**
+   * Create the stub of one of the owner's smart collections: a project that
+   * keeps the default app, the instructions and the chats of the collection,
+   * whose documents stay in iFinder. One stub per collection and owner; a stub
+   * takes no project slot (`countOwned`). Whether the collection is the
+   * owner's is the caller's to check (it asks iFinder with the owner's rights).
+   *
+   * @param {Object} options
+   * @param {Object} options.owner
+   * @param {string} options.collectionId
+   * @param {{name: string, description?: string, instructions?: string, defaultAppId?: string}} options.content
+   * @returns {Promise<Object>}
+   * @throws {ProjectError} `COLLECTION_ALREADY_ADDED` (details `projectId`).
+   */
+  async createCollectionStub({ owner, collectionId, content }) {
+    if (!this.repository.isAvailable()) {
+      throw new ProjectError(
+        'STORAGE_UNAVAILABLE',
+        'Projects are unavailable on this installation'
+      );
+    }
+    return this.repository.withOwnerLock(String(owner.id), async () => {
+      const existing = (await this.repository.listOwned(String(owner.id))).find(
+        project => isCollectionStub(project) && project.source.collectionId === collectionId
+      );
+      if (existing) {
+        throw new ProjectError(
+          'COLLECTION_ALREADY_ADDED',
+          'This smart collection is in your projects already',
+          { projectId: existing.id }
+        );
+      }
+      const project = await this.repository.createUser({
+        owner: actorOf(owner),
+        content: { ...content, source: { type: SMART_COLLECTION_SOURCE, collectionId } }
+      });
+      if (!project) {
+        throw new ProjectError('STORAGE_UNAVAILABLE', 'The project could not be stored');
+      }
+      return project;
+    });
+  }
+
+  /**
+   * The stubs of smart collections one user holds, by collection id.
+   *
+   * @param {string} ownerId
+   * @returns {Promise<Map<string, Object>>}
+   */
+  async collectionStubsOf(ownerId) {
+    const stubs = new Map();
+    for (const project of await this.repository.listOwned(String(ownerId))) {
+      if (isCollectionStub(project)) stubs.set(project.source.collectionId, project);
+    }
+    return stubs;
   }
 
   /**

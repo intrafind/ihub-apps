@@ -36,6 +36,9 @@ function ChatHeader({
   onToggleCanvas,
   // Opens the share dialog: the conversation and/or a link to the app.
   onShare,
+  // Opens the Artifacts panel: every file the conversation produced.
+  onOpenArtifacts,
+  showArtifactsButton = false,
   currentLanguage,
   isMobile = false,
   messages = [],
@@ -192,6 +195,17 @@ function ChatHeader({
                 <Icon name="share" size="sm" />
               </button>
             )}
+            {showArtifactsButton && (
+              <button
+                onClick={onOpenArtifacts}
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
+                title={t('chatArtifacts.open', 'Artifacts')}
+                aria-label={t('chatArtifacts.open', 'Artifacts')}
+                data-testid="open-artifacts"
+              >
+                <Icon name="archive-box" size="sm" />
+              </button>
+            )}
             {showCompareModeToggle && (
               <button
                 onClick={() => !compareModeDisabled && onCompareModeChange?.(!compareModeActive)}
@@ -237,6 +251,8 @@ function ChatHeader({
               onToggleConfig={onToggleConfig}
               onShare={onShare}
               showShareButton={showShareButton}
+              onOpenArtifacts={onOpenArtifacts}
+              showArtifactsButton={showArtifactsButton}
               showConfigButton={showConfigButton}
               showClearButton={showClearButton}
               messages={messages}

@@ -662,6 +662,8 @@ export const platformConfigSchema = z
     projects: z
       .object({
         tierPolicy: z.enum(['ihub', 'both', 'ifinder']).prefault('ihub'),
+        // The app a project chat starts in when the project names none.
+        defaultAppId: z.string().max(100).optional(),
         limits: z
           .object({
             maxFiles: z.number().int().min(1).max(50).prefault(25),

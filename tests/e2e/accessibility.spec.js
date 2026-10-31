@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { SHARE_ID, mockSharedChatWithArtifacts } from './helpers/sharedChatWithArtifacts.js';
 
 /**
  * Accessibility End-to-End Tests
@@ -464,6 +465,23 @@ test.describe('Accessibility — a user project page', () => {
 // practices), so they are run explicitly: a screen-reader user navigates by
 // landmark, and a second <main> (or an unlabelled duplicate) makes that list
 // ambiguous.
+// The Artifacts panel of a chat, open, over a shared chat whose share routes
+// are intercepted (see helpers/sharedChatWithArtifacts.js): no model, no
+// stored chat needed.
+test.describe('Accessibility — the Artifacts panel', () => {
+  test('has no critical or serious violations when open', async ({ page }) => {
+    await mockSharedChatWithArtifacts(page);
+    await page.goto(`/share/${SHARE_ID}`);
+    await page.getByTestId('open-artifacts').click();
+    const panel = page.getByRole('dialog', { name: /Artifacts/ });
+    await expect(panel.getByRole('listitem')).toHaveCount(3);
+    await panel.getByRole('button', { name: /^src\/index\.js/ }).click();
+    await expect(panel.getByLabel('Content of src/index.js')).toBeVisible();
+
+    await expectNoBlockingViolations(page, 'Artifacts panel');
+  });
+});
+
 test.describe('Accessibility — landmarks', () => {
   test.beforeEach(async ({ page }) => {
     await signInAsAdmin(page);

@@ -438,12 +438,48 @@ export function registerProjectPickerRoutes(app) {
     res.json({ pages });
   });
 
+  // The search profiles the caller may search in, as the chat input offers
+  // them (`services/integrations/scopes/iFinderScopes.js`): their own, narrowed
+  // to the admin's allow-list, or the configured default when iFinder cannot
+  // say. No app is involved, so no app pins one.
+  app.get(route('/ifinder/profiles'), ...gate, async (req, res) => {
+    if (!ifinderConfigured()) return sendNotFound(res, 'iFinder');
+    try {
+      const { default: iFinderScopes } =
+        await import('../services/integrations/scopes/iFinderScopes.js');
+      const listing = await iFinderScopes.listScopes({ user: req.user, app: null });
+      res.json({
+        profiles: listing.scopes,
+        defaultProfile: listing.defaultScope,
+        fixed: listing.fixed,
+        ...(listing.hint ? { hint: listing.hint } : {})
+      });
+    } catch (error) {
+      sendFailedOperationError(res, 'list iFinder search profiles', error);
+    }
+  });
+
   app.get(route('/ifinder/search'), ...gate, async (req, res) => {
     if (!ifinderConfigured()) return sendNotFound(res, 'iFinder');
     const parsed = ifinderPickerSchema.safeParse(req.query || {});
     if (!parsed.success) return sendBadRequest(res, 'A search query is required');
     const { q, profile, limit } = parsed.data;
     try {
+      // A profile picked here is checked like one picked in the chat input.
+      if (profile) {
+        const { default: iFinderScopes } =
+          await import('../services/integrations/scopes/iFinderScopes.js');
+        const check = await iFinderScopes.validateScope({
+          scopeId: profile,
+          user: req.user,
+          app: null
+        });
+        if (!check.ok) {
+          return sendErrorResponse(res, 403, check.message, {
+            details: { code: check.code }
+          });
+        }
+      }
       const { default: IFinderHandler } = await import('../sources/IFinderHandler.js');
       const handler = new IFinderHandler();
       const results = await handler.searchDocuments({

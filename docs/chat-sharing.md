@@ -2,7 +2,8 @@
 
 A stored chat can be handed to other people as a **read-only link**. The
 recipient sees the conversation as it was when it was shared — the messages
-and the images it generated — and can view or download those artifacts. They
+and the files it generated — and can view or download those artifacts, one
+by one or together as a ZIP in the [Artifacts panel](artifacts.md#the-artifacts-panel). They
 cannot type into it, edit it, rate it or continue it.
 
 Sharing rides on [Chat Persistence](chat-persistence.md): only a kept chat
@@ -217,6 +218,7 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
 | `GET /api/shares/:shareId`                       | per mode   | The snapshot and the display fields; counts as a view     |
 | `GET /api/shares/:shareId/artifacts`             | per mode   | Descriptors of the artifacts the snapshot references      |
 | `GET /api/shares/:shareId/artifacts/:artifactId` | per mode   | The bytes; `?download=1` sets `Content-Disposition: attachment` |
+| `POST /api/shares/:shareId/artifacts/zip`        | per mode   | Several (`{ artifactIds }`) or all of them as one ZIP     |
 | `DELETE /api/shares/:shareId`                    | owner/admin| Revoke                                                    |
 | `GET /api/users/lookup?q=`                       | signed in  | Recipient picker: at most ten `{ id, name, email }`, never the caller; empty unless user links are on offer, and for machine or agent tokens |
 | `GET /api/admin/chat-history/shares`             | admin      | The newest shares across the installation                 |

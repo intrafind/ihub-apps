@@ -85,6 +85,41 @@ export function collectionIdOf(projectId) {
   return isIFinderProjectId(projectId) ? projectId.slice(IFINDER_PROJECT_ID_PREFIX.length) : null;
 }
 
+/** The `source.type` of a project that stands for an iFinder smart collection. */
+export const SMART_COLLECTION_SOURCE = 'smart-collection';
+
+/**
+ * Whether a stored project is the stub of an iFinder smart collection: a user
+ * project the owner added from the catalog (or created as a collection) that
+ * keeps the default app, the instructions and the chats, while the documents
+ * stay in the collection. It stores no items of its own.
+ *
+ * @param {Object|null|undefined} project
+ * @returns {boolean}
+ */
+export function isCollectionStub(project) {
+  return (
+    Boolean(project) &&
+    !isIFinderProjectId(project.id) &&
+    project.source?.type === SMART_COLLECTION_SOURCE &&
+    typeof project.source.collectionId === 'string' &&
+    COLLECTION_ID.test(project.source.collectionId)
+  );
+}
+
+/**
+ * The smart collection behind a project: the id of a collection project
+ * (`ifc_…`) or the collection a stub stands for. Null for any other project.
+ *
+ * @param {Object|null|undefined} project
+ * @returns {string|null}
+ */
+export function smartCollectionIdOf(project) {
+  if (!project) return null;
+  if (isCollectionStub(project)) return project.source.collectionId;
+  return collectionIdOf(project.id);
+}
+
 /** Most items one project may hold, whatever an admin configures. */
 export const MAX_FILES_CEILING = 50;
 

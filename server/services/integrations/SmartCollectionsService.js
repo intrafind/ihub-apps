@@ -4,7 +4,8 @@
 /**
  * Client of the iFinder Smart Collections public API (v1, GA since iFinder 6.8):
  * list and get, and (iteration 2 of the iFinder tier) create, rename, add
- * documents and remove documents, with the calling user's own JWT.
+ * documents, remove documents and delete a collection, with the calling user's
+ * own JWT.
  *
  *  - The paths are the **v1** ones (`/public-api/smart-collections/api/v1/...`),
  *    not the v0 paths the 6.8 documentation still shows.
@@ -444,6 +445,27 @@ class SmartCollectionsService {
       method: 'PATCH',
       suffix: `/${collectionIdOrThrow(id)}`,
       body,
+      signal,
+      timeoutMs: WRITE_TIMEOUT_MS
+    });
+  }
+
+  /**
+   * Delete a collection in iFinder. Its documents are untouched: a collection
+   * only lists them.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.id
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<void>}
+   * @throws {SmartCollectionsError} `NOT_FOUND` when it is gone already, or not the caller's.
+   */
+  async remove({ user, id, signal }) {
+    await this._request({
+      user,
+      method: 'DELETE',
+      suffix: `/${collectionIdOrThrow(id)}`,
       signal,
       timeoutMs: WRITE_TIMEOUT_MS
     });

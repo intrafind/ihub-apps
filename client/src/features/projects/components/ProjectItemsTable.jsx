@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { DataTable } from '../../admin/components/data-table';
-import { isItemReadable, kindIcon, localizedText } from '../utils/projectItems';
+import { hasDocumentActions, isItemReadable, kindIcon, localizedText } from '../utils/projectItems';
 import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
 import ProjectItemStatus from './ProjectItemStatus';
@@ -44,6 +44,9 @@ function isRetryable(item) {
  *   items cannot be pinned, such as a smart collection from iFinder).
  * @param {(item: Object) => void} [props.onTogglePinned]
  * @param {(item: Object) => void} [props.onPreview]
+ * @param {(action: 'previewDocument'|'download'|'details'|'open', item: Object) => void} [props.onDocumentAction] -
+ *   The document actions of an iFinder document (`ProjectItemDocumentActions.jsx`);
+ *   reading only, so offered on a read-only list too.
  * @param {(item: Object) => void} [props.onRefresh] - Retry (failed, not an upload) or
  *   refresh (stale, picked).
  * @param {(item: Object) => void} [props.onRename]
@@ -64,6 +67,7 @@ function ProjectItemsTable({
   hidePinned = false,
   onTogglePinned,
   onPreview,
+  onDocumentAction,
   onRefresh,
   onRename,
   onRemove,
@@ -201,6 +205,21 @@ function ProjectItemsTable({
       hidden: item => typeof onPreview !== 'function' || !isItemReadable(item),
       onClick: item => onPreview(item)
     },
+    ...[
+      ['previewDocument', t('sources.preview', 'Preview (PDF)'), 'document-text'],
+      ['open', t('projects.items.actions.openInIFinder', 'Open in iFinder'), 'external-link'],
+      ['download', t('sources.download', 'Download'), 'download'],
+      ['details', t('sources.details', 'Details'), 'information-circle']
+    ].map(([id, label, icon]) => ({
+      id,
+      label,
+      icon,
+      // Opening the document where it lives is the one a reader wants first.
+      ...(id === 'open' ? { priority: 'primary' } : {}),
+      hidden: item => typeof onDocumentAction !== 'function' || !hasDocumentActions(item),
+      disabled: item => busyItemId === item.id,
+      onClick: item => onDocumentAction(id, item)
+    })),
     {
       id: 'retry',
       label: t('projects.items.actions.retry', 'Retry'),
