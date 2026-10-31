@@ -12,6 +12,9 @@ import path from 'node:path';
 import * as iFinderTool from '../../../../../../tools/iFinder.js';
 import iFinderScopes from '../../../../scopes/iFinderScopes.js';
 import iFinderService from '../../../../iFinderService.js';
+import iAssistantService from '../../../../iAssistantService.js';
+import iAssistantProfileResolver from '../../../../iAssistantProfileResolver.js';
+import { clearExchangedTokenCache } from '../../../../iFinderTokenProvider.js';
 import { iFinderConfigFromInstance, withIntegrationConfigs } from '../../../../ifinderConfig.js';
 import { enableAssistantModelOnIFinderSetup } from '../../../../iAssistantModelActivation.js';
 import { DiagnosticsReport, STATUS } from '../../../../integrationDiagnostics.js';
@@ -191,6 +194,18 @@ async function test({ instance, user }) {
   return report.steps;
 }
 
+/**
+ * Everything that read the iFinder connection: iFinder itself, iAssistant
+ * (its base URL and enabled state come from this connection) and the tokens
+ * exchanged for it, whose cache key does not include the exchange settings.
+ */
+function resetConnectionCaches() {
+  iFinderService.resetConfig();
+  iAssistantService.resetConfig();
+  iAssistantProfileResolver.reset();
+  clearExchangedTokenCache();
+}
+
 const connector = {
   id: 'ifinder',
   actions: {
@@ -208,7 +223,7 @@ const connector = {
     return iFinderScopes;
   },
   invalidate() {
-    iFinderService.resetConfig();
+    resetConnectionCaches();
   },
   /**
    * When the admin finishes setting iFinder up, the iAssistant conversation
@@ -216,7 +231,7 @@ const connector = {
    * trip to Admin → Models.
    */
   async onChanged({ before, after }) {
-    iFinderService.resetConfig();
+    resetConnectionCaches();
     const was = before ? iFinderConfigFromInstance(before) : null;
     const now = after ? iFinderConfigFromInstance(after) : null;
     try {
