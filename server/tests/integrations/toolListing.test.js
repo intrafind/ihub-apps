@@ -75,11 +75,17 @@ describe('installed integration tools in the tool listing', () => {
     expect(await listFor({ app })).toEqual(['braveSearch']);
   });
 
-  it('keeps an explicit group grant on the instance id', async () => {
+  it('keeps an explicit group grant on the instance id for a member of its groups', async () => {
     const app = { id: 'chat', tools: [] };
-    expect(await listFor({ app, groups: ['guests'], grants: ['portal'] })).toEqual([
+    expect(await listFor({ app, groups: ['analysts'], grants: ['portal'] })).toEqual([
       'portal__purge',
       'portal__search'
     ]);
+  });
+
+  it('lists nothing for a grant holder outside the installation groups', async () => {
+    const app = { id: 'chat', tools: [] };
+    expect(await listFor({ app, groups: ['guests'], grants: ['portal'] })).toEqual([]);
+    expect(await listFor({ app, groups: ['guests'], grants: ['*'] })).toEqual(['braveSearch']);
   });
 });
