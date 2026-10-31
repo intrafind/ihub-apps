@@ -276,7 +276,7 @@ export const useMermaidRenderer = ({ t }) => {
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-xs">
               <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
                 <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;"></div>
-                <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div class="pan-zoom-controls select-none absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <button class="mermaid-zoom-in p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${label('common.zoomIn', 'Zoom In')} (+)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
@@ -294,7 +294,7 @@ export const useMermaidRenderer = ({ t }) => {
                   </button>
                 </div>
               </div>
-              <div class="code-block-toolbar flex flex-row items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
+              <div class="code-block-toolbar select-none flex flex-row items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
                   <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${escapeHtml(language)})` : ''}</span>
                 </div>
@@ -419,7 +419,7 @@ export const useMermaidRenderer = ({ t }) => {
                 <div class="text-red-100 text-sm mb-3">${escapeHtml(err?.message ?? '')}</div>
                 <pre class="text-red-200 text-xs"><code>${escapeHtml(code)}</code></pre>
               </div>
-              <div class="code-block-toolbar flex flex-row items-center justify-between bg-red-100 border-t border-red-200 px-3 py-2 rounded-b-lg">
+              <div class="code-block-toolbar select-none flex flex-row items-center justify-between bg-red-100 border-t border-red-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
                   <span class="text-xs font-medium text-red-600">Mermaid (Error)</span>
                 </div>

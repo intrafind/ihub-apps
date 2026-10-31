@@ -59,6 +59,8 @@ function SharedAppHeader({
   hideParametersButton = false,
   onShare,
   showShareButton = false,
+  onOpenArtifacts,
+  showArtifactsButton = false,
   conversationTitle = null,
 
   // Compare mode props
@@ -150,6 +152,8 @@ function SharedAppHeader({
           parametersVisible={showParameters}
           onShare={onShare}
           showShareButton={showShareButton}
+          onOpenArtifacts={onOpenArtifacts}
+          showArtifactsButton={mode === 'chat' && showArtifactsButton}
           messages={messages}
           exportSettings={exportSettings}
           appId={appId}
