@@ -66,6 +66,9 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
   gone.
 - **Deployments that write `a2aAgents.json`** have to write installations; the field names are
   listed in `docs/a2a-agents.md`. The `security` block lives in `integrations.json`.
+- **An agent whose id another installation already holds** (an MCP server, a catalog integration)
+  is not moved: it is kept in `contents/config/a2aAgents.unmigrated.json` with a warning in the
+  log. Install it under a free id and bind it to its apps.
 
 ## Web Search Keys Moved From `providers.json` to the `websearch` Installation
 
