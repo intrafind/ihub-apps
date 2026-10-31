@@ -72,15 +72,20 @@ const portal = {
 };
 const jira = { id: 'jira', name: 'Jira', script: 'jira.js', parameters: { type: 'object' } };
 
+const WEB_SEARCH = 'com.intrafind/web-search';
 let installed;
 const open = () => {
-  installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
+  installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: true }];
 };
 const closedTo = groups => {
-  installed = [{ id: 'websearch', enabled: true, allowedGroups: groups }];
+  installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: true, allowedGroups: groups }];
 };
 configCache.getTools = () => ({ data: [brave, qwant, reader, portal, jira] });
 configCache.getIntegrations = () => ({ data: { installed } });
+// The installed-integration service reads the same file by its path.
+const cachedConfig = configCache.get.bind(configCache);
+configCache.get = configPath =>
+  configPath === 'config/integrations.json' ? { data: { installed } } : cachedConfig(configPath);
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getSources = () => ({ data: [] });
 configCache.getFeatures = () => ({ skills: false });
@@ -99,7 +104,7 @@ describe('isWebSearchAvailableTo', () => {
   });
 
   it('is false while the installation is off or missing', () => {
-    installed = [{ id: 'websearch', enabled: false }];
+    installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: false }];
     assert.equal(isWebSearchAvailableTo(RESEARCHER), false);
     installed = [];
     assert.equal(isWebSearchAvailableTo(RESEARCHER), false);
@@ -141,7 +146,7 @@ describe('a workflow node that lists the web search tools', () => {
   });
 
   it('gets nothing while the installation is off', async () => {
-    installed = [{ id: 'websearch', enabled: false }];
+    installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: false }];
     assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url', 'jira'], RESEARCHER)), [
       'jira'
     ]);
@@ -219,7 +224,7 @@ describe('native web search and the installation', () => {
   });
 
   it('is not resolved while the installation is off', () => {
-    installed = [{ id: 'websearch', enabled: false }];
+    installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: false }];
     assert.equal(resolveAppNativeWebSearch(app, 'anthropic', undefined, undefined, STAFF), null);
   });
 
@@ -260,7 +265,7 @@ describe('the fallback tool when a provider turns native search down', () => {
       await resolveNativeWebSearchFallbackTools(directive, { app, language: 'en' }),
       []
     );
-    installed = [{ id: 'websearch', enabled: false }];
+    installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: false }];
     assert.deepEqual(
       await resolveNativeWebSearchFallbackTools(directive, {
         app,
