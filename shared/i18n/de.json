@@ -3332,7 +3332,9 @@
         "test": "Verbindung testen",
         "testing": "Teste …",
         "dynamicActionsEmpty": "Der Server listet seine Tools, sobald iHub sich verbindet. Testen Sie die Verbindung, um sie zu sehen; jedes Tool ist an, bis Sie welche abschalten.",
+        "dynamicActionsUnavailable": "Der Server hat seine Tools nicht gelistet (nicht erreichbar oder noch niemand verbunden). Beim Speichern bleibt die gespeicherte Tool-Auswahl, wie sie ist; testen Sie die Verbindung, um sie zu sehen und zu ändern.",
         "dynamicActionsHint": "Das sind die Tools, die der Server listet; ein später hinzugefügtes Tool ist standardmäßig an.",
+        "dynamicActionsAllowlistHint": "Das sind die Tools, die der Server listet; nur die angehakten dürfen laufen, und ein Tool, das der Server später hinzufügt, bleibt aus, bis Sie es einschalten.",
         "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen."
       },
       "connections": {

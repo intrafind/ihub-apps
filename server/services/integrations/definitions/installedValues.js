@@ -30,11 +30,13 @@ export function effectiveValues(definition, instance) {
 /**
  * A URL is joined with paths in templates (`{baseUrl}{apiPath}`,
  * `{baseUrl}/dataset/{name}`), so a trailing slash an admin typed would give
- * an interior `//`. It goes here, once, for every use of the value.
+ * an interior `//`. It goes here, once, for every use of the value. A field
+ * with `keepTrailingSlash` opts out: its URL is used verbatim (an MCP
+ * endpoint, an OAuth issuer), and other state is bound to that exact string.
  */
-function normalizeValue(field, value) {
-  if (field?.type === 'url' && typeof value === 'string') return value.replace(/\/+$/, '');
-  return value;
+export function normalizeValue(field, value) {
+  if (field?.type !== 'url' || typeof value !== 'string' || field.keepTrailingSlash) return value;
+  return value.replace(/\/+$/, '');
 }
 
 /**
