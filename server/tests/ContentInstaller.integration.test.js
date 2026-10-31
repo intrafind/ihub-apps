@@ -72,7 +72,7 @@ jest.unstable_mockModule('../services/marketplace/RegistryService.js', () => ({
 jest.unstable_mockModule('../requestThrottler.js', () => ({
   throttledFetch: async (_id, url, options = {}) => {
     state.fetches.push({ url, headers: options.headers || {} });
-    const relative = url.replace(/^https:\/\/[^/]+\//, '');
+    const relative = url.replace(/^https?:\/\/[^/]+\//, '');
     const body = state.files[relative];
     if (body === undefined) return { ok: false, status: 404, text: async () => 'not found' };
     return {
@@ -281,6 +281,21 @@ describe('ContentInstaller: integration definitions', () => {
     );
     expect(written.sort()).toEqual(['connector.js', 'icon.svg', 'integration.json']);
     expect(integrationRegistry.get('org.example/script')).toMatchObject({ source: 'installed' });
+  });
+
+  test('never sends the registry credentials over plain http, even to the registry host', async () => {
+    publish(definition, { companions: ['README.md'] });
+    state.auth = { type: 'bearer', token: 'secret' };
+    state.items[0].source.rawBase = `http://registry.example/integrations/${FOLDER}`;
+
+    await contentInstaller.install('reg', 'integration', FOLDER, 'admin');
+
+    const byUrl = Object.fromEntries(state.fetches.map(f => [f.url, f.headers]));
+    for (const name of ['README.md', 'openapi.json', 'icon.svg']) {
+      const headers = byUrl[`http://registry.example/integrations/${FOLDER}/${name}`];
+      expect(headers).toBeDefined();
+      expect(headers.Authorization).toBeUndefined();
+    }
   });
 
   test('re-installing a definition drops the cached schemas of its installations and re-registers their scope providers', async () => {
