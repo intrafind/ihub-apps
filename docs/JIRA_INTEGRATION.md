@@ -53,10 +53,16 @@ The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassia
 2. Open **Admin → Integrations → Installed → Atlassian Jira** and fill in:
    - **OAuth client ID** (`clientId`)
    - **OAuth client secret** (`clientSecretRef`): the credential from step 1
-   - **Redirect URI** (`redirectUri`): the callback URL registered in the Atlassian app; empty
-     means it is derived from each request
+   - **Redirect URI** (`redirectUri`): the callback URL registered in the Atlassian app. Empty
+     means it is derived from each request as the browser sees it: scheme and host from the
+     `X-Forwarded-Proto` / `X-Forwarded-Host` headers of a trusted proxy (else the request's
+     own), the base path (`X-Forwarded-Prefix`), then `/api/integrations/jira/callback` — for
+     example `https://ihub.example.com/ihub/api/integrations/jira/callback`. The authorize
+     redirect and the token exchange send the same derived value. Set the field when the derived
+     URL is not the one registered in the Atlassian app (an unusual proxy setup).
    - **Jira site URL** (`siteUrl`): your Atlassian Cloud site, for reference and links
-3. **Test** checks the client id and secret, the redirect URI, that `auth.atlassian.com` is
+3. **Test** checks the client id and secret, the redirect URI (for an empty field it shows the
+   URL derived from your own request, which is the one to register), that `auth.atlassian.com` is
    reachable through the outbound proxy, and lists how many users are connected. The OAuth flow
    itself needs a browser, so each user connects from the chat or from **Settings →
    Integrations**.
@@ -64,7 +70,9 @@ The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassia
    who may use Jira at all.
 
 The installation's **Connections** button lists the users who connected their Atlassian account
-and lets an admin disconnect one (the tokens are deleted).
+and lets an admin disconnect one (the tokens are deleted). The "users connected" count on the
+installed list follows connects and disconnects as they happen and is re-counted from the token
+files in the background at most every 30 seconds, so every cluster worker shows the same number.
 
 ### Apps
 
@@ -245,7 +253,8 @@ contents/
 **"JIRA OAuth configuration incomplete"**
 - Ensure all environment variables are set correctly
 - Verify OAuth app is created in Atlassian Developer Console (not JIRA instance)
-- Check that redirect URI matches exactly (including protocol and port)
+- Check that redirect URI matches exactly (including protocol and port); with an empty
+  **Redirect URI** field, **Test** on the installation shows the URL derived from your request
 
 **404 Error on Authorization**
 - ❌ Wrong: `https://your-site.atlassian.net/oauth/authorize`

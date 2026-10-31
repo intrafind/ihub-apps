@@ -127,7 +127,9 @@ Installed**, and no longer a page of its own under **Admin → Integrations**.
 - **One place for the OAuth app:** the installation `jira` holds the client id, the client secret
   as a credential reference, the redirect URI and the site URL; **Test** checks them and the route
   to `auth.atlassian.com`, and **Connections** lists the users who connected their Atlassian
-  account and disconnects one.
+  account and disconnects one. The redirect URI may stay empty: it is then derived from each
+  request (scheme, host and base path as the browser sees them), and **Test** shows the resulting
+  URL to register. The "users connected" count follows connects and disconnects as they happen.
 - **Apps bind instead of listing tools:** an app binds `integrations.jira` and picks actions by
   name; the six tools keep their ids (`jira_searchTickets` and friends). An app that binds Jira is
   offered only while the installation is enabled, and the installation's groups decide who may use

@@ -15,10 +15,17 @@ import JiraService from '../../../../JiraService.js';
 import credentialService from '../../../../../CredentialService.js';
 import { httpFetch } from '../../../../../../utils/httpConfig.js';
 import {
+  JIRA_CALLBACK_PATH,
   isJiraConfigured,
   jiraConfigFromInstance,
-  listJiraConnections
+  listJiraConnections,
+  resolveJiraRedirectUri
 } from '../../../../jiraConfig.js';
+import {
+  getJiraConnectionCount,
+  refreshJiraConnectionCount,
+  setJiraConnectionCount
+} from '../../../../jiraConnectionCount.js';
 
 const PARAMETERS = JSON.parse(
   readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'parameters.json'), 'utf8')
@@ -35,11 +42,52 @@ function action(name) {
 const TEST_TIMEOUT_MS = 10000;
 
 /**
- * The installation test: client id and secret present, the redirect URI
- * well-formed, Atlassian's authorization server reachable, and how many users
- * are connected. The OAuth flow itself needs a browser, so it is not run.
+ * The redirect URI step of the test: a configured value must be an http(s)
+ * URL ending in the callback path; an empty one is derived from each request,
+ * and the admin's own request shows what that comes to.
+ * @param {{ redirectUri: string }} cfg
+ * @param {import('express').Request} [req] - The admin's request, for the derived example
  */
-async function test({ instance, values, user }) {
+export function redirectUriStep(cfg, req) {
+  const step = { id: 'redirect', label: 'Redirect URI' };
+  if (cfg.redirectUri) {
+    let ok = false;
+    try {
+      const url = new URL(cfg.redirectUri);
+      ok = /^https?:$/.test(url.protocol) && url.pathname.endsWith(JIRA_CALLBACK_PATH);
+    } catch {
+      ok = false;
+    }
+    return {
+      ...step,
+      status: ok ? 'ok' : 'warn',
+      message: ok
+        ? cfg.redirectUri
+        : `${cfg.redirectUri} should end in ${JIRA_CALLBACK_PATH} and be registered in the Atlassian app`
+    };
+  }
+  let derived = null;
+  try {
+    derived = resolveJiraRedirectUri(req, cfg);
+  } catch {
+    derived = null;
+  }
+  return {
+    ...step,
+    status: 'ok',
+    message: derived
+      ? `Empty: derived from the request, here ${derived}; register that URL in the Atlassian app`
+      : `Empty: derived from each request as <scheme>://<host><base path>${JIRA_CALLBACK_PATH}; register that URL in the Atlassian app`
+  };
+}
+
+/**
+ * The installation test: client id and secret present, the redirect URI
+ * well-formed or derivable, Atlassian's authorization server reachable, and
+ * how many users are connected. The OAuth flow itself needs a browser, so it
+ * is not run.
+ */
+async function test({ instance, values, user, req }) {
   const cfg = jiraConfigFromInstance({ ...instance, values, enabled: true });
   const steps = [];
   const secret = cfg.clientSecretRef ? credentialService.tryResolveSecret(cfg.clientSecretRef) : '';
@@ -55,32 +103,7 @@ async function test({ instance, values, user }) {
           ? `Credential "${cfg.clientSecretRef}" has no value or does not exist`
           : `Client ${cfg.clientId.slice(0, 6)}… with secret`
   });
-  if (cfg.redirectUri) {
-    let ok = false;
-    try {
-      const url = new URL(cfg.redirectUri);
-      ok =
-        /^https?:$/.test(url.protocol) && url.pathname.endsWith('/api/integrations/jira/callback');
-    } catch {
-      ok = false;
-    }
-    steps.push({
-      id: 'redirect',
-      label: 'Redirect URI',
-      status: ok ? 'ok' : 'warn',
-      message: ok
-        ? cfg.redirectUri
-        : `${cfg.redirectUri} should end in /api/integrations/jira/callback and be registered in the Atlassian app`
-    });
-  } else {
-    steps.push({
-      id: 'redirect',
-      label: 'Redirect URI',
-      status: 'warn',
-      message:
-        'Empty: derived from each request; register the resulting callback URL in the Atlassian app'
-    });
-  }
+  steps.push(redirectUriStep(cfg, req));
   const started = Date.now();
   try {
     const controller = new AbortController();
@@ -113,6 +136,7 @@ async function test({ instance, values, user }) {
     });
   }
   const connections = await listJiraConnections();
+  setJiraConnectionCount(connections.length);
   const mine = user?.id ? connections.some(c => c.userId === user.id) : false;
   steps.push({
     id: 'connections',
@@ -134,35 +158,34 @@ const connector = {
     getAttachment: action('getAttachment')
   },
   test,
-  /** For the installed list: per-user sign-in, how many users connected. */
+  /**
+   * For the installed list: per-user sign-in, how many users connected. The
+   * count is adjusted as users connect and disconnect on this worker and
+   * re-counted from disk in the background at most every 30 s, so the other
+   * cluster workers converge too (see jiraConnectionCount.js).
+   */
   status(instance) {
+    refreshJiraConnectionCount().catch(() => {});
     return {
       connected: isJiraConfigured(jiraConfigFromInstance(instance)),
       perUser: true,
-      userConnections: connector._connectionCount
+      userConnections: getJiraConnectionCount()
     };
   },
-  _connectionCount: 0,
   async listConnections() {
     const connections = await listJiraConnections();
-    connector._connectionCount = connections.length;
+    setJiraConnectionCount(connections.length);
     return connections;
   },
   async disconnectUser(_instance, userId) {
     const removed = await JiraService.deleteUserTokens(userId);
-    connector._connectionCount = (await listJiraConnections()).length;
     return { removed: Boolean(removed) };
   },
   invalidate() {},
   onChanged() {}
 };
 
-// Keep the count fresh for the status pill without a disk read per request.
-listJiraConnections().then(
-  list => {
-    connector._connectionCount = list.length;
-  },
-  () => {}
-);
+// Seed the count for the status pill without a disk read per request.
+refreshJiraConnectionCount({ force: true }).catch(() => {});
 
 export default connector;

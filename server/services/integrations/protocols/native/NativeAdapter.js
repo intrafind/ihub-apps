@@ -167,7 +167,7 @@ export async function run({ definition, instance, action, args = {}, context = {
 }
 
 /** Test an installation: the connector's steps in the shared report shape. */
-export async function test({ definition, instance, language = 'en', user }) {
+export async function test({ definition, instance, language = 'en', user, req }) {
   const started = Date.now();
   let connector;
   try {
@@ -182,7 +182,7 @@ export async function test({ definition, instance, language = 'en', user }) {
   let steps;
   try {
     steps = connector.test
-      ? await connector.test({ definition, instance, values, language, user })
+      ? await connector.test({ definition, instance, values, language, user, req })
       : [{ id: 'module', label: 'Connector module', status: 'ok', message: 'Loaded' }];
   } catch (error) {
     steps = [{ id: 'test', label: 'Test', status: 'fail', message: error.message }];
