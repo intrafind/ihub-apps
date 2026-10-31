@@ -155,6 +155,26 @@ export const fetchSharedArtifact = async (shareId, artifactId) => {
 };
 
 /**
+ * Several of a share's artifacts as one ZIP archive, or every one its
+ * snapshot named when no ids are given.
+ *
+ * @param {string} shareId - Share id.
+ * @param {string[]} [artifactIds] - Ids to pack.
+ * @returns {Promise<Blob>} the archive
+ */
+export const downloadSharedArtifactsZip = async (shareId, artifactIds) => {
+  if (!shareId) {
+    throw new Error('Missing required parameters');
+  }
+  const response = await apiClient.post(
+    `/shares/${encodeURIComponent(shareId)}/artifacts/zip`,
+    Array.isArray(artifactIds) ? { artifactIds } : {},
+    { ...VIEWER_REQUEST, responseType: 'blob' }
+  );
+  return response.data;
+};
+
+/**
  * Users matching a name or e-mail fragment, for the recipient picker. At
  * most ten, never the caller, nothing under two characters.
  *

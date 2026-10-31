@@ -9,7 +9,13 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ChatMessageList from '../components/ChatMessageList';
 import { ArtifactFetchContext } from '../contexts/ArtifactFetchContext';
 import { transformStoredMessage } from '../hooks/useChatMessages';
-import { fetchSharedArtifact, fetchSharedChat, fetchSharedChatArtifacts } from '../../../api';
+import {
+  downloadSharedArtifactsZip,
+  fetchSharedArtifact,
+  fetchSharedChat,
+  fetchSharedChatArtifacts
+} from '../../../api';
+import ArtifactsPanel from '../components/ArtifactsPanel';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -191,6 +197,7 @@ export default function SharedChatPage() {
   const [status, setStatus] = useState('loading');
   const [data, setData] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   // The one request in flight for this link, keyed by what it asked with.
   // Every successful open counts as a view server-side, so the page must
   // open a link exactly once: not once per StrictMode double-run, and not
@@ -255,6 +262,15 @@ export default function SharedChatPage() {
   );
   const fetchArtifactBlob = useCallback(
     artifactId => fetchSharedArtifact(shareId, artifactId),
+    [shareId]
+  );
+  // The Artifacts panel through the share: only what its snapshot named.
+  const artifactSource = useMemo(
+    () => ({
+      list: () => fetchSharedChatArtifacts(shareId),
+      fetchBlob: artifactId => fetchSharedArtifact(shareId, artifactId),
+      zip: artifactIds => downloadSharedArtifactsZip(shareId, artifactIds)
+    }),
     [shareId]
   );
 
@@ -430,18 +446,39 @@ export default function SharedChatPage() {
 
         {artifacts.length > 0 && (
           <section className="mt-4 mb-8" aria-labelledby="shared-artifacts-heading">
-            <h2
-              id="shared-artifacts-heading"
-              className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2.5 px-1"
-            >
-              {t('chatSharing.viewer.artifacts', 'Files in this chat')}
-            </h2>
+            <div className="flex items-center justify-between gap-2 mb-2.5 px-1">
+              <h2
+                id="shared-artifacts-heading"
+                className="text-[0.6875rem] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400"
+              >
+                {t('chatSharing.viewer.artifacts', 'Files in this chat')}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowArtifacts(true)}
+                data-testid="open-artifacts"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <Icon name="archive-box" size="sm" />
+                {t('chatArtifacts.openPanel', 'Preview and download as ZIP')}
+              </button>
+            </div>
             <ul className="flex flex-col gap-2">
               {artifacts.map(artifact => (
                 <ArtifactRow key={artifact.id} artifact={artifact} fetchBlob={fetchArtifactBlob} />
               ))}
             </ul>
           </section>
+        )}
+
+        {showArtifacts && (
+          <ArtifactsPanel
+            isOpen
+            onClose={() => setShowArtifacts(false)}
+            source={artifactSource}
+            zipName={title || 'shared-chat'}
+            messages={messages}
+          />
         )}
 
         {share.expiresAt && (

@@ -24,6 +24,10 @@ jest.mock('../../../client/src/features/chat/components/AppChatStarter', () => (
     return <textarea aria-label={`Message ${props.app?.id}`} />;
   }
 }));
+const mockPlatform = { platformConfig: { projects: {} } };
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => mockPlatform
+}));
 jest.mock('../../../client/src/shared/hooks/useApps', () => ({
   __esModule: true,
   default: () => mockApps

@@ -41,8 +41,11 @@ function fieldError(t, field, code) {
  * @param {string} [props.idPrefix='project'] - Prefix of the input ids.
  * @param {boolean} [props.disabled=false]
  * @param {boolean} [props.showDefaultApp=false]
- * @param {boolean} [props.hideInstructions=false] - Leave the instructions out (a
- *   smart collection from iFinder has none).
+ * @param {boolean} [props.hideInstructions=false] - Leave the instructions out.
+ * @param {string[]} [props.lockedFields] - Fields shown but not editable, with
+ *   `lockedHint` below them (the name and description of a smart collection where
+ *   this installation cannot change collections).
+ * @param {string} [props.lockedHint]
  * @returns {JSX.Element}
  */
 function ProjectFormFields({
@@ -52,7 +55,9 @@ function ProjectFormFields({
   idPrefix = 'project',
   disabled = false,
   showDefaultApp = false,
-  hideInstructions = false
+  hideInstructions = false,
+  lockedFields = [],
+  lockedHint = ''
 }) {
   const { t } = useTranslation();
   const fields = [
@@ -72,13 +77,15 @@ function ProjectFormFields({
     <div className="space-y-4">
       {fields
         .filter(({ field }) => !(hideInstructions && field === 'instructions'))
-        .map(({ field, label, rows, hint }) => {
+        .map(({ field, label, rows, hint: fieldHint }) => {
           const id = `${idPrefix}-${field}`;
           const error = fieldError(t, field, errors[field]);
+          const locked = lockedFields.includes(field);
+          const hint = locked ? lockedHint : fieldHint;
           const common = {
             id,
             value: form[field] || '',
-            disabled,
+            disabled: disabled || locked,
             onChange: e => onChange(field, e.target.value),
             'aria-invalid': error ? true : undefined,
             className: `${INPUT_CLASS} ${field === 'instructions' ? 'font-mono text-sm' : ''}`

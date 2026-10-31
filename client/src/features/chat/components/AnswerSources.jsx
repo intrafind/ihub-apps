@@ -205,10 +205,16 @@ function CitedSourceRow({ source, messageKey, active }) {
     'min-w-0 truncate text-left text-gray-800 hover:text-indigo-600 hover:underline dark:text-gray-200 dark:hover:text-indigo-300';
 
   return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- mouse shortcut; the row's buttons serve the keyboard
     <li
-      className={`-mx-1 flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-sm transition-colors ${
+      className={`-mx-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-sm transition-colors ${
         active ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
       }`}
+      // The whole row opens the panel, a mouse shortcut for the number button
+      // (keyboard users have the buttons). The link and buttons keep their own action.
+      onClick={event => {
+        if (!event.target.closest('a, button')) showInPanel();
+      }}
       onMouseEnter={() => highlightCitation(messageKey, source.n)}
       onMouseLeave={() => releaseCitation(messageKey, source.n)}
       onFocus={() => highlightCitation(messageKey, source.n)}

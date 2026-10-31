@@ -291,12 +291,28 @@ export function buildItemRequest(tabId, draft = {}) {
     case 'ifinder-document': {
       const documentId = (draft.documentId || '').trim();
       if (!documentId) return fail('documentRequired');
-      return { body: { kind: 'ifinder-document', ref: { documentId }, ...common }, error: null };
+      const searchProfile = (draft.searchProfile || '').trim();
+      return {
+        body: {
+          kind: 'ifinder-document',
+          ref: { documentId, ...(searchProfile ? { searchProfile } : {}) },
+          ...common
+        },
+        error: null
+      };
     }
     case 'ifinder-query': {
       const query = (draft.query || '').trim();
       if (!query) return fail('queryRequired');
-      return { body: { kind: 'ifinder-query', ref: { query }, ...common }, error: null };
+      const searchProfile = (draft.searchProfile || '').trim();
+      return {
+        body: {
+          kind: 'ifinder-query',
+          ref: { query, ...(searchProfile ? { searchProfile } : {}) },
+          ...common
+        },
+        error: null
+      };
     }
     default:
       return fail('unsupported');
@@ -667,4 +683,19 @@ export function linkableItems(source, target) {
     linked: present.has(originalKey(source.id, item)),
     unavailable: Boolean(item.link) && item.link.state !== 'ok'
   }));
+}
+
+/** The item kinds whose original lives in another system and opens there. */
+export const DOCUMENT_ACTION_KINDS = Object.freeze(['ifinder-document']);
+
+/**
+ * Whether an item offers the document actions of a chat's sources (a preview
+ * of the original, download, details, open where it lives): an iFinder
+ * document that did not fail.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function hasDocumentActions(item) {
+  return DOCUMENT_ACTION_KINDS.includes(item?.kind) && item?.status !== 'failed';
 }

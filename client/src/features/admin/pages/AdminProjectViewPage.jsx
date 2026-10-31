@@ -24,6 +24,7 @@ import {
 } from '../components/AdminProjectDetail';
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
+import { useProjectItemDocumentActions } from '../../projects/components/ProjectItemDocumentActions';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import { ADMIN_ITEM_API } from '../utils/adminProjectItemApi';
@@ -74,6 +75,7 @@ function AdminProjectViewPageContent({ id }) {
   const [dependencies, setDependencies] = useState(null);
   const [dependenciesFailed, setDependenciesFailed] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
+  const documentActions = useProjectItemDocumentActions(id);
   const [historyOpen, setHistoryOpen] = useState(false);
   const checks = useAdminProjectChecks(id);
   const { estimate, byItem, clearEstimate } = checks;
@@ -191,7 +193,14 @@ function AdminProjectViewPageContent({ id }) {
                   readOnly
                   estimates={estimate ? byItem : undefined}
                   onPreview={setPreviewItem}
+                  onDocumentAction={documentActions.onDocumentAction}
                 />
+                {documentActions.error && (
+                  <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {documentActions.error}
+                  </p>
+                )}
+                {documentActions.dialogs}
               </Card>
 
               <Card title={t('admin.projects.view.usedBy', 'Used by')}>
