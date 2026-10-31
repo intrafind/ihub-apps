@@ -844,23 +844,28 @@ class ContentInstaller {
       const definitionId = dirNameToDefinitionId(name);
       await integrationRegistry.writeInstalled(definitionId, content.files);
       // Installations of a re-installed definition keep cached parameter
-      // schemas of the old document otherwise, and their scope providers
-      // keep the old definition until they are registered again. The
-      // definition is on disk at this point, so a failing refresh is logged
-      // and the install still records itself (as `_afterChange` does).
+      // schemas of the old document otherwise, their scope providers keep
+      // the old definition until they are registered again, and the MCP
+      // client manager keeps serving the old endpoint until the adapters are
+      // told (`notifyDefinitionsChanged`). The definition is on disk at this
+      // point, so a failing refresh is logged and the install still records
+      // itself (as `_afterChange` does).
       try {
         const [
           { default: installedIntegrationService },
           { invalidate },
+          { notifyDefinitionsChanged },
           { syncIntegrationScopeProviders }
         ] = await Promise.all([
           import('../integrations/InstalledIntegrationService.js'),
           import('../integrations/protocols/openapi/OpenApiAdapter.js'),
+          import('../integrations/protocols/index.js'),
           import('../integrations/integrationTools.js')
         ]);
         for (const instance of installedIntegrationService.instancesOf(definitionId)) {
           invalidate(instance.id);
         }
+        await notifyDefinitionsChanged({ definitionIds: [definitionId] });
         await syncIntegrationScopeProviders();
       } catch (error) {
         logger.warn(

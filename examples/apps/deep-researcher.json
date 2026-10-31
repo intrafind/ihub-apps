@@ -17,7 +17,12 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
   "sendChatHistory": false,
-  "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator", "braveSearch"],
+  "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator"],
+  "websearch": {
+    "enabled": true,
+    "enabledByDefault": true,
+    "provider": "brave"
+  },
   "settings": {
     "enabled": true,
     "model": {
