@@ -4439,6 +4439,24 @@
         "editDetails": "Name und Beschreibung bearbeiten",
         "availability": "Verfügbarkeit",
         "saved": "Gespeichert."
+      },
+      "defaultApp": {
+        "label": "Standard-App für Projekt-Chats",
+        "none": "Erste App der Liste",
+        "help": "Ein Chat in einem Projekt startet in der Standard-App des Projekts; hat das Projekt keine, startet er in dieser App."
+      },
+      "settings": {
+        "title": "Projekteinstellungen"
+      },
+      "tierPolicy": {
+        "legend": "Wo Benutzer ihre Projekte finden",
+        "ihub": "Nur iHub-Projekte",
+        "ihubHelp": "iFinder Smart Collections werden nicht angeboten. Dies ist die Standardeinstellung.",
+        "both": "iHub-Projekte und iFinder Smart Collections",
+        "bothHelp": "Benutzer fügen ihre iFinder Smart Collections aus dem Katalog zu ihren Projekten hinzu und wählen beim Anlegen eines Projekts, wo es liegt.",
+        "ifinder": "iFinder Smart Collections bevorzugt",
+        "ifinderHelp": "Smart Collections können wie unter „both“ hinzugefügt werden. Lokale Projekte bleiben nutzbar und können weiterhin angelegt werden.",
+        "requirements": "Smart Collections brauchen außerdem ein konfiguriertes iFinder (Integrationen → iFinder), einen Benutzer mit der Rolle fi_smartcollections und iFinder 6.8 oder neuer. Prüfen Sie das mit dem iFinder-Integrationstest."
       }
     },
     "peopleDirectories": {
@@ -7066,7 +7084,8 @@
       "linkChangeProject": "Ändern",
       "linkPublishedDetail": "Für alle veröffentlicht",
       "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
-      "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar."
+      "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
+      "ifinderProfile": "Suchen in"
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -7158,7 +7177,8 @@
         "remove": "Element entfernen",
         "rename": "Umbenennen",
         "retry": "Erneut versuchen",
-        "transfer": "Verschieben oder kopieren nach…"
+        "transfer": "Verschieben oder kopieren nach…",
+        "openInIFinder": "In iFinder öffnen"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -7202,7 +7222,8 @@
       "selectAll": "Alle Elemente auswählen",
       "selectItem": "{{name}} auswählen",
       "collectionFull": "Eine Smart Collection enthält so viele Dokumente, wie iFinder erlaubt.",
-      "removeFromCollectionConfirm": "„{{name}}“ aus der Collection entfernen? Das Dokument bleibt in iFinder."
+      "removeFromCollectionConfirm": "„{{name}}“ aus der Collection entfernen? Das Dokument bleibt in iFinder.",
+      "openUnavailable": "Für dieses Dokument gibt es keinen Link zum Öffnen."
     },
     "list": {
       "emptyText": "Legen Sie ein Projekt an, fügen Sie Ihre Dokumente und Anweisungen hinzu und beginnen Sie Chats, die sie kennen.",
@@ -7259,7 +7280,11 @@
       "deleteTitle": "Projekt löschen",
       "readOnly": "Der Besitzer dieses Projekts ist nicht mehr aktiv. Es bleibt lesbar, aber niemand kann es ändern, bis ein Administrator es überträgt.",
       "ifinderReadOnly": "Dies ist eine Smart Collection aus iFinder. Sie können sie hier lesen und in Chats verwenden; Dokumente fügen Sie in iFinder hinzu, entfernen oder benennen sie dort um.",
-      "ifinderManage": "Dies ist eine Smart Collection aus iFinder. Fügen Sie Dokumente hinzu, die Sie lesen dürfen, oder entfernen Sie sie hier: Nur die Liste ändert sich, nie das Dokument. Die Collection ändert sich auch in iFinder. Teilen und Löschen erfolgt in iFinder."
+      "ifinderManage": "Dies ist eine Smart Collection aus iFinder. Fügen Sie Dokumente hinzu, die Sie lesen dürfen, oder entfernen Sie sie hier: Nur die Liste ändert sich, nie das Dokument. Die Collection ändert sich auch in iFinder. Geteilt wird sie in iFinder.",
+      "collectionDeleted": "Die Smart Collection dieses Projekts wurde in iFinder gelöscht. Chats, Standard-App und Anweisungen bleiben hier erhalten; Dokumente hat das Projekt keine mehr. Löschen Sie das Projekt, wenn Sie es nicht mehr brauchen.",
+      "collectionUnavailable": "iFinder ist nicht erreichbar, daher fehlen die Dokumente dieser Smart Collection im Moment.",
+      "deleteStubConfirm": "„{{name}}“ aus Ihren Projekten entfernen? Die Chats bleiben außerhalb des Projekts erhalten, Standard-App und Anweisungen werden gelöscht.",
+      "deleteCollectionToo": "Auch die Smart Collection in iFinder löschen. Ihre Dokumente bleiben in iFinder. Ohne diese Option bleibt die Collection in iFinder und kann wieder hinzugefügt werden."
     },
     "preview": {
       "edit": "Text bearbeiten",
@@ -7303,7 +7328,8 @@
       "reset": "Änderungen verwerfen",
       "saved": "Gespeichert.",
       "saving": "Wird gespeichert…",
-      "title": "Anweisungen"
+      "title": "Anweisungen",
+      "collectionNameLocked": "Name und Beschreibung gehören zur Smart Collection, die auf dieser Installation nicht von hier aus geändert werden kann. Ändern Sie sie in iFinder."
     },
     "transfer": {
       "hint": "Wählen Sie, wer das Projekt übernimmt. Sie bestätigen im nächsten Schritt.",
@@ -7372,7 +7398,7 @@
     },
     "attach": {
       "title": "Projekte für diesen Chat",
-      "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Deren Anweisungen gelten nicht.",
+      "hint": "Die Antworten können die Dokumente der angehakten Projekte nutzen. Die Anweisungen eines Projekts gelten für die Chats, die darin gestartet werden, nicht hier.",
       "remove": "{{name}} aus diesem Chat entfernen",
       "full": "Ein Chat kann höchstens {{max}} Projekte nutzen.",
       "button": "Projekt"
@@ -7381,7 +7407,7 @@
       "placeholder": "Neuer Chat in {{name}}",
       "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
       "app": "App",
-      "hintAttached": "Die Antworten können die Dokumente dieses Projekts nutzen. Seine Anweisungen gelten nicht."
+      "hintAttached": "Dieser Chat läuft außerhalb des Projekts und nutzt seine Dokumente. Die Anweisungen des Projekts gelten für die Chats seiner Mitglieder im Projekt."
     },
     "appSelect": {
       "unavailable": "{{id}} (nicht verfügbar)"
@@ -7419,7 +7445,13 @@
       "browse": "Katalog durchsuchen",
       "publishedOffHint": "Veröffentlicht, aber der Katalog ist ausgeschaltet: Niemand findet oder nutzt es über den Katalog, bis ein Administrator ihn wieder einschaltet.",
       "adminAddedHint": "Sie haben dieses Projekt zu Ihren Projekten hinzugefügt; die Administratoren halten es aktuell. „Neuer Chat“ startet einen Chat mit angehängtem Projekt, und die Chat-Eingabe bietet es an.",
-      "adminNotAddedHint": "Die Administratoren haben dieses Projekt für alle bereitgestellt. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in der Chat-Eingabe zu finden."
+      "adminNotAddedHint": "Die Administratoren haben dieses Projekt für alle bereitgestellt. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in der Chat-Eingabe zu finden.",
+      "publishedTitle": "Veröffentlichte Projekte",
+      "collectionsTitle": "Ihre iFinder Smart Collections",
+      "collectionsHint": "Fügen Sie eine Collection zu Ihren Projekten hinzu, um mit ihr zu chatten, mit eigener Standard-App und eigenen Anweisungen. Ihre Dokumente bleiben in iFinder.",
+      "collectionsUnavailable": "iFinder ist nicht erreichbar, daher fehlen Ihre Smart Collections in dieser Liste.",
+      "noCollectionMatches": "Keine Smart Collection passt.",
+      "noCollections": "Sie haben keine Smart Collections in iFinder."
     },
     "picker": {
       "search": "Projekte durchsuchen",
@@ -7436,14 +7468,17 @@
       "readOnly": "nur lesbar",
       "ifinderHint": "Eine Smart Collection aus iFinder. iHub liest sie nur; ändern Sie sie in iFinder.",
       "ifinderDetail": "Smart Collection aus iFinder",
-      "ifinderManageHint": "Eine Smart Collection aus iFinder. Sie können sie hier umbenennen und Dokumente hinzufügen oder entfernen."
+      "ifinderManageHint": "Eine Smart Collection aus iFinder. Sie können sie hier umbenennen und Dokumente hinzufügen oder entfernen.",
+      "ifinderDeletedDetail": "Smart Collection, in iFinder gelöscht",
+      "collectionDeletedHint": "Die Smart Collection dieses Projekts wurde in iFinder gelöscht.",
+      "collectionDeleted": "In iFinder gelöscht"
     },
     "ifinder": {
       "sourceTitle": "Smart Collection in iFinder",
       "sourceText": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Hinzufügen, Entfernen, Umbenennen oder Teilen geschieht in iFinder.",
       "documentCount_one": "{{count}} Dokument",
       "documentCount_other": "{{count}} Dokumente",
-      "sourceTextManage": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Sie können die Collection hier umbenennen und Dokumente hinzufügen oder entfernen; die Änderung wird in iFinder vorgenommen. Teilen oder löschen Sie sie in iFinder.",
+      "sourceTextManage": "Die Dokumente bleiben in iFinder und werden mit Ihren eigenen Zugriffsrechten gelesen. Sie können die Collection hier umbenennen und Dokumente hinzufügen oder entfernen; die Änderung wird in iFinder vorgenommen. Teilen Sie sie in iFinder.",
       "documentCountOf": "{{count}} von {{max}} Dokumenten",
       "rename": "Umbenennen",
       "renameTitle": "Collection umbenennen",
@@ -7461,5 +7496,38 @@
       "noProfiles": "Keiner Ihrer eigenen Einträge wird hier angeboten, daher wird nur die Voreinstellung aufgeführt.",
       "unavailable": "Die Liste konnte nicht geladen werden, daher wird nur die Voreinstellung angeboten."
     }
+  },
+  "chatArtifacts": {
+    "title": "Artefakte",
+    "open": "Artefakte",
+    "openPanel": "Vorschau und Download als ZIP",
+    "close": "Artefakte schließen",
+    "count_one": "{{count}} Datei",
+    "count_other": "{{count}} Dateien",
+    "loading": "Die Dateien dieses Chats werden geladen…",
+    "loadFailed": "Die Dateien dieses Chats konnten nicht geladen werden.",
+    "empty": "Dieser Chat hat noch keine Dateien. Dateien, Bilder und Dokumente, die der Assistent erstellt, erscheinen hier.",
+    "listLabel": "Dateien dieses Chats",
+    "previewLabel": "Vorschau",
+    "selectAll": "Alle auswählen",
+    "selectNamed": "{{name}} auswählen",
+    "fromAnswer": "Antwort {{number}}",
+    "download": "Herunterladen",
+    "downloadNamed": "{{name}} herunterladen",
+    "downloadFailed": "Der Download ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "downloadSelected": "Auswahl herunterladen (.zip)",
+    "downloadAll": "Alle herunterladen (.zip)",
+    "copy": "Kopieren",
+    "copied": "In die Zwischenablage kopiert.",
+    "copyFailed": "Der Inhalt konnte nicht kopiert werden.",
+    "zipPreparing": "Das ZIP-Archiv wird erstellt…",
+    "zipTooMany": "Zu viele Dateien für ein ZIP-Archiv. Bitte weniger Dateien auswählen.",
+    "zipTooLarge": "Die Dateien sind zu groß für ein ZIP-Archiv. Bitte weniger Dateien auswählen.",
+    "zipFailed": "Das ZIP-Archiv konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+    "previewLoading": "Vorschau wird geladen…",
+    "previewFailed": "Die Vorschau konnte nicht geladen werden.",
+    "previewTruncated": "Angezeigt werden die ersten {{size}}. Laden Sie die Datei herunter, um alles zu sehen.",
+    "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter, um sie zu öffnen.",
+    "codeOf": "Inhalt von {{name}}"
   }
 }

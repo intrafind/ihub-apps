@@ -34,6 +34,7 @@ const EMPTY_DRAFT = Object.freeze({
   language: '',
   documentId: '',
   documentTitle: '',
+  searchProfile: '',
   query: ''
 });
 
@@ -300,11 +301,18 @@ function ItemFormBody({
             draft={draft}
             update={update}
             searchIFinder={api.searchIFinder}
+            fetchProfiles={api.fetchIFinderProfiles}
             errorMessage={api.errorMessage}
           />
         );
       case 'ifinder-query':
-        return <IFinderQueryPicker draft={draft} update={update} />;
+        return (
+          <IFinderQueryPicker
+            draft={draft}
+            update={update}
+            fetchProfiles={api.fetchIFinderProfiles}
+          />
+        );
       default:
         return null;
     }

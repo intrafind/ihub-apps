@@ -21,8 +21,10 @@ import {
   describeSigningKey,
   runApiRequestStep,
   runJwtSteps,
+  runSmartCollectionsStep,
   runTransportSteps
 } from '../../../../builtins/iFinderDiagnostics.js';
+import configCache from '../../../../../../configCache.js';
 import logger from '../../../../../../utils/logger.js';
 
 const parameters = JSON.parse(
@@ -177,6 +179,14 @@ async function test({ instance, user }) {
             : []
       });
     }
+    // The call the iFinder tier of the projects makes; says why it would stay hidden.
+    await runSmartCollectionsStep(report, {
+      user: testUser,
+      exchange: cfg.authMode === 'oidcTokenExchange',
+      subject: jwtResult.info?.subject,
+      timeout: cfg.timeout,
+      platformConfig: configCache.getPlatform() ?? {}
+    });
   });
   return report.steps;
 }

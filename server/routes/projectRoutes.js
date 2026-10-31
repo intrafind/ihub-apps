@@ -68,10 +68,11 @@ import {
   projectSettings,
   projectsClientConfig
 } from '../services/projects/projectSettings.js';
-import { isIFinderProjectId } from '../services/projects/projectConstants.js';
+import { ifinderProjectIdOf, isIFinderProjectId } from '../services/projects/projectConstants.js';
 import {
   availabilityFor,
-  listCollectionProjects
+  listCollectionProjects,
+  loadCollectionProject
 } from '../services/projects/ifinder/IFinderTier.js';
 import {
   collectionWriteSupport,
@@ -81,7 +82,10 @@ import { MAX_DOCUMENTS } from '../services/projects/ifinder/IFinderCollectionWri
 import {
   addIFinderDocuments,
   createIFinderProject,
+  deleteStubCollection,
   forIFinderProject,
+  importCollection,
+  listCollections,
   removeIFinderDocument,
   renameIFinderProject
 } from './projectIFinderHandlers.js';
@@ -205,6 +209,70 @@ function subscribable(project, permissions) {
   if (!permissions.canUse) return false;
   if (project.ownership === 'admin') return isPublished(project) && project.enabled !== false;
   return permissions.role === 'catalog';
+}
+
+/**
+ * The serialized projects of a list with what iFinder says about the smart
+ * collections behind the caller's stubs: name, description and document
+ * count from the collection list, and a collection that list does not hold
+ * asked for by id (iFinder's list matches the owner case-sensitively, the
+ * per-collection call does not), so a deleted one says so.
+ *
+ * @param {Object} user
+ * @param {Object[]} serialized - `serializeFor` bodies.
+ * @returns {Promise<{items: Object[], warnings: Object[]}>}
+ */
+async function withCollectionStates(user, serialized) {
+  const stubs = serialized.filter(
+    project => project.source?.type === 'smart-collection' && project.permissions?.isOwner
+  );
+  if (stubs.length === 0) return { items: serialized, warnings: [] };
+  const listing = await listCollectionProjects(user);
+  const listed = new Map(listing.projects.map(project => [project.source?.collectionId, project]));
+  const states = new Map();
+  await Promise.all(
+    stubs.map(async stub => {
+      const collectionId = stub.source.collectionId;
+      const summary = listed.get(collectionId);
+      if (summary) {
+        states.set(stub.id, {
+          collection: { id: collectionId, state: 'ok', name: summary.name },
+          name: summary.name || stub.name,
+          description: summary.description || '',
+          usage: { items: summary.usage?.items ?? 0, bytes: 0 }
+        });
+        return;
+      }
+      if (!listing.offered) {
+        states.set(stub.id, { collection: { id: collectionId, state: 'unavailable' } });
+        return;
+      }
+      const loaded = await loadCollectionProject(user, ifinderProjectIdOf(collectionId), {
+        titles: false
+      });
+      if (loaded.status === 'ok') {
+        states.set(stub.id, {
+          collection: { id: collectionId, state: 'ok', name: loaded.project.name },
+          name: loaded.project.name || stub.name,
+          description: loaded.project.description || '',
+          usage: { items: loaded.project.items.length, bytes: 0 }
+        });
+      } else {
+        states.set(stub.id, {
+          collection: {
+            id: collectionId,
+            state: loaded.status === 'not-found' ? 'deleted' : 'unavailable'
+          }
+        });
+      }
+    })
+  );
+  return {
+    items: serialized.map(project =>
+      states.has(project.id) ? { ...project, ...states.get(project.id) } : project
+    ),
+    warnings: listing.warnings
+  };
 }
 
 /**
@@ -418,6 +486,42 @@ export default function registerProjectRoutes(app) {
 
   /**
    * @swagger
+   * /api/projects/_collections:
+   *   get:
+   *     summary: The caller's iFinder smart collections, to add to their projects
+   *     description: |
+   *       Each collection says whether it is in the caller's projects already
+   *       (`added`, with the `projectId` of its project). `available: false`
+   *       while the iFinder tier is not offered to the caller.
+   *     tags: [Projects]
+   *   post:
+   *     summary: Add a smart collection to the caller's projects
+   *     description: |
+   *       `{ collectionId, instructions?, defaultAppId? }`. Creates the project
+   *       that keeps the collection's default app, instructions and chats; the
+   *       documents stay in iFinder. 409 `COLLECTION_ALREADY_ADDED` when it is
+   *       in the caller's projects already.
+   *     tags: [Projects]
+   */
+  app.get(route('/_collections'), ...gate, authenticatedOnly, (req, res) => {
+    ensurePrincipal(req);
+    if (!requireUserProjects(req, res)) return;
+    return listCollections(req, res);
+  });
+
+  app.post(route('/_collections'), ...gate, authenticatedOnly, (req, res) => {
+    ensurePrincipal(req);
+    if (!requireUserProjects(req, res)) return;
+    if (!mayCreateProjects(req.user)) {
+      return sendErrorResponse(res, 403, 'You may not create projects', {
+        details: { code: 'PERMISSION_DENIED' }
+      });
+    }
+    return importCollection(req, res, { serialize: serializeFor });
+  });
+
+  /**
+   * @swagger
    * /api/projects/_catalog:
    *   get:
    *     summary: The projects published to the catalog
@@ -502,30 +606,15 @@ export default function registerProjectRoutes(app) {
         return res.json({ items: [], nextCursor: null });
       }
       const effectiveScope = userProjectsOn ? scope : 'admin';
-      // The user's iFinder smart collections are theirs, so they belong to the
-      // "all" and "mine" lists, behind the same switch as the other user
-      // projects. They are asked for beside the local list: a slow iFinder
-      // costs its short timeout, never the local projects.
-      const withCollections = userProjectsOn && (scope === 'all' || scope === 'mine');
-      const [local, collections] = await Promise.all([
-        listProjects(req.user, repo, effectiveScope),
-        withCollections ? listCollectionProjects(req.user) : null
-      ]);
-      let items = local;
-      if (collections?.projects.length) {
-        const context = callerContext(req.user);
-        // Built for this caller from what iFinder sent: nothing from another
-        // user's cache entry can be in it.
-        items = [
-          ...local,
-          ...collections.projects.map(project =>
-            serializeFor(project, req.user, context, { includeItems: false })
-          )
-        ].sort((a, b) =>
-          String(b.lastActivityAt || '').localeCompare(String(a.lastActivityAt || ''))
-        );
-      }
-      res.json({ items, nextCursor: null, warnings: collections?.warnings || [] });
+      // The smart collections the user added are their projects (stubs, listed
+      // with the owned ones); a collection they did not add is not listed, it
+      // is offered by `GET /api/projects/_collections`. The stubs get the
+      // collection's name and document count from iFinder's list, asked for
+      // only when there is a stub: a slow iFinder costs its short timeout,
+      // never the local projects.
+      const local = await listProjects(req.user, repo, effectiveScope);
+      const { items, warnings } = await withCollectionStates(req.user, local);
+      res.json({ items, nextCursor: null, warnings });
     } catch (error) {
       sendFailedOperationError(res, 'list projects', error);
     }
@@ -644,6 +733,7 @@ export default function registerProjectRoutes(app) {
     ...gate,
     authenticatedOnly,
     projectAccessRequired('own'),
+    deleteStubCollection,
     async (req, res) => {
       try {
         const service = getProjectService();

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { clearConversationId, resetChatId } from '../../../utils/chatId';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import AppChatStarter, { MAX_START_PATH_LENGTH } from '../../chat/components/AppChatStarter';
 import {
   ATTACH_PROJECT_QUERY_PARAM,
@@ -35,13 +36,14 @@ function ProjectChatComposer({ project, projectName, attach = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { choices, loading } = useProjectChatApps();
+  const { platformConfig } = usePlatformConfig() || {};
   // The user's pick for this visit; until then the project's default applies.
   const [picked, setPicked] = useState('');
   const apps = choices.map(({ app }) => app);
   const appId =
     picked && apps.some(app => app.id === picked)
       ? picked
-      : resolveProjectChatApp(apps, project.defaultAppId);
+      : resolveProjectChatApp(apps, project.defaultAppId, platformConfig?.projects?.defaultAppId);
   const app = apps.find(entry => entry.id === appId) || null;
 
   // A new chat, every time: the chat page opens the chat id this tab holds
@@ -127,7 +129,7 @@ function ProjectChatComposer({ project, projectName, attach = false }) {
           {attach
             ? t(
                 'projects.composer.hintAttached',
-                'The answers can use the documents of this project. Its instructions do not apply.'
+                'This chat runs outside the project and uses its documents. The project’s instructions apply to its members’ chats inside it.'
               )
             : t('projects.composer.hint', 'The app gets the project’s instructions and documents.')}
         </p>
