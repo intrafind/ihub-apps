@@ -186,7 +186,7 @@ function AdminInstalledIntegrationsPage() {
     if (item.enabled !== false && boundAppNames(item.id).length > 0) {
       setConfirm({ kind: 'disable', item });
     } else {
-      toggle(item);
+      void toggle(item);
     }
   };
 
@@ -637,8 +637,8 @@ function AdminInstalledIntegrationsPage() {
           const current = confirm;
           setConfirm(null);
           if (!current) return;
-          if (current.kind === 'disable') toggle(current.item);
-          else remove(current.item);
+          if (current.kind === 'disable') void toggle(current.item);
+          else void remove(current.item);
         }}
         onDeny={() => setConfirm(null)}
       />
