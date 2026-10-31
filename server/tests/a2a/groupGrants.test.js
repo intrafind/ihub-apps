@@ -10,10 +10,24 @@ import { describe, it, expect, jest } from '@jest/globals';
  * gateway reads grants (`getVisibleToolIds`).
  */
 
+// Agent skills carry the installation marker the A2A adapter adds; `jira`
+// is also a local tool's id, which the loader marks on the agent's skills.
 const tools = [
-  { id: 'a2a__langdock__ask', _a2a: { agentId: 'langdock' } },
-  { id: 'a2a__langdock__summarize', _a2a: { agentId: 'langdock' } },
-  { id: 'a2a__jira__ask', _a2a: { agentId: 'jira', idConflict: true } },
+  {
+    id: 'a2a__langdock__ask',
+    _a2a: { agentId: 'langdock' },
+    _integration: { instanceId: 'langdock' }
+  },
+  {
+    id: 'a2a__langdock__summarize',
+    _a2a: { agentId: 'langdock' },
+    _integration: { instanceId: 'langdock' }
+  },
+  {
+    id: 'a2a__jira__ask',
+    _a2a: { agentId: 'jira', idConflict: true },
+    _integration: { instanceId: 'jira' }
+  },
   { id: 'drawio__create_diagram', _mcp: { serverId: 'drawio' } },
   { id: 'iFinder_search' },
   { id: 'braveSearch' }
@@ -24,6 +38,16 @@ jest.unstable_mockModule('../../toolLoader.js', () => ({
 }));
 
 const { default: configCache } = await import('../../configCache.js');
+
+// The listing drops an integration tool whose installation is missing,
+// disabled or closed to the user's groups; both agents are installed and open.
+configCache.setCacheEntry('config/integrations.json', {
+  installed: [
+    { id: 'langdock', definition: 'com.intrafind/a2a-agent', enabled: true },
+    { id: 'jira', definition: 'com.intrafind/a2a-agent', enabled: true }
+  ],
+  security: { blockPrivateIps: true, allowedHosts: [] }
+});
 
 const listFor = async grants => {
   const user = { id: 'u', groups: ['g'], permissions: { tools: new Set(grants) } };
@@ -49,6 +73,8 @@ describe('group tool grants in the tool listing', () => {
 
   it('never grants an agent through an id it shares with a tool', async () => {
     expect(await listFor(['jira'])).toEqual([]);
+    // The agent reference still works.
+    expect(await listFor(['a2a__jira'])).toEqual(['a2a__jira__ask']);
   });
 
   it('grants nothing without a grant, everything with "*"', async () => {

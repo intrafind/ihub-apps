@@ -126,4 +126,39 @@ describe('V194 a2a agents → installed integrations', () => {
     await up(ctx);
     assert.equal(ctx.files['config/integrations.json'].installed.length, 1);
   });
+
+  it('keeps an agent whose id an installation already holds in a side file', async () => {
+    const ctx = makeCtx({
+      'config/a2aAgents.json': {
+        agents: [langdock],
+        security: { blockPrivateIps: false, allowedHosts: ['agents.internal'] }
+      },
+      'config/integrations.json': {
+        installed: [{ id: 'langdock', definition: 'com.intrafind/mcp-remote', enabled: true }],
+        security: { blockPrivateIps: true, allowedHosts: [] }
+      },
+      'apps/helper.json': { id: 'helper', tools: ['a2a__langdock__ask'] }
+    });
+    await up(ctx);
+    const integrations = ctx.files['config/integrations.json'];
+    assert.deepEqual(
+      integrations.installed.map(i => i.definition),
+      ['com.intrafind/mcp-remote'],
+      'the MCP server keeps the id'
+    );
+    assert.equal('config/a2aAgents.json' in ctx.files, false);
+    assert.deepEqual(ctx.files['config/a2aAgents.unmigrated.json'], {
+      security: { blockPrivateIps: false, allowedHosts: ['agents.internal'] },
+      agents: [langdock]
+    });
+    // The app keeps its reference; nothing was bound to the MCP server.
+    assert.deepEqual(ctx.files['apps/helper.json'], {
+      id: 'helper',
+      tools: ['a2a__langdock__ask']
+    });
+    assert.ok(
+      ctx.logs.some(m => m.includes('not migrated') && m.includes('"langdock"')),
+      ctx.logs.join('\n')
+    );
+  });
 });
