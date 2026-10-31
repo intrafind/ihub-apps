@@ -21,6 +21,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AddProjectItemDialog from '../../projects/components/AddProjectItemDialog';
 import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
+import { useProjectItemDocumentActions } from '../../projects/components/ProjectItemDocumentActions';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
@@ -89,6 +90,7 @@ function AdminProjectEditPageContent({ id }) {
   // Until the admin types an ID, a new project's ID follows its name.
   const [idEdited, setIdEdited] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
+  const documentActions = useProjectItemDocumentActions(id);
   const [busyItemId, setBusyItemId] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -367,7 +369,14 @@ function AdminProjectEditPageContent({ id }) {
         onRefresh={handleRefresh}
         onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
         onRemove={setRemoveItem}
+        onDocumentAction={documentActions.onDocumentAction}
       />
+      {documentActions.error && (
+        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {documentActions.error}
+        </p>
+      )}
+      {documentActions.dialogs}
     </section>
   );
 

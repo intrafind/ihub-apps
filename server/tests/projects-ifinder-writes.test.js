@@ -66,7 +66,7 @@ const { MAX_DOCUMENTS } = await import('../services/projects/ifinder/IFinderColl
 
 const route = {
   config: h.handlersFor('get', '/api/projects/_config'),
-  list: h.handlersFor('get', '/api/projects'),
+  list: h.handlersFor('get', '/api/projects/_collections'),
   get: h.handlersFor('get', '/api/projects/:projectId'),
   create: h.handlersFor('post', '/api/projects'),
   rename: h.handlersFor('patch', '/api/projects/:projectId'),
@@ -88,10 +88,14 @@ const remove = (user, n, documentId) =>
     params: { projectId: pid(n), itemId: itemIdOf(ID(n), documentId) }
   });
 const open = (user, n) => drive(route.get, { user, params: { projectId: pid(n) } });
-/** The list as the user sees the collections in it: local projects of other tests stay out. */
+/** The user's collections as `GET /api/projects/_collections` lists them, by project id. */
 const list = async user => {
   const res = await drive(route.list, { user });
-  res.body.items = res.body.items.filter(item => item.id.startsWith('ifc_'));
+  res.body.items = (res.body.items || []).map(item => ({
+    ...item,
+    id: `ifc_${item.collectionId}`,
+    usage: { items: item.documentCount }
+  }));
   return res;
 };
 const documentsOf = n => ifinder.documentIdsOf(ID(n));
@@ -114,13 +118,16 @@ describe('creating a collection', () => {
       tier: 'ifinder'
     });
     assert.equal(res.statusCode, 201, JSON.stringify(res.body));
-    assert.equal(res.body.id, pid(5), 'the id comes from the new collection uuid');
+    assert.match(res.body.id, /^prj_/, 'the project is the stored stub of the collection');
+    assert.deepEqual(res.body.source, { type: 'smart-collection', collectionId: ID(5) });
+    assert.equal(res.body.collection.state, 'ok');
     assert.equal(res.body.tier, 'ifinder');
     assert.equal(res.body.name, 'Contracts');
     assert.equal(res.body.description, 'All of them');
     assert.equal(res.body.permissions.canEdit, true);
     assert.equal(res.body.permissions.canShare, false);
-    assert.equal(res.body.permissions.canDelete, false);
+    assert.equal(res.body.permissions.canDelete, true, 'the owner deletes the stub');
+    assert.equal(res.body.permissions.canHoldChats, true, 'chats run inside it');
     const [request] = writes();
     assert.equal(request.method, 'POST');
     assert.equal(request.scope, 'fi_smartcollections');
@@ -178,11 +185,22 @@ describe('creating a collection', () => {
     assert.equal(writes().length, 0, 'iFinder was not asked');
   });
 
+  it('keeps the default app and the instructions on its project, never in iFinder', async () => {
+    ifinder.state.nextIds.push(ID(6));
+    const res = await create(ADA, {
+      name: 'X',
+      tier: 'ifinder',
+      instructions: 'Be brief',
+      defaultAppId: 'chat'
+    });
+    assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+    assert.equal(res.body.instructions, 'Be brief');
+    assert.equal(res.body.defaultAppId, 'chat');
+    const [request] = writes();
+    assert.deepEqual(request.body, { name: 'X', description: '' });
+  });
+
   it('refuses what a collection does not have, and who may not create', async () => {
-    for (const extra of [{ instructions: 'Be brief' }, { defaultAppId: 'chat' }]) {
-      const res = await create(ADA, { name: 'X', tier: 'ifinder', ...extra });
-      assert.equal(res.statusCode, 400, JSON.stringify(extra));
-    }
     assert.equal((await create(ADA, { name: '', tier: 'ifinder' })).statusCode, 400);
     assert.equal((await create(ADA, { name: 'X', tier: 'other' })).statusCode, 400);
     assert.equal((await create(NOCREATE, { name: 'X', tier: 'ifinder' })).statusCode, 403);
@@ -755,7 +773,6 @@ describe('where no lock reaches every instance', () => {
       assert.equal(page.body.permissions.canEdit, false);
       assert.equal(page.body.permissions.readOnly, true);
       assert.equal(page.body.permissions.canUse, true);
-      assert.equal((await list(ADA)).body.items[0].permissions.canEdit, false);
       ifinder.reset();
       resetIFinderTier();
       for (const res of [

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect } from 'react';
-import { getFileExtension } from '../utils/markdownHelpers';
+import { useTranslation } from 'react-i18next';
+import { codeDownloadName } from '../utils/markdownHelpers';
+import { saveBlobAs } from '../utils/externalNavigation';
 
 // Helper to provide temporary feedback on a button
 const showButtonFeedback = (button, message, isSuccess = true) => {
@@ -27,7 +29,19 @@ const showButtonFeedback = (button, message, isSuccess = true) => {
   }, 2000);
 };
 
+/** The name a code block's download button saves under (see `codeDownloadName`). */
+const downloadNameOf = button => {
+  try {
+    const encoded = button.dataset.codeFilename;
+    if (encoded) return decodeURIComponent(encoded);
+  } catch {
+    // A malformed attribute falls back to the language's default name.
+  }
+  return codeDownloadName('', button.dataset.codeLanguage || 'text');
+};
+
 export const useCodeBlockInteractions = () => {
+  const { t } = useTranslation();
   useEffect(() => {
     const handleInteraction = e => {
       const button = e.target.closest('button');
@@ -59,36 +73,24 @@ export const useCodeBlockInteractions = () => {
       if (isCopyBtn) {
         navigator.clipboard
           .writeText(codeContent)
-          .then(() => showButtonFeedback(button, 'Copied!', true))
+          .then(() => showButtonFeedback(button, t('common.copied', 'Copied!'), true))
           .catch(err => {
             console.error('Failed to copy code block:', err);
-            showButtonFeedback(button, 'Error', false);
+            showButtonFeedback(button, t('common.error', 'Error'), false);
           });
       }
 
       if (isDownloadBtn) {
-        try {
-          const language = button.dataset.codeLanguage || 'text';
-          const fileExtension = getFileExtension(language);
-          const blob = new Blob([codeContent], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `code.${fileExtension}`;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
-          showButtonFeedback(button, 'Downloaded!', true);
-        } catch (err) {
-          console.error('Download failed:', err);
-          showButtonFeedback(button, 'Error', false);
+        const blob = new Blob([codeContent], { type: 'text/plain' });
+        if (saveBlobAs(blob, downloadNameOf(button))) {
+          showButtonFeedback(button, t('common.downloaded', 'Downloaded!'), true);
+        } else {
+          showButtonFeedback(button, t('common.error', 'Error'), false);
         }
       }
     };
 
     document.addEventListener('click', handleInteraction);
     return () => document.removeEventListener('click', handleInteraction);
-  }, []);
+  }, [t]);
 };

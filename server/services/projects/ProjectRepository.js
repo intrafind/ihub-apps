@@ -39,6 +39,7 @@ import configStore from '../config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { memberTargetKey } from './projectAccess.js';
 import { isReservedAdminProjectId } from '../../validators/projectSchema.js';
+import { SMART_COLLECTION_SOURCE, isCollectionStub } from './projectConstants.js';
 
 const COMPONENT = 'ProjectRepository';
 
@@ -366,7 +367,9 @@ export class ProjectRepository {
    *
    * @param {Object} options
    * @param {{id: string, name?: string}} options.owner
-   * @param {{name: string, description?: string, instructions?: string}} options.content
+   * @param {{name: string, description?: string, instructions?: string, defaultAppId?: string,
+   *   source?: {type: 'smart-collection', collectionId: string}}} options.content - With a
+   *   `source`, the project is the stub of that smart collection (tier `ifinder`).
    * @param {string} [options.now]
    * @returns {Promise<Object|null>}
    */
@@ -378,11 +381,16 @@ export class ProjectRepository {
       id = this._mintId();
     }
     const actor = actorOf(owner);
+    const stubSource =
+      content?.source?.type === SMART_COLLECTION_SOURCE && content.source.collectionId
+        ? { type: SMART_COLLECTION_SOURCE, collectionId: String(content.source.collectionId) }
+        : null;
     const project = {
       version: PROJECT_VERSION,
       id,
       ownership: 'user',
-      tier: 'ihub',
+      tier: stubSource ? 'ifinder' : 'ihub',
+      ...(stubSource ? { source: stubSource } : {}),
       name: String(content?.name || ''),
       description: String(content?.description || ''),
       instructions: String(content?.instructions || ''),
@@ -468,7 +476,9 @@ export class ProjectRepository {
 
   /** How many projects one user owns. */
   async countOwned(ownerId) {
-    return (await this.listOwned(ownerId)).length;
+    // The stub of a smart collection holds no documents of its own: it does
+    // not take one of the owner's project slots.
+    return (await this.listOwned(ownerId)).filter(project => !isCollectionStub(project)).length;
   }
 
   /**

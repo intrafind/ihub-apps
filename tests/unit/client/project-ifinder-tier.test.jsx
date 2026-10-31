@@ -663,22 +663,25 @@ describe('creating a collection', () => {
     expect(within(dialog).getByLabelText('Instructions')).toBeInTheDocument();
   });
 
-  it('creates a smart collection with a name and a description, and no instructions', async () => {
+  it('creates a smart collection with a name and a description, and its project with instructions', async () => {
     const { createProject } = require('../../../client/src/api');
     createProject.mockResolvedValue({ ...MANAGED, id: COLLECTION_ID });
     const dialog = await openDialog(WRITABLE_CONFIG);
     expect(within(dialog).getByLabelText(/^In iHub/)).toBeChecked();
     fireEvent.click(within(dialog).getByLabelText(/^As an iFinder smart collection/));
-    expect(within(dialog).queryByLabelText('Instructions')).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: ' Contracts ' } });
     fireEvent.change(within(dialog).getByLabelText('Description'), {
       target: { value: 'Lease and NDA' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('Instructions'), {
+      target: { value: 'Cite the clause' }
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create collection' }));
     await waitFor(() =>
       expect(createProject).toHaveBeenCalledWith({
         name: 'Contracts',
         description: 'Lease and NDA',
+        instructions: 'Cite the clause',
         tier: 'ifinder'
       })
     );
@@ -696,6 +699,88 @@ describe('creating a collection', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create project' }));
     await waitFor(() =>
       expect(createProject).toHaveBeenCalledWith({ name: 'Local', instructions: 'Be brief' })
+    );
+  });
+});
+
+describe('the project of a smart collection the user added', () => {
+  const STUB_ID = 'prj_stub';
+  const STUB = {
+    ...MANAGED,
+    id: STUB_ID,
+    instructions: 'Cite the clause',
+    defaultAppId: 'chat',
+    collection: { id: COLLECTION_ID.slice(4), state: 'ok', name: 'Contracts' },
+    permissions: {
+      ...OWNER_PERMISSIONS,
+      canDelete: true,
+      canHoldChats: true,
+      readsAllChats: true
+    }
+  };
+
+  function renderStub() {
+    return render(
+      <MemoryRouter initialEntries={[`/projects/${STUB_ID}`]}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectPage />} />
+          <Route path="/projects" element={<div>project list</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  beforeEach(() => {
+    mockApi.fetchProjectsConfig.mockResolvedValue(WRITABLE_CONFIG);
+    mockApi.fetchProject.mockResolvedValue(STUB);
+  });
+
+  it('is a smart collection with its own instructions and default app, and holds chats', async () => {
+    renderStub();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(isIFinderProject(STUB)).toBe(true);
+    expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('iFinder');
+    expect(screen.getByText('Cite the clause')).toBeInTheDocument();
+    expect(screen.getByTestId('project-ifinder-source')).toHaveTextContent('2 of 200 documents');
+    // A chat runs inside it: its instructions apply, so the composer says so.
+    expect(screen.getByTestId('project-chat-composer')).toHaveTextContent(
+      'The app gets the project’s instructions and documents.'
+    );
+    // An iFinder document offers what a chat's source offers.
+    expect(screen.getAllByRole('button', { name: 'Open in iFinder' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+    expect(await screen.findByRole('menuitem', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Download' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Preview (PDF)' })).toBeInTheDocument();
+  });
+
+  it('says when its collection was deleted in iFinder, and keeps the project', async () => {
+    mockApi.fetchProject.mockResolvedValue({
+      ...STUB,
+      items: [],
+      usage: { items: 0, bytes: 0 },
+      collection: { id: COLLECTION_ID.slice(4), state: 'deleted' }
+    });
+    renderStub();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    expect(screen.getByTestId('project-collection-deleted')).toBeInTheDocument();
+    expect(screen.getByTestId('project-tier-badge')).toHaveTextContent('Deleted in iFinder');
+    expect(screen.queryByRole('button', { name: /add documents/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-ifinder-banner')).not.toBeInTheDocument();
+  });
+
+  it('deletes the project, and the collection in iFinder only when asked', async () => {
+    const { deleteProject } = require('../../../client/src/api');
+    deleteProject.mockReset();
+    deleteProject.mockResolvedValue();
+    renderStub();
+    await screen.findByRole('heading', { name: 'Contracts' });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByTestId('delete-collection-checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(deleteProject).toHaveBeenCalledWith(STUB_ID, { deleteCollection: true })
     );
   });
 });
