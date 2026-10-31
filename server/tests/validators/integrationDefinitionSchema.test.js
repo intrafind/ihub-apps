@@ -147,6 +147,18 @@ describe('integrationDefinitionSchema', () => {
       validateIntegrationDefinition({ ...base, scopes: { ...base.scopes, action: 'nope' } }).success
     ).toBe(false);
     expect(
+      validateIntegrationDefinition({
+        ...base,
+        scopes: { ...base.scopes, paging: { offset: 'offset', limit: 'limit', size: 25 } }
+      }).success
+    ).toBe(true);
+    expect(
+      validateIntegrationDefinition({
+        ...base,
+        scopes: { ...base.scopes, paging: { offset: 'offset', limit: 'limit', size: 0 } }
+      }).success
+    ).toBe(false);
+    expect(
       validateIntegrationDefinition({ ...base, sources: { nope: base.sources.search_datasets } })
         .success
     ).toBe(false);

@@ -26,7 +26,8 @@ import {
   setInstalledIntegrationEnabled,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
-import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import { fetchAdminApps, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const TABS = ['installed', 'catalog'];
 
@@ -58,20 +59,21 @@ function Pill({ tone = 'gray', children }) {
  * The install wizard is built from each definition's install fields.
  */
 function AdminInstalledIntegrationsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab = TABS.includes(tabParam) ? tabParam : 'installed';
   const installParam = searchParams.get('install');
 
   const [installed, setInstalled] = useState([]);
+  const [apps, setApps] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState(null); // { definitionId, instanceId? }
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { kind: 'remove' | 'disable', item }
   const [busy, setBusy] = useState(null);
   const [testResult, setTestResult] = useState(null);
 
@@ -85,6 +87,14 @@ function AdminInstalledIntegrationsPage() {
       ]);
       setInstalled(installedRes.items || []);
       setCatalog(catalogRes.items || []);
+      // Which apps bind each installation, for the remove and disable
+      // warnings; the page works without the list.
+      try {
+        const appList = await fetchAdminApps();
+        setApps(Array.isArray(appList) ? appList : []);
+      } catch {
+        setApps([]);
+      }
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     } finally {
@@ -115,6 +125,20 @@ function AdminInstalledIntegrationsPage() {
   };
 
   const takenIds = useMemo(() => installed.map(i => i.id), [installed]);
+
+  /** Names of the apps whose `integrations` bind an installation. */
+  const boundAppNames = useCallback(
+    instanceId =>
+      apps
+        .filter(
+          app =>
+            app?.integrations &&
+            typeof app.integrations === 'object' &&
+            Object.hasOwn(app.integrations, instanceId)
+        )
+        .map(app => getLocalizedContent(app.name, i18n.language) || app.id),
+    [apps, i18n.language]
+  );
 
   const filteredCatalog = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -154,6 +178,16 @@ function AdminInstalledIntegrationsPage() {
     }
   };
 
+  // Disabling hides every app that binds the installation: ask first when
+  // there is one.
+  const requestToggle = item => {
+    if (item.enabled !== false && boundAppNames(item.id).length > 0) {
+      setConfirm({ kind: 'disable', item });
+    } else {
+      toggle(item);
+    }
+  };
+
   const runTest = async item => {
     setBusy(item.id);
     setTestResult(null);
@@ -167,9 +201,7 @@ function AdminInstalledIntegrationsPage() {
     }
   };
 
-  const remove = async () => {
-    const item = confirmDelete;
-    setConfirmDelete(null);
+  const remove = async item => {
     if (!item) return;
     setBusy(item.id);
     try {
@@ -364,7 +396,7 @@ function AdminInstalledIntegrationsPage() {
                     <button
                       type="button"
                       className={SECONDARY_BUTTON_CLASS}
-                      onClick={() => toggle(item)}
+                      onClick={() => requestToggle(item)}
                       disabled={busy === item.id}
                       aria-pressed={item.enabled !== false}
                       aria-label={
@@ -387,7 +419,7 @@ function AdminInstalledIntegrationsPage() {
                     <button
                       type="button"
                       className={DANGER_BUTTON_CLASS}
-                      onClick={() => setConfirmDelete(item)}
+                      onClick={() => setConfirm({ kind: 'remove', item })}
                       disabled={busy === item.id}
                       aria-label={t('admin.integrationCatalog.actions.remove', 'Remove {{id}}', {
                         id: item.id
@@ -512,18 +544,51 @@ function AdminInstalledIntegrationsPage() {
       )}
 
       <ConfirmDialog
-        isOpen={Boolean(confirmDelete)}
-        title={t('admin.integrationCatalog.confirmRemove.title', 'Remove integration?')}
-        message={t(
-          'admin.integrationCatalog.confirmRemove.message',
-          'Apps that bind "{{id}}" lose its actions. A stored service-account token is deleted with it.',
-          { id: confirmDelete?.id }
-        )}
-        confirmLabel={t('common.delete', 'Delete')}
+        isOpen={Boolean(confirm)}
+        title={
+          confirm?.kind === 'disable'
+            ? t('admin.integrationCatalog.confirmDisable.title', 'Disable integration?')
+            : t('admin.integrationCatalog.confirmRemove.title', 'Remove integration?')
+        }
+        message={
+          <>
+            <p>
+              {confirm?.kind === 'disable'
+                ? t(
+                    'admin.integrationCatalog.confirmDisable.message',
+                    'Apps that bind "{{id}}" are hidden from users while it is disabled.',
+                    { id: confirm?.item.id }
+                  )
+                : t(
+                    'admin.integrationCatalog.confirmRemove.message',
+                    'Apps that bind "{{id}}" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it.',
+                    { id: confirm?.item.id }
+                  )}
+            </p>
+            {confirm && boundAppNames(confirm.item.id).length > 0 && (
+              <p className="mt-2" data-testid="bound-apps">
+                {t('admin.integrationCatalog.boundApps', 'Bound by: {{apps}}', {
+                  apps: boundAppNames(confirm.item.id).join(', ')
+                })}
+              </p>
+            )}
+          </>
+        }
+        confirmLabel={
+          confirm?.kind === 'disable'
+            ? t('admin.integrationCatalog.status.disable', 'Disable')
+            : t('common.delete', 'Delete')
+        }
         denyLabel={t('common.cancel', 'Cancel')}
         danger
-        onConfirm={remove}
-        onDeny={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const current = confirm;
+          setConfirm(null);
+          if (!current) return;
+          if (current.kind === 'disable') toggle(current.item);
+          else remove(current.item);
+        }}
+        onDeny={() => setConfirm(null)}
       />
     </div>
   );
