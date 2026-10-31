@@ -36,26 +36,59 @@ function withTimeout(promise, ms) {
 }
 
 /**
+ * The settings step: tenant, client id and secret present, and the secret
+ * from where the admin expects it. A `clientSecretRef` whose credential is
+ * missing or empty is a `warn` when the `AZURE_CLIENT_SECRET` variable stood
+ * in (the test would otherwise pass and the directory break once the variable
+ * goes), and a `fail` when nothing did.
+ */
+function settingsStep(cfg) {
+  const missing = ['tenantId', 'clientId', 'clientSecret'].filter(key => !cfg[key]);
+  const credentialMissing = Boolean(cfg.clientSecretRef) && cfg.clientSecretSource !== 'credential';
+  const credentialMessage = credentialMissing
+    ? `Credential "${cfg.clientSecretRef}" has no value or does not exist`
+    : '';
+  const step = { id: 'settings', label: 'App registration' };
+  if (missing.length) {
+    const message = `Missing: ${missing.join(', ')} (set the field or the AZURE_* environment variable)`;
+    return {
+      ...step,
+      status: 'fail',
+      message: credentialMessage ? `${credentialMessage}. ${message}` : message
+    };
+  }
+  if (credentialMissing) {
+    return {
+      ...step,
+      status: 'warn',
+      message: `${credentialMessage}; the secret came from AZURE_CLIENT_SECRET`,
+      hints: [
+        'Pick a credential that holds the client secret, or clear the field to use the environment variable on purpose'
+      ]
+    };
+  }
+  return {
+    ...step,
+    status: 'ok',
+    message: `Tenant ${cfg.tenantId}, client ${cfg.clientId.slice(0, 8)}…${cfg.clientSecretSource === 'env' ? ' (secret from AZURE_CLIENT_SECRET)' : ''}`
+  };
+}
+
+/**
  * The installation test: settings present, a client-credentials token from
- * the tenant, one Graph call that needs User.Read.All.
+ * the tenant, one Graph call that needs User.Read.All. The token is always
+ * fetched anew with the values under test and kept out of the shared cache,
+ * so a wrong secret in an unsaved draft cannot pass on a token the runtime
+ * acquired with the saved one.
  */
 async function test({ instance, values }) {
   const cfg = entraConfigFromInstance({ ...instance, values, enabled: true });
-  const steps = [];
-  const missing = ['tenantId', 'clientId', 'clientSecret'].filter(key => !cfg[key]);
-  steps.push({
-    id: 'settings',
-    label: 'App registration',
-    status: missing.length ? 'fail' : 'ok',
-    message: missing.length
-      ? `Missing: ${missing.join(', ')} (set the field or the AZURE_* environment variable)`
-      : `Tenant ${cfg.tenantId}, client ${cfg.clientId.slice(0, 8)}…${cfg.clientSecretRef ? '' : ' (secret from AZURE_CLIENT_SECRET)'}`
-  });
-  if (missing.length) return steps;
+  const steps = [settingsStep(cfg)];
+  if (steps[0].status === 'fail') return steps;
   const started = Date.now();
   let token;
   try {
-    token = await withTimeout(entraService._getAccessToken(cfg), TEST_TIMEOUT_MS);
+    token = await withTimeout(entraService._getAccessToken(cfg, { fresh: true }), TEST_TIMEOUT_MS);
     steps.push({
       id: 'token',
       label: 'Client credentials',

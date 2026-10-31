@@ -1,9 +1,21 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { createHash } from 'node:crypto';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { getEntraConfig, isEntraConfigured } from './entraConfig.js';
 import logger from '../../utils/logger.js';
+
+/**
+ * What a cached token was acquired with. The secret goes in as a hash so a
+ * token acquired with one secret is never handed out for another (the
+ * installation test runs with the secret the admin entered), and so the key
+ * never holds the secret itself. Never logged or exposed.
+ */
+function tokenCacheKey(cfg) {
+  const secretHash = createHash('sha256').update(cfg.clientSecret).digest('hex');
+  return `${cfg.tenantId}|${cfg.clientId}|${secretHash}`;
+}
 
 /**
  * Entra ID (Azure AD) Service for Microsoft Graph API integration
@@ -33,7 +45,17 @@ class EntraService {
     this.tokenFor = null;
   }
 
-  async _getAccessToken(cfg = this.getConfig()) {
+  /**
+   * A client-credentials token for `cfg`, from the cache while the cached one
+   * was acquired for the same tenant, client and secret and has over a minute
+   * left.
+   * @param {object} [cfg] The Entra settings (default: the installation's)
+   * @param {{ fresh?: boolean }} [options] `fresh` always asks the tenant for a
+   *   new token and leaves the shared cache alone, both ways: the installation
+   *   test uses it so an unsaved draft neither reads a token the runtime got
+   *   with the saved secret nor stores one the runtime would reuse.
+   */
+  async _getAccessToken(cfg = this.getConfig(), { fresh = false } = {}) {
     if (!cfg.enabled) {
       throw new Error('The Microsoft Entra ID directory integration is disabled.');
     }
@@ -42,8 +64,9 @@ class EntraService {
         'The Microsoft Entra ID directory integration is missing its tenant id, client id or client secret.'
       );
     }
-    const key = `${cfg.tenantId}|${cfg.clientId}`;
+    const key = tokenCacheKey(cfg);
     if (
+      !fresh &&
       this.accessToken &&
       this.tokenFor === key &&
       this.tokenExpiry &&
@@ -76,10 +99,18 @@ class EntraService {
       }
 
       const tokenData = await response.json();
+      if (!tokenData.access_token) {
+        logger.error('Error fetching access token', {
+          component: 'EntraService',
+          error: 'token response without access_token'
+        });
+        throw new Error('Failed to acquire access token.');
+      }
+      logger.info('Token acquired', { component: 'EntraService', fresh });
+      if (fresh) return tokenData.access_token;
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
       this.tokenFor = key;
-      logger.info('Token acquired', { component: 'EntraService' });
       return this.accessToken;
     } catch (error) {
       if (error.message === 'Failed to acquire access token.') throw error;

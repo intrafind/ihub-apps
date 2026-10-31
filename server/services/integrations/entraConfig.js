@@ -32,20 +32,26 @@ function text(value) {
  * The Entra settings as `EntraService` reads them.
  * @param {object|null} [instance]
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {{ enabled: boolean, tenantId: string, clientId: string, clientSecret: string, clientSecretRef: string }}
+ * `clientSecretSource` says where the secret came from: the credential
+ * `clientSecretRef` names, the `AZURE_CLIENT_SECRET` variable, or nowhere
+ * (`''`). A reference whose credential is missing or empty still falls back to
+ * the variable, so the installation test can tell the admin.
+ * @returns {{ enabled: boolean, tenantId: string, clientId: string, clientSecret: string, clientSecretRef: string, clientSecretSource: 'credential'|'env'|'' }}
  */
 export function entraConfigFromInstance(instance, env = process.env) {
   const values = instance?.values || {};
   const clientSecretRef = text(values.clientSecretRef);
   const fromCredential = clientSecretRef
-    ? credentialService.tryResolveSecret(clientSecretRef)
-    : undefined;
+    ? text(credentialService.tryResolveSecret(clientSecretRef))
+    : '';
+  const fromEnv = text(env.AZURE_CLIENT_SECRET);
   return {
     enabled: Boolean(instance) && instance.enabled !== false,
     tenantId: text(values.tenantId) || text(env.AZURE_TENANT_ID),
     clientId: text(values.clientId) || text(env.AZURE_CLIENT_ID),
     clientSecretRef,
-    clientSecret: text(fromCredential) || text(env.AZURE_CLIENT_SECRET)
+    clientSecret: fromCredential || fromEnv,
+    clientSecretSource: fromCredential ? 'credential' : fromEnv ? 'env' : ''
   };
 }
 
