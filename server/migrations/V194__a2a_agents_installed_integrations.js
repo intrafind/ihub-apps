@@ -19,13 +19,18 @@
  * reference (`a2a__langdock__ask`) also becomes the binding of the whole
  * agent, because the skill ids behind the slugs are only known from the card.
  *
- * `config/a2aAgents.json` is removed; nothing reads it any more.
+ * `config/a2aAgents.json` is removed; nothing reads it any more. An agent whose
+ * id another installation already holds is not moved: it is written to
+ * `config/a2aAgents.unmigrated.json` with a warning, for the admin to install
+ * under a free id.
  */
 
 export const version = '194';
 export const description = 'a2a_agents_installed_integrations';
 
 const A2A_FILE = 'config/a2aAgents.json';
+/** Agents the migration could not move, for the admin to re-install by hand. */
+const UNMIGRATED_FILE = 'config/a2aAgents.unmigrated.json';
 const INTEGRATIONS_FILE = 'config/integrations.json';
 const DEFINITION = 'com.intrafind/a2a-agent';
 const DEFAULTS = { timeoutMs: 60000, streaming: 'auto', pollIntervalMs: 1500 };
@@ -158,9 +163,13 @@ export async function up(ctx) {
   }
 
   let migrated = 0;
+  const skipped = [];
   for (const agent of agents) {
     if (integrations.installed.some(inst => inst.id === agent.id)) {
-      ctx.log(`A2A agent "${agent.id}" is already an installed integration; left as is`);
+      // Another installation (an MCP server V193 moved, an installed catalog
+      // integration) holds the id. The agent cannot take it; it is kept in a
+      // side file below instead of being lost with a2aAgents.json.
+      skipped.push(agent);
       continue;
     }
     const instance = instanceFrom(agent);
@@ -199,6 +208,19 @@ export async function up(ctx) {
     }
   }
 
+  if (skipped.length) {
+    await ctx.writeJson(UNMIGRATED_FILE, {
+      ...(a2a.security ? { security: a2a.security } : {}),
+      agents: skipped
+    });
+    ctx.warn(
+      `${skipped.length} A2A agent(s) not migrated because an installed integration already has the id: ${skipped
+        .map(agent => `"${agent.id}"`)
+        .join(
+          ', '
+        )}. Kept in ${UNMIGRATED_FILE}; install each under a free id and bind it to its apps.`
+    );
+  }
   if (hadFile) {
     await ctx.deleteFile(A2A_FILE);
     ctx.log(`${A2A_FILE} removed: A2A agents are installed integrations now`);

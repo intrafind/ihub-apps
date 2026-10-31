@@ -63,8 +63,11 @@ stay valid; it maps `auth` to a sign-in mode and keeps the credential references
 `allowedSkills` into `actions.enabled`, merges the file's `security` block into
 `integrations.json`, rewrites agent references in `app.tools` into bindings (a reference to a
 single skill becomes a binding of the whole agent, because the skill ids behind the tool slugs
-are only known from the card) and deletes the file. Conversations (`contextId`) and the inbound
-side — iHub as an agent — are unchanged.
+are only known from the card) and deletes the file. An agent whose id another installation
+already holds (an MCP server that V193 moved, an integration installed from the catalog) is not
+moved: the migration writes it to `contents/config/a2aAgents.unmigrated.json` and logs a warning.
+Install it under a free id and bind it to its apps; their old references to the agent select
+nothing. Conversations (`contextId`) and the inbound side — iHub as an agent — are unchanged.
 
 ## Authentication
 

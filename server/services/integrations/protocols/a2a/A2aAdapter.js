@@ -106,7 +106,10 @@ export async function test({ definition, instance }) {
   push('settings', 'Agent settings', 'ok', projected.config.cardUrl);
   let probe;
   try {
-    probe = await a2aClientManager.testConfig(projected.config);
+    // Every skill of the card, the switched-off ones included: the dialog
+    // replaces its action list with this result, so a skill left out here
+    // would come back switched on at the next save.
+    probe = await a2aClientManager.testConfig({ ...projected.config, deniedSkills: [] });
   } catch (error) {
     push('card', 'Agent Card', 'fail', error.message, {
       details: error.details ? { issues: error.details } : undefined
@@ -124,11 +127,9 @@ export async function test({ definition, instance }) {
       actionCount: skills.length,
       successMessage: `Agent Card read, ${skills.length} skills listed`
     }),
-    actions: skills.map(skill => ({
-      ...actionOf(skill, instance),
-      enabled: skill.allowed !== false,
-      available: skill.allowed !== false
-    }))
+    // `enabled` comes from the installation's action policy (`actionOf`), the
+    // same source the saved installation uses.
+    actions: skills.map(skill => actionOf(skill, instance))
   };
 }
 
