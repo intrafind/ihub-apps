@@ -34,6 +34,13 @@ const RESERVED_INSTANCE_IDS = new Set([
   'ifinder',
   'iassistant'
 ]);
+/**
+ * Tool ids with these prefixes are routed elsewhere before the tool list is
+ * consulted (`workflow_*` to the workflow runner in `runTool`) or classified
+ * by prefix (`knowledge_*`, `source_*` as source tools), so an installation
+ * named `workflow_docs` would never reach its adapter.
+ */
+const RESERVED_INSTANCE_ID_PREFIX = /^(workflow|knowledge|source)_/i;
 
 export class IntegrationError extends Error {
   constructor(message, { status = 400, code = 'INTEGRATION_ERROR', details } = {}) {
@@ -186,10 +193,15 @@ export class InstalledIntegrationService {
       });
     }
     const instance = parsed.data;
-    if (instance.id.includes('__') || RESERVED_INSTANCE_IDS.has(instance.id.toLowerCase())) {
-      throw new IntegrationError('Instance id must not contain "__" or be a reserved id', {
-        code: 'INVALID_ID'
-      });
+    if (
+      instance.id.includes('__') ||
+      RESERVED_INSTANCE_IDS.has(instance.id.toLowerCase()) ||
+      RESERVED_INSTANCE_ID_PREFIX.test(instance.id)
+    ) {
+      throw new IntegrationError(
+        'Instance id must not contain "__", be a reserved id or start with workflow_, knowledge_ or source_',
+        { code: 'INVALID_ID' }
+      );
     }
     const entry = this.registry.get(instance.definition);
     if (!entry) {

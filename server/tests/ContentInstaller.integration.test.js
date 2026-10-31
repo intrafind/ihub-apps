@@ -91,6 +91,15 @@ jest.unstable_mockModule('../services/integrations/protocols/openapi/OpenApiAdap
   invalidate: instanceId => invalidated.push(instanceId)
 }));
 
+/** How often the installer asked for the scope providers to be re-registered. */
+let scopeProviderSyncs = 0;
+jest.unstable_mockModule('../services/integrations/integrationTools.js', () => ({
+  syncIntegrationScopeProviders: async () => {
+    scopeProviderSyncs += 1;
+    return [];
+  }
+}));
+
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');
 const { default: integrationRegistry } =
   await import('../services/integrations/definitions/IntegrationRegistry.js');
@@ -162,6 +171,7 @@ describe('ContentInstaller: integration definitions', () => {
     state.auth = { type: 'none' };
     state.fetches = [];
     invalidated.length = 0;
+    scopeProviderSyncs = 0;
     // The registry singleton keeps the previous test's entries in memory.
     await integrationRegistry.reload();
   });
@@ -205,13 +215,14 @@ describe('ContentInstaller: integration definitions', () => {
     }
   });
 
-  test('re-installing a definition drops the cached schemas of its installations', async () => {
+  test('re-installing a definition drops the cached schemas of its installations and re-registers their scope providers', async () => {
     publish(definition);
     state.instances = [{ id: 'service-prod' }, { id: 'service-test' }];
 
     await contentInstaller.install('reg', 'integration', FOLDER, 'admin');
 
     expect(invalidated).toEqual(['service-prod', 'service-test']);
+    expect(scopeProviderSyncs).toBe(1);
   });
 
   test('rejects a definition that fails the schema', async () => {

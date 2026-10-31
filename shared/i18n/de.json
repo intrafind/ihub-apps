@@ -3225,6 +3225,9 @@
           "openCatalog": "Katalog öffnen",
           "actions": "Aktionen",
           "noActions": "Diese Installation bietet gerade keine Aktion an.",
+          "notInstalled": "Nicht installiert",
+          "notInstalledHelp": "Diese Installation gibt es nicht mehr; die App ist deshalb für Nutzer ausgeblendet. Entferne die Einbindung, um die App wieder anzubieten.",
+          "unbind": "Einbindung entfernen",
           "defaultScope": "Standard-{{scope}}",
           "pinnedScope": "Fester {{scope}}",
           "pinnedHelp": "Legt den Bereich fest; Nutzer können ihn nicht ändern.",
@@ -3596,8 +3599,13 @@
       },
       "confirmRemove": {
         "title": "Integration entfernen?",
-        "message": "Apps, die \"{{id}}\" einbinden, verlieren ihre Aktionen. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
+        "message": "Apps, die \"{{id}}\" einbinden, verlieren ihre Aktionen und sind für Nutzer ausgeblendet, bis die Einbindung entfernt ist. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
       },
+      "confirmDisable": {
+        "title": "Integration deaktivieren?",
+        "message": "Apps, die \"{{id}}\" einbinden, sind für Nutzer ausgeblendet, solange sie deaktiviert ist."
+      },
+      "boundApps": "Eingebunden von: {{apps}}",
       "sideEffect": {
         "read": "lesend",
         "write": "schreibend",

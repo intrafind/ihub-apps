@@ -306,6 +306,17 @@ export const integrationScopesSchema = z.object({
     name: jsonPathSchema,
     isDefault: jsonPathSchema.optional()
   }),
+  /**
+   * The action lists at most `size` items per call (a portal's own cap): the
+   * adapter pages with these offset and limit parameters until a short page.
+   */
+  paging: z
+    .object({
+      offset: identifierSchema,
+      limit: identifierSchema,
+      size: z.number().int().min(1).max(1000)
+    })
+    .optional(),
   /** `"<action>.<param>"` → how the picked id reaches that parameter; `{id}` and `{name}` are substituted. */
   applyAs: z.record(
     z.string().regex(/^[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*$/, 'use "<action>.<param>"'),

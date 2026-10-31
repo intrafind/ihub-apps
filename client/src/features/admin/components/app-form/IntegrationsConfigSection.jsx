@@ -13,7 +13,8 @@ import {
   CHECKBOX_CLASS,
   HELP_CLASS,
   INPUT_CLASS,
-  LABEL_CLASS
+  LABEL_CLASS,
+  SECONDARY_BUTTON_CLASS
 } from '../people-directories/formStyles';
 
 /** Keys of `app.integrations` that are built-in settings, not installed instances. */
@@ -39,6 +40,14 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     () => (integrations && typeof integrations === 'object' ? integrations : {}),
     [integrations]
   );
+
+  // Bindings to installations that are gone: the app is hidden from users
+  // until they are unbound, so they are listed with a way to do that.
+  const staleIds = useMemo(() => {
+    if (loading || error) return [];
+    const installedIds = new Set(installed.map(i => i.id));
+    return Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !installedIds.has(id));
+  }, [bindings, installed, loading, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +146,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
             </p>
           )}
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          {!loading && !error && installed.length === 0 && (
+          {!loading && !error && installed.length === 0 && staleIds.length === 0 && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
               <Link
@@ -294,6 +303,33 @@ function IntegrationsConfigSection({ integrations, onChange }) {
               </div>
             );
           })}
+          {staleIds.map(id => (
+            <div
+              key={id}
+              data-testid={`stale-integration-${id}`}
+              className="rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-2 flex items-start gap-3"
+            >
+              <div className="flex-1">
+                <span className="font-mono text-sm text-gray-900 dark:text-gray-100">{id}</span>
+                <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+                  {t('admin.apps.edit.integrations.notInstalled', 'Not installed')}
+                </span>
+                <p className={HELP_CLASS}>
+                  {t(
+                    'admin.apps.edit.integrations.notInstalledHelp',
+                    'This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.'
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={SECONDARY_BUTTON_CLASS}
+                onClick={() => setBinding(id, null)}
+              >
+                {t('admin.apps.edit.integrations.unbind', 'Unbind')}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

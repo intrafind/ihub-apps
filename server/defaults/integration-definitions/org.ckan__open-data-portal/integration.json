@@ -154,6 +154,7 @@
     "action": "list_organizations",
     "label": { "en": "Publisher", "de": "Herausgeber" },
     "map": { "id": "name", "name": "title" },
+    "paging": { "offset": "offset", "limit": "limit", "size": 25 },
     "applyAs": { "search_datasets.fq": { "value": "organization:{id}", "mode": "append" } },
     "strict": false
   },
