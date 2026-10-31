@@ -50,6 +50,7 @@ Add this to your `contents/apps/my-first-app.json`:
 ```
 
 That's it! Your app will:
+
 - Appear in the app list with the specified name and icon
 - Use the default AI model configured in your system
 - Provide a standard chat interface
@@ -58,18 +59,22 @@ That's it! Your app will:
 ### Quick Examples by Use Case
 
 **Customer Support Bot:**
+
 ```json
 {
   "id": "support-bot",
   "name": { "en": "Support Assistant" },
   "description": { "en": "24/7 customer support" },
-  "system": { "en": "You are a friendly customer support agent. Help users with their questions professionally." },
+  "system": {
+    "en": "You are a friendly customer support agent. Help users with their questions professionally."
+  },
   "preferredStyle": "professional",
   "websearch": { "enabled": true, "enabledByDefault": true }
 }
 ```
 
 **Document Analyzer:**
+
 ```json
 {
   "id": "doc-analyzer",
@@ -87,6 +92,7 @@ That's it! Your app will:
 ```
 
 **Data Extractor with Structured Output:**
+
 ```json
 {
   "id": "data-extractor",
@@ -108,13 +114,14 @@ That's it! Your app will:
 
 iHub Apps supports three types of applications, each designed for different use cases:
 
-| Type | Best For | Integration Level | Configuration Complexity |
-|------|----------|-------------------|--------------------------|
-| **Chat** | AI-powered conversations, assistants, tools | Native | Medium to High |
-| **Redirect** | External tools, SaaS apps, separate services | External Link | Low |
-| **Iframe** | Embedded dashboards, web apps, tools | Embedded | Low to Medium |
+| Type         | Best For                                     | Integration Level | Configuration Complexity |
+| ------------ | -------------------------------------------- | ----------------- | ------------------------ |
+| **Chat**     | AI-powered conversations, assistants, tools  | Native            | Medium to High           |
+| **Redirect** | External tools, SaaS apps, separate services | External Link     | Low                      |
+| **Iframe**   | Embedded dashboards, web apps, tools         | Embedded          | Low to Medium            |
 
 **Choosing the Right Type:**
+
 - Use **Chat Apps** when you need AI-powered interactions with customizable prompts, tools, and settings
 - Use **Redirect Apps** when you want to link to external applications without embedding them
 - Use **Iframe Apps** when you want to embed external applications seamlessly within iHub Apps
@@ -140,6 +147,7 @@ Standard AI-powered chat interfaces with customizable prompts and settings. This
 Link to external applications or websites directly from the app list. Perfect for integrating third-party tools, external services, or specialized applications that don't need to be embedded.
 
 **Use Cases:**
+
 - Link to external SaaS tools (e.g., CRM, project management)
 - Connect to internal applications on different domains
 - Provide quick access to web-based tools
@@ -165,15 +173,16 @@ Link to external applications or websites directly from the app list. Perfect fo
 
 **Configuration Properties:**
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `url` | String (URL) | Yes | - | The target URL to redirect to. Must be a valid URL starting with `http://` or `https://`; other schemes (such as `mailto:`) are rejected when the app is saved, and the app shows an error instead of opening them. |
-| `openInNewTab` | Boolean | No | `true` | Whether to open the URL in a new browser tab. When `false`, navigates in the same window. |
-| `showWarning` | Boolean | No | `true` | Whether to display a warning page before redirecting. When `false`, redirects immediately without confirmation. |
+| Property       | Type         | Required | Default | Description                                                                                                                                                                                                         |
+| -------------- | ------------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`          | String (URL) | Yes      | -       | The target URL to redirect to. Must be a valid URL starting with `http://` or `https://`; other schemes (such as `mailto:`) are rejected when the app is saved, and the app shows an error instead of opening them. |
+| `openInNewTab` | Boolean      | No       | `true`  | Whether to open the URL in a new browser tab. When `false`, navigates in the same window.                                                                                                                           |
+| `showWarning`  | Boolean      | No       | `true`  | Whether to display a warning page before redirecting. When `false`, redirects immediately without confirmation.                                                                                                     |
 
 **Step-by-Step Setup:**
 
 1. **Create the app configuration file** in `contents/apps/my-redirect-app.json`:
+
    ```json
    {
      "id": "my-external-tool",
@@ -211,7 +220,8 @@ Link to external applications or websites directly from the app list. Perfect fo
 
 **Configuration Examples:**
 
-*Immediate redirect to internal tool (no warning):*
+_Immediate redirect to internal tool (no warning):_
+
 ```json
 {
   "id": "intranet",
@@ -228,7 +238,8 @@ Link to external applications or websites directly from the app list. Perfect fo
 }
 ```
 
-*External service with warning:*
+_External service with warning:_
+
 ```json
 {
   "id": "external-crm",
@@ -250,6 +261,7 @@ Link to external applications or websites directly from the app list. Perfect fo
 Embed external applications directly within iHub Apps using an iframe. This creates a seamless integration where the external application appears as a native part of iHub Apps.
 
 **Use Cases:**
+
 - Embed business intelligence dashboards
 - Integrate document editors or collaboration tools
 - Display internal web applications
@@ -275,15 +287,16 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 **Configuration Properties:**
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid URL starting with `http://` or `https://`; other schemes are rejected when the app is saved, and the app shows an error instead of embedding them. |
-| `allowFullscreen` | Boolean | No | `true` | Whether to allow the embedded app to enter fullscreen mode. |
-| `sandbox` | Array<String> | No | `["allow-scripts", "allow-same-origin", "allow-forms"]` | Array of sandbox permissions that control what the iframe can do. See [Sandbox Permissions](#iframe-sandbox-permissions) below. |
+| Property          | Type          | Required | Default                                                 | Description                                                                                                                                                                                             |
+| ----------------- | ------------- | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`             | String (URL)  | Yes      | -                                                       | The URL of the application to embed. Must be a valid URL starting with `http://` or `https://`; other schemes are rejected when the app is saved, and the app shows an error instead of embedding them. |
+| `allowFullscreen` | Boolean       | No       | `true`                                                  | Whether to allow the embedded app to enter fullscreen mode.                                                                                                                                             |
+| `sandbox`         | Array<String> | No       | `["allow-scripts", "allow-same-origin", "allow-forms"]` | Array of sandbox permissions that control what the iframe can do. See [Sandbox Permissions](#iframe-sandbox-permissions) below.                                                                         |
 
 **Step-by-Step Setup:**
 
 1. **Create the app configuration file** in `contents/apps/my-iframe-app.json`:
+
    ```json
    {
      "id": "my-embedded-app",
@@ -299,12 +312,7 @@ Embed external applications directly within iHub Apps using an iframe. This crea
      "iframeConfig": {
        "url": "https://analytics.company.com/dashboard",
        "allowFullscreen": true,
-       "sandbox": [
-         "allow-scripts",
-         "allow-same-origin",
-         "allow-forms",
-         "allow-popups"
-       ]
+       "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups"]
      },
      "color": "#8B5CF6",
      "icon": "chart-bar",
@@ -329,36 +337,40 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 The `sandbox` attribute restricts what the embedded application can do. Include only the permissions your application needs:
 
-| Permission | Description | Risk Level |
-|------------|-------------|------------|
-| `allow-scripts` | Allows JavaScript execution | Medium - Required for most modern web apps |
-| `allow-same-origin` | Treats content as same origin, enables storage access | High - Required for apps that need cookies/storage |
-| `allow-forms` | Allows form submission | Low - Required for apps with forms |
-| `allow-popups` | Allows opening new windows/tabs | Medium - Required for apps that open external links |
-| `allow-modals` | Allows `alert()`, `confirm()`, `prompt()` dialogs | Low - Usually safe to enable |
-| `allow-top-navigation` | Allows navigating the top-level window | High - Generally avoid unless necessary |
-| `allow-downloads` | Allows downloading files | Medium - Enable if app needs file downloads |
+| Permission             | Description                                           | Risk Level                                          |
+| ---------------------- | ----------------------------------------------------- | --------------------------------------------------- |
+| `allow-scripts`        | Allows JavaScript execution                           | Medium - Required for most modern web apps          |
+| `allow-same-origin`    | Treats content as same origin, enables storage access | High - Required for apps that need cookies/storage  |
+| `allow-forms`          | Allows form submission                                | Low - Required for apps with forms                  |
+| `allow-popups`         | Allows opening new windows/tabs                       | Medium - Required for apps that open external links |
+| `allow-modals`         | Allows `alert()`, `confirm()`, `prompt()` dialogs     | Low - Usually safe to enable                        |
+| `allow-top-navigation` | Allows navigating the top-level window                | High - Generally avoid unless necessary             |
+| `allow-downloads`      | Allows downloading files                              | Medium - Enable if app needs file downloads         |
 
 **Recommended Sandbox Configurations:**
 
-*Minimal (most restrictive):*
+_Minimal (most restrictive):_
+
 ```json
 "sandbox": ["allow-scripts"]
 ```
 
-*Standard (balanced security and functionality):*
+_Standard (balanced security and functionality):_
+
 ```json
 "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms"]
 ```
 
-*Permissive (for trusted applications):*
+_Permissive (for trusted applications):_
+
 ```json
 "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups", "allow-modals", "allow-downloads"]
 ```
 
 **Configuration Examples:**
 
-*Embedded whiteboard application:*
+_Embedded whiteboard application:_
+
 ```json
 {
   "id": "whiteboard",
@@ -381,7 +393,8 @@ The `sandbox` attribute restricts what the embedded application can do. Include 
 }
 ```
 
-*Embedded analytics dashboard:*
+_Embedded analytics dashboard:_
+
 ```json
 {
   "id": "analytics",
@@ -398,7 +411,8 @@ The `sandbox` attribute restricts what the embedded application can do. Include 
 }
 ```
 
-*Internal document editor:*
+_Internal document editor:_
+
 ```json
 {
   "id": "docs-editor",
@@ -408,12 +422,7 @@ The `sandbox` attribute restricts what the embedded application can do. Include 
   "iframeConfig": {
     "url": "https://docs.company.local/editor",
     "allowFullscreen": false,
-    "sandbox": [
-      "allow-scripts",
-      "allow-same-origin",
-      "allow-forms",
-      "allow-modals"
-    ]
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-modals"]
   },
   "color": "#10B981",
   "icon": "document-text"
@@ -428,20 +437,20 @@ Different app types have different required and optional fields. Here's a quick 
 
 These fields are required for **all** app types (chat, redirect, iframe):
 
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `id` | String | Unique identifier (alphanumeric, dots, hyphens, underscores) | `"my-app"` |
-| `name` | Object | Localized app names | `{"en": "My App", "de": "Meine App"}` |
-| `description` | Object | Localized descriptions | `{"en": "Description", "de": "Beschreibung"}` |
-| `color` | String | Hex color code | `"#4F46E5"` |
-| `icon` | String | Icon identifier | `"chat"` |
+| Field         | Type   | Description                                                  | Example                                       |
+| ------------- | ------ | ------------------------------------------------------------ | --------------------------------------------- |
+| `id`          | String | Unique identifier (alphanumeric, dots, hyphens, underscores) | `"my-app"`                                    |
+| `name`        | Object | Localized app names                                          | `{"en": "My App", "de": "Meine App"}`         |
+| `description` | Object | Localized descriptions                                       | `{"en": "Description", "de": "Beschreibung"}` |
+| `color`       | String | Hex color code                                               | `"#4F46E5"`                                   |
+| `icon`        | String | Icon identifier                                              | `"chat"`                                      |
 
 ### Chat Apps (Additional Required Fields)
 
 Chat apps require these additional fields:
 
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
+| Field    | Type   | Description              | Example                                  |
+| -------- | ------ | ------------------------ | ---------------------------------------- |
 | `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
 
 Optional fields include: `preferredModel`, `preferredStyle`, `tools`, `variables`, `settings`, etc.
@@ -450,38 +459,39 @@ Optional fields include: `preferredModel`, `preferredStyle`, `tools`, `variables
 
 Redirect apps require:
 
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `type` | String | Must be `"redirect"` | `"redirect"` |
-| `redirectConfig` | Object | Redirect configuration | See below |
+| Field                | Type   | Description                               | Example                 |
+| -------------------- | ------ | ----------------------------------------- | ----------------------- |
+| `type`               | String | Must be `"redirect"`                      | `"redirect"`            |
+| `redirectConfig`     | Object | Redirect configuration                    | See below               |
 | `redirectConfig.url` | String | Target URL (`http://` or `https://` only) | `"https://example.com"` |
 
 ### Iframe Apps (Additional Required Fields)
 
 Iframe apps require:
 
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `type` | String | Must be `"iframe"` | `"iframe"` |
-| `iframeConfig` | Object | Iframe configuration | See below |
+| Field              | Type   | Description                                 | Example                     |
+| ------------------ | ------ | ------------------------------------------- | --------------------------- |
+| `type`             | String | Must be `"iframe"`                          | `"iframe"`                  |
+| `iframeConfig`     | Object | Iframe configuration                        | See below                   |
 | `iframeConfig.url` | String | URL to embed (`http://` or `https://` only) | `"https://example.com/app"` |
 
 ### Common Optional Fields
 
 These optional fields work for all app types:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | Boolean | `true` | Whether the app is enabled |
-| `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
-| `category` | String | - | App category for grouping |
-| `requiredFeatures` | Array | - | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off |
-| `requiredIntegrations` | Array | - | Integrations the app needs that are not installations: only `peopleDirectories` (at least one enabled people directory). While it is off, users do not get the app, exactly like `requiredFeatures`. The shipped `people-directory` app uses it. For iFinder and iAssistant, bind the installation under `integrations` instead; `ifinder` is no longer accepted here |
-| `integrations` | Object | - | The installed integrations (Admin → Integrations → Installed) the app offers, the actions it offers of each, and the chat settings for the integration's scope. The shipped `ifinder-search` and `iassistant` apps use it. See [Integrations](#integrations-binding-an-installed-integration) |
+| Field                  | Type    | Default | Description                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`              | Boolean | `true`  | Whether the app is enabled                                                                                                                                                                                                                                                                                                                                            |
+| `order`                | Number  | -       | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder                                                                                                                                                                                                                                             |
+| `category`             | String  | -       | App category for grouping                                                                                                                                                                                                                                                                                                                                             |
+| `requiredFeatures`     | Array   | -       | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off                                                                                            |
+| `requiredIntegrations` | Array   | -       | Integrations the app needs that are not installations: only `peopleDirectories` (at least one enabled people directory). While it is off, users do not get the app, exactly like `requiredFeatures`. The shipped `people-directory` app uses it. For iFinder and iAssistant, bind the installation under `integrations` instead; `ifinder` is no longer accepted here |
+| `integrations`         | Object  | -       | The installed integrations (Admin → Integrations → Installed) the app offers, the actions it offers of each, and the chat settings for the integration's scope. The shipped `ifinder-search` and `iassistant` apps use it. See [Integrations](#integrations-binding-an-installed-integration)                                                                         |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
 The following fields are specific to chat apps and are not used for redirect or iframe types:
+
 - `system`, `preferredModel`, `preferredOutputFormat`
 - `preferredStyle`, `sendChatHistory`
 - `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
@@ -521,47 +531,47 @@ Each app is defined with the following essential properties:
 
 ### Property Details
 
-| Property                | Type    | Description                                                                                                              |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `id`                    | String  | **Required.** Unique identifier for the app                                                                              |
-| `name`                  | Object  | **Required.** Localized names for the app                                                                                |
-| `description`           | Object  | **Required.** Localized descriptions of app functionality                                                                |
-| `color`                 | String  | **Required.** Hex color code for app theming                                                                             |
-| `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
-| `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
-| `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
-| `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
-| `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
-| `requiredFeatures`      | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled |
-| `requiredIntegrations`  | Array   | Optional. Integrations the app needs that are not installations (only `peopleDirectories`). While it is off, users do not get the app, as if it were disabled |
-| `integrations`          | Object  | Optional. Installed integrations the app binds, with their actions and scope settings. See [Integrations](#integrations-binding-an-installed-integration) below |
-| `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
-| `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
-| `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
-| `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
-| `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
-| `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
-| `ephemeral`             | Boolean | Optional. When `true`, the app's chats are temporary: stored on the server like any chat (a reload brings the conversation back), but never listed in the chat history or shareable, and deleted a day after their last activity — or as soon as the user starts a new chat. No iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`; the toggle only appears where the chat history is on). While active, a notice says the chat is not saved to the history — similar to a browser's incognito mode. See [Chat Persistence → Temporary chats](chat-persistence.md#temporary-chats-and-guests). Default: `false` |
-| `allowEmptyContent`     | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`              |
-| `allowedModels`         | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                       |
-| `disallowModelSelection`| Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                     |
-| `outputSchema`          | Object  | Optional. JSON schema describing the structured response format                                                          |
-| `customResponseRenderer`| String  | Optional. Name of a custom renderer component used to display the AI response instead of the default markdown renderer  |
-| `skills`                | Array   | Optional. Array of skill identifiers (strings) that are available for this app. Skills extend app capabilities with reusable AI behaviors |
-| `skillSettings`         | Object  | Optional. Controls how skills behave. See [Skill Settings](#skill-settings) below                                        |
-| `documentTemplate`      | String  | Optional. Id of the [document template](document-templates.md) (corporate design) every PDF, Word and PowerPoint file of this app uses — documents the `pdf`, `docx` and `pptx` skills create and the chat's PDF export. Without it, the default template applies |
-| `iassistant`            | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below |
-| `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
-| `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
-| `tools`                 | Array   | Optional. Array of tool identifiers available in this app. The iFinder tools and the tools of MCP servers are not listed here: an app gets them by binding the installation (`ifinder`, `drawio`, `langdock`, …) under `integrations`; an MCP server id, a `<server>__<tool>` id or a remote A2A agent reference (`langdock`, `a2a__langdock`, `a2a__langdock__ask`) in `tools` selects nothing |
-| `toolChoice`            | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call) |
-| `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
-| `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
-| `projects`              | Array   | Optional. Admin projects linked to the app — a project id, or `{ "id", "mode": "auto" \| "context" \| "tools", "write" }`. Replaces the former `sources`. See [Projects → Linking a project](projects.md#linking-a-project). `features.projects` / `features.userProjects` (`false`) switch projects or personal projects off for this app, see [Switching projects off for an app](projects.md#switching-projects-off-for-an-app) |
-| `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
-| `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
-| `inheritanceLevel`      | Number  | Optional. Depth of the inheritance chain                                                                                 |
-| `overriddenFields`      | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                |
+| Property                 | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                     | String  | **Required.** Unique identifier for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `name`                   | Object  | **Required.** Localized names for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `description`            | Object  | **Required.** Localized descriptions of app functionality                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `color`                  | String  | **Required.** Hex color code for app theming                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `icon`                   | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `system`                 | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `type`                   | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `order`                  | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `enabled`                | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `requiredFeatures`       | Array   | Optional. Feature ids the app needs (e.g. `["skills"]`). While one is off, users do not get the app, as if it were disabled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `requiredIntegrations`   | Array   | Optional. Integrations the app needs that are not installations (only `peopleDirectories`). While it is off, users do not get the app, as if it were disabled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `integrations`           | Object  | Optional. Installed integrations the app binds, with their actions and scope settings. See [Integrations](#integrations-binding-an-installed-integration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `category`               | String  | Optional. Category label for grouping apps in the UI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `preferredModel`         | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `preferredOutputFormat`  | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `preferredStyle`         | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `sendChatHistory`        | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `autoStart`              | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `ephemeral`              | Boolean | Optional. When `true`, the app's chats are temporary: stored on the server like any chat (a reload brings the conversation back), but never listed in the chat history or shareable, and deleted a day after their last activity — or as soon as the user starts a new chat. No iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`; the toggle only appears where the chat history is on). While active, a notice says the chat is not saved to the history — similar to a browser's incognito mode. See [Chat Persistence → Temporary chats](chat-persistence.md#temporary-chats-and-guests). Default: `false` |
+| `allowEmptyContent`      | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `allowedModels`          | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `disallowModelSelection` | Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `outputSchema`           | Object  | Optional. JSON schema describing the structured response format                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `customResponseRenderer` | String  | Optional. Name of a custom renderer component used to display the AI response instead of the default markdown renderer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `skills`                 | Array   | Optional. Array of skill identifiers (strings) that are available for this app. Skills extend app capabilities with reusable AI behaviors                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `skillSettings`          | Object  | Optional. Controls how skills behave. See [Skill Settings](#skill-settings) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `documentTemplate`       | String  | Optional. Id of the [document template](document-templates.md) (corporate design) every PDF, Word and PowerPoint file of this app uses — documents the `pdf`, `docx` and `pptx` skills create and the chat's PDF export. Without it, the default template applies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `iassistant`             | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `imageGeneration`        | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `thinking`               | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `tools`                  | Array   | Optional. Array of tool identifiers available in this app. The iFinder tools and the tools of MCP servers are not listed here: an app gets them by binding the installation (`ifinder`, `drawio`, `langdock`, …) under `integrations`; an MCP server id, a `<server>__<tool>` id or a remote A2A agent reference (`langdock`, `a2a__langdock`, `a2a__langdock__ask`) in `tools` selects nothing                                                                                                                                                                                                                                                                                                                                                                                      |
+| `toolChoice`             | String  | Optional. `auto` (default): the model decides whether to use the app's tools. `required`: the first model call of every message must call one of them, then the model answers from the result. See [Requiring a tool call](tool-calling.md#requiring-a-tool-call)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `apps`                   | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `websearch`              | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `projects`               | Array   | Optional. Admin projects linked to the app — a project id, or `{ "id", "mode": "auto" \| "context" \| "tools", "write" }`. Replaces the former `sources`. See [Projects → Linking a project](projects.md#linking-a-project). `features.projects` / `features.userProjects` (`false`) switch projects or personal projects off for this app, see [Switching projects off for an app](projects.md#switching-projects-off-for-an-app)                                                                                                                                                                                                                                                                                                                                                   |
+| `allowInheritance`       | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `parentId`               | String  | Optional. ID of the parent app to inherit configuration from                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `inheritanceLevel`       | Number  | Optional. Depth of the inheritance chain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `overriddenFields`       | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Apps do not set a temperature or any other sampling parameter. Those come from the model's `sampling` configuration; when it is unset the provider's default applies. See [Sampling Parameters](models.md#sampling-parameters).
 
@@ -624,10 +634,10 @@ what the user typed, if anything
 </user_instruction>
 ```
 
-| Attribute | Values |
-| --- | --- |
-| `type` | `email`, `meeting` (a calendar item in Outlook), `page` (the tab open in the browser extension), `document` (a file) |
-| `origin` | `open` — the item the user has open; `added` — an email the user added in Outlook; `attachment` — a file attached to these emails; `upload` — a file the user uploaded |
+| Attribute | Values                                                                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`    | `email`, `meeting` (a calendar item in Outlook), `page` (the tab open in the browser extension), `document` (a file)                                                   |
+| `origin`  | `open` — the item the user has open; `added` — an email the user added in Outlook; `attachment` — a file attached to these emails; `upload` — a file the user uploaded |
 
 The attributes are facts, not roles: whether an added email is background (a reply) or the thing to work on ("summarize these") is up to the app's task and the user's instruction. Write templates — or the system prompt, for an app without one — against the `<content>` tag: say what the task does with the blocks, that `<user_instruction>` says _how_, and what happens without blocks ("the whole message is the text to translate"). Refer to a particular block by its attributes, e.g. "reply to the `<content type="email" origin="open">` email". The shipped Translator (in its system prompt), Summarizer and **Outlook – Reply Directly** apps are examples. Don't wrap `{{content}}` in quotes: when there are blocks, it holds several of them.
 
@@ -642,13 +652,13 @@ Details:
 
 Uploaded documents keep their structure (admins can switch this off under **Admin → Features → Structured document extraction**, see [File Upload → Extracted text format](file-upload-feature.md#extracted-text-format)). A prompt can rely on it:
 
-| File | What the model reads |
-|---|---|
-| Word (.docx) | Markdown: `#` … `######` headings, the numbers Word shows in front of numbered headings and paragraphs (`2.1`, `a)`, `§ 3`), tables as Markdown tables, footnotes as `[^1]`, `[Page break]` where the author forced a new page (Word stores no page numbers, so pages cannot be cited), and `[Header] …` / `[Footer] …` lines before the text. Only for apps that opt in (`upload.fileUpload.trackedChanges` / `comments`): `{++added++}` / `{--removed--}` for tracked changes and `{>>Author: comment<<}` for comments |
-| PowerPoint (.pptx) | `[Slide N]` in the order of the presentation (`[Slide 3 (hidden)]` for a hidden slide), the slide title as `# Title`, tables as Markdown tables. Speaker notes (`[Notes]`) only for apps that opt in (`upload.fileUpload.speakerNotes`) |
-| Excel (.xlsx, .xls) | `[Sheet: name]`; a sheet with a header row as a Markdown table, other sheets tab-separated; merged cells filled so every row is complete; at most 2,000 rows per sheet and 300,000 characters per workbook, with a notice (`[… N more rows omitted]`) |
-| OpenOffice / LibreOffice (.odt, .ods, .odp) | The same as the Microsoft counterparts: .odt as Markdown with `#` headings, the numbers Writer shows in front of list items and headings, Markdown tables, footnotes and `[Page break]`; .ods like Excel; .odp like PowerPoint (speaker notes with `upload.fileUpload.speakerNotes`). Tracked changes are applied, review marks are not available |
-| PDF | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. `#` headings come from the tags, from an outline (bookmarks) that matches the text, or from clearly larger type; otherwise headings are ordinary lines. Markdown tables only where the PDF is tagged — without tags, table rows are plain lines |
+| File                                        | What the model reads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Word (.docx)                                | Markdown: `#` … `######` headings, the numbers Word shows in front of numbered headings and paragraphs (`2.1`, `a)`, `§ 3`), tables as Markdown tables, footnotes as `[^1]`, `[Page break]` where the author forced a new page (Word stores no page numbers, so pages cannot be cited), and `[Header] …` / `[Footer] …` lines before the text. Only for apps that opt in (`upload.fileUpload.trackedChanges` / `comments`): `{++added++}` / `{--removed--}` for tracked changes and `{>>Author: comment<<}` for comments |
+| PowerPoint (.pptx)                          | `[Slide N]` in the order of the presentation (`[Slide 3 (hidden)]` for a hidden slide), the slide title as `# Title`, tables as Markdown tables. Speaker notes (`[Notes]`) only for apps that opt in (`upload.fileUpload.speakerNotes`)                                                                                                                                                                                                                                                                                  |
+| Excel (.xlsx, .xls)                         | `[Sheet: name]`; a sheet with a header row as a Markdown table, other sheets tab-separated; merged cells filled so every row is complete; at most 2,000 rows per sheet and 300,000 characters per workbook, with a notice (`[… N more rows omitted]`)                                                                                                                                                                                                                                                                    |
+| OpenOffice / LibreOffice (.odt, .ods, .odp) | The same as the Microsoft counterparts: .odt as Markdown with `#` headings, the numbers Writer shows in front of list items and headings, Markdown tables, footnotes and `[Page break]`; .ods like Excel; .odp like PowerPoint (speaker notes with `upload.fileUpload.speakerNotes`). Tracked changes are applied, review marks are not available                                                                                                                                                                        |
+| PDF                                         | `[Page N]` before each page — `[Page 5 (printed: 3)]` when the page's printed number differs from its position —, one line per line of the page, `[Page 2: no extractable text]` for a page without a text layer. `#` headings come from the tags, from an outline (bookmarks) that matches the text, or from clearly larger type; otherwise headings are ordinary lines. Markdown tables only where the PDF is tagged — without tags, table rows are plain lines                                                        |
 
 Tell the model what to align on, and how to cite. Without that, a comparison falls back to matching free-flowing text:
 
@@ -663,6 +673,7 @@ Compare the two documents in <content> section by section.
 ```
 
 Two limits to keep in mind: headings in a PDF are only marked when the file tells where they are, so a prompt should not depend on `#` lines being there (a numbered clause may appear as the plain line `2.1 Laufzeit …`), and the markers are fixed English words whatever the language of the document.
+
 - Global prompt variables such as `{{user_name}}` are expanded in the typed text of a message only when the app has no `prompt` template.
 
 #### Variables
@@ -713,14 +724,14 @@ Administrators can override the automatically generated placeholder for each var
 
 #### Variable Types
 
-| Type       | Description                      |
-| ---------- | -------------------------------- |
-| `string`   | Single-line text input           |
-| `text`     | Multi-line text input            |
-| `select`   | Selection from predefined values |
-| `number`   | Numeric input field              |
-| `boolean`  | Boolean true/false toggle        |
-| `date`     | Date picker input                |
+| Type      | Description                      |
+| --------- | -------------------------------- |
+| `string`  | Single-line text input           |
+| `text`    | Multi-line text input            |
+| `select`  | Selection from predefined values |
+| `number`  | Numeric input field              |
+| `boolean` | Boolean true/false toggle        |
+| `date`    | Date picker input                |
 
 #### Variables Panel
 
@@ -808,25 +819,25 @@ The `settings` property controls which configuration options users can adjust fo
 }
 ```
 
-| Property                              | Description                                                              |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden |
-| `settings.model.enabled`              | Enable/disable model selection option                                    |
-| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": ["auto", "required"]}` shows only models that support tool calling (a filter value that is an array matches any of its entries) |
-| `settings.style.enabled`              | Enable/disable response style selection                                  |
-| `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
-| `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
-| `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                            |
+| Property                              | Description                                                                                                                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden                                                                                                                                                                          |
+| `settings.model.enabled`              | Enable/disable model selection option                                                                                                                                                                                                             |
+| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": ["auto", "required"]}` shows only models that support tool calling (a filter value that is an array matches any of its entries)                       |
+| `settings.style.enabled`              | Enable/disable response style selection                                                                                                                                                                                                           |
+| `settings.outputFormat.enabled`       | Enable/disable output format selection                                                                                                                                                                                                            |
+| `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                                                                                                                                                                                                |
+| `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                                                                                                                                                                                                     |
 | `settings.speechRecognition.service`  | Speech recognition backend: `"default"` (the platform default from Admin → Voice Input; the browser unless changed), `"browser"`, `"azure"`, `"model"` or `"custom"`. See [Microphone Feature](microphone-feature.md#speech-recognition-services) |
-| `settings.speechRecognition.modelId`  | With `"model"`: the transcription model that takes the app's dictation |
-| `settings.speechRecognition.host`     | Host URL for the speech recognition service (required when `service` is `"azure"`) |
-| `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
-| `inputMode.microphone.showTranscript` | Show the live transcript while recording                                 |
-| `inputMode.microphone.enabled`        | Enable/disable microphone input for voice commands                       |
-| `inputMode.voiceMode.enabled`         | Turn [voice mode](microphone-feature.md#voice-mode-spoken-conversation) (preview) on or off for this app. Absent follows the platform's `appDefault`. Needs the microphone |
-| `inputMode.voiceMode.listeningStyle`  | Optional: `"hands-free"` or `"push-to-talk"`; absent follows the platform |
-| `inputMode.voiceMode.ttsModelId`      | Optional: the text-to-speech model that speaks in this app; absent follows the platform |
-| `inputMode.voiceMode.voice`           | Optional: a voice id of that model                                       |
+| `settings.speechRecognition.modelId`  | With `"model"`: the transcription model that takes the app's dictation                                                                                                                                                                            |
+| `settings.speechRecognition.host`     | Host URL for the speech recognition service (required when `service` is `"azure"`)                                                                                                                                                                |
+| `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                                                                                                                                                                                                      |
+| `inputMode.microphone.showTranscript` | Show the live transcript while recording                                                                                                                                                                                                          |
+| `inputMode.microphone.enabled`        | Enable/disable microphone input for voice commands                                                                                                                                                                                                |
+| `inputMode.voiceMode.enabled`         | Turn [voice mode](microphone-feature.md#voice-mode-spoken-conversation) (preview) on or off for this app. Absent follows the platform's `appDefault`. Needs the microphone                                                                        |
+| `inputMode.voiceMode.listeningStyle`  | Optional: `"hands-free"` or `"push-to-talk"`; absent follows the platform                                                                                                                                                                         |
+| `inputMode.voiceMode.ttsModelId`      | Optional: the text-to-speech model that speaks in this app; absent follows the platform                                                                                                                                                           |
+| `inputMode.voiceMode.voice`           | Optional: a voice id of that model                                                                                                                                                                                                                |
 
 For more details, see the [Microphone Feature](microphone-feature.md) documentation.
 
@@ -933,12 +944,12 @@ Each prompt can optionally set initial values for input variables:
 
 Each starter prompt supports the following fields:
 
-| Field         | Type    | Required | Default | Description                                                           |
-| ------------- | ------- | -------- | ------- | --------------------------------------------------------------------- |
-| `title`       | Object  | Yes      | -       | Localized button label shown to the user                              |
-| `message`     | Object  | Yes      | -       | Localized message sent to the AI when the prompt is clicked           |
-| `description` | Object  | No       | -       | Localized subtitle displayed beneath the title for additional context |
-| `variables`   | Object  | No       | -       | Key-value pairs that pre-fill app variable fields                     |
+| Field         | Type    | Required | Default | Description                                                                                                                                                                                                |
+| ------------- | ------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`       | Object  | Yes      | -       | Localized button label shown to the user                                                                                                                                                                   |
+| `message`     | Object  | Yes      | -       | Localized message sent to the AI when the prompt is clicked                                                                                                                                                |
+| `description` | Object  | No       | -       | Localized subtitle displayed beneath the title for additional context                                                                                                                                      |
+| `variables`   | Object  | No       | -       | Key-value pairs that pre-fill app variable fields                                                                                                                                                          |
 | `autoSend`    | Boolean | No       | `false` | When `true`, clicking the prompt immediately sends the message without requiring a second confirmation. When `false`, the message is inserted into the input field and the user can edit it before sending |
 
 Starter prompts take the highest priority and will hide both welcome messages and example prompts when configured.
@@ -977,10 +988,10 @@ window and leaves the starter prompts and the chat input as they are.
 }
 ```
 
-| Field      | Type   | Required | Description                                                                        |
-| ---------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `content`  | Object | Yes      | Localized guide text in Markdown                                                   |
-| `question` | Object | No       | Localized dialog heading; defaults to "How do I use this app?"                     |
+| Field      | Type   | Required | Description                                                    |
+| ---------- | ------ | -------- | -------------------------------------------------------------- |
+| `content`  | Object | Yes      | Localized guide text in Markdown                               |
+| `question` | Object | No       | Localized dialog heading; defaults to "How do I use this app?" |
 
 Where users find it — one control with one label, "Usage guide" ("Anleitung" in German), in the
 same place in every state:
@@ -1066,28 +1077,28 @@ The `upload` property controls file and media upload capabilities:
 
 Every upload type has its own size limit, and a file is held to the limit of its own type: a PDF is refused above `fileUpload.maxFileSizeMB` even when `videoUpload.maxFileSizeMB` is 51200. Before, every file was accepted up to the largest limit of all types.
 
-| Property                            | Type    | Default  | Description                                                                              |
-| ----------------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------- |
-| `upload.enabled`                    | Boolean | `false`  | Master switch that enables or disables all upload functionality                          |
-| `upload.allowMultiple`              | Boolean | `false`  | Allow users to attach more than one file at a time                                       |
-| `upload.imageUpload.enabled`        | Boolean | `false`  | Enable image attachment support                                                          |
-| `upload.imageUpload.resizeImages`   | Boolean | `true`   | Automatically resize images before sending to reduce token consumption                  |
-| `upload.imageUpload.maxFileSizeMB`  | Number  | `10`     | Maximum image file size in megabytes (1-100)                                             |
-| `upload.imageUpload.supportedFormats` | Array | `["image/jpeg","image/jpg","image/png","image/gif","image/webp"]` | Allowed MIME types for image uploads |
-| `upload.audioUpload.enabled`        | Boolean | `false`  | Enable audio file upload support (for transcription or audio-capable models)            |
-| `upload.audioUpload.maxFileSizeMB`  | Number  | `20`     | Maximum audio file size in megabytes (1-2000)                                            |
-| `upload.audioUpload.supportedFormats` | Array | `["audio/mpeg","audio/wav","audio/mp3","audio/flac","audio/ogg"]` | Allowed MIME types for audio uploads |
-| `upload.videoUpload.enabled`        | Boolean | `false`  | Enable video upload (the audio is extracted in the browser for transcription or audio-capable models) |
-| `upload.videoUpload.extractAudio`   | Boolean | `true`   | Extract the audio of the video as a 16 kHz mono WAV; `false` sends the whole video to the model |
-| `upload.videoUpload.maxFileSizeMB`  | Number  | `50`     | Maximum video file size in megabytes (1-51200, that is 50 GB). An MP4 or MOV can be that large when its audio is extracted: only its index and audio are read. Other containers, and videos sent as they are, work up to about 2 GB — see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb) |
-| `upload.videoUpload.supportedFormats` | Array | `["video/mp4","video/webm","video/quicktime"]` | Allowed MIME types for video uploads |
-| `upload.fileUpload.enabled`         | Boolean | `false`  | Enable document/text file upload support                                                 |
-| `upload.fileUpload.maxFileSizeMB`   | Number  | `20`     | Maximum document file size in megabytes (1-100)                                          |
-| `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
-| `upload.fileUpload.trackedChanges`  | String  | `"accepted"` | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view |
-| `upload.fileUpload.comments`        | String  | `"ignore"` | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to      |
-| `upload.fileUpload.speakerNotes`    | String  | `"ignore"` | `"include"` sends the speaker notes of PowerPoint and OpenDocument slides as `[Notes]` after the slide text |
-| `upload.cloudStorageUpload.enabled` | Boolean | `false`  | Enable the cloud storage file picker (requires cloud storage configured in platform.json)|
+| Property                              | Type    | Default                                                           | Description                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------- | ------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `upload.enabled`                      | Boolean | `false`                                                           | Master switch that enables or disables all upload functionality                                                                                                                                                                                                                                                        |
+| `upload.allowMultiple`                | Boolean | `false`                                                           | Allow users to attach more than one file at a time                                                                                                                                                                                                                                                                     |
+| `upload.imageUpload.enabled`          | Boolean | `false`                                                           | Enable image attachment support                                                                                                                                                                                                                                                                                        |
+| `upload.imageUpload.resizeImages`     | Boolean | `true`                                                            | Automatically resize images before sending to reduce token consumption                                                                                                                                                                                                                                                 |
+| `upload.imageUpload.maxFileSizeMB`    | Number  | `10`                                                              | Maximum image file size in megabytes (1-100)                                                                                                                                                                                                                                                                           |
+| `upload.imageUpload.supportedFormats` | Array   | `["image/jpeg","image/jpg","image/png","image/gif","image/webp"]` | Allowed MIME types for image uploads                                                                                                                                                                                                                                                                                   |
+| `upload.audioUpload.enabled`          | Boolean | `false`                                                           | Enable audio file upload support (for transcription or audio-capable models)                                                                                                                                                                                                                                           |
+| `upload.audioUpload.maxFileSizeMB`    | Number  | `20`                                                              | Maximum audio file size in megabytes (1-2000)                                                                                                                                                                                                                                                                          |
+| `upload.audioUpload.supportedFormats` | Array   | `["audio/mpeg","audio/wav","audio/mp3","audio/flac","audio/ogg"]` | Allowed MIME types for audio uploads                                                                                                                                                                                                                                                                                   |
+| `upload.videoUpload.enabled`          | Boolean | `false`                                                           | Enable video upload (the audio is extracted in the browser for transcription or audio-capable models)                                                                                                                                                                                                                  |
+| `upload.videoUpload.extractAudio`     | Boolean | `true`                                                            | Extract the audio of the video as a 16 kHz mono WAV; `false` sends the whole video to the model                                                                                                                                                                                                                        |
+| `upload.videoUpload.maxFileSizeMB`    | Number  | `50`                                                              | Maximum video file size in megabytes (1-51200, that is 50 GB). An MP4 or MOV can be that large when its audio is extracted: only its index and audio are read. Other containers, and videos sent as they are, work up to about 2 GB — see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb) |
+| `upload.videoUpload.supportedFormats` | Array   | `["video/mp4","video/webm","video/quicktime"]`                    | Allowed MIME types for video uploads                                                                                                                                                                                                                                                                                   |
+| `upload.fileUpload.enabled`           | Boolean | `false`                                                           | Enable document/text file upload support                                                                                                                                                                                                                                                                               |
+| `upload.fileUpload.maxFileSizeMB`     | Number  | `20`                                                              | Maximum document file size in megabytes (1-100)                                                                                                                                                                                                                                                                        |
+| `upload.fileUpload.supportedFormats`  | Array   | See schema                                                        | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)                                                                                                                                                                                                                                   |
+| `upload.fileUpload.trackedChanges`    | String  | `"accepted"`                                                      | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view                                                                                                                                                                                            |
+| `upload.fileUpload.comments`          | String  | `"ignore"`                                                        | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to                                                                                                                                                                                                                                   |
+| `upload.fileUpload.speakerNotes`      | String  | `"ignore"`                                                        | `"include"` sends the speaker notes of PowerPoint and OpenDocument slides as `[Notes]` after the slide text                                                                                                                                                                                                            |
+| `upload.cloudStorageUpload.enabled`   | Boolean | `false`                                                           | Enable the cloud storage file picker (requires cloud storage configured in platform.json)                                                                                                                                                                                                                              |
 
 #### Skill Settings
 
@@ -1101,13 +1112,13 @@ The `skills` array specifies which skill identifiers are available for an app. S
 }
 ```
 
-| Property                       | Type    | Default | Description                                                                         |
-| ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
-| `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
-| `skillSettings.enabled`        | Boolean | `false` | Turn skills on for this app. Skills are opt-in: without `true`, the app gets no `<available_skills>` block, no `activate_skill` / `read_skill_resource` / `find_skill` tools, no `requestedSkills` or `/name` pre-activation, and skills active earlier in the chat are not carried over, whatever the app lists in `skills` and whatever skills the user owns. Agent nodes are not affected: they list their skills themselves |
-| `skillSettings.autoActivate`   | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
-| `skillSettings.maxActiveSkills`| Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out |
-| `skillSettings.allowPersonal`  | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Applies only when `skillSettings.enabled` is `true`. Set `false` to allow only the global skills listed in `skills` |
+| Property                        | Type    | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skills`                        | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `skillSettings.enabled`         | Boolean | `false` | Turn skills on for this app. Skills are opt-in: without `true`, the app gets no `<available_skills>` block, no `activate_skill` / `read_skill_resource` / `find_skill` tools, no `requestedSkills` or `/name` pre-activation, and skills active earlier in the chat are not carried over, whatever the app lists in `skills` and whatever skills the user owns. Agent nodes are not affected: they list their skills themselves                                                                                                                         |
+| `skillSettings.autoActivate`    | Boolean | `false` | Run the app's `skills` on every turn, without `/name` and without waiting for the model to activate them — for an app built around a skill, like the shipped Skill Builder. They come after the skills the request or message names and count towards `maxActiveSkills`; only skills granted to the user are loaded. This includes skills only users may start (`disable-model-invocation: true`): assigning them with `autoActivate` is the admin starting them. A user's own skill of the same name, picked with `/name`, takes the app skill's place |
+| `skillSettings.maxActiveSkills` | Number  | `3`     | Maximum number of skills active at once in a turn (1-10): the ones the request or message names with `/`, then the app's own skills when `autoActivate` is on, then the ones still active from earlier in the chat, newest first. Further skills are left out                                                                                                                                                                                                                                                                                           |
+| `skillSettings.allowPersonal`   | Boolean | `true`  | Offer users' own and shared [user skills](skills.md#user-skills) in this app. Applies only when `skillSettings.enabled` is `true`. Set `false` to allow only the global skills listed in `skills`                                                                                                                                                                                                                                                                                                                                                       |
 
 **Documents in the corporate design:** the system skills `pdf`, `docx` and `pptx` create PDF, Word and PowerPoint files. Set `documentTemplate` to fix the [document template](document-templates.md) they use in this app:
 
@@ -1144,14 +1155,14 @@ This enables a "concierge" bot that routes requests to specialist bots:
 
 Requirements and behavior:
 
-| Aspect            | Behavior                                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Feature flag      | The `appAsTool` platform feature must be enabled (Admin → Features). Off by default.                               |
-| Permissions       | Users can only reach target apps their groups allow — the same check as opening the app directly. Apps the user may not access are not offered to the model at all. |
-| Nesting           | One level only. A called app runs without `app__*` tools, so chains like A → B → C (or loops) cannot form. Self-references are ignored. |
-| Model             | Each target app resolves its own model (`preferredModel` or platform default). The target model must support tools only if the target app itself uses tools. The calling app's model must support tool calling. |
-| Statelessness     | Each call is a fresh, single-turn invocation of the target app — no chat history is shared in either direction.    |
-| Tool description  | Write target app descriptions as if instructing the concierge's model when to pick that specialist — the description **is** the tool description. |
+| Aspect           | Behavior                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature flag     | The `appAsTool` platform feature must be enabled (Admin → Features). Off by default.                                                                                                                            |
+| Permissions      | Users can only reach target apps their groups allow — the same check as opening the app directly. Apps the user may not access are not offered to the model at all.                                             |
+| Nesting          | One level only. A called app runs without `app__*` tools, so chains like A → B → C (or loops) cannot form. Self-references are ignored.                                                                         |
+| Model            | Each target app resolves its own model (`preferredModel` or platform default). The target model must support tools only if the target app itself uses tools. The calling app's model must support tool calling. |
+| Statelessness    | Each call is a fresh, single-turn invocation of the target app — no chat history is shared in either direction.                                                                                                 |
+| Tool description | Write target app descriptions as if instructing the concierge's model when to pick that specialist — the description **is** the tool description.                                                               |
 
 #### iAssistant Configuration
 
@@ -1178,34 +1189,34 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 }
 ```
 
-| Property                    | Type   | Description                                                                                      |
-| --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
-| `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
-| `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the iFinder installation's base URL               |
-| `iassistant.profileId`      | String | iAssistant *conversation* profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning |
-| `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
-| `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
-| `iassistant.filter[].values`| Array  | Array of allowed values for the filter field                                                     |
-| `iassistant.filter[].isNegated` | Boolean | When `true`, excludes results matching the filter instead of including them. Default: `false` |
-| `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
-| `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
-| `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
-| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). A user who does not have it in iFinder searches their own default profile instead, see below |
-| `iassistant.assistantId`    | String | An iFinder iAssistant (iFinder 6.8+), e.g. `"legal-advisor"`. It sets the conversation profile and the search profile and wins over `profileId`, `searchProfile` and `allSearchProfiles`. Only users who have its search profile can use the app, see below |
-| `iassistant.allSearchProfiles` | Boolean | Send no search profile, so iFinder searches across every search profile the user has (iFinder 6.9+). Default: `false` |
-| `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
-| `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
-| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to the installation's **Answer only from retrieved documents** (`groundedOnly`); `false` turns that default off for this app |
-| `iassistant.tools`          | Array  | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools |
-| `iassistant.labels`         | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels |
-| `iassistant.scope`          | String | OAuth scope requested in the iFinder JWT for this app                                            |
-| `iassistant.ephemeral`      | Boolean | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`            |
+| Property                          | Type            | Description                                                                                                                                                                                                                                                 |
+| --------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `iassistant.enabled`              | Boolean         | Enable or disable iAssistant integration for this app. Default: `false`                                                                                                                                                                                     |
+| `iassistant.baseUrl`              | String          | Base URL of the iAssistant service, overriding the iFinder installation's base URL                                                                                                                                                                          |
+| `iassistant.profileId`            | String          | iAssistant _conversation_ profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning                                                                                                                                             |
+| `iassistant.filter`               | Array           | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated`                                                                                                                                               |
+| `iassistant.filter[].key`         | String          | The metadata field name to filter on                                                                                                                                                                                                                        |
+| `iassistant.filter[].values`      | Array           | Array of allowed values for the filter field                                                                                                                                                                                                                |
+| `iassistant.filter[].isNegated`   | Boolean         | When `true`, excludes results matching the filter instead of including them. Default: `false`                                                                                                                                                               |
+| `iassistant.searchMode`           | String          | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                                                                                                                                                                                        |
+| `iassistant.searchDistance`       | String          | Similarity threshold for semantic search results (e.g., `"0.7"`)                                                                                                                                                                                            |
+| `iassistant.searchFields`         | Object          | Map of field names to boost weights for relevance tuning                                                                                                                                                                                                    |
+| `iassistant.searchProfile`        | String          | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). A user who does not have it in iFinder searches their own default profile instead, see below                                                                                  |
+| `iassistant.assistantId`          | String          | An iFinder iAssistant (iFinder 6.8+), e.g. `"legal-advisor"`. It sets the conversation profile and the search profile and wins over `profileId`, `searchProfile` and `allSearchProfiles`. Only users who have its search profile can use the app, see below |
+| `iassistant.allSearchProfiles`    | Boolean         | Send no search profile, so iFinder searches across every search profile the user has (iFinder 6.9+). Default: `false`                                                                                                                                       |
+| `iassistant.extraContext`         | String          | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below)                                                                                                                                          |
+| `iassistant.systemPromptPreamble` | String          | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below)                                                                                                                                                              |
+| `iassistant.groundedOnly`         | Boolean         | Answer only from the retrieved sources, see below. Unset defers to the installation's **Answer only from retrieved documents** (`groundedOnly`); `false` turns that default off for this app                                                                |
+| `iassistant.tools`                | Array           | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools                                                                                                                          |
+| `iassistant.labels`               | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels                                                                                                                                                          |
+| `iassistant.scope`                | String          | OAuth scope requested in the iFinder JWT for this app                                                                                                                                                                                                       |
+| `iassistant.ephemeral`            | Boolean         | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`                                                                                                                                                                       |
 
 > `tools`, `labels`, `scope` and `ephemeral` were read by the adapter but missing from the app schema until now, so setting them on an app had no effect and produced no validation error. They work as documented from this release on — check any app that already carries them, since they now actually apply.
 
 **Restricting answers to your own documents (`groundedOnly`):**
 
-By default the iAssistant answers from the retrieved documents *and* from the model's general knowledge. Set `groundedOnly` to confine it to what retrieval returned:
+By default the iAssistant answers from the retrieved documents _and_ from the model's general knowledge. Set `groundedOnly` to confine it to what retrieval returned:
 
 ```json
 "iassistant": {
@@ -1219,11 +1230,11 @@ This is carried as a prompt instruction prepended to `extraContext`, because the
 
 **Conversation profile vs. search profile (`profileId` vs. `searchProfile`):**
 
-`profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
+`profileId` picks the iAssistant _conversation_ profile — the workflow and its tuning. `searchProfile` picks the iFinder _search_ profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
 
 The search profile comes from `searchProfile`, then the model's, then the installation's `defaultSearchProfile`. Because search profiles are assigned per user in iFinder, iHub checks it against the search profiles of the requesting user before creating a conversation and uses the user's default profile when they do not have it (the installation's `verifySearchProfileAccess`, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The resolved profile is pinned for the life of the conversation.
 
-**An iFinder iAssistant (`assistantId`):** iFinder pairs a conversation profile with a search profile in an *iAssistant* (Admin UI of iFinder → iAssistants). Naming one takes both profiles from iFinder, so the pairing is maintained in one place. iFinder offers a user only the iAssistants whose search profile they have; a user without it gets the message that the iAssistant is not available to them instead of an answer from another corpus. In **Admin → Apps → Edit → iAssistant**, **Load from iFinder** lists the iAssistants iFinder shows *you*; others can be entered by ID. Both profiles are pinned for the life of a conversation.
+**An iFinder iAssistant (`assistantId`):** iFinder pairs a conversation profile with a search profile in an _iAssistant_ (Admin UI of iFinder → iAssistants). Naming one takes both profiles from iFinder, so the pairing is maintained in one place. iFinder offers a user only the iAssistants whose search profile they have; a user without it gets the message that the iAssistant is not available to them instead of an answer from another corpus. In **Admin → Apps → Edit → iAssistant**, **Load from iFinder** lists the iAssistants iFinder shows _you_; others can be entered by ID. Both profiles are pinned for the life of a conversation.
 
 **All search profiles (`allSearchProfiles`):** iFinder 6.9 accepts a conversation without a search profile and then searches everything the user may see through any of their search profiles — the content filters of all their profiles combined, without profile-specific boosting. Use it for an assistant over "everything I can find in iFinder". iFinder 6.8 rejects such a conversation.
 
@@ -1252,10 +1263,10 @@ The `imageGeneration` property sets default parameters for image generation apps
 }
 ```
 
-| Property                      | Type   | Default | Description                                                                                               |
-| ----------------------------- | ------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| Property                      | Type   | Default | Description                                                                                                                                     |
+| ----------------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `imageGeneration.aspectRatio` | String | -       | Default aspect ratio for generated images. Options: `"1:1"`, `"16:9"`, `"9:16"`, `"5:4"`, `"4:5"`, `"3:2"`, `"2:3"`, `"3:4"`, `"4:3"`, `"21:9"` |
-| `imageGeneration.quality`     | String | -       | Default image quality level. Options: `"Low"`, `"Medium"`, `"High"`                                      |
+| `imageGeneration.quality`     | String | -       | Default image quality level. Options: `"Low"`, `"Medium"`, `"High"`                                                                             |
 
 #### Thinking Configuration
 
@@ -1269,11 +1280,11 @@ The `thinking` property enables extended thinking for models that support it (e.
 }
 ```
 
-| Property           | Type    | Default | Description                                                                                             |
-| ------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `thinking.enabled` | Boolean | `false` | Enable extended thinking mode                                                                           |
-| `thinking.level`   | String  | `medium`| Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens     |
-| `thinking.thoughts`| Boolean | `false` | When `true`, the model's internal thinking steps are included and displayed in the response             |
+| Property            | Type    | Default  | Description                                                                                         |
+| ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `thinking.enabled`  | Boolean | `false`  | Enable extended thinking mode                                                                       |
+| `thinking.level`    | String  | `medium` | Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens |
+| `thinking.thoughts` | Boolean | `false`  | When `true`, the model's internal thinking steps are included and displayed in the response         |
 
 An app's `thinking` block overrides the model's for that app. `thinking.budget`
 is no longer accepted — see [Models](models.md#model-thinking-configuration).
@@ -1299,12 +1310,13 @@ An app offers an [installed integration](integrations.md) (**Admin → Integrati
 }
 ```
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `actions` | Array | all of the installation's actions | The actions the app offers the model, by name. `[]` binds the installation without tools, for the scope picker only |
-| `scopePicker`, `defaultScope`, `pinnedScope`, `allowAllSearchProfiles` | | | The scope settings, see [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask) |
+| Field                                                                  | Type    | Default                           | Description                                                                                                                                                      |
+| ---------------------------------------------------------------------- | ------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions`                                                              | Array   | all of the installation's actions | The actions the app offers the model, by name. `[]` binds the installation without tools, for the scope picker only                                              |
+| `required`                                                             | Boolean | `true`                            | Whether the app is hidden while the installation is disabled or missing. `false`: the app stays available without the installation's actions, scopes and sources |
+| `scopePicker`, `defaultScope`, `pinnedScope`, `allowAllSearchProfiles` |         |                                   | The scope settings, see [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask)                                                                |
 
-The binding is also the requirement: the app is offered to users only while every installation it binds exists and is enabled. Otherwise users do not get the app, as with a `requiredFeatures` entry that is off, and **Admin → Apps** names the missing installation.
+The binding is also the requirement: the app is offered to users only while every installation it binds with `required` on (the default) exists and is enabled. Otherwise users do not get the app, as with a `requiredFeatures` entry that is off, and **Admin → Apps** names the missing installation. With `"required": false` the app stays available and simply lacks that integration while it is off. Web search (`websearch`) is optional by default and hides the app only with `websearch.required: true`, see [Web Search](#web-search).
 
 **iFinder.** The seven iFinder tools (`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_discover`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`) are the actions of the built-in `ifinder` installation and are not listed in `tools`. The action names are the tool ids without the `iFinder_` prefix: `"ifinder": { "actions": ["search", "getContent"] }` offers two of them, `"ifinder": {}` all seven, `"ifinder": { "actions": [] }` none (the chat still gets the search profile picker). The tools keep their ids in the chat and in group tool grants (`permissions.tools`).
 
@@ -1318,12 +1330,12 @@ Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and l
 
 ### Integration scopes: where to search and whom to ask
 
-An integration can offer *scopes* the user picks per chat: where it searches, or whom it asks. Today two integrations do:
+An integration can offer _scopes_ the user picks per chat: where it searches, or whom it asks. Today two integrations do:
 
-| Integration | `integrations` key | Scopes | Offered to |
-|---|---|---|---|
-| iFinder | `ifinder` | The user's iFinder search profiles, with their display names ("Search in: Contracts") | Apps that bind the `ifinder` installation, while it is enabled |
-| iAssistant | `iassistant` | `assistant:<id>` — an iFinder iAssistant the user can see; `configured` — the app's own conversation and search profile (when the app names no iAssistant); `all` — all of the user's search profiles, when allowed | Chats whose model is an iAssistant (`iassistant-conversation`) |
+| Integration | `integrations` key | Scopes                                                                                                                                                                                                              | Offered to                                                     |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| iFinder     | `ifinder`          | The user's iFinder search profiles, with their display names ("Search in: Contracts")                                                                                                                               | Apps that bind the `ifinder` installation, while it is enabled |
+| iAssistant  | `iassistant`       | `assistant:<id>` — an iFinder iAssistant the user can see; `configured` — the app's own conversation and search profile (when the app names no iAssistant); `all` — all of the user's search profiles, when allowed | Chats whose model is an iAssistant (`iassistant-conversation`) |
 
 The picked scope is saved with the chat and restored when the chat is reopened. It is binding: every `iFinder_*` call of the chat searches the picked profile, whatever `searchProfile` the model passes, and the model is told the profile is fixed (`iFinder_listProfiles` is not offered then). Changing an iAssistant scope mid-chat continues in a new iFinder conversation, because iFinder fixes the profiles of a conversation when it is created. The server checks the scope on every turn against what the integration offers the user and the admin allow-list (the iFinder installation's **Offered search profiles**, `allowedSearchProfiles`, see [Platform → iFinder](platform.md#ifinder-integration)); a scope the user may not use refuses the turn with `403 INTEGRATION_SCOPE_NOT_ALLOWED`.
 
@@ -1334,12 +1346,12 @@ The picked scope is saved with the chat and restored when the chat is reopened. 
 }
 ```
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `scopePicker` | `menu` \| `hidden` | `menu` | `menu`: a row under **Use in this chat** in the "+" menu with a submenu, and a chip under the composer showing the scope in use. Picking a scope closes the menu. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
-| `defaultScope` | String | the installation's default | The scope a new chat starts with, when the user has it |
-| `pinnedScope` | String | - | The only scope the app's chats use. The picker shows it but offers nothing else, and the server applies it whatever the request says |
-| `allowAllSearchProfiles` | Boolean | the app's `iassistant.allSearchProfiles` | `iassistant` only: offer "All my search profiles" (iFinder 6.9+) |
+| Field                    | Type               | Default                                  | Description                                                                                                                                                                                                                                                                       |
+| ------------------------ | ------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scopePicker`            | `menu` \| `hidden` | `menu`                                   | `menu`: a row under **Use in this chat** in the "+" menu with a submenu, and a chip under the composer showing the scope in use. Picking a scope closes the menu. `hidden`: no picker; the model chooses as before (still checked against the user's profiles and the allow-list) |
+| `defaultScope`           | String             | the installation's default               | The scope a new chat starts with, when the user has it                                                                                                                                                                                                                            |
+| `pinnedScope`            | String             | -                                        | The only scope the app's chats use. The picker shows it but offers nothing else, and the server applies it whatever the request says                                                                                                                                              |
+| `allowAllSearchProfiles` | Boolean            | the app's `iassistant.allSearchProfiles` | `iassistant` only: offer "All my search profiles" (iFinder 6.9+)                                                                                                                                                                                                                  |
 
 When iFinder cannot be asked for the list (a user without the feature `fi_ifinder_allow` gets 403, or iFinder is down), the picker offers the configured default (and the admin allow-list) with a short hint instead of an empty list. `GET /api/integrations/scopes?appId=…&modelId=…` returns what the picker shows.
 
@@ -1350,24 +1362,24 @@ For a complete list of all built-in icons, their names, and how to add custom SV
 
 Common icons used for apps include:
 
-| Name                  | Description                   |
-| --------------------- | ----------------------------- |
-| `academic-cap`        | Graduation cap                |
-| `briefcase`           | Briefcase / work              |
-| `calendar`            | Calendar                      |
-| `chart-bar`           | Bar chart                     |
-| `chat-bubbles`        | Chat conversation bubbles     |
-| `code`                | Code brackets                 |
-| `document-search`     | Document with search          |
-| `document-text`       | Document with text            |
-| `globe`               | Globe / Earth                 |
-| `information-circle`  | Information icon              |
-| `light-bulb`          | Light bulb / idea             |
-| `mail`                | Email / envelope              |
-| `question-mark-circle`| Question mark in a circle     |
-| `share`               | Share icon                    |
-| `sparkles`            | Sparkles / magic effect       |
-| `users`               | Group of people               |
+| Name                   | Description               |
+| ---------------------- | ------------------------- |
+| `academic-cap`         | Graduation cap            |
+| `briefcase`            | Briefcase / work          |
+| `calendar`             | Calendar                  |
+| `chart-bar`            | Bar chart                 |
+| `chat-bubbles`         | Chat conversation bubbles |
+| `code`                 | Code brackets             |
+| `document-search`      | Document with search      |
+| `document-text`        | Document with text        |
+| `globe`                | Globe / Earth             |
+| `information-circle`   | Information icon          |
+| `light-bulb`           | Light bulb / idea         |
+| `mail`                 | Email / envelope          |
+| `question-mark-circle` | Question mark in a circle |
+| `share`                | Share icon                |
+| `sparkles`             | Sparkles / magic effect   |
+| `users`                | Group of people           |
 
 See [Icons](icons.md) for the full reference, including how to add custom SVG icons.
 
@@ -1455,27 +1467,32 @@ Here are some practical examples of how to configure the settings for different 
 ### Common Configuration Issues
 
 **App not appearing in the list:**
+
 - Verify JSON syntax is valid (no trailing commas, proper quotes)
 - Check that the app ID is unique
 - Ensure the app file is in `contents/apps/` directory
 - Restart the server after adding new app files
 
 **Variables not working:**
+
 - Confirm variable names in prompt template match variable definitions
 - Check that variable types are valid (`string`, `text`, `select`, `number`, `boolean`, `date`)
 - Verify required fields are marked correctly
 
 **Tools not executing:**
+
 - Ensure tools are defined as individual files under `contents/tools/`
 - Check that tool IDs match exactly (case-sensitive)
 - Verify user has permissions for the specified tools
 
 **Structured output validation errors:**
+
 - Validate your JSON schema syntax
 - Test with simpler schemas first
 - Check provider-specific limitations
 
 **"Invalid app configuration: …" when saving an app:**
+
 - Creating or saving an app under **Admin → Apps**, uploading an app file and the admin API
   check the complete configuration against the app schema; a configuration that does not pass
   is not saved. The message names each field that failed, for example
@@ -1492,28 +1509,33 @@ Here are some practical examples of how to configure the settings for different 
 
 **Redirect Apps:**
 
-*App redirects but doesn't open:*
+_App redirects but doesn't open:_
+
 - Check if browser pop-up blocker is preventing new tabs
 - Verify the URL is accessible from the user's network
 - Ensure the URL includes the protocol (https:// or http://)
 - Test the URL directly in a browser
 
-*Warning page shows but redirect button doesn't work:*
+_Warning page shows but redirect button doesn't work:_
+
 - Check browser console for JavaScript errors
 - Verify the `redirectConfig.url` is a valid URL format
 - Ensure no network policies are blocking the redirect
 
-*The app shows an error that it has no valid web address:*
+_The app shows an error that it has no valid web address:_
+
 - `redirectConfig.url` is missing or does not start with `http://` or `https://`. Only web
   addresses are opened; correct the URL under **Admin → Apps**
 
-*Users don't want to see the warning page:*
+_Users don't want to see the warning page:_
+
 - Set `redirectConfig.showWarning: false` for immediate redirect
 - This is recommended for trusted internal applications only
 
 **Iframe Apps:**
 
-*"Failed to load embedded application" error:*
+_"Failed to load embedded application" error:_
+
 - **X-Frame-Options blocking**: The target site sends `X-Frame-Options: DENY` or `SAMEORIGIN` headers
   - Solution: Contact the site administrator to allow framing from your domain, or use a redirect app instead
 - **CSP blocking**: The site's Content Security Policy prevents embedding
@@ -1521,35 +1543,41 @@ Here are some practical examples of how to configure the settings for different 
 - **HTTPS mixed content**: Embedding HTTP content in HTTPS page
   - Solution: Use HTTPS URLs or serve iHub Apps over HTTP (not recommended)
 
-*Iframe loads but features don't work:*
+_Iframe loads but features don't work:_
+
 - Check sandbox permissions - add necessary permissions like `allow-popups`, `allow-modals`
 - Verify `allow-same-origin` is included if the app needs storage/cookies
 - Check browser console for security or permission errors
 
-*Authentication issues in embedded app:*
+_Authentication issues in embedded app:_
+
 - Ensure `allow-same-origin` is in sandbox permissions
 - Check if the app uses third-party cookies (may be blocked by browser)
 - Consider using redirect type instead if authentication is complex
 
-*Iframe is slow to load:*
+_Iframe is slow to load:_
+
 - The target application may be resource-intensive
 - Consider using redirect type to open in a separate tab
 - Check network latency between user and target server
 
-*Embedded app breaks out of iframe:*
+_Embedded app breaks out of iframe:_
+
 - The app uses `target="_top"` or `target="_parent"` in links
 - Add `allow-top-navigation` to sandbox if this is intended
 - Or remove this permission to prevent breakout (links won't work)
 
 **Security Considerations:**
 
-*Redirect Apps:*
+_Redirect Apps:_
+
 - Always validate URLs to prevent open redirect vulnerabilities
 - Use `showWarning: true` for external sites to inform users
 - Consider maintaining a whitelist of allowed domains
 - Be cautious with redirects to user-provided URLs
 
-*Iframe Apps:*
+_Iframe Apps:_
+
 - Only embed applications from trusted sources
 - Use minimal sandbox permissions necessary for functionality
 - Avoid `allow-top-navigation` unless absolutely required
@@ -1562,13 +1590,15 @@ Here are some practical examples of how to configure the settings for different 
 
 **Best Practices:**
 
-*Redirect Apps:*
+_Redirect Apps:_
+
 - Use descriptive names and descriptions to clarify where users are going
 - Choose appropriate icons that represent the external service
 - Test redirects on different browsers and devices
 - Document any required VPN or network access for internal apps
 
-*Iframe Apps:*
+_Iframe Apps:_
+
 - Test thoroughly in the target browsers your users will use
 - Verify mobile responsiveness if users access via mobile devices
 - Monitor for changes in the embedded app that might break integration
@@ -1597,17 +1627,17 @@ Web search is configured per-app using the `websearch` object. This replaces the
 }
 ```
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when the model supports it |
-| `maxResults` | Number | `5` | Maximum number of search results (1-20) |
-| `extractContent` | Boolean | `true` | Extract full page content from search results |
-| `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
-| `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
-| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50) |
-| `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when web search is on (several searches, check sources, combine). `false` turns it off; a string replaces the built-in text. See [Web Tools → Multi-Step Research](web-tools.md#multi-step-research) |
+| Property           | Type              | Default  | Description                                                                                                                                                                                                                                          |
+| ------------------ | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | Boolean           | `false`  | Enable web search for this app                                                                                                                                                                                                                       |
+| `provider`         | String            | `"auto"` | Search provider: `"auto"` or `"brave"`                                                                                                                                                                                                               |
+| `useNativeSearch`  | Boolean           | `true`   | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when the model supports it                                                                                                               |
+| `maxResults`       | Number            | `5`      | Maximum number of search results (1-20)                                                                                                                                                                                                              |
+| `extractContent`   | Boolean           | `true`   | Extract full page content from search results                                                                                                                                                                                                        |
+| `contentMaxLength` | Number            | `3000`   | Maximum extracted content length per page in characters (500-50,000)                                                                                                                                                                                 |
+| `enabledByDefault` | Boolean           | `false`  | Whether web search is active by default; users can toggle it in the chat input                                                                                                                                                                       |
+| `maxSearches`      | Number            | `5`      | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50)                                                                                                                                                  |
+| `researchGuidance` | Boolean or String | `true`   | Research instruction added to the system prompt when web search is on (several searches, check sources, combine). `false` turns it off; a string replaces the built-in text. See [Web Tools → Multi-Step Research](web-tools.md#multi-step-research) |
 
 The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
 
@@ -1624,4 +1654,4 @@ For full details including provider setup and API keys, see **[Web Tools](web-to
 
 ---
 
-*This documentation follows iHub Apps best practices for app configuration. For additional examples and support, consult the community resources or refer to the example configurations in `contents/apps/`.*
+_This documentation follows iHub Apps best practices for app configuration. For additional examples and support, consult the community resources or refer to the example configurations in `contents/apps/`._

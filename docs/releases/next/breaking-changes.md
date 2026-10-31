@@ -52,6 +52,9 @@ verbatim, trailing slash included, so per-user sign-ins and client registrations
 - **Deployments that write `mcpServers.json`** (Helm values, templates, scripts) have to write
   installations; the field names are listed in `docs/mcp-integration.md`. The `security` block
   (`blockPrivateIps`, `allowedHosts`) lives in `integrations.json`.
+- **A server whose id another, non-MCP installation already holds** (an integration installed from
+  the catalog) is not moved: it is kept in `contents/config/mcpServers.unmigrated.json` with a
+  warning in the log. Install it under a free id and bind it to its apps.
 - Remote A2A agents keep their own page for now; the id-clash rules name installed integrations
   where they named MCP servers.
 
@@ -93,9 +96,11 @@ Qwant) into the installed integration `websearch` and the credentials
   `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
   an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
   named instead (logged per app). `read_url` entries stay.
-- **Apps with web search on** are hidden while the `websearch` installation is disabled or
-  missing, and the installation's groups apply to them — to native search on Google, OpenAI and
-  Anthropic models as well, not only to the script-backed search tools.
+- **Apps with web search on** stay available while the `websearch` installation is disabled or
+  missing, without the search toggle and without native search; `websearch.required: true` hides
+  the app instead, like a required integration binding. The installation's groups apply to them
+  — to native search on Google, OpenAI and Anthropic models as well, not only to the
+  script-backed search tools.
 - **Deployments that write `providers.json` or the tool files themselves** have to write the
   installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.
 
