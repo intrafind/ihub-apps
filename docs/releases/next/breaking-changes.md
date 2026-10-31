@@ -93,8 +93,10 @@ Qwant) into the installed integration `websearch` and the credentials
   `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
   an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
   named instead (logged per app). `read_url` entries stay.
-- **Apps with web search on** are hidden while the `websearch` installation is disabled or
-  missing, and the installation's groups apply to them — to native search on Google, OpenAI and
-  Anthropic models as well, not only to the script-backed search tools.
+- **Apps with web search on** stay available while the `websearch` installation is disabled or
+  missing, without the search toggle and without native search; `websearch.required: true` hides
+  the app instead, like a required integration binding. The installation's groups apply to them
+  — to native search on Google, OpenAI and Anthropic models as well, not only to the
+  script-backed search tools.
 - **Deployments that write `providers.json` or the tool files themselves** have to write the
   installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.
