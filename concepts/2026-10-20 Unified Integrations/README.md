@@ -63,6 +63,10 @@ We propose one **integrations platform** with three layers, the shape every comp
 
 See [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for). Taken: vocabulary (Integration, Connection, Action), server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes (2026-10-20); approval per [#2945](https://github.com/intrafind/ihub-apps/issues/2945) (2026-10-22, replaces "ask on every write by default"); integrations own their tools and the Tools page folds in (2026-10-23). Open: clean break for the Tools admin routes, and the team-level questions in [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team).
 
+## Revision 2026-10-31
+
+- **Integrations get a version, a compatibility range, release notes and their own migrations**, so an admin updates one integration from the marketplace without updating iHub and the update brings the installation along: [Integration Versioning and Migrations](../2026-10-31%20Integration%20Versioning%20and%20Migrations/README.md).
+
 ## Revision 2026-10-30
 
 - **CKAN Open Data Portal is the first catalog integration** and the walking skeleton for the platform: [concept, tests and draft definition](../2026-10-30%20CKAN%20Open%20Data%20Integration/README.md). It exercises definition with companion files, the `openapi` adapter (array parameters, envelope mapping, action defaults), scopes from an action, declarative Answer Sources, a declared health probe, the install wizard, the app binding and the marketplace type, without OAuth or migrations.
