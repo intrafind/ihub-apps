@@ -11,12 +11,17 @@
  *   configured under Admin → Integrations;
  * - `app.integrations[<id>]`: a binding to an installed integration (Admin →
  *   Integrations → Installed, `config/integrations.json`), which must exist
- *   and be enabled. The built-in iFinder and iAssistant are the installations
- *   `ifinder` and `iassistant`.
+ *   and be enabled unless the binding says `required: false`. The built-in
+ *   iFinder and iAssistant are the installations `ifinder` and `iassistant`.
+ * - `app.websearch.enabled`: web search runs on the `websearch` installation;
+ *   it counts as a requirement only with `websearch.required: true`.
  *
  * An integration counts as on when it is set up and switched on; without it
- * the apps that need it are not offered to users, like an app whose required
- * feature is off.
+ * the apps that require it are not offered to users, like an app whose
+ * required feature is off. An optional binding (`required: false`) keeps the
+ * app available: its actions, scopes and sources are simply not there while
+ * the installation is off (`integrationTools.filterIntegrationToolsForApp`,
+ * `toolLoader.isWebSearchAvailableTo`).
  *
  * Each check reads a context of the config files it depends on, so it stays a
  * pure function: `{ platform, peopleDirectories, installedIntegrations }` as
@@ -89,9 +94,21 @@ export function getIntegrationStatus(context = {}) {
 }
 
 /**
+ * Whether a binding hides its app while the installation is off. Absent means
+ * required; only an explicit `required: false` makes the binding optional.
+ *
+ * @param {Object} [binding] - `app.integrations[<id>]`
+ * @returns {boolean}
+ */
+export function isRequiredBinding(binding) {
+  return binding?.required !== false;
+}
+
+/**
  * The integrations an app depends on that are off: ids from
- * `requiredIntegrations`, and the keys of `app.integrations` whose installation
- * is missing or disabled. Empty when the app can be offered.
+ * `requiredIntegrations`, the keys of `app.integrations` whose installation
+ * is missing or disabled (optional bindings excepted), and `websearch` for an
+ * app that requires web search. Empty when the app can be offered.
  *
  * @param {Object} app - App config
  * @param {Object} [context] - `{ platform, peopleDirectories, installedIntegrations }`
@@ -106,16 +123,31 @@ export function missingAppIntegrations(app, context = {}) {
   const bindings = app?.integrations;
   if (bindings && typeof bindings === 'object') {
     for (const key of Object.keys(bindings)) {
+      if (!isRequiredBinding(bindings[key])) continue;
       if (!isInstalledIntegrationEnabled(key, context) && !missing.includes(key)) missing.push(key);
     }
     // iAssistant runs on the iFinder installation its `connection` names
     // (`ifinder` by default): the app is off while that connection is off too.
-    if (Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID)) {
+    if (
+      Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID) &&
+      isRequiredBinding(bindings[IASSISTANT_INSTANCE_ID])
+    ) {
       const connection = iAssistantConnectionId(context);
       if (!isInstalledIntegrationEnabled(connection, context) && !missing.includes(connection)) {
         missing.push(connection);
       }
     }
+  }
+  // Web search is switched on in the app's own settings; its tools belong to
+  // the `websearch` installation. By default the app stays available without
+  // it (the search toggle and native search drop out); `required: true` hides
+  // the app like a required binding does.
+  if (
+    app?.websearch?.enabled &&
+    app.websearch.required === true &&
+    !isInstalledIntegrationEnabled('websearch', context)
+  ) {
+    if (!missing.includes('websearch')) missing.push('websearch');
   }
   return missing;
 }

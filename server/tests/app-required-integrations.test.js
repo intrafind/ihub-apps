@@ -43,6 +43,37 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(areAppIntegrationsEnabled({ id: 'chat' }, {}), true);
   });
 
+  it('stays available without the websearch installation unless web search is required', () => {
+    // Web search is an enhancement for most apps: on by itself it never hides the app.
+    const optional = { id: 'web', websearch: { enabled: true } };
+    assert.equal(areAppIntegrationsEnabled(optional, { installedIntegrations: [] }), true);
+    assert.deepEqual(
+      missingAppIntegrations(optional, {
+        installedIntegrations: [{ id: 'websearch', enabled: false }]
+      }),
+      []
+    );
+    const app = { id: 'web', websearch: { enabled: true, required: true } };
+    assert.equal(areAppIntegrationsEnabled(app, { installedIntegrations: [] }), false);
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'websearch', enabled: false }]
+      }),
+      false
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(app, { installedIntegrations: [{ id: 'websearch' }] }),
+      true
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(
+        { id: 'plain', websearch: { enabled: false } },
+        { installedIntegrations: [] }
+      ),
+      true
+    );
+  });
+
   it('follows the ifinder installation', () => {
     const bound = { id: 'x', integrations: { ifinder: {} } };
     assert.equal(areAppIntegrationsEnabled(bound, {}), false);
@@ -95,6 +126,40 @@ describe('areAppIntegrationsEnabled', () => {
       areAppIntegrationsEnabled(bound, { installedIntegrations: [{ id: 'open-data-portal' }] }),
       true
     );
+  });
+
+  it('skips a binding marked optional and the connection it would pull in', () => {
+    const optional = {
+      id: 'assistant',
+      integrations: { 'open-data-portal': { required: false }, ifinder: {} }
+    };
+    // Only the required binding counts; the optional one neither hides nor is listed.
+    assert.deepEqual(missingAppIntegrations(optional, {}), ['ifinder']);
+    assert.equal(
+      areAppIntegrationsEnabled(optional, { installedIntegrations: [{ id: 'ifinder' }] }),
+      true
+    );
+    // An optional iAssistant binding does not require the iFinder connection either.
+    const assistant = { id: 'a', integrations: { iassistant: { actions: [], required: false } } };
+    assert.deepEqual(missingAppIntegrations(assistant, {}), []);
+    const requiredAssistant = { id: 'a', integrations: { iassistant: { actions: [] } } };
+    assert.deepEqual(missingAppIntegrations(requiredAssistant, {}), ['iassistant', 'ifinder']);
+  });
+
+  it('accepts `required` on a binding and on web search', () => {
+    const base = { name: { en: 'x' }, description: { en: 'x' }, color: '#4F46E5', icon: 'chat' };
+    const parsed = appConfigSchema.safeParse({
+      ...base,
+      id: 'x',
+      integrations: { 'open-data-portal': { required: false }, ifinder: { required: true } },
+      websearch: { enabled: true, required: true }
+    });
+    assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
+    assert.equal(parsed.data.integrations['open-data-portal'].required, false);
+    assert.equal(parsed.data.websearch.required, true);
+    // Absent means optional for web search and required for a binding.
+    const defaults = appConfigSchema.safeParse({ ...base, id: 'y', websearch: { enabled: true } });
+    assert.equal(defaults.data.websearch.required, false);
   });
 
   it('reports a requirement and a binding once each, in order', () => {

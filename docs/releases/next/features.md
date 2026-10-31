@@ -21,7 +21,10 @@ actions as tools.
   an answer mentions is linked.
 - **In apps:** **Admin → Apps → Edit → Installed integrations** binds an installation, narrows it
   to some actions and sets the default or pinned scope. An app is offered only while every
-  installation it binds exists and is enabled; **Admin → Apps** names a missing one.
+  installation it binds as **Required** (the default) exists and is enabled; **Admin → Apps**
+  names a missing one. Switch **Required** off and the app stays available without that
+  integration's actions while it is off. Web search is optional by default, since most apps work
+  without it; its own **Required** switch hides the app instead.
 - **Marketplace:** the new item type **Integrations** installs definitions from a registry. The
   official marketplace publishes the first one with an example app.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
@@ -31,7 +34,6 @@ actions as tools.
   Schleswig-Holstein, open.canada.ca and data.boston.gov; data.europa.eu offers only the search.
 
 See [Integrations](../../integrations.md).
-
 
 ## iFinder and iAssistant Are Installed Integrations
 
@@ -107,3 +109,22 @@ connector before it is published). The install refuses a second code file or a r
 with a clear message. The reason is that an update from the Marketplace reloads the entry module
 only; a helper file would keep running its old code until a restart. Updating a code-based
 integration takes effect at once, for its actions and for the scopes it offers in the chat.
+
+## Web Search Is an Installed Integration
+
+The search engines and the page reader are the built-in integration **Web search** under
+**Admin → Integrations → Installed**, and no longer a category on the Providers page.
+
+- **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
+  as credential references, the **default search engine** every app on `auto` uses, and the
+  groups that may search — these hold for native search on Google, OpenAI and Anthropic models
+  too, so a user outside them gets no web search on any model. Qwant still needs no key.
+- **Test:** the installation's **Test** reports which engines have a key and runs one live search
+  with the default engine, with the same verdicts and hints as the former connectivity test.
+- **Apps unchanged:** an app still switches web search on in its own settings and may name an
+  engine; the tools keep their ids (`braveSearch`, `staanSearch`, `qwantSearch`, `read_url`). An
+  app with web search on is offered only while the installation is enabled, and **Admin → Apps**
+  names it when it is missing.
+- **Migrated for you:** migration V195 moves the provider keys into credentials, creates the
+  installation and retires the four tool files. `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still
+  apply when no credential is referenced.

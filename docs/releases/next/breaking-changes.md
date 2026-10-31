@@ -77,3 +77,29 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
   is not moved: it is kept in `contents/config/a2aAgents.unmigrated.json` with a warning in the
   log. Install it under a free id and bind it to its apps.
 
+## Web Search Keys Moved From `providers.json` to the `websearch` Installation
+
+Migration V195 moves the `websearch` entries of `contents/config/providers.json` (Brave, Staan,
+Qwant) into the installed integration `websearch` and the credentials
+`integration-websearch-brave` / `integration-websearch-staan`, and deletes the tool files
+`braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from
+`contents/tools/`.
+
+- **Admin page and API:** the **Web Search Providers** category on **Admin → Providers** and
+  `POST /api/admin/providers/{id}/websearch-test` are gone; use the installation and
+  `POST /api/admin/integrations/installed/websearch/_test`. A provider with
+  `category: "websearch"` can no longer be created.
+- **Tools:** the four tools are no longer listed under **Admin → Tools** and cannot be disabled
+  there; switch the installation's actions off instead. A `tools` entry naming one of them (an
+  app's, a workflow node's) still selects it, now from the installation and only while the
+  installation is enabled and its groups include the user. The migration removes `braveSearch`,
+  `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
+  an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
+  named instead (logged per app). `read_url` entries stay.
+- **Apps with web search on** stay available while the `websearch` installation is disabled or
+  missing, without the search toggle and without native search; `websearch.required: true` hides
+  the app instead, like a required integration binding. The installation's groups apply to them
+  — to native search on Google, OpenAI and Anthropic models as well, not only to the
+  script-backed search tools.
+- **Deployments that write `providers.json` or the tool files themselves** have to write the
+  installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.

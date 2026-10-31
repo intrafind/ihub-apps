@@ -1,0 +1,163 @@
+{
+  "id": "com.intrafind/web-search",
+  "version": "1.0.0",
+  "name": {
+    "en": "Web search",
+    "de": "Websuche"
+  },
+  "description": {
+    "en": "Search the web with Brave, Staan or Qwant and read pages in full. Apps switch web search on in their own settings; this installation holds the search engines' API keys and the default engine. Qwant needs no key, so web search works out of the box.",
+    "de": "Das Web mit Brave, Staan oder Qwant durchsuchen und Seiten vollständig lesen. Apps schalten die Websuche in ihren eigenen Einstellungen ein; diese Installation hält die API-Schlüssel der Suchmaschinen und die Standard-Suchmaschine. Qwant braucht keinen Schlüssel, die Websuche funktioniert daher sofort."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["search", "web"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "websearch"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "websearch"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "defaultProvider",
+      "type": "enum",
+      "title": {
+        "en": "Default search engine",
+        "de": "Standard-Suchmaschine"
+      },
+      "description": {
+        "en": "Used when an app says \"auto\". Auto picks Brave, then Staan when a key is configured, else Qwant.",
+        "de": "Wird genutzt, wenn eine App „auto“ sagt. Auto wählt Brave, dann Staan, wenn ein Schlüssel hinterlegt ist, sonst Qwant."
+      },
+      "default": "auto",
+      "choices": [
+        {
+          "value": "auto",
+          "label": {
+            "en": "Auto (first engine with a key, else Qwant)",
+            "de": "Auto (erste Suchmaschine mit Schlüssel, sonst Qwant)"
+          }
+        },
+        {
+          "value": "brave",
+          "label": {
+            "en": "Brave Search",
+            "de": "Brave Search"
+          }
+        },
+        {
+          "value": "staan",
+          "label": {
+            "en": "Staan",
+            "de": "Staan"
+          }
+        },
+        {
+          "value": "qwant",
+          "label": {
+            "en": "Qwant (no key)",
+            "de": "Qwant (ohne Schlüssel)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "braveCredentialRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Brave Search API key",
+        "de": "Brave-Search-API-Schlüssel"
+      },
+      "description": {
+        "en": "A credential of type secret holding the key (api.search.brave.com). The environment variable BRAVE_SEARCH_API_KEY is used when empty.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Schlüssel (api.search.brave.com). Leer: die Umgebungsvariable BRAVE_SEARCH_API_KEY."
+      }
+    },
+    {
+      "key": "staanCredentialRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Staan API key",
+        "de": "Staan-API-Schlüssel"
+      },
+      "description": {
+        "en": "A credential of type secret holding the key (staan.ai). The environment variable STAAN_API_KEY is used when empty.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Schlüssel (staan.ai). Leer: die Umgebungsvariable STAAN_API_KEY."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "brave",
+      "toolId": "braveSearch",
+      "title": {
+        "en": "Brave Search",
+        "de": "Brave Search"
+      },
+      "description": {
+        "en": "Search the web with Brave (needs a key).",
+        "de": "Das Web mit Brave durchsuchen (braucht einen Schlüssel)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    {
+      "name": "staan",
+      "toolId": "staanSearch",
+      "title": {
+        "en": "Staan Search",
+        "de": "Staan-Suche"
+      },
+      "description": {
+        "en": "Search the web with Staan, the European index (needs a key).",
+        "de": "Das Web mit Staan, dem europäischen Index, durchsuchen (braucht einen Schlüssel)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    {
+      "name": "qwant",
+      "toolId": "qwantSearch",
+      "title": {
+        "en": "Qwant Search",
+        "de": "Qwant-Suche"
+      },
+      "description": {
+        "en": "Search the web with Qwant (no key).",
+        "de": "Das Web mit Qwant durchsuchen (ohne Schlüssel)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    {
+      "name": "readUrl",
+      "toolId": "read_url",
+      "title": {
+        "en": "Web page reader",
+        "de": "Webseiten-Leser"
+      },
+      "description": {
+        "en": "Open a web page or PDF by URL and return its main content as Markdown.",
+        "de": "Eine Webseite oder ein PDF per URL öffnen und den Hauptinhalt als Markdown zurückgeben."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  ],
+  "instructions": {
+    "en": "Web search is switched on per app under Apps → Edit → Web search; the user turns it on or off in the chat.",
+    "de": "Die Websuche wird pro App unter Apps → Bearbeiten → Websuche eingeschaltet; der Benutzer schaltet sie im Chat ein oder aus."
+  }
+}

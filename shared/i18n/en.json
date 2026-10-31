@@ -856,7 +856,6 @@
       "backToList": "Back to Providers",
       "category": {
         "llm": "LLM Providers",
-        "websearch": "Web Search Providers",
         "cloudstorage": "Cloud Storage Providers",
         "custom": "Custom / Generic API Keys"
       },
@@ -912,26 +911,6 @@
       "info": {
         "title": "API Key Priority",
         "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
-      },
-      "websearchTest": {
-        "title": "Connectivity Test",
-        "description": "Runs one real search from this server, bypassing the result cache, and reports whether the provider answered. This is the only way to find out whether bot protection (such as the DataDome layer in front of Qwant) is blocking this server’s IP address — that is decided by where the server sends traffic from, not by the settings on this page.",
-        "savedConfigHint": "The test uses the saved configuration — save your changes first to test them.",
-        "queryLabel": "Test query (optional)",
-        "queryPlaceholder": "open source software",
-        "run": "Run Test",
-        "running": "Testing...",
-        "buttonTitle": "Run one live search and report whether this server can reach the provider",
-        "couldNotRun": "Could not run the test",
-        "blockedBy": "Blocked by {{vendor}} bot protection",
-        "whatToDo": "What to do",
-        "sampleResults": "Sample results",
-        "query": "Query",
-        "results": "Results",
-        "duration": "Took",
-        "endpoint": "Endpoint",
-        "egress": "Egress",
-        "egressDirect": "direct (no proxy)"
       },
       "health": {
         "notTested": "Not tested",
@@ -2723,6 +2702,9 @@
           "noActions": "This installation offers no action right now.",
           "notInstalled": "Not installed",
           "notInstalledHelp": "This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.",
+          "notInstalledOptionalHelp": "This installation no longer exists. The app stays available without it; unbind it to tidy up.",
+          "required": "Required",
+          "requiredHelp": "Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.",
           "unbind": "Unbind",
           "defaultScope": "Default {{scope}}",
           "pinnedScope": "Pinned {{scope}}",
@@ -2742,7 +2724,7 @@
         "websearchProviderBrave": "Brave",
         "websearchProviderStaan": "Staan",
         "websearchProviderQwant": "Qwant (no API key)",
-        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.",
+        "websearchProviderDesc": "Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -2758,6 +2740,8 @@
         "websearchResearchGuidanceCustom": "Custom Research Guidance",
         "websearchResearchGuidanceCustomDesc": "Optional. Replaces the built-in guidance that is added to the system prompt when web search is on. Leave empty to use the built-in guidance.",
         "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users",
+        "websearchRequired": "Required",
+        "websearchRequiredDesc": "Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.",
         "toolChoice": "Tool use",
         "toolChoiceDesc": "Whether the model decides for itself to use this app's tools",
         "toolChoiceAuto": "Model decides (default)",

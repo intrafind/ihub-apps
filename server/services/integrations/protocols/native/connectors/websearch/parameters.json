@@ -1,0 +1,292 @@
+{
+  "brave": {
+    "toolId": "braveSearch",
+    "name": {
+      "en": "Brave Web / Internet Search",
+      "de": "Brave Web- / Internetsuche"
+    },
+    "description": {
+      "en": "Search the web / internet using Brave for up-to-date information. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": {
+            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+          }
+        },
+        "extractContent": {
+          "type": "boolean",
+          "description": {
+            "en": "Whether to extract full page content from the top search results (default: false)",
+            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
+          },
+          "default": false
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum number of results to return / pages to extract content from (default: 10)",
+            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10)"
+          },
+          "default": 10,
+          "minimum": 1,
+          "maximum": 20
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum length of extracted content per page in characters (default: 3000)",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+          },
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 50000
+        },
+        "language": {
+          "type": "string",
+          "description": {
+            "en": "Language or locale for the search results, e.g. 'en', 'de' or 'en-GB' (default: the user's language)",
+            "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'en-GB' (Standard: die Sprache des Benutzers)"
+          }
+        },
+        "freshness": {
+          "type": "string",
+          "enum": ["day", "week", "month", "year"],
+          "description": {
+            "en": "Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.",
+            "de": "Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+          }
+        },
+        "includeDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": {
+            "en": "Only return results from these domains, e.g. ['example.com']. Maximum 10. Use it when the user names a site or domain.",
+            "de": "Nur Ergebnisse von diesen Domains zurückgeben, z. B. ['example.com']. Maximal 10. Verwenden, wenn der Benutzer eine Website oder Domain nennt."
+          }
+        }
+      },
+      "required": ["query"]
+    },
+    "concurrency": 1,
+    "requestDelayMs": 1100
+  },
+  "staan": {
+    "toolId": "staanSearch",
+    "name": {
+      "en": "Staan Web / Internet Search",
+      "de": "Staan Web- / Internetsuche"
+    },
+    "description": {
+      "en": "Search the web / internet using Staan (staan.ai) for up-to-date information. Optionally extracts full page content from the top results, and can be restricted to or kept away from specific domains. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet mit Staan (staan.ai) für aktuelle Informationen. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen und kann auf bestimmte Domains eingeschränkt oder von ihnen ferngehalten werden. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": {
+            "en": "The search query or search terms to find on the web. Supports the 'site:' and '-site:' operators. Maximum 400 characters. Example: 'latest AI news' or 'Python programming tutorial'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Unterstützt die Operatoren 'site:' und '-site:'. Maximal 400 Zeichen. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+          }
+        },
+        "extractContent": {
+          "type": "boolean",
+          "description": {
+            "en": "Whether to extract full page content from the top search results (default: false)",
+            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
+          },
+          "default": false
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum number of results to return / pages to extract content from (default: 10). Staan returns 10 results per request, so asking for more than 10 issues one extra request per further 10, up to 40.",
+            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10). Staan liefert 10 Ergebnisse pro Anfrage; mehr als 10 erfordert je weitere 10 eine zusätzliche Anfrage, bis maximal 40."
+          },
+          "default": 10,
+          "minimum": 1,
+          "maximum": 40
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum length of extracted content per page in characters (default: 3000)",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+          },
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 50000
+        },
+        "language": {
+          "type": "string",
+          "description": {
+            "en": "Language or locale for the search results, e.g. 'en', 'de' or 'en-GB' (default: English/US). Staan serves the German, French and English markets.",
+            "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'en-GB' (Standard: Englisch/US). Staan bedient den deutschen, französischen und englischen Markt."
+          }
+        },
+        "includeDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": {
+            "en": "Only return results from these domains, e.g. ['example.com']. Maximum 10. Cannot be combined with excludeDomains.",
+            "de": "Nur Ergebnisse von diesen Domains zurückgeben, z. B. ['example.com']. Maximal 10. Nicht mit excludeDomains kombinierbar."
+          }
+        },
+        "excludeDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": {
+            "en": "Drop results from these domains, e.g. ['example.com']. Maximum 10. Cannot be combined with includeDomains.",
+            "de": "Ergebnisse von diesen Domains ausschließen, z. B. ['example.com']. Maximal 10. Nicht mit includeDomains kombinierbar."
+          }
+        },
+        "freshness": {
+          "type": "string",
+          "enum": ["day", "week", "month", "year"],
+          "description": {
+            "en": "Prefer results from the last day, week, month or year. Best effort: Staan results are not dated, so older pages can still be returned; check the date of what you cite. Use it when the question is about recent events or the user asks for current information.",
+            "de": "Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr bevorzugen. Ohne Gewähr: Staan-Ergebnisse haben kein Datum, ältere Seiten können also trotzdem zurückkommen; das Datum der zitierten Seiten prüfen. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+          }
+        }
+      },
+      "required": ["query"]
+    },
+    "concurrency": 2,
+    "requestDelayMs": 100
+  },
+  "qwant": {
+    "toolId": "qwantSearch",
+    "name": {
+      "en": "Qwant Web / Internet Search",
+      "de": "Qwant Web- / Internetsuche"
+    },
+    "description": {
+      "en": "Search the web / internet using Qwant for up-to-date information. Needs no API key. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet mit Qwant für aktuelle Informationen. Benötigt keinen API-Schlüssel. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": {
+            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+          }
+        },
+        "extractContent": {
+          "type": "boolean",
+          "description": {
+            "en": "Whether to extract full page content from the top search results (default: false)",
+            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
+          },
+          "default": false
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum number of results to return / pages to extract content from (default: 10). Qwant returns at most 10 results per search.",
+            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10). Qwant liefert maximal 10 Ergebnisse pro Suche."
+          },
+          "default": 10,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum length of extracted content per page in characters (default: 3000)",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+          },
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 50000
+        },
+        "language": {
+          "type": "string",
+          "description": {
+            "en": "Language or locale for the search results, e.g. 'en', 'de' or 'de-CH' (default: English/US)",
+            "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'de-CH' (Standard: Englisch/US)"
+          }
+        },
+        "freshness": {
+          "type": "string",
+          "enum": ["day", "week", "month", "year"],
+          "description": {
+            "en": "Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.",
+            "de": "Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+          }
+        },
+        "includeDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": {
+            "en": "Only return results from these domains, e.g. ['example.com']. Maximum 10. Use it when the user names a site or domain.",
+            "de": "Nur Ergebnisse von diesen Domains zurückgeben, z. B. ['example.com']. Maximal 10. Verwenden, wenn der Benutzer eine Website oder Domain nennt."
+          }
+        }
+      },
+      "required": ["query"]
+    },
+    "concurrency": 1,
+    "requestDelayMs": 1100
+  },
+  "readUrl": {
+    "toolId": "read_url",
+    "name": {
+      "en": "Web Page Reader",
+      "de": "Webseiten-Leser"
+    },
+    "description": {
+      "en": "Open a web page (or PDF) by its URL and return its main content as Markdown (headings, lists, tables, links), without navigation, ads, headers or footers. Use it to read a search result in full, or any URL the user gives you. Use the 'url' parameter with the full http(s) address. When the result says 'truncated': true, call it again with the same url and 'offset' set to 'nextOffset' to read on.",
+      "de": "Öffnet eine Webseite (oder ein PDF) über ihre URL und gibt den Hauptinhalt als Markdown (Überschriften, Listen, Tabellen, Links) ohne Navigation, Werbung, Kopf- und Fußzeilen zurück. Verwenden Sie es, um ein Suchergebnis vollständig zu lesen oder eine vom Benutzer genannte URL zu öffnen. Verwenden Sie den 'url' Parameter mit der vollständigen http(s)-Adresse. Meldet das Ergebnis 'truncated': true, rufen Sie es mit derselben url und 'offset' gleich 'nextOffset' erneut auf, um weiterzulesen."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": {
+            "en": "The full http(s) URL of the page to open. Example: 'https://example.com/article'",
+            "de": "Die vollständige http(s)-URL der zu öffnenden Seite. Beispiel: 'https://example.com/artikel'"
+          }
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum length of the returned text in characters (default: 10000)",
+            "de": "Maximale Länge des zurückgegebenen Textes in Zeichen (Standard: 10000)"
+          },
+          "default": 10000,
+          "minimum": 500,
+          "maximum": 50000
+        },
+        "offset": {
+          "type": "integer",
+          "description": {
+            "en": "Character offset to start reading at, for reading on in a long page: pass the 'nextOffset' of the previous result (default: 0)",
+            "de": "Zeichenposition, ab der gelesen wird, um eine lange Seite weiterzulesen: den 'nextOffset' des vorigen Ergebnisses übergeben (Standard: 0)"
+          },
+          "default": 0,
+          "minimum": 0
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}
