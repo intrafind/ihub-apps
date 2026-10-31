@@ -71,7 +71,8 @@ function loadToolDefinitions() {
     const tool = JSON.parse(readFileSync(path.join(TOOLS_DIR, `${id}.json`), 'utf8'));
     if (tool.functions && typeof tool.functions === 'object') {
       for (const [fn, cfg] of Object.entries(tool.functions)) {
-        const { functions: _functions, ...base } = tool;
+        const base = { ...tool };
+        delete base.functions;
         tools.set(`${tool.id}_${fn}`, {
           ...base,
           id: `${tool.id}_${fn}`,

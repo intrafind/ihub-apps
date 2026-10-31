@@ -85,12 +85,19 @@ export async function precondition(ctx) {
   return false;
 }
 
+// Code-unit order, as the default sort gave it when SHIPPED_HASHES was taken:
+// a locale-aware order would change the hashes.
+function byCodeUnit(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 function sortKeys(value) {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .sort(byCodeUnit)
         .map(key => [key, sortKeys(value[key])])
     );
   }
@@ -103,7 +110,8 @@ function sortKeys(value) {
  * @param {(text: string) => string} sha256 - hex digest
  */
 export function contentHash(tool, sha256) {
-  const { enabled: _enabled, ...rest } = tool || {};
+  const rest = { ...(tool || {}) };
+  delete rest.enabled;
   return sha256(JSON.stringify(sortKeys(rest)));
 }
 
