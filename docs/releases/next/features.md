@@ -167,3 +167,32 @@ variables alone.
 - **Migrated for you:** migration V197 creates the installation (enabled when the three variables
   were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
   into the binding.
+
+## People Directories Are Installed Integrations
+
+LDAP people directories — the company directory and external ones such as x500.bund.de — are
+installations of the built-in integration **LDAP people directory** under **Admin → Integrations →
+Installed**, one installation per directory, and no longer a page of their own.
+
+- **One wizard per directory:** the install wizard holds everything the directory editor had —
+  reuse an LDAP sign-in provider or connect directly, access (anonymous or a service account whose
+  password is a credential), preset and mapping, units, data flow, limits, trusted certificates and
+  the admin **LDAP browser** — with the groups who may use the directory as the installation's
+  groups. **Test connection** runs the known directory test, and a field next to the button takes
+  a surname for the sample search. **Use for people search** on an LDAP sign-in provider opens the
+  wizard with the provider selected.
+- **Same tools, same ids:** every directory keeps its id, so `<id>__search_people`,
+  `<id>__get_person`, `<id>__list_units` and the browser's `<id>__browse_*` tools, group grants
+  and audit records are unchanged. The installed list shows the transport (LDAPS, StartTLS, plain
+  text) and marks external directories.
+- **Bind one or all:** an app binds one directory like any installation, or **All LDAP people
+  directory installations** — the new definition binding `"integrations":
+  { "com.intrafind/ldap-directory": {} }`, which follows directories installed later. The app
+  editor offers that row for every integration installed more than once. Actions such as the LDAP
+  browser are bound only when named, never as part of "every action".
+- **Migrated for you:** migration V198 moves every directory of `peopleDirectories.json` into an
+  installation (bind passwords stay credential references), rewrites the shipped People search
+  and LDAP browser apps and every app that listed `peopleDirectories` or a directory, and keeps
+  `ldapBrowse` references working.
+
+See [People Directory Search](../../people-directory-search.md).

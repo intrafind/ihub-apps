@@ -133,3 +133,35 @@ integration `entra` and are no longer listed under **Admin → Tools**.
   `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` are set, and the variables stay
   the fallback for empty fields. Without them the installation exists disabled until an admin
   fills it in.
+
+## People Directories Moved From `peopleDirectories.json` to Installed Integrations
+
+Migration V198 turns every directory of `contents/config/peopleDirectories.json` into an installed
+integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
+`contents/config/integrations.json` and removes the file; nothing reads it any more.
+
+- **Admin page and API:** **Admin → Integrations → People directories**
+  (`/admin/integrations/people-directories`, `.../new`, `.../<id>`) is gone, replaced by
+  **Admin → Integrations → Installed**; the routes `GET`/`PUT /api/admin/people-directories`,
+  `GET /api/admin/people-directories/presets` and `POST /api/admin/people-directories/test` are
+  removed. Test a directory with `POST /api/admin/integrations/installed/<id>/_test` (an unsaved
+  one with `POST /api/admin/integrations/catalog/com.intrafind%2Fldap-directory/_test`); the
+  sample search travels as `testInput: { "query": "…" }`.
+- **Apps:** `requiredIntegrations` is retired — the schema accepts only an empty list — and
+  `tools: ["peopleDirectories"]` selects nothing any more. The migration turns both into the
+  definition binding `"integrations": { "com.intrafind/ldap-directory": {} }`; a directory id or
+  `<id>__search_people` in `tools` becomes a binding of that installation (narrowed to the action
+  where one was named). `ldapBrowse` and `<id>__browse_*` entries stay and keep working. The
+  shipped `ldap-browser` app binds the browse actions of every directory instead of
+  `requiredIntegrations`.
+- **Groups:** a directory's `groups` became the installation's `allowedGroups`; `["*"]` became
+  "everyone" (an empty list). A browse-only directory (empty `groups`) keeps its people search
+  closed because the migration switches its search actions off; switch them on in the wizard to
+  open it.
+- **Deployments that write `peopleDirectories.json`** (Helm values, templates, scripts) have to
+  write installations; the field names are listed in `docs/people-directory-search.md`. The
+  shipped `x500bund` entry is now a disabled installation in the default `integrations.json`;
+  `examples/config/peopleDirectories.json` is gone.
+- **A directory whose id another installation already holds** is not moved: it is kept in
+  `contents/config/peopleDirectories.unmigrated.json` with a warning in the log. Install it as an
+  LDAP people directory under a free id and bind it to its apps.

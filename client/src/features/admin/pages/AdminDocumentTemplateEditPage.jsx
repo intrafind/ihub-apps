@@ -20,7 +20,7 @@ import {
   LABEL_CLASS,
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS
-} from '../components/people-directories/formStyles';
+} from '../components/formStyles';
 import {
   createDocumentTemplate,
   fetchDocumentTemplate,

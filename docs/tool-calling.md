@@ -1168,11 +1168,10 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 ### People directories (`<directoryId>__search_people`, …)
 
-- **Provider**: Any model supporting function calling
-- **Description**: Search LDAP people directories — the company directory (reusing an LDAP sign-in provider) and external ones such as x500.bund.de. Each directory configured under **Admin → Integrations → People directories** offers `<directoryId>__search_people`, `<directoryId>__get_person` and optionally `<directoryId>__list_units`, named and described after the directory so the model can choose between them
-- **Type**: Server-side execution, discovered from `contents/config/peopleDirectories.json`
-- **App Usage**: `"tools": ["peopleDirectories"]` for every directory (including ones added later), `"tools": ["x500bund"]` for one directory's tools. A directory's own `groups` still apply
-- **LDAP browser**: a directory with `browse` on also offers `<directoryId>__browse_search`, `__browse_read` and `__browse_children` (raw entries, for the admins in `browse.groups`). Only `"tools": ["ldapBrowse"]` selects them
+- **Description**: Search LDAP people directories — the company directory (reusing an LDAP sign-in provider) and external ones such as x500.bund.de. Each directory is an installation of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`, **Admin → Integrations → Installed**) and offers `<directoryId>__search_people`, `<directoryId>__get_person` and optionally `<directoryId>__list_units`, named and described after the directory so the model can choose between them
+- **Type**: Actions of a `native` installation, run through the installation's connector
+- **App Usage**: bind the installation (`"integrations": { "x500bund": {} }`) for one directory, or the definition (`"integrations": { "com.intrafind/ldap-directory": {} }`) for every directory including ones installed later. The installation's groups still apply
+- **LDAP browser**: a directory with **LDAP browser for admins** on also offers `<directoryId>__browse_search`, `__browse_read` and `__browse_children` (raw entries, for the admins in its browser groups). They are bound only when an app names them in `actions`, or selected by `"tools": ["ldapBrowse"]`
 - **Documentation**: See [People Directory Search](people-directory-search.md)
 
 ### `entraPeopleSearch`

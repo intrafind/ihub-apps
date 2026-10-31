@@ -21,10 +21,7 @@ import mcpClientManager from './services/mcp/McpClientManager.js';
 import { installedIntegrationRefs } from './services/integrations/installedRefs.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
-import {
-  discoverPeopleDirectoryTools,
-  filterDirectoryToolsForUser
-} from './services/peopleDirectory/PeopleDirectoryService.js';
+import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import {
@@ -235,11 +232,10 @@ export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
- * id, an MCP server's id or a people directory's id (`_a2a.idConflict`), so
- * that reference never silently grants the remote agent; `a2a__<agentId>`
- * still selects the agent as a whole. The admin API refuses such ids; this
- * covers a hand-edited config and a tool, MCP server or directory added after
- * the agent.
+ * id or another installation's id (`_a2a.idConflict`), so that reference
+ * never silently grants the remote agent; `a2a__<agentId>` still selects the
+ * agent as a whole. The admin API refuses such ids; this covers a hand-edited
+ * config and a tool or installation added after the agent.
  *
  * @param {Array<Object>} a2aTools - Discovered A2A tools
  * @param {Array<Object>} otherTools - Local and MCP tools
@@ -252,38 +248,17 @@ function guardA2aAgentIds(a2aTools, otherTools) {
   const agentIds = new Set(a2aTools.map(tool => tool._a2a?.agentId).filter(Boolean));
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: installedIntegrationRefs().filter(ref => !agentIds.has(ref.id)),
-    peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
+    mcpServers: installedIntegrationRefs().filter(ref => !agentIds.has(ref.id))
   });
   for (const [agentId, conflict] of conflicts) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool, installed integration or people directory id; select the agent as a2a__<agentId>',
+      'A2A agent id is also a tool or installed integration id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }
   return tools;
-}
-
-/**
- * The tools of the configured people directories (`<directoryId>__search_people`,
- * …, marked with `_peopleDirectory`). Not narrowed to a user: who may use a
- * directory is checked wherever tools are narrowed to one (`mayUseDirectory`).
- * @param {string|null} language
- * @param {Array<Object>} otherTools - Local, MCP and A2A tools (id clash check)
- */
-function discoverDirectoryTools(language, otherTools) {
-  try {
-    const platformConfig = configCache.getPlatform() || {};
-    return discoverPeopleDirectoryTools({
-      language: language || platformConfig.defaultLanguage || 'en',
-      otherTools
-    });
-  } catch (error) {
-    logger.error('Error discovering people directory tools', { component: 'ToolLoader', error });
-    return [];
-  }
 }
 
 /**
@@ -302,24 +277,31 @@ async function discoverIntegrationTools(language) {
   }
 }
 
+/** Drop the integration tools whose installation's groups exclude the user (lazy import, see above). */
+async function filterIntegrationToolsForUser(tools, user) {
+  if (!tools.some(t => t._integration)) return tools;
+  const { filterIntegrationToolsForUser: filter } =
+    await import('./services/integrations/integrationTools.js');
+  return filter(tools, user);
+}
+
 /**
- * Load tools from local configuration, MCP servers, remote A2A agents,
- * people directories and installed integrations.
+ * Load tools from local configuration and the installed integrations (which
+ * include the MCP servers, the remote A2A agents and the people directories).
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  // Installed integrations include the MCP servers and the remote A2A agents
-  // (their tools keep `_mcp` and `_a2a`).
+  // Installed integrations include the MCP servers, the remote A2A agents and
+  // the people directories (their tools keep `_mcp`, `_a2a` and
+  // `_peopleDirectory`).
   const discoveredIntegrationTools = await discoverIntegrationTools(language);
   const otherTools = discoveredIntegrationTools.filter(t => !t._a2a);
   const a2aTools = guardA2aAgentIds(
     discoveredIntegrationTools.filter(t => t._a2a),
     [...configured, ...otherTools]
   );
-  const integrationTools = [...otherTools, ...a2aTools];
-  const directoryTools = discoverDirectoryTools(language, [...configured, ...integrationTools]);
-  const discovered = [...integrationTools, ...directoryTools];
+  const discovered = [...otherTools, ...a2aTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -681,23 +663,27 @@ export async function getToolsForApp(app, language = null, context = {}) {
   let appTools = [];
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    // A people directory's own `groups` hold on top of the app's selection.
     // An installed integration's tools come only through `app.integrations`
     // (below), where the installation's groups and the binding's action list
     // are checked; an `app.tools` reference to one does not bypass that.
     //
-    // The one exception is the `websearch` installation, whose actions kept
-    // the tool ids they had as tool files (`braveSearch`, `read_url`, …): a
-    // workflow node, or an app, that lists one of those ids keeps getting the
-    // tool, once the installation's own enabled and group checks pass. The
-    // ids are matched exactly; `websearch` itself selects nothing here.
+    // Two exceptions keep old references working: the `websearch`
+    // installation, whose actions kept the tool ids they had as tool files
+    // (`braveSearch`, `read_url`, …) — a workflow node, or an app, that lists
+    // one of those ids keeps getting the tool, once the installation's own
+    // enabled and group checks pass (ids matched exactly; `websearch` itself
+    // selects nothing here) — and the people directories, whose tools a
+    // directory id or `ldapBrowse` select as before (`isToolSelected`), with
+    // the installation's groups and the directory's own `browse.groups`
+    // holding on top of the app's selection.
     const webSearchOpen = isWebSearchAvailableTo(context.user);
+    const selected = allTools.filter(t => {
+      if (!t._integration) return isToolSelected(t, app.tools);
+      if (t._peopleDirectory) return isToolSelected(t, app.tools);
+      return webSearchOpen && isWebSearchInstallationTool(t) && app.tools.includes(t.id);
+    });
     appTools = filterDirectoryToolsForUser(
-      allTools.filter(t =>
-        t._integration
-          ? webSearchOpen && isWebSearchInstallationTool(t) && app.tools.includes(t.id)
-          : isToolSelected(t, app.tools)
-      ),
+      await filterIntegrationToolsForUser(selected, context.user),
       context.user
     );
 
@@ -724,7 +710,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
     try {
       const { getIntegrationToolsForApp } =
         await import('./services/integrations/integrationTools.js');
-      let bound = getIntegrationToolsForApp(app, allTools, context);
+      // A people directory's own `browse.groups` hold on top of the binding.
+      let bound = filterDirectoryToolsForUser(
+        getIntegrationToolsForApp(app, allTools, context),
+        context.user
+      );
       if (Array.isArray(context.enabledTools)) {
         bound = bound.filter(t => isToolSelected(t, context.enabledTools));
       }
@@ -1175,18 +1165,6 @@ export async function runTool(toolId, params = {}, options = {}) {
     });
     const { runIntegrationTool } = await import('./services/integrations/integrationTools.js');
     return await runIntegrationTool(tool, params, options);
-  }
-
-  // People directory tools run through their directory, as the calling user.
-  if (tool._peopleDirectory) {
-    logger.info('Dispatching people directory tool call', {
-      component: 'ToolLoader',
-      toolId,
-      directoryId: tool._peopleDirectory.id
-    });
-    const { runPeopleDirectoryTool } =
-      await import('./services/peopleDirectory/peopleDirectoryRunner.js');
-    return await runPeopleDirectoryTool(tool, params);
   }
 
   // MCP tools are dispatched through McpClientManager.callTool.

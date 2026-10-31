@@ -190,31 +190,46 @@ async function connectorFor(definition) {
 export async function discoverActions({ definition, instance, language = 'en' }) {
   const connector = await connectorFor(definition);
   const values = effectiveValues(definition, instance);
+  const ctx = { definition, instance, values, language };
+  // A connector may shape an action after the installation: its parameters,
+  // model-facing description, data flow and availability can be functions of
+  // the listing context (a people directory's mapped fields and name).
+  const perInstance = (impl, key) =>
+    typeof impl?.[key] === 'function' ? impl[key](ctx) : undefined;
   return definition.actions.map(action => {
     const impl = connector.actions?.[action.name];
     const requirementsMet = actionRequirementsMet(action, values);
     const enabled = actionEnabled(instance, action);
     const error = impl ? undefined : `not implemented by connector "${connector.id}"`;
+    const parameters =
+      typeof impl?.parameters === 'function' ? impl.parameters(ctx) : impl?.parameters;
+    const ownDescription = perInstance(impl, 'description');
+    const usable = perInstance(impl, 'available');
     return {
       name: action.name,
       toolId: toolIdFor(instance.id, action.name, action),
       title: localized(action.title, language, action.name),
-      description: localized(action.description, language, ''),
+      description:
+        typeof ownDescription === 'string' && ownDescription
+          ? ownDescription
+          : localized(action.description, language, ''),
       parameters: localizeSchema(
-        impl?.parameters || { type: 'object', properties: {}, required: [] },
+        parameters || { type: 'object', properties: {}, required: [] },
         language
       ),
       sideEffect: action.sideEffect,
-      dataFlow: action.dataFlow,
+      dataFlow: perInstance(impl, 'dataFlow') || action.dataFlow,
       enabledByDefault: action.enabledByDefault !== false,
+      bindExplicitly: action.bindExplicitly === true,
       enabled,
       requirementsMet,
       needsToken: false,
-      available: Boolean(impl) && enabled && requirementsMet,
+      available: Boolean(impl) && enabled && requirementsMet && usable !== false,
       error,
       guidance: localized(action.guidance, language, ''),
       examples: (action.examples || []).map(example => localized(example, language, '')),
-      sources: action.sources
+      sources: action.sources,
+      extras: perInstance(impl, 'extras')
     };
   });
 }
@@ -239,7 +254,7 @@ export async function run({ definition, instance, action, args = {}, context = {
 }
 
 /** Test an installation: the connector's steps in the shared report shape. */
-export async function test({ definition, instance, language = 'en', user, req }) {
+export async function test({ definition, instance, language = 'en', user, req, testInput }) {
   const started = Date.now();
   let connector;
   try {
@@ -254,7 +269,7 @@ export async function test({ definition, instance, language = 'en', user, req })
   let steps;
   try {
     steps = connector.test
-      ? await connector.test({ definition, instance, values, language, user, req })
+      ? await connector.test({ definition, instance, values, language, user, req, testInput })
       : [{ id: 'module', label: 'Connector module', status: 'ok', message: 'Loaded' }];
   } catch (error) {
     steps = [{ id: 'test', label: 'Test', status: 'fail', message: error.message }];

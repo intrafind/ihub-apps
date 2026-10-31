@@ -37,20 +37,20 @@ describe('isToolSelected', () => {
     const search = { id: 'x500bund__search_people', _peopleDirectory: { id: 'x500bund' } };
     const corp = { id: 'corp__get_person', _peopleDirectory: { id: 'corp' } };
 
-    test('selects a directory tool by its directory id, its exact id, or peopleDirectories', () => {
+    test('selects a directory tool by its directory id or its exact id, never by the retired peopleDirectories', () => {
       expect(isToolSelected(search, ['x500bund'])).toBe(true);
       expect(isToolSelected(search, ['x500bund__search_people'])).toBe(true);
-      expect(isToolSelected(search, ['peopleDirectories'])).toBe(true);
-      expect(isToolSelected(corp, new Set(['peopleDirectories']))).toBe(true);
+      expect(isToolSelected(search, new Set(['x500bund']))).toBe(true);
+      expect(isToolSelected(search, ['peopleDirectories'])).toBe(false);
+      expect(isToolSelected(corp, new Set(['peopleDirectories']))).toBe(false);
     });
 
     test('a directory id selects only that directory', () => {
       expect(isToolSelected(corp, ['x500bund'])).toBe(false);
     });
 
-    test('neither reference selects a tool that is not a directory tool', () => {
-      expect(isToolSelected({ id: 'braveSearch' }, ['peopleDirectories'])).toBe(false);
-      expect(isToolSelected({ id: 'peopleDirectories_list' }, ['peopleDirectories'])).toBe(false);
+    test('a directory id selects no tool that is not a directory tool', () => {
+      expect(isToolSelected({ id: 'braveSearch' }, ['x500bund'])).toBe(false);
       expect(isToolSelected({ id: 'jira_searchTickets' }, ['x500bund'])).toBe(false);
     });
 

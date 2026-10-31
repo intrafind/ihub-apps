@@ -30,6 +30,8 @@ process.env.CONTENTS_DIR = contentsDir;
 const { peopleDirectoriesFileSchema, peopleDirectorySchema } =
   await import('../../validators/peopleDirectorySchema.js');
 const { appConfigSchema } = await import('../../validators/appConfigSchema.js');
+const { directoryFromInstance } =
+  await import('../../services/integrations/ldapDirectoryConfig.js');
 const certStore = await import('../../services/peopleDirectory/certStore.js');
 const { copyDefaultConfiguration } = await import('../../utils/setupUtils.js');
 
@@ -99,16 +101,22 @@ describe('shipped BSI root PCA-1-Verwaltung-23', () => {
     assert.equal(intermediate.verify(root.publicKey), true);
   });
 
-  it('is what the shipped x500bund entry trusts', () => {
+  it('is what the shipped x500bund installation trusts', () => {
     const file = JSON.parse(
-      fs.readFileSync(path.join(defaultsDir, 'config', 'peopleDirectories.json'), 'utf8')
+      fs.readFileSync(path.join(defaultsDir, 'config', 'integrations.json'), 'utf8')
     );
-    const x500 = file.directories.find(directory => directory.id === 'x500bund');
-    assert.deepEqual(x500.tlsCa, ['pca-1-verwaltung-23']);
-    assert.equal(x500.url, 'ldaps://x500.bund.de:636');
+    const x500 = file.installed.find(instance => instance.id === 'x500bund');
+    assert.equal(x500.definition, 'com.intrafind/ldap-directory');
+    assert.deepEqual(x500.values.tlsCa, ['pca-1-verwaltung-23']);
+    assert.equal(x500.values.url, 'ldaps://x500.bund.de:636');
     assert.equal(x500.enabled, false);
-    assert.equal(x500.dataFlow, 'external');
-    assert.ok(peopleDirectoriesFileSchema.safeParse(file).success);
+    assert.equal(x500.values.dataFlow, 'external');
+    // The installation reads back as a valid directory.
+    const directory = directoryFromInstance(x500);
+    const parsed = peopleDirectorySchema.safeParse(directory);
+    assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
+    assert.deepEqual(directory.tlsCa, ['pca-1-verwaltung-23']);
+    assert.deepEqual(directory.groups, ['authenticated']);
   });
 });
 
@@ -167,11 +175,15 @@ describe('schema', () => {
     );
   });
 
-  it('rejects ids that would collide with tool id parsing, and the reserved reference', () => {
-    for (const id of ['corp_ad', 'Corp', 'a', '-corp', 'x'.repeat(33)]) {
+  it('rejects ids that would collide with tool id parsing', () => {
+    // Installation ids: letters, digits, dots, hyphens, underscores; never `__`,
+    // which separates the directory id from the action in a tool id.
+    for (const id of ['corp__ad', '', 'corp ad', 'corp/ad', 'x'.repeat(65)]) {
       assert.equal(peopleDirectorySchema.safeParse({ ...base, id }).success, false, id);
     }
-    assert.equal(peopleDirectorySchema.safeParse({ ...base, id: 'corp-ad' }).success, true);
+    for (const id of ['corp-ad', 'corp_ad', 'Corp.AD', 'a']) {
+      assert.equal(peopleDirectorySchema.safeParse({ ...base, id }).success, true, id);
+    }
     assert.equal(
       peopleDirectoriesFileSchema.safeParse({ directories: [base, { ...base }] }).success,
       false
@@ -214,14 +226,15 @@ describe('schema', () => {
 describe('shipped People search app', () => {
   const appFile = path.join(defaultsDir, 'apps', 'people-directory.json');
 
-  it('passes the app schema, waits for a directory and selects every directory', () => {
+  it('passes the app schema and binds every directory installation', () => {
     const app = JSON.parse(fs.readFileSync(appFile, 'utf8'));
     const parsed = appConfigSchema.safeParse(app);
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
-    // Shipped on, but users get it only once a directory is configured
+    // Shipped on, but users get it only once a directory installation is enabled
     assert.equal(app.enabled, true);
-    assert.deepEqual(app.requiredIntegrations, ['peopleDirectories']);
-    assert.deepEqual(app.tools, ['peopleDirectories']);
+    assert.deepEqual(app.integrations, { 'com.intrafind/ldap-directory': {} });
+    assert.equal(app.tools, undefined);
+    assert.equal(app.requiredIntegrations, undefined);
     assert.ok(app.system.en && app.system.de);
   });
 
@@ -232,7 +245,7 @@ describe('shipped People search app', () => {
       fs.writeFileSync(path.join(existing, 'apps', 'chat.json'), '{"id":"chat","custom":true}');
       await copyDefaultConfiguration({ defaultsPath: defaultsDir, contentsPath: existing });
       assert.ok(fs.existsSync(path.join(existing, 'apps', 'people-directory.json')));
-      assert.ok(fs.existsSync(path.join(existing, 'config', 'peopleDirectories.json')));
+      assert.equal(fs.existsSync(path.join(existing, 'config', 'peopleDirectories.json')), false);
       assert.ok(fs.existsSync(path.join(existing, 'config', 'certs', 'pca-1-verwaltung-23.pem')));
       assert.equal(
         fs.readFileSync(path.join(existing, 'apps', 'chat.json'), 'utf8'),

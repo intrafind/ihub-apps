@@ -178,12 +178,6 @@ const AdminDocumentTemplatesPage = lazyWithRetry(
 const AdminDocumentTemplateEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminDocumentTemplateEditPage')
 );
-const AdminPeopleDirectoriesPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminPeopleDirectoriesPage')
-);
-const AdminPeopleDirectoryEditPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminPeopleDirectoryEditPage')
-);
 const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
 );
@@ -776,14 +770,6 @@ function App() {
             <Route
               path="integrations/nextcloud"
               element={<LazyAdminRoute component={AdminIntegrationsNextcloudPage} />}
-            />
-            <Route
-              path="integrations/people-directories"
-              element={<LazyAdminRoute component={AdminPeopleDirectoriesPage} />}
-            />
-            <Route
-              path="integrations/people-directories/:directoryId"
-              element={<LazyAdminRoute component={AdminPeopleDirectoryEditPage} />}
             />
             <Route
               path="office-integration"

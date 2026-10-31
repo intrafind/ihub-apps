@@ -2714,7 +2714,10 @@
           "picker": {
             "menu": "In the menu",
             "hidden": "Hidden"
-          }
+          },
+          "allInstallations": "All {{name}} installations",
+          "allInstallationsHelp": "Every installation of this integration, including ones installed later ({{count}} now).",
+          "explicitAction": "Only when ticked here; never part of \"every action\"."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
@@ -2949,7 +2952,8 @@
         "notConnected": "Not connected",
         "toolCount": "{{count}} tools",
         "userConnections_one": "1 connected user",
-        "userConnections_other": "{{count}} connected users"
+        "userConnections_other": "{{count}} connected users",
+        "external": "External"
       },
       "source": {
         "shipped": "Shipped",
@@ -3028,7 +3032,9 @@
         "dynamicActionsUnavailable": "The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.",
         "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default.",
         "dynamicActionsAllowlistHint": "These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.",
-        "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust."
+        "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust.",
+        "description": "Description",
+        "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by."
       },
       "connections": {
         "title": "Connected users",
@@ -3041,7 +3047,13 @@
         "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
         "resetDone": "OAuth client registration reset"
       },
-      "runsCode": "Runs code on this server"
+      "runsCode": "Runs code on this server",
+      "transport": {
+        "ldaps": "LDAPS",
+        "starttls": "StartTLS",
+        "plaintext": "Plain text",
+        "unknown": "Transport unknown"
+      }
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
@@ -3063,7 +3075,7 @@
           "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
         },
         "peopleDirectories": {
-          "description": "Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de.",
+          "description": "Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de. Each directory is an installation of the LDAP people directory integration.",
           "title": "People directories"
         }
       },
@@ -3939,277 +3951,6 @@
         "ifinder": "iFinder smart collections preferred",
         "ifinderHelp": "Smart collections can be added like under \"both\". Local projects stay usable and can still be created.",
         "requirements": "Smart collections also need iFinder configured (Integrations → iFinder), a user with the fi_smartcollections role and iFinder 6.8 or later. Use the iFinder integration test to check them."
-      }
-    },
-    "peopleDirectories": {
-      "access": {
-        "anonymous": "Anonymous",
-        "anonymousHelp": "Only for directories that allow anonymous search, such as x500.bund.de. Active Directory normally does not.",
-        "bindDn": "Bind DN",
-        "description": "How iHub signs in to the directory. Searches never run with a user's own password, because iHub does not keep it.",
-        "noBindAccount": "This sign-in provider has no bind account. Choose anonymous access if the directory allows it, or a service account.",
-        "password": "Password",
-        "passwordHelp": "Choose the stored credential that holds the password.",
-        "providerAccount": "The sign-in provider's bind account",
-        "providerAccountHelp": "The service account the provider already uses to look up users.",
-        "service": "Service account",
-        "serviceHelp": "A read-only account of its own for the people search.",
-        "servicePlaintext": "A service account never binds over plain text. Use ldaps:// or StartTLS, or this directory cannot connect.",
-        "title": "Access"
-      },
-      "appOffer": {
-        "dismiss": "Not now",
-        "enable": "Enable app",
-        "enabled": "The \"People search\" app is on.",
-        "enabling": "Enabling…",
-        "error": "The app could not be enabled: {{error}}",
-        "text": "Also enable the “People search” app? Users can then ask for people in a chat, and it searches every directory they may use."
-      },
-      "browse": {
-        "auditNote": "Every browser call is written to the audit log with the filter used, never the values returned. The LDAP browser app ships disabled: enable it under Apps and give it only to admin groups.",
-        "base": "Browse base",
-        "baseHelp": "Every DN the browser reads must lie here. Leave empty for the base DN, the whole directory; set a branch to limit what admins can see.",
-        "bind": "Account for browsing",
-        "bindAnonymousHelp": "Only what the directory shows to anonymous clients.",
-        "bindDirectory": "The directory's account",
-        "bindDirectoryHelp": "The account under Access. The browser can read everything it can read.",
-        "bindDirectoryWarning": "With the directory's account, the browser has the full reach of the people search account. Use an account of its own if that account can read more than admins should see.",
-        "bindService": "An account of its own",
-        "bindServiceHelp": "A read-only account with exactly the reach admins should have.",
-        "denyAttributes": "Further attributes to withhold",
-        "denyAttributesHelp": "One attribute name per line. Passwords, LAPS and BitLocker secrets, certificates and photos are always withheld; add attributes where your directory keeps other secrets. Withheld attributes cannot be used in a filter either.",
-        "description": "Lets admins ask about the directory in plain words and see the raw entries: attributes, branches, group members. Separate from people search, which only returns mapped fields.",
-        "enabled": "Offer the LDAP browser",
-        "enabledHelp": "Adds the tools {{tools}}. Only apps that list \"ldapBrowse\", such as the LDAP browser app, get them.",
-        "groups": "Who may browse",
-        "groupsHelp": "Signed-in users in one of these groups. Separate from the directory's groups under Visibility: neither grants the other.",
-        "maxResults": "Maximum entries per search",
-        "maxResultsHelp": "1 to {{max}}; empty for {{default}}.",
-        "offKept": "The LDAP browser is off. Its settings below are kept for when you switch it on again.",
-        "title": "LDAP browser"
-      },
-      "edit": {
-        "backToList": "Back to people directories",
-        "basics": "Directory",
-        "changedElsewhere": "This directory was changed elsewhere after you opened it. Save again to overwrite that change, or reload the page to see it.",
-        "createTitle": "Add people directory",
-        "errorsTitle": "Please check these fields",
-        "leave": "Leave",
-        "loadError": "The directory could not be loaded",
-        "notFound": "There is no people directory \"{{id}}\".",
-        "notFoundTitle": "Directory not found",
-        "save": "Save directory",
-        "saveError": "The directory was not saved",
-        "saving": "Saving…",
-        "statusTitle": "As saved, this directory has issues:",
-        "stay": "Stay",
-        "subtitle": "Each enabled directory gives apps read-only tools to search for people and read one person. Nothing is written to the directory.",
-        "unsavedMessage": "You have unsaved changes. Leave anyway?",
-        "unsavedTitle": "Unsaved changes"
-      },
-      "errors": {
-        "attributeName": "\"{{name}}\" is not an LDAP attribute name.",
-        "authProviderRequired": "Choose a sign-in provider.",
-        "baseDnRequired": "Enter the base DN.",
-        "bindDnRequired": "Enter the bind DN.",
-        "browseGroupsRequired": "Choose who may use the LDAP browser.",
-        "idPattern": "Use 2 to 32 lower-case letters, digits and \"-\", starting with a letter or digit.",
-        "idRequired": "Enter an id.",
-        "idReserved": "\"{{id}}\" is reserved.",
-        "idTaken": "Another directory uses \"{{id}}\".",
-        "limitRange": "Enter a whole number from {{min}} to {{max}}.",
-        "passwordRefRequired": "Choose the credential that holds the password.",
-        "personFilterPattern": "An LDAP filter in parentheses, e.g. (objectClass=person).",
-        "tlsCaPattern": "\"{{name}}\" is not a certificate name: use lower-case letters, digits and \"-\", without \".pem\".",
-        "urlPattern": "Use ldaps://host:636 or ldap://host:389, without a path.",
-        "urlRequired": "Enter the directory URL."
-      },
-      "fields": {
-        "academicTitle": "Academic title",
-        "department": "Department",
-        "email": "E-mail",
-        "fax": "Fax",
-        "firstName": "First name",
-        "jobTitle": "Job title",
-        "lastName": "Last name",
-        "location": "Location",
-        "managerId": "Manager",
-        "mobile": "Mobile",
-        "name": "Name",
-        "organization": "Organization",
-        "phone": "Phone",
-        "salutation": "Salutation"
-      },
-      "form": {
-        "enabled": "Enabled",
-        "enabledHelp": "Offer the tools of this directory to apps. While off, no search reaches the directory.",
-        "id": "ID",
-        "idFixed": "The id prefixes the tool ids apps select, so it cannot be changed.",
-        "idHelp": "2 to 32 lower-case letters, digits and \"-\". It becomes the prefix of the tool ids and cannot be changed later."
-      },
-      "limits": {
-        "concurrency": "Parallel requests",
-        "description": "Upper bounds for each search. A tool call can ask for fewer results, never more. All tools of this directory and its test share one request queue.",
-        "maxResults": "Maximum results per search",
-        "range": "Default {{fallback}}, {{min}} to {{max}}.",
-        "requestDelayMs": "Delay between requests (ms)",
-        "timeoutMs": "Timeout (ms)",
-        "title": "Limits",
-        "units": "Offer organisational units (list_units)",
-        "unitsHelp": "Lists the units directly below the search base (for x500.bund.de: the authorities), so the model can narrow a search to one of them."
-      },
-      "list": {
-        "add": "Add directory",
-        "allOff": "All directories are off, so no search term leaves iHub. Switch one on to offer it to apps.",
-        "browse": "LDAP browser",
-        "browseHint": "Admins in the browse groups can read raw entries with the LDAP browser.",
-        "delete": "Delete",
-        "deleteConfirm": "Delete \"{{name}}\"? Apps lose its tools at once.",
-        "deleteLabel": "Delete {{name}}",
-        "deleteTitle": "Delete directory",
-        "deleted": "\"{{name}}\" deleted.",
-        "edit": "Edit",
-        "editLabel": "Edit {{name}}",
-        "empty": "No people directory configured",
-        "emptyHint": "Add one, or use \"Use for people search\" on an LDAP sign-in provider in the authentication settings.",
-        "external": "External",
-        "externalHint": "Search terms go to a directory run by a third party.",
-        "gone": "\"{{name}}\" no longer exists. The list has been reloaded.",
-        "groups": "Groups",
-        "loadError": "The people directories could not be loaded",
-        "needsAttention": "Needs attention",
-        "noGroups": "nobody",
-        "off": "Off",
-        "on": "On",
-        "preset": "Directory type",
-        "saveFailed": "The change was not saved",
-        "saved": "Directory \"{{id}}\" saved.",
-        "source": "Source",
-        "sourceProvider": "Sign-in provider {{name}}",
-        "switchedOff": "\"{{name}}\" is off.",
-        "switchedOn": "\"{{name}}\" is on."
-      },
-      "mapping": {
-        "description": "Defaults come from the directory type \"{{preset}}\". Leave a field empty to keep the preset value shown next to it.",
-        "field": "Field",
-        "fieldsHelp": "Comma-separated candidates; the first one with a value wins. A candidate is an attribute (mail), a component of the entry’s DN (dn:l), or attributes joined by a space (givenName sn). Only mapped attributes are read from the directory.",
-        "fieldsTitle": "Person fields",
-        "overrideColumn": "Override",
-        "personFilter": "Person filter",
-        "presetColumn": "Preset",
-        "presetValue": "Preset: {{value}}",
-        "searchAttributes": "Free-text attributes",
-        "searchAttributesHelp": "Comma-separated. Each word of a search is matched against these attributes.",
-        "searchBase": "Search base",
-        "searchBaseHelp": "Where people are searched. Defaults to the base DN.",
-        "title": "Search and mapping",
-        "unmapped": "not mapped"
-      },
-      "model": {
-        "description": "The model chooses a directory by these texts. Say whose staff it lists, which fields it has, and whether it is an external service.",
-        "descriptionLabel": "Description",
-        "name": "Name",
-        "noDescription": "Without a description the model knows nothing but the name and id, and may pick the wrong directory.",
-        "previewTitle": "What the model sees",
-        "title": "Model-facing name and description",
-        "toolIds": "Tools apps can select:"
-      },
-      "network": {
-        "allowPlaintext": "Allow plain-text connections (ldap:// without StartTLS)",
-        "allowedHosts": "Hosts allowed on private addresses",
-        "allowedHostsHelp": "One host per line. iHub refuses a directory host that resolves to a private, loopback or link-local address unless it is listed here or in the platform-wide SSRF allow-list. The host of a reused sign-in provider is always allowed.",
-        "description": "How the connection is secured and which servers iHub may reach.",
-        "plaintextRefused": "This directory uses ldap:// without StartTLS. iHub refuses the connection until plain text is allowed here — better switch to ldaps:// or StartTLS.",
-        "plaintextWarning": "Without TLS, the search terms and the records the directory returns — names, phone numbers, e-mail addresses — cross the network in plain text. Use ldaps://host:636, or ldap://host:389 with StartTLS, whenever the server supports it. A service account password is never sent in plain text.",
-        "title": "Network",
-        "tlsCa": "Trusted certificates",
-        "tlsCaHelp": "Only for a CA that the iHub server does not trust already. One name per line: the file contents/config/certs/<name>.pem on the server. When set, only these certificates verify the server's certificate. Leave empty to use the public roots and the server's operating system certificate store. Verification stays on unless the host is on the platform's SSL whitelist.",
-        "transport": "Transport"
-      },
-      "presets": {
-        "activeDirectory": "Active Directory",
-        "ivbb": "IVBB directory (x500.bund.de)",
-        "openldap": "OpenLDAP / generic LDAP"
-      },
-      "source": {
-        "baseDn": "Base DN",
-        "bindAccount": "Bind account",
-        "bindAccountNone": "None",
-        "bindAccountSet": "Configured",
-        "description": "Where the directory lives and how iHub reaches it.",
-        "direct": "Connect directly",
-        "directHelp": "For directories without a sign-in provider, such as the external x500.bund.de.",
-        "missingProvider": "The sign-in provider \"{{name}}\" is not configured. Save it in the authentication settings first, or choose another one.",
-        "noProviders": "No LDAP sign-in provider is configured.",
-        "openAuth": "Open the authentication settings",
-        "overrides": "Override provider settings",
-        "overridesHelp": "Leave a field empty to use the value of the sign-in provider.",
-        "preset": "Directory type",
-        "presetHelp": "Sets which entries are people and where each field is read from. See Mapping below.",
-        "presetInherit": "As the provider ({{preset}})",
-        "provider": "Sign-in provider",
-        "providerNotConfigured": "{{name}} (not configured)",
-        "providerPlaceholder": "Choose a provider…",
-        "reuse": "Reuse a sign-in provider",
-        "reuseHelp": "URL, base DN, directory type and bind account come from an LDAP sign-in provider of the authentication settings.",
-        "starttls": "StartTLS",
-        "starttlsHelp": "Upgrades an ldap:// connection to TLS before anything is searched. Not needed for ldaps://.",
-        "starttlsInheritOff": "As the provider (off)",
-        "starttlsInheritOn": "As the provider (on)",
-        "starttlsLabel": "Use StartTLS (encrypt ldap:// connections)",
-        "starttlsOff": "Off",
-        "starttlsOn": "On",
-        "title": "Source",
-        "url": "URL",
-        "urlHelp": "ldaps://host:636 for TLS. ldap://host:389 needs StartTLS — or plain text allowed under Network, which is not recommended."
-      },
-      "subtitle": "LDAP directories the model can search for people — your own and external ones such as x500.bund.de. Each enabled directory becomes read-only tools that apps can use.",
-      "test": {
-        "couldNotRun": "The test could not run",
-        "description": "Connects with the settings as they are on this page, saved or not, and searches for a name. Nothing is saved.",
-        "failed": "Test failed",
-        "noResults": "The sample search found nobody.",
-        "passed": "Test passed",
-        "query": "Name to search for (optional)",
-        "queryHelp": "Without a name the test stops after the bind. The search runs against the live directory.",
-        "resultTitle": "Connection test",
-        "resultsTitle": "Mapped results ({{count}})",
-        "run": "Test",
-        "running": "Testing…",
-        "steps": {
-          "bind": "Bind",
-          "configuration": "Effective configuration",
-          "connect": "Connect",
-          "mapping": "Mapped people",
-          "network": "Address check (SSRF)",
-          "search": "Sample search",
-          "starttls": "StartTLS"
-        },
-        "summary": "{{ok}} ok, {{warn}} warnings, {{fail}} failed",
-        "title": "Test"
-      },
-      "title": "People directories",
-      "transport": {
-        "ldaps": "Encrypted (LDAPS)",
-        "plaintext": "Plain text",
-        "plaintextHint": "Search terms and results cross the network unencrypted.",
-        "starttls": "Encrypted (StartTLS)",
-        "unknown": "Not known yet"
-      },
-      "visibility": {
-        "dataFlow": "Data flow",
-        "description": "Who may search this directory, and where the search terms go.",
-        "everyone": "Everyone (*)",
-        "everyoneHelp": "Every user, anonymous users included",
-        "external": "External",
-        "externalHelp": "A third party runs the directory, so the names users search for leave your organisation. Say so in the description, too.",
-        "groups": "Groups",
-        "groupsHelp": "Users need one of these groups in addition to access to the app or tool. Apps and tool permissions cannot widen this list.",
-        "groupsPlaceholder": "Search groups…",
-        "internal": "Internal",
-        "internalHelp": "The directory is run by your organisation.",
-        "noGroups": "No group selected: nobody can use this directory.",
-        "title": "Visibility"
       }
     },
     "updates": {

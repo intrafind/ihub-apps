@@ -3,6 +3,7 @@
 
 import logger from '../../utils/logger.js';
 import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
+import { expandUserGroups } from '../../utils/groupInheritance.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
@@ -30,6 +31,11 @@ import {
  * Without `actions`, every available action is bound. The user's scope pick
  * (`params.integrationScopes[instanceId]`) reaches the adapter and is applied
  * after the model's arguments.
+ *
+ * A key may also be a definition id (`"com.intrafind/ldap-directory": {}`):
+ * that binds every installation of the definition, the ones installed later
+ * included, with the same `actions` and `required` settings. A binding of
+ * one installation wins over the binding of its definition.
  */
 
 const COMPONENT = 'IntegrationTools';
@@ -64,15 +70,36 @@ function toolFromAction(resolved, action, language) {
       action: action.name,
       definition: definition.id,
       // A built-in that kept the tool id it had before (`iFinder_search`).
-      fixedToolId: action.toolId !== `${instance.id}__${action.name}`
+      fixedToolId: action.toolId !== `${instance.id}__${action.name}`,
+      // Bound only when a binding names the action (a directory's LDAP browser).
+      ...(action.bindExplicitly ? { bindExplicitly: true } : {})
     },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
     readOnly: action.sideEffect === 'read',
     examples: action.examples,
     sources: action.sources,
-    instructions: localized(definition.instructions, language) || undefined
+    instructions: localized(definition.instructions, language) || undefined,
+    // A connector may add fields of its own (a people directory's marker).
+    ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
   };
+}
+
+/**
+ * The binding an app has for an installation: its own, else the one of its
+ * definition. Null when the app binds neither.
+ * @param {object} app
+ * @param {{ id: string, definition?: string }} instance
+ * @returns {object|null}
+ */
+export function appBindingFor(app, instance) {
+  const bindings = app?.integrations;
+  if (!bindings || typeof bindings !== 'object' || !instance?.id) return null;
+  if (Object.hasOwn(bindings, instance.id)) return bindings[instance.id] || {};
+  if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
+    return bindings[instance.definition] || {};
+  }
+  return null;
 }
 
 /**
@@ -129,8 +156,10 @@ export async function discoverIntegrationTools(language = null) {
 export function userMayUse(instance, user) {
   const allowed = instance.allowedGroups || [];
   if (allowed.length === 0) return true;
-  const groups = Array.isArray(user?.groups) ? user.groups : [];
-  return groups.some(g => allowed.includes(g));
+  // Inherited groups count: an installation open to `users` is open to
+  // `admins`, who inherit it (groups.json `inherits`).
+  const groups = expandUserGroups(Array.isArray(user?.groups) ? user.groups : []);
+  return allowed.some(g => groups.has(g));
 }
 
 /**
@@ -149,11 +178,18 @@ export function filterIntegrationToolsForUser(tools, user) {
   });
 }
 
-/** The installation ids an app binds (keys of `app.integrations` that are installed). */
+/**
+ * The installation ids an app binds: the keys of `app.integrations` that are
+ * installed, plus every installation of a definition it binds.
+ */
 export function boundInstanceIds(app) {
   const bindings = app?.integrations;
   if (!bindings || typeof bindings !== 'object') return [];
-  return Object.keys(bindings).filter(id => installedIntegrationService.get(id));
+  const ids = new Set();
+  for (const instance of installedIntegrationService.list()) {
+    if (appBindingFor(app, instance)) ids.add(instance.id);
+  }
+  return [...ids];
 }
 
 /**
@@ -169,14 +205,19 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
   for (const tool of allTools) {
     if (!isIntegrationTool(tool)) continue;
     const { instanceId, action } = tool._integration;
-    const binding = bindings[instanceId];
-    if (!binding) continue;
     const instance = installedIntegrationService.get(instanceId);
     if (!instance || instance.enabled === false) continue;
+    const binding = appBindingFor(app, instance);
+    if (!binding) continue;
     if (!userMayUse(instance, context.user)) continue;
-    // `actions` absent: every action; a list (even empty): only those. An
-    // empty list binds the installation for its scopes and nothing else.
-    if (Array.isArray(binding.actions) && !binding.actions.includes(action)) continue;
+    // `actions` absent: every action except those bound explicitly only; a
+    // list (even empty): exactly those. An empty list binds the installation
+    // for its scopes and nothing else.
+    if (Array.isArray(binding.actions)) {
+      if (!binding.actions.includes(action)) continue;
+    } else if (tool._integration.bindExplicitly) {
+      continue;
+    }
     out.push(tool);
   }
   return out;
@@ -268,7 +309,7 @@ function scopeProviderFor(resolved) {
     // A user outside the installation's groups gets none of its tools, so
     // the scope picker and the "limited to" note would be about nothing.
     appliesTo: ({ app, user }) =>
-      Boolean(app?.integrations?.[instanceId]) && userMayUse(instance, user),
+      Boolean(appBindingFor(app, instance)) && userMayUse(instance, user),
     describeForModel: scopeId => {
       if (!scopeId || scopeId === ALL_SCOPE_ID) return null;
       const name = scopeNames.get(`${instanceId}:${scopeId}`) || scopeId;
@@ -284,7 +325,7 @@ function scopeProviderFor(resolved) {
           hint: 'forbidden'
         };
       }
-      const settings = appScopeSettings(app, instanceId);
+      const settings = appScopeSettings(app, instanceId, definition.id);
       let scopes;
       let hint;
       try {
@@ -315,7 +356,7 @@ function scopeProviderFor(resolved) {
     async validateScope({ scopeId, app, user }) {
       // Nothing to bind: the user gets no tool of this installation.
       if (!userMayUse(instance, user)) return { ok: true, scopeId: null, fixed: false };
-      const settings = appScopeSettings(app, instanceId);
+      const settings = appScopeSettings(app, instanceId, definition.id);
       if (settings.pinnedScope) return { ok: true, scopeId: settings.pinnedScope, fixed: true };
       if (!scopeId) return { ok: true, scopeId: settings.defaultScope || null, fixed: false };
       if (scopeId === ALL_SCOPE_ID) return { ok: true, scopeId: null, fixed: false };

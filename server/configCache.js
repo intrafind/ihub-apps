@@ -411,10 +411,6 @@ const CONFIG_LOADERS = {
   'config/integrations.json': {
     label: 'installed integrations',
     count: data => (data.installed || []).length
-  },
-  'config/peopleDirectories.json': {
-    label: 'people directories',
-    count: data => (data.directories || []).length
   }
 };
 
@@ -490,7 +486,6 @@ class ConfigCache {
       'config/registries.json',
       'config/installations.json',
       'config/integrations.json',
-      'config/peopleDirectories.json',
       'config/credentials.json',
       'config/agents.json',
       // Alongside users.json, and for the same reason: `loadOAuthClients` is a
@@ -1252,12 +1247,11 @@ class ConfigCache {
    * The config an integration check (integrationRegistry) reads: the platform
    * config and the people directories. Tolerates a cache that is not loaded yet.
    *
-   * @returns {{platform: Object, peopleDirectories: Object, installedIntegrations: Array}}
+   * @returns {{platform: Object, installedIntegrations: Array}}
    */
   getIntegrationContext() {
     return {
       platform: this.get('config/platform.json')?.data || {},
-      peopleDirectories: this.get('config/peopleDirectories.json')?.data || {},
       installedIntegrations: this.get('config/integrations.json')?.data?.installed || []
     };
   }
@@ -1578,21 +1572,6 @@ class ConfigCache {
   }
 
   /**
-   * Get the people directories (`contents/config/peopleDirectories.json`).
-   * The file is validated when an admin saves it; a hand-edited entry is
-   * checked again when its tools are built (see
-   * services/peopleDirectory/PeopleDirectoryService.js).
-   * @returns {{ data: { directories: Array }, etag: string|null }}
-   */
-  getPeopleDirectories() {
-    const cached = this.get('config/peopleDirectories.json');
-    if (!cached || !cached.data) {
-      return { data: { directories: [] }, etag: null };
-    }
-    return cached;
-  }
-
-  /**
    * Refresh registries cache from disk.
    * Should be called when registries are added, updated, or removed.
    * @returns {Promise<boolean>} True on success, false on failure
@@ -1825,16 +1804,16 @@ class ConfigCache {
 
     const originalToolsCount = tools.length;
     let userSpecificEtag = toolsEtag || 'no-etag';
-    // People directory tools come from peopleDirectories.json, which the tools
-    // ETag does not cover: a renamed or re-enabled directory must not be
-    // answered with a 304 for the old list.
-    const { etag: directoriesEtag } = this.getPeopleDirectories();
-    if (directoriesEtag) {
-      const directoriesHash = createHash('md5')
-        .update(String(directoriesEtag))
+    // The tools of installed integrations come from integrations.json, which
+    // the tools ETag does not cover: a renamed or re-enabled installation must
+    // not be answered with a 304 for the old list.
+    const { etag: integrationsEtag } = this.getIntegrations();
+    if (integrationsEtag) {
+      const integrationsHash = createHash('md5')
+        .update(String(integrationsEtag))
         .digest('hex')
         .substring(0, 8);
-      userSpecificEtag = etagWithSuffix(userSpecificEtag, `d${directoriesHash}`);
+      userSpecificEtag = etagWithSuffix(userSpecificEtag, `i${integrationsHash}`);
     }
 
     // Apply filtering based on user permissions

@@ -10,7 +10,6 @@ import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadConfiguredTools, runTool } from '../../toolLoader.js';
 import {
-  discoverPeopleDirectoryTools,
   filterDirectoryToolsForUser,
   mayUseDirectory
 } from '../peopleDirectory/PeopleDirectoryService.js';
@@ -301,14 +300,19 @@ export async function buildMcpServer({ user, platform }) {
     const language = platform?.defaultLanguage || 'en';
     const configuredTools = await loadConfiguredTools(language);
     // People directory tools are iHub's own (its connection, not a proxied
-    // server's), offered to callers in the directory's groups.
-    const tools = [
-      ...configuredTools,
-      ...filterDirectoryToolsForUser(
-        discoverPeopleDirectoryTools({ language, otherTools: configuredTools }),
+    // server's), offered to callers in the installation's and the directory's
+    // groups. They are actions of the `com.intrafind/ldap-directory`
+    // installations; the other installed integrations stay out, as before.
+    const { discoverIntegrationTools, filterIntegrationToolsForUser } =
+      await import('../integrations/integrationTools.js');
+    const directoryTools = filterDirectoryToolsForUser(
+      filterIntegrationToolsForUser(
+        (await discoverIntegrationTools(language)).filter(tool => tool._peopleDirectory),
         user
-      )
-    ];
+      ),
+      user
+    );
+    const tools = [...configuredTools, ...directoryTools];
     for (const tool of tools) {
       if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
       registerTool(

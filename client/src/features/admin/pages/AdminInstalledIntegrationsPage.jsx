@@ -18,7 +18,7 @@ import {
   DANGER_BUTTON_CLASS,
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS
-} from '../components/people-directories/formStyles';
+} from '../components/formStyles';
 import {
   deleteInstalledIntegration,
   fetchInstalledIntegrations,
@@ -35,6 +35,21 @@ const TABS = ['installed', 'catalog'];
 /** Marketplace item names are definition folder names: `/` became `__`. */
 function definitionIdFromParam(value) {
   return value ? value.replace('__', '/') : null;
+}
+
+/**
+ * Prefilled install values from a deep link: `v.<key>=<value>` parameters
+ * (`?install=com.intrafind__ldap-directory&v.authProvider=corp-ad`) and the
+ * `label` parameter. Another page (the LDAP sign-in providers) opens the
+ * wizard this way with its own context filled in.
+ */
+function prefillFromParams(params) {
+  const values = {};
+  for (const [key, value] of params.entries()) {
+    if (key.startsWith('v.') && key.length > 2) values[key.slice(2)] = value;
+  }
+  const label = params.get('label') || '';
+  return { values, label };
 }
 
 function Pill({ tone = 'gray', children }) {
@@ -73,7 +88,7 @@ function AdminInstalledIntegrationsPage() {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [search, setSearch] = useState('');
-  const [dialog, setDialog] = useState(null); // { definitionId, instanceId? }
+  const [dialog, setDialog] = useState(null); // { definitionId, instanceId?, prefill? }
   const [connectionsFor, setConnectionsFor] = useState(null); // an installation that signs users in
   const [confirm, setConfirm] = useState(null); // { kind: 'remove' | 'disable', item }
   const [busy, setBusy] = useState(null);
@@ -112,9 +127,11 @@ function AdminInstalledIntegrationsPage() {
   useEffect(() => {
     const definitionId = definitionIdFromParam(installParam);
     if (definitionId && !loading) {
-      setDialog({ definitionId });
+      setDialog({ definitionId, prefill: prefillFromParams(searchParams) });
       const next = new URLSearchParams(searchParams);
       next.delete('install');
+      next.delete('label');
+      for (const key of [...next.keys()]) if (key.startsWith('v.')) next.delete(key);
       setSearchParams(next, { replace: true });
     }
   }, [installParam, loading, searchParams, setSearchParams]);
@@ -128,18 +145,25 @@ function AdminInstalledIntegrationsPage() {
 
   const takenIds = useMemo(() => installed.map(i => i.id), [installed]);
 
-  /** Names of the apps whose `integrations` bind an installation. */
+  /**
+   * Names of the apps whose `integrations` bind an installation: by its id,
+   * or by its definition (`"com.intrafind/ldap-directory": {}` binds every
+   * installation of it).
+   */
   const boundAppNames = useCallback(
-    instanceId =>
-      apps
+    instanceId => {
+      const definitionId = installed.find(i => i.id === instanceId)?.definition;
+      return apps
         .filter(
           app =>
             app?.integrations &&
             typeof app.integrations === 'object' &&
-            Object.hasOwn(app.integrations, instanceId)
+            (Object.hasOwn(app.integrations, instanceId) ||
+              (definitionId && Object.hasOwn(app.integrations, definitionId)))
         )
-        .map(app => getLocalizedContent(app.name, i18n.language) || app.id),
-    [apps, i18n.language]
+        .map(app => getLocalizedContent(app.name, i18n.language) || app.id);
+    },
+    [apps, installed, i18n.language]
   );
 
   const filteredCatalog = useMemo(() => {
@@ -376,6 +400,28 @@ function AdminInstalledIntegrationsPage() {
                             ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.status.toolCount })}`}
                         </Pill>
                       )}
+                      {item.status?.transport && item.enabled !== false && (
+                        // People directories: how the LDAP connection is protected.
+                        <Pill
+                          tone={
+                            item.status.transport === 'plaintext'
+                              ? 'red'
+                              : item.status.transport === 'unknown'
+                                ? 'gray'
+                                : 'blue'
+                          }
+                        >
+                          {t(
+                            `admin.integrationCatalog.transport.${item.status.transport}`,
+                            item.status.transport
+                          )}
+                        </Pill>
+                      )}
+                      {item.status?.external && (
+                        <Pill tone="yellow">
+                          {t('admin.integrationCatalog.status.external', 'External')}
+                        </Pill>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                       {item.definitionName}
@@ -595,6 +641,7 @@ function AdminInstalledIntegrationsPage() {
           definitionId={dialog.definitionId}
           instanceId={dialog.instanceId}
           takenIds={takenIds}
+          prefill={dialog.prefill}
           onClose={() => setDialog(null)}
           onSaved={onSaved}
         />

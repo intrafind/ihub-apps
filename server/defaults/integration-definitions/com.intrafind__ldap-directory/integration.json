@@ -1,0 +1,880 @@
+{
+  "id": "com.intrafind/ldap-directory",
+  "version": "1.0.0",
+  "name": {
+    "en": "LDAP people directory",
+    "de": "LDAP-Personenverzeichnis"
+  },
+  "description": {
+    "en": "Let the model look people up in an LDAP or Active Directory people directory: the company directory (reusing an LDAP sign-in provider) or an external one such as x500.bund.de. Each installation is one directory with its own tools, named and described after it, so the model can tell which fits a question. Optionally an admin-only LDAP browser for raw entries.",
+    "de": "Das Modell Personen in einem LDAP- oder Active-Directory-Personenverzeichnis nachschlagen lassen: das Firmenverzeichnis (über einen LDAP-Anmeldeanbieter) oder ein externes wie x500.bund.de. Jede Installation ist ein Verzeichnis mit eigenen, nach ihm benannten Tools, damit das Modell erkennt, welches zu einer Frage passt. Optional ein LDAP-Browser für rohe Einträge, nur für Administratoren."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": [
+    "directory",
+    "ldap",
+    "people"
+  ],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/people-directory-search.md",
+  "builtIn": true,
+  "protocol": {
+    "type": "native",
+    "module": "ldapDirectory"
+  },
+  "auth": {
+    "modes": [
+      "none"
+    ]
+  },
+  "install": [
+    {
+      "key": "authProvider",
+      "type": "string",
+      "title": {
+        "en": "Reuse LDAP sign-in provider",
+        "de": "LDAP-Anmeldeanbieter wiederverwenden"
+      },
+      "description": {
+        "en": "Name of a provider under Admin → Authentication → LDAP (platform.json ldapAuth.providers[].name). The directory inherits its URL, base DN, StartTLS, TLS versions, preset and bind account; any field set here overrides the inherited one. Leave empty to connect directly.",
+        "de": "Name eines Anbieters unter Administration → Authentifizierung → LDAP (platform.json ldapAuth.providers[].name). Das Verzeichnis übernimmt URL, Basis-DN, StartTLS, TLS-Versionen, Voreinstellung und Bind-Konto; jedes hier gesetzte Feld überschreibt den übernommenen Wert. Leer lassen, um direkt zu verbinden."
+      }
+    },
+    {
+      "key": "url",
+      "type": "string",
+      "title": {
+        "en": "LDAP URL",
+        "de": "LDAP-URL"
+      },
+      "pattern": "^ldaps?://[^/\\\\s?#@]+/?$",
+      "suggestions": [
+        "ldaps://x500.bund.de:636"
+      ],
+      "description": {
+        "en": "ldaps://host:636 or ldap://host:389. Required unless a sign-in provider is reused. LDAP does not use the HTTP proxy.",
+        "de": "ldaps://host:636 oder ldap://host:389. Pflicht, wenn kein Anmeldeanbieter wiederverwendet wird. LDAP nutzt den HTTP-Proxy nicht."
+      }
+    },
+    {
+      "key": "starttls",
+      "type": "boolean",
+      "title": {
+        "en": "StartTLS",
+        "de": "StartTLS"
+      },
+      "description": {
+        "en": "Upgrade a plain ldap:// connection to TLS before anything is sent. Ignored for ldaps://.",
+        "de": "Eine ldap://-Verbindung vor dem ersten Byte auf TLS heben. Für ldaps:// ohne Wirkung."
+      }
+    },
+    {
+      "key": "baseDn",
+      "type": "string",
+      "title": {
+        "en": "Base DN",
+        "de": "Basis-DN"
+      },
+      "suggestions": [
+        "o=Bund,c=DE"
+      ],
+      "description": {
+        "en": "Where people are searched, e.g. dc=corp,dc=example. Required unless a sign-in provider is reused.",
+        "de": "Wo Personen gesucht werden, z. B. dc=corp,dc=example. Pflicht, wenn kein Anmeldeanbieter wiederverwendet wird."
+      }
+    },
+    {
+      "key": "preset",
+      "type": "enum",
+      "title": {
+        "en": "Directory preset",
+        "de": "Verzeichnis-Voreinstellung"
+      },
+      "description": {
+        "en": "Person filter, searched attributes and attribute mapping of a directory type. The mapping fields under Advanced override single entries. Empty: the sign-in provider’s preset, else OpenLDAP.",
+        "de": "Personenfilter, durchsuchte Attribute und Attributzuordnung eines Verzeichnistyps. Die Zuordnungsfelder unter Erweitert überschreiben einzelne Einträge. Leer: die Voreinstellung des Anmeldeanbieters, sonst OpenLDAP."
+      },
+      "choices": [
+        {
+          "value": "openldap",
+          "label": {
+            "en": "OpenLDAP (inetOrgPerson)",
+            "de": "OpenLDAP (inetOrgPerson)"
+          }
+        },
+        {
+          "value": "activeDirectory",
+          "label": {
+            "en": "Active Directory",
+            "de": "Active Directory"
+          }
+        },
+        {
+          "value": "ivbb",
+          "label": {
+            "en": "IVBB directory (x500.bund.de)",
+            "de": "IVBB-Verzeichnis (x500.bund.de)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "bindMode",
+      "type": "enum",
+      "title": {
+        "en": "Access",
+        "de": "Zugriff"
+      },
+      "description": {
+        "en": "How iHub binds for searches. Empty: the sign-in provider’s bind account, else anonymous. iHub never keeps a user’s LDAP password, so a search cannot run as the user.",
+        "de": "Wie sich iHub für Suchen anmeldet. Leer: das Bind-Konto des Anmeldeanbieters, sonst anonym. iHub speichert nie das LDAP-Passwort eines Benutzers; eine Suche kann daher nicht als Benutzer laufen."
+      },
+      "choices": [
+        {
+          "value": "anonymous",
+          "label": {
+            "en": "Anonymous bind",
+            "de": "Anonymer Bind"
+          }
+        },
+        {
+          "value": "service",
+          "label": {
+            "en": "Service account",
+            "de": "Dienstkonto"
+          },
+          "requires": [
+            "bindDn",
+            "bindPasswordRef"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "bindDn",
+      "type": "string",
+      "title": {
+        "en": "Bind DN",
+        "de": "Bind-DN"
+      },
+      "when": {
+        "field": "bindMode",
+        "equals": "service"
+      },
+      "description": {
+        "en": "The service account that searches, e.g. cn=ldap-reader,ou=service,dc=corp,dc=example.",
+        "de": "Das Dienstkonto, das sucht, z. B. cn=ldap-reader,ou=service,dc=corp,dc=example."
+      }
+    },
+    {
+      "key": "bindPasswordRef",
+      "type": "credential",
+      "credentialTypes": [
+        "secret"
+      ],
+      "title": {
+        "en": "Bind password",
+        "de": "Bind-Passwort"
+      },
+      "when": {
+        "field": "bindMode",
+        "equals": "service"
+      },
+      "description": {
+        "en": "A credential of type secret holding the service account’s password (Admin → Credentials). Passwords are never stored in the installation.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Passwort des Dienstkontos (Administration → Zugangsdaten). Passwörter werden nie in der Installation gespeichert."
+      }
+    },
+    {
+      "key": "units",
+      "type": "boolean",
+      "title": {
+        "en": "Offer units (list_units)",
+        "de": "Organisationseinheiten anbieten (list_units)"
+      },
+      "description": {
+        "en": "Offer the one-level children of the search base as units the model can narrow a search to (authorities in x500.bund.de).",
+        "de": "Die direkten Kinder der Suchbasis als Einheiten anbieten, auf die das Modell eine Suche eingrenzen kann (Behörden in x500.bund.de)."
+      }
+    },
+    {
+      "key": "dataFlow",
+      "type": "enum",
+      "title": {
+        "en": "Data flow",
+        "de": "Datenfluss"
+      },
+      "default": "internal",
+      "description": {
+        "en": "External: search terms leave your network (a public directory). Shown as a badge and carried on the tools.",
+        "de": "Extern: Suchbegriffe verlassen Ihr Netz (ein öffentliches Verzeichnis). Als Kennzeichen angezeigt und an den Tools mitgeführt."
+      },
+      "choices": [
+        {
+          "value": "internal",
+          "label": {
+            "en": "Internal",
+            "de": "Intern"
+          }
+        },
+        {
+          "value": "external",
+          "label": {
+            "en": "External",
+            "de": "Extern"
+          }
+        }
+      ]
+    },
+    {
+      "key": "browse",
+      "type": "boolean",
+      "title": {
+        "en": "LDAP browser for admins",
+        "de": "LDAP-Browser für Administratoren"
+      },
+      "description": {
+        "en": "Also offer the raw-entry browse actions (browse_search, browse_read, browse_children) to the groups below. Raw entries are never for every caller; every call is audited.",
+        "de": "Zusätzlich die Browse-Aktionen für rohe Einträge (browse_search, browse_read, browse_children) für die Gruppen unten anbieten. Rohe Einträge sind nie für jeden; jeder Aufruf wird protokolliert."
+      }
+    },
+    {
+      "key": "browseGroups",
+      "type": "list",
+      "title": {
+        "en": "LDAP browser: groups",
+        "de": "LDAP-Browser: Gruppen"
+      },
+      "default": [
+        "admins"
+      ],
+      "when": {
+        "field": "browse",
+        "equals": true
+      },
+      "description": {
+        "en": "Who may browse, separate from the installation’s groups. Signed-in users only; \"*\" is refused. Personal API keys, OAuth clients and agents never browse.",
+        "de": "Wer browsen darf, getrennt von den Gruppen der Installation. Nur angemeldete Benutzer; \"*\" wird abgelehnt. Persönliche API-Schlüssel, OAuth-Clients und Agenten browsen nie."
+      }
+    },
+    {
+      "key": "browseBase",
+      "type": "string",
+      "title": {
+        "en": "LDAP browser: base DN",
+        "de": "LDAP-Browser: Basis-DN"
+      },
+      "when": {
+        "field": "browse",
+        "equals": true
+      },
+      "description": {
+        "en": "The DN the browser is confined to. Empty: the directory’s base DN.",
+        "de": "Der DN, auf den der Browser beschränkt ist. Leer: der Basis-DN des Verzeichnisses."
+      }
+    },
+    {
+      "key": "browseMaxResults",
+      "type": "number",
+      "title": {
+        "en": "LDAP browser: results per search",
+        "de": "LDAP-Browser: Treffer pro Suche"
+      },
+      "min": 1,
+      "max": 200,
+      "default": 50,
+      "when": {
+        "field": "browse",
+        "equals": true
+      }
+    },
+    {
+      "key": "browseBindMode",
+      "type": "enum",
+      "title": {
+        "en": "LDAP browser: access",
+        "de": "LDAP-Browser: Zugriff"
+      },
+      "when": {
+        "field": "browse",
+        "equals": true
+      },
+      "description": {
+        "en": "A separate (ideally read-only) account for browsing. Empty: the directory’s own bind, whose whole reach the browser then has.",
+        "de": "Ein eigenes (idealerweise lesendes) Konto zum Browsen. Leer: der Bind des Verzeichnisses, dessen gesamte Reichweite der Browser dann hat."
+      },
+      "choices": [
+        {
+          "value": "anonymous",
+          "label": {
+            "en": "Anonymous bind",
+            "de": "Anonymer Bind"
+          }
+        },
+        {
+          "value": "service",
+          "label": {
+            "en": "Service account",
+            "de": "Dienstkonto"
+          },
+          "requires": [
+            "browseBindDn",
+            "browseBindPasswordRef"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "browseBindDn",
+      "type": "string",
+      "title": {
+        "en": "LDAP browser: bind DN",
+        "de": "LDAP-Browser: Bind-DN"
+      },
+      "when": {
+        "field": "browseBindMode",
+        "equals": "service"
+      }
+    },
+    {
+      "key": "browseBindPasswordRef",
+      "type": "credential",
+      "credentialTypes": [
+        "secret"
+      ],
+      "title": {
+        "en": "LDAP browser: bind password",
+        "de": "LDAP-Browser: Bind-Passwort"
+      },
+      "when": {
+        "field": "browseBindMode",
+        "equals": "service"
+      }
+    },
+    {
+      "key": "browseDenyAttributes",
+      "type": "list",
+      "title": {
+        "en": "LDAP browser: withheld attributes",
+        "de": "LDAP-Browser: zurückgehaltene Attribute"
+      },
+      "when": {
+        "field": "browse",
+        "equals": true
+      },
+      "description": {
+        "en": "Attribute names withheld on top of the built-in list of secrets.",
+        "de": "Attributnamen, die zusätzlich zur eingebauten Liste der Geheimnisse zurückgehalten werden."
+      }
+    },
+    {
+      "key": "searchBase",
+      "type": "string",
+      "advanced": true,
+      "title": {
+        "en": "Search base",
+        "de": "Suchbasis"
+      },
+      "description": {
+        "en": "Where people are searched when it differs from the base DN (or the provider’s user search base).",
+        "de": "Wo Personen gesucht werden, wenn das vom Basis-DN (oder der Benutzersuchbasis des Anbieters) abweicht."
+      }
+    },
+    {
+      "key": "personFilter",
+      "type": "string",
+      "advanced": true,
+      "title": {
+        "en": "Person filter",
+        "de": "Personenfilter"
+      },
+      "description": {
+        "en": "An LDAP filter in parentheses that matches people, e.g. (objectClass=person). Empty: the preset’s filter.",
+        "de": "Ein LDAP-Filter in Klammern, der Personen trifft, z. B. (objectClass=person). Leer: der Filter der Voreinstellung."
+      }
+    },
+    {
+      "key": "searchAttributes",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Searched attributes",
+        "de": "Durchsuchte Attribute"
+      },
+      "description": {
+        "en": "The attributes a search word is matched in (at most 12). Empty: the preset’s.",
+        "de": "Die Attribute, in denen ein Suchwort gesucht wird (höchstens 12). Leer: die der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_name",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Name",
+        "de": "Zuordnung: Name"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_firstName",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: First name",
+        "de": "Zuordnung: Vorname"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_lastName",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Surname",
+        "de": "Zuordnung: Nachname"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_salutation",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Salutation",
+        "de": "Zuordnung: Anrede"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_academicTitle",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Academic title",
+        "de": "Zuordnung: Akademischer Titel"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_jobTitle",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Job title / function",
+        "de": "Zuordnung: Funktion"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_department",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Department / unit",
+        "de": "Zuordnung: Abteilung / Organisationseinheit"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_organization",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Organisation",
+        "de": "Zuordnung: Organisation"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_location",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Location",
+        "de": "Zuordnung: Standort"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_email",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: E-mail",
+        "de": "Zuordnung: E-Mail"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_phone",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Phone",
+        "de": "Zuordnung: Telefon"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_fax",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Fax",
+        "de": "Zuordnung: Fax"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_mobile",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Mobile",
+        "de": "Zuordnung: Mobil"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "mapping_managerId",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Mapping: Manager",
+        "de": "Zuordnung: Vorgesetzte Person"
+      },
+      "description": {
+        "en": "Sources tried in order: an attribute (mail), a DN component (dn:l) or attributes joined with a space (givenName sn). Empty: the preset’s mapping.",
+        "de": "Quellen in dieser Reihenfolge: ein Attribut (mail), ein DN-Bestandteil (dn:l) oder mit Leerzeichen verbundene Attribute (givenName sn). Leer: die Zuordnung der Voreinstellung."
+      }
+    },
+    {
+      "key": "tlsMinVersion",
+      "type": "enum",
+      "advanced": true,
+      "title": {
+        "en": "TLS: minimum version",
+        "de": "TLS: Mindestversion"
+      },
+      "choices": [
+        {
+          "value": "TLSv1",
+          "label": "TLSv1"
+        },
+        {
+          "value": "TLSv1.1",
+          "label": "TLSv1.1"
+        },
+        {
+          "value": "TLSv1.2",
+          "label": "TLSv1.2"
+        },
+        {
+          "value": "TLSv1.3",
+          "label": "TLSv1.3"
+        }
+      ]
+    },
+    {
+      "key": "tlsMaxVersion",
+      "type": "enum",
+      "advanced": true,
+      "title": {
+        "en": "TLS: maximum version",
+        "de": "TLS: Höchstversion"
+      },
+      "choices": [
+        {
+          "value": "TLSv1",
+          "label": "TLSv1"
+        },
+        {
+          "value": "TLSv1.1",
+          "label": "TLSv1.1"
+        },
+        {
+          "value": "TLSv1.2",
+          "label": "TLSv1.2"
+        },
+        {
+          "value": "TLSv1.3",
+          "label": "TLSv1.3"
+        }
+      ]
+    },
+    {
+      "key": "tlsCiphers",
+      "type": "string",
+      "advanced": true,
+      "title": {
+        "en": "TLS: cipher suites",
+        "de": "TLS: Cipher-Suites"
+      },
+      "description": {
+        "en": "OpenSSL cipher list. Verification itself cannot be switched off here; only the platform’s SSL whitelist does that.",
+        "de": "OpenSSL-Cipher-Liste. Die Prüfung selbst lässt sich hier nicht abschalten; das tut nur die SSL-Whitelist der Plattform."
+      }
+    },
+    {
+      "key": "tlsCa",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Trusted certificates",
+        "de": "Vertrauenswürdige Zertifikate"
+      },
+      "suggestions": [
+        "pca-1-verwaltung-23"
+      ],
+      "description": {
+        "en": "Names of trust anchors in contents/config/certs/<name>.pem. When set, only these verify this directory’s server. Empty: Node’s roots and the server’s certificate store.",
+        "de": "Namen von Vertrauensankern in contents/config/certs/<name>.pem. Gesetzt prüfen nur diese den Server dieses Verzeichnisses. Leer: die Wurzeln von Node und der Zertifikatspeicher des Servers."
+      }
+    },
+    {
+      "key": "allowedHosts",
+      "type": "list",
+      "advanced": true,
+      "title": {
+        "en": "Allowed private hosts",
+        "de": "Erlaubte private Hosts"
+      },
+      "description": {
+        "en": "Hosts this directory may reach although they resolve to a private address (*.corp.example patterns allowed).",
+        "de": "Hosts, die dieses Verzeichnis trotz privater Adresse erreichen darf (Muster wie *.corp.example erlaubt)."
+      }
+    },
+    {
+      "key": "allowPlaintext",
+      "type": "boolean",
+      "advanced": true,
+      "title": {
+        "en": "Allow plain-text ldap://",
+        "de": "Unverschlüsseltes ldap:// erlauben"
+      },
+      "description": {
+        "en": "Allow an ldap:// URL without StartTLS. Search terms and the people found then cross the network in plain text; a service bind is never sent in plain text.",
+        "de": "Eine ldap://-URL ohne StartTLS erlauben. Suchbegriffe und gefundene Personen gehen dann unverschlüsselt über das Netz; ein Dienstkonto-Bind wird nie unverschlüsselt gesendet."
+      }
+    },
+    {
+      "key": "maxResults",
+      "type": "number",
+      "advanced": true,
+      "title": {
+        "en": "Results per search",
+        "de": "Treffer pro Suche"
+      },
+      "min": 1,
+      "max": 50,
+      "default": 10,
+      "description": {
+        "en": "The most people one search returns; a tool call can ask for fewer, never more.",
+        "de": "Höchstzahl der Personen einer Suche; ein Tool-Aufruf kann weniger verlangen, nie mehr."
+      }
+    },
+    {
+      "key": "timeoutMs",
+      "type": "number",
+      "advanced": true,
+      "title": {
+        "en": "Timeout (ms)",
+        "de": "Zeitlimit (ms)"
+      },
+      "min": 1000,
+      "max": 30000,
+      "default": 8000
+    },
+    {
+      "key": "concurrency",
+      "type": "number",
+      "advanced": true,
+      "title": {
+        "en": "Concurrent requests",
+        "de": "Gleichzeitige Anfragen"
+      },
+      "min": 1,
+      "max": 10,
+      "default": 2,
+      "description": {
+        "en": "One queue per directory, shared by all its actions and its test.",
+        "de": "Eine Warteschlange pro Verzeichnis, geteilt von allen Aktionen und dem Test."
+      }
+    },
+    {
+      "key": "requestDelayMs",
+      "type": "number",
+      "advanced": true,
+      "title": {
+        "en": "Delay between requests (ms)",
+        "de": "Pause zwischen Anfragen (ms)"
+      },
+      "min": 0,
+      "max": 60000,
+      "default": 0
+    }
+  ],
+  "capabilities": [
+    "tools"
+  ],
+  "test": {
+    "input": {
+      "key": "query",
+      "title": {
+        "en": "Sample search (a surname)",
+        "de": "Beispielsuche (ein Nachname)"
+      },
+      "description": {
+        "en": "Optional: a name to search for in the test, to check the mapping.",
+        "de": "Optional: ein Name, nach dem der Test sucht, um die Zuordnung zu prüfen."
+      }
+    }
+  },
+  "instructions": {
+    "en": "Everything you state about a person comes from a tool result; never guess contact details. Say which directory a result came from. On \"truncated\": true narrow the search instead of paging.",
+    "de": "Alles, was du über eine Person sagst, stammt aus einem Tool-Ergebnis; rate nie Kontaktdaten. Nenne das Verzeichnis, aus dem ein Treffer stammt. Bei \"truncated\": true die Suche eingrenzen statt zu blättern."
+  },
+  "actions": [
+    {
+      "name": "search_people",
+      "title": {
+        "en": "Search people",
+        "de": "Personen suchen"
+      },
+      "description": {
+        "en": "Search people in this directory by name, e-mail address or a few words",
+        "de": "Personen in diesem Verzeichnis nach Name, E-Mail-Adresse oder einigen Wörtern suchen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service"
+    },
+    {
+      "name": "get_person",
+      "title": {
+        "en": "Get a person",
+        "de": "Person abrufen"
+      },
+      "description": {
+        "en": "Get all details of one person by the personId of a search result",
+        "de": "Alle Angaben zu einer Person anhand der personId eines Suchtreffers abrufen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service"
+    },
+    {
+      "name": "list_units",
+      "title": {
+        "en": "List units",
+        "de": "Einheiten auflisten"
+      },
+      "description": {
+        "en": "List the units (authorities, departments, sites) this directory can be narrowed to",
+        "de": "Die Organisationseinheiten auflisten, auf die sich dieses Verzeichnis eingrenzen lässt"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service",
+      "requires": {
+        "install.units": true
+      }
+    },
+    {
+      "name": "browse_search",
+      "title": {
+        "en": "LDAP browser: search",
+        "de": "LDAP-Browser: Suche"
+      },
+      "description": {
+        "en": "Admin LDAP browser: search raw directory entries with an LDAP filter",
+        "de": "Admin-LDAP-Browser: rohe Verzeichniseinträge mit einem LDAP-Filter suchen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service",
+      "requires": {
+        "install.browse": true
+      },
+      "bindExplicitly": true
+    },
+    {
+      "name": "browse_read",
+      "title": {
+        "en": "LDAP browser: read entry",
+        "de": "LDAP-Browser: Eintrag lesen"
+      },
+      "description": {
+        "en": "Admin LDAP browser: read one entry by its full DN, with its raw attributes",
+        "de": "Admin-LDAP-Browser: einen Eintrag anhand seines DN mit rohen Attributen lesen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service",
+      "requires": {
+        "install.browse": true
+      },
+      "bindExplicitly": true
+    },
+    {
+      "name": "browse_children",
+      "title": {
+        "en": "LDAP browser: list children",
+        "de": "LDAP-Browser: Kinder auflisten"
+      },
+      "description": {
+        "en": "Admin LDAP browser: list the direct children of a DN",
+        "de": "Admin-LDAP-Browser: die direkten Kinder eines DN auflisten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service",
+      "requires": {
+        "install.browse": true
+      },
+      "bindExplicitly": true
+    }
+  ]
+}

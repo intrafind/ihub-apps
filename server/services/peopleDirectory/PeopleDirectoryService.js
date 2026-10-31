@@ -2,17 +2,20 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
-import { installedIntegrationRefs } from '../integrations/installedRefs.js';
 import logger from '../../utils/logger.js';
+import { expandUserGroups } from '../../utils/groupInheritance.js';
 import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import {
   ALLOWED_TLS_OPTION_KEYS,
   LDAP_BROWSE_DEFAULTS,
   PEOPLE_DIRECTORY_DEFAULTS,
-  RESERVED_DIRECTORY_IDS,
   peopleDirectorySchema
 } from '../../validators/peopleDirectorySchema.js';
+import {
+  directoryFromInstance,
+  getDirectoryInstallations
+} from '../integrations/ldapDirectoryConfig.js';
 import {
   DEFAULT_SEARCH_PRESET,
   SEARCH_PRESETS,
@@ -23,24 +26,34 @@ import { assertTransportAllowed, describeTransport, parseDirectoryUrl } from './
 
 /**
  * People directories: configuration resolution, who may use a directory, the
- * tools each directory offers, running them, and the admin connection test.
+ * tools each directory offers, and the pieces the admin connection test and
+ * the connector share.
+ *
+ * A directory is an installation of the built-in integration
+ * `com.intrafind/ldap-directory` (Admin → Integrations → Installed); this
+ * module reads those installations in the directory shape of
+ * `validators/peopleDirectorySchema.js` (see `integrations/ldapDirectoryConfig.js`).
  *
  * Each enabled directory becomes its own small set of read-only tools —
  * `<id>__search_people`, `<id>__get_person` and, with `units`,
  * `<id>__list_units` — named and described after the directory, so the model
  * can tell which directory fits a question and call several when it needs to.
- * Nothing is merged server-side; every result names its directory.
+ * Nothing is merged server-side; every result names its directory. The tools
+ * are the actions of the installation (the `ldapDirectory` connector); they
+ * carry `_integration` like every installed integration's tools and
+ * `_peopleDirectory` for the rules below.
  *
- * Who may use a directory (`groups`) is ANDed with the ordinary tool grants
- * and checked wherever tools are narrowed to a user (`mayUseDirectory`): the
- * tool listing, an app's tools, a direct tool run, the MCP gateway, and the
- * tool itself when it runs.
+ * Who may use a directory (the installation's `allowedGroups`, read here as
+ * `groups`) is ANDed with the ordinary tool grants and checked wherever tools
+ * are narrowed to a user (`mayUseDirectory`): the tool listing, an app's
+ * tools, a direct tool run, the MCP gateway, and the tool itself when it runs.
  *
- * A directory with `browse` on also offers the admin LDAP browser:
+ * A directory with the LDAP browser on also offers the admin tools
  * `<id>__browse_search`, `<id>__browse_read` and `<id>__browse_children`. They
  * return raw entries, so they have their own access list (`browse.groups`,
  * checked by `mayBrowseDirectory` in the same places), are selected only by the
- * `ldapBrowse` reference, and are never offered over the MCP gateway.
+ * `ldapBrowse` reference or an explicit binding of the browse actions, and are
+ * never offered over the MCP gateway.
  *
  * This module is on the path of every tool listing, so it opens nothing and
  * loads no LDAP client; running a tool and the admin test live in
@@ -60,12 +73,12 @@ export const BROWSE_ACTIONS = ['browse_search', 'browse_read', 'browse_children'
 const trimmed = value => (typeof value === 'string' ? value.trim() : '');
 
 /**
- * Every configured directory, as stored.
+ * Every configured directory: the installations of the LDAP directory
+ * definition, in the directory shape.
  * @returns {Object[]}
  */
 export function getConfiguredDirectories() {
-  const directories = configCache.getPeopleDirectories?.()?.data?.directories;
-  return Array.isArray(directories) ? directories : [];
+  return getDirectoryInstallations().map(directoryFromInstance);
 }
 
 /**
@@ -312,25 +325,6 @@ function resolveBrowse(browse, resolved) {
 }
 
 /**
- * A user's groups plus every group they inherit (`inherits` in groups.json),
- * so a directory open to `users` is open to `admins`, who inherit it.
- * @param {string[]} groups
- * @returns {Set<string>}
- */
-export function expandUserGroups(groups) {
-  const config = configCache.getGroups?.()?.data?.groups || {};
-  const result = new Set();
-  const queue = Array.isArray(groups) ? [...groups] : [];
-  while (queue.length > 0) {
-    const group = queue.shift();
-    if (typeof group !== 'string' || result.has(group)) continue;
-    result.add(group);
-    for (const parent of config[group]?.inherits || []) queue.push(parent);
-  }
-  return result;
-}
-
-/**
  * Whether a user may use a directory: it exists, is enabled, and the user is
  * in one of its `groups` ("*" for every caller). Fails closed: no user, an
  * unknown directory or an error means no.
@@ -339,6 +333,8 @@ export function expandUserGroups(groups) {
  * @param {string} directoryId
  * @returns {boolean}
  */
+export { expandUserGroups };
+
 export function mayUseDirectory(user, directoryId) {
   try {
     const directory = findDirectory(directoryId);
@@ -423,93 +419,16 @@ export function filterDirectoryToolsForUser(tools, user) {
 }
 
 /**
- * Whether a directory id would collide with another reference: an app or a
- * group selecting `x` must not reach both a directory and a tool, an MCP
- * server or an A2A agent.
- *
- * @param {string} id
- * @param {Object} others
- * @param {Object[]} [others.tools] - Configured, MCP and A2A tools
- * @param {Array<{id: string, toolPrefix?: string}>} [others.mcpServers] - Installed integrations
- *   (an MCP installation's tools answer to its id and its prefix's base)
- * @param {Object[]} [others.a2aAgents]
- * @returns {{kind: string, id: string}|null}
- */
-export function findDirectoryIdConflict(id, { tools = [], mcpServers = [], a2aAgents = [] } = {}) {
-  if (typeof id !== 'string' || !id) return null;
-  const wanted = id.toLowerCase();
-  if (RESERVED_DIRECTORY_IDS.includes(wanted)) return { kind: 'reserved', id };
-  for (const tool of tools) {
-    if (!tool?.id || tool._peopleDirectory) continue;
-    if (tool.id === id || toolBaseId(tool.id) === id) return { kind: 'tool', id: tool.id };
-  }
-  const server = mcpServers.find(entry =>
-    mcpServerBaseIds(entry).some(base => base.toLowerCase() === wanted)
-  );
-  if (server) return { kind: 'mcpServer', id: server.id };
-  const agent = a2aAgents.find(entry => String(entry?.id).toLowerCase() === wanted);
-  if (agent) return { kind: 'a2aAgent', id: agent.id };
-  return null;
-}
-
-/** The base id apps select a tool by: `jira_search` → `jira`. */
-function toolBaseId(toolId) {
-  return toolId.includes('_') ? toolId.split('_')[0] : toolId;
-}
-
-/**
- * The base ids an MCP server's tools answer to: its id and, with a custom
- * `toolPrefix` (`dio_`), the prefix's base.
- * @param {Object} server
- * @returns {string[]}
- */
-export function mcpServerBaseIds(server) {
-  const bases = typeof server?.id === 'string' && server.id ? [server.id] : [];
-  const prefix = typeof server?.toolPrefix === 'string' ? server.toolPrefix.trim() : '';
-  if (prefix && toolBaseId(prefix)) bases.push(toolBaseId(prefix));
-  return bases;
-}
-
-/**
- * The reverse of {@link findDirectoryIdConflict}, for the routes that add a
- * tool, an MCP server or an A2A agent: the configured directory whose id one
- * of `ids` would take over. Switched-off directories count, since switching
- * one on later would meet the same clash.
- *
- * @param {Array<string|null|undefined>} ids - Ids and base ids the new entry answers to
- * @returns {string|null} The directory id
- */
-export function findDirectoryClaimedBy(ids) {
-  const wanted = new Set(
-    ids.filter(id => typeof id === 'string' && id).map(id => id.toLowerCase())
-  );
-  const directory = getConfiguredDirectories().find(
-    entry => typeof entry?.id === 'string' && wanted.has(entry.id.toLowerCase())
-  );
-  return directory ? directory.id : null;
-}
-
-/**
- * Send the 409 for an id a people directory already uses.
- * @param {import('express').Response} res
- * @param {string} what - What clashes, e.g. `MCP server id "corp"` or `tool prefix "corp_"`
- * @param {string} directoryId
- */
-export function sendDirectoryIdClash(res, what, directoryId) {
-  return res.status(409).json({
-    success: false,
-    error: `The ${what} is already used by the people directory "${directoryId}". Apps and groups reference directories, tools, MCP servers and agents by id, so it needs an id of its own.`,
-    conflict: { kind: 'peopleDirectory', id: directoryId }
-  });
-}
-
-/**
  * The last problem logged per `<kind>:<directoryId>`, so each is reported once
  * and again only when it changes. Bounded by the configured directories.
  */
 const reportedProblems = new Map();
 
-function reportOnce(key, detail, message, meta) {
+/**
+ * Log a directory problem once per `<kind>:<directoryId>`, and again only when
+ * it changes (the tool listing runs often).
+ */
+export function reportDirectoryProblemOnce(key, detail, message, meta) {
   if (reportedProblems.get(key) === detail) return;
   reportedProblems.set(key, detail);
   logger.warn(message, { component: COMPONENT, ...meta });
@@ -717,91 +636,6 @@ export function buildBrowseTools(resolved, language = 'en') {
       properties: { dn: dn(`The full DN whose children to list. Leave out for ${base}.`) }
     })
   ];
-}
-
-/**
- * The tools of every enabled, usable directory, for `loadTools()`. Not narrowed
- * to a user — `loadTools` has none; see {@link mayUseDirectory}.
- *
- * @param {Object} [options]
- * @param {string} [options.language]
- * @param {Object[]} [options.otherTools] - Configured, MCP and A2A tools, for the id clash check
- * @returns {Object[]}
- */
-export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] } = {}) {
-  const directories = getConfiguredDirectories();
-  if (directories.length === 0) return [];
-  const platform = configCache.getPlatform() || {};
-  const others = {
-    tools: otherTools,
-    // MCP servers and A2A agents are installed integrations.
-    mcpServers: installedIntegrationRefs(),
-    a2aAgents: []
-  };
-  const tools = [];
-  const seen = new Set();
-  for (const raw of directories) {
-    if (!raw) continue;
-    // A hand-edited file may repeat an id; the first entry wins, as in
-    // findDirectory, whose groups decide who may use the tools.
-    if (seen.has(raw.id)) {
-      reportOnce(
-        `duplicate:${raw.id}`,
-        'duplicate',
-        'People directory id appears more than once; only the first entry is offered',
-        { directoryId: raw.id }
-      );
-      continue;
-    }
-    seen.add(raw.id);
-    if (raw.enabled === false) continue;
-    const conflict = findDirectoryIdConflict(raw.id, others);
-    if (conflict) {
-      reportOnce(
-        `conflict:${raw.id}`,
-        `${conflict.kind}:${conflict.id}`,
-        'People directory id is also used by another tool reference; its tools are not offered',
-        { directoryId: raw.id, conflictKind: conflict.kind, conflictId: conflict.id }
-      );
-      continue;
-    }
-    const resolved = resolveDirectory(raw, platform);
-    if (resolved.problems.length > 0) {
-      reportOnce(
-        `problems:${raw.id}`,
-        resolved.problems.join('|'),
-        'People directory is not usable; its tools are not offered',
-        { directoryId: raw.id, problems: resolved.problems }
-      );
-      continue;
-    }
-    tools.push(
-      ...buildDirectoryTools(resolved, language),
-      ...usableBrowseTools(resolved, language)
-    );
-  }
-  return tools;
-}
-
-/**
- * The LDAP browser tools of a usable directory: none while the browser is off,
- * or when its own settings cannot work (reported once).
- * @param {Object} resolved
- * @param {string} language
- * @returns {Object[]}
- */
-function usableBrowseTools(resolved, language) {
-  if (!resolved.browse) return [];
-  if (resolved.browse.problems.length > 0) {
-    reportOnce(
-      `browse:${resolved.id}`,
-      resolved.browse.problems.join('|'),
-      'LDAP browser of a people directory is not usable; its tools are not offered',
-      { directoryId: resolved.id, problems: resolved.browse.problems }
-    );
-    return [];
-  }
-  return buildBrowseTools(resolved, language);
 }
 
 /**

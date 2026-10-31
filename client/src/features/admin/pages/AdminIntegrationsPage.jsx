@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import AdminIntegrationHubPage from '../components/AdminIntegrationHubPage';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { fetchPeopleDirectories } from '../../../api/peopleDirectoriesAdminApi';
+import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
+
+/** The built-in definition of the LDAP people directories (one installation per directory). */
+const LDAP_DIRECTORY_DEFINITION = 'com.intrafind/ldap-directory';
 
 /**
  * Integrations landing page — single entry point for every external system
@@ -17,8 +20,8 @@ import { fetchPeopleDirectories } from '../../../api/peopleDirectoriesAdminApi';
  * Status detection looks at platform.json:
  *   - Cloud storage provider entries → cloudStorage.providers[id].enabled
  *   - Outlook / Nextcloud Embed → corresponding feature flag in platform.features
- *   - People directories → at least one enabled entry in peopleDirectories.json
- *     (`GET /admin/people-directories`)
+ *   - People directories → at least one enabled installation of the LDAP people
+ *     directory definition (`GET /admin/integrations/installed`)
  *
  * If platform config can't be loaded the cards still render but show "Available".
  */
@@ -39,11 +42,13 @@ function AdminIntegrationsPage() {
       .catch(() => {
         if (!cancelled) setPlatform(null);
       });
-    fetchPeopleDirectories()
+    fetchInstalledIntegrations()
       .then(res => {
         if (!cancelled) {
           setPeopleDirectoriesOn(
-            (res?.directories || []).some(directory => directory?.enabled !== false)
+            (res?.items || []).some(
+              item => item?.definition === LDAP_DIRECTORY_DEFINITION && item.enabled !== false
+            )
           );
         }
       })
@@ -63,7 +68,7 @@ function AdminIntegrationsPage() {
   };
 
   const statusFor = (kind, id) => {
-    // Read from peopleDirectories.json, not from platform.json.
+    // Read from the installed integrations, not from platform.json.
     if (kind === 'peopleDirectories') return peopleDirectoriesOn ? 'connected' : 'available';
     if (!platform) return 'available';
     switch (kind) {
@@ -202,11 +207,11 @@ function AdminIntegrationsPage() {
       title: t('admin.integrations.cards.peopleDirectories.title', 'People directories'),
       description: t(
         'admin.integrations.cards.peopleDirectories.description',
-        'Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de.'
+        'Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de. Each directory is an installation of the LDAP people directory integration.'
       ),
       icon: 'user-group',
       color: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
-      href: '/admin/integrations/people-directories',
+      href: '/admin/integrations/installed',
       status: statusFor('peopleDirectories'),
       category: directories
     }

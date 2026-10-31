@@ -417,6 +417,13 @@ export const integrationActionSchema = z.object({
   sideEffect: z.enum(SIDE_EFFECTS).prefault('unknown'),
   dataFlow: z.enum(DATA_FLOWS).prefault('external'),
   enabledByDefault: z.boolean().prefault(true),
+  /**
+   * An app binds this action only by naming it in the binding's `actions`; a
+   * binding without `actions` ("every action") leaves it out. For an action
+   * whose reach goes beyond the integration's purpose (a directory's raw LDAP
+   * browser next to its people search).
+   */
+  bindExplicitly: z.boolean().prefault(false),
   /** Which identity the action needs; `token` means it refuses to run without a credential. */
   connection: z.enum(ACTION_CONNECTIONS).optional(),
   /** Install values that must hold for the action to be offered, e.g. `{ "install.datastoreSql": true }`. */
@@ -495,6 +502,21 @@ export const integrationHealthSchema = z.object({
   args: z.record(z.string(), primitiveSchema).optional()
 });
 
+/**
+ * What the installation test may ask the admin for besides the settings: one
+ * free-text input (a sample search of a directory) the wizard shows next to
+ * **Test connection** and passes to the connector as `testInput[key]`.
+ */
+export const integrationTestSchema = z.object({
+  input: z
+    .object({
+      key: identifierSchema,
+      title: localizedStringSchema,
+      description: localizedStringSchema.optional()
+    })
+    .optional()
+});
+
 export const integrationPublisherSchema = z.object({
   name: z.string().min(1).max(200),
   url: z.string().url().optional(),
@@ -528,6 +550,7 @@ export const integrationDefinitionSchema = z
     scopes: integrationScopesSchema.optional(),
     sources: z.record(identifierSchema, integrationSourceMappingSchema).optional(),
     health: integrationHealthSchema.optional(),
+    test: integrationTestSchema.optional(),
     actions: z.array(integrationActionSchema).prefault([]),
     instructions: localizedStringSchema.optional(),
     _meta: z.record(z.string(), z.any()).optional()

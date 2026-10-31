@@ -102,6 +102,16 @@ function definitionDetailView(entry, language, instances) {
         }
       : null,
     health: def.health || null,
+    /** The free-text input the installation test takes besides the settings, when the definition has one. */
+    test: def.test?.input
+      ? {
+          input: {
+            key: def.test.input.key,
+            title: localized(def.test.input.title, language, def.test.input.key),
+            description: localized(def.test.input.description, language)
+          }
+        }
+      : null,
     instructions: localized(def.instructions, language),
     actions: def.actions.map(a => ({
       name: a.name,
@@ -111,6 +121,7 @@ function definitionDetailView(entry, language, instances) {
       sideEffect: a.sideEffect,
       dataFlow: a.dataFlow,
       enabledByDefault: a.enabledByDefault,
+      bindExplicitly: a.bindExplicitly === true,
       connection: a.connection,
       requires: a.requires,
       guidance: localized(a.guidance, language),
@@ -233,11 +244,13 @@ export default function registerAdminIntegrationsRoutes(app) {
       const id = definitionIdOf(req, res);
       if (!id) return;
       try {
-        const payload = { ...(req.body || {}), definition: id, id: req.body?.id || 'draft' };
+        const { testInput, ...body } = req.body || {};
+        const payload = { ...body, definition: id, id: body.id || 'draft' };
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
           user: req.user,
-          req
+          req,
+          testInput
         });
         logAudit({
           req,
@@ -495,11 +508,13 @@ export default function registerAdminIntegrationsRoutes(app) {
       try {
         const existing = installedIntegrationService.get(id);
         if (!existing) return sendNotFound(res, 'Integration');
-        const payload = req.body && Object.keys(req.body).length ? { ...req.body, id } : existing;
+        const { testInput, ...body } = req.body || {};
+        const payload = Object.keys(body).length ? { ...body, id } : existing;
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
           user: req.user,
-          req
+          req,
+          testInput
         });
         logAudit({
           req,
