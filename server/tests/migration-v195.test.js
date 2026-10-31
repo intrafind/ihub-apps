@@ -8,7 +8,8 @@ import {
   up,
   precondition,
   version,
-  websearchFrom
+  websearchFrom,
+  migrateAppSearchTools
 } from '../migrations/V195__web_search_installed_integration.js';
 
 function makeCtx(files) {
@@ -93,7 +94,8 @@ describe('V195 web search → installed integration', () => {
         tools: ['braveSearch', 'read_url'],
         websearch: { enabled: true }
       },
-      'apps/plain.json': { id: 'plain', tools: ['jira'] }
+      'apps/plain.json': { id: 'plain', tools: ['jira'] },
+      'apps/reader.json': { id: 'reader', tools: ['read_url'] }
     });
     assert.equal(await precondition(ctx), true);
     await up(ctx);
@@ -111,8 +113,78 @@ describe('V195 web search → installed integration', () => {
     assert.equal('tools/braveSearch.json' in ctx.files, false);
     assert.equal('tools/read_url.json' in ctx.files, false);
     assert.equal('tools/jira.json' in ctx.files, true);
-    assert.deepEqual(ctx.files['apps/chat.json'], { id: 'chat', websearch: { enabled: true } });
+    // The search tool reference goes (web search is already on); the page
+    // reader reference stays, the tool loader serves it from the installation.
+    assert.deepEqual(ctx.files['apps/chat.json'], {
+      id: 'chat',
+      tools: ['read_url'],
+      websearch: { enabled: true }
+    });
     assert.deepEqual(ctx.files['apps/plain.json'].tools, ['jira']);
+    assert.deepEqual(ctx.files['apps/reader.json'], { id: 'reader', tools: ['read_url'] });
+    assert.ok(
+      ctx.logs.some(m => m.includes('apps/chat.json') && m.includes('websearch already enabled')),
+      ctx.logs.join('\n')
+    );
+  });
+
+  it('turns on app.websearch for an app that had web search only through a search tool reference', async () => {
+    const ctx = makeCtx({
+      'config/integrations.json': {
+        installed: [
+          {
+            id: 'websearch',
+            definition: 'com.intrafind/web-search',
+            enabled: true,
+            values: { defaultProvider: 'staan' }
+          }
+        ]
+      },
+      // The deep-researcher example's shape: no `websearch`, Brave in `tools`.
+      'apps/deep-researcher.json': {
+        id: 'deep-researcher',
+        tools: ['researchPlanner', 'deepResearch', 'braveSearch']
+      },
+      // Several engines listed: the installation's default engine wins.
+      'apps/multi.json': {
+        id: 'multi',
+        tools: ['qwantSearch', 'staanSearch'],
+        websearch: { enabled: false, maxResults: 3 }
+      },
+      // Several engines listed, none of them the installation's default: the first listed wins.
+      'apps/both.json': { id: 'both', tools: ['qwantSearch', 'braveSearch', 'read_url'] }
+    });
+    await up(ctx);
+    assert.deepEqual(ctx.files['apps/deep-researcher.json'], {
+      id: 'deep-researcher',
+      tools: ['researchPlanner', 'deepResearch'],
+      websearch: { enabled: true, enabledByDefault: true, provider: 'brave' }
+    });
+    assert.deepEqual(ctx.files['apps/multi.json'], {
+      id: 'multi',
+      websearch: { enabled: true, enabledByDefault: true, provider: 'staan', maxResults: 3 }
+    });
+    assert.deepEqual(ctx.files['apps/both.json'], {
+      id: 'both',
+      tools: ['read_url'],
+      websearch: { enabled: true, enabledByDefault: true, provider: 'qwant' }
+    });
+    assert.ok(
+      ctx.logs.some(m => m.includes('apps/deep-researcher.json') && m.includes('provider "brave"')),
+      ctx.logs.join('\n')
+    );
+  });
+
+  it('migrateAppSearchTools: the first listed engine when the installation has no default', () => {
+    const { app, provider } = migrateAppSearchTools(
+      { id: 'a', tools: ['qwantSearch', 'braveSearch'] },
+      'auto'
+    );
+    assert.equal(provider, 'qwant');
+    assert.equal(app.websearch.provider, 'qwant');
+    assert.equal(app.tools, undefined);
+    assert.equal(migrateAppSearchTools({ id: 'a', tools: ['jira', 'read_url'] }), null);
+    assert.equal(migrateAppSearchTools({ id: 'a' }), null);
   });
 
   it('is idempotent', async () => {

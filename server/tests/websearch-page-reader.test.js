@@ -111,8 +111,8 @@ describe('page reader alongside web search', () => {
   });
 
   it('is offered once when the app also lists it in tools', async () => {
-    // A leftover `read_url` reference (V195 strips them) resolves to no static
-    // tool; the installation still offers the reader exactly once.
+    // A `read_url` reference in `tools` is served from the installation, and
+    // `app.websearch` offers the reader as well: it is offered exactly once.
     const offered = await getToolsForApp(webApp({ tools: [READ_URL_TOOL_ID] }), 'en', {
       modelProvider: 'mistral'
     });
