@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
+import { installedIntegrationRefs } from '../integrations/installedRefs.js';
 import logger from '../../utils/logger.js';
 import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -429,7 +430,8 @@ export function filterDirectoryToolsForUser(tools, user) {
  * @param {string} id
  * @param {Object} others
  * @param {Object[]} [others.tools] - Configured, MCP and A2A tools
- * @param {Object[]} [others.mcpServers]
+ * @param {Array<{id: string, toolPrefix?: string}>} [others.mcpServers] - Installed integrations
+ *   (an MCP installation's tools answer to its id and its prefix's base)
  * @param {Object[]} [others.a2aAgents]
  * @returns {{kind: string, id: string}|null}
  */
@@ -732,7 +734,7 @@ export function discoverPeopleDirectoryTools({ language = 'en', otherTools = [] 
   const platform = configCache.getPlatform() || {};
   const others = {
     tools: otherTools,
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    mcpServers: installedIntegrationRefs(),
     a2aAgents: configCache.getA2aAgents?.()?.data?.agents || []
   };
   const tools = [];

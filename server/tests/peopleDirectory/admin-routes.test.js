@@ -51,7 +51,7 @@ configCache.getPlatform = () => ({
 });
 configCache.getApps = () => ({ data: [{ id: 'people-directory', enabled: false }] });
 configCache.getTools = () => ({ data: [{ id: 'evidence_collect' }] });
-configCache.getMcpServers = () => ({ data: { servers: [{ id: 'drawio' }] } });
+configCache.getIntegrations = () => ({ data: { installed: [{ id: 'drawio' }] } });
 configCache.getA2aAgents = () => ({ data: { agents: [] } });
 
 const PRINCIPALS = {

@@ -152,7 +152,7 @@ describe('IntegrationRegistry', () => {
     await expect(
       registry.writeInstalled('local.stdio', {
         'integration.json': definition('local.stdio', {
-          protocol: { type: 'mcp-stdio', command: 'npx' },
+          protocol: { type: 'mcp', transport: { type: 'stdio', command: 'npx' } },
           actions: []
         })
       })

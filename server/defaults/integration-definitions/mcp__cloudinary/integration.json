@@ -1,0 +1,68 @@
+{
+  "id": "mcp/cloudinary",
+  "version": "1.0.0",
+  "name": {
+    "en": "Cloudinary",
+    "de": "Cloudinary"
+  },
+  "description": {
+    "en": "Search, upload, tag and transform images and videos in Cloudinary.",
+    "de": "Bilder und Videos in Cloudinary suchen, hochladen, verschlagworten und transformieren."
+  },
+  "publisher": {
+    "name": "Cloudinary"
+  },
+  "categories": ["mcp", "content"],
+  "docsUrl": "https://cloudinary.com/documentation/cloudinary_llm_mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://asset-management.mcp.cloudinary.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "cloudinary-url"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Store the environment URL cloudinary://<api_key>:<api_secret>@<cloud_name> from Console → Settings → API Keys.",
+        "de": "Die Umgebungs-URL cloudinary://<api_key>:<api_secret>@<cloud_name> aus Console → Settings → API Keys speichern."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["images", "video", "assets", "dam"]
+  }
+}

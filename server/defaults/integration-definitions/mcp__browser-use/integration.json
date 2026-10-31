@@ -1,0 +1,68 @@
+{
+  "id": "mcp/browser-use",
+  "version": "1.0.0",
+  "name": {
+    "en": "Browser Use",
+    "de": "Browser Use"
+  },
+  "description": {
+    "en": "Let a cloud browser agent navigate websites, fill in forms and extract information.",
+    "de": "Einen Cloud-Browser-Agenten Websites bedienen, Formulare ausfüllen und Informationen auslesen lassen."
+  },
+  "publisher": {
+    "name": "Browser Use"
+  },
+  "categories": ["mcp", "automation"],
+  "docsUrl": "https://docs.browser-use.com/cloud/guides/mcp-server",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://api.browser-use.com/v3/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "X-Browser-Use-API-Key"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API key at cloud.browser-use.com under Settings → API keys. Usage is billed by Browser Use.",
+        "de": "API-Schlüssel auf cloud.browser-use.com unter Settings → API keys erstellen. Die Nutzung wird von Browser Use abgerechnet."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["browser", "web automation", "agent"]
+  }
+}

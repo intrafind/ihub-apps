@@ -1,0 +1,68 @@
+{
+  "id": "mcp/statista",
+  "version": "1.0.0",
+  "name": {
+    "en": "Statista",
+    "de": "Statista"
+  },
+  "description": {
+    "en": "Search Statista statistics and retrieve chart data for market and consumer research.",
+    "de": "Statista-Statistiken durchsuchen und Diagrammdaten für Markt- und Verbraucherforschung abrufen."
+  },
+  "publisher": {
+    "name": "Statista"
+  },
+  "categories": ["mcp", "data"],
+  "docsUrl": "https://docs.platform.statista.ai/mcp-server/introduction",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://api.statista.ai/v1/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "x-api-key"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Statista issues the API key after you request access at platform.statista.ai; it requires a Statista contract.",
+        "de": "Statista stellt den API-Schlüssel nach einer Zugangsanfrage auf platform.statista.ai aus; ein Statista-Vertrag ist erforderlich."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["statistics", "market research"]
+  }
+}

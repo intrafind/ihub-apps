@@ -138,8 +138,16 @@ export class IntegrationRegistry {
     if (validation.data.id !== id) {
       throw new Error(`Definition id "${validation.data.id}" does not match "${id}"`);
     }
-    if (validation.data.protocol.type === 'mcp-stdio') {
-      throw new Error('Local (stdio) integrations cannot be installed from a registry');
+    if (validation.data.protocol.type === 'mcp') {
+      // A registry may only publish remote servers with a fixed transport: a
+      // local process (`stdio`) is the admin's own decision, taken in the
+      // generic "MCP server" definition that ships with iHub.
+      const transport = validation.data.protocol.transport?.type;
+      if (!transport || transport === 'stdio') {
+        throw new Error(
+          'An MCP integration from a registry needs a fixed remote transport (stdio is not allowed)'
+        );
+      }
     }
     const dir = await this._installedDir(id);
     // Written to a staging folder first: a bad companion path, a failed write

@@ -187,12 +187,13 @@ class McpClientManager {
   }
 
   /**
-   * (Re)load the manager from a raw mcpServers.json object.
+   * (Re)load the manager from a `{ servers, security }` config: the installed
+   * MCP integrations projected onto server configs (`protocols/mcp/serverConfig.js`).
    */
   async initialize(rawConfig) {
     const parsed = mcpServersFileSchema.safeParse(rawConfig || { servers: [] });
     if (!parsed.success) {
-      logger.error('Invalid mcpServers.json — refusing to load MCP client config', {
+      logger.error('Invalid MCP server config — refusing to load MCP client config', {
         component: 'McpClientManager',
         errors: parsed.error.issues
       });
@@ -775,6 +776,23 @@ class McpClientManager {
   }
 
   /**
+   * The server's own `tools/list` result (every tool, before the allowlist),
+   * or an empty list when the server is unknown, disabled or unreachable.
+   * @param {string} serverId
+   * @returns {Promise<Object[]>}
+   */
+  async rawToolsOfServer(serverId) {
+    const conn = this.connections.get(serverId);
+    if (!conn) return [];
+    try {
+      await this._serverTools(conn);
+    } catch {
+      return conn.rawToolsCache || [];
+    }
+    return conn.rawToolsCache || [];
+  }
+
+  /**
    * The tools of one server as every consumer sees them. For `oauthUser`
    * servers this is the shared catalog; no connection is made.
    * @param {McpServerConnection} conn
@@ -1069,7 +1087,7 @@ class McpClientManager {
    * URL. Otherwise the result asks to save first (`reason: 'unsaved_changes'`).
    * The probe never touches the shared registration or catalog.
    */
-  async testConfig(rawServerConfig, user = null) {
+  async testConfig(rawServerConfig, user = null, { resolveSecret } = {}) {
     const parsed = mcpServerConfigSchema.safeParse(rawServerConfig);
     if (!parsed.success) {
       const err = new Error('Invalid server config');
@@ -1082,7 +1100,8 @@ class McpClientManager {
     // ones to allow; `tools` stays the allowlisted subset.
     const allow = parsed.data.allowedTools || ['*'];
     const allowAll = allow.includes('*');
-    const probeConfig = { ...parsed.data, enabled: true, allowedTools: ['*'] };
+    const deny = new Set(parsed.data.deniedTools || []);
+    const probeConfig = { ...parsed.data, enabled: true, allowedTools: ['*'], deniedTools: [] };
     let saved = null;
     if (isUserOAuthServer(parsed.data)) {
       // Per-user server: probe with the acting admin's own token, and only
@@ -1102,13 +1121,14 @@ class McpClientManager {
       saved = current;
     }
     const conn = new McpServerConnection(probeConfig, this.security, {
-      ...(saved ? { authProvider: this._providerFor(saved, String(user.id)) } : {})
+      ...(saved ? { authProvider: this._providerFor(saved, String(user.id)) } : {}),
+      ...(resolveSecret ? { resolveSecret } : {})
     });
     const probe = async () => {
       await conn.connect();
       const catalog = summarizeTools(await conn.listTools()).map(tool => ({
         ...tool,
-        allowed: allowAll || allow.includes(tool.originalName)
+        allowed: (allowAll || allow.includes(tool.originalName)) && !deny.has(tool.originalName)
       }));
       return {
         status: conn.status(),

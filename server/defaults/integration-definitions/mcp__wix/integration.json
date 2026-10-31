@@ -1,0 +1,71 @@
+{
+  "id": "mcp/wix",
+  "version": "1.0.0",
+  "name": {
+    "en": "Wix",
+    "de": "Wix"
+  },
+  "description": {
+    "en": "Manage Wix sites and the business data behind them.\n\nReplace YOUR_WIX_ACCOUNT_ID in the additional headers with your Wix account ID. The key is sent without a “Bearer” prefix.",
+    "de": "Wix-Websites und die zugehörigen Geschäftsdaten verwalten.\n\nYOUR_WIX_ACCOUNT_ID in den zusätzlichen Headern durch die eigene Wix-Konto-ID ersetzen. Der Schlüssel wird ohne „Bearer“-Präfix gesendet."
+  },
+  "publisher": {
+    "name": "Wix"
+  },
+  "categories": ["mcp", "content"],
+  "docsUrl": "https://dev.wix.com/docs/overview/ai-the-wix-platform/the-wix-mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.wix.com/mcp",
+      "headers": {
+        "wix-account-id": "YOUR_WIX_ACCOUNT_ID"
+      }
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "Authorization"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API key in the Wix API Keys Manager with the permissions the tools need.",
+        "de": "API-Schlüssel im Wix API Keys Manager mit den nötigen Berechtigungen erstellen."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["website", "cms", "e-commerce"]
+  }
+}

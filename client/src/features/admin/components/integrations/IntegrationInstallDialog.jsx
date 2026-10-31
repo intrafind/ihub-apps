@@ -9,6 +9,8 @@ import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 import IntegrationTestResults from '../IntegrationTestResults';
 import GroupMultiSelect from '../GroupMultiSelect';
 import ConfigFieldInput, { pickText } from './ConfigFieldInput';
+import { buildActionsPolicy, isAllowlist } from './actionsPolicy';
+import { fieldApplies, secretFieldForMode } from '../../../../shared/utils/configFieldWhen';
 import {
   CALLOUT_CLASS,
   CHECKBOX_CLASS,
@@ -38,6 +40,7 @@ const SIDE_EFFECT_CLASS = {
 const AUTH_MODE_KEYS = {
   none: ['none', 'No sign-in (public API)'],
   'service-account': ['serviceAccount', 'Shared service account (one token for everyone)'],
+  'oauth-client': ['oauthClient', 'iHub signs in with one OAuth client (client credentials)'],
   'api-key-user': ['apiKeyUser', 'Each user enters an API key'],
   'oauth-user': ['oauthUser', 'Each user signs in (OAuth)'],
   'enterprise-managed': ['enterpriseManaged', 'Enterprise-managed (IdP)']
@@ -105,6 +108,9 @@ function IntegrationInstallDialog({
   const isEdit = Boolean(instanceId);
 
   const [definition, setDefinition] = useState(null);
+  // The actions the wizard offers: the definition's, or (dynamic actions,
+  // MCP) what the system listed in the edit view or the last test.
+  const [knownActions, setKnownActions] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -142,15 +148,19 @@ function IntegrationInstallDialog({
           values[field.key] = existing?.values?.[field.key] ?? field.default ?? '';
         }
         const instance = existing?.instance;
+        const actions = def.dynamicActions ? existing?.actions || [] : def.actions || [];
+        setKnownActions(actions);
         const defaultOn = new Set(
-          (def.actions || []).filter(a => a.enabledByDefault !== false).map(a => a.name)
+          actions.filter(a => a.enabledByDefault !== false).map(a => a.name)
         );
         let checked;
-        if (instance?.actions) {
+        if (def.dynamicActions && instance) {
+          checked = new Set(actions.filter(a => a.enabled !== false).map(a => a.name));
+        } else if (instance?.actions) {
           const enabled = instance.actions.enabled || ['*'];
           const disabled = new Set(instance.actions.disabled || []);
           checked = new Set(
-            (def.actions || [])
+            actions
               .map(a => a.name)
               .filter(
                 name =>
@@ -174,7 +184,10 @@ function IntegrationInstallDialog({
           // Kept as stored and sent back: other languages of the label and
           // the per-action overrides have no editor here yet.
           storedLabel: instance?.label && typeof instance.label === 'object' ? instance.label : {},
-          overrides: instance?.actions?.overrides || {}
+          overrides: instance?.actions?.overrides || {},
+          // The stored policy: sent back unchanged while no actions are known,
+          // and it decides whether an allowlist stays one (`buildActionsPolicy`).
+          storedActions: instance?.actions || null
         });
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
@@ -188,15 +201,20 @@ function IntegrationInstallDialog({
   }, [definitionId, instanceId, isEdit, lang, takenIds]);
 
   const secretField = useMemo(
-    () => definition?.install?.find(f => f.key === definition?.auth?.serviceAccount?.field) || null,
-    [definition]
+    () => secretFieldForMode(definition, form?.authMode),
+    [definition, form?.authMode]
   );
   const adminFields = useMemo(
     () => (definition?.install || []).filter(f => f.scope === 'admin' && !f.sensitive),
     [definition]
   );
-  const mainFields = adminFields.filter(f => !f.advanced);
-  const advancedFields = adminFields.filter(f => f.advanced);
+  // A field with a `when` clause shows only while it applies.
+  const visibleFields = adminFields.filter(f =>
+    fieldApplies(f, form?.values || {}, form?.authMode)
+  );
+  const mainFields = visibleFields.filter(f => !f.advanced);
+  const advancedFields = visibleFields.filter(f => f.advanced);
+  const supportedModes = definition?.supportedAuthModes || ['none', 'service-account'];
 
   const setValue = (key, value) => {
     setForm(prev => ({ ...prev, values: { ...prev.values, [key]: value } }));
@@ -207,14 +225,11 @@ function IntegrationInstallDialog({
     const values = {};
     for (const [key, value] of Object.entries(form.values)) {
       if (value === '' || value === null || value === undefined) continue;
+      // A hidden field's value is dropped: it belongs to another transport or sign-in mode.
+      const field = adminFields.find(f => f.key === key);
+      if (field && !fieldApplies(field, form.values, form.authMode)) continue;
       values[key] = value;
     }
-    const defaultOn = new Set(
-      (definition.actions || []).filter(a => a.enabledByDefault !== false).map(a => a.name)
-    );
-    const names = (definition.actions || []).map(a => a.name);
-    const enabled = ['*', ...names.filter(n => form.checkedActions.has(n) && !defaultOn.has(n))];
-    const disabled = names.filter(n => !form.checkedActions.has(n) && defaultOn.has(n));
     const payload = {
       id: form.id.trim(),
       definition: definition.id,
@@ -223,9 +238,14 @@ function IntegrationInstallDialog({
       values,
       auth: { mode: form.authMode },
       allowedGroups: form.allowedGroups,
-      actions: { enabled, disabled, overrides: form.overrides || {} }
+      actions: buildActionsPolicy({
+        knownActions,
+        checkedActions: form.checkedActions,
+        stored: form.storedActions,
+        overrides: form.overrides || {}
+      })
     };
-    if (form.authMode === 'service-account' && secretField && form.secret.trim()) {
+    if (secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };
     }
     return payload;
@@ -248,7 +268,23 @@ function IntegrationInstallDialog({
     setError(null);
     setTestResult(null);
     try {
-      setTestResult(await testIntegrationDraft(definition.id, buildPayload()));
+      const result = await testIntegrationDraft(definition.id, buildPayload());
+      setTestResult(result);
+      // Dynamic actions: the test listed the server's tools; offer them. A
+      // tool seen for the first time starts as the tested policy has it (the
+      // stored allowlist or denylist, sent with the draft), so a tool the
+      // admin switched off before the server went down stays off.
+      if (definition.dynamicActions && Array.isArray(result?.actions) && result.actions.length) {
+        setKnownActions(result.actions);
+        setForm(prev => {
+          const known = new Set(result.actions.map(a => a.name));
+          const kept = [...prev.checkedActions].filter(name => known.has(name));
+          const fresh = result.actions
+            .filter(a => !knownActions.some(k => k.name === a.name) && a.enabled !== false)
+            .map(a => a.name);
+          return { ...prev, checkedActions: new Set([...kept, ...fresh]) };
+        });
+      }
     } catch (err) {
       applyError(err);
     } finally {
@@ -433,7 +469,7 @@ function IntegrationInstallDialog({
               <div className="space-y-2">
                 {(definition.authModes || []).map(mode => {
                   const [key, fallback] = AUTH_MODE_KEYS[mode] || [mode, mode];
-                  const available = mode === 'none' || mode === 'service-account';
+                  const available = supportedModes.includes(mode);
                   return (
                     <label
                       key={mode}
@@ -460,7 +496,7 @@ function IntegrationInstallDialog({
                   );
                 })}
               </div>
-              {form.authMode === 'service-account' && secretField && (
+              {secretField && (
                 <ConfigFieldInput
                   field={secretField}
                   value={form.secret}
@@ -504,8 +540,31 @@ function IntegrationInstallDialog({
               <legend className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 {t('admin.integrationCatalog.wizard.actions', '5 · Actions the model may call')}
               </legend>
+              {definition.dynamicActions && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {knownActions.length === 0 && form.storedActions
+                    ? t(
+                        'admin.integrationCatalog.wizard.dynamicActionsUnavailable',
+                        'The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.'
+                      )
+                    : knownActions.length === 0
+                      ? t(
+                          'admin.integrationCatalog.wizard.dynamicActionsEmpty',
+                          'The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.'
+                        )
+                      : isAllowlist(form.storedActions)
+                        ? t(
+                            'admin.integrationCatalog.wizard.dynamicActionsAllowlistHint',
+                            'These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.'
+                          )
+                        : t(
+                            'admin.integrationCatalog.wizard.dynamicActionsHint',
+                            'These are the tools the server lists; a tool the server adds later is on by default.'
+                          )}
+                </p>
+              )}
               <ul className="divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-                {(definition.actions || []).map(action => {
+                {knownActions.map(action => {
                   const needsToken = action.connection === 'token' && form.authMode === 'none';
                   const requirement = action.requires
                     ? Object.entries(action.requires)

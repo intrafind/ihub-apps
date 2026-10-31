@@ -28,3 +28,32 @@ restored from a backup after the upgrade fails validation until the two blocks a
   suggestions (`email`, `username`, `id`, `name`, `domain\username`); a `${user.field}` template
   is typed as is. The signing algorithm choices are RS256/384/512 and ES256/384/512.
 
+## MCP Servers Moved From `mcpServers.json` to Installed Integrations
+
+Migration V193 turns every server of `contents/config/mcpServers.json` into an installed
+integration in `contents/config/integrations.json` (same id, same tool ids) and removes the file;
+nothing reads it any more. A server whose endpoint is a shipped `mcp/<id>` definition installs
+that definition only when its `toolPrefix` is empty or the default `<id>__`; a server with a
+custom prefix installs the generic `com.intrafind/mcp-server` definition instead, which keeps the
+prefix (the migration log says which servers fell back and why). Endpoint and OAuth URLs are kept
+verbatim, trailing slash included, so per-user sign-ins and client registrations stay valid.
+
+- **Admin page and API:** **Admin → MCP servers** and its catalog dialog are gone, replaced by
+  **Admin → Integrations → Installed**. The routes `/api/admin/mcp/servers*`,
+  `/api/admin/mcp/catalog`, `/api/admin/mcp/status`, `/api/admin/mcp/tools` and
+  `/api/admin/mcp/test` are removed; use `/api/admin/integrations/catalog` and
+  `/api/admin/integrations/installed`. Per-user connections of a server are managed through
+  `/api/admin/integrations/installed/{id}/connections` and `.../registration/_reset`. The MCP
+  gateway (`/api/admin/mcp/gateway`, `platform.mcpServer`) is unchanged.
+- **Apps:** an `app.tools` entry naming a server (`"drawio"`) or one of its tools
+  (`"drawio__create_diagram"`) selects nothing any more; the migration turns both into the
+  binding `integrations.drawio` (narrowed to the tool where one was named). The MCP servers
+  picker in the app editor is gone; bind the installation instead.
+- **Deployments that write `mcpServers.json`** (Helm values, templates, scripts) have to write
+  installations; the field names are listed in `docs/mcp-integration.md`. The `security` block
+  (`blockPrivateIps`, `allowedHosts`) lives in `integrations.json`.
+- **A server whose id another, non-MCP installation already holds** (an integration installed from
+  the catalog) is not moved: it is kept in `contents/config/mcpServers.unmigrated.json` with a
+  warning in the log. Install it under a free id and bind it to its apps.
+- Remote A2A agents keep their own page for now; the id-clash rules name installed integrations
+  where they named MCP servers.

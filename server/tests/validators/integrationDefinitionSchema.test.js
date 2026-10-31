@@ -202,11 +202,11 @@ describe('integrationDefinitionSchema', () => {
     void health;
     const result = validateIntegrationDefinition({
       ...rest,
-      protocol: { type: 'mcp-remote', endpoint: { url: 'https://mcp.example.com' } },
+      protocol: { type: 'http', request: { url: 'https://api.example.com/{id}' } },
       actions: []
     });
     expect(result.success).toBe(true);
-    expect(result.data.protocol.endpoint.url).toBe('https://mcp.example.com');
+    expect(result.data.protocol.request.url).toBe('https://api.example.com/{id}');
   });
 });
 
@@ -271,7 +271,7 @@ describe('checkInstallValues', () => {
     );
     expect(errors[0]).toEqual({
       key: 'apiToken',
-      message: 'a credential is required for a service account'
+      message: 'a credential is required for this sign-in mode'
     });
     expect(
       checkInstallValues(

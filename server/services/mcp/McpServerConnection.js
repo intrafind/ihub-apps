@@ -67,11 +67,15 @@ export class McpServerConnection {
   constructor(
     serverConfig,
     security = {},
-    { authProvider, catalogOnly = false, onToolsListed } = {}
+    { authProvider, catalogOnly = false, onToolsListed, resolveSecret } = {}
   ) {
     this.config = serverConfig;
     this.security = security;
     this.authProvider = authProvider || null;
+    // A draft test may bring its secret inline instead of a stored credential.
+    this.resolveSecret = typeof resolveSecret === 'function' ? resolveSecret : null;
+    /** The server's own `tools/list` result behind the current tool sets. */
+    this.rawToolsCache = null;
     this.catalogOnly = catalogOnly === true;
     this.onToolsListed = typeof onToolsListed === 'function' ? onToolsListed : null;
     this.client = null;
@@ -115,7 +119,9 @@ export class McpServerConnection {
     for (const [refField, plainField] of Object.entries(refFields)) {
       if (typeof out[refField] === 'string' && out[refField]) {
         try {
-          out[plainField] = credentialService.resolveSecret(out[refField]);
+          out[plainField] = this.resolveSecret
+            ? this.resolveSecret(out[refField])
+            : credentialService.resolveSecret(out[refField]);
         } catch (err) {
           logger.error('Failed to resolve MCP server auth secret from credential store', {
             component: 'McpServerConnection',
@@ -422,6 +428,7 @@ export class McpServerConnection {
     const { tools, appTools } = this.buildToolSets(rawTools);
     this.toolsCache = tools;
     this.appToolsCache = appTools;
+    this.rawToolsCache = rawTools;
     if (this.onToolsListed) {
       try {
         this.onToolsListed(rawTools);
@@ -446,11 +453,13 @@ export class McpServerConnection {
     if (!Array.isArray(rawTools)) {
       this.toolsCache = null;
       this.appToolsCache = null;
+      this.rawToolsCache = null;
       return;
     }
     const { tools, appTools } = this.buildToolSets(rawTools);
     this.toolsCache = tools;
     this.appToolsCache = appTools;
+    this.rawToolsCache = rawTools;
   }
 
   /**
@@ -467,6 +476,7 @@ export class McpServerConnection {
     const prefix = this.config.toolPrefix?.trim() || `${this.config.id}__`;
     const allow = this.config.allowedTools || ['*'];
     const allowAll = allow.includes('*');
+    const deny = new Set(this.config.deniedTools || []);
     const appsEnabled = appsEnabledFor(this.config);
 
     const tools = [];
@@ -477,7 +487,7 @@ export class McpServerConnection {
       // must never reach the model. Only the view link is dropped.
       const meta = readToolUiMeta(t);
       const ui = meta && !appsEnabled ? { ...meta, resourceUri: null } : meta;
-      const allowed = allowAll || allow.includes(t.name);
+      const allowed = (allowAll || allow.includes(t.name)) && !deny.has(t.name);
 
       // The allowlist governs what the model is offered. App-only tools are
       // never offered to the model and exist only to serve this server's own

@@ -1,0 +1,67 @@
+{
+  "id": "mcp/postman",
+  "version": "1.0.0",
+  "name": {
+    "en": "Postman",
+    "de": "Postman"
+  },
+  "description": {
+    "en": "Manage Postman workspaces, collections, environments and API specifications.\n\n/minimal offers the essential tools; use /mcp for the full tool set or /code for code generation. The EU region uses https://mcp.eu.postman.com.",
+    "de": "Postman-Workspaces, Collections, Umgebungen und API-Spezifikationen verwalten.\n\n/minimal bietet die wichtigsten Tools; /mcp für alle Tools oder /code für Codegenerierung verwenden. Die EU-Region nutzt https://mcp.eu.postman.com."
+  },
+  "publisher": {
+    "name": "Postman"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://learning.postman.com/docs/developer/postman-api/postman-mcp-server/",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.postman.com/minimal"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create a Postman API key under Settings → API keys (postman.postman.co/settings/me/api-keys).",
+        "de": "Postman-API-Schlüssel unter Settings → API keys erstellen (postman.postman.co/settings/me/api-keys)."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["api", "testing", "collections"]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "mcp/hugging-face",
+  "version": "1.0.0",
+  "name": {
+    "en": "Hugging Face",
+    "de": "Hugging Face"
+  },
+  "description": {
+    "en": "Search models, datasets, Spaces and papers on the Hugging Face Hub.\n\nWorks without a token with a reduced tool set. For all tools, create an access token at huggingface.co/settings/tokens, switch the authentication to Bearer token, and pick tools and Spaces at huggingface.co/settings/mcp.",
+    "de": "Modelle, Datasets, Spaces und Paper auf dem Hugging Face Hub durchsuchen.\n\nFunktioniert ohne Token mit weniger Tools. Für alle Tools ein Access Token unter huggingface.co/settings/tokens erstellen, die Authentifizierung auf Bearer-Token umstellen und Tools sowie Spaces unter huggingface.co/settings/mcp auswählen."
+  },
+  "publisher": {
+    "name": "Hugging Face"
+  },
+  "categories": ["mcp", "data"],
+  "docsUrl": "https://huggingface.co/docs/hub/hf-mcp-server",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://huggingface.co/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["models", "datasets", "ml", "papers"]
+  }
+}

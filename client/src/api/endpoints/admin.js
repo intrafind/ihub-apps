@@ -86,18 +86,6 @@ export const fetchTools = async (options = {}) => {
 };
 
 /**
- * Fetch the per-server MCP tool catalog for the app editor's MCP picker.
- * Returns an array of { id, name, enabled, tools: [{ name, description }], error }.
- * Not cached — tool discovery reflects live connection state.
- *
- * @returns {Promise<Array>} Array of MCP server entries with their tools
- */
-export const fetchMcpToolCatalog = async () => {
-  const data = await handleApiResponse(() => apiClient.get('/admin/mcp/tools'), null, null, false);
-  return data?.servers || [];
-};
-
-/**
  * Per-agent skill catalog of the configured remote A2A agents, for the app
  * editor's agent picker. Each entry: `{ id, name, description?, enabled,
  * skills: [{ id, name, description, toolId }], error }`.

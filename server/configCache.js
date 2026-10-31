@@ -493,7 +493,6 @@ class ConfigCache {
       'config/features.json',
       'config/registries.json',
       'config/installations.json',
-      'config/mcpServers.json',
       'config/a2aAgents.json',
       'config/integrations.json',
       'config/peopleDirectories.json',
@@ -1564,21 +1563,6 @@ class ConfigCache {
     const cached = this.get('config/installations.json');
     if (!cached || !cached.data) {
       return { data: { installations: {} }, etag: null };
-    }
-    return cached;
-  }
-
-  /**
-   * Get the MCP outbound servers configuration.
-   * @returns {{ data: { servers: Array, security: Object }, etag: string|null }}
-   */
-  getMcpServers() {
-    const cached = this.get('config/mcpServers.json');
-    if (!cached || !cached.data) {
-      return {
-        data: { servers: [], security: { blockPrivateIps: true, allowedHosts: [] } },
-        etag: null
-      };
     }
     return cached;
   }
