@@ -192,6 +192,11 @@ export async function runIntegrationTool(tool, params = {}, options = {}) {
   if (!resolved?.definition) {
     throw new Error(`Integration ${instanceId} is not installed or its definition is missing`);
   }
+  if (resolved.incompatible) {
+    throw new Error(
+      `Integration ${instanceId} cannot run: its definition ${resolved.statusReason || 'is incompatible with this server version'}`
+    );
+  }
   if (resolved.instance.enabled === false) {
     throw new Error(`Integration ${instanceId} is disabled`);
   }

@@ -1,6 +1,9 @@
 {
   "id": "mcp/modjo",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
   "name": {
     "en": "Modjo",
     "de": "Modjo"

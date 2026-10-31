@@ -152,11 +152,19 @@ export class InstalledIntegrationService {
       document: entry.document,
       security: this.security(),
       values: effectiveValues(entry.definition, instance),
-      label: instanceLabel(entry.definition, instance, language)
+      label: instanceLabel(entry.definition, instance, language),
+      /** `ok`, or `incompatible` when the definition cannot run on this server version. */
+      status: entry.status || 'ok',
+      statusReason: entry.statusReason || null,
+      incompatible: entry.status === 'incompatible'
     };
   }
 
-  /** Every enabled instance whose definition and adapter exist, resolved. */
+  /**
+   * Every enabled instance whose definition and adapter exist, resolved. An
+   * installation of an incompatible definition is left out: it is listed to
+   * the admin with the reason, but offers no tools and no scopes.
+   */
   async resolveAllEnabled(language = 'en') {
     await this.registry.ensureLoaded();
     const out = [];
@@ -164,6 +172,7 @@ export class InstalledIntegrationService {
       if (instance.enabled === false) continue;
       const resolved = await this.resolve(instance, language);
       if (!resolved?.definition) continue;
+      if (resolved.incompatible) continue;
       if (!getProtocolAdapter(resolved.definition.protocol.type)) continue;
       out.push(resolved);
     }
@@ -222,6 +231,14 @@ export class InstalledIntegrationService {
       });
     }
     const definition = entry.definition;
+    if (entry.status === 'incompatible') {
+      // Values are validated against a definition this server cannot run;
+      // nothing saved against it would be served anyway.
+      throw new IntegrationError(
+        `Integration definition "${definition.id}" ${entry.statusReason || 'is incompatible with this server version'}`,
+        { code: 'INCOMPATIBLE_DEFINITION', details: entry.compatibility }
+      );
+    }
     if (definition.singleton && instance.id !== definition.singleton.instanceId) {
       throw new IntegrationError(
         `"${definition.id}" is installed once, as "${definition.singleton.instanceId}"`,

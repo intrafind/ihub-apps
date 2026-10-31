@@ -11,11 +11,14 @@ import { resolveAndValidatePath } from '../../../utils/pathSecurity.js';
 import {
   INTEGRATION_ID_PATTERN,
   validateIntegrationDefinition,
+  definitionSchemaRevision,
+  unsupportedSchemaMessage,
   dirNameToDefinitionId,
   definitionIdToDirName
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { checkScriptCodeFiles } from './scriptModule.js';
+import { checkCompatibility, describeIncompatibility } from './compatibility.js';
 
 /**
  * Loads integration definitions (the catalog) from two trees:
@@ -27,7 +30,14 @@ import { checkScriptCodeFiles } from './scriptModule.js';
  * An installed definition with the same id wins over the shipped one. Each
  * definition folder may carry companion files; for the `openapi` protocol the
  * OpenAPI document named in `protocol.document` is read and parsed here so the
- * adapters never touch the filesystem.
+ * adapters never touch the filesystem. Release notes (`releases[].notes`) are
+ * Markdown companions under `releases/<version>/`, served on request through
+ * `readCompanion`.
+ *
+ * A definition whose `compatibility.ihub` the running server does not satisfy
+ * loads with `status: 'incompatible'`: it stays in the catalog (so its
+ * installations can be listed with the reason), but offers no tools. One
+ * whose `compatibility.schema` revision is unknown is refused by the schema.
  *
  * The two trees are never seeded into each other: `integration-definitions/`
  * is on the import-only list of `utils/setupUtils.js`.
@@ -38,6 +48,11 @@ const COMPONENT = 'IntegrationRegistry';
 export const INTEGRATIONS_CONFIG_KEY = 'config/integrations.json';
 const DEFINITION_FILE = 'integration.json';
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+/** A companion served to the admin UI (release notes, README) is text and small. */
+const MAX_COMPANION_BYTES = 512 * 1024;
+/** Companion files the admin API serves by path: Markdown only. */
+const SERVED_COMPANION_PATTERN =
+  /^(?!\.)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/i;
 
 const defaultShippedDir = fileURLToPath(
   new URL('../../../defaults/integration-definitions/', import.meta.url)
@@ -104,10 +119,41 @@ export class IntegrationRegistry {
   }
 
   /**
-   * @returns {Array<object>} every valid entry: `{ definition, source, dir, document? }`
+   * @returns {Array<object>} every valid entry:
+   *   `{ id, definition, source, dir, status, compatibility, document? }`
    */
   list() {
     return [...this.entries.values()];
+  }
+
+  /** Whether a definition loaded but cannot run on this server version. */
+  isIncompatible(id) {
+    return this.entries.get(id)?.status === 'incompatible';
+  }
+
+  /**
+   * A Markdown companion file of a definition (release notes, README), read
+   * from its folder. The path is checked against the companion grammar and
+   * resolved inside the folder; anything else, a missing file or one above
+   * the size limit yields null.
+   *
+   * @param {string} id - definition id
+   * @param {string} relPath - companion path as the definition names it
+   * @returns {Promise<string|null>}
+   */
+  async readCompanion(id, relPath) {
+    const entry = this.entries.get(id);
+    if (!entry) return null;
+    if (typeof relPath !== 'string' || !SERVED_COMPANION_PATTERN.test(relPath)) return null;
+    const target = await resolveAndValidatePath(relPath, entry.dir);
+    if (!target) return null;
+    try {
+      const stat = await fs.stat(target);
+      if (!stat.isFile() || stat.size > MAX_COMPANION_BYTES) return null;
+      return await fs.readFile(target, 'utf8');
+    } catch {
+      return null;
+    }
   }
 
   /** The definition with this id, or null. */
@@ -131,6 +177,14 @@ export class IntegrationRegistry {
     const definitionFile = files[DEFINITION_FILE];
     if (!definitionFile) throw new Error(`${DEFINITION_FILE} is missing`);
     const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
+    const revision = definitionSchemaRevision(raw);
+    if (!revision.supported) {
+      const error = new Error(
+        `Invalid integration definition: ${unsupportedSchemaMessage(revision.revision)}`
+      );
+      error.code = 'UNSUPPORTED_DEFINITION_SCHEMA';
+      throw error;
+    }
     const validation = validateIntegrationDefinition(raw);
     if (!validation.success) {
       const details = validation.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
@@ -301,6 +355,21 @@ export class IntegrationRegistry {
       }
       return null;
     }
+    // The format revision is read from the raw file, before the parse strips
+    // fields this server does not know: a definition written for a later
+    // revision is refused whole, not loaded with parts of it missing.
+    const revision = definitionSchemaRevision(raw);
+    if (!revision.supported) {
+      logger.warn('Skipping integration definition: unsupported definition schema revision', {
+        component: COMPONENT,
+        file,
+        id: raw?.id,
+        status: 'unsupportedSchema',
+        revision: revision.revision,
+        message: unsupportedSchemaMessage(revision.revision)
+      });
+      return null;
+    }
     const validation = validateIntegrationDefinition(raw);
     if (!validation.success) {
       logger.warn('Skipping invalid integration definition', {
@@ -325,7 +394,31 @@ export class IntegrationRegistry {
       });
       return null;
     }
-    const entry = { definition, source, dir, id: definition.id };
+    const compatibility = checkCompatibility(definition);
+    const entry = {
+      definition,
+      source,
+      dir,
+      id: definition.id,
+      status: compatibility.compatible ? 'ok' : 'incompatible',
+      compatibility
+    };
+    if (!compatibility.compatible) {
+      // Kept in the catalog, so its installations are listed with the reason
+      // instead of vanishing; it offers no tools (`InstalledIntegrationService`).
+      logger.warn('Integration definition is incompatible with this server version', {
+        component: COMPONENT,
+        file,
+        id: definition.id,
+        requires: compatibility.requires,
+        serverVersion: compatibility.serverVersion
+      });
+      entry.statusReason = describeIncompatibility(
+        compatibility.requires,
+        compatibility.serverVersion
+      );
+    }
+    await this._checkReleaseNotes(entry, file);
     if (definition.protocol.type === 'script') {
       try {
         await fs.access(path.join(dir, definition.protocol.module));
@@ -355,6 +448,41 @@ export class IntegrationRegistry {
       }
     }
     return entry;
+  }
+
+  /**
+   * Drop the release-note files the folder does not have, so the API never
+   * offers a note that cannot be served. The definition is still loaded: a
+   * missing note is a packaging slip, not a reason to lose the integration.
+   */
+  async _checkReleaseNotes(entry, file) {
+    const releases = entry.definition.releases;
+    if (!Array.isArray(releases)) return;
+    for (const release of releases) {
+      if (!release.notes) continue;
+      for (const [category, relPath] of Object.entries(release.notes)) {
+        const target = await resolveAndValidatePath(relPath, entry.dir);
+        let exists = false;
+        if (target) {
+          try {
+            exists = (await fs.stat(target)).isFile();
+          } catch {
+            exists = false;
+          }
+        }
+        if (exists) continue;
+        logger.warn('Integration release note file is missing; the note is not offered', {
+          component: COMPONENT,
+          file,
+          id: entry.id,
+          release: release.version,
+          category,
+          path: relPath
+        });
+        delete release.notes[category];
+      }
+      if (Object.keys(release.notes).length === 0) delete release.notes;
+    }
   }
 
   async _readDocument(dir, relPath) {

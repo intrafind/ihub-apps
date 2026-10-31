@@ -151,6 +151,8 @@ registryModule.default.ensureLoaded = registry.ensureLoaded.bind(registry);
 registryModule.default.list = registry.list.bind(registry);
 registryModule.default.get = registry.get.bind(registry);
 registryModule.default.isInstalled = registry.isInstalled.bind(registry);
+registryModule.default.isIncompatible = registry.isIncompatible.bind(registry);
+registryModule.default.readCompanion = registry.readCompanion.bind(registry);
 
 const { default: registerAdminIntegrationsRoutes } =
   await import('../../routes/admin/integrations.js');
@@ -389,5 +391,67 @@ describe('installed instances', () => {
     ).expect(200);
     expect(res.body.result.success).toBe(false);
     expect(res.body.result.steps.find(s => s.id === 'probe').status).toBe('fail');
+  });
+  it('serves Markdown companion files of a definition by path, nothing outside the folder', async () => {
+    await fs.writeFile(
+      path.join(shippedDir, 'org.ckan__portal', 'README.md'),
+      '# Portal\n',
+      'utf8'
+    );
+    const id = encodeURIComponent('org.ckan/portal');
+    const ok = await admin(
+      request(app).get(`/api/admin/integrations/catalog/${id}/_file`).query({ path: 'README.md' })
+    ).expect(200);
+    expect(ok.headers['content-type']).toMatch(/text\/markdown/);
+    expect(ok.text).toBe('# Portal\n');
+    for (const bad of [
+      '../org.ckan__portal/README.md',
+      'api.json',
+      '/etc/passwd.md',
+      'x/../../README.md'
+    ]) {
+      await admin(
+        request(app).get(`/api/admin/integrations/catalog/${id}/_file`).query({ path: bad })
+      ).expect(404);
+    }
+    await admin(request(app).get(`/api/admin/integrations/catalog/${id}/_file`)).expect(400);
+    await admin(
+      request(app)
+        .get(`/api/admin/integrations/catalog/${encodeURIComponent('org.none')}/_file`)
+        .query({ path: 'README.md' })
+    ).expect(404);
+    await request(app)
+      .get(`/api/admin/integrations/catalog/${id}/_file`)
+      .query({ path: 'README.md' })
+      .expect(401);
+  });
+
+  it('reports versions, compatibility and the (empty) update list', async () => {
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    const catalog = await admin(request(app).get('/api/admin/integrations/catalog')).expect(200);
+    expect(catalog.body.items[0]).toMatchObject({
+      id: 'org.ckan/portal',
+      version: '1.2.3',
+      compatibility: { schema: 1 },
+      compatible: true,
+      status: 'ok',
+      update: null
+    });
+    expect(typeof catalog.body.serverVersion).toBe('string');
+    const detail = await admin(
+      request(app).get(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}`)
+    ).expect(200);
+    expect(detail.body.definition.releases).toEqual([]);
+    const list = await admin(request(app).get('/api/admin/integrations/installed')).expect(200);
+    expect(list.body.items[0]).toMatchObject({
+      id: 'ckan-demo',
+      definitionVersion: '1.2.3',
+      currentVersion: '1.2.3',
+      incompatible: false,
+      updateAvailable: false
+    });
+    expect(list.body.updatesAvailable).toBe(0);
+    const updates = await admin(request(app).get('/api/admin/integrations/updates')).expect(200);
+    expect(updates.body).toEqual({ success: true, definitions: [], installations: [], count: 0 });
   });
 });

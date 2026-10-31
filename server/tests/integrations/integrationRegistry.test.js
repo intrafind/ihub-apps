@@ -167,6 +167,116 @@ describe('IntegrationRegistry', () => {
     expect(registry.get('org.x/y')).toBeNull();
   });
 
+  it('loads a definition the server version does not satisfy as incompatible, without tools', async () => {
+    await writeDefinition(
+      shippedDir,
+      'org.old',
+      definition('org.old', { compatibility: { ihub: '<1.0.0' } })
+    );
+    await writeDefinition(
+      shippedDir,
+      'org.fine',
+      definition('org.fine', { compatibility: { ihub: '>=1.0.0' } })
+    );
+    const registry = new IntegrationRegistry({ shippedDir, contentsDir });
+    await registry.reload();
+    const old = registry.get('org.old');
+    expect(old.status).toBe('incompatible');
+    expect(old.compatibility).toMatchObject({ requires: '<1.0.0', compatible: false });
+    expect(old.statusReason).toMatch(/needs iHub <1\.0\.0, this server runs/);
+    expect(registry.isIncompatible('org.old')).toBe(true);
+    expect(registry.get('org.fine').status).toBe('ok');
+    expect(registry.isIncompatible('org.fine')).toBe(false);
+    // Still in the catalog: its installations are listed with the reason.
+    expect(
+      registry
+        .list()
+        .map(e => e.id)
+        .sort()
+    ).toEqual(['org.fine', 'org.old']);
+  });
+
+  it('refuses a definition written for an unknown schema revision before reading anything else', async () => {
+    await writeDefinition(shippedDir, 'org.future', {
+      ...definition('org.future'),
+      compatibility: { schema: 2 },
+      futureField: { only: 'a later server knows this' }
+    });
+    const registry = new IntegrationRegistry({ shippedDir, contentsDir });
+    await registry.reload();
+    expect(registry.get('org.future')).toBeNull();
+    await expect(
+      registry.writeInstalled('org.future', {
+        'integration.json': { ...definition('org.future'), compatibility: { schema: 2 } },
+        'api.json': doc
+      })
+    ).rejects.toMatchObject({ code: 'UNSUPPORTED_DEFINITION_SCHEMA' });
+    expect(registry.get('org.future')).toBeNull();
+  });
+
+  it('serves release notes from the folder and drops a note whose file is missing', async () => {
+    const releases = [
+      {
+        version: '1.0.0',
+        date: '2026-10-31',
+        summary: { en: 'First version.' },
+        notes: {
+          features: 'releases/1.0.0/features.md',
+          breaking: 'releases/1.0.0/breaking-changes.md'
+        }
+      }
+    ];
+    await writeDefinition(shippedDir, 'org.notes', definition('org.notes', { releases }), {
+      'api.json': doc
+    });
+    await fs.mkdir(path.join(shippedDir, 'org.notes', 'releases', '1.0.0'), { recursive: true });
+    await fs.writeFile(
+      path.join(shippedDir, 'org.notes', 'releases', '1.0.0', 'features.md'),
+      '# Features\n',
+      'utf8'
+    );
+    await fs.writeFile(path.join(shippedDir, 'org.notes', 'secret.md'), 'hidden', 'utf8');
+    const registry = new IntegrationRegistry({ shippedDir, contentsDir });
+    await registry.reload();
+    const entry = registry.get('org.notes');
+    expect(entry.definition.releases[0].notes).toEqual({ features: 'releases/1.0.0/features.md' });
+    expect(await registry.readCompanion('org.notes', 'releases/1.0.0/features.md')).toBe(
+      '# Features\n'
+    );
+    // Any Markdown companion of the folder can be read, nothing else, and
+    // nothing outside the folder.
+    expect(await registry.readCompanion('org.notes', 'secret.md')).toBe('hidden');
+    expect(await registry.readCompanion('org.notes', 'api.json')).toBeNull();
+    expect(await registry.readCompanion('org.notes', '../org.notes/secret.md')).toBeNull();
+    expect(await registry.readCompanion('org.notes', 'releases/../../x.md')).toBeNull();
+    expect(await registry.readCompanion('org.notes', '/etc/passwd.md')).toBeNull();
+    expect(await registry.readCompanion('org.notes', 'releases/1.0.0/missing.md')).toBeNull();
+    expect(await registry.readCompanion('org.unknown', 'secret.md')).toBeNull();
+  });
+
+  it('writes an installed definition with its releases subfolder', async () => {
+    const registry = new IntegrationRegistry({ shippedDir, contentsDir });
+    await registry.reload();
+    const entry = await registry.writeInstalled('org.new/thing', {
+      'integration.json': definition('org.new/thing', {
+        releases: [
+          {
+            version: '1.0.0',
+            date: '2026-10-31',
+            summary: { en: 'First' },
+            notes: { features: 'releases/1.0.0/features.md' }
+          }
+        ]
+      }),
+      'api.json': doc,
+      'releases/1.0.0/features.md': '# First\n'
+    });
+    expect(entry.definition.releases[0].notes.features).toBe('releases/1.0.0/features.md');
+    expect(await registry.readCompanion('org.new/thing', 'releases/1.0.0/features.md')).toBe(
+      '# First\n'
+    );
+  });
+
   it('tolerates a missing contents directory', async () => {
     await fs.rm(contentsDir, { recursive: true, force: true });
     await writeDefinition(shippedDir, 'ok', definition('ok'));

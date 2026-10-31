@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
+import semver from 'semver';
 import { sourceDeclarationSchema } from '../services/sources/producers/declared.js';
 
 /**
@@ -66,6 +67,95 @@ const companionPathSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/, 'must be a relative path');
 
 const httpOrCompanionSchema = z.union([z.string().url(), companionPathSchema]);
+
+/**
+ * Revisions of the definition format this server knows (`compatibility.schema`).
+ * A definition that names a later revision is refused instead of loaded with
+ * its unknown fields ignored.
+ */
+export const KNOWN_SCHEMA_REVISIONS = [1];
+
+/**
+ * What a definition needs to run: `ihub` is a semver range the server version
+ * must satisfy (`">=5.7.0 <7"`); `schema` is the revision of the definition
+ * format the file is written in. Both optional: a definition without them runs
+ * on every version and uses revision 1.
+ */
+export const compatibilitySchema = z
+  .object({
+    ihub: z
+      .string()
+      .min(1)
+      .max(128)
+      .refine(range => semver.validRange(range) !== null, {
+        message: 'compatibility.ihub must be a semver range (e.g. ">=5.7.0 <7")'
+      })
+      .optional(),
+    schema: z.number().int().min(1).prefault(1)
+  })
+  .superRefine((compat, ctx) => {
+    // Callers check the raw document first (`definitionSchemaRevision`); this
+    // keeps a direct `validateIntegrationDefinition` from accepting one.
+    if (!KNOWN_SCHEMA_REVISIONS.includes(compat.schema)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['schema'],
+        message: unsupportedSchemaMessage(compat.schema)
+      });
+    }
+  });
+
+/**
+ * The definition-format revision a raw `integration.json` declares
+ * (`compatibility.schema`, default 1). Read from the raw document, before the
+ * Zod parse: the parse strips fields it does not know, so a definition
+ * written for a later revision would otherwise be accepted with those fields
+ * silently dropped.
+ *
+ * @param {unknown} raw - parsed integration.json, not yet validated
+ * @returns {{ revision: number, supported: boolean }}
+ */
+export function definitionSchemaRevision(raw) {
+  const value = raw?.compatibility?.schema;
+  const revision = value === undefined || value === null ? 1 : Number(value);
+  const supported = Number.isInteger(revision) && KNOWN_SCHEMA_REVISIONS.includes(revision);
+  return { revision: Number.isNaN(revision) ? value : revision, supported };
+}
+
+/** The message for a definition whose format revision this server does not know. */
+export function unsupportedSchemaMessage(revision) {
+  return `definition schema revision ${revision} is not supported by this server (known: ${KNOWN_SCHEMA_REVISIONS.join(', ')})`;
+}
+
+/** Release-note categories, named like iHub's own `docs/releases/<version>/` files. */
+export const RELEASE_NOTE_CATEGORIES = ['features', 'fixes', 'breaking'];
+
+/** A release-note file: a Markdown companion file inside the definition folder. */
+const releaseNotePathSchema = companionPathSchema.refine(p => /\.md$/i.test(p), {
+  message: 'release notes are Markdown files (.md)'
+});
+
+/**
+ * One entry of a definition's release history: the version, when it was
+ * published, a one-line localized summary for lists and the update dialog,
+ * and the Markdown companion files with the full notes per category. A
+ * release that changes what an installation stores names its `migration`
+ * (phase 2 of the versioning concept).
+ */
+export const releaseSchema = z.object({
+  version: semverSchema,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
+  summary: localizedStringSchema,
+  notes: z
+    .object({
+      features: releaseNotePathSchema.optional(),
+      fixes: releaseNotePathSchema.optional(),
+      breaking: releaseNotePathSchema.optional()
+    })
+    .strict()
+    .optional(),
+  migration: z.string().min(1).max(64).optional()
+});
 
 const primitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
@@ -506,6 +596,10 @@ export const integrationDefinitionSchema = z
     $schema: z.string().optional(),
     id: integrationIdSchema,
     version: semverSchema,
+    /** What the definition needs to run (iHub version range, format revision). */
+    compatibility: compatibilitySchema.prefault({}),
+    /** Release history, newest first; `releases[0].version` is `version`. */
+    releases: z.array(releaseSchema).optional(),
     name: localizedStringSchema,
     description: localizedStringSchema.optional(),
     publisher: integrationPublisherSchema.optional(),
@@ -632,6 +726,31 @@ export const integrationDefinitionSchema = z
         path: ['auth', 'serviceAccount', 'field'],
         message: `"${serviceField}" is not an install field`
       });
+    }
+
+    if (def.releases) {
+      if (def.releases.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['releases'],
+          message: 'releases lists at least the current version, or is left out'
+        });
+      } else if (def.releases[0].version !== def.version) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['releases', 0, 'version'],
+          message: `the newest release must be the definition version ${def.version}`
+        });
+      }
+      for (let i = 1; i < def.releases.length; i += 1) {
+        if (!semver.gt(def.releases[i - 1].version, def.releases[i].version)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['releases', i, 'version'],
+            message: 'releases are listed newest first, each version once'
+          });
+        }
+      }
     }
   });
 

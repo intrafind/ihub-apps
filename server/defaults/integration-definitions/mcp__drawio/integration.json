@@ -1,6 +1,9 @@
 {
   "id": "mcp/drawio",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
   "name": {
     "en": "draw.io",
     "de": "draw.io"

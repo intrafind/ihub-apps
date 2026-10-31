@@ -16,14 +16,18 @@ import {
 } from '../../services/integrations/protocols/index.js';
 import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSchema.js';
 import { localized } from '../../services/integrations/definitions/installedValues.js';
+import { findDefinitionUpdates } from '../../services/integrations/definitions/definitionUpdates.js';
+import { serverVersion } from '../../services/integrations/definitions/compatibility.js';
 import logger from '../../utils/logger.js';
 
 /**
  * Admin API of the integrations platform (#3061):
  *
  *   GET  /api/admin/integrations/catalog                      definitions (shipped + installed from registries)
- *   GET  /api/admin/integrations/catalog/:definitionId         one definition with its install fields and actions
+ *   GET  /api/admin/integrations/catalog/:definitionId         one definition with its install fields, actions and releases
+ *   GET  /api/admin/integrations/catalog/:definitionId/_file?path=  a Markdown companion file (release notes) of a definition
  *   POST /api/admin/integrations/catalog/:definitionId/_test   test an unsaved instance
+ *   GET  /api/admin/integrations/updates                       installations whose definition has a newer catalog version
  *   GET  /api/admin/integrations/installed                     installed instances
  *   POST /api/admin/integrations/installed                     install (create an instance)
  *   GET  /api/admin/integrations/installed/:id                 instance with its live actions
@@ -54,11 +58,32 @@ function definitionIdOf(req, res) {
   return id;
 }
 
-function catalogEntryView(entry, language, instances) {
+/** The release history as the UI lists it: one summary line per version plus the note paths. */
+function releasesView(def, language) {
+  return (def.releases || []).map(release => ({
+    version: release.version,
+    date: release.date,
+    summary: localized(release.summary, language),
+    notes: release.notes || {},
+    migration: release.migration || null
+  }));
+}
+
+function catalogEntryView(entry, language, instances, updates) {
   const def = entry.definition;
+  const update = updates?.get(def.id) || null;
   return {
     id: def.id,
     version: def.version,
+    compatibility: def.compatibility,
+    /** `ok`, or `incompatible` when this server version does not satisfy `compatibility.ihub`. */
+    status: entry.status || 'ok',
+    statusReason: entry.statusReason || null,
+    compatible: entry.status !== 'incompatible',
+    requires: entry.compatibility?.requires || null,
+    releaseCount: def.releases?.length || 0,
+    /** A newer version in the marketplace catalog this definition was installed from. */
+    update,
     name: localized(def.name, language, def.id),
     description: localized(def.description, language),
     publisher: def.publisher,
@@ -86,12 +111,14 @@ function catalogEntryView(entry, language, instances) {
   };
 }
 
-function definitionDetailView(entry, language, instances) {
+function definitionDetailView(entry, language, instances, updates) {
   const def = entry.definition;
   return {
-    ...catalogEntryView(entry, language, instances),
+    ...catalogEntryView(entry, language, instances, updates),
     nameLocalized: def.name,
     descriptionLocalized: def.description,
+    license: def.license || null,
+    releases: releasesView(def, language),
     auth: def.auth,
     install: def.install,
     scopes: def.scopes
@@ -120,16 +147,17 @@ function definitionDetailView(entry, language, instances) {
   };
 }
 
-function instanceView(instance, resolved, language) {
+function instanceView(instance, resolved, language, updates) {
   const adapter = resolved?.definition
     ? getProtocolAdapter(resolved.definition.protocol.type)
     : null;
   let status = null;
   try {
-    status = adapter?.status ? adapter.status(instance) : null;
+    status = adapter?.status && !resolved?.incompatible ? adapter.status(instance) : null;
   } catch {
     status = null;
   }
+  const update = resolved?.definition ? updates?.get(resolved.definition.id) || null : null;
   return {
     ...instance,
     label: resolved?.label || instance.id,
@@ -139,8 +167,40 @@ function instanceView(instance, resolved, language) {
     /** Live connection health, for adapters that keep connections (MCP). */
     status,
     /** Whether the installation signs every user in (per-user connections to manage). */
-    perUser: instance.auth?.mode === 'oauth-user'
+    perUser: instance.auth?.mode === 'oauth-user',
+    /** The version of the definition on disk (`definitionVersion` is what the values were written for). */
+    currentVersion: resolved?.definition?.version || null,
+    /** The definition loaded but cannot run on this server version; the reason says why. */
+    incompatible: Boolean(resolved?.incompatible),
+    incompatibleReason: resolved?.incompatible ? resolved.statusReason : null,
+    /** A newer, compatible version waits in the marketplace catalog (registry-installed definitions only). */
+    updateAvailable: Boolean(update?.compatible),
+    latestVersion: update?.latestVersion || null,
+    update
   };
+}
+
+/** The newer catalog versions of the loaded definitions, or an empty map when the lookup fails. */
+async function definitionUpdates() {
+  try {
+    return await findDefinitionUpdates(integrationRegistry.list());
+  } catch (error) {
+    logger.warn('Could not check the marketplace catalogs for integration updates', {
+      component: COMPONENT,
+      error: error.message
+    });
+    return new Map();
+  }
+}
+
+/** A companion path from the query string, or null when it is not one. */
+function companionPathOf(req, res) {
+  const relPath = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!relPath || relPath.length > 255) {
+    sendBadRequest(res, 'Missing or invalid path');
+    return null;
+  }
+  return relPath;
 }
 
 async function adapterFor(id, res) {
@@ -179,11 +239,17 @@ export default function registerAdminIntegrationsRoutes(app) {
       await integrationRegistry.ensureLoaded();
       const language = languageOf(req);
       const instances = installedIntegrationService.list();
+      const updates = await definitionUpdates();
       const items = integrationRegistry
         .list()
-        .map(entry => catalogEntryView(entry, language, instances))
+        .map(entry => catalogEntryView(entry, language, instances, updates))
         .sort((a, b) => a.name.localeCompare(b.name));
-      res.json({ success: true, items, supportedProtocols: supportedProtocols() });
+      res.json({
+        success: true,
+        items,
+        supportedProtocols: supportedProtocols(),
+        serverVersion: serverVersion()
+      });
     } catch (error) {
       sendInternalError(res, error, 'list integration catalog');
     }
@@ -217,7 +283,8 @@ export default function registerAdminIntegrationsRoutes(app) {
           definition: definitionDetailView(
             entry,
             languageOf(req),
-            installedIntegrationService.list()
+            installedIntegrationService.list(),
+            await definitionUpdates()
           )
         });
       } catch (error) {
@@ -225,6 +292,52 @@ export default function registerAdminIntegrationsRoutes(app) {
       }
     }
   );
+
+  // A Markdown companion file of a loaded definition (release notes, README),
+  // served from its folder. The registry checks the path grammar and keeps
+  // the read inside the folder; a path it does not accept is a 404 like a
+  // missing file, so the response never says which paths exist.
+  app.get(
+    buildServerPath('/api/admin/integrations/catalog/:definitionId/_file'),
+    adminAuth,
+    async (req, res) => {
+      const id = definitionIdOf(req, res);
+      if (!id) return;
+      const relPath = companionPathOf(req, res);
+      if (!relPath) return;
+      try {
+        await integrationRegistry.ensureLoaded();
+        if (!integrationRegistry.get(id)) return sendNotFound(res, 'Integration definition');
+        const text = await integrationRegistry.readCompanion(id, relPath);
+        if (text === null) return sendNotFound(res, 'Companion file');
+        res.type('text/markdown; charset=utf-8').send(text);
+      } catch (error) {
+        sendInternalError(res, error, 'read integration companion file');
+      }
+    }
+  );
+
+  // Installations whose definition has a newer version in the marketplace
+  // catalog it came from (the dashboard counter and the badges).
+  app.get(buildServerPath('/api/admin/integrations/updates'), adminAuth, async (req, res) => {
+    try {
+      await integrationRegistry.ensureLoaded();
+      const updates = await definitionUpdates();
+      const definitions = [...updates.entries()].map(([id, update]) => ({ id, ...update }));
+      const installations = installedIntegrationService
+        .list()
+        .filter(instance => updates.get(instance.definition)?.compatible)
+        .map(instance => ({
+          id: instance.id,
+          definition: instance.definition,
+          definitionVersion: instance.definitionVersion || null,
+          latestVersion: updates.get(instance.definition).latestVersion
+        }));
+      res.json({ success: true, definitions, installations, count: installations.length });
+    } catch (error) {
+      sendInternalError(res, error, 'check integration updates');
+    }
+  });
 
   app.post(
     buildServerPath('/api/admin/integrations/catalog/:definitionId/_test'),
@@ -259,12 +372,19 @@ export default function registerAdminIntegrationsRoutes(app) {
   app.get(buildServerPath('/api/admin/integrations/installed'), adminAuth, async (req, res) => {
     try {
       const language = languageOf(req);
+      await integrationRegistry.ensureLoaded();
+      const updates = await definitionUpdates();
       const items = [];
       for (const instance of installedIntegrationService.list()) {
         const resolved = await installedIntegrationService.resolve(instance, language);
-        items.push(instanceView(instance, resolved, language));
+        items.push(instanceView(instance, resolved, language, updates));
       }
-      res.json({ success: true, items, security: installedIntegrationService.security() });
+      res.json({
+        success: true,
+        items,
+        security: installedIntegrationService.security(),
+        updatesAvailable: items.filter(item => item.updateAvailable).length
+      });
     } catch (error) {
       sendInternalError(res, error, 'list installed integrations');
     }
@@ -302,7 +422,9 @@ export default function registerAdminIntegrationsRoutes(app) {
       const resolved = await installedIntegrationService.resolve(id, language);
       if (!resolved) return sendNotFound(res, 'Integration');
       let actions = [];
-      if (resolved.definition) {
+      // An incompatible definition offers no tools; asking its adapter for
+      // actions would run it.
+      if (resolved.definition && !resolved.incompatible) {
         const adapter = getProtocolAdapter(resolved.definition.protocol.type);
         if (adapter) {
           actions = await adapter.discoverActions({
@@ -315,16 +437,18 @@ export default function registerAdminIntegrationsRoutes(app) {
           });
         }
       }
+      const updates = await definitionUpdates();
       res.json({
         success: true,
-        instance: instanceView(resolved.instance, resolved, language),
+        instance: instanceView(resolved.instance, resolved, language, updates),
         values: resolved.values,
         actions: actions.map(a => ({ ...a, parameters: a.parameters, sources: undefined })),
         definition: resolved.definition
           ? definitionDetailView(
               integrationRegistry.get(resolved.definition.id),
               language,
-              installedIntegrationService.list()
+              installedIntegrationService.list(),
+              updates
             )
           : null
       });
