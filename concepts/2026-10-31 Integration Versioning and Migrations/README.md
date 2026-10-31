@@ -1,6 +1,6 @@
 # Integration Versioning, Compatibility and Migrations
 
-**Date:** 2026-10-31 · **Status:** concept, decisions requested · **Epic:** [#2911](https://github.com/intrafind/ihub-apps/issues/2911) · **Builds on:** [Unified Integrations](../2026-10-20%20Unified%20Integrations/README.md), [CKAN walking skeleton](../2026-10-30%20CKAN%20Open%20Data%20Integration/README.md)
+**Date:** 2026-10-31 · **Status:** concept, decided 2026-10-31 (Daniel Manzke) · **Epic:** [#2911](https://github.com/intrafind/ihub-apps/issues/2911) · **Builds on:** [Unified Integrations](../2026-10-20%20Unified%20Integrations/README.md), [CKAN walking skeleton](../2026-10-30%20CKAN%20Open%20Data%20Integration/README.md)
 
 ## Requirement
 
@@ -31,11 +31,26 @@ An integration definition already carries a semantic `version` and every install
     {
       "version": "1.4.0",
       "date": "2026-11-12",
-      "notes": { "en": "DataStore search returns `total`; new action `resource.preview`.", "de": "…" },
+      "summary": { "en": "DataStore search returns `total`; new action `resource.preview`.", "de": "…" },
+      "notes": {                                     // companion files, the layout of docs/releases/<version>/
+        "features": "releases/1.4.0/features.md",
+        "fixes": "releases/1.4.0/fixes.md"
+      },
       "migration": "1.4.0"                           // id of a migration below, optional
     },
-    { "version": "1.3.1", "date": "2026-11-02", "notes": { "en": "Fix: publisher listing beyond 25 entries." } },
-    { "version": "1.3.0", "date": "2026-10-28", "notes": { "en": "Renamed install field `fq` to `defaultFilter`." }, "migration": "1.3.0" }
+    {
+      "version": "1.3.1",
+      "date": "2026-11-02",
+      "summary": { "en": "Fix: publisher listing beyond 25 entries." },
+      "notes": { "fixes": "releases/1.3.1/fixes.md" }
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-10-28",
+      "summary": { "en": "Renamed install field `fq` to `defaultFilter`." },
+      "notes": { "breaking": "releases/1.3.0/breaking-changes.md" },
+      "migration": "1.3.0"
+    }
   ],
   "migrations": [                                    // new, declarative
     {
@@ -56,7 +71,7 @@ An integration definition already carries a semantic `version` and every install
 }
 ```
 
-- `releases[].notes` are the changelog the marketplace and the installed list show. A release without `migration` changes nothing an installation stores.
+- `releases[]` is the release history. `summary` is one localized line for lists and the update dialog. `notes` points at Markdown companion files in the definition folder, one per category with the same names as iHub's own release notes in `docs/releases/<version>/` (`features`, `fixes`, `breaking`); a category without changes has no file. The files are companion files like `connector.js` or an OpenAPI document: a package is published exploded, so the marketplace lists, inspects and fetches each file on its own and the catalog page renders a release's notes without downloading the package, the way a skill's `SKILL.md` references its further files. A release without `migration` changes nothing an installation stores.
 - Migration ids are the version they bring an installation **up to**; the registry runs every migration with `semver.gt(id, installedVersion) && semver.lte(id, definition.version)`, in semver order. Skipping versions therefore works: 1.2.0 → 1.4.0 runs 1.3.0 and 1.4.0.
 - Declarative steps: `renameValue`, `setValue` (`when: missing | always`), `removeValue`, `mapValue` (`{ key, map: { old: new } }`), `renameAction`, `removeAction`, `renameScope`. They touch `values`, `actions.enabled/disabled/overrides`, and the app bindings `app.integrations[<instanceId>].actions` / `defaultScope` / `pinnedScope`. Nothing else is reachable from a declarative step.
 - A `module` step is a companion file exporting `up({ instance, apps, definition, from, to, log })` and returning the changed instance; it may change apps through the given list only. It is allowed only when the definition came from a registry with `trustCode` and the file's hash is in `source.integrity`, the same rule as for a `script` connector. Built-in definitions may always use modules (they ship with the server).
@@ -86,7 +101,7 @@ The server version comes from the root `package.json` (already used for the upda
 1. Snapshot `config/integrations.json` and the bound app files to `contents/backups/integrations/<id>-<from>-<timestamp>/` (same helper as the marketplace backups).
 2. Run the applicable migrations in order; each step validates against the new definition's `install` fields after it ran (`checkInstallValues`), so a migration that leaves an invalid installation fails fast.
 3. Write the installation with `definitionVersion = definition.version` and a `migrationLog` entry `{ from, to, at, steps, warnings }` (kept to the last 10); write changed apps; `invalidate`, `syncIntegrationScopeProviders`, refresh caches.
-4. On failure: restore the snapshot, keep `definitionVersion` as it was, mark the installation `status: migrationFailed` with the error, and keep it disabled for tool loading until an admin resolves it (re-run, or edit and save, which writes the current `definitionVersion`). Never half-migrated.
+4. On failure: restore the snapshot, keep `definitionVersion` as it was, mark the installation `status: migrationFailed` with the error, and keep it disabled for tool loading until an admin acts: **Re-run migration**, **Restore backup** (the pre-update definition and values), or **Uninstall** (remove the installation and its bindings). Editing and saving the installation against the new definition also clears the state, since saving writes the current `definitionVersion`. The old values are never served against the new definition. Never half-migrated.
 
 **Downgrade** (iHub downgraded, or "revert to previous version" in the marketplace): the definition is older than `definitionVersion`. Migrations are forward-only, so the runner restores the latest snapshot whose `to` equals the definition's version if one exists, otherwise marks the installation `status: needsReview` and leaves it disabled. The marketplace "Revert" button is therefore exactly "restore the backup the update made".
 
@@ -98,11 +113,11 @@ The server version comes from the root `package.json` (already used for the upda
 
 **Integrations → Installed.** The row shows the installed version; a tooltip or detail shows the definition version and the last migration. `migrationFailed` and `needsReview` rows carry a red pill with **Re-run migration** and **Restore backup**.
 
-**Integration detail (catalog).** A **Releases** tab lists the changelog; the **Compatibility** line sits next to the author and license.
+**Integration detail (catalog).** A **Releases** tab lists the history with each release's summary and renders its note files on demand (one request per file, served by the registry like every other companion file); the **Compatibility** line sits next to the author and license. The update dialog shows the summaries of the versions in between and expands to the notes.
 
 ## 5 · The marketplace repository
 
-- `integrations/<folder>/integration.json` keeps `releases`, so the catalog generator emits per item: `version`, `compatibility`, `releases` (notes only, the last 20) and `integrity`. One folder, one current version: older versions are reachable through git tags `integrations/<id>@<version>`; the catalog carries `versions: [{ version, ref }]` so a registry can serve `?version=` for a pinned install (phase 2).
+- `integrations/<folder>/integration.json` keeps `releases`, so the catalog generator emits per item: `version`, `compatibility`, `releases` (version, date, summary and the note file paths, the last 20) and `integrity` (which covers the note files like every companion file). The note files stay in the folder and are served exploded, so the catalog page fetches one file when an admin opens a release. One folder, one current version: older versions are reachable through git tags `integrations/<id>@<version>`; the catalog carries `versions: [{ version, ref }]` so a registry can serve `?version=` for a pinned install (phase 2).
 - `scripts/validate.js` fails when `version` changed without a new `releases[0]` entry of that version, when an install field or action was renamed or removed without a migration touching it (a structural diff against the previous tag), or when a `module` step exists without an `integrity` hash.
 - Registry setting `channel: stable | all` and per-item `pin: "1.3.x"` are phase 2; phase 1 always offers the catalog's current version.
 
@@ -116,16 +131,20 @@ The server version comes from the root `package.json` (already used for the upda
 
 Built-ins adopt the format in phase 1: iFinder, iAssistant, web search, the MCP and A2A definitions get `releases` with what V192–V195 did, and the first iHub release after phase 2 migrates installations through the runner instead of a numbered `server/migrations/V*.js` when only an installation's values change.
 
-## 7 · Decisions requested
+## 7 · Decisions
 
-1. **Declarative-first.** Catalog integrations without `trustCode` get declarative steps only. Agreed, or should every registry be allowed to run migration modules (the installer verifies hashes either way)?
-2. **Failure policy.** A failed migration leaves the installation disabled until an admin acts. Alternative: keep serving the old values with a warning (risk: tools call a definition the values no longer fit).
-3. **Where the notes live.** `releases` inside `integration.json` (one file, validated by schema) versus a `CHANGELOG.md` companion (nicer to write, not machine-readable). The concept takes `releases` in JSON with localized notes; Markdown in `notes` is rendered.
-4. **Numbered config migrations stay for everything that is not an installation** (platform.json, apps, groups). Only the per-installation part moves into the definition. Confirm.
-5. **Compatibility range vs minimum.** The requirement names a minimum; the concept uses a range so a definition can also say "not on iHub 7" when the adapter contract changes. Confirm the range.
+All decided 2026-10-31 (Daniel Manzke).
+
+1. **Declarative-first.** Catalog integrations without `trustCode` get declarative steps only; migration modules need a registry trusted for code. **Decided: yes, for now.**
+2. **Failure policy.** A failed migration leaves the installation disabled until an admin acts. **Decided: manual action.** The admin re-runs the migration, restores the backup, or uninstalls the integration (section 3). The old values are never served against the new definition.
+3. **Where the notes live.** **Decided: in the JSON, with the notes in files.** `releases[]` carries version, date and a one-line summary; the notes themselves are Markdown companion files per category, named like iHub's own `docs/releases/<version>/` files (`features.md`, `fixes.md`, `breaking-changes.md`). Packages are published exploded, so every file can be inspected and fetched on its own and nothing is downloaded to show a changelog, as a skill's `SKILL.md` references its further files (section 1).
+4. **Numbered config migrations stay** for everything that is not an installation (platform.json, apps, groups). Only the per-installation part moves into the definition. **Decided: yes.**
+5. **Compatibility range vs minimum.** **Decided: semver range** (`compatibility.ihub`), which covers the minimum case and lets a definition exclude a future major.
 
 ## Open questions
 
-- Should an app binding be versioned too (an app that relies on action `dataset.search` existing)? The migration rewrites bindings, which covers renames; removals leave the app with fewer tools and a warning in Admin → Apps.
-- Several installations of one definition migrate independently; one failing must not block the others. The runner treats each installation as its own unit of work.
-- Telemetry: should the installed list report "updates available" to the admin changelog ("What's New") like iHub releases do?
+All decided 2026-10-31 (Daniel Manzke).
+
+- **App bindings are not versioned.** The migration rewrites bindings, which covers renames; a removed action leaves the app with fewer tools and a warning in Admin → Apps.
+- **Installations migrate independently.** Several installations of one definition are separate units of work; one failing never blocks the others.
+- **"Updates available" stays out of What's New.** The installed list shows an update badge per row and the admin dashboard a count; What's New remains the changelog of iHub releases.

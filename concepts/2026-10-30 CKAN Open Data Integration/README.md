@@ -195,7 +195,7 @@ Code map and admin walkthrough: [docs/integrations.md](../../docs/integrations.m
 2. Should the `dcat-ap-de` metadata profile normalize `format` and `license` URIs in the adapter (so every portal looks the same to the model) or stay model guidance only? Recommendation: guidance in iteration 1, normalization in iteration 2 after seeing real questions.
 3. Does the customer need file content (CSV preview, PDF summary) in iteration 1? If yes, decision 1 above moves forward.
 4. Icon: CKAN's logo is trademarked by the Open Knowledge Foundation; use a neutral "open data" icon in the marketplace entry.
-5. Does any customer need hard isolation between publishers inside one app (`scopes.strict`, ownership checks on direct-id actions) in iteration 1? The public-portal use case does not; an internal catalog with department-level separation might, although CKAN's own organization permissions and a token per department are the simpler answer.
+5. ~~Does any customer need hard isolation between publishers inside one app (`scopes.strict`, ownership checks on direct-id actions) in iteration 1?~~ Decided 2026-10-31: no. The shipped definition keeps `strict: false`; CKAN's own organization permissions and a token per department are the simpler isolation. Revisit when a customer asks.
 
 ## Sources
 
