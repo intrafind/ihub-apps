@@ -15,6 +15,7 @@ import {
   definitionIdToDirName
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
+import { checkScriptCodeFiles } from './scriptModule.js';
 
 /**
  * Loads integration definitions (the catalog) from two trees:
@@ -143,6 +144,7 @@ export class IntegrationRegistry {
       if (typeof files[moduleFile] !== 'string') {
         throw new Error(`Connector module "${moduleFile}" is missing from the integration files`);
       }
+      checkScriptCodeFiles(validation.data, files);
     }
     if (validation.data.protocol.type === 'mcp') {
       // A registry may only publish remote servers with a fixed transport: a

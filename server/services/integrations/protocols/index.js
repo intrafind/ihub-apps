@@ -50,8 +50,11 @@ const adapters = { openapi, native, mcp, a2a, script: native };
  * @param {{ definitionIds?: string[] }} [context] - the changed definitions, when known
  */
 export async function notifyDefinitionsChanged(context = {}) {
+  const told = new Set();
   for (const [type, adapter] of Object.entries(adapters)) {
-    if (typeof adapter.onChanged !== 'function') continue;
+    // `native` and `script` are one module: told once.
+    if (typeof adapter.onChanged !== 'function' || told.has(adapter)) continue;
+    told.add(adapter);
     try {
       await adapter.onChanged(context);
     } catch (error) {

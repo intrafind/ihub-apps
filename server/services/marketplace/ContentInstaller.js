@@ -47,6 +47,10 @@ import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import integrationRegistry from '../integrations/definitions/IntegrationRegistry.js';
 import {
+  CODE_FILE_PATTERN,
+  checkScriptCodeFiles
+} from '../integrations/definitions/scriptModule.js';
+import {
   validateIntegrationDefinition,
   definitionIdToDirName,
   dirNameToDefinitionId
@@ -315,8 +319,6 @@ export async function fetchItemContent(registryId, type, name) {
   return { item, content: responseData };
 }
 
-const CODE_FILE = /\.(m?js|cjs)$/i;
-
 /** Whether `text` has the hash `expected` (`sha256-<base64>` or a hex digest). */
 export function matchesIntegrity(text, expected) {
   if (typeof expected !== 'string' || !expected) return false;
@@ -329,7 +331,8 @@ export function matchesIntegrity(text, expected) {
 /**
  * Code travels only from a registry the admin trusts for it, and only with a
  * hash per code file in the catalog, which the fetched file must match. Every
- * hash the catalog lists is checked, whatever the file.
+ * hash the catalog lists is checked, whatever the file. A `script` definition
+ * brings exactly one code file, its bundled module (`checkScriptCodeFiles`).
  *
  * @param {object} item - Catalog item
  * @param {{ files: Record<string, string|object> }} content
@@ -338,7 +341,7 @@ export function matchesIntegrity(text, expected) {
 export function verifyIntegrationCode(item, content, registry) {
   const definition = content.files['integration.json'];
   const isScript = definition?.protocol?.type === 'script';
-  const codeFiles = Object.keys(content.files).filter(file => CODE_FILE.test(file));
+  const codeFiles = Object.keys(content.files).filter(file => CODE_FILE_PATTERN.test(file));
   const integrity = item.source?.integrity || {};
   if (isScript || codeFiles.length) {
     if (registry?.trustCode !== true) {
@@ -358,6 +361,7 @@ export function verifyIntegrationCode(item, content, registry) {
       error.code = 'CODE_INTEGRITY_REQUIRED';
       throw error;
     }
+    if (isScript) checkScriptCodeFiles(definition, content.files);
   }
   for (const [file, expected] of Object.entries(integrity)) {
     const text = content.files[file];
