@@ -269,7 +269,7 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | `mcp/<storageId>__<serverId>.json` | the instance migrated from server `<serverId>` | the user behind `<storageId>` (resolved as `mcpUserTokens.js` does today) | the authorization server stored with the token (tokens are already keyed by issuer) | the config fingerprint stored with the token keeps working: a changed endpoint still invalidates it |
 | `mcp-oauth-clients` namespace | n/a | n/a | per issuer | client registrations move unchanged under `OAuthUserClient` |
 
-Breaking changes (CLAUDE.md rule): decided 2026-10-20 as a clean break for `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, the `/api/admin/configs/platform` writes for `jira`/`cloudStorage` and the three cloud file-browser routes, with aliases only for the OAuth callback URLs registered in vendor consoles. **Still open:** the same call for `/api/admin/tools` (the Tools pages); recommendation is a clean break, since `V1xx__integrations_from_tools` turns every tool file into a custom integration.
+Breaking changes (CLAUDE.md rule): decided 2026-10-20 as a clean break for `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, the `/api/admin/configs/platform` writes for `jira`/`cloudStorage` and the three cloud file-browser routes, with aliases only for the OAuth callback URLs registered in vendor consoles. Decided 2026-10-31: the same clean break for `/api/admin/tools` (the Tools pages), since `V1xx__integrations_from_tools` turns every tool file into a custom integration; before the routes go, the workflow editor's tool pickers (`fetchTools`) and the tool helpers in `client/src/api/adminApi.js` move to the Integrations API or are removed.
 
 ## 8. Non-functional
 
