@@ -34,10 +34,14 @@ export const IFINDER_DEFAULT_ENDPOINTS = Object.freeze({
 });
 
 /** An installation of `integrations.json` by id, or null. */
-export function installedInstance(id) {
+export function installedInstance(id, definitionId) {
   const installed = configCache.getIntegrations?.()?.data?.installed;
   if (!Array.isArray(installed)) return null;
-  return installed.find(instance => instance?.id === id) || null;
+  return (
+    installed.find(
+      instance => instance?.id === id && (!definitionId || instance.definition === definitionId)
+    ) || null
+  );
 }
 
 function stringList(value) {
@@ -58,7 +62,7 @@ function finite(value, fallback) {
 export function getIFinderConfig() {
   const override = overrides.getStore()?.ifinder;
   if (override) return override;
-  return iFinderConfigFromInstance(installedInstance(IFINDER_INSTANCE_ID));
+  return iFinderConfigFromInstance(installedInstance(IFINDER_INSTANCE_ID, IFINDER_DEFINITION_ID));
 }
 
 /**
@@ -134,7 +138,9 @@ export function isIFinderConfigured(cfg = getIFinderConfig()) {
 export function getIAssistantConfig() {
   const override = overrides.getStore()?.iassistant;
   if (override) return override;
-  return iAssistantConfigFromInstance(installedInstance(IASSISTANT_INSTANCE_ID));
+  return iAssistantConfigFromInstance(
+    installedInstance(IASSISTANT_INSTANCE_ID, IASSISTANT_DEFINITION_ID)
+  );
 }
 
 /**

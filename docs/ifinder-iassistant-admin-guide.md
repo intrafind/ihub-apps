@@ -298,8 +298,7 @@ the **Private key** field of the wizard; the installation stores a
         "audience": "ifinder-api",
         "defaultScope": "fa_index_read",
         "tokenExpirationSeconds": 3600,
-        "timeout": 30000,
-        "downloadDir": "/tmp/ifinder-downloads"
+        "timeout": 30000
       }
     }
   ]
