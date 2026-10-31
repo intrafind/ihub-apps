@@ -174,6 +174,18 @@ export function resolveJwtSubject(user, config) {
       }
       resolved = user.username;
       break;
+    case 'id':
+      if (!hasSubjectValue(user.id)) {
+        throw subjectFieldMissingError(field, ['user id'], user);
+      }
+      resolved = user.id;
+      break;
+    case 'name':
+      if (!hasSubjectValue(user.name)) {
+        throw subjectFieldMissingError(field, ['display name'], user);
+      }
+      resolved = user.name;
+      break;
     case String.raw`domain\username`: {
       const missing = [];
       if (!hasSubjectValue(user.domain)) missing.push('NetBIOS domain');

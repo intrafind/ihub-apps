@@ -7,14 +7,32 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   up,
   precondition,
   version,
   description,
   migrateApp,
-  iFinderInstanceFrom
+  iFinderInstanceFrom,
+  withEnvOverrides
 } from '../migrations/V192__ifinder_iassistant_installed_integrations.js';
+import {
+  checkInstallValues,
+  validateIntegrationDefinition
+} from '../validators/integrationDefinitionSchema.js';
+
+const IFINDER_DEFINITION = JSON.parse(
+  fs.readFileSync(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../defaults/integration-definitions/com.intrafind__ifinder/integration.json'
+    ),
+    'utf8'
+  )
+);
 
 function makeCtx(files) {
   const logs = [];
@@ -207,7 +225,7 @@ describe('V192 iFinder and iAssistant as installed integrations', () => {
       assert.deepEqual(app.tools, ['braveSearch']);
     });
 
-    it('binds the iAssistant installation to apps on the iAssistant model', () => {
+    it('binds the iAssistant installation to apps on the iAssistant model, without an ifinder binding', () => {
       const { app } = migrateApp({
         id: 'iassistant',
         preferredModel: 'iassistant-conversation',
@@ -215,10 +233,37 @@ describe('V192 iFinder and iAssistant as installed integrations', () => {
         integrations: { iassistant: { allowAllSearchProfiles: true } }
       });
       assert.deepEqual(app.requiredIntegrations, ['peopleDirectories']);
+      // The iAssistant installation runs on iFinder: the gate comes with the
+      // iassistant binding, and the app does not gain the iFinder tools.
       assert.deepEqual(app.integrations, {
-        ifinder: {},
         iassistant: { allowAllSearchProfiles: true, actions: [] }
       });
+    });
+
+    it('keeps the iFinder tools of an app on the iAssistant model', () => {
+      const { app } = migrateApp({
+        id: 'd',
+        preferredModel: 'iassistant-conversation',
+        requiredIntegrations: ['ifinder'],
+        tools: ['iFinder_search']
+      });
+      assert.deepEqual(app.integrations, {
+        ifinder: { actions: ['search'] },
+        iassistant: { actions: [] }
+      });
+    });
+
+    it('turns a requirement without iFinder tools into a binding without actions', () => {
+      const { app, notes } = migrateApp({
+        id: 'e',
+        requiredIntegrations: ['ifinder'],
+        tools: ['braveSearch']
+      });
+      assert.equal('requiredIntegrations' in app, false);
+      // The app only needed iFinder to be on; it never had the seven tools.
+      assert.deepEqual(app.integrations, { ifinder: { actions: [] } });
+      assert.deepEqual(app.tools, ['braveSearch']);
+      assert.ok(notes.some(n => n.includes('requiredIntegrations ifinder')));
     });
 
     it('leaves an app without iFinder or iAssistant alone', () => {
@@ -245,5 +290,99 @@ describe('V192 iFinder and iAssistant as installed integrations', () => {
 
   it('maps an empty block to an installation without values', () => {
     assert.deepEqual(iFinderInstanceFrom({}).values, {});
+  });
+
+  it('keeps a domain\\username or template subject, which the definition accepts', async () => {
+    const definition = validateIntegrationDefinition(IFINDER_DEFINITION);
+    assert.ok(definition.success, JSON.stringify(definition.errors));
+    for (const jwtSubjectField of [
+      String.raw`domain\username`,
+      String.raw`CONTOSO\${user.username}`,
+      'id',
+      'name'
+    ]) {
+      const ctx = makeCtx({
+        'config/platform.json': {
+          iFinder: {
+            enabled: true,
+            baseUrl: 'https://ifinder.example',
+            authMode: 'ihubSigned',
+            defaultSearchProfile: 'searchprofile-standard',
+            jwtSubjectField
+          }
+        }
+      });
+      await up(ctx);
+      const ifinder = ctx.files['config/integrations.json'].installed.find(i => i.id === 'ifinder');
+      assert.equal(ifinder.values.jwtSubjectField, jwtSubjectField);
+      assert.deepEqual(checkInstallValues(definition.data, ifinder.values), []);
+    }
+  });
+
+  it('accepts every migrated value of a full block', async () => {
+    const definition = validateIntegrationDefinition(IFINDER_DEFINITION);
+    const { values } = iFinderInstanceFrom(PLATFORM.iFinder);
+    assert.deepEqual(checkInstallValues(definition.data, values), []);
+  });
+
+  describe('IHUB_PLATFORM__I_FINDER__* and __I_ASSISTANT__* variables', () => {
+    const env = {
+      IHUB_PLATFORM__I_FINDER__ENABLED: 'true',
+      IHUB_PLATFORM__I_FINDER__BASE_URL: 'https://ifinder.env',
+      IHUB_PLATFORM__I_FINDER__TOKEN_EXCHANGE__OIDC_PROVIDER: 'entra',
+      IHUB_PLATFORM__I_FINDER__ALLOWED_SEARCH_PROFILES: '["hr"]',
+      IHUB_PLATFORM__I_ASSISTANT__GROUNDED_ONLY: 'true',
+      IHUB_PLATFORM__AUTH__MODE: 'local',
+      OTHER: 'x'
+    };
+
+    it('maps the variables the way configCache did, over the block', () => {
+      const { block, applied } = withEnvOverrides(
+        { enabled: false, baseUrl: 'https://ifinder.file', timeout: 5 },
+        'IHUB_PLATFORM__I_FINDER__',
+        env
+      );
+      assert.deepEqual(block, {
+        enabled: true,
+        baseUrl: 'https://ifinder.env',
+        timeout: 5,
+        tokenExchange: { oidcProvider: 'entra' },
+        allowedSearchProfiles: ['hr']
+      });
+      assert.equal(applied.length, 4);
+      assert.deepEqual(withEnvOverrides(undefined, 'IHUB_PLATFORM__I_FINDER__', {}), {
+        block: undefined,
+        applied: []
+      });
+    });
+
+    it('folds them into the installations, also when platform.json has no block', async () => {
+      const ctx = makeCtx({ 'config/platform.json': { auth: { mode: 'local' } } });
+      await up(ctx, env);
+      const { installed } = ctx.files['config/integrations.json'];
+      const ifinder = installed.find(i => i.id === 'ifinder');
+      assert.equal(ifinder.enabled, true);
+      assert.equal(ifinder.values.baseUrl, 'https://ifinder.env');
+      assert.equal(ifinder.values.tokenExchangeProvider, 'entra');
+      assert.deepEqual(ifinder.values.allowedSearchProfiles, ['hr']);
+      const iassistant = installed.find(i => i.id === 'iassistant');
+      assert.equal(iassistant.enabled, true);
+      assert.equal(iassistant.values.groundedOnly, true);
+      assert.deepEqual(ctx.files['config/platform.json'], { auth: { mode: 'local' } });
+      assert.ok(ctx.logs.some(l => l.includes('IHUB_PLATFORM__I_FINDER__BASE_URL')));
+    });
+
+    it('lets the variable win over the file, as it did at runtime', async () => {
+      const ctx = makeCtx({
+        'config/platform.json': {
+          iFinder: { enabled: false, baseUrl: 'https://ifinder.file', defaultSearchProfile: 'hr' }
+        }
+      });
+      await up(ctx, env);
+      const ifinder = ctx.files['config/integrations.json'].installed.find(i => i.id === 'ifinder');
+      assert.equal(ifinder.enabled, true);
+      assert.equal(ifinder.values.baseUrl, 'https://ifinder.env');
+      assert.equal(ifinder.values.defaultSearchProfile, 'hr');
+    });
   });
 });

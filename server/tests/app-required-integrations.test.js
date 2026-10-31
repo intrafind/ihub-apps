@@ -117,6 +117,40 @@ describe('areAppIntegrationsEnabled', () => {
     );
   });
 
+  it('keeps an iAssistant app off while the iFinder installation it runs on is off', () => {
+    const app = { id: 'iassistant', integrations: { iassistant: { actions: [] } } };
+    // The iassistant installation is on, its connection (ifinder) is not.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'iassistant' }, { id: 'ifinder', enabled: false }]
+      }),
+      ['ifinder']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, { installedIntegrations: [{ id: 'iassistant' }] }),
+      ['ifinder']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'iassistant' }, { id: 'ifinder' }]
+      }),
+      []
+    );
+    // Both off: each is reported once.
+    assert.deepEqual(missingAppIntegrations(app, {}), ['iassistant', 'ifinder']);
+    // The connection the installation names is the one that has to be on.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [
+          { id: 'iassistant', values: { connection: 'ifinder-prod' } },
+          { id: 'ifinder', enabled: false },
+          { id: 'ifinder-prod' }
+        ]
+      }),
+      []
+    );
+  });
+
   it('reports installed integrations by instance id', () => {
     const status = getIntegrationStatus({
       installedIntegrations: [{ id: 'open-data-portal' }, { id: 'archive', enabled: false }]

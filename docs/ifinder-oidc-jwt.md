@@ -366,7 +366,7 @@ requires touching iFinder — new keys are discovered through JWKS.
 | `oauth.issuer` | `platform.json`, oauth block | Absolute URL stamped into the token `iss`; must equal iFinder `issuer-uri` | **Yes — must be a URL** |
 | `audience` | installation values, advanced | `aud` claim (default `ifinder-api`) | Optional |
 | `defaultScope` | installation values, advanced (**Token scope**) | `scope` claim (e.g. `fa_index_read`) | Optional |
-| `jwtSubjectField` | installation values (**User identity sent to iFinder**) | Which user field becomes `sub` (`email`, `id`, `username`, `name`; in the JSON also `domain\\username` or a `${user.field}` template) | Recommended |
+| `jwtSubjectField` | installation values (**User identity sent to iFinder**) | Which user field becomes `sub`: `email`, `username`, `id`, `name`, `domain\\username`, or a `${user.field}` template | Recommended |
 | `tokenExpirationSeconds` | installation values, advanced | Token TTL (default `3600`) | Optional |
 | `jwt.algorithm` | `platform.json`, jwt block | Must be `RS256` (default) so JWKS is populated | Yes (default) |
 

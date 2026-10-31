@@ -13,13 +13,20 @@
  * Apps bind the installations instead of requiring the old integration id
  * and listing the tool ids:
  *
- * - `requiredIntegrations: ["ifinder"]` → `integrations.ifinder` binding
  * - `tools: ["iFinder_search", …]` or `["iFinder"]` → `integrations.ifinder.actions`
  *   (the whole list means every action, and is left out)
  * - an app on the iAssistant model (`preferredModel`) or with
  *   `iassistant.enabled` → `integrations.iassistant` with no actions
  * - a binding that existed only for its scope settings keeps the app's tools
  *   as they were: `actions: []`
+ * - `requiredIntegrations: ["ifinder"]` without iFinder tools → an
+ *   `integrations.ifinder` binding with `actions: []` (the gate, not the
+ *   tools); an app that binds `iassistant` needs no such binding, since the
+ *   iAssistant installation runs on iFinder
+ *
+ * `IHUB_PLATFORM__I_FINDER__*` and `IHUB_PLATFORM__I_ASSISTANT__*` variables,
+ * which configCache applied to the blocks in memory, are folded into the
+ * installations; the variables do nothing afterwards.
  *
  * The shipped `tools/iFinder.json` is removed: the iFinder installation owns
  * the seven actions and their tool ids (`iFinder_search`, …) stay the same.
@@ -156,8 +163,21 @@ export function migrateApp(app) {
     id => id === 'iFinder' || (typeof id === 'string' && id.startsWith(IFINDER_TOOL_PREFIX))
   );
   const hadScopeBinding = Boolean(integrations.ifinder);
+  const usesAssistant =
+    next.preferredModel === 'iassistant-conversation' ||
+    next.iassistant?.enabled === true ||
+    Boolean(integrations.iassistant);
 
-  if (requiredIFinder || iFinderRefs.length || hadScopeBinding) {
+  // A requirement alone (no iFinder tools, no scope settings) only gated the
+  // app on the integration being on. An app on the iAssistant model gets that
+  // from its `iassistant` binding; any other app keeps a binding without
+  // actions, so it does not gain the seven tools it never had.
+  const requirementOnly = requiredIFinder && !iFinderRefs.length && !hadScopeBinding;
+  const bindsIFinder = requirementOnly
+    ? !usesAssistant
+    : Boolean(iFinderRefs.length || hadScopeBinding);
+
+  if (bindsIFinder) {
     const binding = { ...(integrations.ifinder || {}) };
     if (iFinderRefs.length) {
       const all = iFinderRefs.includes('iFinder');
@@ -177,11 +197,11 @@ export function migrateApp(app) {
       notes.push(
         `iFinder tools → integrations.ifinder${binding.actions ? ` (${names.join(', ')})` : ''}`
       );
-    } else if (!requiredIFinder && hadScopeBinding) {
-      // Scope settings only: the app had no iFinder tools, and keeps none.
+    } else {
+      // Scope settings or the requirement only: the app had no iFinder tools,
+      // and keeps none.
       if (!Array.isArray(binding.actions)) binding.actions = [];
-    } else if (requiredIFinder) {
-      notes.push('requiredIntegrations ifinder → integrations.ifinder');
+      if (requirementOnly) notes.push('requiredIntegrations ifinder → integrations.ifinder');
     }
     integrations.ifinder = binding;
   }
@@ -189,13 +209,12 @@ export function migrateApp(app) {
     const rest = required.filter(id => id !== 'ifinder');
     if (rest.length) next.requiredIntegrations = rest;
     else delete next.requiredIntegrations;
+    if (requirementOnly && usesAssistant) {
+      notes.push('requiredIntegrations ifinder dropped: the iassistant binding needs iFinder');
+    }
   }
 
   // --- iAssistant: the model, or the app setting, means the app uses it
-  const usesAssistant =
-    next.preferredModel === 'iassistant-conversation' ||
-    next.iassistant?.enabled === true ||
-    Boolean(integrations.iassistant);
   if (usesAssistant) {
     const binding = { ...(integrations.iassistant || {}) };
     // iAssistant offers no tool actions; the binding carries the scopes.
@@ -209,12 +228,75 @@ export function migrateApp(app) {
   return { app: next, notes };
 }
 
-export async function up(ctx) {
+/** `UPPER_SNAKE_CASE` → `camelCase`, as configCache maps `IHUB_*` variables. */
+function toCamelCase(segment) {
+  return segment.toLowerCase().replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+function parseEnvValue(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function setNestedValue(target, pathParts, value) {
+  let current = target;
+  for (const key of pathParts.slice(0, -1)) {
+    if (current[key] === undefined || current[key] === null || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  current[pathParts.at(-1)] = value;
+}
+
+/**
+ * The platform block with the `IHUB_PLATFORM__<BLOCK>__*` overrides of the
+ * environment applied, the way configCache applied them in memory before the
+ * block moved. The overrides never reached platform.json, so the migration
+ * folds them into the installation itself; configCache ignores them from now
+ * on and warns while they are still set.
+ *
+ * @param {Object|undefined} block - `platform.iFinder` or `platform.iAssistant`
+ * @param {string} envPrefix - e.g. `IHUB_PLATFORM__I_FINDER__`
+ * @param {Object} env
+ * @returns {{ block: Object|undefined, applied: string[] }}
+ */
+export function withEnvOverrides(block, envPrefix, env = process.env) {
+  const applied = [];
+  let result = block;
+  for (const [envKey, envValue] of Object.entries(env)) {
+    if (!envKey.startsWith(envPrefix) || envValue === undefined) continue;
+    const pathParts = envKey.slice(envPrefix.length).split('__').map(toCamelCase);
+    if (pathParts.some(part => !part)) continue;
+    if (!result || typeof result !== 'object') result = {};
+    setNestedValue(result, pathParts, parseEnvValue(envValue));
+    applied.push(envKey);
+  }
+  return { block: result, applied };
+}
+
+export const IFINDER_ENV_PREFIX = 'IHUB_PLATFORM__I_FINDER__';
+export const IASSISTANT_ENV_PREFIX = 'IHUB_PLATFORM__I_ASSISTANT__';
+
+export async function up(ctx, env = process.env) {
   // 1. The installations
   if (await ctx.fileExists('config/platform.json')) {
     const platform = await ctx.readJson('config/platform.json');
-    const iFinder = platform?.iFinder;
-    const iAssistant = platform?.iAssistant;
+    const fromEnv = {
+      iFinder: withEnvOverrides(platform?.iFinder, IFINDER_ENV_PREFIX, env),
+      iAssistant: withEnvOverrides(platform?.iAssistant, IASSISTANT_ENV_PREFIX, env)
+    };
+    const iFinder = fromEnv.iFinder.block;
+    const iAssistant = fromEnv.iAssistant.block;
+    const applied = [...fromEnv.iFinder.applied, ...fromEnv.iAssistant.applied];
+    if (applied.length) {
+      ctx.log(
+        `Folded ${applied.join(', ')} into the installations; the variables are ignored from now on and can be removed`
+      );
+    }
     if (iFinder || iAssistant) {
       const config = (await ctx.fileExists('config/integrations.json'))
         ? await ctx.readJson('config/integrations.json')
