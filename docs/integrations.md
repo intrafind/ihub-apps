@@ -99,7 +99,18 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
 ```jsonc
 {
   "id": "org.example/service", // reverse-DNS, optionally one "/"
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "compatibility": { "ihub": ">=5.7.0 <7" }, // semver range the server version must satisfy
+  "releases": [
+    // newest first; releases[0].version is version
+    {
+      "version": "1.1.0",
+      "date": "2026-11-12",
+      "summary": { "en": "Search returns totals.", "de": "Suche liefert Trefferzahlen." },
+      "notes": { "features": "releases/1.1.0/features.md", "fixes": "releases/1.1.0/fixes.md" }
+    },
+    { "version": "1.0.0", "date": "2026-10-31", "summary": { "en": "First version." } }
+  ],
   "name": { "en": "…", "de": "…" },
   "protocol": {
     "type": "openapi",
@@ -178,17 +189,25 @@ A field may carry a `when` clause so it applies only in some cases: `{ "field": 
 
 `scopes.paging` makes the adapter call the scope action page by page (`offset` and `limit` name its parameters, `size` is the portal's cap per call) until a page comes back short, at most 1000 scopes. A service account's secret goes into a header (`kind: header` with `header` and `valuePrefix`, `bearer`, or `basic`); a secret in a query parameter is not supported. Field types: `string` (with optional `suggestions` and `pattern`), `number` (`min`, `max`), `boolean`, `enum` (`choices` with localized labels), `url` (a trailing slash is stripped, since the value is joined with paths in templates; `"keepTrailingSlash": true` keeps the URL verbatim for an endpoint whose exact string matters, such as the MCP server URL and the OAuth issuer of the generic MCP definition, to which per-user tokens and client registrations are bound), `secret` (always sensitive, stored in the credential store), `credential` (a reference to an entry of the credential store, picked in the wizard; the iFinder private key uses it), `instance` (another installation, whose definition `definition` names; the iAssistant `connection` field uses it), `list` (a list of strings), `file`, `directory`. `scope: "user"` fields are reserved for per-user connections. The schema is `server/validators/integrationDefinitionSchema.js`; the sources mapping is the [declared-sources format](answer-sources.md) with `urlTemplate` on top.
 
-To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document and the icon are fetched even when not listed). See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
+### Version, compatibility and release notes
+
+`version` is the definition's semantic version; every installation records the `definitionVersion` it was written for, and **Admin → Integrations → Installed** shows it per row. `compatibility.ihub` is a semver range (`">=5.7.0"`, `">=5.7.0 <7"`) the server version (the root `package.json`) must satisfy; prereleases compare with `includePrerelease`, so `5.7.0-rc.1` satisfies `>=5.7.0`. A definition without it runs on every version. A definition the server does not satisfy still loads, with status **incompatible**: its installations are listed with the reason, but they offer no tools and no scopes, cannot be edited or tested, and nothing is written for them; the catalog greys the definition and the marketplace refuses to install or update it (`INCOMPATIBLE_IHUB_VERSION`). `compatibility.schema` (integer, default 1) is the revision of the definition format the file is written in; it is read from the raw file before anything else, and a revision this server does not know is refused whole (the registry skips the folder with a warning, the marketplace rejects the item with `UNSUPPORTED_DEFINITION_SCHEMA`) instead of being loaded with its unknown fields dropped.
+
+`releases` is the release history, newest first, and `releases[0].version` must equal `version`. Each entry carries the `date` (`YYYY-MM-DD`), a one-line localized `summary` for lists and the update dialog, and under `notes` the Markdown files with the full notes per category, named like iHub's own `docs/releases/<version>/` files: `features` (`releases/<version>/features.md`), `fixes` (`fixes.md`), `breaking` (`breaking-changes.md`). A category without changes has no file. The files are companion files of the folder, fetched and served one by one (`GET …/catalog/:definitionId/_file?path=…`), so the marketplace renders a release's notes without downloading the package; a note file missing from the folder is logged and left out. `migration` names the definition migration a release needs (phase 2 of the versioning concept; not run yet). The shipped definitions (iFinder, iAssistant, web search, Jira, Entra, the MCP server and A2A agent definitions, CKAN) carry a `1.0.0` release whose notes describe what the config migrations V192–V197 did.
+
+To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document, the icon and the release-note files are fetched even when not listed). The catalog item copies `version`, `compatibility` and `releases`, so the marketplace decides compatibility and shows the history without a download. See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
 
 ## API
 
 | Route                                                                                                                 | Purpose                                                               |
 | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `GET /api/admin/integrations/catalog`                                                                                 | definitions with install state                                        |
-| `GET /api/admin/integrations/catalog/:definitionId`                                                                   | one definition (install fields, auth, actions); the id is URL-encoded |
+| `GET /api/admin/integrations/catalog/:definitionId`                                                                   | one definition (install fields, auth, actions, releases, compatibility); the id is URL-encoded |
+| `GET /api/admin/integrations/catalog/:definitionId/_file?path=…`                                                      | one Markdown companion file of the definition (a release's notes), from its folder |
+| `GET /api/admin/integrations/updates`                                                                                 | installations whose definition has a newer compatible version in the marketplace catalog it came from |
 | `POST /api/admin/integrations/catalog/:definitionId/_test`                                                            | test an unsaved instance (`values`, `auth`, `secrets`)                |
 | `POST /api/admin/integrations/catalog/_reload`                                                                        | re-read the definition folders                                        |
-| `GET` / `POST /api/admin/integrations/installed`                                                                      | list, install                                                         |
+| `GET` / `POST /api/admin/integrations/installed`                                                                      | list (with `definitionVersion`, `currentVersion`, `updateAvailable`, `incompatible`), install |
 | `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id`                                                        | read with live actions, update, uninstall                             |
 | `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable`                                             | lifecycle                                                             |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
@@ -200,7 +219,8 @@ Every write is audited with resource `integration`.
 | File                                                                                                          | Responsibility                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `server/validators/integrationDefinitionSchema.js`, `integrationsConfigSchema.js`                             | definition, `ConfigField`, installed-instance schemas; `checkInstallValues`                                                                                                 |
-| `server/services/integrations/definitions/IntegrationRegistry.js`                                             | loads shipped and installed definition folders and their OpenAPI documents                                                                                                  |
+| `server/services/integrations/definitions/IntegrationRegistry.js`                                             | loads shipped and installed definition folders and their OpenAPI documents; the `incompatible` status, release-note checks, companion files                                 |
+| `server/services/integrations/definitions/compatibility.js`, `definitionUpdates.js`                           | the compatibility check against the server version; newer catalog versions of installed definitions                                                                        |
 | `server/services/integrations/InstalledIntegrationService.js`                                                 | `integrations.json` CRUD, managed secrets, tests                                                                                                                            |
 | `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js`                | the `openapi` adapter: actions, run, test, scopes                                                                                                                           |
 | `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js`             | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them |

@@ -10,7 +10,8 @@
  *
  * Route groups:
  * - Registry management (CRUD + test + refresh)
- * - Catalog browsing (list items across all registries, get item detail)
+ * - Catalog browsing (list items across all registries, get item detail,
+ *   a Markdown companion file of an integration item such as its release notes)
  * - Item actions (install, update, uninstall, detach)
  * - Installation tracking (list all, check for updates)
  *
@@ -22,7 +23,9 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import registryService from '../../services/marketplace/RegistryService.js';
-import contentInstaller from '../../services/marketplace/ContentInstaller.js';
+import contentInstaller, {
+  fetchIntegrationCompanion
+} from '../../services/marketplace/ContentInstaller.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 
@@ -330,6 +333,37 @@ export default function registerAdminMarketplaceRoutes(app) {
     }
   );
 
+  /**
+   * GET /api/admin/marketplace/registries/:registryId/items/integration/:name/_file?path=<companion>
+   * A Markdown companion file of an integration item (a release's notes, the
+   * README), fetched from the registry without installing the item. Only
+   * paths the catalog lists for the item are served; anything else is 404.
+   */
+  app.get(
+    buildServerPath('/api/admin/marketplace/registries/:registryId/items/integration/:name/_file'),
+    adminAuth,
+    featureGuard,
+    async (req, res) => {
+      try {
+        const { registryId, name } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
+        const relPath = typeof req.query.path === 'string' ? req.query.path : '';
+        if (!relPath || relPath.length > 255) return sendError(res, 400, 'Missing or invalid path');
+        const text = await fetchIntegrationCompanion(registryId, name, relPath);
+        if (text === null) return sendError(res, 404, 'Companion file not found');
+        res.type('text/markdown; charset=utf-8').send(text);
+      } catch (error) {
+        logger.error('Error reading item companion file', {
+          component: COMPONENT,
+          error: error.message
+        });
+        const status = error.message.includes('not found') ? 404 : 500;
+        sendError(res, status, error.message);
+      }
+    }
+  );
+
   // ==========================================================================
   // Item Actions
   // ==========================================================================
@@ -366,6 +400,12 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (error.code === 'LOCAL_CONTENT_EXISTS') {
           return sendError(res, 409, error.message, error.code);
         }
+        if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
+          return sendError(res, 409, error.message, error.code);
+        }
+        if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
+          return sendError(res, 422, error.message, error.code);
+        }
         const status = error.message.includes('already installed')
           ? 409
           : error.message.startsWith('Content validation failed')
@@ -400,6 +440,12 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.json(manifest);
       } catch (error) {
         logger.error('Error updating item', { component: COMPONENT, error: error.message });
+        if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
+          return sendError(res, 409, error.message, error.code);
+        }
+        if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
+          return sendError(res, 422, error.message, error.code);
+        }
         const status = error.message.includes('not installed')
           ? 404
           : error.message.startsWith('Content validation failed')

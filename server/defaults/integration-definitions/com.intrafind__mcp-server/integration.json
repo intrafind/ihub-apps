@@ -1,6 +1,23 @@
 {
   "id": "com.intrafind/mcp-server",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: every server of mcpServers.json became an installation (migration V193); tool ids are unchanged.",
+        "de": "Erste Version: jeder Server aus mcpServers.json wurde eine Installation (Migration V193); Tool-IDs bleiben gleich."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": { "en": "MCP server", "de": "MCP-Server" },
   "description": {
     "en": "Any server that speaks the Model Context Protocol: a hosted endpoint (Streamable HTTP or SSE), a WebSocket endpoint, or a local process started by iHub (stdio). Its tools become the actions of this installation.",

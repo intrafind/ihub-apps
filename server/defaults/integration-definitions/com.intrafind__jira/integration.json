@@ -1,6 +1,23 @@
 {
   "id": "com.intrafind/jira",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: the jira installation replaces platform.jira (migration V196); six actions keep their tool ids.",
+        "de": "Erste Version: die Installation jira ersetzt platform.jira (Migration V196); sechs Aktionen behalten ihre Tool-IDs."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Atlassian Jira",
     "de": "Atlassian Jira"

@@ -1,6 +1,23 @@
 {
   "id": "com.intrafind/web-search",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: the websearch installation replaces the websearch providers and the shipped search tool files (migration V195).",
+        "de": "Erste Version: die Installation websearch ersetzt die Websuche-Provider und die mitgelieferten Suchwerkzeug-Dateien (Migration V195)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Web search",
     "de": "Websuche"

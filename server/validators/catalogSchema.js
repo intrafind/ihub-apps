@@ -76,8 +76,38 @@ const catalogItemSchema = z.object({
   license: z.string().optional(),
   /** Link to the full license text; the admin marketplace shows `license` as a link to it */
   licenseUrl: z.string().url().optional(),
-  /** Minimum iHub server version required to use this item */
-  minVersion: z.string().optional()
+  /** Minimum iHub server version required to use this item (short form of `compatibility.ihub`: `>=minVersion`) */
+  minVersion: z.string().optional(),
+  /**
+   * What the item needs to run (integrations: copied from the definition's
+   * `compatibility`): `ihub` is a semver range the server version must
+   * satisfy, `schema` the definition-format revision.
+   */
+  compatibility: z
+    .object({
+      ihub: z.string().optional(),
+      schema: z.number().int().optional()
+    })
+    .passthrough()
+    .optional(),
+  /**
+   * Release history (integrations), newest first: version, date, a localized
+   * one-line summary and the paths of the Markdown note files per category,
+   * which are companion files of the item.
+   */
+  releases: z
+    .array(
+      z
+        .object({
+          version: z.string(),
+          date: z.string().optional(),
+          summary: z.union([z.record(z.string()), z.string()]).optional(),
+          notes: z.record(z.string(), z.string()).optional(),
+          migration: z.string().optional()
+        })
+        .passthrough()
+    )
+    .optional()
 });
 
 /**

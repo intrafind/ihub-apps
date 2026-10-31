@@ -167,3 +167,28 @@ variables alone.
 - **Migrated for you:** migration V197 creates the installation (enabled when the three variables
   were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
   into the binding.
+
+## Integrations Carry a Version, Compatibility and Release Notes
+
+An integration definition now says which iHub versions it runs on and what changed between its
+versions, so the marketplace can tell you before you install or update anything.
+
+- **Compatibility:** a definition declares the iHub version range it needs. The marketplace greys
+  an item this server cannot run and says why ("needs iHub >=6.0.0, this server runs 5.7.2");
+  **Install** and **Update** are disabled, and the API refuses them too. A definition already on
+  disk that no longer matches (after a downgrade, or copied in by hand) is listed under **Admin →
+  Integrations → Installed** as **Incompatible** with the reason; its installations stay as they
+  are but offer no actions until the definition fits again.
+- **Release notes:** every version of a definition has a date, a one-line summary and Markdown
+  notes per category (features, fixes, breaking changes). The marketplace detail of an integration
+  gets a **Releases** tab that opens each release's notes on request, and the **Update** dialog
+  lists what changed between your installed version and the catalog version before you confirm.
+- **Versions in the admin UI:** the installed list shows each installation's definition version and
+  an **Update to vX available** badge when the catalog it came from offers a newer compatible
+  version; the admin dashboard counts the installations with an update waiting.
+- **Shipped definitions** declare their compatibility and carry a 1.0.0 release whose notes
+  describe what the config migrations of this release did (iFinder, iAssistant, web search, Jira,
+  Entra ID directory, MCP servers, A2A agents, CKAN).
+
+See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes)
+and [Marketplace](../../marketplace.md).

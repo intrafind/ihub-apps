@@ -2,6 +2,23 @@
   "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
   "id": "com.intrafind/iassistant",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: the iassistant installation replaces platform.iAssistant (migration V192).",
+        "de": "Erste Version: die Installation iassistant ersetzt platform.iAssistant (Migration V192)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "iAssistant",
     "de": "iAssistant"

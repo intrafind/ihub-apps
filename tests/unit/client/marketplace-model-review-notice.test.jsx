@@ -6,7 +6,7 @@
  * notice while the model is installed from the marketplace.
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 const mockApi = {
@@ -118,7 +118,12 @@ describe('marketplace detail panel', () => {
     );
     await screen.findByText(REVIEW);
     expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
+    // Update opens the dialog with what changes first; its own Update button runs it.
     fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    expect(mockApi.updateMarketplaceItem).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(screen.getByTestId('update-dialog')).getByRole('button', { name: 'Update' })
+    );
     await waitFor(() =>
       expect(mockApi.updateMarketplaceItem).toHaveBeenCalledWith('official', 'model', 'model-item')
     );

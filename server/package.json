@@ -74,6 +74,7 @@
     "pngjs": "^7.0.0",
     "pptxgenjs": "^4.0.1",
     "proxy-addr": "^2.0.7",
+    "semver": "^7.8.5",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
     "turndown": "^7.2.4",

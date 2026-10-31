@@ -2664,12 +2664,26 @@
         "category": "Category",
         "license": "License",
         "installedAt": "Installed",
-        "noPreview": "No configuration preview available."
+        "noPreview": "No configuration preview available.",
+        "compatibility": "Compatibility",
+        "compatibilityValue": "iHub {{requires}}",
+        "tabs": {
+          "overview": "Overview",
+          "content": "Content",
+          "releases": "Releases"
+        }
       },
       "modelReview": {
         "title": "Review this model before you test or enable it",
         "body": "Models from the marketplace bring their own settings, including the endpoint URL. Testing or using the model sends the API key it uses (its own or, when it has none, the provider key) and the prompts to that endpoint, so check the URL and settings first."
-      }
+      },
+      "updateAvailable": "Update available",
+      "updateTo": "Update {{from}} → {{to}}",
+      "incompatible": "Needs iHub {{requires}}; this server runs {{version}}.",
+      "incompatibleShort": "Not compatible with this iHub version",
+      "compatibilityLine": "Compatibility: iHub {{requires}}",
+      "confirmUpdate": "The installed files are replaced with the catalog version; local edits are lost.",
+      "noReleasesBetween": "The catalog lists no release notes between these versions."
     },
     "apps": {
       "edit": {
@@ -2949,7 +2963,11 @@
         "notConnected": "Not connected",
         "toolCount": "{{count}} tools",
         "userConnections_one": "1 connected user",
-        "userConnections_other": "{{count}} connected users"
+        "userConnections_other": "{{count}} connected users",
+        "incompatible": "Incompatible",
+        "definitionVersion": "Definition on disk: v{{version}}",
+        "updateAvailable": "Update to v{{version}} available",
+        "updateAvailableTitle": "Open the marketplace to update"
       },
       "source": {
         "shipped": "Shipped",
@@ -2959,7 +2977,8 @@
         "protocol": "Protocol",
         "signIn": "Sign-in",
         "actions": "Actions",
-        "publisher": "Publisher"
+        "publisher": "Publisher",
+        "compatibility": "Needs"
       },
       "actions": {
         "test": "Test {{id}}",
@@ -3041,7 +3060,9 @@
         "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
         "resetDone": "OAuth client registration reset"
       },
-      "runsCode": "Runs code on this server"
+      "runsCode": "Runs code on this server",
+      "incompatibleReason": "This installation offers no actions: its definition {{reason}}.",
+      "catalogIncompatible": "Cannot be installed: {{reason}}."
     },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
@@ -3589,6 +3610,11 @@
       },
       "actions": {
         "manageProjects": "Manage Projects"
+      },
+      "integrations": {
+        "label": "Integrations",
+        "withUpdates": "{{enabled}} / {{total}} · {{count}} updates available",
+        "incompatible": "{{count}} installations cannot run on this iHub version"
       }
     },
     "copilotAgent": {
@@ -4437,6 +4463,19 @@
         "reservedId": "This id is reserved; choose another one.",
         "name": "Give the template a name.",
         "color": "Use a hex colour like #e30613."
+      }
+    },
+    "integrationReleases": {
+      "empty": "No release notes yet.",
+      "installed": "installed",
+      "showNotes": "Show notes",
+      "hideNotes": "Hide notes",
+      "loading": "Loading…",
+      "loadFailed": "Could not load the notes.",
+      "category": {
+        "breaking": "Breaking changes",
+        "features": "Features",
+        "fixes": "Fixes"
       }
     }
   },

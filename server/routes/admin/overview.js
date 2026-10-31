@@ -11,6 +11,9 @@ import {
   getStorageSnapshot,
   summarizeStorage
 } from '../../services/systemResources.js';
+import integrationRegistry from '../../services/integrations/definitions/IntegrationRegistry.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
+import { findDefinitionUpdates } from '../../services/integrations/definitions/definitionUpdates.js';
 
 export default function registerAdminOverviewRoutes(app) {
   /**
@@ -92,6 +95,26 @@ export default function registerAdminOverviewRoutes(app) {
         // leave null
       }
 
+      // Installed integrations and how many of them have a newer definition
+      // waiting in the marketplace catalog (the installed list shows the
+      // badge per row; the dashboard shows the count). Read from the loaded
+      // registry and the cached catalogs, so it is local and cheap.
+      let integrations = { total: 0, enabled: 0, incompatible: 0, updatesAvailable: 0 };
+      try {
+        await integrationRegistry.ensureLoaded();
+        const installed = installedIntegrationService.list();
+        const updates = await findDefinitionUpdates(integrationRegistry.list());
+        integrations = {
+          total: installed.length,
+          enabled: installed.filter(i => i.enabled !== false).length,
+          incompatible: installed.filter(i => integrationRegistry.isIncompatible(i.definition))
+            .length,
+          updatesAvailable: installed.filter(i => updates.get(i.definition)?.compatible).length
+        };
+      } catch {
+        // leave the zeros
+      }
+
       res.json({
         apps: { total: apps.length, enabled: enabledApps.length },
         models: { total: allModels.length, enabled: enabledModels.length },
@@ -100,6 +123,7 @@ export default function registerAdminOverviewRoutes(app) {
         tools: { total: allTools.length, enabled: enabledTools.length },
         groups: groupCount,
         users: userCount,
+        integrations,
         storage,
         auth: {
           mode: authMode,
