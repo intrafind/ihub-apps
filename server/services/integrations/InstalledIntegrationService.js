@@ -196,6 +196,21 @@ export class InstalledIntegrationService {
         { code: 'INVALID_ID' }
       );
     }
+    // A built-in's fixed id (`ifinder`, `iassistant`) belongs to that built-in:
+    // its config is read by that id, so another definition installed under it
+    // would receive the built-in's per-user tokens.
+    const claimedBy = this.registry
+      .list()
+      .find(
+        e =>
+          e.definition.singleton?.instanceId === instance.id &&
+          e.definition.id !== instance.definition
+      );
+    if (claimedBy) {
+      throw new IntegrationError(`"${instance.id}" is reserved for ${claimedBy.definition.id}`, {
+        code: 'INVALID_ID'
+      });
+    }
     const entry = this.registry.get(instance.definition);
     if (!entry) {
       throw new IntegrationError(`Unknown integration definition "${instance.definition}"`, {
