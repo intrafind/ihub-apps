@@ -27,7 +27,7 @@ function makeCtx(files) {
     },
     listFiles: async (dir, pattern) =>
       Object.keys(files)
-        .filter(rel => rel.startsWith(`${dir}/`) && rel.endsWith(pattern.replace('*', '')))
+        .filter(rel => rel.startsWith(`${dir}/`) && rel.endsWith(pattern.replaceAll('*', '')))
         .map(rel => rel.slice(dir.length + 1)),
     log: m => logs.push(m)
   };
