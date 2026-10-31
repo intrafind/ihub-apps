@@ -2079,78 +2079,9 @@
       "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten."
     },
     "cloudStorage": {
-      "title": "Cloud-Speicher-Integration",
-      "subtitle": "Cloud-Speicher-Anbieter für Datei-Uploads konfigurieren",
-      "enabled": "Cloud-Speicher aktiviert",
-      "disabled": "Cloud-Speicher deaktiviert",
-      "noProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
-      "addProvider": "Anbieter hinzufügen",
-      "providers": "Cloud-Speicher",
-      "providerType": "Anbietertyp",
-      "selectType": "Anbietertyp auswählen",
-      "sharepoint": "SharePoint",
       "office365": "Microsoft Office 365",
       "googledrive": "Google Drive",
-      "googleDrive": "Google Drive",
-      "nextcloud": "Nextcloud",
-      "serverUrl": "Nextcloud-Server-URL",
-      "serverUrlHint": "Basis-URL Ihrer Nextcloud-Instanz (ohne abschließenden Schrägstrich).",
-      "editProvider": "Anbieter bearbeiten",
-      "deleteProvider": "Anbieter löschen",
-      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
-      "name": "Name",
-      "displayName": "Anzeigename",
-      "tenantId": "Mandanten-ID",
-      "clientId": "Client-ID",
-      "clientSecret": "Client-Secret",
-      "siteUrl": "Website-URL (Optional)",
-      "driveId": "Laufwerk-ID (Optional)",
-      "callbackUrl": "Callback-URL",
-      "callbackUrlPlaceholder": "Geben Sie oben einen Namen ein, um die Callback-URL zu generieren",
-      "callbackUrlHint": "Registrieren Sie diese URL als Weiterleitungs-URI bei Ihrem Anbieter (Azure AD / Google Cloud / Nextcloud OAuth-Admin). Lassen Sie das optionale Weiterleitungs-URI-Feld unten leer, um diesen automatisch erkannten Wert zu verwenden.",
-      "redirectUri": "Weiterleitungs-URI (Optional)",
-      "redirectUriHint": "Optional. Überschreibt die oben automatisch erkannte Callback-URL. Nützlich, wenn iHub hinter einem Proxy läuft, dessen externer Hostname sich von dem unterscheidet, was der Server sieht.",
-      "providerEnabled": "Anbieter aktiviert",
-      "save": "Speichern",
-      "cancel": "Abbrechen",
-      "saving": "Speichern...",
-      "saveSuccess": "Cloud-Speicher-Konfiguration erfolgreich gespeichert",
-      "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
-      "deleteSuccess": "Anbieter erfolgreich gelöscht",
-      "deleteError": "Fehler beim Löschen des Anbieters",
-      "sources": "Verfügbare Quellen",
-      "myDrive": "Meine Ablage",
-      "sharedDrives": "Geteilte Ablagen",
-      "sharedWithMe": "Für mich freigegeben",
-      "validation": {
-        "nameRequired": "Name ist erforderlich",
-        "displayNameRequired": "Anzeigename ist erforderlich",
-        "tenantIdRequired": "Mandanten-ID ist erforderlich",
-        "clientIdRequired": "Client-ID ist erforderlich",
-        "clientSecretRequired": "Client-Secret ist erforderlich",
-        "googledriveRequired": "Client-ID und Client-Secret sind für Google Drive erforderlich",
-        "nextcloudRequired": "Server-URL, Client-ID und Client-Secret sind für Nextcloud erforderlich"
-      },
-      "info": {
-        "title": "Über Cloud-Speicher-Integration",
-        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie Office 365 und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
-      },
-      "office365Info": {
-        "title": "Office 365-Konfiguration",
-        "description": "Um die Office 365-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
-        "step1": "App in Azure AD registrieren",
-        "step2": "API-Berechtigungen konfigurieren (Files.Read, Sites.Read.All)",
-        "step3": "Client-Secret erstellen",
-        "step4": "Mandanten-ID, Client-ID und Client-Secret hier kopieren"
-      },
-      "googleDriveInfo": {
-        "title": "Google Drive-Konfiguration",
-        "description": "Um die Google Drive-Integration zu konfigurieren, müssen Sie ein Projekt in der Google Cloud Console erstellen und die Google Drive-API aktivieren.",
-        "step1": "Projekt in Google Cloud Console erstellen",
-        "step2": "Google Drive-API aktivieren",
-        "step3": "OAuth 2.0-Anmeldedaten erstellen",
-        "step4": "Client-ID und Client-Secret hier kopieren"
-      }
+      "nextcloud": "Nextcloud"
     },
     "system": {
       "title": "Systemverwaltung",
@@ -3357,7 +3288,7 @@
         },
         "nextcloud": {
           "title": "Nextcloud",
-          "description": "Ermöglichen Sie Benutzern, Dateien aus jeder Nextcloud-Instanz während eines Chats zu durchsuchen und anzuhängen. Verwendet dieselbe `cloudStorage`-Konfiguration wie Office 365 und Google Drive."
+          "description": "Benutzer Dateien aus einer Nextcloud-Instanz im Chat durchsuchen und anhängen lassen. Installiert als Integration „nextcloud“."
         },
         "nextcloudEmbed": {
           "title": "Nextcloud-Embed",

@@ -198,15 +198,23 @@ check('drive ID with ! is accepted', (await itemsStatus(businessDriveId)) === 20
 check('drive ID with ! reaches the service', listedDrive === businessDriveId);
 check('drive ID with a slash is still rejected', (await itemsStatus('b!abc/../me')) === 400);
 
-// Only the sources the admin enabled are offered.
-configCache.getPlatform = () => ({
-  cloudStorage: {
-    enabled: true,
-    providers: [
+// Only the sources the admin enabled are offered (the provider is the
+// `office365` installation; its source switches are install values).
+configCache.getIntegrations = () => ({
+  data: {
+    installed: [
       {
         id: 'office365',
-        type: 'office365',
-        sources: { personalDrive: true, followedSites: false, teams: false }
+        definition: 'com.intrafind/office365',
+        enabled: true,
+        values: {
+          tenantId: 't',
+          clientId: 'c',
+          clientSecretRef: 's',
+          sourceFollowedSites: false,
+          sourceTeams: false
+        },
+        auth: { mode: 'oauth-user' }
       }
     ]
   }

@@ -13,11 +13,7 @@
     "name": "IntraFind Software AG",
     "verification": "intrafind"
   },
-  "categories": [
-    "directory",
-    "ldap",
-    "people"
-  ],
+  "categories": ["directory", "ldap", "people"],
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/people-directory-search.md",
   "builtIn": true,
   "protocol": {
@@ -25,9 +21,7 @@
     "module": "ldapDirectory"
   },
   "auth": {
-    "modes": [
-      "none"
-    ]
+    "modes": ["none"]
   },
   "install": [
     {
@@ -50,9 +44,7 @@
         "de": "LDAP-URL"
       },
       "pattern": "^ldaps?://[^/\\\\s?#@]+/?$",
-      "suggestions": [
-        "ldaps://x500.bund.de:636"
-      ],
+      "suggestions": ["ldaps://x500.bund.de:636"],
       "description": {
         "en": "ldaps://host:636 or ldap://host:389. Required unless a sign-in provider is reused. LDAP does not use the HTTP proxy.",
         "de": "ldaps://host:636 oder ldap://host:389. Pflicht, wenn kein Anmeldeanbieter wiederverwendet wird. LDAP nutzt den HTTP-Proxy nicht."
@@ -77,9 +69,7 @@
         "en": "Base DN",
         "de": "Basis-DN"
       },
-      "suggestions": [
-        "o=Bund,c=DE"
-      ],
+      "suggestions": ["o=Bund,c=DE"],
       "description": {
         "en": "Where people are searched, e.g. dc=corp,dc=example. Required unless a sign-in provider is reused.",
         "de": "Wo Personen gesucht werden, z. B. dc=corp,dc=example. Pflicht, wenn kein Anmeldeanbieter wiederverwendet wird."
@@ -145,10 +135,7 @@
             "en": "Service account",
             "de": "Dienstkonto"
           },
-          "requires": [
-            "bindDn",
-            "bindPasswordRef"
-          ]
+          "requires": ["bindDn", "bindPasswordRef"]
         }
       ]
     },
@@ -171,9 +158,7 @@
     {
       "key": "bindPasswordRef",
       "type": "credential",
-      "credentialTypes": [
-        "secret"
-      ],
+      "credentialTypes": ["secret"],
       "title": {
         "en": "Bind password",
         "de": "Bind-Passwort"
@@ -247,9 +232,7 @@
         "en": "LDAP browser: groups",
         "de": "LDAP-Browser: Gruppen"
       },
-      "default": [
-        "admins"
-      ],
+      "default": ["admins"],
       "when": {
         "field": "browse",
         "equals": true
@@ -319,10 +302,7 @@
             "en": "Service account",
             "de": "Dienstkonto"
           },
-          "requires": [
-            "browseBindDn",
-            "browseBindPasswordRef"
-          ]
+          "requires": ["browseBindDn", "browseBindPasswordRef"]
         }
       ]
     },
@@ -341,9 +321,7 @@
     {
       "key": "browseBindPasswordRef",
       "type": "credential",
-      "credentialTypes": [
-        "secret"
-      ],
+      "credentialTypes": ["secret"],
       "title": {
         "en": "LDAP browser: bind password",
         "de": "LDAP-Browser: Bind-Passwort"
@@ -665,9 +643,7 @@
         "en": "Trusted certificates",
         "de": "Vertrauenswürdige Zertifikate"
       },
-      "suggestions": [
-        "pca-1-verwaltung-23"
-      ],
+      "suggestions": ["pca-1-verwaltung-23"],
       "description": {
         "en": "Names of trust anchors in contents/config/certs/<name>.pem. When set, only these verify this directory’s server. Empty: Node’s roots and the server’s certificate store.",
         "de": "Namen von Vertrauensankern in contents/config/certs/<name>.pem. Gesetzt prüfen nur diese den Server dieses Verzeichnisses. Leer: die Wurzeln von Node und der Zertifikatspeicher des Servers."
@@ -756,9 +732,7 @@
       "default": 0
     }
   ],
-  "capabilities": [
-    "tools"
-  ],
+  "capabilities": ["tools"],
   "test": {
     "input": {
       "key": "query",

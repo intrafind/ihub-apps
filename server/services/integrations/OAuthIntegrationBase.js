@@ -5,8 +5,8 @@ import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
 import credentialService from '../CredentialService.js';
+import { findCloudStorageProvider } from './cloudStorageConfig.js';
 import {
   OAuthRefreshError,
   REFRESH_ERROR_CODES,
@@ -94,9 +94,11 @@ class OAuthIntegrationBase {
   }
 
   /**
-   * Load and validate a provider's configuration from cloudStorage.providers,
-   * resolving secret-reference fields through the credential service.
-   * @param {string} providerId - The provider ID from cloud storage config
+   * Load and validate a provider's configuration from its installation
+   * (`cloudStorageConfig.js`: the `office365`, `googledrive` or `nextcloud`
+   * installation, read in the provider shape), resolving secret-reference
+   * fields through the credential service.
+   * @param {string} providerId - The provider ID (the installation's `providerId` value, else its id)
    * @param {Object} options
    * @param {string} options.type - Provider type discriminator (e.g. 'googledrive')
    * @param {string[]} [options.requiredFields] - Fields that must be present on the provider
@@ -108,22 +110,9 @@ class OAuthIntegrationBase {
     providerId,
     { type, requiredFields = [], secretFields = [], postProcess } = {}
   ) {
-    if (!configCache || typeof configCache.get !== 'function') {
-      throw new Error('Platform configuration cache is not initialized');
-    }
+    const provider = findCloudStorageProvider(providerId, type);
 
-    const platformConfig = configCache.getPlatform();
-    const cloudStorage = platformConfig?.cloudStorage;
-
-    if (!cloudStorage?.enabled) {
-      throw new Error('Cloud storage is not enabled');
-    }
-
-    const provider = cloudStorage.providers?.find(
-      p => p.id === providerId && p.type === type && p.enabled !== false
-    );
-
-    if (!provider) {
+    if (!provider || provider.enabled === false) {
       throw new Error(`${this.displayName} provider '${providerId}' not found or not enabled`);
     }
 

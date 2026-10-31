@@ -188,3 +188,35 @@ Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `eviden
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
 - **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
   shipped copy is deleted on the next start.
+
+## Cloud Storage Providers Moved Out of `platform.json`
+
+Migration V200 moves `platform.cloudStorage.providers[]` into the installed integrations
+`office365` (`com.intrafind/office365`), `googledrive` (`com.intrafind/google-drive`) and
+`nextcloud` (`com.intrafind/nextcloud`) in `contents/config/integrations.json` and removes the
+block. The platform schema rejects a `cloudStorage` key afterwards, so a `platform.json`
+restored from a backup after the upgrade fails validation until the block is removed, and
+`PUT /api/admin/configs/platform` no longer carries `cloudStorage`.
+
+- **Admin pages:** **Admin → Integrations → Office 365 / Google Drive / Nextcloud**
+  (`/admin/integrations/office365`, `/admin/integrations/google-drive`,
+  `/admin/integrations/nextcloud`) and the shared provider editor are gone; use
+  **Admin → Integrations → Installed**. The user-facing routes
+  `/api/integrations/{office365,googledrive,nextcloud}/*` and `/api/auth/status` (its
+  `cloudStorage` payload is filled from the installations) are unchanged.
+- **One installation per provider type.** Each definition is a singleton; the first enabled
+  provider of a type (else the first) becomes the installation, further providers of the same type
+  are kept in `contents/config/cloudStorage.unmigrated.json` with a warning in the log. The
+  provider's `id` becomes the installation's **Provider id** value when it differs from the
+  installation id, so callback URLs, stored user tokens and the Nextcloud embed plugin's
+  `ihub_provider_id` keep working.
+- **Office 365 tenant id:** the tenant id is an identifier, not a secret; the migration decrypts
+  the former `tenantIdRef` credential into the plain `tenantId` value (the credential entry is
+  left in the store). A plain `clientSecret` in a hand-edited file goes into the credential store
+  as `integration-<id>-clientSecretRef`.
+- **Deployments that write `platform.json` themselves** (Helm values, templates, scripts) have
+  to write the installations instead; the field names are listed in
+  `docs/office365-integration.md`, `docs/google-drive-integration.md` and
+  `docs/nextcloud-integration.md`. There were no `IHUB_PLATFORM__CLOUD_STORAGE__*` environment
+  overrides in use by the shipped configuration; an override of that path no longer applies.
+- **Validator:** `server/validators/cloudStorageSchema.js` is removed.

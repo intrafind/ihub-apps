@@ -7,9 +7,9 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import { isValidGraphId } from './graphIds.js';
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
+import { findCloudStorageProvider } from './cloudStorageConfig.js';
 import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
 
 /**
@@ -49,8 +49,8 @@ class Office365Service extends OAuthIntegrationBase {
   _getProviderConfig(providerId) {
     return super._getProviderConfig(providerId, {
       type: 'office365',
-      requiredFields: ['tenantIdRef', 'clientId', 'clientSecretRef'],
-      secretFields: ['tenantIdRef', 'clientSecretRef']
+      requiredFields: ['tenantId', 'clientId', 'clientSecretRef'],
+      secretFields: ['clientSecretRef']
     });
   }
 
@@ -78,9 +78,7 @@ class Office365Service extends OAuthIntegrationBase {
    * @returns {{personalDrive: boolean, followedSites: boolean, teams: boolean}}
    */
   getEnabledSources(providerId) {
-    const provider = configCache
-      .getPlatform()
-      ?.cloudStorage?.providers?.find(p => p.id === providerId && p.type === 'office365');
+    const provider = findCloudStorageProvider(providerId, 'office365');
     if (!provider) return { personalDrive: false, followedSites: false, teams: false };
     return this._enabledSources(provider);
   }

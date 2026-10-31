@@ -14,6 +14,11 @@ import jira from './jira/index.js';
 import entra from './entra/index.js';
 import ldapDirectory from './ldapDirectory/index.js';
 import ihub from './ihub/index.js';
+import {
+  googleDriveConnector,
+  nextcloudConnector,
+  office365Connector
+} from './cloudStorage/index.js';
 
 registerConnector(ifinder);
 registerConnector(iassistant);
@@ -22,3 +27,6 @@ registerConnector(jira);
 registerConnector(entra);
 registerConnector(ldapDirectory);
 registerConnector(ihub);
+registerConnector(office365Connector);
+registerConnector(googleDriveConnector);
+registerConnector(nextcloudConnector);

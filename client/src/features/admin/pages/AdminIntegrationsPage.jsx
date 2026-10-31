@@ -10,6 +10,12 @@ import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
 
 /** The built-in definition of the LDAP people directories (one installation per directory). */
 const LDAP_DIRECTORY_DEFINITION = 'com.intrafind/ldap-directory';
+/** The cloud storage installations (one singleton per provider), by card id. */
+const CLOUD_STORAGE_INSTALLATIONS = {
+  office365: 'office365',
+  'google-drive': 'googledrive',
+  nextcloud: 'nextcloud'
+};
 
 /**
  * Integrations landing page — single entry point for every external system
@@ -17,8 +23,9 @@ const LDAP_DIRECTORY_DEFINITION = 'com.intrafind/ldap-directory';
  * category grouping, and search. Each card links to the dedicated subpage where
  * the admin actually configures the integration.
  *
- * Status detection looks at platform.json:
- *   - Cloud storage provider entries → cloudStorage.providers[id].enabled
+ * Status detection:
+ *   - Cloud storage providers → the `office365`, `googledrive` and `nextcloud`
+ *     installations (`GET /admin/integrations/installed`)
  *   - Outlook / Nextcloud Embed → corresponding feature flag in platform.features
  *   - People directories → at least one enabled installation of the LDAP people
  *     directory definition (`GET /admin/integrations/installed`)
@@ -31,6 +38,7 @@ function AdminIntegrationsPage() {
   const integrationsEnabled = featureFlags.isEnabled('integrations', true);
   const [platform, setPlatform] = useState(null);
   const [peopleDirectoriesOn, setPeopleDirectoriesOn] = useState(false);
+  const [installed, setInstalled] = useState([]);
 
   useEffect(() => {
     if (!integrationsEnabled) return;
@@ -45,39 +53,37 @@ function AdminIntegrationsPage() {
     fetchInstalledIntegrations()
       .then(res => {
         if (!cancelled) {
+          const items = res?.items || [];
+          setInstalled(items);
           setPeopleDirectoriesOn(
-            (res?.items || []).some(
+            items.some(
               item => item?.definition === LDAP_DIRECTORY_DEFINITION && item.enabled !== false
             )
           );
         }
       })
       .catch(() => {
-        if (!cancelled) setPeopleDirectoriesOn(false);
+        if (!cancelled) {
+          setInstalled([]);
+          setPeopleDirectoriesOn(false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [integrationsEnabled]);
 
-  const cloudProvider = id => {
-    const providers = platform?.cloudStorage?.providers;
-    if (!providers) return null;
-    if (Array.isArray(providers)) return providers.find(p => p?.id === id) ?? null;
-    return providers[id] ?? null;
-  };
-
   const statusFor = (kind, id) => {
     // Read from the installed integrations, not from platform.json.
     if (kind === 'peopleDirectories') return peopleDirectoriesOn ? 'connected' : 'available';
+    if (kind === 'cloud') {
+      const item = installed.find(entry => entry?.id === CLOUD_STORAGE_INSTALLATIONS[id]);
+      if (!item) return 'available';
+      if (item.enabled === false) return 'disabled';
+      return item.status?.connected ? 'connected' : 'available';
+    }
     if (!platform) return 'available';
     switch (kind) {
-      case 'cloud': {
-        const p = cloudProvider(id);
-        if (!p) return 'available';
-        if (p.enabled === false) return 'disabled';
-        return p.clientId || p.clientSecret ? 'connected' : 'available';
-      }
       case 'outlook':
         return platform.features?.outlookAddIn || platform.officeIntegration?.enabled
           ? 'connected'
@@ -155,11 +161,11 @@ function AdminIntegrationsPage() {
       title: t('admin.integrations.cards.office365.title', 'Office 365 (OneDrive / SharePoint)'),
       description: t(
         'admin.integrations.cards.office365.description',
-        'Let users browse and attach files from OneDrive / SharePoint via Microsoft Graph during a chat.'
+        'Let users browse and attach files from OneDrive / SharePoint via Microsoft Graph during a chat. Installed as the integration "office365".'
       ),
       icon: 'cloud',
       color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
-      href: '/admin/integrations/office365',
+      href: '/admin/integrations/installed',
       status: statusFor('cloud', 'office365'),
       category: storage
     },
@@ -168,11 +174,11 @@ function AdminIntegrationsPage() {
       title: t('admin.integrations.cards.googleDrive.title', 'Google Drive'),
       description: t(
         'admin.integrations.cards.googleDrive.description',
-        'Let users browse and attach files from Google Drive during a chat.'
+        'Let users browse and attach files from Google Drive during a chat. Installed as the integration "googledrive".'
       ),
       icon: 'cloud',
       color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400',
-      href: '/admin/integrations/google-drive',
+      href: '/admin/integrations/installed',
       status: statusFor('cloud', 'google-drive'),
       category: storage
     },
@@ -181,11 +187,11 @@ function AdminIntegrationsPage() {
       title: t('admin.integrations.cards.nextcloud.title', 'Nextcloud'),
       description: t(
         'admin.integrations.cards.nextcloud.description',
-        'Let users browse and attach files from any Nextcloud instance during a chat.'
+        'Let users browse and attach files from any Nextcloud instance during a chat. Installed as the integration "nextcloud".'
       ),
       icon: 'cloud',
       color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400',
-      href: '/admin/integrations/nextcloud',
+      href: '/admin/integrations/installed',
       status: statusFor('cloud', 'nextcloud'),
       category: storage
     },

@@ -163,15 +163,6 @@ const AdminInstalledIntegrationsPage = lazyWithRetry(
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
-const AdminIntegrationsOffice365Page = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsOffice365Page')
-);
-const AdminIntegrationsGoogleDrivePage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsGoogleDrivePage')
-);
-const AdminIntegrationsNextcloudPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsNextcloudPage')
-);
 const AdminDocumentTemplatesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminDocumentTemplatesPage')
 );
@@ -758,18 +749,6 @@ function App() {
             <Route
               path="integrations/installed"
               element={<LazyAdminRoute component={AdminInstalledIntegrationsPage} />}
-            />
-            <Route
-              path="integrations/office365"
-              element={<LazyAdminRoute component={AdminIntegrationsOffice365Page} />}
-            />
-            <Route
-              path="integrations/google-drive"
-              element={<LazyAdminRoute component={AdminIntegrationsGoogleDrivePage} />}
-            />
-            <Route
-              path="integrations/nextcloud"
-              element={<LazyAdminRoute component={AdminIntegrationsNextcloudPage} />}
             />
             <Route
               path="office-integration"

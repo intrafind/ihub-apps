@@ -214,3 +214,25 @@ tools and the scheduled-task tools are the actions of the built-in integration *
 - **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
   (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
   lists only custom tools from now on.
+
+## Cloud Storage Providers Are Installed Integrations
+
+Office 365 (OneDrive / SharePoint), Google Drive and Nextcloud are the built-in integrations
+**Microsoft Office 365**, **Google Drive** and **Nextcloud** (installations `office365`,
+`googledrive`, `nextcloud`) under **Admin → Integrations → Installed**, and no longer three
+pages of their own with a shared provider editor.
+
+- **One wizard per provider:** the install wizard holds the OAuth app — client id, client secret
+  as a credential reference, redirect URI — and the provider's own settings (tenant, sources,
+  site and drive restrictions; the Nextcloud server URL). **Test connection** checks the client,
+  the redirect URI (and shows the derived URL to register when the field is empty), the route to
+  the provider's authorization server and how many users are connected; **Connections** lists the
+  connected users and disconnects one.
+- **Nothing changes for users:** they connect under **Settings → Integrations** or from the file
+  picker as before, through the unchanged `/api/integrations/<provider>/…` routes, and existing
+  connections keep working — the installation's **Provider id** keeps the id the provider had.
+  The pickers, browsers and project cloud documents read the enabled providers from the
+  installations.
+- **Migrated for you:** migration V200 moves the `platform.cloudStorage` providers into the
+  three installations (Office 365's tenant id back into the clear, a plain-text secret into the
+  credential store) and removes the block.

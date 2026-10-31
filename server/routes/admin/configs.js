@@ -211,7 +211,7 @@ export default function registerAdminConfigRoutes(app) {
         };
       }
 
-      // Integration secrets (jira/cloudStorage/oidc/ldap/ntlm/iFinder) no longer
+      // Integration secrets (oidc/ldap/ntlm) no longer
       // live in platform.json — they are stored in the central credential store
       // and referenced by *Ref ids, so there is nothing to sanitize for them
       // here. Only the JWT secrets and proxy JWT provider config remain inline.
@@ -334,7 +334,6 @@ export default function registerAdminConfigRoutes(app) {
         // toggles revert on the next load.
         mcpServer:
           newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
-        cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         telemetry:
           newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
         speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
@@ -365,7 +364,7 @@ export default function registerAdminConfigRoutes(app) {
         );
       }
 
-      // Integration secrets (jira/cloudStorage/oidc/ldap/ntlm/iFinder) live in
+      // Integration secrets (oidc/ldap/ntlm) live in
       // the central credential store and are referenced by *Ref ids that are
       // plain config values — they pass through the merge above unchanged and
       // require no encrypt/restore handling here.

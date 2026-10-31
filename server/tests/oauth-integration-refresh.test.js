@@ -23,24 +23,29 @@ jest.unstable_mockModule('../utils/httpConfig.js', () => ({ httpFetch }));
 const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.unstable_mockModule('../utils/logger.js', () => ({ default: logger }));
 
-const platformConfig = {
-  cloudStorage: {
-    enabled: true,
-    providers: [
-      { id: 'g1', type: 'googledrive', clientId: 'cid', clientSecretRef: 'sec' },
-      { id: 'o1', type: 'office365', clientId: 'cid', tenantIdRef: 'ten', clientSecretRef: 'sec' },
-      {
-        id: 'n1',
-        type: 'nextcloud',
-        serverUrl: 'https://nc.example.com/',
-        clientId: 'cid',
-        clientSecretRef: 'sec'
-      }
-    ]
-  }
+// The providers are installations; `providerId` keeps the ids the tests use.
+const installation = (id, definition, providerId, values) => ({
+  id,
+  definition,
+  enabled: true,
+  values: { providerId, clientId: 'cid', clientSecretRef: 'sec', ...values },
+  auth: { mode: 'oauth-user' }
+});
+const integrations = {
+  installed: [
+    installation('googledrive', 'com.intrafind/google-drive', 'g1', {}),
+    installation('office365', 'com.intrafind/office365', 'o1', { tenantId: 'resolved-ten' }),
+    installation('nextcloud', 'com.intrafind/nextcloud', 'n1', {
+      serverUrl: 'https://nc.example.com/'
+    })
+  ]
 };
 jest.unstable_mockModule('../configCache.js', () => ({
-  default: { get: () => undefined, getPlatform: () => platformConfig }
+  default: {
+    get: () => undefined,
+    getPlatform: () => ({}),
+    getIntegrations: () => ({ data: integrations })
+  }
 }));
 jest.unstable_mockModule('../services/CredentialService.js', () => ({
   default: { resolveSecret: ref => `resolved-${ref}` }
