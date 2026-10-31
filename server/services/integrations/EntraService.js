@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import 'dotenv/config';
 import { httpFetch } from '../../utils/httpConfig.js';
+import { getEntraConfig, isEntraConfigured } from './entraConfig.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -11,34 +11,56 @@ import logger from '../../utils/logger.js';
  */
 class EntraService {
   constructor() {
-    this.clientId = process.env.AZURE_CLIENT_ID;
-    this.clientSecret = process.env.AZURE_CLIENT_SECRET;
-    this.tenantId = process.env.AZURE_TENANT_ID;
-
-    if (!this.clientId || !this.clientSecret || !this.tenantId) {
-      throw new Error('Missing Azure credentials in environment variables.');
-    }
-
-    this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
     this.graphUrl = 'https://graph.microsoft.com/v1.0';
     this.accessToken = null;
     this.tokenExpiry = null;
+    this.tokenFor = null;
   }
 
-  async _getAccessToken() {
-    if (this.accessToken && this.tokenExpiry && this.tokenExpiry > Date.now() + 60000) {
+  /** The current settings of the `entra` installation (with `AZURE_*` fallbacks). */
+  getConfig() {
+    return getEntraConfig();
+  }
+
+  isConfigured() {
+    return isEntraConfigured(this.getConfig());
+  }
+
+  /** Forget the cached token: the installation changed. */
+  resetConfig() {
+    this.accessToken = null;
+    this.tokenExpiry = null;
+    this.tokenFor = null;
+  }
+
+  async _getAccessToken(cfg = this.getConfig()) {
+    if (!cfg.enabled) {
+      throw new Error('The Microsoft Entra ID directory integration is disabled.');
+    }
+    if (!cfg.tenantId || !cfg.clientId || !cfg.clientSecret) {
+      throw new Error(
+        'The Microsoft Entra ID directory integration is missing its tenant id, client id or client secret.'
+      );
+    }
+    const key = `${cfg.tenantId}|${cfg.clientId}`;
+    if (
+      this.accessToken &&
+      this.tokenFor === key &&
+      this.tokenExpiry &&
+      this.tokenExpiry > Date.now() + 60000
+    ) {
       return this.accessToken;
     }
-
     logger.info('No valid token found, fetching a new one', { component: 'EntraService' });
+    const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(cfg.tenantId)}/oauth2/v2.0/token`;
     const params = new URLSearchParams();
-    params.append('client_id', this.clientId);
+    params.append('client_id', cfg.clientId);
     params.append('scope', 'https://graph.microsoft.com/.default');
-    params.append('client_secret', this.clientSecret);
+    params.append('client_secret', cfg.clientSecret);
     params.append('grant_type', 'client_credentials');
 
     try {
-      const response = await httpFetch(this.tokenUrl, {
+      const response = await httpFetch(tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params
@@ -56,6 +78,7 @@ class EntraService {
       const tokenData = await response.json();
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
+      this.tokenFor = key;
       logger.info('Token acquired', { component: 'EntraService' });
       return this.accessToken;
     } catch (error) {
@@ -66,7 +89,7 @@ class EntraService {
   }
 
   async _makeGraphRequest(endpoint, options = {}) {
-    const token = await this._getAccessToken();
+    const token = options.token || (await this._getAccessToken());
     const url = `${this.graphUrl}${endpoint}`;
     try {
       const response = await httpFetch(url, {

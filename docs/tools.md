@@ -5,7 +5,7 @@
 
 ## Quick Links
 
-- [Built-in Tools Reference](tool-calling.md#built-in-tools-reference) — braveSearch, read_url, iFinder, entraPeopleSearch
+- [Built-in Tools Reference](tool-calling.md#built-in-tools-reference) — braveSearch, read_url, iFinder, entraPeopleSearch (all of them actions of built-in [installed integrations](integrations.md#built-in-integrations) now)
 - [People Directory Search](people-directory-search.md) — LDAP directories (company directory, x500.bund.de) as `<directoryId>__search_people` tools; apps select them with `peopleDirectories`. The admin LDAP browser (`ldapBrowse`) returns raw entries
 - [Native Web Search Resolution](tool-calling.md#native-web-search-resolution) — how Google/OpenAI/Anthropic native search is resolved (it's not a tool)
 - [Tool Configuration Reference](tool-calling.md#tool-configuration-reference) — tool file field descriptions and `isSpecialTool` explanation

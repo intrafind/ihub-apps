@@ -1,0 +1,167 @@
+{
+  "id": "com.intrafind/entra-directory",
+  "version": "1.0.0",
+  "name": {
+    "en": "Microsoft Entra ID directory",
+    "de": "Microsoft-Entra-ID-Verzeichnis"
+  },
+  "description": {
+    "en": "Look people up in your organisation's Microsoft Entra ID (formerly Azure AD) through Microsoft Graph: find a person, read their profile, manager and teams, list a team's members. Runs with an app registration's client credentials (application permissions User.Read.All and GroupMember.Read.All), not as the signed-in user.",
+    "de": "Personen im Microsoft Entra ID (vormals Azure AD) der Organisation über Microsoft Graph nachschlagen: Person finden, Profil, Vorgesetzte und Teams lesen, Teammitglieder auflisten. Läuft mit den Client-Zugangsdaten einer App-Registrierung (Anwendungsberechtigungen User.Read.All und GroupMember.Read.All), nicht als angemeldeter Benutzer."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["directory", "microsoft", "people"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/tool-calling.md#entrapeoplesearch",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "entra"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "entra"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "tenantId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Tenant ID",
+        "de": "Mandanten-ID"
+      },
+      "description": {
+        "en": "The directory (tenant) id of your Entra ID tenant. The environment variable AZURE_TENANT_ID is used when empty.",
+        "de": "Die Verzeichnis-ID (Mandanten-ID) Ihres Entra-ID-Mandanten. Leer: die Umgebungsvariable AZURE_TENANT_ID."
+      }
+    },
+    {
+      "key": "clientId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Application (client) ID",
+        "de": "Anwendungs-ID (Client-ID)"
+      },
+      "description": {
+        "en": "The app registration that holds the Graph application permissions. The environment variable AZURE_CLIENT_ID is used when empty.",
+        "de": "Die App-Registrierung mit den Graph-Anwendungsberechtigungen. Leer: die Umgebungsvariable AZURE_CLIENT_ID."
+      }
+    },
+    {
+      "key": "clientSecretRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Client secret",
+        "de": "Client-Secret"
+      },
+      "description": {
+        "en": "A credential of type secret holding the app registration's client secret. The environment variable AZURE_CLIENT_SECRET is used when empty.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret der App-Registrierung. Leer: die Umgebungsvariable AZURE_CLIENT_SECRET."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "instructions": {
+    "en": "The directory answers who someone is, who they report to and which teams they are in. Find the person first, then use the returned id for the details; never guess an id.",
+    "de": "Das Verzeichnis beantwortet, wer jemand ist, wem die Person berichtet und in welchen Teams sie ist. Finde zuerst die Person und verwende dann die zurückgegebene ID für Details; rate nie eine ID."
+  },
+  "actions": [
+    {
+      "name": "findUser",
+      "toolId": "entraPeopleSearch_findUser",
+      "title": {
+        "en": "Find a person",
+        "de": "Person finden"
+      },
+      "description": {
+        "en": "Find a user by name or email",
+        "de": "Einen Benutzer nach Name oder E-Mail finden"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    },
+    {
+      "name": "getAllUserDetails",
+      "toolId": "entraPeopleSearch_getAllUserDetails",
+      "title": {
+        "en": "Read a person’s profile",
+        "de": "Profil einer Person lesen"
+      },
+      "description": {
+        "en": "Get all details for a user",
+        "de": "Alle Details für einen Benutzer abrufen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    },
+    {
+      "name": "getUserManager",
+      "toolId": "entraPeopleSearch_getUserManager",
+      "title": {
+        "en": "Get the manager",
+        "de": "Vorgesetzte Person abrufen"
+      },
+      "description": {
+        "en": "Get the direct manager of a user",
+        "de": "Den direkten Vorgesetzten eines Benutzers abrufen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    },
+    {
+      "name": "getUserGroups",
+      "toolId": "entraPeopleSearch_getUserGroups",
+      "title": {
+        "en": "List a person’s teams",
+        "de": "Teams einer Person auflisten"
+      },
+      "description": {
+        "en": "List teams the user belongs to",
+        "de": "Teams auflisten, denen der Benutzer angehört"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    },
+    {
+      "name": "getTeamMembers",
+      "toolId": "entraPeopleSearch_getTeamMembers",
+      "title": {
+        "en": "List team members",
+        "de": "Teammitglieder auflisten"
+      },
+      "description": {
+        "en": "Get members of a team",
+        "de": "Mitglieder eines Teams abrufen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    },
+    {
+      "name": "getUserPhotoBase64",
+      "toolId": "entraPeopleSearch_getUserPhotoBase64",
+      "title": {
+        "en": "Get the profile photo",
+        "de": "Profilfoto abrufen"
+      },
+      "description": {
+        "en": "Get a user's profile photo as Base64",
+        "de": "Profilbild eines Benutzers als Base64 abrufen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "connection": "service"
+    }
+  ]
+}

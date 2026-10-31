@@ -1178,10 +1178,11 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 ### `entraPeopleSearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Corporate directory integration for Microsoft Entra ID (formerly Azure AD)
-- **Type**: Server-side execution (method-based)
-- **Methods**: `findUser`, `getAllUserDetails`, `getUserManager`, `getUserGroups`, `getTeamMembers`, `getUserPhotoBase64`
-- **Authentication**: Requires Azure credentials and Microsoft Graph API permissions
+- **Description**: Corporate directory integration for Microsoft Entra ID (formerly Azure AD) through Microsoft Graph
+- **Type**: Actions of the built-in installed integration **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra` under **Admin → Integrations → Installed**); there is no tool file any more
+- **Tools**: `entraPeopleSearch_findUser`, `entraPeopleSearch_getAllUserDetails`, `entraPeopleSearch_getUserManager`, `entraPeopleSearch_getUserGroups`, `entraPeopleSearch_getTeamMembers`, `entraPeopleSearch_getUserPhotoBase64` (ids unchanged)
+- **Configuration**: the installation holds the tenant id, the application (client) id and the client secret as a credential reference; each falls back to `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` when empty. The app registration needs the application permissions `User.Read.All` and `GroupMember.Read.All` with admin consent. **Test** acquires a token and lists one user.
+- **Apps**: bind the installation (`"integrations": { "entra": {} }`, or `{ "actions": ["findUser", "getUserManager"] }`); an app that binds it is offered only while the installation is enabled. Migration V197 rewrote `tools: ["entraPeopleSearch"]` entries.
 - **Use Cases**: Org chart lookups, employee directory, team composition queries
 
 ## Related Documentation
