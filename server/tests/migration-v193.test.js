@@ -374,6 +374,64 @@ describe('V193 mcp servers → installed integrations', () => {
     assert.equal('config/mcpServers.json' in ctx.files, false);
   });
 
+  it('keeps a server whose id a non-MCP installation holds in a side file', async () => {
+    const taken = {
+      id: 'drawio',
+      name: 'Draw.io (self-hosted)',
+      transport: { type: 'streamableHttp', url: 'https://mcp.internal/drawio' },
+      auth: { type: 'none' }
+    };
+    const ctx = makeCtx({
+      'config/mcpServers.json': {
+        security: { blockPrivateIps: false, allowedHosts: ['mcp.internal'] },
+        servers: [taken]
+      },
+      'config/integrations.json': {
+        installed: [{ id: 'drawio', definition: 'org.example/diagrams', values: {} }]
+      },
+      'apps/diagrams.json': { id: 'diagrams', tools: ['drawio'] }
+    });
+    await up(ctx, { shippedDefinitions: SHIPPED });
+    // The catalog installation keeps the id; nothing else was installed.
+    assert.deepEqual(
+      ctx.files['config/integrations.json'].installed.map(i => i.definition),
+      ['org.example/diagrams']
+    );
+    assert.equal('config/mcpServers.json' in ctx.files, false);
+    assert.deepEqual(ctx.files['config/mcpServers.unmigrated.json'], {
+      security: { blockPrivateIps: false, allowedHosts: ['mcp.internal'] },
+      servers: [taken]
+    });
+    // The app keeps its reference; nothing was bound to the catalog integration.
+    assert.deepEqual(ctx.files['apps/diagrams.json'], { id: 'diagrams', tools: ['drawio'] });
+    assert.ok(
+      ctx.logs.some(m => m.includes('not migrated') && m.includes('"drawio"')),
+      ctx.logs.join('\n')
+    );
+  });
+
+  it('treats an MCP installation under the id as a re-run and leaves it as is', async () => {
+    const ctx = makeCtx({
+      'config/mcpServers.json': {
+        servers: [
+          {
+            id: 'drawio',
+            transport: { type: 'streamableHttp', url: 'https://mcp.draw.io/mcp' },
+            auth: { type: 'none' }
+          }
+        ]
+      },
+      'config/integrations.json': {
+        installed: [{ id: 'drawio', definition: 'mcp/drawio', values: {} }]
+      },
+      'apps/diagrams.json': { id: 'diagrams', tools: ['drawio'] }
+    });
+    await up(ctx, { shippedDefinitions: SHIPPED });
+    assert.equal(ctx.files['config/integrations.json'].installed.length, 1);
+    assert.equal('config/mcpServers.unmigrated.json' in ctx.files, false);
+    assert.deepEqual(ctx.files['apps/diagrams.json'].integrations, { drawio: {} });
+  });
+
   it('still rewrites apps when the server file is already gone', async () => {
     const ctx = makeCtx({
       'config/integrations.json': {

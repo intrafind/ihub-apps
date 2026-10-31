@@ -84,13 +84,16 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
       : [];
   if (!integrationStatus) return missingFeatures;
   const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : [];
-  const bound =
-    app.integrations && typeof app.integrations === 'object' ? Object.keys(app.integrations) : [];
+  // Optional bindings (`required: false`) never hide the app (missingAppIntegrations).
+  const bindings = app.integrations && typeof app.integrations === 'object' ? app.integrations : {};
+  const bound = Object.keys(bindings).filter(id => bindings[id]?.required !== false);
   const missingIntegrations = [];
   // iAssistant runs on the iFinder connection; the server hides the app while
   // that installation is off (missingAppIntegrations), so say so here too.
-  const connection = app.integrations?.iassistant ? ['ifinder'] : [];
-  for (const id of new Set([...required, ...bound, ...connection])) {
+  const connection = bound.includes('iassistant') ? ['ifinder'] : [];
+  // Web search hides the app only when the app says it is required.
+  const websearch = app.websearch?.enabled && app.websearch.required === true ? ['websearch'] : [];
+  for (const id of new Set([...required, ...bound, ...connection, ...websearch])) {
     if (integrationStatus[id] === true) continue;
     const name =
       INTEGRATION_NAMES[id] ||

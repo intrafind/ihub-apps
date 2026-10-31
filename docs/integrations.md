@@ -6,11 +6,11 @@ The catalog ships with the **CKAN Open Data Portal** (GovData, the German state 
 
 ## Three records
 
-| Record | Where | What |
-| --- | --- | --- |
-| **Definition** | `server/defaults/integration-definitions/<folder>/` (shipped) or `contents/integration-definitions/<folder>/` (installed from a registry; wins over a shipped one with the same id) | The catalog entry: id, version, protocol, auth modes, install fields, actions, scopes, sources. Never carries a secret or an installation's values. |
-| **Installed integration** | `contents/config/integrations.json` | The admin's instance: endpoint and other install values, sign-in mode, groups, which actions are on. One definition can be installed several times (two portals, two labels). |
-| **App binding** | `app.integrations[<instanceId>]` | Which installations an app offers, optionally narrowed to some actions, with the scope settings users start with. |
+| Record                    | Where                                                                                                                                                                               | What                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Definition**            | `server/defaults/integration-definitions/<folder>/` (shipped) or `contents/integration-definitions/<folder>/` (installed from a registry; wins over a shipped one with the same id) | The catalog entry: id, version, protocol, auth modes, install fields, actions, scopes, sources. Never carries a secret or an installation's values.                           |
+| **Installed integration** | `contents/config/integrations.json`                                                                                                                                                 | The admin's instance: endpoint and other install values, sign-in mode, groups, which actions are on. One definition can be installed several times (two portals, two labels). |
+| **App binding**           | `app.integrations[<instanceId>]`                                                                                                                                                    | Which installations an app offers, optionally narrowed to some actions, with the scope settings users start with.                                                             |
 
 A definition's folder name is its id with the one `/` replaced by `__`: `org.ckan/open-data-portal` lives in `org.ckan__open-data-portal/`.
 
@@ -54,12 +54,12 @@ A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a
 2. **Install** opens a wizard generated from the definition's install fields:
    - **Name**: the instance id apps refer to, and a label users see in the chat.
    - **Settings**: the definition's fields (URL, numbers, switches, choices). Advanced fields are folded away.
-   - **Sign-in**: the modes the definition offers and the protocol can run. *No sign-in* for public APIs; *Shared service account* stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; *OAuth client* (client credentials) and *Each user signs in* (per-user OAuth) are available for MCP servers, the other protocols get them in a later release. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
+   - **Sign-in**: the modes the definition offers and the protocol can run. _No sign-in_ for public APIs; _Shared service account_ stores one secret for everyone in the credential store (`integration-<instanceId>-<field>`), never in a config file; _OAuth client_ (client credentials) and _Each user signs in_ (per-user OAuth) are available for MCP servers, the other protocols get them in a later release. A field that applies to one mode or one transport only (its `when` clause) is shown only then.
    - **Who may use it**: groups, or everyone who may use an app that binds the integration.
-   - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is *none*; actions with a requirement (for example SQL on a DataStore) appear once the setting is on. For an MCP server the list is what the server reports after a test (or on edit); a tool the server adds later is on by default.
+   - **Actions**: which of the definition's actions the model may call. Each shows its side effect (read, write, destructive). Actions that need a token are off while sign-in is _none_; actions with a requirement (for example SQL on a DataStore) appear once the setting is on. For an MCP server the list is what the server reports after a test (or on edit); a tool the server adds later is on by default.
 3. **Test connection** runs the definition's health action with the values as entered and lists the actions the model would get (for an MCP server: connects and lists its tools). Nothing is saved until **Install**.
 
-Installed instances can be tested, edited, disabled and removed from the **Installed** tab, which also shows the connection health of an MCP installation (connected, unreachable, the number of connected users of a per-user server) and, for a per-user server, the **Connected users** dialog (disconnect a user, reset iHub's OAuth client registration). Removing an instance deletes its managed secret. Removing a *definition* (uninstalling it from the marketplace) is refused while instances of it exist.
+Installed instances can be tested, edited, disabled and removed from the **Installed** tab, which also shows the connection health of an MCP installation (connected, unreachable, the number of connected users of a per-user server) and, for a per-user server, the **Connected users** dialog (disconnect a user, reset iHub's OAuth client registration). Removing an instance deletes its managed secret. Removing a _definition_ (uninstalling it from the marketplace) is refused while instances of it exist.
 
 ## Binding to an app
 
@@ -73,15 +73,15 @@ Installed instances can be tested, edited, disabled and removed from the **Insta
 
 The built-in `ifinder` and `iassistant` installations are bound the same way, and the same object carries their scope settings (`scopePicker`, `defaultScope`, `pinnedScope`). For iFinder the `actions` are the tool names without the `iFinder_` prefix: `"integrations": { "ifinder": { "actions": ["search", "getContent"] } }`; leave `actions` out for all seven, or set `"actions": []` to bind the installation for the scope picker only. An app on the iAssistant model (`preferredModel: "iassistant-conversation"`) binds `"integrations": { "iassistant": { "actions": [] } }`. See [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 
-An app is offered to users only while every installation it binds exists and is enabled (for `iassistant`, the iFinder installation too). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools.
+An app is offered to users only while every installation it **requires** exists and is enabled (for `iassistant`, the iFinder installation too). Otherwise it is hidden like an app whose required feature is off, and **Admin → Apps** names the missing installation. Uninstalling or disabling an integration therefore takes its apps offline instead of leaving them without tools. A binding is required unless it says `"required": false`: an optional binding keeps the app available, and its actions, scopes and sources are simply not there while the installation is disabled or missing (**Required** switch per binding in the app editor). Web search works the other way round, since most apps work without it: `websearch.enabled` leaves the app available while the `websearch` installation is off, and only `websearch.required: true` hides it.
 
-In the chat, every bound action appears as a tool `<instanceId>__<action>` named *Label: Action* (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The tools menu shows one switch per installation (the instance id is the tool reference), on by default. An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
+In the chat, every bound action appears as a tool `<instanceId>__<action>` named _Label: Action_ (the built-in integrations keep their `iFinder_*` ids, see above; an MCP installation's tools keep `<toolPrefix or id__><tool>`). The tools menu shows one switch per installation (the instance id is the tool reference), on by default. An `app.tools` entry naming an installation or one of its tools selects nothing: the binding is the only way in. When the definition declares **scopes** (for CKAN: the publishers), the chat offers them in the scope picker like iFinder search profiles, and the pick is applied to the actions after the model's arguments, so the model cannot override it. A scope narrows the actions it is declared for (for CKAN: the dataset search); it is not an access boundary. Actions that take an id, such as reading one dataset, still reach records outside the scope, and a pinned scope must not be relied on for isolation. Use the system's own permissions and a token per audience for that.
 
 ## How an action runs
 
 Five protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors, and `script`, the same adapter with the connector module loaded from the definition folder; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
 
-1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is *service account*;
+1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is _service account_;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
 3. serializes array parameters as the document says (`form` style: repeated, or comma-joined for `explode: false`; `spaceDelimited` and `pipeDelimited` are not supported), or as a JSON list for RPC-style APIs such as CKAN;
 4. performs the request through the SSRF guard with the usual size caps and `hideFields`;
@@ -94,37 +94,74 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
 
 ```jsonc
 {
-  "id": "org.example/service",            // reverse-DNS, optionally one "/"
+  "id": "org.example/service", // reverse-DNS, optionally one "/"
   "version": "1.0.0",
   "name": { "en": "…", "de": "…" },
   "protocol": {
     "type": "openapi",
-    "document": "openapi.json",            // companion file in the folder
-    "baseUrl": "{baseUrl}",                // install fields as {placeholders}
+    "document": "openapi.json", // companion file in the folder
+    "baseUrl": "{baseUrl}", // install fields as {placeholders}
     "responseEnvelope": { "success": "success", "result": "result", "error": "error.message" },
-    "arrayParameterStyle": "json-list"     // openapi | repeat | comma | json-list
+    "arrayParameterStyle": "json-list" // openapi | repeat | comma | json-list
   },
-  "auth": { "modes": ["none", "service-account"],
-            "serviceAccount": { "kind": "header", "header": "Authorization", "valuePrefix": "Bearer ", "field": "apiToken" } },
+  "auth": {
+    "modes": ["none", "service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "header": "Authorization",
+      "valuePrefix": "Bearer ",
+      "field": "apiToken"
+    }
+  },
   "install": [
     { "key": "baseUrl", "type": "url", "title": { "en": "Service URL" }, "required": true },
     { "key": "apiToken", "type": "secret", "title": { "en": "API token" } },
-    { "key": "maxRows", "type": "number", "title": { "en": "Rows" }, "default": 10, "min": 1, "max": 50, "advanced": true }
+    {
+      "key": "maxRows",
+      "type": "number",
+      "title": { "en": "Rows" },
+      "default": 10,
+      "min": 1,
+      "max": 50,
+      "advanced": true
+    }
   ],
   "actions": [
-    { "name": "search", "operationId": "search", "sideEffect": "read", "dataFlow": "external",
-      "title": { "en": "Search" }, "description": { "en": "…as the model should read it…" },
+    {
+      "name": "search",
+      "operationId": "search",
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "title": { "en": "Search" },
+      "description": { "en": "…as the model should read it…" },
       "defaults": { "rows": { "value": "{maxRows}", "mode": "cap" } },
       "hideFields": ["help", "result.items[].internalId"],
-      "guidance": { "en": "When to use it." }, "examples": [{ "en": "Example question" }] },
-    { "name": "list_groups", "operationId": "listGroups", "sideEffect": "read", "dataFlow": "external",
-      "title": { "en": "List groups" }, "description": { "en": "…" } }
+      "guidance": { "en": "When to use it." },
+      "examples": [{ "en": "Example question" }]
+    },
+    {
+      "name": "list_groups",
+      "operationId": "listGroups",
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "title": { "en": "List groups" },
+      "description": { "en": "…" }
+    }
   ],
-  "scopes": { "action": "list_groups", "label": { "en": "Group" }, "map": { "id": "name", "name": "title" },
-              "paging": { "offset": "offset", "limit": "limit", "size": 25 },
-              "applyAs": { "search.fq": { "value": "group:{id}", "mode": "append" } } },
-  "sources": { "search": { "list": "items", "fields": { "id": "id", "title": "title", "snippet": "summary" },
-                           "urlTemplate": "{baseUrl}/items/{id}" } },
+  "scopes": {
+    "action": "list_groups",
+    "label": { "en": "Group" },
+    "map": { "id": "name", "name": "title" },
+    "paging": { "offset": "offset", "limit": "limit", "size": 25 },
+    "applyAs": { "search.fq": { "value": "group:{id}", "mode": "append" } }
+  },
+  "sources": {
+    "search": {
+      "list": "items",
+      "fields": { "id": "id", "title": "title", "snippet": "summary" },
+      "urlTemplate": "{baseUrl}/items/{id}"
+    }
+  },
   "health": { "action": "search", "args": { "rows": 0 } }
 }
 ```
@@ -141,36 +178,36 @@ To publish a definition, put the folder in a marketplace registry as an item of 
 
 ## API
 
-| Route | Purpose |
-| --- | --- |
-| `GET /api/admin/integrations/catalog` | definitions with install state |
-| `GET /api/admin/integrations/catalog/:definitionId` | one definition (install fields, auth, actions); the id is URL-encoded |
-| `POST /api/admin/integrations/catalog/:definitionId/_test` | test an unsaved instance (`values`, `auth`, `secrets`) |
-| `POST /api/admin/integrations/catalog/_reload` | re-read the definition folders |
-| `GET` / `POST /api/admin/integrations/installed` | list, install |
-| `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id` | read with live actions, update, uninstall |
-| `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable` | lifecycle |
-| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in |
+| Route                                                                                                                 | Purpose                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `GET /api/admin/integrations/catalog`                                                                                 | definitions with install state                                        |
+| `GET /api/admin/integrations/catalog/:definitionId`                                                                   | one definition (install fields, auth, actions); the id is URL-encoded |
+| `POST /api/admin/integrations/catalog/:definitionId/_test`                                                            | test an unsaved instance (`values`, `auth`, `secrets`)                |
+| `POST /api/admin/integrations/catalog/_reload`                                                                        | re-read the definition folders                                        |
+| `GET` / `POST /api/admin/integrations/installed`                                                                      | list, install                                                         |
+| `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id`                                                        | read with live actions, update, uninstall                             |
+| `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable`                                             | lifecycle                                                             |
+| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
 
 Every write is audited with resource `integration`.
 
 ## Code map
 
-| File | Responsibility |
-| --- | --- |
-| `server/validators/integrationDefinitionSchema.js`, `integrationsConfigSchema.js` | definition, `ConfigField`, installed-instance schemas; `checkInstallValues` |
-| `server/services/integrations/definitions/IntegrationRegistry.js` | loads shipped and installed definition folders and their OpenAPI documents |
-| `server/services/integrations/InstalledIntegrationService.js` | `integrations.json` CRUD, managed secrets, tests |
-| `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js` | the `openapi` adapter: actions, run, test, scopes |
-| `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js` | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
-| `server/services/integrations/protocols/mcp/` | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations |
-| `server/services/integrations/protocols/a2a/` | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager |
-| `server/services/integrations/integrationTools.js` | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers |
-| `server/routes/admin/integrations.js` | the admin API |
-| `server/services/marketplace/ContentInstaller.js` | marketplace type `integration` |
-| `client/src/features/admin/pages/AdminInstalledIntegrationsPage.jsx`, `components/integrations/*` | Installed and Catalog page, install wizard |
-| `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx` | app editor binding |
-| `server/defaults/integration-definitions/org.ckan__open-data-portal/` | the shipped CKAN definition |
-| `server/defaults/integration-definitions/com.intrafind__mcp-server/`, `mcp__*/` | the generic MCP server definition and the shipped hosted MCP servers |
-| `server/migrations/V193__mcp_servers_installed_integrations.js`, `V194__a2a_agents_installed_integrations.js` | `mcpServers.json` and `a2aAgents.json` → installations |
-| `server/defaults/integration-definitions/com.intrafind__ifinder/`, `com.intrafind__iassistant/` | the built-in iFinder and iAssistant definitions |
+| File                                                                                                          | Responsibility                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/validators/integrationDefinitionSchema.js`, `integrationsConfigSchema.js`                             | definition, `ConfigField`, installed-instance schemas; `checkInstallValues`                                                                                                 |
+| `server/services/integrations/definitions/IntegrationRegistry.js`                                             | loads shipped and installed definition folders and their OpenAPI documents                                                                                                  |
+| `server/services/integrations/InstalledIntegrationService.js`                                                 | `integrations.json` CRUD, managed secrets, tests                                                                                                                            |
+| `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js`                | the `openapi` adapter: actions, run, test, scopes                                                                                                                           |
+| `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js`             | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
+| `server/services/integrations/protocols/mcp/`                                                                 | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations            |
+| `server/services/integrations/protocols/a2a/`                                                                 | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager                                                                                 |
+| `server/services/integrations/integrationTools.js`                                                            | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                         |
+| `server/routes/admin/integrations.js`                                                                         | the admin API                                                                                                                                                               |
+| `server/services/marketplace/ContentInstaller.js`                                                             | marketplace type `integration`                                                                                                                                              |
+| `client/src/features/admin/pages/AdminInstalledIntegrationsPage.jsx`, `components/integrations/*`             | Installed and Catalog page, install wizard                                                                                                                                  |
+| `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx`                                 | app editor binding                                                                                                                                                          |
+| `server/defaults/integration-definitions/org.ckan__open-data-portal/`                                         | the shipped CKAN definition                                                                                                                                                 |
+| `server/defaults/integration-definitions/com.intrafind__mcp-server/`, `mcp__*/`                               | the generic MCP server definition and the shipped hosted MCP servers                                                                                                        |
+| `server/migrations/V193__mcp_servers_installed_integrations.js`, `V194__a2a_agents_installed_integrations.js` | `mcpServers.json` and `a2aAgents.json` → installations                                                                                                                      |
+| `server/defaults/integration-definitions/com.intrafind__ifinder/`, `com.intrafind__iassistant/`               | the built-in iFinder and iAssistant definitions                                                                                                                             |

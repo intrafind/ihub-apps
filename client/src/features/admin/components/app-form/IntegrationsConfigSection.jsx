@@ -115,6 +115,12 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     setBinding(id, sameAsAll ? rest : { ...rest, actions: next });
   };
 
+  // Absent `required` means required; only an explicit `false` is optional.
+  const setRequired = (id, required) => {
+    const { required: _drop, ...rest } = bindings[id] || {};
+    setBinding(id, required ? rest : { ...rest, required: false });
+  };
+
   const setScope = (id, patch) => {
     const binding = { ...(bindings[id] || {}), ...patch };
     for (const key of Object.keys(patch)) {
@@ -233,6 +239,23 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                         ))}
                       </div>
                     </div>
+                    <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                      <input
+                        type="checkbox"
+                        className={`${CHECKBOX_CLASS} mt-0.5`}
+                        checked={binding.required !== false}
+                        onChange={e => setRequired(item.id, e.target.checked)}
+                      />
+                      <span>
+                        {t('admin.apps.edit.integrations.required', 'Required')}
+                        <span className={`${HELP_CLASS} block`}>
+                          {t(
+                            'admin.apps.edit.integrations.requiredHelp',
+                            'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
+                          )}
+                        </span>
+                      </span>
+                    </label>
                     {hasScopes && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
@@ -309,10 +332,15 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                   {t('admin.apps.edit.integrations.notInstalled', 'Not installed')}
                 </span>
                 <p className={HELP_CLASS}>
-                  {t(
-                    'admin.apps.edit.integrations.notInstalledHelp',
-                    'This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.'
-                  )}
+                  {bindings[id]?.required === false
+                    ? t(
+                        'admin.apps.edit.integrations.notInstalledOptionalHelp',
+                        'This installation no longer exists. The app stays available without it; unbind it to tidy up.'
+                      )
+                    : t(
+                        'admin.apps.edit.integrations.notInstalledHelp',
+                        'This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.'
+                      )}
                 </p>
               </div>
               <button
