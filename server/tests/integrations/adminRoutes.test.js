@@ -322,6 +322,15 @@ describe('installed instances', () => {
         .send({ ...payload, id: 'a2a' })
     ).expect(400);
     expect(reserved.body.code).toBe('INVALID_ID');
+    // `workflow_docs__search` would be routed to the workflow runner.
+    for (const id of ['workflow_docs', 'Knowledge_base', 'source_x']) {
+      const prefixed = await admin(
+        request(app)
+          .post('/api/admin/integrations/installed')
+          .send({ ...payload, id })
+      ).expect(400);
+      expect(prefixed.body.code).toBe('INVALID_ID');
+    }
     const sensitive = await admin(
       request(app)
         .post('/api/admin/integrations/installed')

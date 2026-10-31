@@ -149,10 +149,10 @@
           }
         },
         {
-          "value": "HS256",
+          "value": "ES512",
           "label": {
-            "en": "HS256",
-            "de": "HS256"
+            "en": "ES512",
+            "de": "ES512"
           }
         }
       ]
@@ -205,46 +205,17 @@
     },
     {
       "key": "jwtSubjectField",
-      "type": "enum",
+      "type": "string",
       "title": {
         "en": "User identity sent to iFinder",
         "de": "An iFinder gesendete Benutzeridentität"
       },
       "description": {
-        "en": "Which attribute of the iHub user becomes the JWT subject; it must match how iFinder knows the user.",
-        "de": "Welches Attribut des iHub-Benutzers zum JWT-Subject wird; es muss dem entsprechen, wie iFinder den Benutzer kennt."
+        "en": "Which attribute of the iHub user becomes the JWT subject; it must match how iFinder knows the user. One of email, username, id, name or domain\\username, or a template with ${user.field} placeholders such as CONTOSO\\${user.username}.",
+        "de": "Welches Attribut des iHub-Benutzers zum JWT-Subject wird; es muss dem entsprechen, wie iFinder den Benutzer kennt. Einer der Werte email, username, id, name oder domain\\username, oder eine Vorlage mit ${user.field}-Platzhaltern wie CONTOSO\\${user.username}."
       },
       "default": "email",
-      "choices": [
-        {
-          "value": "email",
-          "label": {
-            "en": "E-mail",
-            "de": "E-Mail"
-          }
-        },
-        {
-          "value": "id",
-          "label": {
-            "en": "User id",
-            "de": "Benutzer-ID"
-          }
-        },
-        {
-          "value": "username",
-          "label": {
-            "en": "Username",
-            "de": "Benutzername"
-          }
-        },
-        {
-          "value": "name",
-          "label": {
-            "en": "Display name",
-            "de": "Anzeigename"
-          }
-        }
-      ]
+      "suggestions": ["email", "username", "id", "name", "domain\\username"]
     },
     {
       "key": "tokenExchangeProvider",

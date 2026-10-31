@@ -227,13 +227,17 @@ function unwrapEnvelope(envelope, data) {
   if (envelope.success) {
     const success = valueAtPath(data, envelope.success);
     if (success === false) {
+      const message = envelope.error ? valueAtPath(data, envelope.error) : undefined;
       return {
         ok: false,
         value: {
           error: true,
           type: envelope.errorType ? valueAtPath(data, envelope.errorType) : undefined,
-          message: envelope.error ? valueAtPath(data, envelope.error) : undefined,
-          details: envelope.error ? undefined : data
+          message,
+          // A validation error (CKAN: `error: { __type, <field>: [...] }`)
+          // has no message at the declared path; the error object itself
+          // then tells the model which argument was wrong.
+          details: message === undefined ? errorObjectOf(envelope, data) : undefined
         }
       };
     }
@@ -243,6 +247,17 @@ function unwrapEnvelope(envelope, data) {
     if (result !== undefined) return { ok: true, value: result };
   }
   return { ok: true, value: data };
+}
+
+/** The object the envelope's `error` path points into (`error.message` → `error`), else the body. */
+function errorObjectOf(envelope, data) {
+  if (!envelope.error) return data;
+  const segments = String(envelope.error)
+    .replace(/^\$\.?/, '')
+    .split('.');
+  const parent = segments.slice(0, -1).join('.');
+  const value = parent ? valueAtPath(data, parent) : data;
+  return value === undefined || value === null ? data : value;
 }
 
 /** Add `portalUrl` to every hit the sources mapping lists. */
@@ -315,7 +330,10 @@ export async function run({
       error: true,
       status: raw.status,
       type: !unwrapped.ok ? unwrapped.value.type : undefined,
-      message: message || raw.statusText || `HTTP ${raw.status}`
+      message: message || raw.statusText || `HTTP ${raw.status}`,
+      ...(!unwrapped.ok && unwrapped.value.details !== undefined
+        ? { details: unwrapped.value.details }
+        : {})
     };
   }
 
@@ -440,8 +458,15 @@ function finish(steps, started, actionCount) {
   };
 }
 
+/** Bounds of a paged scope listing: pages are asked for until a short one. */
+export const SCOPE_LISTING_MAX_ITEMS = 1000;
+export const SCOPE_LISTING_MAX_PAGES = 40;
+
 /**
- * The scopes the definition offers (e.g. publishers of a portal).
+ * The scopes the definition offers (e.g. publishers of a portal). With
+ * `scopes.paging`, the action is called page by page (CKAN caps a full-field
+ * organization listing at 25 per call) until a page comes back short, or the
+ * bounds above are reached.
  * @returns {Promise<Array<{ id: string, name: string, isDefault?: boolean }>>}
  */
 export async function listScopes({ definition, instance, document, security }) {
@@ -449,25 +474,36 @@ export async function listScopes({ definition, instance, document, security }) {
   if (!scopes) return [];
   const action = definition.actions.find(a => a.name === scopes.action);
   if (!action) return [];
-  const result = await run({ definition, instance, document, action, args: {}, security });
-  if (!result || result.error) {
-    throw new Error(result?.message || 'Could not list scopes');
-  }
-  const listed = valueAtPath(result, scopes.items);
-  const items = Array.isArray(listed) ? listed : [];
+  const paging = scopes.paging;
   const out = [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const id = valueAtPath(item, scopes.map.id);
-    const name = valueAtPath(item, scopes.map.name);
-    if (id === undefined || id === null || id === '') continue;
-    out.push({
-      id: String(id),
-      name: name ? String(name) : String(id),
-      isDefault: scopes.map.isDefault ? valueAtPath(item, scopes.map.isDefault) === true : undefined
-    });
+  const seen = new Set();
+  let offset = 0;
+  for (let page = 0; page < (paging ? SCOPE_LISTING_MAX_PAGES : 1); page++) {
+    const args = paging ? { [paging.offset]: offset, [paging.limit]: paging.size } : {};
+    const result = await run({ definition, instance, document, action, args, security });
+    if (!result || result.error) {
+      throw new Error(result?.message || 'Could not list scopes');
+    }
+    const listed = valueAtPath(result, scopes.items);
+    const items = Array.isArray(listed) ? listed : [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const id = valueAtPath(item, scopes.map.id);
+      const name = valueAtPath(item, scopes.map.name);
+      if (id === undefined || id === null || id === '' || seen.has(String(id))) continue;
+      seen.add(String(id));
+      out.push({
+        id: String(id),
+        name: name ? String(name) : String(id),
+        isDefault: scopes.map.isDefault
+          ? valueAtPath(item, scopes.map.isDefault) === true
+          : undefined
+      });
+    }
+    if (!paging || items.length < paging.size || out.length >= SCOPE_LISTING_MAX_ITEMS) break;
+    offset += items.length;
   }
-  return out;
+  return out.slice(0, SCOPE_LISTING_MAX_ITEMS);
 }
 
 /**

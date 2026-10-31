@@ -35,6 +35,10 @@ const integrations = {
 
 export const INTEGRATION_IDS = Object.keys(integrations);
 
+/** The built-in installations (`config/integrations.json`). */
+const IFINDER_INSTANCE_ID = 'ifinder';
+const IASSISTANT_INSTANCE_ID = 'iassistant';
+
 /**
  * Whether an installed integration (`config/integrations.json`) exists and is
  * enabled.
@@ -104,8 +108,30 @@ export function missingAppIntegrations(app, context = {}) {
     for (const key of Object.keys(bindings)) {
       if (!isInstalledIntegrationEnabled(key, context) && !missing.includes(key)) missing.push(key);
     }
+    // iAssistant runs on the iFinder installation its `connection` names
+    // (`ifinder` by default): the app is off while that connection is off too.
+    if (Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID)) {
+      const connection = iAssistantConnectionId(context);
+      if (!isInstalledIntegrationEnabled(connection, context) && !missing.includes(connection)) {
+        missing.push(connection);
+      }
+    }
   }
   return missing;
+}
+
+/**
+ * The id of the iFinder installation the iAssistant installation runs on.
+ * @param {Object} [context] - `{ installedIntegrations }`
+ * @returns {string}
+ */
+function iAssistantConnectionId(context = {}) {
+  const installed = Array.isArray(context.installedIntegrations)
+    ? context.installedIntegrations
+    : [];
+  const instance = installed.find(entry => entry?.id === IASSISTANT_INSTANCE_ID);
+  const connection = instance?.values?.connection;
+  return typeof connection === 'string' && connection ? connection : IFINDER_INSTANCE_ID;
 }
 
 /**
