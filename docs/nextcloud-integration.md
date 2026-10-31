@@ -47,50 +47,46 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 ## Step 2: Configure the Nextcloud Provider in iHub Apps
 
-You can configure providers via the admin UI or by editing `contents/config/platform.json` directly.
+Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/nextcloud`, installation `nextcloud`; see [Integrations](integrations.md#built-in-integrations)).
 
 ### Option A: Admin UI (recommended)
 
 1. Sign in to iHub Apps as an administrator.
-2. Navigate to **Admin → Integrations → Nextcloud**.
-3. Toggle **Cloud Storage** on if it isn't already.
-4. Click **Add Provider** and fill in:
-   - **Name** (provider ID, e.g. `nextcloud-main`) — must match the `<providerId>` you used in the redirect URI above.
-   - **Display Name** — the friendly label shown to end users (e.g. `Company Nextcloud`).
-   - **Provider Type** — `Nextcloud`.
-   - **Nextcloud Server URL** — base URL of the instance, no trailing slash (e.g. `https://nextcloud.example.com`).
+2. Navigate to **Admin → Integrations → Installed**, open the **Catalog** tab and click **Install** on **Nextcloud** (or edit the `nextcloud` installation an upgrade created).
+3. Fill in:
+   - **Label** — the friendly name shown to end users (e.g. `Company Nextcloud`).
+   - **Nextcloud server URL** — base URL of the instance, no trailing slash (e.g. `https://nextcloud.example.com`).
    - **Client ID** — the Client Identifier from step 1.
-   - **Client Secret** — the Secret from step 1.
-   - **Redirect URI** — optional; leave blank to let iHub auto-detect it from the request, or paste the full URL you registered in Nextcloud.
-5. Click **Save**.
+   - **Client secret** — a credential of type secret (**Admin → Credentials**) holding the Secret from step 1.
+   - **Redirect URI** — optional; leave blank to derive it from the request (**Test connection** shows the URL to register), or paste the full URL you registered in Nextcloud.
+   - **Provider id** (Advanced) — the `<providerId>` in the callback URL, in the users' stored connections and in the embed plugin's `ihub_provider_id`. Empty: `nextcloud`. An upgrade keeps the id the provider had before (e.g. `nextcloud-main`).
+4. **Test connection**, then **Install**.
 
-### Option B: `platform.json`
+### Option B: `integrations.json`
 
 ```json
 {
-  "cloudStorage": {
-    "enabled": true,
-    "providers": [
-      {
-        "id": "nextcloud-main",
-        "name": "nextcloud-main",
-        "displayName": "Company Nextcloud",
-        "type": "nextcloud",
-        "enabled": true,
+  "installed": [
+    {
+      "id": "nextcloud",
+      "definition": "com.intrafind/nextcloud",
+      "enabled": true,
+      "label": { "en": "Company Nextcloud" },
+      "values": {
         "serverUrl": "https://nextcloud.example.com",
         "clientId": "<client-identifier-from-nextcloud>",
-        "clientSecret": "<client-secret-from-nextcloud>",
+        "clientSecretRef": "integration-nextcloud-clientSecretRef",
         "redirectUri": "https://ihub.example.com/api/integrations/nextcloud/nextcloud-main/callback",
-        "sources": {
-          "personalFiles": true
-        }
-      }
-    ]
-  }
+        "providerId": "nextcloud-main"
+      },
+      "auth": { "mode": "oauth-user" },
+      "allowedGroups": []
+    }
+  ]
 }
 ```
 
-> **Secrets at rest:** `clientSecret` is automatically encrypted on disk using AES-256-GCM the next time the admin UI saves the platform config (or you can paste an already-encrypted value). Environment-variable placeholders like `${NEXTCLOUD_CLIENT_SECRET}` are passed through unchanged.
+> **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider here.
 
 ---
 

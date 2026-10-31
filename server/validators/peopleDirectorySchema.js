@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { LDAP_BROWSE_REFERENCE, PEOPLE_DIRECTORIES_REFERENCE } from '../utils/toolSelection.js';
 import {
   FORBIDDEN_ATTRIBUTES,
   MAPPED_PERSON_FIELDS,
@@ -10,12 +9,14 @@ import {
 } from '../services/peopleDirectory/presets.js';
 
 /**
- * Schema for `contents/config/peopleDirectories.json`: the directories iHub
- * searches for people. Every enabled directory becomes the tools
- * `<id>__search_people`, `<id>__get_person` and, with `units`, `<id>__list_units`
- * (see services/peopleDirectory/PeopleDirectoryService.js); with `browse` on,
- * also the admin LDAP browser tools `<id>__browse_search`, `<id>__browse_read`
- * and `<id>__browse_children` (services/peopleDirectory/LdapBrowser.js).
+ * Schema of one people directory, the shape `services/peopleDirectory/*`
+ * works on. A directory is an installation of the built-in integration
+ * `com.intrafind/ldap-directory`; `services/integrations/ldapDirectoryConfig.js`
+ * turns the installation's values into this shape. Every enabled directory
+ * becomes the tools `<id>__search_people`, `<id>__get_person` and, with
+ * `units`, `<id>__list_units` (see services/peopleDirectory/PeopleDirectoryService.js);
+ * with `browse` on, also the admin LDAP browser tools `<id>__browse_search`,
+ * `<id>__browse_read` and `<id>__browse_children` (services/peopleDirectory/LdapBrowser.js).
  *
  * Secrets are never stored here: a service bind names a credential profile
  * (`passwordRef`), and the schema refuses anything else that looks like a
@@ -24,29 +25,11 @@ import {
  */
 
 /**
- * Directory ids become the prefix of tool ids. No `_`: `isToolSelected` reads
- * the part before the first `_` as a tool's base id, so an id with one would
- * select other tools.
+ * Directory ids are installation ids (`integrationsConfigSchema`), and become
+ * the prefix of tool ids (`<id>__search_people`). The installation service
+ * refuses `__` inside an id, so the prefix parses back unambiguously.
  */
-export const PEOPLE_DIRECTORY_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,31}$/;
-
-/**
- * Ids a directory cannot take: `peopledirectories` selects every directory,
- * `ldapbrowse` every LDAP browser,
- * `new` is the admin editor's create route, and `app__`, `workflow_`,
- * `source_`, `knowledge_` and `a2a__` tool ids are routed (or hidden) by
- * prefix before a directory tool would be reached.
- */
-export const RESERVED_DIRECTORY_IDS = [
-  PEOPLE_DIRECTORIES_REFERENCE.toLowerCase(),
-  LDAP_BROWSE_REFERENCE.toLowerCase(),
-  'new',
-  'app',
-  'workflow',
-  'source',
-  'knowledge',
-  'a2a'
-];
+export const PEOPLE_DIRECTORY_ID_PATTERN = /^(?!.*__)[a-zA-Z0-9._-]{1,64}$/;
 
 /** Name of a trust anchor in the certificate store `contents/config/certs/<name>.pem`. */
 export const CERTIFICATE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
@@ -226,7 +209,7 @@ export const peopleDirectorySchema = z
       .string()
       .regex(
         PEOPLE_DIRECTORY_ID_PATTERN,
-        'Use 2 to 32 lower-case letters, digits and "-", starting with a letter or digit'
+        'Use letters, digits, dots, hyphens and underscores (no "__")'
       ),
     enabled: z.boolean().prefault(true),
     type: z.enum(['ldap']).prefault('ldap'),
@@ -320,12 +303,5 @@ export const peopleDirectoriesFileSchema = z
         });
       }
       seen.add(directory.id);
-      if (RESERVED_DIRECTORY_IDS.includes(directory.id)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['directories', index, 'id'],
-          message: `"${directory.id}" is reserved`
-        });
-      }
     });
   });

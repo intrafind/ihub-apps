@@ -3,12 +3,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  CHECKBOX_CLASS,
-  HELP_CLASS,
-  INPUT_CLASS,
-  LABEL_CLASS
-} from '../people-directories/formStyles';
+import { CHECKBOX_CLASS, HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../formStyles';
 import { CredentialRefSelect } from '../OpenApiToolEditor';
 import { fetchInstalledIntegrations } from '../../../../api/integrationsAdminApi';
 

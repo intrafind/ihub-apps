@@ -145,7 +145,7 @@ export const fetchAdminApps = async () => {
 
 /**
  * Which integrations an app can require are on, e.g.
- * `{ ifinder: true, peopleDirectories: false }`.
+ * `{ ifinder: true, 'com.intrafind/ldap-directory': false }`.
  */
 export const fetchAppIntegrationStatus = async () => {
   const response = await makeAdminApiCall('/admin/apps/integration-status');

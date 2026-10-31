@@ -163,26 +163,11 @@ const AdminInstalledIntegrationsPage = lazyWithRetry(
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
-const AdminIntegrationsOffice365Page = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsOffice365Page')
-);
-const AdminIntegrationsGoogleDrivePage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsGoogleDrivePage')
-);
-const AdminIntegrationsNextcloudPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsNextcloudPage')
-);
 const AdminDocumentTemplatesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminDocumentTemplatesPage')
 );
 const AdminDocumentTemplateEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminDocumentTemplateEditPage')
-);
-const AdminPeopleDirectoriesPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminPeopleDirectoriesPage')
-);
-const AdminPeopleDirectoryEditPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminPeopleDirectoryEditPage')
 );
 const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
@@ -764,26 +749,6 @@ function App() {
             <Route
               path="integrations/installed"
               element={<LazyAdminRoute component={AdminInstalledIntegrationsPage} />}
-            />
-            <Route
-              path="integrations/office365"
-              element={<LazyAdminRoute component={AdminIntegrationsOffice365Page} />}
-            />
-            <Route
-              path="integrations/google-drive"
-              element={<LazyAdminRoute component={AdminIntegrationsGoogleDrivePage} />}
-            />
-            <Route
-              path="integrations/nextcloud"
-              element={<LazyAdminRoute component={AdminIntegrationsNextcloudPage} />}
-            />
-            <Route
-              path="integrations/people-directories"
-              element={<LazyAdminRoute component={AdminPeopleDirectoriesPage} />}
-            />
-            <Route
-              path="integrations/people-directories/:directoryId"
-              element={<LazyAdminRoute component={AdminPeopleDirectoryEditPage} />}
             />
             <Route
               path="office-integration"

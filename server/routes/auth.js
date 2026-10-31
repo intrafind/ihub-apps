@@ -23,6 +23,7 @@ import {
 } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
 import { isJiraConfigured } from '../services/integrations/jiraConfig.js';
+import { cloudStorageStatus } from '../services/integrations/cloudStorageConfig.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
@@ -760,19 +761,10 @@ export default function registerAuthRoutes(app) {
           type: ntlmAuthConfig.type || 'ntlm'
         }
       },
-      // Add cloud storage configuration (sanitize sensitive fields)
-      cloudStorage: platform.cloudStorage
-        ? {
-            enabled: platform.cloudStorage.enabled,
-            providers: (platform.cloudStorage.providers || []).map(p => ({
-              id: p.id,
-              name: p.name,
-              displayName: p.displayName,
-              type: p.type,
-              enabled: p.enabled
-            }))
-          }
-        : { enabled: false, providers: [] },
+      // The cloud storage providers (no secrets): the `office365`,
+      // `googledrive` and `nextcloud` installations, in the shape the client
+      // always read (`cloudStorage.enabled`, `cloudStorage.providers[]`).
+      cloudStorage: cloudStorageStatus(),
       // Expose Jira integration status (no secrets)
       jira: {
         enabled: isJiraConfigured()

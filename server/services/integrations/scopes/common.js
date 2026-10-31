@@ -16,10 +16,15 @@ export const MAX_SCOPE_ID_LENGTH = 256;
  * An app's scope settings for one integration.
  * @param {Object} app
  * @param {string} integrationId
+ * @param {string} [definitionId] - The installation's definition, whose binding applies when the installation has none of its own
  * @returns {{ scopePicker: string, defaultScope: string|null, pinnedScope: string|null }}
  */
-export function appScopeSettings(app, integrationId) {
-  const settings = app?.integrations?.[integrationId] || {};
+export function appScopeSettings(app, integrationId, definitionId) {
+  const bindings = app?.integrations || {};
+  // An installation's own binding, else the binding of its definition
+  // (`"com.intrafind/ldap-directory": {}` binds every installation of it).
+  const settings =
+    bindings[integrationId] || (definitionId ? bindings[definitionId] : undefined) || {};
   const text = value => (typeof value === 'string' && value ? value : null);
   return {
     ...settings,

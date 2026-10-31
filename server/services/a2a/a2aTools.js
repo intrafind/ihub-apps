@@ -638,25 +638,17 @@ export function nonAgentToolRefs(tool) {
  * @param {string} agentId
  * @param {Object} [taken]
  * @param {Array<Object>} [taken.tools] - Local and discovered tool definitions
- * @param {Array<{id: string, toolPrefix?: string}>} [taken.mcpServers] - Configured MCP servers
- * @param {Array<{id: string}>} [taken.peopleDirectories] - Configured people directories,
- *   switched-off ones included (their tools are not loaded yet when agents are checked)
- * @returns {{kind: 'tool'|'mcpServer'|'peopleDirectory', id: string}|null} The first clash, or null
+ * @param {Array<{id: string, toolPrefix?: string}>} [taken.mcpServers] - Other installed
+ *   integrations (MCP servers, people directories, catalog integrations)
+ * @returns {{kind: 'tool'|'mcpServer', id: string}|null} The first clash, or null
  *
  * @example
  *   findAgentIdConflict('jira', { tools: [{ id: 'jira_searchTickets' }] });
  *   // → { kind: 'tool', id: 'jira_searchTickets' }
  */
-export function findAgentIdConflict(
-  agentId,
-  { tools = [], mcpServers = [], peopleDirectories = [] } = {}
-) {
+export function findAgentIdConflict(agentId, { tools = [], mcpServers = [] } = {}) {
   if (typeof agentId !== 'string' || !agentId) return null;
   const wanted = agentId.toLowerCase();
-  const directory = (peopleDirectories || []).find(
-    entry => typeof entry?.id === 'string' && entry.id.toLowerCase() === wanted
-  );
-  if (directory) return { kind: 'peopleDirectory', id: directory.id };
   for (const server of mcpServers || []) {
     if (typeof server?.id !== 'string') continue;
     // A custom `toolPrefix` (`dio_`) gives the server's tools another base id.

@@ -10,8 +10,9 @@
  * the text is a snapshot taken at pick time (spec 3 §4). A later refresh
  * downloads again with the same user's token.
  *
- * Each kind is available when the `integrations` feature is on and
- * `platform.cloudStorage.providers` holds an enabled provider of its type.
+ * Each kind is available when the `integrations` feature is on and the
+ * provider's installation (`office365`, `googledrive`, `nextcloud`; see
+ * `services/integrations/cloudStorageConfig.js`) is enabled.
  * The feature is checked again when a document is downloaded, for a pick and
  * a refresh alike: a refresh skips the availability check (an item of a kind
  * the admin switched off may still be saved), but it must not reach a cloud
@@ -24,6 +25,7 @@ import { z } from 'zod';
 import configCache from '../../../configCache.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
 import { isValidGraphId } from '../../integrations/graphIds.js';
+import { listCloudStorageProviders } from '../../integrations/cloudStorageConfig.js';
 import { OAuthRefreshError } from '../../integrations/oauthRefreshError.js';
 import { ProjectError } from '../projectErrors.js';
 import { registerItemKind } from './registry.js';
@@ -40,9 +42,9 @@ const optionalMeta = {
 };
 
 function providerEnabled(type) {
-  return ({ platform, features }) =>
+  return ({ features }) =>
     isFeatureEnabled(INTEGRATIONS_FEATURE, features || {}) &&
-    (platform?.cloudStorage?.providers || []).some(
+    listCloudStorageProviders().some(
       provider => provider?.type === type && provider.enabled !== false
     );
 }

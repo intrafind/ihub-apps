@@ -1,0 +1,99 @@
+{
+  "id": "com.intrafind/nextcloud",
+  "version": "1.0.0",
+  "name": {
+    "en": "Nextcloud",
+    "de": "Nextcloud"
+  },
+  "description": {
+    "en": "Let users browse and attach files from a Nextcloud instance, each signed in with their own Nextcloud account (OAuth 2.0). Holds the instance URL and the OAuth client registered in Nextcloud.",
+    "de": "Benutzer Dateien aus einer Nextcloud-Instanz durchsuchen und anhängen lassen, jeder mit dem eigenen Nextcloud-Konto angemeldet (OAuth 2.0). Hält die Instanz-URL und den in Nextcloud registrierten OAuth-Client."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["storage", "files"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/nextcloud-integration.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "nextcloud"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "nextcloud"
+  },
+  "auth": {
+    "modes": ["oauth-user"]
+  },
+  "install": [
+    {
+      "key": "serverUrl",
+      "type": "url",
+      "required": true,
+      "title": {
+        "en": "Nextcloud server URL",
+        "de": "Nextcloud-Server-URL"
+      },
+      "description": {
+        "en": "The base URL of the instance, e.g. https://nextcloud.example.com; the base for OAuth, OCS and WebDAV.",
+        "de": "Die Basis-URL der Instanz, z. B. https://nextcloud.example.com; Basis für OAuth, OCS und WebDAV."
+      }
+    },
+    {
+      "key": "clientId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Client ID",
+        "de": "Client-ID"
+      },
+      "description": {
+        "en": "The Client Identifier of the OAuth 2.0 client registered in Nextcloud (Settings → Security).",
+        "de": "Die Client-Kennung des in Nextcloud registrierten OAuth-2.0-Clients (Einstellungen → Sicherheit)."
+      }
+    },
+    {
+      "key": "clientSecretRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "required": true,
+      "title": {
+        "en": "Client secret",
+        "de": "Client-Secret"
+      },
+      "description": {
+        "en": "A credential of type secret holding the OAuth client secret.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem OAuth-Client-Secret."
+      }
+    },
+    {
+      "key": "redirectUri",
+      "type": "url",
+      "title": {
+        "en": "Redirect URI",
+        "de": "Redirect-URI"
+      },
+      "description": {
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/nextcloud/<provider id>/callback); the test shows the resulting URL.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/nextcloud/<provider id>/callback); der Test zeigt die resultierende URL."
+      }
+    },
+    {
+      "key": "providerId",
+      "type": "string",
+      "advanced": true,
+      "pattern": "^[A-Za-z0-9._-]{1,100}$",
+      "title": {
+        "en": "Provider id",
+        "de": "Anbieter-ID"
+      },
+      "description": {
+        "en": "The id in the callback URL (/api/integrations/nextcloud/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
+        "de": "Die ID in der Callback-URL (/api/integrations/nextcloud/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
+      }
+    }
+  ],
+  "capabilities": ["files"],
+  "actions": []
+}

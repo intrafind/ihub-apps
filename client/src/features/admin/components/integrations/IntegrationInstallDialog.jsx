@@ -20,7 +20,7 @@ import {
   PRIMARY_BUTTON_CLASS,
   RADIO_CLASS,
   SECONDARY_BUTTON_CLASS
-} from '../people-directories/formStyles';
+} from '../formStyles';
 import {
   fetchInstalledIntegration,
   fetchIntegrationDefinition,
@@ -79,6 +79,8 @@ function detailText(err) {
  * @param {string} props.definitionId - definition to install
  * @param {string} [props.instanceId] - edit this instance instead of creating one
  * @param {string[]} [props.takenIds] - existing instance ids (to propose a free one)
+ * @param {{ values?: Object, label?: string }} [props.prefill] - install values and
+ *   label to start a new installation with (a deep link from another page)
  * @param {() => void} props.onClose
  * @param {(instance: Object) => void} props.onSaved
  */
@@ -100,6 +102,7 @@ function IntegrationInstallDialog({
   definitionId,
   instanceId,
   takenIds = NO_TAKEN_IDS,
+  prefill,
   onClose,
   onSaved
 }) {
@@ -122,6 +125,8 @@ function IntegrationInstallDialog({
   const [testResult, setTestResult] = useState(null);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  // What the admin typed into the definition's `test.input` field (a sample search).
+  const [testInput, setTestInput] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +150,11 @@ function IntegrationInstallDialog({
         const values = {};
         for (const field of def.install || []) {
           if (field.sensitive || field.scope !== 'admin') continue;
-          values[field.key] = existing?.values?.[field.key] ?? field.default ?? '';
+          values[field.key] =
+            existing?.values?.[field.key] ??
+            (!isEdit ? prefill?.values?.[field.key] : undefined) ??
+            field.default ??
+            '';
         }
         const instance = existing?.instance;
         const actions = def.dynamicActions ? existing?.actions || [] : def.actions || [];
@@ -174,7 +183,8 @@ function IntegrationInstallDialog({
         setSecretStored(Boolean(instance?.auth?.credentialRef));
         setForm({
           id: instance?.id || def.singleton?.instanceId || proposeInstanceId(def.id, takenIds),
-          label: pickText(instance?.label, lang) || '',
+          label: pickText(instance?.label, lang) || (!isEdit && prefill?.label) || '',
+          description: pickText(instance?.description, lang) || '',
           enabled: instance ? instance.enabled !== false : true,
           values,
           authMode: instance?.auth?.mode || def.defaultAuthMode || def.authModes?.[0] || 'none',
@@ -184,6 +194,10 @@ function IntegrationInstallDialog({
           // Kept as stored and sent back: other languages of the label and
           // the per-action overrides have no editor here yet.
           storedLabel: instance?.label && typeof instance.label === 'object' ? instance.label : {},
+          storedDescription:
+            instance?.description && typeof instance.description === 'object'
+              ? instance.description
+              : {},
           overrides: instance?.actions?.overrides || {},
           // The stored policy: sent back unchanged while no actions are known,
           // and it decides whether an allowlist stays one (`buildActionsPolicy`).
@@ -198,7 +212,7 @@ function IntegrationInstallDialog({
     return () => {
       cancelled = true;
     };
-  }, [definitionId, instanceId, isEdit, lang, takenIds]);
+  }, [definitionId, instanceId, isEdit, lang, takenIds, prefill]);
 
   const secretField = useMemo(
     () => secretFieldForMode(definition, form?.authMode),
@@ -234,6 +248,7 @@ function IntegrationInstallDialog({
       id: form.id.trim(),
       definition: definition.id,
       label: mergedLabel(form.storedLabel, lang, form.label.trim()),
+      description: mergedLabel(form.storedDescription, lang, form.description.trim()),
       enabled: form.enabled,
       values,
       auth: { mode: form.authMode },
@@ -268,7 +283,10 @@ function IntegrationInstallDialog({
     setError(null);
     setTestResult(null);
     try {
-      const result = await testIntegrationDraft(definition.id, buildPayload());
+      const payload = buildPayload();
+      const inputKey = definition.test?.input?.key;
+      if (inputKey && testInput.trim()) payload.testInput = { [inputKey]: testInput.trim() };
+      const result = await testIntegrationDraft(definition.id, payload);
       setTestResult(result);
       // Dynamic actions: the test listed the server's tools; offer them. A
       // tool seen for the first time starts as the tested policy has it (the
@@ -423,6 +441,24 @@ function IntegrationInstallDialog({
                   </p>
                 </div>
               </div>
+              <div>
+                <label htmlFor="integration-instance-description" className={LABEL_CLASS}>
+                  {t('admin.integrationCatalog.wizard.description', 'Description')}
+                </label>
+                <textarea
+                  id="integration-instance-description"
+                  className={INPUT_CLASS}
+                  rows={2}
+                  value={form.description}
+                  onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+                />
+                <p className={HELP_CLASS}>
+                  {t(
+                    'admin.integrationCatalog.wizard.descriptionHelp',
+                    'What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.'
+                  )}
+                </p>
+              </div>
             </fieldset>
 
             {/* 2 Settings */}
@@ -532,15 +568,24 @@ function IntegrationInstallDialog({
                   'Leave empty for everyone who may use an app that binds this integration.'
                 )}
               />
-              <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                <input
-                  type="checkbox"
-                  className={CHECKBOX_CLASS}
-                  checked={form.enabled}
-                  onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))}
-                />
-                {t('admin.integrationCatalog.wizard.enabled', 'Enabled')}
-              </label>
+              {definition.alwaysInstalled ? (
+                <p className={HELP_CLASS}>
+                  {t(
+                    'admin.integrationCatalog.wizard.alwaysInstalledHelp',
+                    'This integration is always installed and enabled; switch single actions off below instead.'
+                  )}
+                </p>
+              ) : (
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX_CLASS}
+                    checked={form.enabled}
+                    onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  {t('admin.integrationCatalog.wizard.enabled', 'Enabled')}
+                </label>
+              )}
             </fieldset>
 
             {/* 5 Actions */}
@@ -660,18 +705,35 @@ function IntegrationInstallDialog({
       </div>
 
       {!loading && definition && form && (
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-            className={SECONDARY_BUTTON_CLASS}
-            onClick={runTest}
-            disabled={testing || saving || !definition.supported}
-          >
-            <Icon name="play" size="sm" />
-            {testing
-              ? t('admin.integrationCatalog.wizard.testing', 'Testing…')
-              : t('admin.integrationCatalog.wizard.test', 'Test connection')}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={SECONDARY_BUTTON_CLASS}
+              onClick={runTest}
+              disabled={testing || saving || !definition.supported}
+            >
+              <Icon name="play" size="sm" />
+              {testing
+                ? t('admin.integrationCatalog.wizard.testing', 'Testing…')
+                : t('admin.integrationCatalog.wizard.test', 'Test connection')}
+            </button>
+            {definition.test?.input && (
+              <div>
+                <label htmlFor="integration-test-input" className="sr-only">
+                  {definition.test.input.title}
+                </label>
+                <input
+                  id="integration-test-input"
+                  className={`${INPUT_CLASS} sm:w-64`}
+                  value={testInput}
+                  onChange={e => setTestInput(e.target.value)}
+                  placeholder={definition.test.input.title}
+                  title={definition.test.input.description || definition.test.input.title}
+                />
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
             <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onClose}>
               {t('common.cancel', 'Cancel')}

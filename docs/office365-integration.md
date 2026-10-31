@@ -115,66 +115,57 @@ The redirect URI is the URL Microsoft redirects to after the user grants access.
 
 ## Step 5: Configure iHub Apps
 
+Office 365 is the built-in installed integration **Microsoft Office 365 (OneDrive / SharePoint)** (`com.intrafind/office365`, installation `office365`; see [Integrations](integrations.md#built-in-integrations)).
+
 ### Via Admin UI
 
 1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → Cloud Storage**
-3. Enable **Cloud Storage** if not already enabled
-4. Click **"Add Provider"**
-5. Fill in the provider details:
+2. Navigate to **Admin → Integrations → Installed**. Open the **Catalog** tab and click **Install** on **Microsoft Office 365**, or edit the `office365` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
+3. Fill in the settings:
 
    | Field | Value |
    |-------|-------|
-   | **Type** | Office 365 |
-   | **Provider ID** | A unique identifier (e.g., `office365-1`) — must match the `{providerId}` in your redirect URI |
-   | **Display Name** | Name shown to users (e.g., `OneDrive`) |
+   | **Label** | Name shown to users in the file picker (e.g., `OneDrive`) |
    | **Tenant ID** | The Directory (tenant) ID from Step 1 |
    | **Client ID** | The Application (client) ID from Step 1 |
-   | **Client Secret** | The client secret value from Step 4 |
-   | **Redirect URI** | Optional — leave blank to auto-detect from the incoming request URL |
-   | **Site URL** | Optional — a specific SharePoint site URL if you want to restrict access to a single site |
-   | **Drive ID** | Optional — a specific drive ID if you want to restrict access to a single drive |
+   | **Client secret** | A credential of type secret (**Admin → Credentials**) holding the client secret value from Step 4 |
+   | **Redirect URI** | Optional — leave blank to derive it from the incoming request; **Test connection** shows the resulting URL |
+   | **Source: …** | Which sources users get: **personal OneDrive**, **followed SharePoint sites**, **Microsoft Teams** |
+   | **SharePoint site URL**, **Drive ID** (Advanced) | Optional — restrict access to a single site or drive |
+   | **Provider id** (Advanced) | The `{providerId}` in the callback URL and in the users' stored connections. Empty: `office365`. An upgrade keeps the id the provider had before; change it only when you re-register the redirect URI |
 
-6. Configure **Available Sources** (check the sources you want to make available to users):
-   - **Personal OneDrive** — User's personal OneDrive files
-   - **Followed SharePoint Sites** — SharePoint sites the user follows
-   - **Microsoft Teams** — Document libraries from the user's joined Teams
+4. **Test connection** checks the client, the settings, the redirect URI and the route to `login.microsoftonline.com`, and counts the connected users
+5. Click **Install** (or **Save**)
 
-7. Click **"Save"**
+### In `integrations.json`
 
-### Via platform.json (manual configuration)
-
-Alternatively, configure the provider directly in `contents/config/platform.json`:
+The installation lives in `contents/config/integrations.json`; the client secret is a credential reference, never a value:
 
 ```json
 {
-  "cloudStorage": {
-    "enabled": true,
-    "providers": [
-      {
-        "id": "office365-1",
-        "name": "office365-1",
-        "displayName": "OneDrive & SharePoint",
-        "type": "office365",
-        "enabled": true,
+  "installed": [
+    {
+      "id": "office365",
+      "definition": "com.intrafind/office365",
+      "enabled": true,
+      "label": { "en": "OneDrive & SharePoint" },
+      "values": {
         "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        "clientSecret": "your-client-secret-value",
-        "redirectUri": "https://your-ihub-domain.com/api/integrations/office365/office365-1/callback",
-        "siteUrl": "",
-        "driveId": "",
-        "sources": {
-          "personalDrive": true,
-          "followedSites": true,
-          "teams": true
-        }
-      }
-    ]
-  }
+        "clientSecretRef": "integration-office365-clientSecretRef",
+        "redirectUri": "https://your-ihub-domain.com/api/integrations/office365/office365/callback",
+        "sourcePersonalDrive": true,
+        "sourceFollowedSites": true,
+        "sourceTeams": true
+      },
+      "auth": { "mode": "oauth-user" },
+      "allowedGroups": []
+    }
+  ]
 }
 ```
 
-> **Security Note**: The `clientSecret` and `tenantId` are automatically encrypted using AES-256-GCM when saved through the admin UI. If editing `platform.json` directly, secrets will be encrypted on the next admin save.
+> Migration V200 moved the former `platform.cloudStorage` provider here. Its `id` (e.g. `office365-1`) became the installation's **Provider id** value when it differed from `office365`, so the registered redirect URI and the users' connections stayed valid.
 
 ---
 

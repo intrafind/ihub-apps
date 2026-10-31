@@ -20,24 +20,28 @@ import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../uti
  * `server/utils/ldapProviderConfig.js`), so they live under "Advanced" with the
  * derived value shown as the placeholder — typing one only overrides it.
  *
- * "Use for people search" on a saved provider opens the people directory
- * editor prefilled to reuse it (`/admin/integrations/people-directories/new`).
+ * "Use for people search" on a saved provider opens the install wizard of the
+ * LDAP people directory integration prefilled to reuse it
+ * (`/admin/integrations/installed?install=com.intrafind__ldap-directory&v.authProvider=…`).
  * It leaves the page, so while anything here is unsaved it only says to save
  * first; a provider that is not saved yet gets nothing (a directory could not
  * find it).
  */
 
 /**
- * The editor URL of a new people directory that reuses a sign-in provider.
+ * The install wizard URL of a new people directory that reuses a sign-in
+ * provider: the definition to install, the provider as the `authProvider`
+ * value and the provider's display name as the label.
  * @param {Object} provider - LDAP provider entry
  * @returns {string}
  */
 function peopleSearchUrl(provider) {
   const params = new URLSearchParams({
-    authProvider: provider.name,
-    name: provider.displayName || provider.name
+    install: 'com.intrafind__ldap-directory',
+    'v.authProvider': provider.name,
+    label: provider.displayName || provider.name
   });
-  return `/admin/integrations/people-directories/new?${params.toString()}`;
+  return `/admin/integrations/installed?${params.toString()}`;
 }
 
 const INPUT_CLASS =

@@ -2079,78 +2079,9 @@
       "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten."
     },
     "cloudStorage": {
-      "title": "Cloud-Speicher-Integration",
-      "subtitle": "Cloud-Speicher-Anbieter für Datei-Uploads konfigurieren",
-      "enabled": "Cloud-Speicher aktiviert",
-      "disabled": "Cloud-Speicher deaktiviert",
-      "noProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
-      "addProvider": "Anbieter hinzufügen",
-      "providers": "Cloud-Speicher",
-      "providerType": "Anbietertyp",
-      "selectType": "Anbietertyp auswählen",
-      "sharepoint": "SharePoint",
       "office365": "Microsoft Office 365",
       "googledrive": "Google Drive",
-      "googleDrive": "Google Drive",
-      "nextcloud": "Nextcloud",
-      "serverUrl": "Nextcloud-Server-URL",
-      "serverUrlHint": "Basis-URL Ihrer Nextcloud-Instanz (ohne abschließenden Schrägstrich).",
-      "editProvider": "Anbieter bearbeiten",
-      "deleteProvider": "Anbieter löschen",
-      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
-      "name": "Name",
-      "displayName": "Anzeigename",
-      "tenantId": "Mandanten-ID",
-      "clientId": "Client-ID",
-      "clientSecret": "Client-Secret",
-      "siteUrl": "Website-URL (Optional)",
-      "driveId": "Laufwerk-ID (Optional)",
-      "callbackUrl": "Callback-URL",
-      "callbackUrlPlaceholder": "Geben Sie oben einen Namen ein, um die Callback-URL zu generieren",
-      "callbackUrlHint": "Registrieren Sie diese URL als Weiterleitungs-URI bei Ihrem Anbieter (Azure AD / Google Cloud / Nextcloud OAuth-Admin). Lassen Sie das optionale Weiterleitungs-URI-Feld unten leer, um diesen automatisch erkannten Wert zu verwenden.",
-      "redirectUri": "Weiterleitungs-URI (Optional)",
-      "redirectUriHint": "Optional. Überschreibt die oben automatisch erkannte Callback-URL. Nützlich, wenn iHub hinter einem Proxy läuft, dessen externer Hostname sich von dem unterscheidet, was der Server sieht.",
-      "providerEnabled": "Anbieter aktiviert",
-      "save": "Speichern",
-      "cancel": "Abbrechen",
-      "saving": "Speichern...",
-      "saveSuccess": "Cloud-Speicher-Konfiguration erfolgreich gespeichert",
-      "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
-      "deleteSuccess": "Anbieter erfolgreich gelöscht",
-      "deleteError": "Fehler beim Löschen des Anbieters",
-      "sources": "Verfügbare Quellen",
-      "myDrive": "Meine Ablage",
-      "sharedDrives": "Geteilte Ablagen",
-      "sharedWithMe": "Für mich freigegeben",
-      "validation": {
-        "nameRequired": "Name ist erforderlich",
-        "displayNameRequired": "Anzeigename ist erforderlich",
-        "tenantIdRequired": "Mandanten-ID ist erforderlich",
-        "clientIdRequired": "Client-ID ist erforderlich",
-        "clientSecretRequired": "Client-Secret ist erforderlich",
-        "googledriveRequired": "Client-ID und Client-Secret sind für Google Drive erforderlich",
-        "nextcloudRequired": "Server-URL, Client-ID und Client-Secret sind für Nextcloud erforderlich"
-      },
-      "info": {
-        "title": "Über Cloud-Speicher-Integration",
-        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie Office 365 und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
-      },
-      "office365Info": {
-        "title": "Office 365-Konfiguration",
-        "description": "Um die Office 365-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
-        "step1": "App in Azure AD registrieren",
-        "step2": "API-Berechtigungen konfigurieren (Files.Read, Sites.Read.All)",
-        "step3": "Client-Secret erstellen",
-        "step4": "Mandanten-ID, Client-ID und Client-Secret hier kopieren"
-      },
-      "googleDriveInfo": {
-        "title": "Google Drive-Konfiguration",
-        "description": "Um die Google Drive-Integration zu konfigurieren, müssen Sie ein Projekt in der Google Cloud Console erstellen und die Google Drive-API aktivieren.",
-        "step1": "Projekt in Google Cloud Console erstellen",
-        "step2": "Google Drive-API aktivieren",
-        "step3": "OAuth 2.0-Anmeldedaten erstellen",
-        "step4": "Client-ID und Client-Secret hier kopieren"
-      }
+      "nextcloud": "Nextcloud"
     },
     "system": {
       "title": "Systemverwaltung",
@@ -3005,7 +2936,10 @@
           "picker": {
             "menu": "Im Menü",
             "hidden": "Verborgen"
-          }
+          },
+          "allInstallations": "Alle Installationen von {{name}}",
+          "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
+          "explicitAction": "Nur wenn hier angehakt; nie Teil von „alle Aktionen“."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
@@ -3240,7 +3174,9 @@
         "notConnected": "Nicht verbunden",
         "toolCount": "{{count}} Tools",
         "userConnections_one": "1 verbundene Person",
-        "userConnections_other": "{{count}} verbundene Personen"
+        "userConnections_other": "{{count}} verbundene Personen",
+        "external": "Extern",
+        "alwaysInstalled": "Immer installiert"
       },
       "source": {
         "shipped": "Mitgeliefert",
@@ -3319,7 +3255,10 @@
         "dynamicActionsUnavailable": "Der Server hat seine Tools nicht gelistet (nicht erreichbar oder noch niemand verbunden). Beim Speichern bleibt die gespeicherte Tool-Auswahl, wie sie ist; testen Sie die Verbindung, um sie zu sehen und zu ändern.",
         "dynamicActionsHint": "Das sind die Tools, die der Server listet; ein später hinzugefügtes Tool ist standardmäßig an.",
         "dynamicActionsAllowlistHint": "Das sind die Tools, die der Server listet; nur die angehakten dürfen laufen, und ein Tool, das der Server später hinzufügt, bleibt aus, bis Sie es einschalten.",
-        "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen."
+        "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen.",
+        "description": "Beschreibung",
+        "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
+        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab."
       },
       "connections": {
         "title": "Verbundene Benutzer",
@@ -3332,7 +3271,13 @@
         "resetConfirm": "OAuth-Client-Registrierung von {{label}} zurücksetzen? Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden.",
         "resetDone": "OAuth-Client-Registrierung zurückgesetzt"
       },
-      "runsCode": "Führt Code auf diesem Server aus"
+      "runsCode": "Führt Code auf diesem Server aus",
+      "transport": {
+        "ldaps": "LDAPS",
+        "starttls": "StartTLS",
+        "plaintext": "Unverschlüsselt",
+        "unknown": "Transport unbekannt"
+      }
     },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
@@ -3343,7 +3288,7 @@
         },
         "nextcloud": {
           "title": "Nextcloud",
-          "description": "Ermöglichen Sie Benutzern, Dateien aus jeder Nextcloud-Instanz während eines Chats zu durchsuchen und anzuhängen. Verwendet dieselbe `cloudStorage`-Konfiguration wie Office 365 und Google Drive."
+          "description": "Benutzer Dateien aus einer Nextcloud-Instanz im Chat durchsuchen und anhängen lassen. Installiert als Integration „nextcloud“."
         },
         "nextcloudEmbed": {
           "title": "Nextcloud-Embed",
@@ -3354,7 +3299,7 @@
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
         },
         "peopleDirectories": {
-          "description": "Das Modell findet Personen, ihre Funktion und Kontaktdaten in LDAP-Verzeichnissen – im eigenen und in externen wie x500.bund.de.",
+          "description": "Das Modell Personen, ihre Funktion und Kontaktdaten in LDAP-Verzeichnissen nachschlagen lassen – im eigenen und in externen wie x500.bund.de. Jedes Verzeichnis ist eine Installation der Integration „LDAP-Personenverzeichnis“.",
           "title": "Personenverzeichnisse"
         }
       },
@@ -4230,277 +4175,6 @@
         "ifinder": "iFinder Smart Collections bevorzugt",
         "ifinderHelp": "Smart Collections können wie unter „both“ hinzugefügt werden. Lokale Projekte bleiben nutzbar und können weiterhin angelegt werden.",
         "requirements": "Smart Collections brauchen außerdem ein konfiguriertes iFinder (Integrationen → iFinder), einen Benutzer mit der Rolle fi_smartcollections und iFinder 6.8 oder neuer. Prüfen Sie das mit dem iFinder-Integrationstest."
-      }
-    },
-    "peopleDirectories": {
-      "access": {
-        "anonymous": "Anonym",
-        "anonymousHelp": "Nur für Verzeichnisse, die eine anonyme Suche erlauben, etwa x500.bund.de. Active Directory erlaubt sie in der Regel nicht.",
-        "bindDn": "Bind-DN",
-        "description": "Wie sich iHub am Verzeichnis anmeldet. Suchen laufen nie mit dem Passwort eines Benutzers, denn iHub speichert es nicht.",
-        "noBindAccount": "Dieser Anmeldeanbieter hat kein Bind-Konto. Wählen Sie anonymen Zugriff, wenn das Verzeichnis ihn erlaubt, oder ein Dienstkonto.",
-        "password": "Passwort",
-        "passwordHelp": "Wählen Sie die gespeicherten Zugangsdaten, die das Passwort enthalten.",
-        "providerAccount": "Das Bind-Konto des Anmeldeanbieters",
-        "providerAccountHelp": "Das Dienstkonto, mit dem der Anbieter schon Benutzer nachschlägt.",
-        "service": "Dienstkonto",
-        "serviceHelp": "Ein eigenes, nur lesendes Konto für die Personensuche.",
-        "servicePlaintext": "Ein Dienstkonto meldet sich nie im Klartext an. Verwenden Sie ldaps:// oder StartTLS, sonst kann dieses Verzeichnis keine Verbindung aufbauen.",
-        "title": "Zugriff"
-      },
-      "appOffer": {
-        "dismiss": "Nicht jetzt",
-        "enable": "App aktivieren",
-        "enabled": "Die App „Personensuche“ ist aktiviert.",
-        "enabling": "Wird aktiviert …",
-        "error": "Die App konnte nicht aktiviert werden: {{error}}",
-        "text": "Auch die App „Personensuche“ aktivieren? Benutzer können dann im Chat nach Personen fragen; sie durchsucht jedes Verzeichnis, das sie verwenden dürfen."
-      },
-      "browse": {
-        "auditNote": "Jeder Browser-Aufruf wird mit dem verwendeten Filter ins Audit-Log geschrieben, nie mit den gelieferten Werten. Die App LDAP-Browser wird deaktiviert ausgeliefert: Schalten Sie sie unter Apps ein und geben Sie sie nur Administratorgruppen.",
-        "base": "Browse-Basis",
-        "baseHelp": "Jede DN, die der Browser liest, muss hier liegen. Leer lassen für die Basis-DN, also das ganze Verzeichnis; einen Zweig setzen, um einzuschränken, was Administratoren sehen.",
-        "bind": "Konto zum Browsen",
-        "bindAnonymousHelp": "Nur, was das Verzeichnis anonymen Clients zeigt.",
-        "bindDirectory": "Das Konto des Verzeichnisses",
-        "bindDirectoryHelp": "Das Konto unter Zugang. Der Browser kann alles lesen, was es lesen kann.",
-        "bindDirectoryWarning": "Mit dem Konto des Verzeichnisses hat der Browser die volle Reichweite des Personensuche-Kontos. Verwenden Sie ein eigenes Konto, wenn dieses Konto mehr lesen kann, als Administratoren sehen sollen.",
-        "bindService": "Ein eigenes Konto",
-        "bindServiceHelp": "Ein Nur-Lese-Konto mit genau der Reichweite, die Administratoren haben sollen.",
-        "denyAttributes": "Weitere zurückgehaltene Attribute",
-        "denyAttributesHelp": "Ein Attributname pro Zeile. Passwörter, LAPS- und BitLocker-Geheimnisse, Zertifikate und Fotos werden immer zurückgehalten; ergänzen Sie Attribute, in denen Ihr Verzeichnis weitere Geheimnisse speichert. Zurückgehaltene Attribute können auch nicht in einem Filter vorkommen.",
-        "description": "Administratoren können in normaler Sprache nach dem Verzeichnis fragen und sehen die rohen Einträge: Attribute, Zweige, Gruppenmitglieder. Getrennt von der Personensuche, die nur zugeordnete Felder liefert.",
-        "enabled": "LDAP-Browser anbieten",
-        "enabledHelp": "Fügt die Tools {{tools}} hinzu. Nur Apps, die „ldapBrowse“ auflisten, etwa die App LDAP-Browser, erhalten sie.",
-        "groups": "Wer browsen darf",
-        "groupsHelp": "Angemeldete Benutzer in einer dieser Gruppen. Getrennt von den Gruppen des Verzeichnisses unter Sichtbarkeit: keine gewährt die andere.",
-        "maxResults": "Höchstzahl Einträge pro Suche",
-        "maxResultsHelp": "1 bis {{max}}; leer für {{default}}.",
-        "offKept": "Der LDAP-Browser ist aus. Seine Einstellungen unten bleiben erhalten, bis Sie ihn wieder einschalten.",
-        "title": "LDAP-Browser"
-      },
-      "edit": {
-        "backToList": "Zurück zu den Personenverzeichnissen",
-        "basics": "Verzeichnis",
-        "changedElsewhere": "Dieses Verzeichnis wurde woanders geändert, nachdem Sie es geöffnet haben. Speichern Sie erneut, um diese Änderung zu überschreiben, oder laden Sie die Seite neu, um sie zu sehen.",
-        "createTitle": "Personenverzeichnis hinzufügen",
-        "errorsTitle": "Bitte prüfen Sie diese Felder",
-        "leave": "Verlassen",
-        "loadError": "Das Verzeichnis konnte nicht geladen werden",
-        "notFound": "Es gibt kein Personenverzeichnis „{{id}}“.",
-        "notFoundTitle": "Verzeichnis nicht gefunden",
-        "save": "Verzeichnis speichern",
-        "saveError": "Das Verzeichnis wurde nicht gespeichert",
-        "saving": "Wird gespeichert …",
-        "statusTitle": "So wie gespeichert, hat dieses Verzeichnis Probleme:",
-        "stay": "Bleiben",
-        "subtitle": "Jedes aktivierte Verzeichnis gibt Apps nur lesende Tools, um Personen zu suchen und eine Person abzurufen. In das Verzeichnis wird nichts geschrieben.",
-        "unsavedMessage": "Sie haben ungespeicherte Änderungen. Trotzdem verlassen?",
-        "unsavedTitle": "Ungespeicherte Änderungen"
-      },
-      "errors": {
-        "attributeName": "„{{name}}“ ist kein LDAP-Attributname.",
-        "authProviderRequired": "Wählen Sie einen Anmeldeanbieter.",
-        "baseDnRequired": "Geben Sie den Basis-DN ein.",
-        "bindDnRequired": "Geben Sie den Bind-DN ein.",
-        "browseGroupsRequired": "Wählen Sie, wer den LDAP-Browser verwenden darf.",
-        "idPattern": "Verwenden Sie 2 bis 32 Kleinbuchstaben, Ziffern und „-“, beginnend mit einem Buchstaben oder einer Ziffer.",
-        "idRequired": "Geben Sie eine ID ein.",
-        "idReserved": "„{{id}}“ ist reserviert.",
-        "idTaken": "Ein anderes Verzeichnis verwendet „{{id}}“.",
-        "limitRange": "Geben Sie eine ganze Zahl von {{min}} bis {{max}} ein.",
-        "passwordRefRequired": "Wählen Sie die Zugangsdaten, die das Passwort enthalten.",
-        "personFilterPattern": "Ein LDAP-Filter in Klammern, z. B. (objectClass=person).",
-        "tlsCaPattern": "„{{name}}“ ist kein Zertifikatsname: Kleinbuchstaben, Ziffern und „-“ verwenden, ohne „.pem“.",
-        "urlPattern": "Verwenden Sie ldaps://host:636 oder ldap://host:389, ohne Pfad.",
-        "urlRequired": "Geben Sie die URL des Verzeichnisses ein."
-      },
-      "fields": {
-        "academicTitle": "Akademischer Titel",
-        "department": "Abteilung",
-        "email": "E-Mail",
-        "fax": "Fax",
-        "firstName": "Vorname",
-        "jobTitle": "Funktion",
-        "lastName": "Nachname",
-        "location": "Ort",
-        "managerId": "Vorgesetzte(r)",
-        "mobile": "Mobil",
-        "name": "Name",
-        "organization": "Organisation",
-        "phone": "Telefon",
-        "salutation": "Anrede"
-      },
-      "form": {
-        "enabled": "Aktiviert",
-        "enabledHelp": "Die Tools dieses Verzeichnisses den Apps anbieten. Solange es aus ist, erreicht keine Suche das Verzeichnis.",
-        "id": "ID",
-        "idFixed": "Die ID ist das Präfix der Tool-IDs, die Apps auswählen, und kann daher nicht geändert werden.",
-        "idHelp": "2 bis 32 Kleinbuchstaben, Ziffern und „-“. Sie wird zum Präfix der Tool-IDs und kann später nicht geändert werden."
-      },
-      "limits": {
-        "concurrency": "Parallele Anfragen",
-        "description": "Obergrenzen für jede Suche. Ein Tool-Aufruf kann weniger Ergebnisse anfordern, nie mehr. Alle Tools dieses Verzeichnisses und sein Test teilen sich eine Warteschlange.",
-        "maxResults": "Höchstzahl der Ergebnisse je Suche",
-        "range": "Standard {{fallback}}, {{min}} bis {{max}}.",
-        "requestDelayMs": "Pause zwischen Anfragen (ms)",
-        "timeoutMs": "Timeout (ms)",
-        "title": "Grenzen",
-        "units": "Organisationseinheiten anbieten (list_units)",
-        "unitsHelp": "Listet die Einheiten direkt unter der Suchbasis auf (bei x500.bund.de: die Behörden), damit das Modell eine Suche auf eine davon eingrenzen kann."
-      },
-      "list": {
-        "add": "Verzeichnis hinzufügen",
-        "allOff": "Alle Verzeichnisse sind aus, daher verlässt kein Suchbegriff iHub. Schalten Sie eines ein, um es den Apps anzubieten.",
-        "browse": "LDAP-Browser",
-        "browseHint": "Administratoren in den Browse-Gruppen können mit dem LDAP-Browser rohe Einträge lesen.",
-        "delete": "Löschen",
-        "deleteConfirm": "„{{name}}“ löschen? Apps verlieren seine Tools sofort.",
-        "deleteLabel": "{{name}} löschen",
-        "deleteTitle": "Verzeichnis löschen",
-        "deleted": "„{{name}}“ gelöscht.",
-        "edit": "Bearbeiten",
-        "editLabel": "{{name}} bearbeiten",
-        "empty": "Kein Personenverzeichnis konfiguriert",
-        "emptyHint": "Fügen Sie eines hinzu, oder verwenden Sie „Für die Personensuche verwenden“ bei einem LDAP-Anmeldeanbieter in den Authentifizierungseinstellungen.",
-        "external": "Extern",
-        "externalHint": "Suchbegriffe gehen an ein Verzeichnis, das ein Dritter betreibt.",
-        "gone": "„{{name}}“ gibt es nicht mehr. Die Liste wurde neu geladen.",
-        "groups": "Gruppen",
-        "loadError": "Die Personenverzeichnisse konnten nicht geladen werden",
-        "needsAttention": "Prüfen",
-        "noGroups": "niemand",
-        "off": "Aus",
-        "on": "An",
-        "preset": "Verzeichnistyp",
-        "saveFailed": "Die Änderung wurde nicht gespeichert",
-        "saved": "Verzeichnis „{{id}}“ gespeichert.",
-        "source": "Quelle",
-        "sourceProvider": "Anmeldeanbieter {{name}}",
-        "switchedOff": "„{{name}}“ ist aus.",
-        "switchedOn": "„{{name}}“ ist an."
-      },
-      "mapping": {
-        "description": "Die Standardwerte kommen vom Verzeichnistyp „{{preset}}“. Lassen Sie ein Feld leer, um den daneben angezeigten Wert der Vorlage zu behalten.",
-        "field": "Feld",
-        "fieldsHelp": "Kommagetrennte Kandidaten; der erste mit einem Wert gewinnt. Ein Kandidat ist ein Attribut (mail), ein Bestandteil des DN des Eintrags (dn:l) oder durch Leerzeichen verbundene Attribute (givenName sn). Aus dem Verzeichnis werden nur zugeordnete Attribute gelesen.",
-        "fieldsTitle": "Personenfelder",
-        "overrideColumn": "Überschreiben",
-        "personFilter": "Personenfilter",
-        "presetColumn": "Vorlage",
-        "presetValue": "Vorlage: {{value}}",
-        "searchAttributes": "Attribute für die Freitextsuche",
-        "searchAttributesHelp": "Kommagetrennt. Jedes Wort einer Suche wird mit diesen Attributen abgeglichen.",
-        "searchBase": "Suchbasis",
-        "searchBaseHelp": "Wo nach Personen gesucht wird. Standard ist der Basis-DN.",
-        "title": "Suche und Zuordnung",
-        "unmapped": "nicht zugeordnet"
-      },
-      "model": {
-        "description": "Anhand dieser Texte wählt das Modell ein Verzeichnis aus. Nennen Sie, wessen Personal es enthält, welche Felder es hat und ob es ein externer Dienst ist.",
-        "descriptionLabel": "Beschreibung",
-        "name": "Name",
-        "noDescription": "Ohne Beschreibung kennt das Modell nur Name und ID und wählt womöglich das falsche Verzeichnis.",
-        "previewTitle": "Was das Modell sieht",
-        "title": "Name und Beschreibung für das Modell",
-        "toolIds": "Tools, die Apps auswählen können:"
-      },
-      "network": {
-        "allowPlaintext": "Klartextverbindungen zulassen (ldap:// ohne StartTLS)",
-        "allowedHosts": "Erlaubte Hosts mit privater Adresse",
-        "allowedHostsHelp": "Ein Host pro Zeile. iHub lehnt einen Verzeichnis-Host ab, der zu einer privaten, Loopback- oder Link-Local-Adresse auflöst, sofern er nicht hier oder in der plattformweiten SSRF-Freigabeliste steht. Der Host eines wiederverwendeten Anmeldeanbieters ist immer erlaubt.",
-        "description": "Wie die Verbindung geschützt ist und welche Server iHub erreichen darf.",
-        "plaintextRefused": "Dieses Verzeichnis verwendet ldap:// ohne StartTLS. iHub lehnt die Verbindung ab, bis Klartext hier zugelassen ist – besser wechseln Sie zu ldaps:// oder StartTLS.",
-        "plaintextWarning": "Ohne TLS gehen die Suchbegriffe und die Einträge, die das Verzeichnis liefert – Namen, Telefonnummern, E-Mail-Adressen –, im Klartext über das Netzwerk. Verwenden Sie ldaps://host:636 oder ldap://host:389 mit StartTLS, wann immer der Server es unterstützt. Das Passwort eines Dienstkontos wird nie im Klartext gesendet.",
-        "title": "Netzwerk",
-        "tlsCa": "Vertrauenswürdige Zertifikate",
-        "tlsCaHelp": "Nur für eine Zertifizierungsstelle, der der iHub-Server nicht schon vertraut. Ein Name pro Zeile: die Datei contents/config/certs/<name>.pem auf dem Server. Wenn gesetzt, prüfen nur diese Zertifikate das Serverzertifikat. Leer lassen, um den öffentlichen Wurzelzertifikaten und dem Zertifikatsspeicher des Betriebssystems des Servers zu vertrauen. Die Prüfung bleibt aktiv, außer der Host steht auf der SSL-Whitelist der Plattform.",
-        "transport": "Transport"
-      },
-      "presets": {
-        "activeDirectory": "Active Directory",
-        "ivbb": "IVBB-Verzeichnis (x500.bund.de)",
-        "openldap": "OpenLDAP / generisches LDAP"
-      },
-      "source": {
-        "baseDn": "Basis-DN",
-        "bindAccount": "Bind-Konto",
-        "bindAccountNone": "Keines",
-        "bindAccountSet": "Konfiguriert",
-        "description": "Wo das Verzeichnis liegt und wie iHub es erreicht.",
-        "direct": "Direkt verbinden",
-        "directHelp": "Für Verzeichnisse ohne Anmeldeanbieter, etwa das externe x500.bund.de.",
-        "missingProvider": "Der Anmeldeanbieter „{{name}}“ ist nicht konfiguriert. Speichern Sie ihn zuerst in den Authentifizierungseinstellungen, oder wählen Sie einen anderen.",
-        "noProviders": "Es ist kein LDAP-Anmeldeanbieter konfiguriert.",
-        "openAuth": "Authentifizierungseinstellungen öffnen",
-        "overrides": "Einstellungen des Anbieters überschreiben",
-        "overridesHelp": "Lassen Sie ein Feld leer, um den Wert des Anmeldeanbieters zu verwenden.",
-        "preset": "Verzeichnistyp",
-        "presetHelp": "Legt fest, welche Einträge Personen sind und woher jedes Feld gelesen wird. Siehe „Suche und Zuordnung“ unten.",
-        "presetInherit": "Wie der Anbieter ({{preset}})",
-        "provider": "Anmeldeanbieter",
-        "providerNotConfigured": "{{name}} (nicht konfiguriert)",
-        "providerPlaceholder": "Anbieter auswählen …",
-        "reuse": "Anmeldeanbieter wiederverwenden",
-        "reuseHelp": "URL, Basis-DN, Verzeichnistyp und Bind-Konto kommen von einem LDAP-Anmeldeanbieter der Authentifizierungseinstellungen.",
-        "starttls": "StartTLS",
-        "starttlsHelp": "Stuft eine ldap://-Verbindung auf TLS hoch, bevor gesucht wird. Für ldaps:// nicht nötig.",
-        "starttlsInheritOff": "Wie der Anbieter (aus)",
-        "starttlsInheritOn": "Wie der Anbieter (an)",
-        "starttlsLabel": "StartTLS verwenden (ldap://-Verbindungen verschlüsseln)",
-        "starttlsOff": "Aus",
-        "starttlsOn": "An",
-        "title": "Quelle",
-        "url": "URL",
-        "urlHelp": "ldaps://host:636 für TLS. ldap://host:389 braucht StartTLS – oder unter „Netzwerk“ zugelassenen Klartext, was nicht empfohlen ist."
-      },
-      "subtitle": "LDAP-Verzeichnisse, in denen das Modell nach Personen suchen kann – das eigene und externe wie x500.bund.de. Jedes aktivierte Verzeichnis wird zu nur lesenden Tools, die Apps verwenden können.",
-      "test": {
-        "couldNotRun": "Der Test konnte nicht laufen",
-        "description": "Verbindet sich mit den Einstellungen, wie sie auf dieser Seite stehen – gespeichert oder nicht –, und sucht nach einem Namen. Es wird nichts gespeichert.",
-        "failed": "Test fehlgeschlagen",
-        "noResults": "Die Probesuche hat niemanden gefunden.",
-        "passed": "Test bestanden",
-        "query": "Gesuchter Name (optional)",
-        "queryHelp": "Ohne Namen endet der Test nach der Anmeldung. Die Suche läuft gegen das echte Verzeichnis.",
-        "resultTitle": "Verbindungstest",
-        "resultsTitle": "Zugeordnete Ergebnisse ({{count}})",
-        "run": "Testen",
-        "running": "Wird getestet …",
-        "steps": {
-          "bind": "Anmeldung (Bind)",
-          "configuration": "Wirksame Konfiguration",
-          "connect": "Verbindung",
-          "mapping": "Zugeordnete Personen",
-          "network": "Adressprüfung (SSRF)",
-          "search": "Probesuche",
-          "starttls": "StartTLS"
-        },
-        "summary": "{{ok}} ok, {{warn}} Warnungen, {{fail}} fehlgeschlagen",
-        "title": "Test"
-      },
-      "title": "Personenverzeichnisse",
-      "transport": {
-        "ldaps": "Verschlüsselt (LDAPS)",
-        "plaintext": "Klartext",
-        "plaintextHint": "Suchbegriffe und Ergebnisse gehen unverschlüsselt über das Netzwerk.",
-        "starttls": "Verschlüsselt (StartTLS)",
-        "unknown": "Noch nicht bekannt"
-      },
-      "visibility": {
-        "dataFlow": "Datenfluss",
-        "description": "Wer dieses Verzeichnis durchsuchen darf und wohin die Suchbegriffe gehen.",
-        "everyone": "Alle (*)",
-        "everyoneHelp": "Alle Benutzer, auch anonyme",
-        "external": "Extern",
-        "externalHelp": "Ein Dritter betreibt das Verzeichnis, daher verlassen die gesuchten Namen Ihre Organisation. Sagen Sie das auch in der Beschreibung.",
-        "groups": "Gruppen",
-        "groupsHelp": "Benutzer brauchen eine dieser Gruppen zusätzlich zum Zugriff auf die App oder das Tool. Apps und Tool-Berechtigungen können diese Liste nicht erweitern.",
-        "groupsPlaceholder": "Gruppen suchen …",
-        "internal": "Intern",
-        "internalHelp": "Ihre Organisation betreibt das Verzeichnis.",
-        "noGroups": "Keine Gruppe ausgewählt: Niemand kann dieses Verzeichnis verwenden.",
-        "title": "Sichtbarkeit"
       }
     },
     "updates": {

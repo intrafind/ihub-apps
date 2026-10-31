@@ -378,7 +378,7 @@ export default function registerAdminAppsRoutes(app) {
    *       - adminAuth: []
    *     responses:
    *       200:
-   *         description: Integration ids with their state, e.g. `{"ifinder": true, "peopleDirectories": false}`
+   *         description: Installation and definition ids with their state, e.g. `{"ifinder": true, "com.intrafind/ldap-directory": false}`
    *       401:
    *         description: Authentication required
    *       403:

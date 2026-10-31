@@ -9,7 +9,7 @@ import {
   HELP_CLASS,
   LABEL_CLASS,
   SECONDARY_BUTTON_CLASS
-} from '../people-directories/formStyles';
+} from '../formStyles';
 
 /**
  * One file of a document template (logo, letterhead, Word or PowerPoint

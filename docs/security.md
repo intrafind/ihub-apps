@@ -444,12 +444,12 @@ actually encrypted at rest:
 | Config Section | `*Ref` Field |
 |----------------|-------|
 | `jira` | `clientSecretRef` |
-| `cloudStorage.providers[]` (type: `office365`) | `clientSecretRef`, `tenantIdRef` |
-| `cloudStorage.providers[]` (type: `googledrive`) | `clientSecretRef` |
 | `oidcAuth.providers[]` | `clientSecretRef` |
 | `ldapAuth.providers[]` | `adminPasswordRef` |
 | `ntlmAuth` | `domainControllerPasswordRef` |
 | `iFinder` | `privateKeyRef` |
+
+The cloud storage providers (Office 365, Google Drive, Nextcloud) are installed integrations since V200; their client secrets are credential references in `contents/config/integrations.json` (`values.clientSecretRef`), like every installed integration's secret.
 
 #### Encryption Lifecycle
 
