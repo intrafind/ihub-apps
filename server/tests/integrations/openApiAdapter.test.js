@@ -57,7 +57,11 @@ const document = {
     '/organization_list': {
       get: {
         operationId: 'organization_list',
-        parameters: [{ name: 'all_fields', in: 'query', schema: { type: 'boolean' } }],
+        parameters: [
+          { name: 'all_fields', in: 'query', schema: { type: 'boolean' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 25 } },
+          { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } }
+        ],
         responses: { 200: { description: 'ok' } }
       }
     },
@@ -105,6 +109,7 @@ const rawDefinition = {
     action: 'list_organizations',
     label: { en: 'Publisher' },
     map: { id: 'name', name: 'title' },
+    paging: { offset: 'offset', limit: 'limit', size: 2 },
     applyAs: { 'search_datasets.fq': { value: 'organization:{id}', mode: 'append' } }
   },
   sources: {
@@ -183,6 +188,18 @@ before(async () => {
       return;
     }
     if (url.pathname === '/api/3/action/package_show') {
+      if (url.searchParams.get('id') === 'bad-id') {
+        // CKAN's validation error: no `message`, one key per field.
+        res.statusCode = 409;
+        res.end(
+          JSON.stringify({
+            help: 'h',
+            success: false,
+            error: { __type: 'Validation Error', id: ['Missing value'] }
+          })
+        );
+        return;
+      }
       res.statusCode = 404;
       res.end(
         JSON.stringify({
@@ -194,12 +211,16 @@ before(async () => {
       return;
     }
     if (url.pathname === '/api/3/action/organization_list') {
-      res.end(
-        envelope([
-          { name: 'city', title: 'City Council' },
-          { name: 'nhs', title: 'Health' }
-        ])
-      );
+      // Like CKAN: a full-field listing is capped, here at the page size the
+      // definition declares (2), whatever `limit` asks for.
+      const all = [
+        { name: 'city', title: 'City Council' },
+        { name: 'nhs', title: 'Health' },
+        { name: 'rail', title: 'Railways' }
+      ];
+      const offset = Number(url.searchParams.get('offset') || 0);
+      const limit = Math.min(Number(url.searchParams.get('limit') || 25), 2);
+      res.end(envelope(all.slice(offset, offset + limit)));
       return;
     }
     if (url.pathname === '/custom/package_search') {
@@ -326,6 +347,34 @@ describe('run', () => {
     });
   });
 
+  it('passes the error object on when the envelope has no message, so the model sees the field', async () => {
+    const result = await adapter.run({
+      definition,
+      instance: instanceWith(),
+      document,
+      security,
+      action: definition.actions.find(a => a.name === 'get_dataset'),
+      args: { id: 'bad-id' }
+    });
+    assert.equal(result.error, true);
+    assert.equal(result.status, 409);
+    assert.equal(result.type, 'Validation Error');
+    assert.deepEqual(result.details, { __type: 'Validation Error', id: ['Missing value'] });
+  });
+
+  it('drops a trailing slash of a URL install value before filling templates', async () => {
+    const result = await adapter.run({
+      definition,
+      instance: instanceWith({ baseUrl: `http://127.0.0.1:${port}/` }),
+      document,
+      security,
+      action: searchAction,
+      args: { q: 'parking' }
+    });
+    assert.equal(requests[0].path, '/api/3/action/package_search');
+    assert.equal(result.results[0].portalUrl, `http://127.0.0.1:${port}/dataset/parking`);
+  });
+
   it('honours the apiPath install value and injects the shared secret header', async () => {
     setCredentials({
       'integration-portal-apiToken': { id: 'x', type: 'secret', value: 'tok-123' }
@@ -370,9 +419,37 @@ describe('listScopes and test', () => {
     });
     assert.deepEqual(scopes, [
       { id: 'city', name: 'City Council', isDefault: undefined },
-      { id: 'nhs', name: 'Health', isDefault: undefined }
+      { id: 'nhs', name: 'Health', isDefault: undefined },
+      { id: 'rail', name: 'Railways', isDefault: undefined }
     ]);
     assert.equal(requests[0].query.get('all_fields'), 'true');
+  });
+
+  it('pages through the scope action until a short page', async () => {
+    await adapter.listScopes({ definition, instance: instanceWith(), document, security });
+    assert.deepEqual(
+      requests.map(r => [r.query.get('offset'), r.query.get('limit')]),
+      [
+        ['0', '2'],
+        ['2', '2']
+      ]
+    );
+  });
+
+  it('asks once, with the operation defaults, when the definition declares no paging', async () => {
+    const unpaged = validateIntegrationDefinition({
+      ...rawDefinition,
+      scopes: { ...rawDefinition.scopes, paging: undefined }
+    }).data;
+    const scopes = await adapter.listScopes({
+      definition: unpaged,
+      instance: instanceWith(),
+      document,
+      security
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].query.get('limit'), '25');
+    assert.equal(scopes.length, 2);
   });
 
   it('reports a successful probe with the action count', async () => {

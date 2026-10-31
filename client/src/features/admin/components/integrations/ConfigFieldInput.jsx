@@ -103,28 +103,17 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
   }
 
   if (field.type === 'list') {
-    const lines = Array.isArray(value) ? value : [];
     return (
-      <div>
-        {label}
-        <textarea
-          id={inputId}
-          className={`${INPUT_CLASS} font-mono`}
-          rows={Math.min(8, Math.max(3, lines.length + 1))}
-          value={lines.join('\n')}
-          onChange={e => {
-            const next = e.target.value
-              .split('\n')
-              .map(s => s.trim())
-              .filter(Boolean);
-            onChange(next.length ? next : '');
-          }}
-          placeholder={t('admin.integrationCatalog.wizard.onePerLine', 'One entry per line')}
-          aria-describedby={description ? helpId : undefined}
-          aria-invalid={error ? 'true' : undefined}
-        />
-        {help}
-      </div>
+      <ListFieldTextarea
+        id={inputId}
+        value={value}
+        onChange={onChange}
+        label={label}
+        help={help}
+        placeholder={t('admin.integrationCatalog.wizard.onePerLine', 'One entry per line')}
+        describedBy={description ? helpId : undefined}
+        invalid={Boolean(error)}
+      />
     );
   }
 
@@ -243,6 +232,68 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
       {help}
     </div>
   );
+}
+
+/** The entries of a `list` value: one per line, trimmed, blanks dropped. */
+function parseListText(text) {
+  return text
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The textarea of a `list` field. The text the admin types stays as typed
+ * (Enter opens a new line, spaces survive) while the value emitted is the
+ * normalized list; the text is re-seeded only when the value changes from
+ * outside, e.g. when the dialog loads an installation.
+ */
+function ListFieldTextarea({
+  id,
+  value,
+  onChange,
+  label,
+  help,
+  placeholder,
+  describedBy,
+  invalid
+}) {
+  const lines = Array.isArray(value) ? value : [];
+  const [text, setText] = useState(() => lines.join('\n'));
+  // Re-seed on an outside change only (state derived from a prop, no effect):
+  // the value this text emits parses back to the same list, so typing never
+  // resets the textarea.
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
+    if (!sameList(parseListText(text), lines)) setText(lines.join('\n'));
+  }
+
+  return (
+    <div>
+      {label}
+      <textarea
+        id={id}
+        className={`${INPUT_CLASS} font-mono`}
+        rows={Math.min(8, Math.max(3, text.split('\n').length + 1))}
+        value={text}
+        onChange={e => {
+          const raw = e.target.value;
+          setText(raw);
+          const next = parseListText(raw);
+          onChange(next.length ? next : '');
+        }}
+        placeholder={placeholder}
+        aria-describedby={describedBy}
+        aria-invalid={invalid ? 'true' : undefined}
+      />
+      {help}
+    </div>
+  );
+}
+
+function sameList(a, b) {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
 /**
