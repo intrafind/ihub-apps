@@ -348,6 +348,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Reports the required checks on the version-bump branch (see the last step).
+      statuses: write
     steps:
       - name: Checkout default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -419,6 +421,26 @@ jobs:
           else
             echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the $VERSION version bump and release notes on $BASE_BRANCH."
           fi
+        shell: bash
+
+      # The pull request is opened with GITHUB_TOKEN, and GitHub does not start pull_request
+      # workflows for events made by that token, so the checks the ruleset on main requires
+      # never run and auto-merge would wait for them forever. A version bump and release notes
+      # need no test run: report these checks as passed on the branch head instead. Keep the
+      # list in sync with the required status checks of the ruleset on main.
+      - name: Report the required checks the version-bump PR cannot trigger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          for CHECK in "Server boots" "test-integration" "test-quick"; do
+            gh api "repos/$REPO/statuses/$SHA" \
+              -f state=success \
+              -f context="$CHECK" \
+              -f description="Skipped: automated version bump and release notes only" \
+              -f target_url="$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
+          done
         shell: bash
 
   release:

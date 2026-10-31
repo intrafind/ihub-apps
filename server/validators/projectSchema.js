@@ -290,15 +290,31 @@ export const userProjectCreateSchema = z
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     defaultAppId: zSafeId.min(1).max(100).optional(),
-    /** `ifinder` creates a smart collection in iFinder (name and description only); omitted is `ihub`. */
+    /** `ifinder` creates a smart collection in iFinder and its stub; omitted is `ihub`. */
     tier: z.enum(['ihub', 'ifinder']).optional()
   })
   .strict();
 
 /**
+ * `POST /api/projects/_collections`: add one of the caller's iFinder smart
+ * collections to their projects, with the default app and the instructions its
+ * stub keeps. The name comes from the collection.
+ */
+export const collectionImportSchema = z
+  .object({
+    collectionId: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
+    instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
+    defaultAppId: zSafeId.min(1).max(100).optional()
+  })
+  .strict();
+
+/**
  * What `PATCH /api/projects/:id` accepts for a smart collection of the iFinder
- * tier: its name and description. Instructions and a default app do not exist
- * there, and nothing else is ever sent to iFinder.
+ * tier that has no stub (`ifc_…`): its name and description. Nothing else is
+ * ever sent to iFinder; a stub takes {@link userProjectUpdateSchema}.
  */
 export const ifinderProjectUpdateSchema = z
   .object({
@@ -491,5 +507,16 @@ export const projectSharingSettingsSchema = z
       })
       .partial()
       .strict()
+      .optional(),
+    tierPolicy: z.enum(['ihub', 'both', 'ifinder']).optional(),
+    // The app a project chat starts in when the project names none; '' clears it.
+    defaultAppId: z.union([zSafeId.min(1).max(100), z.literal('')]).optional()
   })
-  .strict();
+  .strict()
+  .refine(
+    body =>
+      body.sharing !== undefined ||
+      body.tierPolicy !== undefined ||
+      body.defaultAppId !== undefined,
+    { message: 'Send sharing, tierPolicy or defaultAppId' }
+  );

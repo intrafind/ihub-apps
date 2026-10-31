@@ -5,9 +5,10 @@ import { useTranslation } from 'react-i18next';
 import ProjectPanelRow, { PANEL_CARD } from './ProjectPanelRow';
 
 /**
- * The side panel of a smart collection from iFinder: where it lives, what can be
- * done with it here, and how full it is. A smart collection has no instructions,
- * default app, members or catalog entry here, so none of those rows is shown.
+ * Where a smart collection from iFinder lives, what can be done with it here,
+ * and how full it is: the side panel of a collection reached by its own id, and
+ * the card below the settings of a collection's project. Members and a catalog
+ * entry do not exist for it.
  *
  * @param {Object} props
  * @param {{usage?: {items?: number}}} props.project
@@ -30,7 +31,7 @@ function IFinderProjectCard({ project, config = null, editable = false }) {
           {editable
             ? t(
                 'projects.ifinder.sourceTextManage',
-                'Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share or delete it in iFinder.'
+                'Its documents stay in iFinder and are read with your own access rights. You can rename the collection and add or remove documents here, and the change is made in iFinder. Share it in iFinder.'
               )
             : t(
                 'projects.ifinder.sourceText',

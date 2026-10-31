@@ -214,7 +214,7 @@ export default function ProjectsPage() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {config?.sharing?.allowCatalog && (
+            {(config?.sharing?.allowCatalog || config?.ifinder?.available) && (
               <button
                 type="button"
                 onClick={() => setBrowsing(true)}
@@ -377,6 +377,8 @@ export default function ProjectsPage() {
         <ProjectCatalogDialog
           onClose={() => setBrowsing(false)}
           onChanged={() => invalidateProjectsList()}
+          catalogEnabled={config?.sharing?.allowCatalog === true}
+          collectionsEnabled={config?.ifinder?.available === true}
         />
       )}
       {creating && (

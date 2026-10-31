@@ -162,6 +162,7 @@ A file the model created takes the path a generated picture takes. There is no d
   - 25 MB per file.
   - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
 - **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
+- **Artifacts panel:** every file of the chat is also listed in the chat's [Artifacts panel](artifacts.md#the-artifacts-panel), with a preview, and can be downloaded alone or together with others as one ZIP.
 - **Types:** PDF, Word (`.docx`), PowerPoint (`.pptx`), text files from `create_file` and ZIP archives from `create_zip`. The card shows the page or slide count while the answer is on screen. A text file is saved under the last part of its name (`src/index.js` → `index.js`).
 - **Many files in one turn:** `maxPerBatch` (default 8) also caps how many generated files one answer stores. For a project, the `files` skill tells the model to use one `create_zip` call instead of one `create_file` call per file.
 

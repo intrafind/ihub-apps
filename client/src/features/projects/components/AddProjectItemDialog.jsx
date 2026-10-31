@@ -28,7 +28,9 @@ const CloudItemTab = lazy(() => import('./item-dialog/CloudItemTab'));
  * @property {(projectId: string, upload: {file: File, name?: string, pinned?: boolean})
  *   => Promise<Object>} uploadItem - Multipart upload.
  * @property {() => Promise<Array<Object>>} fetchPages - iHub pages.
- * @property {(query: string) => Promise<Array<Object>>} searchIFinder
+ * @property {(query: string, options?: {profile?: string}) => Promise<Array<Object>>} searchIFinder
+ * @property {() => Promise<{profiles: Array<Object>, defaultProfile: string|null, fixed: boolean}>}
+ *   [fetchIFinderProfiles] - The search profiles the caller may search in.
  * @property {(url: string) => Promise<{ok: boolean, error?: string}>} checkUrl
  * @property {(url: string) => Promise<Object>} [previewUrl] - The text a URL would
  *   give the model (`POST …/pickers/url/preview`).

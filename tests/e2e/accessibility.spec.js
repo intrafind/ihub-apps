@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { SHARE_ID, mockSharedChatWithArtifacts } from './helpers/sharedChatWithArtifacts.js';
 
 /**
  * Accessibility End-to-End Tests
@@ -252,11 +253,17 @@ async function gotoSettled(page, path) {
 // The auth API allows 50 requests per 15 minutes, and this file signs in for
 // dozens of pages. Sign in once per worker process and reuse the session cookies.
 let adminCookies;
+// The first sign-in that the API itself refused (anything but a proxy 502/503/504
+// while the server starts). Kept so the later tests fail with that answer at
+// once instead of retrying the login until the auth API's limit answers 429
+// for every test for the next 15 minutes.
+let adminLoginFailure;
 
 /**
  * Signs in as the default local admin so the page's context carries the auth
  * cookie. The dev server is up before the API behind its proxy, which answers
- * 502 until then; keep trying while it starts.
+ * 502 until then; keep trying while it starts. Any other refusal is final and
+ * reported with the API's answer.
  *
  * @param {import('@playwright/test').Page} page - Playwright page object
  */
@@ -265,18 +272,31 @@ async function signInAsAdmin(page) {
     await page.context().addCookies(adminCookies);
     return;
   }
+  if (adminLoginFailure) throw new Error(adminLoginFailure);
   const credentials = {
     username: process.env.TEST_ADMIN_USERNAME || 'admin',
     password: process.env.TEST_ADMIN_PASSWORD || 'password123'
   };
-  await expect
-    .poll(
-      async () =>
-        (await page.request.post('/api/auth/local/login', { data: credentials })).status(),
-      { message: 'Admin login', timeout: 60_000, intervals: [1_000, 2_000] }
-    )
-    .toBe(200);
-  adminCookies = await page.context().cookies();
+  const deadline = Date.now() + 60_000;
+  let last = null;
+  while (Date.now() < deadline) {
+    const response = await page.request.post('/api/auth/local/login', { data: credentials });
+    const status = response.status();
+    if (status === 200) {
+      adminCookies = await page.context().cookies();
+      return;
+    }
+    const body = (await response.text().catch(() => '')).slice(0, 500);
+    last = `Admin login answered HTTP ${status}${body ? `: ${body}` : ''}`;
+    // The API behind the dev proxy is not up yet.
+    if (status !== 502 && status !== 503 && status !== 504) {
+      adminLoginFailure = last;
+      throw new Error(last);
+    }
+    await page.waitForTimeout(1_500);
+  }
+  adminLoginFailure = `Admin login did not succeed within 60 s (last answer: ${last || 'none'})`;
+  throw new Error(adminLoginFailure);
 }
 
 // Critical/serious violations a page still has, as axe rule → number of failing
@@ -444,6 +464,23 @@ test.describe('Accessibility — a user project page', () => {
 // practices), so they are run explicitly: a screen-reader user navigates by
 // landmark, and a second <main> (or an unlabelled duplicate) makes that list
 // ambiguous.
+// The Artifacts panel of a chat, open, over a shared chat whose share routes
+// are intercepted (see helpers/sharedChatWithArtifacts.js): no model, no
+// stored chat needed.
+test.describe('Accessibility — the Artifacts panel', () => {
+  test('has no critical or serious violations when open', async ({ page }) => {
+    await mockSharedChatWithArtifacts(page);
+    await page.goto(`/share/${SHARE_ID}`);
+    await page.getByTestId('open-artifacts').click();
+    const panel = page.getByRole('dialog', { name: /Artifacts/ });
+    await expect(panel.getByRole('listitem')).toHaveCount(3);
+    await panel.getByRole('button', { name: /^src\/index\.js/ }).click();
+    await expect(panel.getByLabel('Content of src/index.js')).toBeVisible();
+
+    await expectNoBlockingViolations(page, 'Artifacts panel');
+  });
+});
+
 test.describe('Accessibility — landmarks', () => {
   test.beforeEach(async ({ page }) => {
     await signInAsAdmin(page);

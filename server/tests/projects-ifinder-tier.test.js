@@ -11,10 +11,11 @@
  *  - the tier is offered only when the policy says so, iFinder is configured,
  *    the user has a stable principal and the Smart Collections API answers
  *    (the capability call); an older iFinder never shows it;
- *  - `GET /api/projects` merges the local list with the user's collections,
- *    built for the requesting user on every call, cached per tenant and
- *    principal and never shared; a slow or failed iFinder costs a warning, not
- *    the local list;
+ *  - `GET /api/projects/_collections` lists the user's collections to add to
+ *    their projects, built for the requesting user on every call, cached per
+ *    tenant and principal and never shared; a slow or failed iFinder costs a
+ *    warning; `GET /api/projects` lists only the collections the user added
+ *    (their stubs), with the collection's name and count;
  *  - a collection opens as a project whose documents are `ifinder-document`
  *    items, with titles fetched in batches and cached per user;
  *  - the read-only guarantee: no write route is reachable for an `ifc_` id;
@@ -173,6 +174,7 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, metho
 const route = {
   config: handlersFor(projects, 'get', '/api/projects/_config'),
   list: handlersFor(projects, 'get', '/api/projects'),
+  collections: handlersFor(projects, 'get', '/api/projects/_collections'),
   get: handlersFor(projects, 'get', '/api/projects/:projectId'),
   items: handlersFor(projects, 'get', '/api/projects/:projectId/items'),
   chats: handlersFor(projects, 'get', '/api/projects/:projectId/chats'),
@@ -260,8 +262,11 @@ beforeEach(() => {
   setPlatform();
 });
 
-const listIds = res => res.body.items.map(project => project.id);
-const listOf = async user => drive(route.list, { user });
+/** The collections the caller may add (`GET /api/projects/_collections`), as project ids. */
+const listIds = res =>
+  (res.body?.items || []).map(entry => entry.id || ifinderProjectIdOf(entry.collectionId));
+const listOf = async user => drive(route.collections, { user });
+const projectListOf = async user => drive(route.list, { user });
 
 describe('the tier policy and the capability call', () => {
   it('offers collections under both and ifinder, never under ihub', async () => {
@@ -364,7 +369,7 @@ describe('the tier policy and the capability call', () => {
 });
 
 describe('the project list', () => {
-  it('merges the collections of the caller as projects, with counts only', async () => {
+  it('lists the collections of the caller to add, with counts only', async () => {
     collection(1, ADA.email, {
       name: 'Contracts',
       documents: ['doc-a', 'doc-b'],
@@ -378,27 +383,23 @@ describe('the project list', () => {
     collection(3, GRACE.email, { name: 'Graces', documents: ['doc-g'] });
     const res = await listOf(ADA);
     assert.equal(res.statusCode, 200);
-    const mine = res.body.items.filter(project => project.tier === 'ifinder');
-    assert.deepEqual(
-      mine.map(project => project.id),
-      [pid(2), pid(1)],
-      'newest activity first, like the rest of the list'
-    );
-    const [policies] = mine;
+    assert.equal(res.body.available, true);
+    assert.deepEqual(listIds(res), [pid(2), pid(1)], 'newest first');
+    const [policies] = res.body.items;
     assert.equal(policies.name, 'Policies');
-    assert.equal(policies.readOnly, false, 'the owner may change it');
-    assert.equal(policies.usage.items, 1);
-    assert.equal(policies.items, undefined, 'the list sends no documents');
-    assert.deepEqual(policies.source, { type: 'smart-collection', collectionId: ID(2) });
-    assert.equal(policies.role, 'owner');
-    assert.equal(policies.permissions.canUse, true);
-    assert.equal(policies.permissions.canEdit, true, 'the owner renames and manages documents');
-    for (const flag of ['canShare', 'canDelete', 'canTransfer', 'canHoldChats']) {
-      assert.equal(policies.permissions[flag], false, flag);
-    }
-    assert.equal(policies.permissions.readOnly, false);
+    assert.equal(policies.documentCount, 1);
+    assert.equal(policies.added, false);
+    assert.equal(policies.projectId, undefined);
     assert.equal(JSON.stringify(res.body).includes('doc-'), false, 'no document id is listed');
     assert.deepEqual(res.body.warnings, []);
+
+    // Not added: the project list does not hold them.
+    const projectList = await projectListOf(ADA);
+    assert.deepEqual(
+      projectList.body.items.filter(project => project.tier === 'ifinder'),
+      [],
+      'a collection is a project once it is added'
+    );
   });
 
   it('gives the namespaced id a form no stored project can have', () => {
@@ -449,12 +450,11 @@ describe('the project list', () => {
     assert.equal(JSON.stringify(grace.body).includes(ID(1)), false);
 
     // The same iFinder identity from another iHub account: the data is shared
-    // by principal, the response is still built for the caller.
+    // by principal, the response is still built for the caller (whose projects
+    // decide what is added).
     const twin = await listOf(ADA_TWIN);
     assert.equal(ifinder.calls('collections').length, 2, 'same principal, same entry');
-    assert.equal(twin.body.items[0].owner.id, ADA_TWIN.id);
-    assert.equal(twin.body.items[0].owner.name, ADA_TWIN.name);
-    assert.equal(again.body.items[0].owner.id, ADA.id);
+    assert.deepEqual(listIds(twin), [pid(1)]);
   });
 
   it('keys the cache by the principal exactly as signed, case included', async () => {
