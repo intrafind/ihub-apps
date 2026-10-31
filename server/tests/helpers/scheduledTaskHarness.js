@@ -107,7 +107,13 @@ let ledger = null;
 /** A default tool definition, as shipped. */
 export async function toolDef(id) {
   return JSON.parse(
-    await fs.readFile(new URL(`../../defaults/tools/${id}.json`, import.meta.url), 'utf8')
+    await fs.readFile(
+      new URL(
+        `../../services/integrations/protocols/native/connectors/ihub/tools/${id}.json`,
+        import.meta.url
+      ),
+      'utf8'
+    )
   );
 }
 

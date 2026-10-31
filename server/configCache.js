@@ -1853,7 +1853,15 @@ class ConfigCache {
       }
       tools = tools.filter(tool => {
         if (granted.has(tool)) return true;
-        if (tool._integration) return appIntegrationTools.has(tool);
+        if (tool._integration) {
+          if (appIntegrationTools.has(tool)) return true;
+          // A built-in action under its old tool id (`ask_user`, `read_url`)
+          // is listed when the app's `tools` name it, as `getToolsForApp`
+          // offers it.
+          return (
+            Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs)
+          );
+        }
         return isToolSelected(tool, appToolRefs);
       });
     }

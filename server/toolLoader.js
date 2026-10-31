@@ -667,20 +667,25 @@ export async function getToolsForApp(app, language = null, context = {}) {
     // (below), where the installation's groups and the binding's action list
     // are checked; an `app.tools` reference to one does not bypass that.
     //
-    // Two exceptions keep old references working: the `websearch`
+    // Three exceptions keep old references working, each once the
+    // installation's own enabled and group checks pass: the `websearch`
     // installation, whose actions kept the tool ids they had as tool files
     // (`braveSearch`, `read_url`, …) — a workflow node, or an app, that lists
-    // one of those ids keeps getting the tool, once the installation's own
-    // enabled and group checks pass (ids matched exactly; `websearch` itself
-    // selects nothing here) — and the people directories, whose tools a
-    // directory id or `ldapBrowse` select as before (`isToolSelected`), with
-    // the installation's groups and the directory's own `browse.groups`
-    // holding on top of the app's selection.
+    // one of those ids keeps getting the tool (ids matched exactly;
+    // `websearch` itself selects nothing here); the people directories,
+    // whose tools a directory id or `ldapBrowse` select as before
+    // (`isToolSelected`), with the directory's own `browse.groups` holding
+    // too; and every other built-in action that kept its tool id
+    // (`fixedToolId`: iHub's own `ask_user`, `knowledge_*`, …), read as the
+    // plain tool it was — exact id or base id (`knowledge`), never the
+    // installation id.
     const webSearchOpen = isWebSearchAvailableTo(context.user);
     const selected = allTools.filter(t => {
       if (!t._integration) return isToolSelected(t, app.tools);
       if (t._peopleDirectory) return isToolSelected(t, app.tools);
-      return webSearchOpen && isWebSearchInstallationTool(t) && app.tools.includes(t.id);
+      if (isWebSearchInstallationTool(t)) return webSearchOpen && app.tools.includes(t.id);
+      if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, app.tools);
+      return false;
     });
     appTools = filterDirectoryToolsForUser(
       await filterIntegrationToolsForUser(selected, context.user),

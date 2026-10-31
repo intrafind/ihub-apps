@@ -568,15 +568,24 @@ function IntegrationInstallDialog({
                   'Leave empty for everyone who may use an app that binds this integration.'
                 )}
               />
-              <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                <input
-                  type="checkbox"
-                  className={CHECKBOX_CLASS}
-                  checked={form.enabled}
-                  onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))}
-                />
-                {t('admin.integrationCatalog.wizard.enabled', 'Enabled')}
-              </label>
+              {definition.alwaysInstalled ? (
+                <p className={HELP_CLASS}>
+                  {t(
+                    'admin.integrationCatalog.wizard.alwaysInstalledHelp',
+                    'This integration is always installed and enabled; switch single actions off below instead.'
+                  )}
+                </p>
+              ) : (
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX_CLASS}
+                    checked={form.enabled}
+                    onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  {t('admin.integrationCatalog.wizard.enabled', 'Enabled')}
+                </label>
+              )}
             </fieldset>
 
             {/* 5 Actions */}

@@ -356,6 +356,11 @@ function AdminInstalledIntegrationsPage() {
                           ? t('admin.integrationCatalog.status.disabled', 'Disabled')
                           : t('admin.integrationCatalog.status.enabled', 'Enabled')}
                       </Pill>
+                      {item.locked && (
+                        <Pill tone="blue">
+                          {t('admin.integrationCatalog.status.alwaysInstalled', 'Always installed')}
+                        </Pill>
+                      )}
                       {item.definitionMissing && (
                         <Pill tone="red">
                           {t(
@@ -484,41 +489,45 @@ function AdminInstalledIntegrationsPage() {
                     >
                       <Icon name="pencil" size="sm" />
                     </button>
-                    <button
-                      type="button"
-                      className={SECONDARY_BUTTON_CLASS}
-                      onClick={() => requestToggle(item)}
-                      disabled={busy === item.id}
-                      aria-pressed={item.enabled !== false}
-                      aria-label={
-                        item.enabled === false
-                          ? t('admin.integrationCatalog.actions.enable', 'Enable {{id}}', {
-                              id: item.id
-                            })
-                          : t('admin.integrationCatalog.actions.disable', 'Disable {{id}}', {
-                              id: item.id
-                            })
-                      }
-                      title={
-                        item.enabled === false
-                          ? t('admin.integrationCatalog.status.enable', 'Enable')
-                          : t('admin.integrationCatalog.status.disable', 'Disable')
-                      }
-                    >
-                      <Icon name={item.enabled === false ? 'check' : 'pause'} size="sm" />
-                    </button>
-                    <button
-                      type="button"
-                      className={DANGER_BUTTON_CLASS}
-                      onClick={() => setConfirm({ kind: 'remove', item })}
-                      disabled={busy === item.id}
-                      aria-label={t('admin.integrationCatalog.actions.remove', 'Remove {{id}}', {
-                        id: item.id
-                      })}
-                      title={t('common.delete', 'Delete')}
-                    >
-                      <Icon name="trash" size="sm" />
-                    </button>
+                    {!item.locked && (
+                      <button
+                        type="button"
+                        className={SECONDARY_BUTTON_CLASS}
+                        onClick={() => requestToggle(item)}
+                        disabled={busy === item.id}
+                        aria-pressed={item.enabled !== false}
+                        aria-label={
+                          item.enabled === false
+                            ? t('admin.integrationCatalog.actions.enable', 'Enable {{id}}', {
+                                id: item.id
+                              })
+                            : t('admin.integrationCatalog.actions.disable', 'Disable {{id}}', {
+                                id: item.id
+                              })
+                        }
+                        title={
+                          item.enabled === false
+                            ? t('admin.integrationCatalog.status.enable', 'Enable')
+                            : t('admin.integrationCatalog.status.disable', 'Disable')
+                        }
+                      >
+                        <Icon name={item.enabled === false ? 'check' : 'pause'} size="sm" />
+                      </button>
+                    )}
+                    {!item.locked && (
+                      <button
+                        type="button"
+                        className={DANGER_BUTTON_CLASS}
+                        onClick={() => setConfirm({ kind: 'remove', item })}
+                        disabled={busy === item.id}
+                        aria-label={t('admin.integrationCatalog.actions.remove', 'Remove {{id}}', {
+                          id: item.id
+                        })}
+                        title={t('common.delete', 'Delete')}
+                      >
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

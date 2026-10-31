@@ -13,6 +13,7 @@ import websearch from './websearch/index.js';
 import jira from './jira/index.js';
 import entra from './entra/index.js';
 import ldapDirectory from './ldapDirectory/index.js';
+import ihub from './ihub/index.js';
 
 registerConnector(ifinder);
 registerConnector(iassistant);
@@ -20,3 +21,4 @@ registerConnector(websearch);
 registerConnector(jira);
 registerConnector(entra);
 registerConnector(ldapDirectory);
+registerConnector(ihub);

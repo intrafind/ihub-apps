@@ -2953,7 +2953,8 @@
         "toolCount": "{{count}} tools",
         "userConnections_one": "1 connected user",
         "userConnections_other": "{{count}} connected users",
-        "external": "External"
+        "external": "External",
+        "alwaysInstalled": "Always installed"
       },
       "source": {
         "shipped": "Shipped",
@@ -3034,7 +3035,8 @@
         "dynamicActionsAllowlistHint": "These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.",
         "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust.",
         "description": "Description",
-        "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by."
+        "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.",
+        "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead."
       },
       "connections": {
         "title": "Connected users",

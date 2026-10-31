@@ -543,6 +543,12 @@ export const integrationDefinitionSchema = z
     builtIn: z.boolean().prefault(false),
     /** Exactly one installation, with this fixed id (the built-in iFinder is `ifinder`). */
     singleton: z.object({ instanceId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) }).optional(),
+    /**
+     * Built-in singletons only: the installation exists and is enabled at all
+     * times (iHub's own tools). It is created when missing and can neither be
+     * removed nor disabled; only its actions and groups are edited.
+     */
+    alwaysInstalled: z.boolean().prefault(false),
     protocol: integrationProtocolSchema,
     auth: integrationAuthSchema,
     install: z.array(configFieldSchema).prefault([]),
@@ -593,6 +599,14 @@ export const integrationDefinitionSchema = z
         });
       }
     });
+
+    if (def.alwaysInstalled && !(def.builtIn && def.singleton)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['alwaysInstalled'],
+        message: 'only a built-in singleton can be always installed'
+      });
+    }
 
     if (def.protocol.type === 'script' && def.builtIn) {
       ctx.addIssue({

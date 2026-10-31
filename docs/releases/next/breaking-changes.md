@@ -165,3 +165,26 @@ integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
 - **A directory whose id another installation already holds** is not moved: it is kept in
   `contents/config/peopleDirectories.unmigrated.json` with a warning in the log. Install it as an
   LDAP people directory under a free id and bind it to its apps.
+
+## iHub's Own Tool Files Retired
+
+Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `evidence.json`,
+`write_artifact.json`, `read_memory.json`, `write_memory.json`, `read_inbox.json`,
+`write_inbox.json`, `create_task.json`, `list_tasks.json`, `mark_task_done.json`,
+`schedule_task.json`, `list_scheduled_tasks.json`, `update_scheduled_task.json`,
+`delete_scheduled_task.json`, `run_scheduled_task_now.json`, `list_task_runs.json` and
+`get_task_run.json` when they are the shipped files; the always-installed integration `ihub`
+(`com.intrafind/ihub`) owns these tools under the same ids.
+
+- **Admin → Tools** no longer lists them and they cannot be switched off there; switch the
+  action off on the `ihub` installation instead (a file that was `enabled: false` is migrated
+  into `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a
+  warning in the log and keeps serving its tool in place of the installation's action until it
+  is deleted; move the change over first.
+- **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
+  grants keep selecting the tools. `tools: ["ihub"]` selects nothing.
+- **The `ihub` installation** cannot be removed or disabled: `DELETE
+  /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
+  (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
+- **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
+  shipped copy is deleted on the next start.

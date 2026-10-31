@@ -72,6 +72,8 @@ function catalogEntryView(entry, language, instances) {
     dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
     /** The definition brings a connector module that runs in the server process. */
     runsCode: def.protocol.type === 'script',
+    /** Installed at all times (iHub's own tools): no enable switch, no remove. */
+    alwaysInstalled: def.alwaysInstalled === true,
     authModes: def.auth.modes,
     /** Sign-in modes the adapter can run in this release (all declared ones when absent). */
     supportedAuthModes: getProtocolAdapter(def.protocol.type)?.supportedAuthModes || [
@@ -150,7 +152,9 @@ function instanceView(instance, resolved, language) {
     /** Live connection health, for adapters that keep connections (MCP). */
     status,
     /** Whether the installation signs every user in (per-user connections to manage). */
-    perUser: instance.auth?.mode === 'oauth-user'
+    perUser: instance.auth?.mode === 'oauth-user',
+    /** An always-installed built-in (iHub's own tools): never removed or disabled. */
+    locked: Boolean(resolved?.definition?.alwaysInstalled)
   };
 }
 

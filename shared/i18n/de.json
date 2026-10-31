@@ -3244,7 +3244,8 @@
         "toolCount": "{{count}} Tools",
         "userConnections_one": "1 verbundene Person",
         "userConnections_other": "{{count}} verbundene Personen",
-        "external": "Extern"
+        "external": "Extern",
+        "alwaysInstalled": "Immer installiert"
       },
       "source": {
         "shipped": "Mitgeliefert",
@@ -3325,7 +3326,8 @@
         "dynamicActionsAllowlistHint": "Das sind die Tools, die der Server listet; nur die angehakten dürfen laufen, und ein Tool, das der Server später hinzufügt, bleibt aus, bis Sie es einschalten.",
         "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen.",
         "description": "Beschreibung",
-        "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird."
+        "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
+        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab."
       },
       "connections": {
         "title": "Verbundene Benutzer",

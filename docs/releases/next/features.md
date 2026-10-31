@@ -196,3 +196,21 @@ Installed**, one installation per directory, and no longer a page of their own.
   `ldapBrowse` references working.
 
 See [People Directory Search](../../people-directory-search.md).
+
+## iHub's Own Tools Are the Always-Installed iHub Integration
+
+`ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
+tools and the scheduled-task tools are the actions of the built-in integration **iHub**
+(installation `ihub`) under **Admin → Integrations → Installed**, instead of tool files.
+
+- **Always there:** the installation exists and is enabled at all times — it is created when
+  missing and shows **Always installed** without a remove or disable switch. Edit it to switch
+  single actions off for every app (what `enabled: false` on a tool file did) or to limit the
+  groups.
+- **Nothing changes for apps:** the tools keep their ids, so `tools: ["ask_user"]`,
+  `["knowledge"]`, `["write_artifact"]` and group grants work as before; the rules for
+  `ask_user` (kept through a chat's tool narrowing) and the scheduled-task tools are unchanged.
+  Every action carries its side effect (read, write, destructive).
+- **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
+  (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
+  lists only custom tools from now on.
