@@ -17,9 +17,6 @@ import {
   SECONDARY_BUTTON_CLASS
 } from '../people-directories/formStyles';
 
-/** Keys of `app.integrations` that are built-in settings, not installed instances. */
-const BUILT_IN_KEYS = new Set(['ifinder', 'iassistant']);
-
 /**
  * App editor section: which installed integrations the app binds, which of
  * their actions, and the default scope. Writes `app.integrations[instanceId]`
@@ -46,7 +43,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
   const staleIds = useMemo(() => {
     if (loading || error) return [];
     const installedIds = new Set(installed.map(i => i.id));
-    return Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !installedIds.has(id));
+    return Object.keys(bindings).filter(id => !installedIds.has(id));
   }, [bindings, installed, loading, error]);
 
   useEffect(() => {
@@ -68,7 +65,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
 
   // Load the actions of every bound installation once it is bound.
   useEffect(() => {
-    const boundIds = Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !details[id]);
+    const boundIds = Object.keys(bindings).filter(id => !details[id]);
     if (boundIds.length === 0) return;
     let cancelled = false;
     void (async () => {
