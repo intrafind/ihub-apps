@@ -17,15 +17,29 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { up, precondition, version } from '../migrations/V123__web_page_reader_entry_point.js';
 
-// The page reader's shipped default now ships as read_url.json (its id was
-// renamed from webContentExtractor to read_url by V157); its content — the
-// script and parameters V123 cares about — is otherwise unchanged.
-const SHIPPED = JSON.parse(
+// The page reader ships as the `readUrl` action of the built-in web search
+// connector now (V157 renamed its id to read_url, V195 moved it out of the
+// tool files); its parameters — what V123 cares about — are unchanged, and a
+// definition as this release last shipped it carried the entry point already.
+const CONNECTOR_PARAMETERS = JSON.parse(
   await readFile(
-    fileURLToPath(new URL('../defaults/tools/read_url.json', import.meta.url)),
+    fileURLToPath(
+      new URL(
+        '../services/integrations/protocols/native/connectors/websearch/parameters.json',
+        import.meta.url
+      )
+    ),
     'utf-8'
   )
 );
+const SHIPPED = {
+  id: 'webContentExtractor',
+  name: CONNECTOR_PARAMETERS.readUrl.name,
+  description: CONNECTOR_PARAMETERS.readUrl.description,
+  script: 'webContentExtractor.js',
+  method: 'extractForTool',
+  parameters: CONNECTOR_PARAMETERS.readUrl.parameters
+};
 
 /** A webContentExtractor definition as an older release shipped it. */
 function legacyTool(extra = {}) {

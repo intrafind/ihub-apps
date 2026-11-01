@@ -1,0 +1,152 @@
+{
+  "id": "com.intrafind/office365",
+  "version": "1.0.0",
+  "name": {
+    "en": "Microsoft Office 365 (OneDrive / SharePoint)",
+    "de": "Microsoft Office 365 (OneDrive / SharePoint)"
+  },
+  "description": {
+    "en": "Let users browse and attach files from OneDrive, SharePoint and Teams through Microsoft Graph, each signed in with their own Microsoft account. Holds the Azure app registration; users connect under Settings → Integrations or from the file picker.",
+    "de": "Benutzer Dateien aus OneDrive, SharePoint und Teams über Microsoft Graph durchsuchen und anhängen lassen, jeder mit dem eigenen Microsoft-Konto angemeldet. Hält die Azure-App-Registrierung; Benutzer verbinden sich unter Einstellungen → Integrationen oder aus der Dateiauswahl."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["storage", "microsoft", "files"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/office365-integration.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "office365"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "office365"
+  },
+  "auth": {
+    "modes": ["oauth-user"]
+  },
+  "install": [
+    {
+      "key": "tenantId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Tenant ID",
+        "de": "Mandanten-ID"
+      },
+      "description": {
+        "en": "The Directory (tenant) ID of the Azure app registration.",
+        "de": "Die Verzeichnis-ID (Mandanten-ID) der Azure-App-Registrierung."
+      }
+    },
+    {
+      "key": "clientId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Client ID",
+        "de": "Client-ID"
+      },
+      "description": {
+        "en": "The Application (client) ID of the Azure app registration.",
+        "de": "Die Anwendungs-ID (Client-ID) der Azure-App-Registrierung."
+      }
+    },
+    {
+      "key": "clientSecretRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "required": true,
+      "title": {
+        "en": "Client secret",
+        "de": "Client-Secret"
+      },
+      "description": {
+        "en": "A credential of type secret holding the client secret value (Certificates & secrets).",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret (Zertifikate & Geheimnisse)."
+      }
+    },
+    {
+      "key": "redirectUri",
+      "type": "url",
+      "title": {
+        "en": "Redirect URI",
+        "de": "Redirect-URI"
+      },
+      "description": {
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/office365/<provider id>/callback); the test shows the resulting URL.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/office365/<provider id>/callback); der Test zeigt die resultierende URL."
+      }
+    },
+    {
+      "key": "sourcePersonalDrive",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: personal OneDrive",
+        "de": "Quelle: persönliches OneDrive"
+      }
+    },
+    {
+      "key": "sourceFollowedSites",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: followed SharePoint sites",
+        "de": "Quelle: gefolgte SharePoint-Sites"
+      }
+    },
+    {
+      "key": "sourceTeams",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: Microsoft Teams",
+        "de": "Quelle: Microsoft Teams"
+      }
+    },
+    {
+      "key": "siteUrl",
+      "type": "url",
+      "advanced": true,
+      "title": {
+        "en": "SharePoint site URL",
+        "de": "SharePoint-Site-URL"
+      },
+      "description": {
+        "en": "Restrict access to one SharePoint site.",
+        "de": "Zugriff auf eine SharePoint-Site beschränken."
+      }
+    },
+    {
+      "key": "driveId",
+      "type": "string",
+      "advanced": true,
+      "title": {
+        "en": "Drive ID",
+        "de": "Laufwerks-ID"
+      },
+      "description": {
+        "en": "Restrict access to one drive.",
+        "de": "Zugriff auf ein Laufwerk beschränken."
+      }
+    },
+    {
+      "key": "providerId",
+      "type": "string",
+      "advanced": true,
+      "pattern": "^[A-Za-z0-9._-]{1,100}$",
+      "title": {
+        "en": "Provider id",
+        "de": "Anbieter-ID"
+      },
+      "description": {
+        "en": "The id in the callback URL (/api/integrations/office365/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
+        "de": "Die ID in der Callback-URL (/api/integrations/office365/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
+      }
+    }
+  ],
+  "capabilities": ["files"],
+  "actions": []
+}

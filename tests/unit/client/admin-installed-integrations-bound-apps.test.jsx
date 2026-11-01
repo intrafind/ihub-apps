@@ -186,4 +186,39 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
       iassistant: {}
     });
   });
+
+  test('a binding is required unless its Required switch is off', async () => {
+    mockApi.fetchInstalledIntegrations.mockResolvedValue({ items: INSTALLED });
+    mockApi.fetchInstalledIntegration.mockResolvedValue({ actions: [], definition: null });
+    const onChange = jest.fn();
+    render(
+      <MemoryRouter>
+        <IntegrationsConfigSection
+          integrations={{
+            'ckan-demo': { actions: ['search_datasets'] },
+            lonely: { required: false }
+          }}
+          onChange={onChange}
+        />
+      </MemoryRouter>
+    );
+    const required = await screen.findAllByRole('checkbox', { name: /^Required/ });
+    expect(required).toHaveLength(2);
+    // Absent `required` renders as on; an explicit `false` as off.
+    expect(required[0]).toBeChecked();
+    expect(required[1]).not.toBeChecked();
+
+    fireEvent.click(required[0]);
+    expect(onChange).toHaveBeenLastCalledWith({
+      'ckan-demo': { actions: ['search_datasets'], required: false },
+      lonely: { required: false }
+    });
+
+    fireEvent.click(required[1]);
+    // Switching it back on drops the key instead of writing `true`.
+    expect(onChange).toHaveBeenLastCalledWith({
+      'ckan-demo': { actions: ['search_datasets'] },
+      lonely: {}
+    });
+  });
 });

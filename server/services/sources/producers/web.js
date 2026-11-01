@@ -69,14 +69,22 @@ export function isWebSearchTool(toolId) {
  */
 const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
+/** The installed integration that owns those scripts as its actions. */
+const WEB_SEARCH_INSTANCE_ID = 'websearch';
+
+/** Its search actions (the page reader, `readUrl`, reads one page and is not one). */
+const WEB_SEARCH_ACTIONS = new Set(['brave', 'qwant', 'staan']);
+
 /** Tool ids `toolLoader.runTool` dispatches by id, before it looks at a script. */
 const DISPATCHED_BY_ID =
   /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource|find_skill)$/;
 
 /**
- * Whether the call ran one of the platform's own web search scripts. Decided
- * by what the definition runs, the way `toolLoader.runTool` dispatches it, and
- * never by the tool's id or name: a custom, OpenAPI, MCP or A2A tool called
+ * Whether the call ran one of the platform's own web search scripts: a search
+ * action of the built-in `websearch` installation (the way they ship), or a
+ * tool file that still runs one of the scripts. Decided by what the
+ * definition runs, the way `toolLoader.runTool` dispatches it, and never by
+ * the tool's id or name: a custom, OpenAPI, MCP or A2A tool called
  * `braveSearch` runs something else.
  *
  * @param {string} toolId
@@ -87,6 +95,13 @@ function isBuiltInWebSearch(toolId, toolDef) {
   if (!toolDef || DISPATCHED_BY_ID.test(String(toolId || ''))) return false;
   if (toolDef._mcp || toolDef._a2a || toolDef.type === 'openapi' || toolDef.isSpecialTool) {
     return false;
+  }
+  const integration = toolDef._integration;
+  if (integration) {
+    return (
+      integration.instanceId === WEB_SEARCH_INSTANCE_ID &&
+      WEB_SEARCH_ACTIONS.has(integration.action)
+    );
   }
   return BUILT_IN_WEB_SEARCH_SCRIPTS.has(toolDef.script);
 }

@@ -44,7 +44,10 @@ capability, not a user-selectable one:
   tools) are listed there.
 
 No configuration is needed for this — listing `ask_user` (or any
-`requiresUserInput` tool) in the app's `tools` is enough.
+`requiresUserInput` tool) in the app's `tools` is enough. `ask_user` is an
+action of the always-installed built-in integration **iHub** (`ihub`, see
+[Integrations](integrations.md#built-in-integrations)); there is no tool file for
+it, and switching the action off there removes it from every app.
 
 ## Tool Parameters
 

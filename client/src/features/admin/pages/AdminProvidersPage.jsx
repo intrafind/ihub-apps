@@ -10,7 +10,6 @@ import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
-import WebsearchTestResult from '../components/WebsearchTestResult';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import { translateModelTestMessage } from '../utils/modelTestMessages';
@@ -203,64 +202,6 @@ function AdminProvidersPage() {
     }));
   };
 
-  /**
-   * Run one live, cache-bypassing search against a web search provider.
-   *
-   * Unlike the model test, a failure here comes back as HTTP 200 with a
-   * diagnosis: "Qwant blocks this server's IP" is the test working, not the
-   * request failing. Only a genuinely broken call (bad id, expired admin
-   * session) throws, and that is what the catch renders.
-   */
-  const testWebsearchProvider = async providerId => {
-    setHealthStatus(prev => ({
-      ...prev,
-      [providerId]: { status: 'testing', websearch: null, expanded: true }
-    }));
-
-    try {
-      const response = await makeAdminApiCall(`/admin/providers/${providerId}/websearch-test`, {
-        method: 'POST',
-        body: {}
-      });
-      const data = response?.data || {};
-      // Map the diagnosis onto a badge. `blocked` and `rate_limited` are kept
-      // out of `error` deliberately: neither is something the admin broke, and
-      // a red "Failed" would send them hunting for a misconfiguration.
-      const BADGE_BY_DIAGNOSIS = {
-        ok: 'ok',
-        empty: 'partial',
-        rate_limited: 'partial',
-        blocked: 'blocked'
-      };
-      const status = BADGE_BY_DIAGNOSIS[data?.diagnosis?.status] || 'error';
-
-      setHealthStatus(prev => ({
-        ...prev,
-        [providerId]: { status, websearch: data, expanded: true }
-      }));
-    } catch (err) {
-      const body = err?.response?.data || {};
-      setHealthStatus(prev => ({
-        ...prev,
-        [providerId]: {
-          status: 'error',
-          websearch: {
-            diagnosis: {
-              status: 'error',
-              title: t('admin.providers.websearchTest.couldNotRun', 'Could not run the test'),
-              detail:
-                body.error || (err?.response?.status ? `HTTP ${err.response.status}` : err.message),
-              remediation: []
-            },
-            results: [],
-            environment: {}
-          },
-          expanded: true
-        }
-      }));
-    }
-  };
-
   const testAllProviders = async () => {
     setTestingAll(true);
     const llmProviders = providers.filter(
@@ -268,10 +209,6 @@ function AdminProvidersPage() {
     );
     for (const provider of llmProviders) {
       await testProvider(provider.id);
-    }
-    // Web search providers have no models to iterate; each is one live search.
-    for (const provider of providers.filter(p => p.category === 'websearch')) {
-      await testWebsearchProvider(provider.id);
     }
     setTestingAll(false);
   };
@@ -332,10 +269,9 @@ function AdminProvidersPage() {
     return acc;
   }, {});
 
-  const categoryOrder = ['llm', 'websearch', 'cloudstorage', 'custom'];
+  const categoryOrder = ['llm', 'cloudstorage', 'custom'];
   const categoryLabels = {
     llm: t('admin.providers.category.llm', 'LLM Providers'),
-    websearch: t('admin.providers.category.websearch', 'Web Search Providers'),
     cloudstorage: t('admin.providers.category.cloudstorage', 'Cloud Storage Providers'),
     custom: t('admin.providers.category.custom', 'Custom / Generic API Keys')
   };
@@ -412,10 +348,7 @@ function AdminProvidersPage() {
               const categoryProviders = groupedProviders[category] || [];
               if (categoryProviders.length === 0) return null;
               const isLlm = category === 'llm';
-              // Web search providers are testable too — one live search rather
-              // than one call per model — so they get the same column.
-              const isWebsearch = category === 'websearch';
-              const hasConnectivity = isLlm || isWebsearch;
+              const hasConnectivity = isLlm;
 
               return (
                 <div key={category}>
@@ -460,9 +393,8 @@ function AdminProvidersPage() {
                           const linkedModels = linkedModelsByProvider[provider.id] || [];
                           const isExpanded = providerHealth.expanded;
                           const hasResults =
-                            (providerHealth.results && providerHealth.results.length > 0) ||
-                            Boolean(providerHealth.websearch);
-                          const colSpan = isLlm ? 7 : isWebsearch ? 6 : 5;
+                            providerHealth.results && providerHealth.results.length > 0;
+                          const colSpan = isLlm ? 7 : 5;
 
                           return (
                             <Fragment key={provider.id}>
@@ -614,22 +546,6 @@ function AdminProvidersPage() {
                                         {t('admin.providers.test', 'Test')}
                                       </button>
                                     )}
-                                    {isWebsearch && (
-                                      <button
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          void testWebsearchProvider(provider.id);
-                                        }}
-                                        disabled={providerHealth.status === 'testing' || testingAll}
-                                        className="text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={t(
-                                          'admin.providers.websearchTest.buttonTitle',
-                                          'Run one live search and report whether this server can reach the provider'
-                                        )}
-                                      >
-                                        {t('admin.providers.test', 'Test')}
-                                      </button>
-                                    )}
                                     <button
                                       onClick={e => {
                                         e.stopPropagation();
@@ -657,17 +573,6 @@ function AdminProvidersPage() {
                                   </div>
                                 </td>
                               </tr>
-                              {/* Expandable web search diagnosis row */}
-                              {isWebsearch && isExpanded && providerHealth.websearch && (
-                                <tr>
-                                  <td
-                                    colSpan={colSpan}
-                                    className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50"
-                                  >
-                                    <WebsearchTestResult result={providerHealth.websearch} />
-                                  </td>
-                                </tr>
-                              )}
                               {/* Expandable model test results row */}
                               {isLlm && isExpanded && hasResults && (
                                 <tr>

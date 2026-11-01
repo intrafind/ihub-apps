@@ -13,7 +13,6 @@ import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
 import { zHttpUrl } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
-import { INTEGRATION_IDS } from '../integrationRegistry.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -103,6 +102,9 @@ const variablesPanelSchema = z
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
+    // Whether the app is hidden while the `websearch` installation is missing
+    // or disabled. Off by default: the app stays available without web search.
+    required: z.boolean().optional().prefault(false),
     provider: z.enum(['auto', 'brave', 'staan', 'qwant']).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
@@ -481,7 +483,9 @@ const integrationScopeSettingsSchema = z
 // and `iassistant` (scope picker settings, #3050) and every installed
 // integration the app binds (Admin → Integrations → Installed, #3061). A key
 // for an installed integration binds it; `actions` narrows it to a subset of
-// the installation's actions.
+// the installation's actions. A key may also be a definition id
+// (`com.intrafind/ldap-directory`, with its one `/`): that binds every
+// installation of the definition, including ones installed later.
 const appIntegrationBindingSchema = integrationScopeSettingsSchema
   .extend({
     // Offer "all my search profiles" (iFinder 6.9+) beside the iAssistants.
@@ -489,13 +493,17 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
     // Actions of an installed integration the app offers; absent = every available action.
     actions: z.array(z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/)).optional(),
     // Whose credential the actions run with (iteration 1 knows `none` and `shared`).
-    connection: z.enum(['none', 'shared', 'user']).optional()
+    connection: z.enum(['none', 'shared', 'user']).optional(),
+    // Whether the app is hidden while the installation is missing or disabled
+    // (absent = true). `false`: the app stays available without the
+    // installation's actions, scopes and sources.
+    required: z.boolean().optional()
   })
   .strict();
 
 const appIntegrationsSchema = z
   .record(
-    z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/, 'Invalid integration id'),
+    z.string().regex(/^[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?$/, 'Invalid integration id'),
     appIntegrationBindingSchema
   )
   .optional();
@@ -592,7 +600,13 @@ const baseAppConfigSchema = z.object({
   requiredFeatures: z.array(z.enum(FEATURE_IDS)).optional(),
   // Integrations (Admin → Integrations, e.g. `ifinder`) the app needs; while one
   // is off, users do not get the app at all, as if it were disabled.
-  requiredIntegrations: z.array(z.enum(INTEGRATION_IDS)).optional(),
+  // Retired: the last built-in check (`peopleDirectories`) became
+  // installations in V198. Bind the installation or its definition under
+  // `integrations` instead; only an empty list passes.
+  requiredIntegrations: z
+    .array(z.string())
+    .max(0, 'requiredIntegrations is retired; bind the integration under "integrations"')
+    .optional(),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

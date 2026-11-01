@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `requiredIntegrations` on an app: users do not get it while the integration
- * is off; and finishing the iFinder setup enables the iAssistant model once.
+ * An app's integration bindings: users do not get the app while a required
+ * installation (or, for a definition binding, every installation of the
+ * definition) is off; `requiredIntegrations` is retired; and finishing the
+ * iFinder setup enables the iAssistant model once.
  */
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,7 +18,7 @@ import configStore from '../services/config/ConfigStore.js';
 import {
   areAppIntegrationsEnabled,
   getIntegrationStatus,
-  isIntegrationEnabled,
+  isDefinitionBinding,
   missingAppIntegrations
 } from '../integrationRegistry.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
@@ -31,16 +33,46 @@ const APPS = [
   { id: 'chat', enabled: true },
   // Binds the built-in iFinder installation (V192).
   { id: 'ifinder-search', enabled: true, integrations: { ifinder: {} } },
-  { id: 'people-directory', enabled: true, requiredIntegrations: ['peopleDirectories'] },
+  // Binds every installation of a definition (V198): offered while one is on.
+  { id: 'people-directory', enabled: true, integrations: { 'com.intrafind/ldap-directory': {} } },
   // Binds an installed integration (#3061): offered only while it is installed and on.
   { id: 'open-data', enabled: true, integrations: { 'open-data-portal': {} } }
 ];
 
 describe('areAppIntegrationsEnabled', () => {
-  const app = { id: 'x', requiredIntegrations: ['ifinder'] };
-
   it('is true for an app that requires nothing', () => {
     assert.equal(areAppIntegrationsEnabled({ id: 'chat' }, {}), true);
+  });
+
+  it('stays available without the websearch installation unless web search is required', () => {
+    // Web search is an enhancement for most apps: on by itself it never hides the app.
+    const optional = { id: 'web', websearch: { enabled: true } };
+    assert.equal(areAppIntegrationsEnabled(optional, { installedIntegrations: [] }), true);
+    assert.deepEqual(
+      missingAppIntegrations(optional, {
+        installedIntegrations: [{ id: 'websearch', enabled: false }]
+      }),
+      []
+    );
+    const app = { id: 'web', websearch: { enabled: true, required: true } };
+    assert.equal(areAppIntegrationsEnabled(app, { installedIntegrations: [] }), false);
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'websearch', enabled: false }]
+      }),
+      false
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(app, { installedIntegrations: [{ id: 'websearch' }] }),
+      true
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(
+        { id: 'plain', websearch: { enabled: false } },
+        { installedIntegrations: [] }
+      ),
+      true
+    );
   });
 
   it('follows the ifinder installation', () => {
@@ -58,21 +90,59 @@ describe('areAppIntegrationsEnabled', () => {
     );
   });
 
-  it('counts people directories as on with one enabled directory', () => {
-    const on = id => isIntegrationEnabled('peopleDirectories', { peopleDirectories: id });
-    assert.equal(on({ directories: [{ id: 'a' }] }), true);
-    assert.equal(on({ directories: [{ id: 'a', enabled: false }, { id: 'b' }] }), true);
-    assert.equal(on({ directories: [{ id: 'a', enabled: false }] }), false);
-    assert.equal(on({ directories: [] }), false);
-    assert.equal(on(undefined), false);
+  it('counts a definition binding as on with one enabled installation of it', () => {
+    const app = { id: 'people', integrations: { 'com.intrafind/ldap-directory': {} } };
+    const ldap = (id, enabled = true) => ({
+      id,
+      definition: 'com.intrafind/ldap-directory',
+      enabled
+    });
+    assert.deepEqual(missingAppIntegrations(app, {}), ['com.intrafind/ldap-directory']);
+    assert.deepEqual(
+      missingAppIntegrations(app, { installedIntegrations: [ldap('corp', false)] }),
+      ['com.intrafind/ldap-directory']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [ldap('corp', false), ldap('x500bund')]
+      }),
+      []
+    );
+    // An installation id wins over a definition id when both could match.
+    assert.equal(
+      isDefinitionBinding('com.intrafind/ldap-directory', {
+        installedIntegrations: [ldap('corp')]
+      }),
+      true
+    );
+    assert.equal(isDefinitionBinding('corp', { installedIntegrations: [ldap('corp')] }), false);
+    assert.equal(isDefinitionBinding('nope', { installedIntegrations: [ldap('corp')] }), false);
+    // Optional definition bindings never hide the app.
+    const optional = {
+      id: 'p',
+      integrations: { 'com.intrafind/ldap-directory': { required: false } }
+    };
+    assert.deepEqual(missingAppIntegrations(optional, {}), []);
   });
 
-  it('reports every built-in check and every installation', () => {
+  it('reports every installation and every installed definition', () => {
     const status = getIntegrationStatus({
-      peopleDirectories: { directories: [{ id: 'd', enabled: true }] },
-      installedIntegrations: [{ id: 'ifinder' }, { id: 'iassistant', enabled: false }]
+      installedIntegrations: [
+        { id: 'ifinder', definition: 'com.intrafind/ifinder' },
+        { id: 'iassistant', definition: 'com.intrafind/iassistant', enabled: false },
+        { id: 'corp', definition: 'com.intrafind/ldap-directory', enabled: false },
+        { id: 'x500bund', definition: 'com.intrafind/ldap-directory' }
+      ]
     });
-    assert.deepEqual(status, { ifinder: true, iassistant: false, peopleDirectories: true });
+    assert.deepEqual(status, {
+      'com.intrafind/ifinder': true,
+      'com.intrafind/iassistant': false,
+      'com.intrafind/ldap-directory': true,
+      ifinder: true,
+      iassistant: false,
+      corp: false,
+      x500bund: true
+    });
   });
 
   it('requires every installation an app binds to exist and be enabled', () => {
@@ -97,13 +167,46 @@ describe('areAppIntegrationsEnabled', () => {
     );
   });
 
-  it('reports a requirement and a binding once each, in order', () => {
+  it('skips a binding marked optional and the connection it would pull in', () => {
+    const optional = {
+      id: 'assistant',
+      integrations: { 'open-data-portal': { required: false }, ifinder: {} }
+    };
+    // Only the required binding counts; the optional one neither hides nor is listed.
+    assert.deepEqual(missingAppIntegrations(optional, {}), ['ifinder']);
+    assert.equal(
+      areAppIntegrationsEnabled(optional, { installedIntegrations: [{ id: 'ifinder' }] }),
+      true
+    );
+    // An optional iAssistant binding does not require the iFinder connection either.
+    const assistant = { id: 'a', integrations: { iassistant: { actions: [], required: false } } };
+    assert.deepEqual(missingAppIntegrations(assistant, {}), []);
+    const requiredAssistant = { id: 'a', integrations: { iassistant: { actions: [] } } };
+    assert.deepEqual(missingAppIntegrations(requiredAssistant, {}), ['iassistant', 'ifinder']);
+  });
+
+  it('accepts `required` on a binding and on web search', () => {
+    const base = { name: { en: 'x' }, description: { en: 'x' }, color: '#4F46E5', icon: 'chat' };
+    const parsed = appConfigSchema.safeParse({
+      ...base,
+      id: 'x',
+      integrations: { 'open-data-portal': { required: false }, ifinder: { required: true } },
+      websearch: { enabled: true, required: true }
+    });
+    assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
+    assert.equal(parsed.data.integrations['open-data-portal'].required, false);
+    assert.equal(parsed.data.websearch.required, true);
+    // Absent means optional for web search and required for a binding.
+    const defaults = appConfigSchema.safeParse({ ...base, id: 'y', websearch: { enabled: true } });
+    assert.equal(defaults.data.websearch.required, false);
+  });
+
+  it('reports each binding once, in order', () => {
     const both = {
       id: 'y',
-      requiredIntegrations: ['peopleDirectories'],
-      integrations: { ifinder: {} }
+      integrations: { 'com.intrafind/ldap-directory': {}, ifinder: {} }
     };
-    assert.deepEqual(missingAppIntegrations(both, {}), ['peopleDirectories', 'ifinder']);
+    assert.deepEqual(missingAppIntegrations(both, {}), ['com.intrafind/ldap-directory', 'ifinder']);
     const scoped = {
       id: 'x',
       integrations: { ifinder: { defaultScope: 'contracts' }, iassistant: {} }
@@ -160,19 +263,28 @@ describe('areAppIntegrationsEnabled', () => {
   });
 
   it('counts an unknown integration as off', () => {
-    assert.equal(areAppIntegrationsEnabled({ requiredIntegrations: ['nope'] }, {}), false);
+    assert.equal(areAppIntegrationsEnabled({ integrations: { nope: {} } }, {}), false);
   });
 
   it('is validated in the app schema, and the shipped apps bind their integrations', async () => {
     const shipped = {
       iassistant: { integrations: { iassistant: { actions: [] } } },
       'ifinder-search': { integrations: { ifinder: { scopePicker: 'menu' } } },
-      'people-directory': { requiredIntegrations: ['peopleDirectories'] }
+      'people-directory': { integrations: { 'com.intrafind/ldap-directory': {} } },
+      'ldap-browser': {
+        integrations: {
+          'com.intrafind/ldap-directory': {
+            actions: ['browse_search', 'browse_read', 'browse_children']
+          }
+        }
+      }
     };
     for (const [id, expected] of Object.entries(shipped)) {
       const app = JSON.parse(await fs.readFile(path.join(APPS_DIR, `${id}.json`), 'utf8'));
       for (const [key, value] of Object.entries(expected)) assert.deepEqual(app[key], value);
-      assert.equal(app.enabled, true);
+      // The LDAP browser ships disabled (raw entries, admins only).
+      assert.equal(app.enabled, id !== 'ldap-browser');
+      assert.equal('requiredIntegrations' in app, false);
       assert.equal(
         (app.tools || []).some(t => String(t).startsWith('iFinder')),
         false,
@@ -181,11 +293,25 @@ describe('areAppIntegrationsEnabled', () => {
       const parsed = appConfigSchema.safeParse(app);
       assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
     }
-    const typo = appConfigSchema.safeParse({ id: 'x', requiredIntegrations: ['ifindr'] });
-    assert.equal(typo.success, false);
-    // `ifinder` is an installation now, not a built-in requirement id.
-    const old = appConfigSchema.safeParse({ id: 'x', requiredIntegrations: ['ifinder'] });
-    assert.equal(old.success, false);
+    // `requiredIntegrations` is retired (V198): a non-empty list is rejected.
+    for (const id of ['ifindr', 'ifinder', 'peopleDirectories']) {
+      assert.equal(
+        appConfigSchema.safeParse({ id: 'x', requiredIntegrations: [id] }).success,
+        false
+      );
+    }
+    // A definition id (with its one "/") is a valid binding key.
+    const base = { name: { en: 'x' }, description: { en: 'x' }, color: '#4F46E5', icon: 'chat' };
+    const definitionBinding = appConfigSchema.safeParse({
+      ...base,
+      id: 'x',
+      integrations: { 'com.intrafind/ldap-directory': { actions: ['search_people'] } }
+    });
+    assert.equal(definitionBinding.success, true, JSON.stringify(definitionBinding.error?.issues));
+    assert.equal(
+      appConfigSchema.safeParse({ ...base, id: 'x', integrations: { 'a/b/c': {} } }).success,
+      false
+    );
   });
 
   it('no longer ships the retired document actions app', async () => {
@@ -193,14 +319,13 @@ describe('areAppIntegrationsEnabled', () => {
   });
 });
 
-describe('configCache.getApps with requiredIntegrations', () => {
+describe('configCache.getApps with integration bindings', () => {
   beforeEach(() => mock.restoreAll());
 
-  function serve(platform, peopleDirectories = { directories: [] }, installed = []) {
+  function serve(platform, _unused, installed = []) {
     mock.method(configCache, 'get', key => {
       if (key === 'config/apps.json') return { data: APPS, etag: '"apps-etag"' };
       if (key === 'config/platform.json') return { data: platform };
-      if (key === 'config/peopleDirectories.json') return { data: peopleDirectories };
       if (key === 'config/integrations.json') return { data: { installed } };
       return null;
     });
@@ -237,6 +362,24 @@ describe('configCache.getApps with requiredIntegrations', () => {
     serve({ iFinder: { enabled: true } }, undefined, [{ id: 'open-data-portal' }]);
     assert.equal(
       configCache.getApps().data.some(a => a.id === 'open-data'),
+      true
+    );
+  });
+
+  it('offers an app bound to a definition once one of its installations is on', () => {
+    serve({}, undefined, [
+      { id: 'corp', definition: 'com.intrafind/ldap-directory', enabled: false }
+    ]);
+    assert.equal(
+      configCache.getApps().data.some(a => a.id === 'people-directory'),
+      false
+    );
+    serve({}, undefined, [
+      { id: 'corp', definition: 'com.intrafind/ldap-directory', enabled: false },
+      { id: 'x500bund', definition: 'com.intrafind/ldap-directory' }
+    ]);
+    assert.equal(
+      configCache.getApps().data.some(a => a.id === 'people-directory'),
       true
     );
   });

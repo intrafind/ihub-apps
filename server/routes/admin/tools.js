@@ -15,10 +15,6 @@ import logger from '../../utils/logger.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import {
-  findDirectoryClaimedBy,
-  sendDirectoryIdClash
-} from '../../services/peopleDirectory/PeopleDirectoryService.js';
-import {
   sendInternalError,
   sendNotFound,
   sendBadRequest,
@@ -520,8 +516,6 @@ export default function registerAdminToolsRoutes(app) {
       if (tools.find(t => t.id === newTool.id)) {
         return sendBadRequest(res, 'Tool with this ID already exists');
       }
-      const directoryId = findDirectoryClaimedBy([newTool.id, newTool.id.split('_')[0]]);
-      if (directoryId) return sendDirectoryIdClash(res, `tool id "${newTool.id}"`, directoryId);
 
       // Set default enabled state if not provided
       if (newTool.enabled === undefined) {

@@ -1,0 +1,80 @@
+{
+  "findUser": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": {
+          "en": "User name or email",
+          "de": "Benutzername oder E-Mail"
+        }
+      }
+    },
+    "required": ["name"]
+  },
+  "getAllUserDetails": {
+    "type": "object",
+    "properties": {
+      "userId": {
+        "type": "string",
+        "description": {
+          "en": "User identifier",
+          "de": "Benutzerkennung"
+        }
+      }
+    },
+    "required": ["userId"]
+  },
+  "getUserManager": {
+    "type": "object",
+    "properties": {
+      "userId": {
+        "type": "string",
+        "description": {
+          "en": "User identifier",
+          "de": "Benutzerkennung"
+        }
+      }
+    },
+    "required": ["userId"]
+  },
+  "getUserGroups": {
+    "type": "object",
+    "properties": {
+      "userId": {
+        "type": "string",
+        "description": {
+          "en": "User identifier",
+          "de": "Benutzerkennung"
+        }
+      }
+    },
+    "required": ["userId"]
+  },
+  "getTeamMembers": {
+    "type": "object",
+    "properties": {
+      "teamId": {
+        "type": "string",
+        "description": {
+          "en": "Team identifier",
+          "de": "Team-Kennung"
+        }
+      }
+    },
+    "required": ["teamId"]
+  },
+  "getUserPhotoBase64": {
+    "type": "object",
+    "properties": {
+      "userId": {
+        "type": "string",
+        "description": {
+          "en": "User identifier",
+          "de": "Benutzerkennung"
+        }
+      }
+    },
+    "required": ["userId"]
+  }
+}

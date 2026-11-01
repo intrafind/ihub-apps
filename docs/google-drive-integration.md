@@ -103,59 +103,50 @@ Before creating credentials, you must configure the OAuth consent screen that us
 
 ## Step 5: Configure iHub Apps
 
+Google Drive is the built-in installed integration **Google Drive** (`com.intrafind/google-drive`, installation `googledrive`; see [Integrations](integrations.md#built-in-integrations)).
+
 ### Via Admin UI
 
 1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → Cloud Storage**
-3. Enable **Cloud Storage** if not already enabled
-4. Click **"Add Provider"**
-5. Fill in the provider details:
+2. Navigate to **Admin → Integrations → Installed**. Open the **Catalog** tab and click **Install** on **Google Drive**, or edit the `googledrive` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
+3. Fill in the settings:
    | Field | Value |
    |-------|-------|
-   | **Type** | Google Drive |
-   | **Provider ID** | A unique identifier (e.g., `google-drive-1`) — must match the `{providerId}` in your redirect URI |
-   | **Display Name** | Name shown to users (e.g., `Google Drive`) |
+   | **Label** | Name shown to users (e.g., `Google Drive`) |
    | **Client ID** | The Client ID from Step 4 |
-   | **Client Secret** | The Client Secret from Step 4 |
-   | **Redirect URI** | Optional — leave blank to auto-detect from the incoming request URL |
+   | **Client secret** | A credential of type secret (**Admin → Credentials**) holding the Client Secret from Step 4 |
+   | **Redirect URI** | Optional — leave blank to derive it from the incoming request; **Test connection** shows the resulting URL |
+   | **Source: …** | Which sources users get: **My Drive**, **shared drives**, **shared with me** |
+   | **Provider id** (Advanced) | The `{providerId}` in the callback URL and in the users' stored connections. Empty: `googledrive`. An upgrade keeps the id the provider had before |
 
-6. Configure **Available Sources** (check the sources you want to make available):
-   - **My Drive** — User's personal Google Drive
-   - **Shared Drives** — Google Workspace Shared Drives / Team Drives
-   - **Shared with Me** — Files shared with the user by others
+4. **Test connection**, then **Install** (or **Save**)
 
-7. Click **"Save"**
-
-### Via platform.json (manual configuration)
-
-Alternatively, configure the provider directly in `contents/config/platform.json`:
+### In `integrations.json`
 
 ```json
 {
-  "cloudStorage": {
-    "enabled": true,
-    "providers": [
-      {
-        "id": "google-drive-1",
-        "name": "google-drive-1",
-        "displayName": "Google Drive",
-        "type": "googledrive",
-        "enabled": true,
+  "installed": [
+    {
+      "id": "googledrive",
+      "definition": "com.intrafind/google-drive",
+      "enabled": true,
+      "label": { "en": "Google Drive" },
+      "values": {
         "clientId": "xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com",
-        "clientSecret": "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxx",
-        "redirectUri": "https://your-ihub-domain.com/api/integrations/googledrive/google-drive-1/callback",
-        "sources": {
-          "myDrive": true,
-          "sharedDrives": true,
-          "sharedWithMe": true
-        }
-      }
-    ]
-  }
+        "clientSecretRef": "integration-googledrive-clientSecretRef",
+        "redirectUri": "https://your-ihub-domain.com/api/integrations/googledrive/googledrive/callback",
+        "sourceMyDrive": true,
+        "sourceSharedDrives": true,
+        "sourceSharedWithMe": true
+      },
+      "auth": { "mode": "oauth-user" },
+      "allowedGroups": []
+    }
+  ]
 }
 ```
 
-> **Security Note**: The `clientSecret` is automatically encrypted using AES-256-GCM when saved through the admin UI. If editing `platform.json` directly, the secret will be encrypted on the next admin save.
+> The client secret is a credential reference, never a value. Migration V200 moved the former `platform.cloudStorage` provider here; a provider id other than `googledrive` became the installation's **Provider id** value.
 
 ---
 

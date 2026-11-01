@@ -101,7 +101,7 @@ export async function getBoundIntegrationIds(user, platform) {
  * @param {string} [a2aAgentId] - Owning agent of a remote A2A agent's skill;
  *   an app or group that references the agent by id sees all its skills.
  * @param {string} [peopleDirectoryId] - Directory of a people directory tool;
- *   an app or group that references the directory (or `peopleDirectories`)
+ *   an app or group that references the directory
  *   sees its tools. The directory's own `groups` are checked separately
  *   (`mayUseDirectory`).
  */

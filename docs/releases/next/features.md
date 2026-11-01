@@ -21,7 +21,10 @@ actions as tools.
   an answer mentions is linked.
 - **In apps:** **Admin → Apps → Edit → Installed integrations** binds an installation, narrows it
   to some actions and sets the default or pinned scope. An app is offered only while every
-  installation it binds exists and is enabled; **Admin → Apps** names a missing one.
+  installation it binds as **Required** (the default) exists and is enabled; **Admin → Apps**
+  names a missing one. Switch **Required** off and the app stays available without that
+  integration's actions while it is off. Web search is optional by default, since most apps work
+  without it; its own **Required** switch hides the app instead.
 - **Marketplace:** the new item type **Integrations** installs definitions from a registry. The
   official marketplace publishes the first one with an example app.
 - **CKAN Open Data Portal** ships with iHub: search datasets, read licenses, publishers, coverage
@@ -31,7 +34,6 @@ actions as tools.
   Schleswig-Holstein, open.canada.ca and data.boston.gov; data.europa.eu offers only the search.
 
 See [Integrations](../../integrations.md).
-
 
 ## iFinder and iAssistant Are Installed Integrations
 
@@ -107,3 +109,130 @@ connector before it is published). The install refuses a second code file or a r
 with a clear message. The reason is that an update from the Marketplace reloads the entry module
 only; a helper file would keep running its old code until a restart. Updating a code-based
 integration takes effect at once, for its actions and for the scopes it offers in the chat.
+
+## Web Search Is an Installed Integration
+
+The search engines and the page reader are the built-in integration **Web search** under
+**Admin → Integrations → Installed**, and no longer a category on the Providers page.
+
+- **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
+  as credential references, the **default search engine** every app on `auto` uses, and the
+  groups that may search — these hold for native search on Google, OpenAI and Anthropic models
+  too, so a user outside them gets no web search on any model. Qwant still needs no key.
+- **Test:** the installation's **Test** reports which engines have a key and runs one live search
+  with the default engine, with the same verdicts and hints as the former connectivity test.
+- **Apps unchanged:** an app still switches web search on in its own settings and may name an
+  engine; the tools keep their ids (`braveSearch`, `staanSearch`, `qwantSearch`, `read_url`). An
+  app with web search on is offered only while the installation is enabled, and **Admin → Apps**
+  names it when it is missing.
+- **Migrated for you:** migration V195 moves the provider keys into credentials, creates the
+  installation and retires the four tool files. `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still
+  apply when no credential is referenced.
+
+## Jira Is an Installed Integration
+
+Atlassian Jira is the built-in integration **Atlassian Jira** under **Admin → Integrations →
+Installed**, and no longer a page of its own under **Admin → Integrations**.
+
+- **One place for the OAuth app:** the installation `jira` holds the client id, the client secret
+  as a credential reference, the redirect URI and the site URL; **Test** checks them and the route
+  to `auth.atlassian.com`, and **Connections** lists the users who connected their Atlassian
+  account and disconnects one. The redirect URI may stay empty: it is then derived from each
+  request (scheme, host and base path as the browser sees them), and **Test** shows the resulting
+  URL to register. The "users connected" count follows connects and disconnects as they happen.
+- **Apps bind instead of listing tools:** an app binds `integrations.jira` and picks actions by
+  name; the six tools keep their ids (`jira_searchTickets` and friends). An app that binds Jira is
+  offered only while the installation is enabled, and the installation's groups decide who may use
+  it.
+- **Users connect as before:** the "Connect to Jira" prompt in the chat and **Settings →
+  Integrations** are unchanged, and existing connections keep working.
+- **Migrated for you:** migration V196 moves `platform.jira` into the installation (keeping its
+  enabled state), retires a hand-written tool file for `tools/jira.js` and rewrites `tools: ["jira"]`
+  into the binding.
+
+## Entra ID Directory Is an Installed Integration
+
+The Microsoft Entra ID people search is the built-in integration **Microsoft Entra ID directory**
+under **Admin → Integrations → Installed**, instead of a tool configured through environment
+variables alone.
+
+- **Configured in the admin UI:** the installation `entra` holds the tenant id, the application
+  (client) id and the client secret as a credential reference; `AZURE_TENANT_ID`,
+  `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` still apply when a field is empty. **Test**
+  acquires a token with the client credentials and lists one user, with hints when Graph refuses.
+- **Apps bind instead of listing tools:** an app binds `integrations.entra` and picks actions by
+  name; the six tools keep their ids (`entraPeopleSearch_findUser` and friends). An app that
+  binds the directory is offered only while the installation is enabled, and the installation's
+  groups decide who may use it.
+- **Migrated for you:** migration V197 creates the installation (enabled when the three variables
+  were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
+  into the binding.
+
+## People Directories Are Installed Integrations
+
+LDAP people directories — the company directory and external ones such as x500.bund.de — are
+installations of the built-in integration **LDAP people directory** under **Admin → Integrations →
+Installed**, one installation per directory, and no longer a page of their own.
+
+- **One wizard per directory:** the install wizard holds everything the directory editor had —
+  reuse an LDAP sign-in provider or connect directly, access (anonymous or a service account whose
+  password is a credential), preset and mapping, units, data flow, limits, trusted certificates and
+  the admin **LDAP browser** — with the groups who may use the directory as the installation's
+  groups. **Test connection** runs the known directory test, and a field next to the button takes
+  a surname for the sample search. **Use for people search** on an LDAP sign-in provider opens the
+  wizard with the provider selected.
+- **Same tools, same ids:** every directory keeps its id, so `<id>__search_people`,
+  `<id>__get_person`, `<id>__list_units` and the browser's `<id>__browse_*` tools, group grants
+  and audit records are unchanged. The installed list shows the transport (LDAPS, StartTLS, plain
+  text) and marks external directories.
+- **Bind one or all:** an app binds one directory like any installation, or **All LDAP people
+  directory installations** — the new definition binding `"integrations":
+  { "com.intrafind/ldap-directory": {} }`, which follows directories installed later. The app
+  editor offers that row for every integration installed more than once. Actions such as the LDAP
+  browser are bound only when named, never as part of "every action".
+- **Migrated for you:** migration V198 moves every directory of `peopleDirectories.json` into an
+  installation (bind passwords stay credential references), rewrites the shipped People search
+  and LDAP browser apps and every app that listed `peopleDirectories` or a directory, and keeps
+  `ldapBrowse` references working.
+
+See [People Directory Search](../../people-directory-search.md).
+
+## iHub's Own Tools Are the Always-Installed iHub Integration
+
+`ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
+tools and the scheduled-task tools are the actions of the built-in integration **iHub**
+(installation `ihub`) under **Admin → Integrations → Installed**, instead of tool files.
+
+- **Always there:** the installation exists and is enabled at all times — it is created when
+  missing and shows **Always installed** without a remove or disable switch. Edit it to switch
+  single actions off for every app (what `enabled: false` on a tool file did) or to limit the
+  groups.
+- **Nothing changes for apps:** the tools keep their ids, so `tools: ["ask_user"]`,
+  `["knowledge"]`, `["write_artifact"]` and group grants work as before; the rules for
+  `ask_user` (kept through a chat's tool narrowing) and the scheduled-task tools are unchanged.
+  Every action carries its side effect (read, write, destructive).
+- **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
+  (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
+  lists only custom tools from now on.
+
+## Cloud Storage Providers Are Installed Integrations
+
+Office 365 (OneDrive / SharePoint), Google Drive and Nextcloud are the built-in integrations
+**Microsoft Office 365**, **Google Drive** and **Nextcloud** (installations `office365`,
+`googledrive`, `nextcloud`) under **Admin → Integrations → Installed**, and no longer three
+pages of their own with a shared provider editor.
+
+- **One wizard per provider:** the install wizard holds the OAuth app — client id, client secret
+  as a credential reference, redirect URI — and the provider's own settings (tenant, sources,
+  site and drive restrictions; the Nextcloud server URL). **Test connection** checks the client,
+  the redirect URI (and shows the derived URL to register when the field is empty), the route to
+  the provider's authorization server and how many users are connected; **Connections** lists the
+  connected users and disconnects one.
+- **Nothing changes for users:** they connect under **Settings → Integrations** or from the file
+  picker as before, through the unchanged `/api/integrations/<provider>/…` routes, and existing
+  connections keep working — the installation's **Provider id** keeps the id the provider had.
+  The pickers, browsers and project cloud documents read the enabled providers from the
+  installations.
+- **Migrated for you:** migration V200 moves the `platform.cloudStorage` providers into the
+  three installations (Office 365's tenant id back into the clear, a plain-text secret into the
+  credential store) and removes the block.

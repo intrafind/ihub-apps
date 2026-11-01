@@ -17,44 +17,18 @@
  *
  * @module services/search/braveApiKey
  */
-import config from '../../config.js';
-import configCache from '../../configCache.js';
-import tokenStorageService from '../TokenStorageService.js';
-import logger from '../../utils/logger.js';
+
+import { resolveBraveApiKey } from './websearchConfig.js';
 
 /**
  * Resolve the Brave Search API key, in order:
- * 1. the provider-level key from `providers.json` (decrypted)
+ * 1. the credential the `websearch` installation references
  * 2. the `BRAVE_SEARCH_API_KEY` environment variable
  *
  * @returns {string|undefined} The key, or undefined when none is configured
  */
 export function getBraveApiKey() {
-  try {
-    const { data: providers } = configCache.getProviders(true);
-    const braveProvider = providers.find(p => p.id === 'brave');
-
-    if (braveProvider?.apiKey) {
-      try {
-        return tokenStorageService.decryptString(braveProvider.apiKey);
-      } catch (error) {
-        logger.error('Failed to decrypt Brave provider API key', {
-          component: 'WebSearch',
-          error
-        });
-        // Fall through to environment variable
-      }
-    }
-  } catch (error) {
-    logger.error('Failed to load Brave provider configuration', {
-      component: 'WebSearch',
-      error
-    });
-    // Fall through to environment variable
-  }
-
-  // Fallback to environment variable
-  return config.BRAVE_SEARCH_API_KEY;
+  return resolveBraveApiKey();
 }
 
 /**

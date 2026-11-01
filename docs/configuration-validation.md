@@ -315,37 +315,9 @@ Validates the MIME type configuration used to classify and display uploadable fi
 }
 ```
 
-### 12. Cloud Storage Configuration (`cloudStorageSchema.js`)
+### 12. Cloud Storage Configuration
 
-Validates cloud storage provider definitions used for file browser integration.
-
-**Supported Provider Types:**
-- **`office365`**: Microsoft SharePoint / OneDrive integration — requires `tenantId`, `clientId`, `clientSecret`; supports filtering by personal drive, followed sites, and Teams
-- **`googledrive`**: Google Drive integration — requires `clientId`, `clientSecret`; supports filtering by My Drive, shared drives, and shared-with-me
-
-**Example Valid Configuration:**
-```json
-{
-  "enabled": true,
-  "providers": [
-    {
-      "id": "company-sharepoint",
-      "name": "company-sharepoint",
-      "displayName": "Company SharePoint",
-      "type": "office365",
-      "enabled": true,
-      "tenantId": "${AZURE_TENANT_ID}",
-      "clientId": "${AZURE_CLIENT_ID}",
-      "clientSecret": "${AZURE_CLIENT_SECRET}",
-      "sources": {
-        "personalDrive": true,
-        "followedSites": true,
-        "teams": true
-      }
-    }
-  ]
-}
-```
+Retired (V200): `cloudStorageSchema.js` is gone. The Office 365, Google Drive and Nextcloud providers are installations of built-in integration definitions (`server/defaults/integration-definitions/com.intrafind__office365/`, `com.intrafind__google-drive/`, `com.intrafind__nextcloud/`), validated like every installation by `integrationsConfigSchema.js` and the definition's install fields (`checkInstallValues`). A `cloudStorage` key in `platform.json` is rejected.
 
 ## Error Handling
 

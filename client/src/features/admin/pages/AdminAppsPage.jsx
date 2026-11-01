@@ -50,14 +50,16 @@ function AppNameCell({ app, currentLanguage }) {
 
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
+  websearch: 'Web search integration',
+  jira: 'Jira integration',
   ifinder: 'iFinder integration',
   iassistant: 'iAssistant integration',
-  peopleDirectories: 'People directories'
+  'com.intrafind/ldap-directory': 'LDAP people directory (any installation)'
 };
 
 /**
- * The features (`requiredFeatures`) and integrations (`requiredIntegrations`,
- * and every installation bound under `app.integrations`) an app requires that
+ * The features (`requiredFeatures`) and integrations (every installation or
+ * definition bound under `app.integrations`) an app requires that
  * are off, by name. While one is off, users do not get the app, even though it
  * is enabled. An id nothing defines (a typo, an uninstalled integration)
  * counts as off and is shown as it is.
@@ -82,14 +84,17 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
         })
       : [];
   if (!integrationStatus) return missingFeatures;
-  const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : [];
-  const bound =
-    app.integrations && typeof app.integrations === 'object' ? Object.keys(app.integrations) : [];
+  // Optional bindings (`required: false`) never hide the app (missingAppIntegrations).
+  // A key may be a definition id: the status map lists definitions too.
+  const bindings = app.integrations && typeof app.integrations === 'object' ? app.integrations : {};
+  const bound = Object.keys(bindings).filter(id => bindings[id]?.required !== false);
   const missingIntegrations = [];
   // iAssistant runs on the iFinder connection; the server hides the app while
   // that installation is off (missingAppIntegrations), so say so here too.
-  const connection = app.integrations?.iassistant ? ['ifinder'] : [];
-  for (const id of new Set([...required, ...bound, ...connection])) {
+  const connection = bound.includes('iassistant') ? ['ifinder'] : [];
+  // Web search hides the app only when the app says it is required.
+  const websearch = app.websearch?.enabled && app.websearch.required === true ? ['websearch'] : [];
+  for (const id of new Set([...bound, ...connection, ...websearch])) {
     if (integrationStatus[id] === true) continue;
     const name =
       INTEGRATION_NAMES[id] ||

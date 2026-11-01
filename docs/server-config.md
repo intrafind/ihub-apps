@@ -76,7 +76,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `NODE_EXTRA_CA_CERTS`      | PEM file with extra CA certificates to trust for outbound HTTPS. Node reads it at process start: the binaries' `config.env` works (the launcher starts the server with it), but a `.env` read by `npm start` comes too late, so set it in the environment there. See [SSL Certificates](ssl-certificates.md). | – |
 | `NODE_USE_SYSTEM_CA`       | iHub trusts the operating system's certificate store by default (Node 24.5+); set to `0` to turn that off. See [SSL Certificates](ssl-certificates.md#method-1b-operating-system-certificate-store-default). | – |
-| `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
+| `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool, used when the **Web search** installation (**Admin → Integrations → Installed**) references no credential for Brave | –                                                |
+| `STAAN_API_KEY`            | API key for the Staan Search tool, used when the **Web search** installation references no credential for Staan | –                                                |
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
 
 For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.md). The legacy `MCP_SERVER_URL` env var was removed; existing installs were auto-migrated by V042 into `mcpServers.json`, which V193 in turn moved into `contents/config/integrations.json` (**Admin → Integrations → Installed**).
@@ -249,7 +250,7 @@ When enabled, the proxy configuration applies to:
 - **LLM Providers**: OpenAI, Anthropic, Google, Mistral, custom endpoints
 - **Authentication**: OIDC, OAuth2, Azure AD, LDAP
 - **Integrations**: Jira, Microsoft Graph (Entra ID)
-- **Tools**: Web search (Brave), web content extraction
+- **Tools**: Web search (Brave, Staan, Qwant), web content extraction
 - **Sources**: External URL sources, iFinder integrations
 
 ### Troubleshooting

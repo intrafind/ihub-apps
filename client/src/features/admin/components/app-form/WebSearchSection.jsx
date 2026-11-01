@@ -81,7 +81,7 @@ function WebSearchSection({ app, onChange }) {
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.websearchProviderDesc',
-                    'Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.'
+                    'Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.'
                   )}
                 </p>
               </div>
@@ -247,6 +247,38 @@ function WebSearchSection({ app, onChange }) {
                     type="checkbox"
                     checked={app.websearch?.enabledByDefault ?? false}
                     onChange={e => handleWebSearchChange({ enabledByDefault: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              {/* Required: hide the app while the websearch installation is off */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.websearchRequired', 'Required')}
+                  </span>
+                  <p
+                    id="websearch-required-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {t(
+                      'admin.apps.edit.websearchRequiredDesc',
+                      'Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.'
+                    )}
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer ml-4">
+                  <span className="sr-only">
+                    {t('admin.apps.edit.websearchRequired', 'Required')}
+                  </span>
+                  <input
+                    id="websearch-required"
+                    type="checkbox"
+                    aria-describedby="websearch-required-desc"
+                    checked={app.websearch?.required ?? false}
+                    onChange={e => handleWebSearchChange({ required: e.target.checked })}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>

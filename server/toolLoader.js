@@ -21,12 +21,14 @@ import mcpClientManager from './services/mcp/McpClientManager.js';
 import { installedIntegrationRefs } from './services/integrations/installedRefs.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
-import {
-  discoverPeopleDirectoryTools,
-  filterDirectoryToolsForUser
-} from './services/peopleDirectory/PeopleDirectoryService.js';
+import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
+import {
+  getWebSearchConfig,
+  isWebSearchEnabled,
+  WEBSEARCH_INSTANCE_ID
+} from './services/search/websearchConfig.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
@@ -230,11 +232,10 @@ export const MAX_SKILL_NAME_ENUM = 100;
 
 /**
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
- * id, an MCP server's id or a people directory's id (`_a2a.idConflict`), so
- * that reference never silently grants the remote agent; `a2a__<agentId>`
- * still selects the agent as a whole. The admin API refuses such ids; this
- * covers a hand-edited config and a tool, MCP server or directory added after
- * the agent.
+ * id or another installation's id (`_a2a.idConflict`), so that reference
+ * never silently grants the remote agent; `a2a__<agentId>` still selects the
+ * agent as a whole. The admin API refuses such ids; this covers a hand-edited
+ * config and a tool or installation added after the agent.
  *
  * @param {Array<Object>} a2aTools - Discovered A2A tools
  * @param {Array<Object>} otherTools - Local and MCP tools
@@ -247,38 +248,17 @@ function guardA2aAgentIds(a2aTools, otherTools) {
   const agentIds = new Set(a2aTools.map(tool => tool._a2a?.agentId).filter(Boolean));
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: installedIntegrationRefs().filter(ref => !agentIds.has(ref.id)),
-    peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
+    mcpServers: installedIntegrationRefs().filter(ref => !agentIds.has(ref.id))
   });
   for (const [agentId, conflict] of conflicts) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool, installed integration or people directory id; select the agent as a2a__<agentId>',
+      'A2A agent id is also a tool or installed integration id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }
   return tools;
-}
-
-/**
- * The tools of the configured people directories (`<directoryId>__search_people`,
- * …, marked with `_peopleDirectory`). Not narrowed to a user: who may use a
- * directory is checked wherever tools are narrowed to one (`mayUseDirectory`).
- * @param {string|null} language
- * @param {Array<Object>} otherTools - Local, MCP and A2A tools (id clash check)
- */
-function discoverDirectoryTools(language, otherTools) {
-  try {
-    const platformConfig = configCache.getPlatform() || {};
-    return discoverPeopleDirectoryTools({
-      language: language || platformConfig.defaultLanguage || 'en',
-      otherTools
-    });
-  } catch (error) {
-    logger.error('Error discovering people directory tools', { component: 'ToolLoader', error });
-    return [];
-  }
 }
 
 /**
@@ -297,24 +277,31 @@ async function discoverIntegrationTools(language) {
   }
 }
 
+/** Drop the integration tools whose installation's groups exclude the user (lazy import, see above). */
+async function filterIntegrationToolsForUser(tools, user) {
+  if (!tools.some(t => t._integration)) return tools;
+  const { filterIntegrationToolsForUser: filter } =
+    await import('./services/integrations/integrationTools.js');
+  return filter(tools, user);
+}
+
 /**
- * Load tools from local configuration, MCP servers, remote A2A agents,
- * people directories and installed integrations.
+ * Load tools from local configuration and the installed integrations (which
+ * include the MCP servers, the remote A2A agents and the people directories).
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  // Installed integrations include the MCP servers and the remote A2A agents
-  // (their tools keep `_mcp` and `_a2a`).
+  // Installed integrations include the MCP servers, the remote A2A agents and
+  // the people directories (their tools keep `_mcp`, `_a2a` and
+  // `_peopleDirectory`).
   const discoveredIntegrationTools = await discoverIntegrationTools(language);
   const otherTools = discoveredIntegrationTools.filter(t => !t._a2a);
   const a2aTools = guardA2aAgentIds(
     discoveredIntegrationTools.filter(t => t._a2a),
     [...configured, ...otherTools]
   );
-  const integrationTools = [...otherTools, ...a2aTools];
-  const directoryTools = discoverDirectoryTools(language, [...configured, ...integrationTools]);
-  const discovered = [...integrationTools, ...directoryTools];
+  const discovered = [...otherTools, ...a2aTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -372,6 +359,33 @@ export const WEBSEARCH_TOOL_IDS = Object.freeze({
 });
 
 /**
+ * Whether the `websearch` installation offers its tools to a user: it is
+ * installed and enabled, and its groups (`allowedGroups`), when it has any,
+ * include one of the user's. The same checks `runIntegrationTool` makes
+ * before it runs one of the installation's actions, so nothing is offered
+ * that the call would then refuse. Every way web search reaches a model goes
+ * through here: the search tool and page reader of `app.websearch`, a
+ * `braveSearch` / `read_url` reference in `app.tools` or a workflow node,
+ * native search on a provider that runs it itself, and the fallback tool
+ * offered when a provider turns native search down.
+ *
+ * @param {Object} [user] - The acting user (`{ groups }`); none means no groups
+ * @returns {boolean}
+ */
+export function isWebSearchAvailableTo(user) {
+  const installation = getWebSearchConfig();
+  if (!installation.enabled) return false;
+  if (installation.allowedGroups.length === 0) return true;
+  const groups = Array.isArray(user?.groups) ? user.groups : [];
+  return groups.some(g => installation.allowedGroups.includes(g));
+}
+
+/** Whether a loaded tool is an action of the `websearch` installation. */
+function isWebSearchInstallationTool(tool) {
+  return tool?._integration?.instanceId === WEBSEARCH_INSTANCE_ID;
+}
+
+/**
  * Resolve an app's `websearch.provider` onto the script-backed tool to offer.
  *
  * `"auto"` walks the keyed engines in registration order — Brave, then Staan —
@@ -394,10 +408,19 @@ export const WEBSEARCH_TOOL_IDS = Object.freeze({
  */
 export function resolveWebsearchToolId(
   provider = 'auto',
-  { braveConfigured = isBraveSearchConfigured, staanConfigured = isStaanSearchConfigured } = {}
+  {
+    braveConfigured = isBraveSearchConfigured,
+    staanConfigured = isStaanSearchConfigured,
+    defaultProvider = () => getWebSearchConfig().defaultProvider
+  } = {}
 ) {
   if (provider && provider !== 'auto') {
     return WEBSEARCH_TOOL_IDS[provider] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  }
+  // "auto" first asks the web search installation for its default engine.
+  const installationDefault = defaultProvider();
+  if (installationDefault && installationDefault !== 'auto') {
+    return WEBSEARCH_TOOL_IDS[installationDefault] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
   }
   if (braveConfigured()) return WEBSEARCH_TOOL_IDS.brave;
   if (staanConfigured()) return WEBSEARCH_TOOL_IDS.staan;
@@ -418,8 +441,9 @@ export function resolveWebsearchToolId(
 export async function describeWebSearchAvailability(app) {
   if (!app?.websearch?.enabled) return null;
   const toolId = resolveWebsearchToolId(app.websearch.provider);
-  const tools = await loadConfiguredTools();
-  const installed = tools.some(t => t.id === toolId && t.enabled !== false);
+  // The search tools belong to the `websearch` installation (Admin →
+  // Integrations → Installed); an installation that is off offers none.
+  const installed = isWebSearchEnabled();
   const configured =
     toolId === WEBSEARCH_TOOL_IDS.brave
       ? isBraveSearchConfigured()
@@ -471,10 +495,15 @@ export function resolveNativeWebSearchProvider(modelProvider, { model, maxUses }
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @param {Object} [model] - Full model config (per-model opt-out)
+ * @param {Object} [user] - The acting user; the `websearch` installation's
+ *   groups hold for native search too (see {@link isWebSearchAvailableTo})
  * @returns {{provider: string, maxUses: number, fallback: string} | null}
  */
-export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model) {
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model, user) {
   if (!app?.websearch?.enabled) return null;
+  // Native search is the provider's, but it is still the app's web search:
+  // an installation that is off, or closed to the user, switches it off too.
+  if (!isWebSearchAvailableTo(user)) return null;
 
   const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
 
@@ -534,12 +563,14 @@ function clampToSchema(value, schema) {
 /**
  * Tools to offer instead of a native web search directive the provider turned
  * down (see services/loop/nativeWebSearchFallback.js). Empty when the fallback
- * tool is not installed.
+ * tool is not installed, or when the `websearch` installation is off or closed
+ * to the user: `runIntegrationTool` would refuse the call anyway.
  * @param {{fallback?: string}|null} directive - the rejected directive
- * @param {{app?: Object, language?: string}} [context]
+ * @param {{app?: Object, language?: string, user?: Object}} [context]
  * @returns {Promise<Object[]>}
  */
-export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
+export async function resolveNativeWebSearchFallbackTools(directive, { app, language, user } = {}) {
+  if (!isWebSearchAvailableTo(user)) return [];
   // With an app in hand, fall back to the search provider that app is
   // configured for — an app set to Qwant should not silently answer from Brave
   // just because the model turned native search down.
@@ -587,8 +618,11 @@ function withPageReader(searchTool, allTools) {
  * @returns {Array} No tools, the search tool followed by the page reader, or — with
  *   native search on a provider in {@link NATIVE_SEARCH_WITH_PAGE_READER} — the reader alone
  */
-function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model, user) {
   if (!app.websearch?.enabled) return [];
+  // The tools come from the `websearch` installation: off, or closed to the
+  // user's groups, means no search tool and no page reader.
+  if (!isWebSearchAvailableTo(user)) return [];
 
   const { enabledByDefault = false } = app.websearch;
 
@@ -597,7 +631,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
 
   // Native search handles this app/model combination — no search tool needed,
   // but the page reader still is where the provider accepts function tools.
-  const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model);
+  const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model, user);
   if (native) {
     if (!NATIVE_SEARCH_WITH_PAGE_READER.has(native.provider)) return [];
     const reader = allTools.find(t => t.id === READ_URL_TOOL_ID);
@@ -629,12 +663,32 @@ export async function getToolsForApp(app, language = null, context = {}) {
   let appTools = [];
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    // A people directory's own `groups` hold on top of the app's selection.
     // An installed integration's tools come only through `app.integrations`
     // (below), where the installation's groups and the binding's action list
     // are checked; an `app.tools` reference to one does not bypass that.
+    //
+    // Three exceptions keep old references working, each once the
+    // installation's own enabled and group checks pass: the `websearch`
+    // installation, whose actions kept the tool ids they had as tool files
+    // (`braveSearch`, `read_url`, …) — a workflow node, or an app, that lists
+    // one of those ids keeps getting the tool (ids matched exactly;
+    // `websearch` itself selects nothing here); the people directories,
+    // whose tools a directory id or `ldapBrowse` select as before
+    // (`isToolSelected`), with the directory's own `browse.groups` holding
+    // too; and every other built-in action that kept its tool id
+    // (`fixedToolId`: iHub's own `ask_user`, `knowledge_*`, …), read as the
+    // plain tool it was — exact id or base id (`knowledge`), never the
+    // installation id.
+    const webSearchOpen = isWebSearchAvailableTo(context.user);
+    const selected = allTools.filter(t => {
+      if (!t._integration) return isToolSelected(t, app.tools);
+      if (t._peopleDirectory) return isToolSelected(t, app.tools);
+      if (isWebSearchInstallationTool(t)) return webSearchOpen && app.tools.includes(t.id);
+      if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, app.tools);
+      return false;
+    });
     appTools = filterDirectoryToolsForUser(
-      allTools.filter(t => !t._integration && isToolSelected(t, app.tools)),
+      await filterIntegrationToolsForUser(selected, context.user),
       context.user
     );
 
@@ -661,7 +715,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
     try {
       const { getIntegrationToolsForApp } =
         await import('./services/integrations/integrationTools.js');
-      let bound = getIntegrationToolsForApp(app, allTools, context);
+      // A people directory's own `browse.groups` hold on top of the binding.
+      let bound = filterDirectoryToolsForUser(
+        getIntegrationToolsForApp(app, allTools, context),
+        context.user
+      );
       if (Array.isArray(context.enabledTools)) {
         bound = bound.filter(t => isToolSelected(t, context.enabledTools));
       }
@@ -677,7 +735,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     context.modelProvider,
     allTools,
     context.websearchEnabled,
-    context.model
+    context.model,
+    context.user
   );
   // An app may also list the page reader in `tools` — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
@@ -1111,18 +1170,6 @@ export async function runTool(toolId, params = {}, options = {}) {
     });
     const { runIntegrationTool } = await import('./services/integrations/integrationTools.js');
     return await runIntegrationTool(tool, params, options);
-  }
-
-  // People directory tools run through their directory, as the calling user.
-  if (tool._peopleDirectory) {
-    logger.info('Dispatching people directory tool call', {
-      component: 'ToolLoader',
-      toolId,
-      directoryId: tool._peopleDirectory.id
-    });
-    const { runPeopleDirectoryTool } =
-      await import('./services/peopleDirectory/peopleDirectoryRunner.js');
-    return await runPeopleDirectoryTool(tool, params);
   }
 
   // MCP tools are dispatched through McpClientManager.callTool.

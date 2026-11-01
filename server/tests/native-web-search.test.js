@@ -15,11 +15,18 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import configCache from '../configCache.js';
 import {
   resolveNativeWebSearchProvider,
   resolveAppNativeWebSearch,
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES
 } from '../toolLoader.js';
+
+// Native search is the app's web search, which belongs to the `websearch`
+// installation: it is resolved only while that installation is on and open
+// to the user.
+let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
+configCache.getIntegrations = () => ({ data: { installed } });
 import AnthropicAdapter, { buildAnthropicWebSearchTool } from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
@@ -129,6 +136,43 @@ describe('resolveAppNativeWebSearch', () => {
       }),
       null
     );
+  });
+
+  it('returns null while the websearch installation is off or missing', () => {
+    const was = installed;
+    try {
+      installed = [{ id: 'websearch', enabled: false }];
+      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'anthropic', undefined), null);
+      installed = [];
+      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'google', undefined), null);
+    } finally {
+      installed = was;
+    }
+  });
+
+  it('applies the installation’s groups: a user outside them gets no native search', () => {
+    const was = installed;
+    try {
+      installed = [{ id: 'websearch', enabled: true, allowedGroups: ['research'] }];
+      const model = undefined;
+      assert.strictEqual(
+        resolveAppNativeWebSearch(baseApp, 'anthropic', undefined, model, {
+          id: 'u',
+          groups: ['staff']
+        }),
+        null
+      );
+      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'google', undefined, model), null);
+      assert.deepStrictEqual(
+        resolveAppNativeWebSearch(baseApp, 'anthropic', undefined, model, {
+          id: 'u',
+          groups: ['research']
+        }),
+        directive('anthropic')
+      );
+    } finally {
+      installed = was;
+    }
   });
 });
 

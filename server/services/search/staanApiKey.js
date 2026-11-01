@@ -16,45 +16,18 @@
  *
  * @module services/search/staanApiKey
  */
-import config from '../../config.js';
-import configCache from '../../configCache.js';
-import tokenStorageService from '../TokenStorageService.js';
-import logger from '../../utils/logger.js';
+
+import { resolveStaanApiKey } from './websearchConfig.js';
 
 /**
  * Resolve the Staan Search API key, in order:
- * 1. the provider-level key from `providers.json` (decrypted)
+ * 1. the credential the `websearch` installation references
  * 2. the `STAAN_API_KEY` environment variable
  *
  * @returns {string|undefined} The key, or undefined when none is configured
  */
 export function getStaanApiKey() {
-  try {
-    const { data: providers } = configCache.getProviders(true);
-    const staanProvider = providers.find(p => p.id === 'staan');
-
-    if (staanProvider?.apiKey) {
-      try {
-        return tokenStorageService.decryptString(staanProvider.apiKey);
-      } catch (error) {
-        logger.error('Failed to decrypt Staan provider API key', {
-          component: 'WebSearch',
-          error
-        });
-        // Fall through to environment variable
-      }
-    }
-  } catch (error) {
-    logger.error('Failed to load Staan provider configuration', {
-      component: 'WebSearch',
-      error
-    });
-    // Fall through to environment variable
-  }
-
-  // Fallback to environment variable. STAAN_API_KEY reaches `config` through
-  // the dynamic `*_API_KEY` pass-through in config.js, not a declared field.
-  return config.STAAN_API_KEY;
+  return resolveStaanApiKey();
 }
 
 /**

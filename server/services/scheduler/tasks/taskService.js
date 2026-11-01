@@ -195,7 +195,11 @@ export async function toolsOfferedByApp(app, user, language = 'en') {
       name: localizedName(tool.name, language) || tool.id,
       // Read the way the run reads the app's `tools` (directory, MCP server
       // and agent references included), so a task can narrow exactly these.
-      selectedByApp: isToolSelected(tool, Array.isArray(app.tools) ? app.tools : [])
+      // An installed integration's tool is here only because the app binds
+      // it (`app.integrations`) or names it in `tools`.
+      selectedByApp:
+        Boolean(tool._integration) ||
+        isToolSelected(tool, Array.isArray(app.tools) ? app.tools : [])
     });
   }
   return out;

@@ -141,7 +141,7 @@ export class AgentLoop {
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
    * @param {Object} [opts.logger]
    * @param {Array} [opts.seams] - initial seam registrations
-   * @param {Function} [opts.resolveNativeWebSearchFallbackTools] - `(directive, {app, language}) => tools`
+   * @param {Function} [opts.resolveNativeWebSearchFallbackTools] - `(directive, {app, language, user}) => tools`
    *   offered when a provider rejects native web search (default: toolLoader's braveSearch)
    */
   constructor(opts = {}) {
@@ -349,7 +349,11 @@ export class AgentLoop {
       try {
         fallbackTools = await this.resolveNativeWebSearchFallbackTools(directive, {
           app: options.appConfig,
-          language: request.language
+          language: request.language,
+          // The `websearch` installation's groups hold for the fallback tool
+          // too: a chat carries the user in the provider options, a workflow
+          // node on the request itself.
+          user: request.user ?? options.user
         });
       } catch (err) {
         this.logger.warn('Could not resolve the native web search fallback tool', {

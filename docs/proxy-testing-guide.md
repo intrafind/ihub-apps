@@ -122,7 +122,7 @@ mitmproxy -p 8080
    curl -x http://your-proxy:8080 https://api.openai.com
    ```
 
-2. **Test the exact failing integration directly**, bypassing the iHub app, so you can tell whether the proxy or the destination is the problem. The example below uses Brave Search — the same pattern (direct request vs. `-x <proxy>`, then the same request through iHub's own code) works for any integration; just swap the URL, headers and env var names.
+2. **Test the exact failing integration directly**, bypassing the iHub app, so you can tell whether the proxy or the destination is the problem. The example below uses Brave Search — the same pattern (direct request vs. `-x <proxy>`, then the same request through iHub's own code) works for any integration; just swap the URL, headers and env var names. In the running server the Brave key comes from the credential the **Web search** installation references (**Admin → Integrations → Installed**), or from `BRAVE_SEARCH_API_KEY` when it references none; the standalone command below passes it as the environment variable either way, and the installation's **Test** button runs the same live search through the server itself.
 
    First check whether iHub even has a proxy configured for this environment: look for a top-level `proxy` block (with `http`/`https`/`noProxy` fields) in `contents/config/platform.json` — this is different from the unrelated `proxyAuth` reverse-proxy-login setting elsewhere in that file — and check `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` in `config.env` or the shell environment. The server also logs the result once at startup (component `HttpConfig`): `"Proxy configuration loaded"` with the URLs it found, or `"No proxy configured"` if nothing is set anywhere. Run the commands below from the iHub install directory (the one containing `server/`), since the last one imports a file by relative path.
 
@@ -214,7 +214,7 @@ Check the logs for:
 
 With proxy enabled, these requests go through the proxy:
 - ✅ LLM API requests (OpenAI, Anthropic, Google, Mistral, etc.)
-- ✅ Web search APIs (Brave)
+- ✅ Web search APIs (Brave, Staan, Qwant)
 - ✅ Integration services (JIRA, Entra/Azure AD, iFinder)
 - ✅ Tool requests (web content extraction, screenshot tools)
 

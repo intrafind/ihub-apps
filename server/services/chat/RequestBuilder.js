@@ -692,7 +692,8 @@ class RequestBuilder {
         app,
         model.provider,
         websearchEnabled,
-        model
+        model,
+        user
       );
 
       // A web-search-enabled app's system prompt typically instructs the model

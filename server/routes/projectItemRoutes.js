@@ -20,6 +20,7 @@ import fs from 'node:fs/promises';
 import { isIFinderConfigured } from '../services/integrations/ifinderConfig.js';
 import multer from 'multer';
 import configCache from '../configCache.js';
+import { listCloudStorageProviders } from '../services/integrations/cloudStorageConfig.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
 import { logAudit } from '../services/AuditLogService.js';
@@ -584,7 +585,7 @@ export function registerProjectPickerRoutes(app) {
   app.get(route('/cloud'), ...gate, (req, res) => {
     // Which cloud providers the picker may offer; the file browsing itself
     // goes through the existing integration routes.
-    const providers = (platformOf().cloudStorage?.providers || [])
+    const providers = listCloudStorageProviders()
       .filter(provider => provider && provider.enabled !== false)
       .map(provider => ({
         id: provider.id,

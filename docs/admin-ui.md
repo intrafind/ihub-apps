@@ -200,7 +200,9 @@ Models define which AI providers and specific model versions are available on yo
 
 ## Managing Providers
 
-**AI Workspace → Providers** holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock, OpenRouter), the web search providers (Brave, Staan, Qwant) and other integrations. A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
+**AI Workspace → Providers** holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock, OpenRouter). A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
+
+The web search engines (Brave, Staan, Qwant) are not providers: they are the built-in **Web search** installation under **Integrations → Installed**, which references their API keys as **secret** credentials from **Integrations → Credentials** (the environment variables `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY` apply when no credential is referenced), sets the default engine and restricts who gets web search; its **Test** runs one live search. See [Web Tools](web-tools.md#api-key-setup).
 
 ![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
 

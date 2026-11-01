@@ -22,12 +22,28 @@ import {
   version
 } from '../migrations/V157__rename_web_page_reader_tool_to_read_url.js';
 
-const SHIPPED = JSON.parse(
+// The page reader ships as the `readUrl` action of the built-in web search
+// connector now (V195 moved it out of the tool files); a definition as this
+// release last shipped it looked like this.
+const CONNECTOR_PARAMETERS = JSON.parse(
   await readFile(
-    fileURLToPath(new URL('../defaults/tools/read_url.json', import.meta.url)),
+    fileURLToPath(
+      new URL(
+        '../services/integrations/protocols/native/connectors/websearch/parameters.json',
+        import.meta.url
+      )
+    ),
     'utf-8'
   )
 );
+const SHIPPED = {
+  id: 'read_url',
+  name: CONNECTOR_PARAMETERS.readUrl.name,
+  description: CONNECTOR_PARAMETERS.readUrl.description,
+  script: 'webContentExtractor.js',
+  method: 'extractForTool',
+  parameters: CONNECTOR_PARAMETERS.readUrl.parameters
+};
 
 /** A key/value map of `contents/` files that supports listFiles + deleteFile. */
 function fakeCtx(files) {

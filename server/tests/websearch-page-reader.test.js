@@ -28,18 +28,37 @@ import {
   READ_URL_TOOL_ID
 } from '../toolLoader.js';
 import * as extractorModule from '../tools/webContentExtractor.js';
+import websearchConnector from '../services/integrations/protocols/native/connectors/websearch/index.js';
 
-async function readDefaultTool(id) {
-  return JSON.parse(
-    await readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8')
-  );
+// The web search tools belong to the built-in `websearch` connector now.
+const PARAMETERS = JSON.parse(
+  await readFile(
+    new URL(
+      '../services/integrations/protocols/native/connectors/websearch/parameters.json',
+      import.meta.url
+    ),
+    'utf8'
+  )
+);
+function connectorTool(action) {
+  const spec = PARAMETERS[action];
+  return {
+    id: spec.toolId,
+    name: spec.name,
+    description: spec.description,
+    parameters: spec.parameters,
+    _integration: { instanceId: 'websearch', action, fixedToolId: true }
+  };
 }
 
-const qwant = await readDefaultTool('qwantSearch');
-const reader = await readDefaultTool(READ_URL_TOOL_ID);
+const qwant = connectorTool('qwant');
+const reader = connectorTool('readUrl');
 
 let tools = [];
+// The `websearch` installation owns the search tools and the page reader.
+let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
 configCache.getTools = () => ({ data: tools });
+configCache.getIntegrations = () => ({ data: { installed } });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
 configCache.getSources = () => ({ data: [] });
 mcpClientManager.listAllTools = async () => [];
@@ -92,16 +111,40 @@ describe('page reader alongside web search', () => {
   });
 
   it('is offered once when the app also lists it in tools', async () => {
+    // A `read_url` reference in `tools` is served from the installation, and
+    // `app.websearch` offers the reader as well: it is offered exactly once.
     const offered = await getToolsForApp(webApp({ tools: [READ_URL_TOOL_ID] }), 'en', {
       modelProvider: 'mistral'
     });
-    assert.deepEqual(ids(offered), [READ_URL_TOOL_ID, 'qwantSearch']);
+    assert.deepEqual(ids(offered).sort(), ['qwantSearch', READ_URL_TOOL_ID].sort());
   });
 
-  it('is left out when it is not installed or disabled', async () => {
-    tools = [qwant];
-    const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral' });
-    assert.deepEqual(ids(offered), ['qwantSearch']);
+  it('is left out, with the search tool, while the websearch installation is off', async () => {
+    installed = [{ id: 'websearch', enabled: false }];
+    try {
+      const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral' });
+      assert.deepEqual(ids(offered), []);
+    } finally {
+      installed = [{ id: 'websearch', enabled: true }];
+    }
+  });
+
+  it('is left out for a user outside the installation’s groups', async () => {
+    installed = [{ id: 'websearch', enabled: true, allowedGroups: ['research'] }];
+    try {
+      const outside = await getToolsForApp(webApp(), 'en', {
+        modelProvider: 'mistral',
+        user: { id: 'u', groups: ['staff'] }
+      });
+      assert.deepEqual(ids(outside), []);
+      const inside = await getToolsForApp(webApp(), 'en', {
+        modelProvider: 'mistral',
+        user: { id: 'u', groups: ['research'] }
+      });
+      assert.deepEqual(ids(inside), ['qwantSearch', READ_URL_TOOL_ID]);
+    } finally {
+      installed = [{ id: 'websearch', enabled: true }];
+    }
   });
 
   it('is offered with the search tool when native search is turned down', async () => {
@@ -114,9 +157,10 @@ describe('page reader alongside web search', () => {
 });
 
 describe('default read_url definition', () => {
-  it('points at an exported function of its script', () => {
-    assert.equal(reader.script, 'webContentExtractor.js');
-    assert.equal(typeof extractorModule[reader.method], 'function');
+  it('is the web search connector’s readUrl action, run by the extractor', () => {
+    assert.equal(reader.id, READ_URL_TOOL_ID);
+    assert.equal(typeof websearchConnector.actions.readUrl.run, 'function');
+    assert.equal(typeof extractorModule.extractForTool, 'function');
   });
 
   it('asks only for a url, a length and an offset, never for ignoreSSL', () => {
