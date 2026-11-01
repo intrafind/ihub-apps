@@ -1,6 +1,23 @@
 {
   "id": "com.intrafind/entra-directory",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: the entra installation replaces the environment-configured entraPeopleSearch tool (migration V197).",
+        "de": "Erste Version: die Installation entra ersetzt das über Umgebungsvariablen konfigurierte Tool entraPeopleSearch (Migration V197)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Microsoft Entra ID directory",
     "de": "Microsoft-Entra-ID-Verzeichnis"

@@ -1285,6 +1285,24 @@ export const installMarketplaceItem = async (registryId, type, name, { replaceLo
 };
 
 /**
+ * Fetches a Markdown companion file of an integration catalog item (a
+ * release's notes) from its registry, without installing the item.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} name - The item name identifier
+ * @param {string} path - The companion path as the catalog lists it
+ * @returns {Promise<string>} The file's text
+ */
+export const fetchMarketplaceItemFile = async (registryId, name, path) => {
+  const query = new URLSearchParams({ path });
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/integration/${name}/_file?${query}`,
+    { responseType: 'text' }
+  );
+  return typeof response.data === 'string' ? response.data : String(response.data ?? '');
+};
+
+/**
  * Updates an already-installed marketplace item to the latest version.
  *
  * @param {string} registryId - The registry ID the item belongs to

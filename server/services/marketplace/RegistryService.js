@@ -25,6 +25,10 @@ import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
 import { getLocalContentIds, installationStatusFor } from './localContent.js';
+import {
+  checkCompatibility,
+  describeIncompatibility
+} from '../integrations/definitions/compatibility.js';
 
 const COMPONENT = 'RegistryService';
 
@@ -568,6 +572,24 @@ function rewriteRelativeLinks(markdown, sourceUrl) {
  * @param {object} data - Raw fetched data
  * @returns {object} Normalised catalog data
  */
+/**
+ * Whether this server can run a catalog item (`compatibility.ihub`, or the
+ * short form `minVersion`), for the browse list and the item detail: an
+ * incompatible item is shown greyed with the reason and cannot be installed.
+ *
+ * @param {object} item - Catalog item
+ * @returns {{ compatible: boolean, requires: string|null, serverVersion: string|null, incompatibleReason: string|null }}
+ */
+export function compatibilityFields(item) {
+  const { compatible, requires, serverVersion } = checkCompatibility(item);
+  return {
+    compatible,
+    requires,
+    serverVersion,
+    incompatibleReason: compatible ? null : describeIncompatibility(requires, serverVersion)
+  };
+}
+
 function mapClaudeCodeCatalog(data) {
   // Already in standard format
   if (data && data.items) return data;
@@ -836,8 +858,9 @@ class RegistryService {
           ...item,
           registryId: registry.id,
           registryName: registry.name,
-          installationStatus: installationStatusFor(installation, existsLocally),
-          installation: installation || null
+          installationStatus: installationStatusFor(installation, existsLocally, item.version),
+          installation: installation || null,
+          ...compatibilityFields(item)
         });
       }
     }
@@ -862,7 +885,12 @@ class RegistryService {
       filtered = filtered.filter(i => i.registryId === filters.registry);
     }
     if (filters.status && filters.status !== 'all') {
-      filtered = filtered.filter(i => i.installationStatus === filters.status);
+      // "Installed" covers items with an update waiting: they are installed too.
+      filtered = filtered.filter(
+        i =>
+          i.installationStatus === filters.status ||
+          (filters.status === 'installed' && i.installationStatus === 'update-available')
+      );
     }
 
     // Pagination
@@ -965,8 +993,9 @@ class RegistryService {
       ...item,
       registryId,
       registryName: registry?.name,
-      installationStatus: installationStatusFor(installation, existsLocally),
+      installationStatus: installationStatusFor(installation, existsLocally, item.version),
       installation: installation || null,
+      ...compatibilityFields(item),
       contentPreview
     };
   }

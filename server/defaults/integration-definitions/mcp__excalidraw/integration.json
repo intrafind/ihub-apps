@@ -1,6 +1,9 @@
 {
   "id": "mcp/excalidraw",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
   "name": {
     "en": "Excalidraw",
     "de": "Excalidraw"

@@ -52,9 +52,15 @@ import {
 } from '../integrations/definitions/scriptModule.js';
 import {
   validateIntegrationDefinition,
+  definitionSchemaRevision,
+  unsupportedSchemaMessage,
   definitionIdToDirName,
   dirNameToDefinitionId
 } from '../../validators/integrationDefinitionSchema.js';
+import {
+  checkCompatibility,
+  describeIncompatibility
+} from '../integrations/definitions/compatibility.js';
 
 const COMPONENT = 'ContentInstaller';
 
@@ -151,6 +157,7 @@ const CONTENT_CONFIG = {
     validate: content => {
       const raw = content?.files?.['integration.json'];
       if (!raw) return { success: false, errors: ['integration.json is missing'] };
+      assertKnownDefinitionSchema(typeof raw === 'string' ? JSON.parse(raw) : raw);
       const parsed = validateIntegrationDefinition(typeof raw === 'string' ? JSON.parse(raw) : raw);
       return parsed.success
         ? { success: true }
@@ -258,18 +265,7 @@ export async function fetchItemContent(registryId, type, name) {
   if (!itemUrl) throw new Error(`Cannot resolve URL for item '${type}:${name}'`);
 
   // Build auth headers from the (already decrypted) registry config
-  const auth = registry.auth;
-  const authHeaders = {};
-  if (auth && auth.type !== 'none') {
-    if (auth.type === 'bearer') {
-      authHeaders['Authorization'] = `Bearer ${auth.token}`;
-    } else if (auth.type === 'basic') {
-      const encoded = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
-      authHeaders['Authorization'] = `Basic ${encoded}`;
-    } else if (auth.type === 'header') {
-      authHeaders[auth.headerName] = auth.headerValue;
-    }
-  }
+  const authHeaders = authHeadersFor(registry);
 
   const { throttledFetch } = await import('../../requestThrottler.js');
 
@@ -390,44 +386,166 @@ export function verifyIntegrationCode(item, content, registry) {
  */
 async function buildIntegrationContent(item, definition, itemUrl, authHeaders, registry) {
   const listed = Array.isArray(item.source?.companions) ? item.source.companions : [];
-  const referenced = [definition?.protocol?.document, definition?.icon].filter(
-    value => typeof value === 'string' && value && !/^https?:\/\//i.test(value)
-  );
+  const referenced = [
+    definition?.protocol?.document,
+    definition?.icon,
+    ...releaseNotePaths(definition)
+  ].filter(value => typeof value === 'string' && value && !/^https?:\/\//i.test(value));
   const companions = [...new Set([...listed, ...referenced])];
-  // Siblings of integration.json; a `?ref=<branch>` of a GitHub Contents URL
-  // belongs to every sibling too.
-  const [itemPath, query = ''] = itemUrl.split('?');
-  // The catalog may name the raw base of the folder (`source.rawBase`, as the
-  // GitHub registries do); otherwise the folder is where integration.json is.
-  const rawBase = typeof item.source?.rawBase === 'string' ? item.source.rawBase : '';
-  const baseUrl = rawBase ? rawBase.replace(/\/$/, '') : itemPath.replace(/\/[^/]*$/, '');
-  const { throttledFetch } = await import('../../requestThrottler.js');
   const files = { 'integration.json': definition };
   for (const relativePath of companions) {
     if (relativePath === 'integration.json') continue;
-    const companionUrl = `${baseUrl}/${relativePath}${query ? `?${query}` : ''}`;
-    // The catalog chose `rawBase`; the registry's credentials go only where
-    // the registry itself lives.
-    const trusted = sharesCredentialScope(companionUrl, [itemUrl, registry?.source]);
-    if (!trusted) {
-      logger.warn('Companion file is fetched without the registry credentials', {
-        component: COMPONENT,
-        companionUrl,
-        itemUrl
-      });
-    }
-    const res = await throttledFetch('marketplace-installer', companionUrl, {
-      headers: {
-        Accept: 'text/plain, application/json, application/vnd.github.raw+json',
-        ...(trusted ? authHeaders : {})
-      }
-    });
-    if (!res.ok) {
-      throw new Error(`Companion file '${relativePath}' could not be fetched (HTTP ${res.status})`);
-    }
-    files[relativePath] = unwrapGitHubContent(await res.text());
+    files[relativePath] = await fetchIntegrationCompanionText(
+      relativePath,
+      item,
+      itemUrl,
+      authHeaders,
+      registry
+    );
   }
   return { files };
+}
+
+/** The release-note files a definition names (`releases[].notes.*`). */
+export function releaseNotePaths(definition) {
+  const paths = [];
+  for (const release of Array.isArray(definition?.releases) ? definition.releases : []) {
+    for (const value of Object.values(release?.notes || {})) {
+      if (typeof value === 'string' && value) paths.push(value);
+    }
+  }
+  return paths;
+}
+
+/**
+ * The URL of a companion file of an integration item: a sibling of
+ * integration.json, or under the raw base the catalog names (`source.rawBase`,
+ * as the GitHub registries do). A `?ref=<branch>` of a GitHub Contents URL
+ * belongs to every sibling too.
+ *
+ * @param {string} relativePath
+ * @param {object} item - Catalog item
+ * @param {string} itemUrl - URL integration.json is fetched from
+ * @returns {string}
+ */
+export function integrationCompanionUrl(relativePath, item, itemUrl) {
+  const [itemPath, query = ''] = itemUrl.split('?');
+  const rawBase = typeof item.source?.rawBase === 'string' ? item.source.rawBase : '';
+  const baseUrl = rawBase ? rawBase.replace(/\/$/, '') : itemPath.replace(/\/[^/]*$/, '');
+  return `${baseUrl}/${relativePath}${query ? `?${query}` : ''}`;
+}
+
+/**
+ * Fetch one companion file of an integration item as text. The registry's
+ * credentials travel only where the registry itself lives
+ * (`sharesCredentialScope`); a `rawBase` elsewhere is fetched without them.
+ *
+ * @param {string} relativePath
+ * @param {object} item - Catalog item
+ * @param {string} itemUrl - URL integration.json is fetched from
+ * @param {Record<string, string>} authHeaders
+ * @param {object} [registry] - Registry config (`source` names its own host)
+ * @returns {Promise<string>}
+ */
+async function fetchIntegrationCompanionText(relativePath, item, itemUrl, authHeaders, registry) {
+  const companionUrl = integrationCompanionUrl(relativePath, item, itemUrl);
+  const trusted = sharesCredentialScope(companionUrl, [itemUrl, registry?.source]);
+  if (!trusted) {
+    logger.warn('Companion file is fetched without the registry credentials', {
+      component: COMPONENT,
+      companionUrl,
+      itemUrl
+    });
+  }
+  const { throttledFetch } = await import('../../requestThrottler.js');
+  const res = await throttledFetch('marketplace-installer', companionUrl, {
+    headers: {
+      Accept: 'text/plain, application/json, application/vnd.github.raw+json',
+      ...(trusted ? authHeaders : {})
+    }
+  });
+  if (!res.ok) {
+    throw new Error(`Companion file '${relativePath}' could not be fetched (HTTP ${res.status})`);
+  }
+  return unwrapGitHubContent(await res.text());
+}
+
+/** Companion files the admin UI may read from a catalog item: Markdown only. */
+const SERVED_COMPANION_PATTERN =
+  /^(?!\.)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/i;
+const MAX_SERVED_COMPANION_BYTES = 512 * 1024;
+
+/**
+ * A Markdown companion file of an integration catalog item (release notes,
+ * README), fetched from the registry with the same credential scoping as an
+ * install, without installing anything. Only a path the catalog itself lists
+ * (`source.companions` or a release's `notes`) is served, so the endpoint is
+ * no proxy for arbitrary URLs. Returns null for a path the item does not
+ * list, a non-Markdown file or a missing file.
+ *
+ * @param {string} registryId
+ * @param {string} name - Catalog item name (the definition folder name)
+ * @param {string} relativePath
+ * @returns {Promise<string|null>}
+ */
+export async function fetchIntegrationCompanion(registryId, name, relativePath) {
+  if (typeof relativePath !== 'string' || !SERVED_COMPANION_PATTERN.test(relativePath)) {
+    return null;
+  }
+  const registry = await registryService.getRegistryWithAuth(registryId);
+  const cached = await registryService.getCachedCatalogAsync(registryId);
+  if (!cached) {
+    throw new Error(
+      `No cached catalog for registry '${registryId}'. Please refresh the registry first.`
+    );
+  }
+  const item = (cached.catalog?.items || []).find(i => i.type === 'integration' && i.name === name);
+  if (!item) throw new Error(`Item 'integration:${name}' not found in registry '${registryId}'`);
+  const listed = new Set([
+    ...(Array.isArray(item.source?.companions) ? item.source.companions : []),
+    ...releaseNotePaths(item)
+  ]);
+  if (!listed.has(relativePath)) return null;
+  const itemUrl = registryService.resolveItemUrl(item, registry);
+  if (!itemUrl) throw new Error(`Cannot resolve URL for item 'integration:${name}'`);
+  let text;
+  try {
+    text = await fetchIntegrationCompanionText(
+      relativePath,
+      item,
+      itemUrl,
+      authHeadersFor(registry),
+      registry
+    );
+  } catch (error) {
+    if (/HTTP 404/.test(error.message)) return null;
+    throw error;
+  }
+  if (Buffer.byteLength(text, 'utf8') > MAX_SERVED_COMPANION_BYTES) {
+    throw new Error(`Companion file '${relativePath}' exceeds the 512KB size limit`);
+  }
+  return text;
+}
+
+/**
+ * Authorization headers from a registry's (decrypted) auth config.
+ * @param {object} registry
+ * @returns {Record<string, string>}
+ */
+function authHeadersFor(registry) {
+  const auth = registry?.auth;
+  const authHeaders = {};
+  if (auth && auth.type !== 'none') {
+    if (auth.type === 'bearer') {
+      authHeaders['Authorization'] = `Bearer ${auth.token}`;
+    } else if (auth.type === 'basic') {
+      const encoded = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
+      authHeaders['Authorization'] = `Basic ${encoded}`;
+    } else if (auth.type === 'header') {
+      authHeaders[auth.headerName] = auth.headerValue;
+    }
+  }
+  return authHeaders;
 }
 
 /** Hosts that share one GitHub token: the Contents API and the raw host. */
@@ -558,6 +676,55 @@ async function buildSkillContent(item, skillMd, authHeaders) {
   return { files };
 }
 
+/**
+ * Refuse a definition written for a format revision this server does not
+ * know, read from the raw document before any other field is looked at.
+ *
+ * @param {object} raw - parsed integration.json
+ * @throws {Error} with `code: 'UNSUPPORTED_DEFINITION_SCHEMA'`
+ */
+export function assertKnownDefinitionSchema(raw) {
+  const revision = definitionSchemaRevision(raw);
+  if (revision.supported) return;
+  const error = new Error(
+    `Content validation failed: ${unsupportedSchemaMessage(revision.revision)}`
+  );
+  error.code = 'UNSUPPORTED_DEFINITION_SCHEMA';
+  error.revision = revision.revision;
+  throw error;
+}
+
+/**
+ * Refuse an item this server version cannot run. The catalog item's
+ * `compatibility.ihub` (or `minVersion`) is checked first, so nothing is
+ * fetched for an item the catalog already marks; for an integration the
+ * fetched definition's own `compatibility` is checked too, since the
+ * definition is what the registry will load.
+ *
+ * @param {string} type
+ * @param {string} name
+ * @param {object} subject - Catalog item or integration definition
+ * @throws {Error} with `code: 'INCOMPATIBLE_IHUB_VERSION'`
+ */
+export function assertCompatible(type, name, subject) {
+  const { compatible, requires, serverVersion } = checkCompatibility(subject);
+  if (compatible) return;
+  const error = new Error(`${type} '${name}' ${describeIncompatibility(requires, serverVersion)}`);
+  error.code = 'INCOMPATIBLE_IHUB_VERSION';
+  error.requires = requires;
+  error.serverVersion = serverVersion;
+  throw error;
+}
+
+/**
+ * The catalog item of an installed or installable item, from the cached
+ * catalog; null when the catalog is not cached or the item is gone.
+ */
+async function cachedCatalogItem(registryId, type, name) {
+  const cached = await registryService.getCachedCatalogAsync(registryId);
+  return (cached?.catalog?.items || []).find(i => i.type === type && i.name === name) || null;
+}
+
 // ---------------------------------------------------------------------------
 // ContentInstaller class
 // ---------------------------------------------------------------------------
@@ -630,6 +797,11 @@ class ContentInstaller {
       throw error;
     }
 
+    // An item this server version cannot run is refused before anything is
+    // fetched (the UI greys it out; this holds for a direct API call too).
+    const catalogItem = await cachedCatalogItem(registryId, type, name);
+    if (catalogItem) assertCompatible(type, name, catalogItem);
+
     const { item, content } = await fetchItemContent(registryId, type, name);
 
     // Validate the fetched content against the schema for this type
@@ -644,6 +816,7 @@ class ContentInstaller {
           `Content validation failed: definition id '${definitionId}' does not match the catalog name '${name}'`
         );
       }
+      assertCompatible(type, name, content.files['integration.json']);
     }
 
     await this._writeContent(type, name, content, config);
@@ -762,9 +935,15 @@ class ContentInstaller {
       );
     }
 
+    const catalogItem = await cachedCatalogItem(existing.registryId, type, name);
+    if (catalogItem) assertCompatible(type, name, catalogItem);
+
     const { item, content } = await fetchItemContent(existing.registryId, type, name);
 
     assertValidContent(type, name, content, config);
+    if (type === 'integration') {
+      assertCompatible(type, name, content.files['integration.json']);
+    }
 
     await this._writeContent(type, name, content, config);
 

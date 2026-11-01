@@ -51,13 +51,22 @@ export function getLocalContentIds(cc) {
 }
 
 /**
- * Installation status of one catalog item.
+ * Installation status of one catalog item. An installed item whose catalog
+ * version differs from the recorded one is `update-available`, which the
+ * marketplace UI shows as installed with an **Update** button.
  *
  * @param {object|undefined} installation - Its entry in installations.json
  * @param {boolean} existsLocally - Whether an item with its type and name is loaded
- * @returns {'installed'|'local'|'available'}
+ * @param {string} [catalogVersion] - The version the catalog offers now
+ * @returns {'installed'|'update-available'|'local'|'available'}
  */
-export function installationStatusFor(installation, existsLocally) {
-  if (installation) return 'installed';
+export function installationStatusFor(installation, existsLocally, catalogVersion) {
+  if (installation) {
+    const installedVersion = installation.version;
+    if (catalogVersion && installedVersion && catalogVersion !== installedVersion) {
+      return 'update-available';
+    }
+    return 'installed';
+  }
   return existsLocally ? 'local' : 'available';
 }

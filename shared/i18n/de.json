@@ -2886,12 +2886,26 @@
         "category": "Kategorie",
         "license": "Lizenz",
         "installedAt": "Installiert",
-        "noPreview": "Keine Konfigurationsvorschau verfügbar."
+        "noPreview": "Keine Konfigurationsvorschau verfügbar.",
+        "compatibility": "Kompatibilität",
+        "compatibilityValue": "iHub {{requires}}",
+        "tabs": {
+          "overview": "Übersicht",
+          "content": "Inhalt",
+          "releases": "Releases"
+        }
       },
       "modelReview": {
         "title": "Prüfen Sie dieses Modell, bevor Sie es testen oder aktivieren",
         "body": "Modelle aus dem Marketplace bringen eigene Einstellungen mit, darunter die Endpunkt-URL. Beim Testen oder Verwenden des Modells werden der verwendete API-Schlüssel (der eigene oder, falls keiner gesetzt ist, der des Providers) und die Prompts an diesen Endpunkt gesendet. Prüfen Sie deshalb zuerst die URL und die Einstellungen."
-      }
+      },
+      "updateAvailable": "Update verfügbar",
+      "updateTo": "Aktualisieren {{from}} → {{to}}",
+      "incompatible": "Benötigt iHub {{requires}}; dieser Server läuft mit {{version}}.",
+      "incompatibleShort": "Nicht kompatibel mit dieser iHub-Version",
+      "compatibilityLine": "Kompatibilität: iHub {{requires}}",
+      "confirmUpdate": "Die installierten Dateien werden durch die Katalogversion ersetzt; lokale Änderungen gehen verloren.",
+      "noReleasesBetween": "Der Katalog führt keine Release-Notes zwischen diesen Versionen."
     },
     "apps": {
       "edit": {
@@ -3175,6 +3189,10 @@
         "toolCount": "{{count}} Tools",
         "userConnections_one": "1 verbundene Person",
         "userConnections_other": "{{count}} verbundene Personen",
+        "incompatible": "Inkompatibel",
+        "definitionVersion": "Definition auf der Platte: v{{version}}",
+        "updateAvailable": "Update auf v{{version}} verfügbar",
+        "updateAvailableTitle": "Zum Aktualisieren den Marktplatz öffnen",
         "external": "Extern",
         "alwaysInstalled": "Immer installiert"
       },
@@ -3186,7 +3204,8 @@
         "protocol": "Protokoll",
         "signIn": "Anmeldung",
         "actions": "Aktionen",
-        "publisher": "Herausgeber"
+        "publisher": "Herausgeber",
+        "compatibility": "Benötigt"
       },
       "actions": {
         "test": "{{id}} testen",
@@ -3272,6 +3291,8 @@
         "resetDone": "OAuth-Client-Registrierung zurückgesetzt"
       },
       "runsCode": "Führt Code auf diesem Server aus",
+      "incompatibleReason": "Diese Installation bietet keine Aktionen: ihre Definition {{reason}}.",
+      "catalogIncompatible": "Kann nicht installiert werden: {{reason}}.",
       "transport": {
         "ldaps": "LDAPS",
         "starttls": "StartTLS",
@@ -3825,6 +3846,11 @@
       },
       "actions": {
         "manageProjects": "Projekte verwalten"
+      },
+      "integrations": {
+        "label": "Integrationen",
+        "withUpdates": "{{enabled}} / {{total}} · {{count}} Updates verfügbar",
+        "incompatible": "{{count}} Installationen laufen nicht auf dieser iHub-Version"
       }
     },
     "copilotAgent": {
@@ -4402,6 +4428,19 @@
         "reservedId": "Diese ID ist reserviert; bitte eine andere wählen.",
         "name": "Geben Sie der Vorlage einen Namen.",
         "color": "Hexadezimale Farbe wie #e30613 verwenden."
+      }
+    },
+    "integrationReleases": {
+      "empty": "Noch keine Release-Notes.",
+      "installed": "installiert",
+      "showNotes": "Notizen anzeigen",
+      "hideNotes": "Notizen ausblenden",
+      "loading": "Lädt…",
+      "loadFailed": "Die Notizen konnten nicht geladen werden.",
+      "category": {
+        "breaking": "Breaking Changes",
+        "features": "Funktionen",
+        "fixes": "Fehlerbehebungen"
       }
     }
   },

@@ -30,6 +30,21 @@ export const testIntegrationDraft = async (definitionId, draft) =>
     })
   ).data.result;
 
+/**
+ * A Markdown companion file of a definition (a release's notes, its README),
+ * served from the definition folder on this server.
+ */
+export const fetchIntegrationDefinitionFile = async (definitionId, path) => {
+  const query = new URLSearchParams({ path });
+  const response = await makeAdminApiCall(`${definitionPath(definitionId)}/_file?${query}`, {
+    responseType: 'text'
+  });
+  return typeof response.data === 'string' ? response.data : String(response.data ?? '');
+};
+
+/** Installations whose definition has a newer compatible version in a marketplace catalog. */
+export const fetchIntegrationUpdates = async () => (await makeAdminApiCall(`${BASE}/updates`)).data;
+
 /** Re-read the definition folders from disk. */
 export const reloadIntegrationCatalog = async () =>
   (await makeAdminApiCall(`${BASE}/catalog/_reload`, { method: 'POST', ...json({}) })).data;

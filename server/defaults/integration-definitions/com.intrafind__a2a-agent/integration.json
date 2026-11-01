@@ -1,6 +1,23 @@
 {
   "id": "com.intrafind/a2a-agent",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: every agent of a2aAgents.json became an installation (migration V194); tool ids are unchanged.",
+        "de": "Erste Version: jeder Agent aus a2aAgents.json wurde eine Installation (Migration V194); Tool-IDs bleiben gleich."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": { "en": "A2A agent", "de": "A2A-Agent" },
   "description": {
     "en": "A remote agent that speaks the Agent-to-Agent protocol. Its Agent Card lists skills; each skill becomes an action the model can delegate to. The agent runs on its own servers and keeps the conversation of a chat.",

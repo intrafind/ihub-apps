@@ -2,6 +2,22 @@
   "$schema": "https://ihub.intrafind.com/schemas/integration/v1.json",
   "id": "org.ckan/open-data-portal",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: dataset search, metadata, DataStore queries and resources of any CKAN portal; publishers as scopes.",
+        "de": "Erste Version: Datensatzsuche, Metadaten, DataStore-Abfragen und Ressourcen jedes CKAN-Portals; Herausgeber als Scopes."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md"
+      }
+    }
+  ],
   "name": { "en": "CKAN Open Data Portal", "de": "CKAN Open-Data-Portal" },
   "description": {
     "en": "Find datasets, read their metadata (publisher, license, formats, coverage), query tabular data in the DataStore and get resource files from any CKAN-based open data portal (GovData, state and city portals, data.europa.eu, internal data catalogs).",

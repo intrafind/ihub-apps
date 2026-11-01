@@ -52,9 +52,12 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
   const lang = i18n.language?.split('-')[0] || 'en';
   const displayName = item.displayName?.[lang] || item.displayName?.en || item.name;
   const description = item.description?.[lang] || item.description?.en || '';
-  const isInstalled = item.installationStatus === 'installed';
-  const isLocal = item.installationStatus === 'local';
   const hasUpdate = item.installationStatus === 'update-available';
+  // An item with a newer version available is installed too
+  const isInstalled = item.installationStatus === 'installed' || hasUpdate;
+  const isLocal = item.installationStatus === 'local';
+  // This server version does not satisfy the item's `compatibility.ihub`
+  const incompatible = item.compatible === false;
 
   /**
    * Installs the item without navigating away from the browse grid.
@@ -64,10 +67,12 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
    */
   const handleInstall = async e => {
     e.stopPropagation();
-    if (isInstalled) return;
+    if (incompatible) return;
+    if (isInstalled && !hasUpdate) return;
     // Installing would replace the local copy — that is confirmed in the detail panel.
     // A model is installed from the detail panel too, which asks to review it first.
-    if (isLocal || item.type === 'model') {
+    // An update is confirmed in the detail panel, which shows what changed.
+    if (isLocal || hasUpdate || item.type === 'model') {
       onClick?.();
       return;
     }
@@ -86,7 +91,11 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
   return (
     <div
       onClick={onClick}
-      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md cursor-pointer transition-all hover:border-blue-300 dark:hover:border-blue-600"
+      className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md cursor-pointer transition-all hover:border-blue-300 dark:hover:border-blue-600 ${
+        incompatible ? 'opacity-60' : ''
+      }`}
+      data-testid="marketplace-item-card"
+      data-compatible={incompatible ? 'false' : 'true'}
       role="button"
       tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && onClick?.()}
@@ -111,9 +120,18 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
               {t('admin.marketplace.localCopy', 'Local copy')}
             </span>
           )}
+          {hasUpdate && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+              {t('admin.marketplace.updateAvailable', 'Update available')}
+            </span>
+          )}
         </div>
         {item.version && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {hasUpdate && item.installation?.version
+              ? `v${item.installation.version} → v${item.version}`
+              : `v${item.version}`}
+          </span>
         )}
       </div>
 
@@ -139,6 +157,23 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
         </div>
       )}
 
+      {/* Why the item cannot be installed here */}
+      {incompatible && (
+        <p
+          className="text-xs text-amber-700 dark:text-amber-400 mb-3"
+          data-testid="incompatible-reason"
+        >
+          {t(
+            'admin.marketplace.incompatible',
+            'Needs iHub {{requires}}; this server runs {{version}}.',
+            {
+              requires: item.requires,
+              version: item.serverVersion || '?'
+            }
+          )}
+        </p>
+      )}
+
       {/* Footer: author/registry and install button */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -147,9 +182,14 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
 
         <button
           onClick={handleInstall}
-          disabled={installing || isInstalled}
+          disabled={installing || (isInstalled && !hasUpdate) || incompatible}
+          title={
+            incompatible
+              ? t('admin.marketplace.incompatibleShort', 'Not compatible with this iHub version')
+              : undefined
+          }
           className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-            isInstalled
+            isInstalled && !hasUpdate
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 cursor-default'
               : isLocal
                 ? 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/20'
@@ -160,7 +200,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
         >
           {installing
             ? '...'
-            : isInstalled
+            : isInstalled && !hasUpdate
               ? '\u2713 ' + t('admin.marketplace.installed', 'Installed')
               : isLocal
                 ? t('admin.marketplace.replaceLocal', 'Replace local copy')

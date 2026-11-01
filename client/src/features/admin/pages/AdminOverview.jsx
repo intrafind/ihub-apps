@@ -20,7 +20,8 @@ import {
   WrenchIcon,
   KeyIcon,
   ArrowUpCircleIcon,
-  ServerStackIcon
+  ServerStackIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline';
 import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
 import { useOverviewData } from '../hooks/useOverviewData';
@@ -419,6 +420,45 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
           })}
           href="/admin/tools"
         />
+        {info.integrations && (
+          <InfoRow
+            icon={LinkIcon}
+            label={t('admin.overview.integrations.label', 'Integrations')}
+            value={
+              info.integrations.updatesAvailable > 0
+                ? t(
+                    'admin.overview.integrations.withUpdates',
+                    '{{enabled}} / {{total}} · {{count}} updates available',
+                    {
+                      enabled: info.integrations.enabled,
+                      total: info.integrations.total,
+                      count: info.integrations.updatesAvailable
+                    }
+                  )
+                : t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+                    enabled: info.integrations.enabled,
+                    total: info.integrations.total
+                  })
+            }
+            valueTitle={
+              info.integrations.incompatible > 0
+                ? t(
+                    'admin.overview.integrations.incompatible',
+                    '{{count}} installations cannot run on this iHub version',
+                    { count: info.integrations.incompatible }
+                  )
+                : undefined
+            }
+            valueClassName={
+              info.integrations.updatesAvailable > 0
+                ? 'text-amber-700 dark:text-amber-400'
+                : info.integrations.incompatible > 0
+                  ? 'text-red-700 dark:text-red-400'
+                  : undefined
+            }
+            href="/admin/integrations/installed"
+          />
+        )}
         <InfoRow
           icon={UsersIcon}
           label={t('admin.overview.groups', 'Groups')}

@@ -17,7 +17,8 @@ export async function a2aManagerConfig() {
   const resolved = [];
   for (const instance of installedIntegrationService.list()) {
     const entry = await installedIntegrationService.resolve(instance);
-    if (entry?.definition?.protocol?.type === 'a2a') resolved.push(entry);
+    // An incompatible definition offers no tools, so its agent is not registered.
+    if (entry?.definition?.protocol?.type === 'a2a' && !entry.incompatible) resolved.push(entry);
   }
   return a2aAgentsFromInstallations(resolved, installedIntegrationService.security());
 }

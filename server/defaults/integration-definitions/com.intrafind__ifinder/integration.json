@@ -2,6 +2,23 @@
   "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
   "id": "com.intrafind/ifinder",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-10-31",
+      "summary": {
+        "en": "First version: the ifinder installation replaces platform.iFinder (migration V192); seven actions keep their tool ids.",
+        "de": "Erste Version: die Installation ifinder ersetzt platform.iFinder (Migration V192); sieben Aktionen behalten ihre Tool-IDs."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "iFinder",
     "de": "iFinder"

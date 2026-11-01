@@ -1,6 +1,9 @@
 {
   "id": "mcp/google-maps",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
   "name": {
     "en": "Google Maps",
     "de": "Google Maps"
