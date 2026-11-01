@@ -169,10 +169,12 @@ describe('assertAllowedMarketplaceTarget', () => {
  */
 async function startServer(routes) {
   const requests = [];
+  // A Map, so a request path can never reach an inherited property.
+  const handlers = new Map(Object.entries(routes));
   const server = http.createServer((req, res) => {
     requests.push({ url: req.url, headers: req.headers });
-    const handler = routes[req.url];
-    if (!handler) {
+    const handler = handlers.get(req.url);
+    if (typeof handler !== 'function') {
       res.writeHead(404).end('missing');
       return;
     }
