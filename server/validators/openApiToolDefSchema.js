@@ -40,6 +40,8 @@ export const openApiBlockSchema = z.object({
   auth: z.object({ credentialRef: z.string().min(1) }).optional(),
   // Static extra request headers merged into every call.
   headers: z.record(z.string()).prefault({}),
+  /** How array query parameters are serialized; `openapi` honours the parameter's style/explode. */
+  arrayStyle: z.enum(['openapi', 'repeat', 'comma', 'json-list']).prefault('openapi'),
   // Mirror astron's x-display: dot-paths (supporting `items[].field` wildcards)
   // stripped from the response before it is returned to the LLM.
   xDisplay: z

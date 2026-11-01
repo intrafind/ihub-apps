@@ -16,7 +16,8 @@ import configStore from '../services/config/ConfigStore.js';
 import {
   areAppIntegrationsEnabled,
   getIntegrationStatus,
-  isIntegrationEnabled
+  isIntegrationEnabled,
+  missingAppIntegrations
 } from '../integrationRegistry.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import {
@@ -29,7 +30,9 @@ const APPS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../def
 const APPS = [
   { id: 'chat', enabled: true },
   { id: 'ifinder-search', enabled: true, requiredIntegrations: ['ifinder'] },
-  { id: 'people-directory', enabled: true, requiredIntegrations: ['peopleDirectories'] }
+  { id: 'people-directory', enabled: true, requiredIntegrations: ['peopleDirectories'] },
+  // Binds an installed integration (#3061): offered only while it is installed and on.
+  { id: 'open-data', enabled: true, integrations: { 'open-data-portal': {} } }
 ];
 
 describe('areAppIntegrationsEnabled', () => {
@@ -71,6 +74,56 @@ describe('areAppIntegrationsEnabled', () => {
     );
   });
 
+  it('requires every installation an app binds to exist and be enabled', () => {
+    const bound = {
+      id: 'open-data',
+      integrations: { 'open-data-portal': { actions: ['search'] } }
+    };
+    assert.deepEqual(missingAppIntegrations(bound, {}), ['open-data-portal']);
+    assert.deepEqual(
+      missingAppIntegrations(bound, {
+        installedIntegrations: [{ id: 'open-data-portal', enabled: false }]
+      }),
+      ['open-data-portal']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(bound, { installedIntegrations: [{ id: 'open-data-portal' }] }),
+      []
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(bound, { installedIntegrations: [{ id: 'open-data-portal' }] }),
+      true
+    );
+  });
+
+  it('treats the ifinder and iassistant bindings as the iFinder connection', () => {
+    const scoped = {
+      id: 'x',
+      integrations: { ifinder: { defaultScope: 'contracts' }, iassistant: {} }
+    };
+    assert.deepEqual(
+      missingAppIntegrations(scoped, { platform: { iFinder: { enabled: false } } }),
+      ['ifinder', 'iassistant']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(scoped, { platform: { iFinder: { enabled: true } } }),
+      []
+    );
+    // A requirement and a binding of the same thing are reported once.
+    const both = { id: 'y', requiredIntegrations: ['ifinder'], integrations: { ifinder: {} } };
+    assert.deepEqual(missingAppIntegrations(both, {}), ['ifinder']);
+  });
+
+  it('reports installed integrations by instance id', () => {
+    const status = getIntegrationStatus({
+      platform: { iFinder: { enabled: true } },
+      installedIntegrations: [{ id: 'open-data-portal' }, { id: 'archive', enabled: false }]
+    });
+    assert.equal(status.ifinder, true);
+    assert.equal(status['open-data-portal'], true);
+    assert.equal(status.archive, false);
+  });
+
   it('counts an unknown integration as off', () => {
     assert.equal(areAppIntegrationsEnabled({ requiredIntegrations: ['nope'] }, {}), false);
   });
@@ -100,11 +153,12 @@ describe('areAppIntegrationsEnabled', () => {
 describe('configCache.getApps with requiredIntegrations', () => {
   beforeEach(() => mock.restoreAll());
 
-  function serve(platform, peopleDirectories = { directories: [] }) {
+  function serve(platform, peopleDirectories = { directories: [] }, installed = []) {
     mock.method(configCache, 'get', key => {
       if (key === 'config/apps.json') return { data: APPS, etag: '"apps-etag"' };
       if (key === 'config/platform.json') return { data: platform };
       if (key === 'config/peopleDirectories.json') return { data: peopleDirectories };
+      if (key === 'config/integrations.json') return { data: { installed } };
       return null;
     });
     mock.method(configCache, 'getFeatures', () => ({}));
@@ -124,6 +178,24 @@ describe('configCache.getApps with requiredIntegrations', () => {
       ['chat', 'ifinder-search']
     );
     assert.notEqual(off.etag, on.etag);
+  });
+
+  it('hides an app whose bound installation is missing or disabled', () => {
+    serve({ iFinder: { enabled: true } });
+    assert.equal(
+      configCache.getApps().data.some(a => a.id === 'open-data'),
+      false
+    );
+    serve({ iFinder: { enabled: true } }, undefined, [{ id: 'open-data-portal', enabled: false }]);
+    assert.equal(
+      configCache.getApps().data.some(a => a.id === 'open-data'),
+      false
+    );
+    serve({ iFinder: { enabled: true } }, undefined, [{ id: 'open-data-portal' }]);
+    assert.equal(
+      configCache.getApps().data.some(a => a.id === 'open-data'),
+      true
+    );
   });
 
   it('still lists it for admins', () => {

@@ -89,6 +89,7 @@
     - [Workflows](workflows.md)
     - [Scheduled Tasks](scheduled-tasks.md)
     - [Marketplace](marketplace.md)
+    - [Integrations](integrations.md)
     - [Agent Factory (V1)](agents.md)
     - [OpenAI-Compatible API](openai-compatible-api.md)
     - [Server Configuration](server-config.md)

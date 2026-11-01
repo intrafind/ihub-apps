@@ -37,8 +37,8 @@ function isPermitted(user, kind, id) {
 }
 
 /**
- * The app and model a scope request is about, or a response already sent.
- * @returns {{ app: Object, model: Object|undefined, language: string }|null}
+ * The app, model and user a scope request is about, or a response already sent.
+ * @returns {{ app: Object, model: Object|undefined, user: Object, language: string }|null}
  */
 function resolveContext(req, res) {
   const { appId, modelId } = req.query;
@@ -65,6 +65,7 @@ function resolveContext(req, res) {
     app,
     // A model the user may not use contributes nothing.
     model: model && isPermitted(req.user, 'models', model.id) ? model : undefined,
+    user: req.user,
     language: sanitizeLanguageCode(
       req.query.lang || req.headers['accept-language']?.split(',')[0]?.split(';')[0],
       configCache.getPlatform()?.defaultLanguage || 'en'

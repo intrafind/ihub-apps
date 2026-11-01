@@ -6,6 +6,7 @@ import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
 import { fetchModels, fetchStyles } from '../../api';
 import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
 import { useUIConfig } from '../contexts/UIConfigContext';
+import { boundIntegrationRefs } from '../utils/boundIntegrationRefs';
 
 /**
  * Custom hook for managing app settings across chat and canvas modes
@@ -181,7 +182,7 @@ function useAppSettings(
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingLevel: app.thinking?.level ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: app.tools || [],
+      enabledTools: [...(app.tools || []), ...boundIntegrationRefs(app)],
       websearchEnabled: app.websearch?.enabledByDefault ?? false,
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
       imageQuality: app.imageGeneration?.quality || 'Medium',

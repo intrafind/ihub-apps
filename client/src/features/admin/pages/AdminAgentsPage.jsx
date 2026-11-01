@@ -140,24 +140,31 @@ export default function AdminAgentsPage() {
       header: t('admin.agents.col.enabled', 'Enabled'),
       sortable: true,
       sortAccessor: p => (p.enabled ? 1 : 0),
-      render: p => (
-        <button
-          onClick={e => {
-            e.stopPropagation();
-            void handleToggle(p.id);
-          }}
-          aria-label={t('admin.agents.action.toggleAriaLabel', 'Toggle agent {{name}}', {
-            name: p.name?.en || p.id
-          })}
-          className={`px-2 py-1 text-xs rounded font-medium ${
-            p.enabled
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-          }`}
-        >
-          {p.enabled ? t('admin.agents.action.on', 'On') : t('admin.agents.action.off', 'Off')}
-        </button>
-      )
+      render: p => {
+        const state = p.enabled
+          ? t('admin.agents.action.on', 'On')
+          : t('admin.agents.action.off', 'Off');
+        return (
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              void handleToggle(p.id);
+            }}
+            aria-pressed={Boolean(p.enabled)}
+            // The visible state must be part of the name (WCAG 2.5.3).
+            aria-label={`${t('admin.agents.action.toggleAriaLabel', 'Toggle agent {{name}}', {
+              name: p.name?.en || p.id
+            })}: ${state}`}
+            className={`px-2 py-1 text-xs rounded font-medium ${
+              p.enabled
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+            }`}
+          >
+            {state}
+          </button>
+        );
+      }
     }
   ];
 

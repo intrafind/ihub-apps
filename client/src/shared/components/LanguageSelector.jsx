@@ -113,7 +113,9 @@ function LanguageSelector({ variant = 'header' }) {
           disabled={isChanging}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={t('common.selectLanguage', 'Select language')}
+          // The visible text (the language code) must be part of the accessible
+          // name (WCAG 2.5.3, axe label-content-name-mismatch).
+          aria-label={`${t('common.selectLanguage', 'Select language')}: ${current.toUpperCase()}`}
           className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
         >
           {current.toUpperCase()}

@@ -157,9 +157,6 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
         }
         aria-expanded={showDropdown}
         aria-haspopup="true"
-        aria-label={
-          variant === 'sidebar' ? `${t('auth.userMenu', 'User menu')}: ${displayName}` : undefined
-        }
       >
         {isAuthenticated ? (
           <>
@@ -174,9 +171,15 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
               </>
             ) : (
               <>
+                {/* The sidebar button is named by its content: a visually
+                    hidden prefix, then the initials, name and e-mail as shown.
+                    An aria-label that paraphrased them would not contain the
+                    visible text (WCAG 2.5.3, axe label-content-name-mismatch). */}
+                <span className="sr-only">{t('auth.userMenu', 'User menu')}: </span>
                 <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-none">
                   {initials}
                 </div>
+                {collapsed && <span className="sr-only">{displayName}</span>}
                 {!collapsed && (
                   <div className="hidden sm:block text-left min-w-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">

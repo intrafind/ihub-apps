@@ -433,6 +433,9 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.json({ success: true });
       } catch (error) {
         logger.error('Error uninstalling item', { component: COMPONENT, error: error.message });
+        if (error.code === 'INTEGRATION_IN_USE') {
+          return sendError(res, 409, error.message, error.code);
+        }
         const status = error.message.includes('not installed') ? 404 : 500;
         sendError(res, status, error.message);
       }

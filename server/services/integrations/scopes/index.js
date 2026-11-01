@@ -14,8 +14,8 @@
  * A provider is an object with:
  *
  *   - `id` — the integration id (`ifinder`, `iassistant`);
- *   - `appliesTo({ app, model })` — whether the app (with the chat's model)
- *     uses the integration at all;
+ *   - `appliesTo({ app, model, user })` — whether the app (with the chat's
+ *     model) uses the integration at all, for this user;
  *   - `listScopes({ user, app, model, language, signal })` — resolves to
  *     `{ scopes, defaultScope, fixed, source, hint? }`, where `scopes` is
  *     `[{ id, name, isDefault, description?, kind? }]`. It never resolves to
@@ -54,6 +54,14 @@ export function registerScopeProvider(provider) {
 }
 
 /**
+ * Remove a provider (an installed integration that was disabled or removed).
+ * @param {string} integrationId
+ */
+export function unregisterScopeProvider(integrationId) {
+  providers.delete(integrationId);
+}
+
+/**
  * The provider registered for an integration id, or null.
  * @param {string} integrationId
  * @returns {Object|null}
@@ -68,16 +76,17 @@ export function listScopeProviders() {
 }
 
 /**
- * The providers whose integration the app uses with this model.
+ * The providers whose integration the app uses with this model, for this user.
  * @param {Object} params
  * @param {Object} params.app
  * @param {Object} [params.model]
+ * @param {Object} [params.user]
  * @returns {Array<Object>}
  */
-export function applicableScopeProviders({ app, model }) {
+export function applicableScopeProviders({ app, model, user }) {
   return listScopeProviders().filter(provider => {
     try {
-      return provider.appliesTo({ app, model });
+      return provider.appliesTo({ app, model, user });
     } catch {
       return false;
     }
@@ -107,7 +116,7 @@ export async function resolveChatScopes({ requested, user, app, model, language,
   const asked =
     requested && typeof requested === 'object' && !Array.isArray(requested) ? requested : {};
   const scopes = {};
-  for (const provider of applicableScopeProviders({ app, model })) {
+  for (const provider of applicableScopeProviders({ app, model, user })) {
     const scopeId = Object.hasOwn(asked, provider.id) ? asked[provider.id] : null;
     if (scopeId !== null && scopeId !== undefined && !isScopeIdShape(scopeId)) {
       return {

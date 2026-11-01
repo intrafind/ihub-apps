@@ -13,8 +13,8 @@ export function a2aAgentReference(agentId) {
 }
 
 /**
- * The remote source a tool belongs to — an MCP server (`_mcp`) or a remote
- * A2A agent (`_a2a`) — as `{ key, id, name, kind }`, or null for a tool of
+ * The remote source a tool belongs to — an MCP server (`_mcp`), a remote
+ * A2A agent (`_a2a`) or an installed integration (`_integration`) — as `{ key, id, name, kind }`, or null for a tool of
  * iHub itself. `key` is unique across both kinds; `id` is the reference an app
  * stores in `app.tools` to enable the whole source — for an A2A agent marked
  * `_a2a.idConflict` (its id is also a tool's or MCP server's) that is
@@ -40,6 +40,14 @@ function ownerOf(tool) {
       kind: 'a2a'
     };
   }
+  if (tool?._integration?.instanceId) {
+    return {
+      key: `integration-${tool._integration.instanceId}`,
+      id: tool._integration.instanceId,
+      name: tool._integration.instanceLabel || tool._integration.instanceId,
+      kind: 'integration'
+    };
+  }
   return null;
 }
 
@@ -57,6 +65,7 @@ function ownerOf(tool) {
 function ownerByReference(tools, reference) {
   return (
     tools.find(candidate => candidate._mcp?.serverId === reference) ||
+    tools.find(candidate => candidate._integration?.instanceId === reference) ||
     tools.find(
       candidate =>
         candidate._a2a?.agentId &&

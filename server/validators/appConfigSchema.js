@@ -477,18 +477,27 @@ const integrationScopeSettingsSchema = z
   })
   .strict();
 
-const appIntegrationsSchema = z
-  .object({
-    ifinder: integrationScopeSettingsSchema.optional(),
-    iassistant: integrationScopeSettingsSchema
-      .extend({
-        // Offer "all my search profiles" (iFinder 6.9+) beside the iAssistants.
-        allowAllSearchProfiles: z.boolean().optional()
-      })
-      .strict()
-      .optional()
+// Per-integration settings, keyed by integration id: the built-in `ifinder`
+// and `iassistant` (scope picker settings, #3050) and every installed
+// integration the app binds (Admin → Integrations → Installed, #3061). A key
+// for an installed integration binds it; `actions` narrows it to a subset of
+// the installation's actions.
+const appIntegrationBindingSchema = integrationScopeSettingsSchema
+  .extend({
+    // Offer "all my search profiles" (iFinder 6.9+) beside the iAssistants.
+    allowAllSearchProfiles: z.boolean().optional(),
+    // Actions of an installed integration the app offers; absent = every available action.
+    actions: z.array(z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/)).optional(),
+    // Whose credential the actions run with (iteration 1 knows `none` and `shared`).
+    connection: z.enum(['none', 'shared', 'user']).optional()
   })
-  .strict()
+  .strict();
+
+const appIntegrationsSchema = z
+  .record(
+    z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/, 'Invalid integration id'),
+    appIntegrationBindingSchema
+  )
   .optional();
 
 // Base app config schema without refinements

@@ -14,7 +14,8 @@ const TYPE_COLORS = {
   model: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   prompt: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
   skill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  workflow: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300'
+  workflow: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300',
+  integration: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
 };
 
 /**

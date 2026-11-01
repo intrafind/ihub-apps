@@ -4,14 +4,23 @@
 /**
  * Integration Registry
  *
- * Integrations (configured under Admin → Integrations) that an app can depend
- * on through `requiredIntegrations`. An integration counts as on when it is
- * set up and switched on; without it the apps that need it are not offered to
- * users.
+ * Which integrations an app depends on, and whether they are on. An app
+ * depends on an integration in two ways:
+ *
+ * - `requiredIntegrations`: the built-in checks below (iFinder, people
+ *   directories), configured under Admin → Integrations;
+ * - `app.integrations[<id>]`: a binding. `ifinder` and `iassistant` are the
+ *   built-in iFinder connection; every other key is an installed integration
+ *   (Admin → Integrations → Installed, `config/integrations.json`), which must
+ *   exist and be enabled.
+ *
+ * An integration counts as on when it is set up and switched on; without it
+ * the apps that need it are not offered to users, like an app whose required
+ * feature is off.
  *
  * Each check reads a context of the config files it depends on, so it stays a
- * pure function: `{ platform, peopleDirectories }` as returned by
- * `configCache.getIntegrationContext()`.
+ * pure function: `{ platform, peopleDirectories, installedIntegrations }` as
+ * returned by `configCache.getIntegrationContext()`.
  *
  * @module integrationRegistry
  */
@@ -28,6 +37,25 @@ const integrations = {
 
 export const INTEGRATION_IDS = Object.keys(integrations);
 
+/** Keys of `app.integrations` that are the built-in iFinder connection, not installations. */
+const BUILT_IN_BINDINGS = { ifinder: 'ifinder', iassistant: 'ifinder' };
+
+/**
+ * Whether an installed integration (`config/integrations.json`) exists and is
+ * enabled.
+ *
+ * @param {string} instanceId
+ * @param {Object} [context] - `{ installedIntegrations }`
+ * @returns {boolean}
+ */
+export function isInstalledIntegrationEnabled(instanceId, context = {}) {
+  const installed = Array.isArray(context.installedIntegrations)
+    ? context.installedIntegrations
+    : [];
+  const instance = installed.find(entry => entry?.id === instanceId);
+  return Boolean(instance) && instance.enabled !== false;
+}
+
 /**
  * Whether an integration is on.
  *
@@ -40,23 +68,64 @@ export function isIntegrationEnabled(integrationId, context = {}) {
 }
 
 /**
- * Every integration id with whether it is on.
+ * Every integration id with whether it is on: the built-in checks, then every
+ * installed integration by its instance id (an installation never takes a
+ * built-in id; the service reserves them).
  *
- * @param {Object} [context] - `{ platform, peopleDirectories }`
+ * @param {Object} [context] - `{ platform, peopleDirectories, installedIntegrations }`
  * @returns {Object<string, boolean>}
  */
 export function getIntegrationStatus(context = {}) {
-  return Object.fromEntries(INTEGRATION_IDS.map(id => [id, isIntegrationEnabled(id, context)]));
+  const installed = Array.isArray(context.installedIntegrations)
+    ? context.installedIntegrations
+    : [];
+  return {
+    ...Object.fromEntries(
+      installed
+        .filter(instance => instance?.id)
+        .map(instance => [instance.id, instance.enabled !== false])
+    ),
+    ...Object.fromEntries(INTEGRATION_IDS.map(id => [id, isIntegrationEnabled(id, context)]))
+  };
 }
 
 /**
- * Whether every integration an app lists in `requiredIntegrations` is on.
+ * The integrations an app depends on that are off: ids from
+ * `requiredIntegrations`, and the keys of `app.integrations` whose installation
+ * is missing or disabled (`ifinder` and `iassistant` stand for the iFinder
+ * connection). Empty when the app can be offered.
  *
  * @param {Object} app - App config
- * @param {Object} [context] - `{ platform, peopleDirectories }`
+ * @param {Object} [context] - `{ platform, peopleDirectories, installedIntegrations }`
+ * @returns {string[]}
+ */
+export function missingAppIntegrations(app, context = {}) {
+  const missing = [];
+  const required = Array.isArray(app?.requiredIntegrations) ? app.requiredIntegrations : [];
+  for (const id of required) {
+    if (!isIntegrationEnabled(id, context)) missing.push(id);
+  }
+  const bindings = app?.integrations;
+  if (bindings && typeof bindings === 'object') {
+    for (const key of Object.keys(bindings)) {
+      const builtIn = BUILT_IN_BINDINGS[key];
+      const on = builtIn
+        ? isIntegrationEnabled(builtIn, context)
+        : isInstalledIntegrationEnabled(key, context);
+      if (!on && !missing.includes(key)) missing.push(key);
+    }
+  }
+  return missing;
+}
+
+/**
+ * Whether every integration an app depends on is on (see
+ * `missingAppIntegrations`).
+ *
+ * @param {Object} app - App config
+ * @param {Object} [context] - `{ platform, peopleDirectories, installedIntegrations }`
  * @returns {boolean}
  */
 export function areAppIntegrationsEnabled(app, context = {}) {
-  const required = Array.isArray(app?.requiredIntegrations) ? app.requiredIntegrations : [];
-  return required.every(id => isIntegrationEnabled(id, context));
+  return missingAppIntegrations(app, context).length === 0;
 }

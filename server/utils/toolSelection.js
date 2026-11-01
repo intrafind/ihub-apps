@@ -83,6 +83,9 @@ export function isToolSelected(tool, refs) {
     return has(tool._peopleDirectory.id) || has(PEOPLE_DIRECTORIES_REFERENCE);
   }
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
+  // Tools of an installed integration (`<instanceId>__<action>`) are selected
+  // by the installation id, never by the `_`-split base id below.
+  if (tool._integration?.instanceId) return has(tool._integration.instanceId);
   if (tool._a2a?.agentId) {
     if (has(a2aAgentReference(tool._a2a.agentId))) return true;
     if (!tool._a2a.idConflict && has(tool._a2a.agentId)) return true;

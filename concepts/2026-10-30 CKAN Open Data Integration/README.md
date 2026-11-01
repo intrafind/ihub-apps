@@ -166,6 +166,19 @@ Decisions requested:
 6. Declarative Answer Sources and scopes for the `openapi` adapter (items 7 and 8), so answers are cited and a publisher can be picked per chat.
 7. Docs: `docs/integrations.md` (new, in `SUMMARY.md`) with the CKAN walkthrough; changelog entry.
 
+**Status (2026-10-30):** iteration 1 is implemented in intrafind/ihub-apps (branch `claude/ckan-api-integration-n4ufoy`, closes #3061). Decisions taken while building it, where they differ from the plan above:
+
+- Shipped definitions live in `server/defaults/integration-definitions/<folder>/` (folder = id with `/` → `__`), not `server/defaults/integrations/`; the folder is import-only (never copied into `contents/` on setup), so a registry-installed copy in `contents/integration-definitions/` wins by id.
+- Admin routes are split into `/api/admin/integrations/catalog[/:definitionId[/_test]]` and `/api/admin/integrations/installed[/:id[/_test|_enable|_disable]]`.
+- `app.integrations` is a map keyed by instance id (`{ actions?, defaultScope?, pinnedScope?, scopePicker? }`), the same object that carries the #3050 scope settings of `ifinder`/`iassistant`, rather than an array.
+- Access is `allowedGroups` on the instance (empty = every user of a binding app), checked when the app's tools are assembled; no `Connection` record yet.
+- Protocol adapters live in `server/services/integrations/protocols/` (`adapters/` is reserved by a lint rule for the LLM adapters). Only `openapi` is implemented.
+- Secrets entered in the wizard become credential-store profiles `integration-<instanceId>-<field>`; `integrations.json` holds only the reference.
+- Marketplace: item type `integration`, companions listed in `source.companions` plus the files the definition names; uninstall is refused with `INTEGRATION_IN_USE` while an instance exists.
+- Deferred to iteration 2: per-user auth modes (`api-key-user`, `oauth-user`), `read_resource_file`, `scopes.strict` ownership checks, DCAT-AP.de normalization, the write actions.
+
+Code map and admin walkthrough: [docs/integrations.md](../../docs/integrations.md).
+
 **Iteration 2:** writes behind #2945 approval (`create_dataset`, `update_dataset`, `add_resource`, `delete_dataset`), `read_resource_file`, DCAT-AP.de normalization of format and license URIs, per-user tokens (#2929).
 
 **Stopgap available now:** the twelve `type: "openapi"` tool definitions from section 4.2 plus an app with `tools: ["ckan_package_search", …]` can be hand-installed on any current iHub. It proves the use case to the customer within a day, but has none of the install, configure, scope and marketplace properties this concept is about.

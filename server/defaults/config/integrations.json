@@ -1,0 +1,7 @@
+{
+  "installed": [],
+  "security": {
+    "blockPrivateIps": true,
+    "allowedHosts": []
+  }
+}
