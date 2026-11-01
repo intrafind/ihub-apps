@@ -149,3 +149,21 @@ Installed**, and no longer a page of its own under **Admin → Integrations**.
 - **Migrated for you:** migration V196 moves `platform.jira` into the installation (keeping its
   enabled state), retires a hand-written tool file for `tools/jira.js` and rewrites `tools: ["jira"]`
   into the binding.
+
+## Entra ID Directory Is an Installed Integration
+
+The Microsoft Entra ID people search is the built-in integration **Microsoft Entra ID directory**
+under **Admin → Integrations → Installed**, instead of a tool configured through environment
+variables alone.
+
+- **Configured in the admin UI:** the installation `entra` holds the tenant id, the application
+  (client) id and the client secret as a credential reference; `AZURE_TENANT_ID`,
+  `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` still apply when a field is empty. **Test**
+  acquires a token with the client credentials and lists one user, with hints when Graph refuses.
+- **Apps bind instead of listing tools:** an app binds `integrations.entra` and picks actions by
+  name; the six tools keep their ids (`entraPeopleSearch_findUser` and friends). An app that
+  binds the directory is offered only while the installation is enabled, and the installation's
+  groups decide who may use it.
+- **Migrated for you:** migration V197 creates the installation (enabled when the three variables
+  were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
+  into the binding.

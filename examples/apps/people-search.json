@@ -18,14 +18,9 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "sendChatHistory": true,
-  "tools": [
-    "entraPeopleSearch_findUser",
-    "entraPeopleSearch_getAllUserDetails",
-    "entraPeopleSearch_getUserManager",
-    "entraPeopleSearch_getUserGroups",
-    "entraPeopleSearch_getTeamMembers",
-    "entraPeopleSearch_getUserPhotoBase64"
-  ],
+  "integrations": {
+    "entra": {}
+  },
   "settings": {
     "enabled": true,
     "model": { "enabled": true },

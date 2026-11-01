@@ -11,8 +11,10 @@ import ifinder from './ifinder/index.js';
 import iassistant from './iassistant.js';
 import websearch from './websearch/index.js';
 import jira from './jira/index.js';
+import entra from './entra/index.js';
 
 registerConnector(ifinder);
 registerConnector(iassistant);
 registerConnector(websearch);
 registerConnector(jira);
+registerConnector(entra);
