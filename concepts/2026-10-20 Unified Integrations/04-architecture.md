@@ -216,7 +216,7 @@ The approval mechanism is the one planned and decided in [intrafind/ihub-apps#29
 | `POST /api/admin/integrations/:id/actions/:action/_test` `{ args, connection: "me" \| "shared:<id>", confirmWrite }` | runs the action through its adapter, without a model; returns status, duration, the request as sent (secrets redacted), the raw response and the Answer Sources produced; refuses every action whose side effect is not `read` (write, destructive or unknown) without `confirmWrite`; audit `action.test` |
 | `POST /api/admin/integrations/builder/_import` `{ kind: openapi \| mcp \| a2a, source }` · `POST /api/admin/integrations/builder/_export/:id` | custom integrations: import actions from a source; export a custom integration as a definition for a registry |
 | `GET /api/admin/integrations/:id/connections` · `DELETE …/connections/:connId` | connected principals, revoke |
-| `GET/POST /api/admin/integrations/connections/shared` | shared connections |
+| `GET/POST /api/admin/integrations/connections/shared` | shared connections: admin-owned `service-account` credentials offered to groups, backed by `credentials.json` profiles; a personal OAuth grant can never become a shared connection (decided 2026-10-31) |
 | `GET /api/admin/integrations/requests` · `POST …/:id/_approve` · `POST …/:id/_decline` | member requests (phase 2) |
 | `GET /api/integrations` | for the user: allowed instances with capabilities, actions, connection status |
 | `POST /api/integrations/:id/connect` → `{ url }` · `GET /api/integrations/oauth/callback` · `POST /api/integrations/:id/disconnect` · `POST …/reconnect` | one connect flow for every protocol; callbacks `/api/integrations/jira/callback` and `/api/mcp/oauth/callback` stay registered as aliases because they are configured in vendor OAuth apps |
@@ -269,7 +269,7 @@ Design tokens: indigo accent, `text-2xl font-semibold` headers, `DataTable` list
 | `mcp/<storageId>__<serverId>.json` | the instance migrated from server `<serverId>` | the user behind `<storageId>` (resolved as `mcpUserTokens.js` does today) | the authorization server stored with the token (tokens are already keyed by issuer) | the config fingerprint stored with the token keeps working: a changed endpoint still invalidates it |
 | `mcp-oauth-clients` namespace | n/a | n/a | per issuer | client registrations move unchanged under `OAuthUserClient` |
 
-Breaking changes (CLAUDE.md rule): decided 2026-10-20 as a clean break for `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, the `/api/admin/configs/platform` writes for `jira`/`cloudStorage` and the three cloud file-browser routes, with aliases only for the OAuth callback URLs registered in vendor consoles. **Still open:** the same call for `/api/admin/tools` (the Tools pages); recommendation is a clean break, since `V1xx__integrations_from_tools` turns every tool file into a custom integration.
+Breaking changes (CLAUDE.md rule): decided 2026-10-20 as a clean break for `/api/admin/mcp/servers`, `/api/admin/a2a/agents`, the `/api/admin/configs/platform` writes for `jira`/`cloudStorage` and the three cloud file-browser routes, with aliases only for the OAuth callback URLs registered in vendor consoles. Decided 2026-10-31: the same clean break for `/api/admin/tools` (the Tools pages), since `V1xx__integrations_from_tools` turns every tool file into a custom integration; before the routes go, the workflow editor's tool pickers (`fetchTools`) and the tool helpers in `client/src/api/adminApi.js` move to the Integrations API or are removed.
 
 ## 8. Non-functional
 
