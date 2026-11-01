@@ -123,8 +123,7 @@ function action(name) {
  * with the mapped people), on the draft as the admin sees it.
  */
 async function test({ instance, values, testInput }) {
-  const { testDirectory } =
-    await import('../../../../../peopleDirectory/peopleDirectoryRunner.js');
+  const { testDirectory } = await import('../../../../../peopleDirectory/peopleDirectoryRunner.js');
   const { getDirectoryInstallations } = await import('../../../../ldapDirectoryConfig.js');
   const saved = getDirectoryInstallations().some(entry => entry.id === instance.id);
   const directory = directoryFromInstance({ ...instance, values, enabled: true });
@@ -157,8 +156,7 @@ const connector = {
     };
   },
   async invalidate() {
-    const { clearUnitsCache } =
-      await import('../../../../../peopleDirectory/LdapDirectory.js');
+    const { clearUnitsCache } = await import('../../../../../peopleDirectory/LdapDirectory.js');
     clearUnitsCache();
   },
   async onChanged() {
