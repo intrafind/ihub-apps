@@ -237,6 +237,45 @@ describe('integration tools', () => {
     );
   });
 
+  it('binds every installation of a type through a type key', async () => {
+    // The test definition has no type; give it one for this test only.
+    const entry = registry.get('test.portal');
+    entry.definition.type = 'people-directory';
+    try {
+      const app = { id: 'typed', tools: [], integrations: { 'type:people-directory': {} } };
+      const tools = await getToolsForApp(app, 'en', { user: { id: 'u', groups: ['data-team'] } });
+      assert.deepEqual(
+        tools
+          .filter(t => t._integration)
+          .map(t => t.id)
+          .sort(),
+        ['portal__list_organizations', 'portal__search_datasets', 'restricted__search_datasets']
+      );
+      // An installation's own binding wins over the type's.
+      const narrowed = await getToolsForApp(
+        { ...app, integrations: { ...app.integrations, portal: { actions: [] } } },
+        'en',
+        { user: { id: 'u', groups: ['data-team'] } }
+      );
+      assert.deepEqual(
+        narrowed.filter(t => t._integration).map(t => t.id),
+        ['restricted__search_datasets']
+      );
+      // Another type binds nothing.
+      const other = await getToolsForApp(
+        { id: 'x', tools: [], integrations: { 'type:storage': {} } },
+        'en',
+        { user: { id: 'u', groups: ['data-team'] } }
+      );
+      assert.equal(
+        other.some(t => t._integration),
+        false
+      );
+    } finally {
+      delete entry.definition.type;
+    }
+  });
+
   it('dispatches runTool to the adapter with the picked scope and strips context keys', async () => {
     requests.length = 0;
     const result = await runTool('portal__search_datasets', {

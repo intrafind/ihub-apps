@@ -28,6 +28,7 @@ import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { areAppIntegrationsEnabled } from './integrationRegistry.js';
+import integrationDefinitions from './services/integrations/definitions/IntegrationRegistry.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
@@ -1247,12 +1248,17 @@ class ConfigCache {
    * The config an integration check (integrationRegistry) reads: the platform
    * config and the people directories. Tolerates a cache that is not loaded yet.
    *
-   * @returns {{platform: Object, installedIntegrations: Array}}
+   * @returns {{platform: Object, installedIntegrations: Array, definitionTypes: Object<string, string>}}
    */
   getIntegrationContext() {
+    const definitionTypes = {};
+    for (const entry of integrationDefinitions.list()) {
+      if (entry?.definition?.type) definitionTypes[entry.definition.id] = entry.definition.type;
+    }
     return {
       platform: this.get('config/platform.json')?.data || {},
-      installedIntegrations: this.get('config/integrations.json')?.data?.installed || []
+      installedIntegrations: this.get('config/integrations.json')?.data?.installed || [],
+      definitionTypes
     };
   }
 

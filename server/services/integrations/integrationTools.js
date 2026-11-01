@@ -5,6 +5,8 @@ import logger from '../../utils/logger.js';
 import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
 import { expandUserGroups } from '../../utils/groupInheritance.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
+import integrationRegistry from './definitions/IntegrationRegistry.js';
+import { bindingKeyOfType } from './integrationTypes.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import {
@@ -87,7 +89,8 @@ function toolFromAction(resolved, action, language) {
 
 /**
  * The binding an app has for an installation: its own, else the one of its
- * definition. Null when the app binds neither.
+ * definition, else the one of its definition's type (`type:<type>`). Null
+ * when the app binds none of them.
  * @param {object} app
  * @param {{ id: string, definition?: string }} instance
  * @returns {object|null}
@@ -98,6 +101,12 @@ export function appBindingFor(app, instance) {
   if (Object.hasOwn(bindings, instance.id)) return bindings[instance.id] || {};
   if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
     return bindings[instance.definition] || {};
+  }
+  const type = instance.definition
+    ? integrationRegistry.get(instance.definition)?.definition?.type
+    : null;
+  if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) {
+    return bindings[bindingKeyOfType(type)] || {};
   }
   return null;
 }

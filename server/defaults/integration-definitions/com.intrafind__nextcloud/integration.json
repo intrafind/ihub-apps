@@ -14,6 +14,7 @@
     "verification": "intrafind"
   },
   "categories": ["storage", "files"],
+  "type": "storage",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/nextcloud-integration.md",
   "builtIn": true,
   "singleton": {

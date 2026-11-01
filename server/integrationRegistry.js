@@ -16,6 +16,9 @@
  * - keyed by a definition id (`com.intrafind/ldap-directory`): every
  *   installation of that definition, the ones installed later included; the
  *   binding is satisfied while at least one of them is enabled.
+ * - keyed by a type (`type:people-directory`): every installation of every
+ *   definition of that type (`services/integrations/integrationTypes.js`),
+ *   the ones installed later included; satisfied while one is enabled.
  * - `app.websearch.enabled`: web search runs on the `websearch` installation;
  *   it counts as a requirement only with `websearch.required: true`.
  *
@@ -27,14 +30,17 @@
  * `toolLoader.isWebSearchAvailableTo`).
  *
  * Each check reads a context of the config files it depends on, so it stays a
- * pure function: `{ platform, installedIntegrations }` as returned by
- * `configCache.getIntegrationContext()`. `requiredIntegrations`, the former
+ * pure function: `{ platform, installedIntegrations, definitionTypes }` as
+ * returned by `configCache.getIntegrationContext()` (`definitionTypes` maps a
+ * definition id to its type). `requiredIntegrations`, the former
  * list of built-in checks, knows no id any more (the last one, people
  * directories, became installations in V198); the app schema rejects a
  * non-empty list.
  *
  * @module integrationRegistry
  */
+
+import { typeOfBindingKey, bindingKeyOfType } from './services/integrations/integrationTypes.js';
 
 /** The built-in installations (`config/integrations.json`). */
 const IFINDER_INSTANCE_ID = 'ifinder';
@@ -88,24 +94,57 @@ export function isDefinitionBinding(key, context = {}) {
 }
 
 /**
- * Whether the integration a binding key names is on: the installation, or
- * for a definition key one of its installations.
+ * The type of an installation's definition, from the context's
+ * `definitionTypes`, or null.
+ *
+ * @param {Object} instance
+ * @param {Object} [context] - `{ definitionTypes }`
+ * @returns {string|null}
+ */
+function typeOfInstance(instance, context = {}) {
+  const types = context.definitionTypes;
+  if (!instance?.definition || !types || typeof types !== 'object') return null;
+  return Object.hasOwn(types, instance.definition) ? types[instance.definition] || null : null;
+}
+
+/**
+ * Whether a type has at least one enabled installation.
+ *
+ * @param {string} type - e.g. `people-directory`
+ * @param {Object} [context] - `{ installedIntegrations, definitionTypes }`
+ * @returns {boolean}
+ */
+export function isTypeInstalled(type, context = {}) {
+  const installed = Array.isArray(context.installedIntegrations)
+    ? context.installedIntegrations
+    : [];
+  return installed.some(
+    entry => entry?.enabled !== false && typeOfInstance(entry, context) === type
+  );
+}
+
+/**
+ * Whether the integration a binding key names is on: the installation, for
+ * a definition key one of its installations, for a type key
+ * (`type:people-directory`) one installation of that type.
  *
  * @param {string} key
- * @param {Object} [context] - `{ installedIntegrations }`
+ * @param {Object} [context] - `{ installedIntegrations, definitionTypes }`
  * @returns {boolean}
  */
 export function isBindingSatisfied(key, context = {}) {
+  const type = typeOfBindingKey(key);
+  if (type) return isTypeInstalled(type, context);
   if (isInstalledIntegrationEnabled(key, context)) return true;
   return isDefinitionBinding(key, context) && isDefinitionInstalled(key, context);
 }
 
 /**
  * Every integration id with whether it is on: every installed integration by
- * its instance id, and every installed definition by its id (on while one of
- * its installations is).
+ * its instance id, every installed definition by its id and every installed
+ * type by its key `type:<type>` (on while one of their installations is).
  *
- * @param {Object} [context] - `{ installedIntegrations }`
+ * @param {Object} [context] - `{ installedIntegrations, definitionTypes }`
  * @returns {Object<string, boolean>}
  */
 export function getIntegrationStatus(context = {}) {
@@ -116,6 +155,12 @@ export function getIntegrationStatus(context = {}) {
   for (const instance of installed) {
     if (!instance?.definition) continue;
     status[instance.definition] = status[instance.definition] || instance.enabled !== false;
+  }
+  for (const instance of installed) {
+    const type = typeOfInstance(instance, context);
+    if (!type) continue;
+    const key = bindingKeyOfType(type);
+    status[key] = status[key] || instance?.enabled !== false;
   }
   for (const instance of installed) {
     if (instance?.id) status[instance.id] = instance.enabled !== false;
