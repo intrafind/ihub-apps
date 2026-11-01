@@ -158,11 +158,14 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
     render(
       <MemoryRouter>
         <IntegrationsConfigSection
-          integrations={{
-            'ckan-demo': { actions: ['search_datasets'] },
-            gone: {},
-            ifinder: {},
-            iassistant: {}
+          app={{
+            id: 'x',
+            integrations: {
+              'ckan-demo': { actions: ['search_datasets'] },
+              gone: {},
+              ifinder: {},
+              iassistant: {}
+            }
           }}
           onChange={onChange}
         />
@@ -181,9 +184,12 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
     fireEvent.click(within(stale).getByRole('button', { name: 'Unbind' }));
 
     expect(onChange).toHaveBeenCalledWith({
-      'ckan-demo': { actions: ['search_datasets'] },
-      ifinder: {},
-      iassistant: {}
+      id: 'x',
+      integrations: {
+        'ckan-demo': { actions: ['search_datasets'] },
+        ifinder: {},
+        iassistant: {}
+      }
     });
   });
 
@@ -194,9 +200,12 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
     render(
       <MemoryRouter>
         <IntegrationsConfigSection
-          integrations={{
-            'ckan-demo': { actions: ['search_datasets'] },
-            lonely: { required: false }
+          app={{
+            id: 'x',
+            integrations: {
+              'ckan-demo': { actions: ['search_datasets'] },
+              lonely: { required: false }
+            }
           }}
           onChange={onChange}
         />
@@ -210,15 +219,21 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
 
     fireEvent.click(required[0]);
     expect(onChange).toHaveBeenLastCalledWith({
-      'ckan-demo': { actions: ['search_datasets'], required: false },
-      lonely: { required: false }
+      id: 'x',
+      integrations: {
+        'ckan-demo': { actions: ['search_datasets'], required: false },
+        lonely: { required: false }
+      }
     });
 
     fireEvent.click(required[1]);
     // Switching it back on drops the key instead of writing `true`.
     expect(onChange).toHaveBeenLastCalledWith({
-      'ckan-demo': { actions: ['search_datasets'] },
-      lonely: {}
+      id: 'x',
+      integrations: {
+        'ckan-demo': { actions: ['search_datasets'] },
+        lonely: {}
+      }
     });
   });
 });

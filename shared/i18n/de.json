@@ -2930,8 +2930,8 @@
         "created": "App erstellt",
         "idRequired": "Die App-ID ist erforderlich",
         "integrations": {
-          "title": "Installierte Integrationen",
-          "desc": "Binde Integrationen ein, die unter Integrationen → Installiert eingerichtet sind. Beschränke sie auf einzelne Aktionen und lege den Startbereich für Nutzer fest.",
+          "title": "Integrationen",
+          "desc": "Installierte Integrationen binden. Auf einzelne Aktionen einschränken und den Bereich festlegen, mit dem Benutzer starten.",
           "none": "Es ist noch keine Integration installiert.",
           "openCatalog": "Katalog öffnen",
           "actions": "Aktionen",
@@ -2953,7 +2953,19 @@
           },
           "allInstallations": "Alle Installationen von {{name}}",
           "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
-          "explicitAction": "Nur wenn hier angehakt; nie Teil von „alle Aktionen“."
+          "explicitAction": "Nur wenn hier angehakt; nie Teil von „alle Aktionen“.",
+          "allPeopleDirectories": "Alle Personenverzeichnisse",
+          "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
+          "panelNotInstalled": "{{name}} ist nicht installiert. Unter Integrationen installieren, um diese Einstellungen zu nutzen.",
+          "iassistantBinding": "In dieser App verwenden",
+          "peopleDirectoriesTitle": "Personenverzeichnisse",
+          "peopleDirectoriesDesc": "Das Modell Personen in den Verzeichnissen nachschlagen lassen: in allen oder in einzelnen.",
+          "groups": {
+            "mcp": "MCP-Server",
+            "a2a": "Agenten",
+            "builtIn": "Integriert",
+            "catalog": "Aus dem Katalog"
+          }
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",

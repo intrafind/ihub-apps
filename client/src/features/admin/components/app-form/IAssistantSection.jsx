@@ -12,8 +12,11 @@ const INPUT_CLASS =
  * IAssistantSection - iAssistant integration configuration card for the App form.
  * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
  * only ever reads/writes `app.iassistant` via the passed-in onChange.
+ * Rendered by IntegrationsConfigSection, which passes the binding of the
+ * `iassistant` installation as `children` (shown below the settings) and a
+ * `notice` when iAssistant is not installed.
  */
-function IAssistantSection({ app, onChange }) {
+function IAssistantSection({ app, onChange, notice = null, children = null }) {
   const { t, i18n } = useTranslation();
   // The iAssistants iFinder shows the signed-in admin; loaded on request,
   // because opening the app editor should not call iFinder.
@@ -63,6 +66,7 @@ function IAssistantSection({ app, onChange }) {
           </p>
         </div>
         <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+          {notice}
           {/* Enable iAssistant toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -273,6 +277,7 @@ function IAssistantSection({ app, onChange }) {
               </div>
             </div>
           )}
+          {children}
         </div>
       </div>
     </div>

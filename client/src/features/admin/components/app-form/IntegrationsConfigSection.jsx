@@ -9,31 +9,81 @@ import {
   fetchInstalledIntegration
 } from '../../../../api/integrationsAdminApi';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
-import {
-  CHECKBOX_CLASS,
-  HELP_CLASS,
-  INPUT_CLASS,
-  LABEL_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../formStyles';
+import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import IntegrationBindingRow from './IntegrationBindingRow';
+import WebSearchSection from './WebSearchSection';
+import IAssistantSection from './IAssistantSection';
 
-/** Definitions whose "every installation" row is offered even with a single installation. */
-const ALWAYS_DEFINITION_ROW = new Set(['com.intrafind/ldap-directory']);
+/** The built-in installations that have their own panel instead of a row. */
+const WEBSEARCH_INSTANCE_ID = 'websearch';
+const IASSISTANT_INSTANCE_ID = 'iassistant';
+const TYPE_PREFIX = 'type:';
 
 /**
- * App editor section: which installed integrations the app binds, which of
- * their actions, and the default scope. Writes `app.integrations[instanceId]`
- * (the object that also carries the scope picker settings of #3050). A
- * definition with several installations (or one that is meant to be
- * installed many times, like the LDAP people directory) also gets a row
- * "All … installations", which writes `app.integrations[definitionId]`: every
- * installation of it, including ones installed later.
+ * The groups of the remaining rows, in order. `match` decides by the
+ * installation's type, protocol and built-in flag (as `GET …/installed`
+ * reports them).
+ */
+const ROW_GROUPS = [
+  { id: 'mcp', match: item => item.protocol === 'mcp' },
+  { id: 'a2a', match: item => item.protocol === 'a2a' },
+  { id: 'builtIn', match: item => item.builtIn === true },
+  { id: 'catalog', match: () => true }
+];
+
+/** Whether an installation belongs on a dedicated panel or nowhere in the editor. */
+function hasOwnPanel(item) {
+  if (item.id === WEBSEARCH_INSTANCE_ID || item.id === IASSISTANT_INSTANCE_ID) return true;
+  // Web search engines are picked in the web search panel; storage providers
+  // are offered through the upload settings (they bring no model actions).
+  return item.type === 'web-search' || item.type === 'storage';
+}
+
+function Card({ title, description, children, testId }) {
+  return (
+    <div
+      className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6"
+      data-testid={testId}
+    >
+      <div className="md:grid md:grid-cols-3 md:gap-6">
+        <div className="md:col-span-1">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+            {title}
+          </h3>
+          {description && (
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>
+          )}
+        </div>
+        <div className="mt-5 md:mt-0 md:col-span-2 space-y-3">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * App editor: everything an app takes from installed integrations, grouped
+ * the way the admin Integrations page groups them, each integration in one
+ * place only.
+ *
+ * - **Web search** keeps its own panel (`app.websearch`), shown while the web
+ *   search integration is installed or the app already uses it.
+ * - **iAssistant** keeps its own panel (`app.iassistant`) with the binding of
+ *   the `iassistant` installation inside it, shown while iAssistant is
+ *   installed or the app already uses it.
+ * - **People directories**: "All people directories" (`type:people-directory`)
+ *   and each directory.
+ * - **Integrations**: every other installation, grouped into MCP servers,
+ *   agents, built-in and catalog integrations; a definition with several
+ *   installations also gets "All … installations" (`app.integrations[<definition id>]`).
+ *
+ * Storage providers have no rows here: they bring no model actions and are
+ * offered through the upload settings.
  *
  * @param {Object} props
- * @param {Object} props.integrations - `app.integrations`
- * @param {(next: Object) => void} props.onChange
+ * @param {Object} props.app - the app being edited
+ * @param {(app: Object) => void} props.onChange - receives the whole changed app
  */
-function IntegrationsConfigSection({ integrations, onChange }) {
+function IntegrationsConfigSection({ app, onChange }) {
   const { t } = useTranslation();
   const [installed, setInstalled] = useState([]);
   const [details, setDetails] = useState({});
@@ -41,40 +91,9 @@ function IntegrationsConfigSection({ integrations, onChange }) {
   const [error, setError] = useState(null);
 
   const bindings = useMemo(
-    () => (integrations && typeof integrations === 'object' ? integrations : {}),
-    [integrations]
+    () => (app.integrations && typeof app.integrations === 'object' ? app.integrations : {}),
+    [app.integrations]
   );
-
-  // Definitions offered as "every installation" rows: with 2+ installations,
-  // the ones meant for many installations, and any definition the app already
-  // binds (so the binding stays editable while only one is installed).
-  const definitionRows = useMemo(() => {
-    const byDefinition = new Map();
-    for (const item of installed) {
-      if (!item.definition) continue;
-      const row = byDefinition.get(item.definition) || {
-        id: item.definition,
-        name: item.definitionName,
-        instances: []
-      };
-      row.instances.push(item);
-      byDefinition.set(item.definition, row);
-    }
-    return [...byDefinition.values()].filter(
-      row =>
-        row.instances.length > 1 ||
-        ALWAYS_DEFINITION_ROW.has(row.id) ||
-        Object.hasOwn(bindings, row.id)
-    );
-  }, [installed, bindings]);
-
-  // Bindings to installations that are gone: the app is hidden from users
-  // until they are unbound, so they are listed with a way to do that.
-  const staleIds = useMemo(() => {
-    if (loading || error) return [];
-    const known = new Set([...installed.map(i => i.id), ...definitionRows.map(row => row.id)]);
-    return Object.keys(bindings).filter(id => !known.has(id));
-  }, [bindings, installed, definitionRows, loading, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,19 +112,105 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     };
   }, []);
 
-  // Load the actions of every bound installation once it is bound. A bound
-  // definition reads the actions of its first installation (all installations
-  // of a definition declare the same actions).
+  const setBinding = (id, binding) => {
+    const next = { ...bindings };
+    if (binding === null) delete next[id];
+    else next[id] = binding;
+    onChange({ ...app, integrations: Object.keys(next).length ? next : undefined });
+  };
+
+  // Rows of the People directories card: the type row, then each directory.
+  const directories = useMemo(
+    () => installed.filter(item => item.type === 'people-directory'),
+    [installed]
+  );
+  const directoryRows = useMemo(() => {
+    const key = `${TYPE_PREFIX}people-directory`;
+    if (directories.length === 0 && !Object.hasOwn(bindings, key)) return [];
+    return [
+      {
+        id: key,
+        kind: 'type',
+        label: t('admin.apps.edit.integrations.allPeopleDirectories', 'All people directories'),
+        definitionName: t(
+          'admin.apps.edit.integrations.allOfTypeHelp',
+          'Every installation of this kind, including ones installed later ({{count}} now).',
+          { count: directories.length }
+        ),
+        enabled: directories.some(i => i.enabled !== false)
+      },
+      ...directories.map(item => ({ ...item, kind: 'instance' }))
+    ];
+  }, [directories, bindings, t]);
+
+  // Definition rows ("All … installations"): definitions with two or more
+  // installations, and any definition the app already binds.
+  const definitionRows = useMemo(() => {
+    const byDefinition = new Map();
+    for (const item of installed) {
+      if (!item.definition || hasOwnPanel(item)) continue;
+      const row = byDefinition.get(item.definition) || {
+        id: item.definition,
+        name: item.definitionName,
+        type: item.type,
+        protocol: item.protocol,
+        builtIn: item.builtIn,
+        instances: []
+      };
+      row.instances.push(item);
+      byDefinition.set(item.definition, row);
+    }
+    return [...byDefinition.values()]
+      .filter(row => row.instances.length > 1 || Object.hasOwn(bindings, row.id))
+      .map(row => ({
+        id: row.id,
+        kind: 'definition',
+        type: row.type,
+        protocol: row.protocol,
+        builtIn: row.builtIn,
+        firstInstanceId: row.instances[0]?.id,
+        label: t('admin.apps.edit.integrations.allInstallations', 'All {{name}} installations', {
+          name: row.name || row.id
+        }),
+        definitionName: t(
+          'admin.apps.edit.integrations.allInstallationsHelp',
+          'Every installation of this integration, including ones installed later ({{count}} now).',
+          { count: row.instances.length }
+        ),
+        enabled: row.instances.some(i => i.enabled !== false)
+      }));
+  }, [installed, bindings, t]);
+
+  // Every other installation, by group.
+  const groupedRows = useMemo(() => {
+    const rest = [
+      ...definitionRows.filter(row => row.type !== 'people-directory'),
+      ...installed
+        .filter(item => !hasOwnPanel(item) && item.type !== 'people-directory')
+        .map(item => ({ ...item, kind: 'instance' }))
+    ];
+    return ROW_GROUPS.map(group => ({
+      id: group.id,
+      rows: rest.filter(item => ROW_GROUPS.find(g => g.match(item))?.id === group.id)
+    })).filter(group => group.rows.length > 0);
+  }, [definitionRows, installed]);
+
+  // A definition row of the LDAP directories stays in the directories card.
+  const directoryDefinitionRows = definitionRows.filter(row => row.type === 'people-directory');
+
+  // Load the actions of every bound installation or definition once bound
+  // (a definition row reads them through its first installation; type rows
+  // offer no actions).
   useEffect(() => {
-    const boundIds = Object.keys(bindings).filter(id => !details[id]);
-    if (boundIds.length === 0) return;
+    const ids = Object.keys(bindings).filter(id => !id.startsWith(TYPE_PREFIX) && !details[id]);
+    if (ids.length === 0 || loading) return;
     let cancelled = false;
     void (async () => {
       const loaded = {};
       await Promise.all(
-        boundIds.map(async id => {
+        ids.map(async id => {
           const row = definitionRows.find(entry => entry.id === id);
-          const instanceId = row ? row.instances[0]?.id : id;
+          const instanceId = row ? row.firstInstanceId : id;
           try {
             loaded[id] = instanceId
               ? await fetchInstalledIntegration(instanceId)
@@ -120,316 +225,177 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     return () => {
       cancelled = true;
     };
-  }, [bindings, details, definitionRows]);
+  }, [bindings, details, definitionRows, loading]);
 
-  const setBinding = (id, binding) => {
-    const next = { ...bindings };
-    if (binding === null) delete next[id];
-    else next[id] = binding;
-    onChange(Object.keys(next).length ? next : undefined);
-  };
+  // Bindings to installations that are gone: the app is hidden from users
+  // until they are unbound, so they are listed with a way to do that.
+  const staleIds = useMemo(() => {
+    if (loading || error) return [];
+    const known = new Set([
+      ...installed.map(i => i.id),
+      ...definitionRows.map(row => row.id),
+      ...directoryRows.map(row => row.id)
+    ]);
+    return Object.keys(bindings).filter(id => !known.has(id));
+  }, [bindings, installed, definitionRows, directoryRows, loading, error]);
 
-  const toggleInstance = (item, checked) => {
-    if (checked) {
-      const existing = bindings[item.id] || {};
-      setBinding(item.id, { ...existing });
-    } else {
-      setBinding(item.id, null);
-    }
-  };
+  const webSearchInstallation = installed.find(i => i.id === WEBSEARCH_INSTANCE_ID);
+  const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
+  const showWebSearch = Boolean(webSearchInstallation) || app.websearch?.enabled === true;
+  const showIAssistant =
+    Boolean(iAssistantInstallation) ||
+    app.iassistant?.enabled === true ||
+    Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID);
 
-  // `actions` absent means every action except those bound explicitly only
-  // (`bindExplicitly`, e.g. a directory's LDAP browser); a list, even an
-  // empty one, means exactly those (an empty list binds the installation for
-  // its scopes only).
-  const toggleAction = (id, actionName, checked, implicitNames) => {
-    const binding = bindings[id] || {};
-    const current = Array.isArray(binding.actions) ? binding.actions : implicitNames;
-    const next = checked
-      ? [...new Set([...current, actionName])]
-      : current.filter(n => n !== actionName);
-    const sameAsImplicit =
-      next.length === implicitNames.length && implicitNames.every(n => next.includes(n));
-    const { actions: _drop, ...rest } = binding;
-    setBinding(id, sameAsImplicit ? rest : { ...rest, actions: next });
-  };
+  const notInstalledNotice = name => (
+    <p
+      className="text-sm rounded-md px-3 py-2 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
+      role="status"
+    >
+      {t(
+        'admin.apps.edit.integrations.panelNotInstalled',
+        '{{name}} is not installed. Install it under Integrations to use these settings.',
+        { name }
+      )}
+    </p>
+  );
 
-  // Absent `required` means required; only an explicit `false` is optional.
-  const setRequired = (id, required) => {
-    const { required: _drop, ...rest } = bindings[id] || {};
-    setBinding(id, required ? rest : { ...rest, required: false });
-  };
+  const groupTitle = id =>
+    ({
+      mcp: t('admin.apps.edit.integrations.groups.mcp', 'MCP servers'),
+      a2a: t('admin.apps.edit.integrations.groups.a2a', 'Agents'),
+      builtIn: t('admin.apps.edit.integrations.groups.builtIn', 'Built-in'),
+      catalog: t('admin.apps.edit.integrations.groups.catalog', 'From the catalog')
+    })[id];
 
-  const setScope = (id, patch) => {
-    const binding = { ...(bindings[id] || {}), ...patch };
-    for (const key of Object.keys(patch)) {
-      if (patch[key] === '' || patch[key] === undefined) delete binding[key];
-    }
-    setBinding(id, binding);
-  };
+  const renderRow = item => (
+    <IntegrationBindingRow
+      key={item.id}
+      item={item}
+      binding={bindings[item.id]}
+      detail={details[item.id]}
+      onBindingChange={binding => setBinding(item.id, binding)}
+    />
+  );
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
-          <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.integrations.title', 'Installed integrations')}
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t(
-              'admin.apps.edit.integrations.desc',
-              'Bind integrations installed under Integrations → Installed. Narrow them to some actions, and set the scope users start with.'
-            )}
-          </p>
-        </div>
-        <div className="mt-5 md:mt-0 md:col-span-2 space-y-3">
-          {loading && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('common.loading', 'Loading…')}
-            </p>
+    <>
+      {!loading && showWebSearch && (
+        <WebSearchSection
+          app={app}
+          onChange={onChange}
+          notice={
+            webSearchInstallation
+              ? null
+              : notInstalledNotice(t('admin.apps.edit.websearch', 'Web Search'))
+          }
+        />
+      )}
+
+      {!loading && showIAssistant && (
+        <IAssistantSection
+          app={app}
+          onChange={onChange}
+          notice={
+            iAssistantInstallation
+              ? null
+              : notInstalledNotice(t('admin.apps.edit.iassistant', 'iAssistant'))
+          }
+        >
+          {iAssistantInstallation &&
+            renderRow({
+              ...iAssistantInstallation,
+              kind: 'instance',
+              label: t('admin.apps.edit.integrations.iassistantBinding', 'Use in this app')
+            })}
+        </IAssistantSection>
+      )}
+
+      {(directoryRows.length > 0 || directoryDefinitionRows.length > 0) && (
+        <Card
+          testId="app-integrations-people-directories"
+          title={t('admin.apps.edit.integrations.peopleDirectoriesTitle', 'People directories')}
+          description={t(
+            'admin.apps.edit.integrations.peopleDirectoriesDesc',
+            'Let the model look people up in the directories: all of them, or single ones.'
           )}
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          {!loading &&
-            !error &&
-            installed.length === 0 &&
-            staleIds.length === 0 &&
-            definitionRows.length === 0 && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
-                <Link
-                  to="/admin/integrations/installed?tab=catalog"
-                  className="text-blue-700 dark:text-blue-300 hover:underline"
-                >
-                  {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
-                </Link>
-              </p>
-            )}
-          {[
-            ...definitionRows.map(row => ({
-              id: row.id,
-              label: t(
-                'admin.apps.edit.integrations.allInstallations',
-                'All {{name}} installations',
-                {
-                  name: row.name || row.id
-                }
-              ),
-              definitionName: t(
-                'admin.apps.edit.integrations.allInstallationsHelp',
-                'Every installation of this integration, including ones installed later ({{count}} now).',
-                { count: row.instances.length }
-              ),
-              enabled: row.instances.some(i => i.enabled !== false),
-              isDefinition: true
-            })),
-            ...installed
-          ].map(item => {
-            const bound = Boolean(bindings[item.id]);
-            const binding = bindings[item.id] || {};
-            const detail = details[item.id];
-            // A definition row lists the actions the definition declares (through
-            // its first installation); an installation row its available ones.
-            const actions = (detail?.actions || []).filter(a =>
-              item.isDefinition ? a.enabledByDefault !== false || a.enabled : a.available
-            );
-            const implicitNames = actions.filter(a => !a.bindExplicitly).map(a => a.name);
-            const selected = Array.isArray(binding.actions) ? binding.actions : implicitNames;
-            const hasScopes = Boolean(detail?.definition?.scopes);
-            const checkboxId = `app-integration-${item.id.replace('/', '__')}`;
-            return (
-              <div
-                key={item.id}
-                data-testid={item.isDefinition ? `definition-binding-${item.id}` : undefined}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
-              >
-                <label htmlFor={checkboxId} className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    id={checkboxId}
-                    type="checkbox"
-                    className={`${CHECKBOX_CLASS} mt-1`}
-                    checked={bound}
-                    onChange={e => toggleInstance(item, e.target.checked)}
-                  />
-                  <span className="flex-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {item.label}
-                    </span>
-                    <span className="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400">
-                      {item.id}
-                    </span>
-                    {item.enabled === false && (
-                      <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-                        {t('admin.integrationCatalog.status.disabled', 'Disabled')}
-                      </span>
-                    )}
-                    <span className="block text-xs text-gray-500 dark:text-gray-400">
-                      {item.definitionName}
-                    </span>
-                  </span>
-                </label>
-                {bound && (
-                  <div className="mt-3 pl-7 space-y-3">
-                    <div>
-                      <p className={LABEL_CLASS}>
-                        {t('admin.apps.edit.integrations.actions', 'Actions')}
-                      </p>
-                      {!detail && <p className={HELP_CLASS}>{t('common.loading', 'Loading…')}</p>}
-                      {detail && actions.length === 0 && (
-                        <p className={HELP_CLASS}>
-                          {t(
-                            'admin.apps.edit.integrations.noActions',
-                            'This installation offers no action right now.'
-                          )}
-                        </p>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                        {actions.map(action => (
-                          <label
-                            key={action.name}
-                            className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200"
-                          >
-                            <input
-                              type="checkbox"
-                              className={`${CHECKBOX_CLASS} mt-0.5`}
-                              checked={selected.includes(action.name)}
-                              onChange={e =>
-                                toggleAction(item.id, action.name, e.target.checked, implicitNames)
-                              }
-                            />
-                            <span>
-                              {action.title}
-                              <span className="ml-1 font-mono text-xs text-gray-500 dark:text-gray-400">
-                                {action.name}
-                              </span>
-                              {action.bindExplicitly && (
-                                <span className={`${HELP_CLASS} block`}>
-                                  {t(
-                                    'admin.apps.edit.integrations.explicitAction',
-                                    'Only when ticked here; never part of "every action".'
-                                  )}
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
-                      <input
-                        type="checkbox"
-                        className={`${CHECKBOX_CLASS} mt-0.5`}
-                        checked={binding.required !== false}
-                        onChange={e => setRequired(item.id, e.target.checked)}
-                      />
-                      <span>
-                        {t('admin.apps.edit.integrations.required', 'Required')}
-                        <span className={`${HELP_CLASS} block`}>
-                          {t(
-                            'admin.apps.edit.integrations.requiredHelp',
-                            'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
-                          )}
-                        </span>
-                      </span>
-                    </label>
-                    {hasScopes && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label htmlFor={`${checkboxId}-default-scope`} className={LABEL_CLASS}>
-                            {t('admin.apps.edit.integrations.defaultScope', 'Default {{scope}}', {
-                              scope: detail.definition.scopes.label
-                            })}
-                          </label>
-                          <input
-                            id={`${checkboxId}-default-scope`}
-                            className={`${INPUT_CLASS} font-mono`}
-                            value={binding.defaultScope || ''}
-                            onChange={e => setScope(item.id, { defaultScope: e.target.value })}
-                            placeholder={t('admin.apps.edit.integrations.scopeAny', 'users pick')}
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor={`${checkboxId}-pinned-scope`} className={LABEL_CLASS}>
-                            {t('admin.apps.edit.integrations.pinnedScope', 'Pinned {{scope}}', {
-                              scope: detail.definition.scopes.label
-                            })}
-                          </label>
-                          <input
-                            id={`${checkboxId}-pinned-scope`}
-                            className={`${INPUT_CLASS} font-mono`}
-                            value={binding.pinnedScope || ''}
-                            onChange={e => setScope(item.id, { pinnedScope: e.target.value })}
-                          />
-                          <p className={HELP_CLASS}>
-                            {t(
-                              'admin.apps.edit.integrations.pinnedHelp',
-                              'Fixes the scope; users cannot change it.'
-                            )}
-                          </p>
-                        </div>
-                        <div>
-                          <label htmlFor={`${checkboxId}-picker`} className={LABEL_CLASS}>
-                            {t('admin.apps.edit.integrations.scopePicker', 'Scope picker')}
-                          </label>
-                          <select
-                            id={`${checkboxId}-picker`}
-                            className={INPUT_CLASS}
-                            value={binding.scopePicker || 'menu'}
-                            onChange={e =>
-                              setScope(item.id, {
-                                scopePicker: e.target.value === 'menu' ? '' : e.target.value
-                              })
-                            }
-                          >
-                            <option value="menu">
-                              {t('admin.apps.edit.integrations.picker.menu', 'In the menu')}
-                            </option>
-                            <option value="hidden">
-                              {t('admin.apps.edit.integrations.picker.hidden', 'Hidden')}
-                            </option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {staleIds.map(id => (
-            <div
-              key={id}
-              data-testid={`stale-integration-${id}`}
-              className="rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-2 flex items-start gap-3"
+        >
+          {directoryRows.slice(0, 1).map(renderRow)}
+          {directoryDefinitionRows.map(renderRow)}
+          {directoryRows.slice(1).map(renderRow)}
+        </Card>
+      )}
+
+      <Card
+        testId="app-integrations"
+        title={t('admin.apps.edit.integrations.title', 'Integrations')}
+        description={t(
+          'admin.apps.edit.integrations.desc',
+          'Bind installed integrations. Narrow them to some actions, and set the scope users start with.'
+        )}
+      >
+        {loading && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('common.loading', 'Loading…')}
+          </p>
+        )}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {!loading && !error && groupedRows.length === 0 && staleIds.length === 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
+            <Link
+              to="/admin/integrations?tab=catalog"
+              className="text-blue-700 dark:text-blue-300 hover:underline"
             >
-              <div className="flex-1">
-                <span className="font-mono text-sm text-gray-900 dark:text-gray-100">{id}</span>
-                <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
-                  {t('admin.apps.edit.integrations.notInstalled', 'Not installed')}
-                </span>
-                <p className={HELP_CLASS}>
-                  {bindings[id]?.required === false
-                    ? t(
-                        'admin.apps.edit.integrations.notInstalledOptionalHelp',
-                        'This installation no longer exists. The app stays available without it; unbind it to tidy up.'
-                      )
-                    : t(
-                        'admin.apps.edit.integrations.notInstalledHelp',
-                        'This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.'
-                      )}
-                </p>
-              </div>
-              <button
-                type="button"
-                className={SECONDARY_BUTTON_CLASS}
-                onClick={() => setBinding(id, null)}
-              >
-                {t('admin.apps.edit.integrations.unbind', 'Unbind')}
-              </button>
+              {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
+            </Link>
+          </p>
+        )}
+        {groupedRows.map(group => (
+          <section key={group.id} aria-labelledby={`app-integrations-group-${group.id}`}>
+            <h4
+              id={`app-integrations-group-${group.id}`}
+              className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
+            >
+              {groupTitle(group.id)}
+            </h4>
+            <div className="space-y-3">{group.rows.map(renderRow)}</div>
+          </section>
+        ))}
+        {staleIds.map(id => (
+          <div
+            key={id}
+            data-testid={`stale-integration-${id}`}
+            className="rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-2 flex items-start gap-3"
+          >
+            <div className="flex-1">
+              <span className="font-mono text-sm text-gray-900 dark:text-gray-100">{id}</span>
+              <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">
+                {t('admin.apps.edit.integrations.notInstalled', 'Not installed')}
+              </span>
+              <p className={HELP_CLASS}>
+                {bindings[id]?.required === false
+                  ? t(
+                      'admin.apps.edit.integrations.notInstalledOptionalHelp',
+                      'This installation no longer exists. The app stays available without it; unbind it to tidy up.'
+                    )
+                  : t(
+                      'admin.apps.edit.integrations.notInstalledHelp',
+                      'This installation no longer exists, so the app is hidden from users. Unbind it to offer the app again.'
+                    )}
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
+            <button
+              type="button"
+              className={SECONDARY_BUTTON_CLASS}
+              onClick={() => setBinding(id, null)}
+            >
+              {t('admin.apps.edit.integrations.unbind', 'Unbind')}
+            </button>
+          </div>
+        ))}
+      </Card>
+    </>
   );
 }
 

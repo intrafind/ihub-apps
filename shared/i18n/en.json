@@ -2639,8 +2639,8 @@
         "created": "App created",
         "idRequired": "App ID is required",
         "integrations": {
-          "title": "Installed integrations",
-          "desc": "Bind integrations installed under Integrations → Installed. Narrow them to some actions, and set the scope users start with.",
+          "title": "Integrations",
+          "desc": "Bind installed integrations. Narrow them to some actions, and set the scope users start with.",
           "none": "No integration is installed yet.",
           "openCatalog": "Open the catalog",
           "actions": "Actions",
@@ -2662,7 +2662,19 @@
           },
           "allInstallations": "All {{name}} installations",
           "allInstallationsHelp": "Every installation of this integration, including ones installed later ({{count}} now).",
-          "explicitAction": "Only when ticked here; never part of \"every action\"."
+          "explicitAction": "Only when ticked here; never part of \"every action\".",
+          "allPeopleDirectories": "All people directories",
+          "allOfTypeHelp": "Every installation of this kind, including ones installed later ({{count}} now).",
+          "panelNotInstalled": "{{name}} is not installed. Install it under Integrations to use these settings.",
+          "iassistantBinding": "Use in this app",
+          "peopleDirectoriesTitle": "People directories",
+          "peopleDirectoriesDesc": "Let the model look people up in the directories: all of them, or single ones.",
+          "groups": {
+            "mcp": "MCP servers",
+            "a2a": "Agents",
+            "builtIn": "Built-in",
+            "catalog": "From the catalog"
+          }
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
