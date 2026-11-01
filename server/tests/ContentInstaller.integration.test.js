@@ -91,6 +91,14 @@ jest.unstable_mockModule('../services/integrations/protocols/openapi/OpenApiAdap
   invalidate: instanceId => invalidated.push(instanceId)
 }));
 
+/** The definition changes the installer told the protocol adapters about. */
+const adapterNotifications = [];
+jest.unstable_mockModule('../services/integrations/protocols/index.js', () => ({
+  notifyDefinitionsChanged: async context => {
+    adapterNotifications.push(context);
+  }
+}));
+
 /** How often the installer asked for the scope providers to be re-registered. */
 let scopeProviderSyncs = 0;
 jest.unstable_mockModule('../services/integrations/integrationTools.js', () => ({
@@ -171,6 +179,7 @@ describe('ContentInstaller: integration definitions', () => {
     state.auth = { type: 'none' };
     state.fetches = [];
     invalidated.length = 0;
+    adapterNotifications.length = 0;
     scopeProviderSyncs = 0;
     // The registry singleton keeps the previous test's entries in memory.
     await integrationRegistry.reload();
@@ -230,13 +239,16 @@ describe('ContentInstaller: integration definitions', () => {
     }
   });
 
-  test('re-installing a definition drops the cached schemas of its installations and re-registers their scope providers', async () => {
+  test('re-installing a definition drops the cached schemas of its installations, tells the protocol adapters and re-registers their scope providers', async () => {
     publish(definition);
     state.instances = [{ id: 'service-prod' }, { id: 'service-test' }];
 
     await contentInstaller.install('reg', 'integration', FOLDER, 'admin');
 
     expect(invalidated).toEqual(['service-prod', 'service-test']);
+    // The MCP adapter rebuilds the client manager from here; a changed
+    // endpoint would otherwise be served only after a restart.
+    expect(adapterNotifications).toEqual([{ definitionIds: ['org.example/service'] }]);
     expect(scopeProviderSyncs).toBe(1);
   });
 

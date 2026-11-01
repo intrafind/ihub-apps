@@ -193,9 +193,6 @@ const AdminMarketplacePage = lazyWithRetry(
 const AdminMarketplaceRegistriesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplaceRegistriesPage')
 );
-const AdminMcpServersPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminMcpServersPage')
-);
 const AdminMcpGatewayPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMcpGatewayPage')
 );
@@ -752,11 +749,7 @@ function App() {
               element={<LazyAdminRoute component={AdminOAuthServerPage} />}
             />
 
-            {/* MCP */}
-            <Route
-              path="mcp/servers"
-              element={<LazyAdminRoute component={AdminMcpServersPage} />}
-            />
+            {/* MCP gateway (outbound MCP servers are installed integrations) */}
             <Route
               path="mcp/gateway"
               element={<LazyAdminRoute component={AdminMcpGatewayPage} />}

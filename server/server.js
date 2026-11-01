@@ -594,14 +594,19 @@ if (cluster.isPrimary && workerCount > 1) {
       const { registerConfigChangeHook, ALL_ENTRIES } = await import('./configSync.js');
       const { invalidate } =
         await import('./services/integrations/protocols/openapi/OpenApiAdapter.js');
+      const { notifyDefinitionsChanged } =
+        await import('./services/integrations/protocols/index.js');
       // Another worker installed, changed or removed an integration or a
-      // definition: refresh what this worker derives from them. Registered
-      // before the first load, so a load that fails here still leaves this
-      // worker following later changes.
+      // definition: refresh what this worker derives from them — the cached
+      // OpenAPI schemas, the MCP client manager's server configs (the MCP
+      // adapter's `onChanged`), the scope providers. Registered before the
+      // first load, so a load that fails here still leaves this worker
+      // following later changes.
       registerConfigChangeHook(async ({ entries }) => {
         if (!entries.includes(INTEGRATIONS_CONFIG_KEY) && !entries.includes(ALL_ENTRIES)) return;
         await integrationRegistry.reload();
         invalidate();
+        await notifyDefinitionsChanged();
         await syncIntegrationScopeProviders();
       });
       // The built-in native connectors (iFinder, iAssistant) register
@@ -702,26 +707,16 @@ if (cluster.isPrimary && workerCount > 1) {
     }
   }
 
-  // Initialise MCP client manager from cached mcpServers.json. Every worker
-  // needs its own initialized manager to serve tool calls it handles, so
-  // `initialize()` always runs; only the eager background `connectAll()` is
+  // Initialise the MCP client manager from the installed MCP integrations.
+  // Every worker needs its own initialized manager to serve tool calls it
+  // handles, so it always runs; only the eager background `connectAll()` is
   // singleton-gated; workers that skip it still connect lazily on first use
   // (tools/list retries on miss). Failure is non-fatal — the rest of iHub
   // keeps working even if outbound MCP discovery is broken.
   try {
-    const mcpManagerModule = await import('./services/mcp/McpClientManager.js');
-    const mcpManager = mcpManagerModule.default;
-    const { data: mcpServersData } = configCache.getMcpServers();
-    await mcpManager.initialize(mcpServersData);
-    if (ownsClusterSingletons) {
-      // Connect eagerly in the background; tools/list will lazy-retry on miss.
-      mcpManager.connectAll().catch(err => {
-        logger.warn('Initial MCP connectAll failed', {
-          component: 'Server',
-          error: err.message
-        });
-      });
-    }
+    const { initializeMcpFromInstallations } =
+      await import('./services/integrations/protocols/mcp/manager.js');
+    await initializeMcpFromInstallations({ connect: ownsClusterSingletons });
   } catch (error) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }

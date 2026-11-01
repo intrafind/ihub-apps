@@ -44,7 +44,7 @@ needed.
 
 | Field | Default | Meaning |
 |-------|---------|---------|
-| `id` | — | Agent id: letters, digits, `_` and `-` (no `.`, no `__`), at most 48 characters. Tools are named `a2a__<id>__<skill>`; apps and groups reference the agent by it, so it must not be the id of a tool or MCP server (see [Ids shared with tools or MCP servers](#ids-shared-with-tools-or-mcp-servers)). |
+| `id` | — | Agent id: letters, digits, `_` and `-` (no `.`, no `__`), at most 48 characters. Tools are named `a2a__<id>__<skill>`; apps and groups reference the agent by it, so it must not be the id of a tool or installed integration (for example an MCP server; see [Ids shared with tools or installed integrations](#ids-shared-with-tools-or-installed-integrations)). |
 | `name`, `description` | — | Shown in the admin UI, the app editor and the chat's tool menu. |
 | `enabled` | `true` | A disabled agent contributes no tools. |
 | `cardUrl` | — | Full URL of the Agent Card. HTTPS; plain HTTP only for `localhost` / `127.0.0.1`. |
@@ -64,14 +64,15 @@ needed.
 | `oauth` | OAuth 2.0 client credentials: iHub fetches a token from `tokenUrl` (HTTPS; plain HTTP only for `localhost`) with `clientId` and the secret behind `clientSecretRef` (optional `scope`), caches it until it expires and sends it as a bearer token. The token request times out after 10 seconds. |
 
 Every `*Ref` field names a profile in the central credential store (**Admin → Credentials**,
-`contents/config/credentials.json`), exactly as for [MCP servers](mcp-integration.md#authentication).
+`contents/config/credentials.json`), as for the service-account sign-in of
+[MCP servers](mcp-integration.md#authentication).
 The secret is encrypted at rest there and resolved per request; `a2aAgents.json` never holds secret
 material, and secrets are never logged. The same credentials are sent for the Agent Card and for
 every JSON-RPC call.
 
 There is **no per-user sign-in yet**: every user of an agent shares the one configured credential.
-Per-user OAuth (an `oauthUser` auth type) is planned together with per-user OAuth for MCP servers
-(#2545).
+Per-user OAuth (an `oauthUser` auth type) is planned (#2545); MCP servers already have it as the
+sign-in mode **Per-user OAuth** of their installation.
 
 ## How skills surface as tools
 
@@ -104,8 +105,9 @@ Each skill within `allowedSkills` becomes one tool:
 
 ### Using agents in apps
 
-An app enables an agent like an MCP server: in the app editor's **Remote A2A agents** list, or by
-putting the agent id into `tools`:
+An app enables an agent in the app editor's **Remote A2A agents** list, or by putting the agent id
+into `tools` (unlike an MCP server, which an app binds under `integrations`; remote agents are
+still configured on their own page, **Admin → A2A agents**, for now):
 
 ```jsonc
 { "id": "support-desk", "tools": ["langdock", "braveSearch"] }
@@ -117,15 +119,16 @@ as `a2a__langdock__ask_langdock_agent` selects just that skill. The literal refe
 select anything — it is not a shortcut for "all agents". In the chat's tool menu each agent is one
 toggle.
 
-### Ids shared with tools or MCP servers
+### Ids shared with tools or installed integrations
 
-Apps and groups reference tools (`jira` for `jira_searchTickets`), MCP servers (`drawio`) and A2A
-agents (`langdock`) by the same bare ids. So an agent id must not be the id or base id of a tool, or
-the id of an MCP server: `POST /api/admin/a2a/agents` refuses such an id with `409`, and creating an
-MCP server with the id of an A2A agent is refused the same way (ids are compared ignoring case).
+Apps and groups reference tools (`jira` for `jira_searchTickets`), installed integrations (`drawio`
+for an MCP server, `ifinder`) and A2A agents (`langdock`) by the same bare ids. So an agent id must
+not be the id or base id of a tool, or the id of an installed integration: `POST /api/admin/a2a/agents`
+refuses such an id with `409`, and installing an integration (for example an MCP server) with the id
+of an A2A agent is refused the same way (ids are compared ignoring case).
 
-Should an agent and a tool or MCP server share an id anyway (a hand-edited file, or a tool added
-after the agent), the bare id keeps selecting only the tool or MCP server: the agent is never
+Should an agent and a tool or installed integration share an id anyway (a hand-edited file, or a
+tool added after the agent), the bare id keeps selecting only the tool or integration: the agent is never
 granted by it. The agent is then enabled as a whole by `a2a__<agentId>`, which the app editor
 writes for you, and the server log names the clash. Apps and group grants that already use
 `a2a__<agentId>` need no change when a clash appears later.
@@ -133,8 +136,8 @@ writes for you, and the server log names the clash. Apps and group grants that a
 ### Group permissions
 
 Group `tools` grants in `groups.json` read like an app's `tools`: grant the agent id
-(`"langdock"`, or `"a2a__langdock"`) for all its skills or a tool id for one — just as an MCP server id grants the
-server's tools and a base id (`"iFinder"`) a tool's functions. As for every tool, which tools an app
+(`"langdock"`, or `"a2a__langdock"`) for all its skills or a tool id for one — just as an installed
+integration's id (an MCP server's `"drawio"`) grants all its tools and a base id (`"iFinder"`) a tool's functions. As for every tool, which tools an app
 can call is decided by the app's own `tools` list; the group grant decides what users see in the
 tool list (`GET /api/tools`). iHub's own MCP gateway and A2A endpoint never re-export remote agents: a remote agent's
 credentials stay with iHub.
@@ -220,13 +223,13 @@ The API behind it (all admin-only):
 | Endpoint | Purpose |
 |----------|---------|
 | `GET /api/admin/a2a/agents` | Agents with status |
-| `POST /api/admin/a2a/agents` | Create (`409` for an id another agent, a tool or an MCP server uses) |
+| `POST /api/admin/a2a/agents` | Create (`409` for an id another agent, a tool or an installed integration uses) |
 | `PUT /api/admin/a2a/agents/:id` | Update |
 | `DELETE /api/admin/a2a/agents/:id` | Delete |
 | `POST /api/admin/a2a/agents/:id/test` | Re-fetch a saved agent's card: `{ status, card, skills }` |
 | `POST /api/admin/a2a/test` | Probe an unsaved agent config |
 | `GET /api/admin/a2a/status` | Health snapshot |
-| `GET /api/admin/a2a/skills` | Skills per agent (the app editor's list; `idConflict: true` for an agent whose id a tool or MCP server shares) |
+| `GET /api/admin/a2a/skills` | Skills per agent (the app editor's list; `idConflict: true` for an agent whose id a tool or installed integration shares) |
 
 ## Security
 

@@ -1,0 +1,51 @@
+{
+  "id": "mcp/context7",
+  "version": "1.0.0",
+  "name": {
+    "en": "Context7",
+    "de": "Context7"
+  },
+  "description": {
+    "en": "Up-to-date, version-specific documentation and code examples for thousands of libraries and frameworks.\n\nWorks without a key. For higher rate limits, create an API key on context7.com and switch the authentication to Bearer token.",
+    "de": "Aktuelle, versionsgenaue Dokumentation und Codebeispiele für Tausende Bibliotheken und Frameworks.\n\nFunktioniert ohne Schlüssel. Für höhere Limits auf context7.com einen API-Schlüssel erstellen und die Authentifizierung auf Bearer-Token umstellen."
+  },
+  "publisher": {
+    "name": "Upstash"
+  },
+  "categories": ["mcp", "documentation"],
+  "docsUrl": "https://context7.com/docs/resources/all-clients",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["libraries", "frameworks", "code", "docs"]
+  }
+}

@@ -39,12 +39,14 @@ import { getContentsPath } from './contentsPath.js';
  */
 // `integration-definitions/` are shipped catalog entries the IntegrationRegistry
 // reads in place; a copy under contents/ would shadow every later update.
-// `tools/iFinder.json` is retired (the iFinder built-in integration owns the
-// tools since V192) and is kept only for the older migrations that read it.
+// `tools/iFinder.json` (V192) and `config/mcpServers.json` (V193) are retired:
+// the iFinder built-in and the installed MCP integrations own them now. Both
+// files are kept only for the older migrations that read them.
 export const IMPORT_ONLY_DEFAULT_FILES = [
   'sources/',
   'integration-definitions/',
-  'tools/iFinder.json'
+  'tools/iFinder.json',
+  'config/mcpServers.json'
 ];
 
 /**

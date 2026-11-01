@@ -65,3 +65,24 @@ export const setInstalledIntegrationEnabled = async (id, enabled) =>
 export const testInstalledIntegration = async (id, draft = {}) =>
   (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data
     .result;
+
+/** Users who connected their own account to an installation that signs every user in. */
+export const fetchIntegrationConnections = async id =>
+  (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.connections || [];
+
+/** Disconnect one user: revoke where possible, delete the stored tokens. */
+export const disconnectIntegrationUser = async (id, userId) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/connections/${encodeURIComponent(userId)}`, {
+      method: 'DELETE'
+    })
+  ).data;
+
+/** Forget iHub's OAuth client registration at the authorization server. */
+export const resetIntegrationRegistration = async id =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/registration/_reset`, {
+      method: 'POST',
+      ...json({})
+    })
+  ).data;

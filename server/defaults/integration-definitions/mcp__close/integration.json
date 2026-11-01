@@ -1,0 +1,71 @@
+{
+  "id": "mcp/close",
+  "version": "1.0.0",
+  "name": {
+    "en": "Close",
+    "de": "Close"
+  },
+  "description": {
+    "en": "Search and update leads, contacts, opportunities and activities in the Close CRM.\n\nThe Close-Scope header starts read-only (mcp.read). Change it to mcp.write_safe or mcp.write_destructive to allow changes.",
+    "de": "Leads, Kontakte, Opportunities und Aktivitäten im Close-CRM suchen und bearbeiten.\n\nDer Header Close-Scope ist zunächst nur lesend (mcp.read). Für Änderungen auf mcp.write_safe oder mcp.write_destructive setzen."
+  },
+  "publisher": {
+    "name": "Close"
+  },
+  "categories": ["mcp", "customer"],
+  "docsUrl": "https://developer.close.com/mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.close.com/mcp",
+      "headers": {
+        "Close-Scope": "mcp.read"
+      }
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "Close-API-Key"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API key in Close under Settings → Developer → API Keys. Each key belongs to one user.",
+        "de": "API-Schlüssel in Close unter Settings → Developer → API Keys erstellen. Jeder Schlüssel gehört zu einem Benutzer."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["crm", "sales", "leads"]
+  }
+}

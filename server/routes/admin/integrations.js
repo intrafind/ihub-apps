@@ -68,7 +68,14 @@ function catalogEntryView(entry, language, instances) {
     runs: def.runs,
     protocol: def.protocol.type,
     supported: Boolean(getProtocolAdapter(def.protocol.type)),
+    /** The actions are asked from the system (MCP), not listed in the definition. */
+    dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
     authModes: def.auth.modes,
+    /** Sign-in modes the adapter can run in this release (all declared ones when absent). */
+    supportedAuthModes: getProtocolAdapter(def.protocol.type)?.supportedAuthModes || [
+      'none',
+      'service-account'
+    ],
     defaultAuthMode: def.auth.default,
     capabilities: def.capabilities,
     actionCount: def.actions.length,
@@ -112,13 +119,38 @@ function definitionDetailView(entry, language, instances) {
 }
 
 function instanceView(instance, resolved, language) {
+  const adapter = resolved?.definition
+    ? getProtocolAdapter(resolved.definition.protocol.type)
+    : null;
+  let status = null;
+  try {
+    status = adapter?.status ? adapter.status(instance) : null;
+  } catch {
+    status = null;
+  }
   return {
     ...instance,
     label: resolved?.label || instance.id,
     definitionName: resolved?.definition ? localized(resolved.definition.name, language) : null,
     definitionMissing: !resolved?.definition,
-    protocol: resolved?.definition?.protocol?.type || null
+    protocol: resolved?.definition?.protocol?.type || null,
+    /** Live connection health, for adapters that keep connections (MCP). */
+    status,
+    /** Whether the installation signs every user in (per-user connections to manage). */
+    perUser: instance.auth?.mode === 'oauth-user'
   };
+}
+
+async function adapterFor(id, res) {
+  const resolved = await installedIntegrationService.resolve(id);
+  if (!resolved) {
+    sendNotFound(res, 'Integration');
+    return null;
+  }
+  const adapter = resolved.definition
+    ? getProtocolAdapter(resolved.definition.protocol.type)
+    : null;
+  return { resolved, adapter };
 }
 
 function sendIntegrationError(res, error, context) {
@@ -366,6 +398,90 @@ export default function registerAdminIntegrationsRoutes(app) {
       }
     );
   }
+
+  // --- Per-user connections (installations that sign every user in) --------
+
+  app.get(
+    buildServerPath('/api/admin/integrations/installed/:id/connections'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const found = await adapterFor(id, res);
+        if (!found) return;
+        const connections = found.adapter?.listConnections
+          ? await found.adapter.listConnections(found.resolved.instance)
+          : [];
+        res.json({ success: true, connections });
+      } catch (error) {
+        sendInternalError(res, error, 'list integration connections');
+      }
+    }
+  );
+
+  app.delete(
+    buildServerPath('/api/admin/integrations/installed/:id/connections/:userId'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      // A store key, never a path: the token store maps ids outside its
+      // file-name allowlist to a hashed storage id itself.
+      const userId = String(req.params.userId || '');
+      if (!userId || userId.length > 256) return sendBadRequest(res, 'Invalid userId');
+      try {
+        const found = await adapterFor(id, res);
+        if (!found) return;
+        if (!found.adapter?.disconnectUser) {
+          return sendBadRequest(res, 'This integration has no per-user connections');
+        }
+        const result = await found.adapter.disconnectUser(found.resolved.instance, userId);
+        if (!result?.removed) return sendNotFound(res, 'Connection');
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Disconnected user "${userId}" from integration "${id}"`
+        });
+        res.json({ success: true, ...result });
+      } catch (error) {
+        sendInternalError(res, error, 'disconnect integration user');
+      }
+    }
+  );
+
+  // Forget iHub's OAuth client registration at the authorization server, so
+  // the next sign-in registers afresh (the recovery path when the server no
+  // longer knows the client). Users' tokens stay; a refresh with the old
+  // client fails and asks them to connect again.
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/registration/_reset'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const found = await adapterFor(id, res);
+        if (!found) return;
+        const done = found.adapter?.resetRegistration
+          ? await found.adapter.resetRegistration(found.resolved.instance)
+          : false;
+        if (!done) return sendBadRequest(res, 'This integration has no OAuth client registration');
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Reset the OAuth client registration of integration "${id}"`
+        });
+        res.json({ success: true });
+      } catch (error) {
+        sendInternalError(res, error, 'reset integration registration');
+      }
+    }
+  );
 
   app.post(
     buildServerPath('/api/admin/integrations/installed/:id/_test'),

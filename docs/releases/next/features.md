@@ -54,3 +54,26 @@ Installed**, and no longer a block in `platform.json` or an editor on the Provid
   their enabled state), rewrites the shipped and custom apps and retires `tools/iFinder.json`.
   Environment variables (`IFINDER_API_URL`, `IFINDER_PRIVATE_KEY`, `IASSISTANT_PROFILE_ID`)
   still apply.
+
+## MCP Servers Are Installed Integrations
+
+Outbound MCP servers are installed under **Admin → Integrations → Installed** like any other
+integration, and no longer on a page of their own.
+
+- **Catalog:** the hosted servers of the former built-in catalog (Microsoft Learn, Context7,
+  GitHub, Atlassian, Stripe and some thirty more), draw.io and Excalidraw are shipped
+  definitions with their endpoint and sign-in mode set. Any other server, including a local
+  process, is installed from the generic **MCP server** definition (Streamable HTTP, SSE,
+  WebSocket or stdio).
+- **Sign-in:** no sign-in, a shared service account (bearer, header or basic), an OAuth client
+  (client credentials) or per-user OAuth, with the secret in the credential store. Per-user
+  servers show their connected users in a dialog, where an admin disconnects a user or resets
+  iHub's client registration.
+- **Actions are the server's tools:** the wizard lists them after **Test connection**, single
+  tools can be switched off, and the installed list shows whether the server is reachable and
+  how many tools it offers.
+- **Apps bind the installation** in **Admin → Apps → Edit → Installed integrations**, optionally
+  narrowed to some tools, and are offered only while it exists and is enabled. Tool ids
+  (`drawio__create_diagram`) and group grants are unchanged.
+- **Migrated for you:** migration V193 moves every server of `mcpServers.json` into an
+  installation under the same id; per-user sign-ins and OAuth client registrations stay valid.

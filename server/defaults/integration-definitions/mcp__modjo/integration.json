@@ -1,0 +1,67 @@
+{
+  "id": "mcp/modjo",
+  "version": "1.0.0",
+  "name": {
+    "en": "Modjo",
+    "de": "Modjo"
+  },
+  "description": {
+    "en": "Analyse recorded sales calls, deals and accounts.",
+    "de": "Aufgezeichnete Verkaufsgespräche, Deals und Accounts analysieren."
+  },
+  "publisher": {
+    "name": "Modjo"
+  },
+  "categories": ["mcp", "customer"],
+  "docsUrl": "https://help.modjo.ai/en/articles/15459539-set-up-and-use-the-modjo-mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://api.mcp.modjo.ai/v1/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "An administrator creates the key in Modjo under Settings → Integrations → Modjo API key. It covers the whole workspace.",
+        "de": "Ein Administrator erstellt den Schlüssel in Modjo unter Settings → Integrations → Modjo API key. Er gilt für den gesamten Workspace."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["sales", "calls", "conversation intelligence"]
+  }
+}

@@ -18,6 +18,7 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import { isInteractiveTool, isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
+import { installedIntegrationRefs } from './services/integrations/installedRefs.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
 import {
@@ -219,20 +220,6 @@ export async function loadConfiguredTools(language = null) {
 }
 
 /**
- * Discover tools from all configured MCP servers via McpClientManager.
- * Replaces the legacy single-server MCP_SERVER_URL stub; multi-server
- * support, transport choice, and SSRF guards live in the manager.
- */
-export async function discoverMcpTools() {
-  try {
-    return await mcpClientManager.listAllTools();
-  } catch (error) {
-    logger.error('Error discovering MCP tools', { component: 'ToolLoader', error });
-    return [];
-  }
-}
-
-/**
  * Discover the skills of all configured remote A2A agents as tools via
  * A2aClientManager (ids `a2a__<agentId>__<skill>`, marked with `_a2a`).
  */
@@ -270,14 +257,14 @@ function guardA2aAgentIds(a2aTools, otherTools) {
   if (!a2aTools.length) return a2aTools;
   const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
     tools: otherTools,
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    mcpServers: installedIntegrationRefs(),
     peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   for (const [agentId, conflict] of conflicts) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool, MCP server or people directory id; select the agent as a2a__<agentId>',
+      'A2A agent id is also a tool, installed integration or people directory id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }
@@ -327,18 +314,18 @@ async function discoverIntegrationTools(language) {
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  const [mcpTools, discoveredA2aTools] = await Promise.all([
-    discoverMcpTools(),
+  // Installed integrations include the MCP servers (their tools keep `_mcp`).
+  const [integrationTools, discoveredA2aTools] = await Promise.all([
+    discoverIntegrationTools(language),
     discoverA2aTools()
   ]);
-  const a2aTools = guardA2aAgentIds(discoveredA2aTools, [...configured, ...mcpTools]);
+  const a2aTools = guardA2aAgentIds(discoveredA2aTools, [...configured, ...integrationTools]);
   const directoryTools = discoverDirectoryTools(language, [
     ...configured,
-    ...mcpTools,
+    ...integrationTools,
     ...a2aTools
   ]);
-  const integrationTools = await discoverIntegrationTools(language);
-  const discovered = [...mcpTools, ...a2aTools, ...directoryTools, ...integrationTools];
+  const discovered = [...integrationTools, ...a2aTools, ...directoryTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {

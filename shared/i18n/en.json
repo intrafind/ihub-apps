@@ -2378,7 +2378,6 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "installedIntegrations": "Installed integrations",
-      "mcpServers": "MCP servers",
       "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
       "systemResources": "System Resources",
@@ -2399,102 +2398,6 @@
         "deleted": "Deleted",
         "testing": "Testing {{id}}...",
         "testOk": "OK — {{count}} tools discovered"
-      },
-      "servers": {
-        "title": "MCP servers (outbound)",
-        "subtitle": "External MCP servers iHub connects to. Their tools are merged into the tool catalog with per-server prefixing.",
-        "create": "Add MCP server",
-        "empty": "No MCP servers configured",
-        "loadError": "Failed to load MCP servers: {{error}}",
-        "saveError": "Save failed: {{error}}",
-        "deleteConfirm": "Delete MCP server \"{{id}}\"?",
-        "deleteError": "Delete failed: {{error}}",
-        "testError": "Test failed: {{error}}",
-        "createTitle": "Create MCP server",
-        "editTitle": "Edit {{id}}",
-        "resetRegistrationConfirm": "Reset the OAuth client registration of \"{{id}}\"? The next sign-in registers iHub afresh; connected users may have to connect again.",
-        "resetRegistrationDone": "OAuth client registration reset",
-        "resetRegistrationError": "Reset failed: {{error}}",
-        "actions": {
-          "test": "Test connection",
-          "resetRegistration": "Reset OAuth client registration"
-        },
-        "test": {
-          "button": "Test connection",
-          "running": "Testing connection…",
-          "success": "Connected — {{count}} tools discovered",
-          "failed": "Connection failed: {{error}}",
-          "noTools": "The server connected but offers no tools.",
-          "rendersView": "interactive view",
-          "fileInput": "file input: {{params}}",
-          "fileInputHint": "Receives a chat attachment of the current message as a file.",
-          "showMore": "Show more",
-          "showLess": "Show less",
-          "authRequired": "This server needs each user to sign in. Connect your own account to test it and load its tools.",
-          "authRequiredUnsaved": "This server needs each user to sign in. Save it, then connect your own account to test it and load its tools.",
-          "connect": "Connect my account",
-          "accountConnected": "Your account is connected to {{id}}. Its tools are loaded in the background; test the connection to refresh them.",
-          "accountConnectFailed": "Connecting your account failed ({{code}})."
-        },
-        "status": {
-          "unknown": "unknown",
-          "unhealthy": "unhealthy",
-          "connected": "connected ({{count}} tools)",
-          "idle": "idle",
-          "disabled": "disabled",
-          "connectedUsers_one": "{{count}} user connected",
-          "connectedUsers_other": "{{count}} users connected"
-        },
-        "form": {
-          "id": "ID",
-          "name": "Name",
-          "description": "Description",
-          "enabled": "Enabled",
-          "transport": "Transport",
-          "url": "URL",
-          "command": "Command",
-          "args": "Args (one per line)",
-          "authType": "Authentication type",
-          "authNone": "None",
-          "authBearer": "Bearer token",
-          "authBasic": "Basic",
-          "authOauth": "OAuth (client credentials)",
-          "token": "Token",
-          "tokenHint": "Encrypted at rest. Submitted plaintext is encrypted before saving.",
-          "username": "Username",
-          "password": "Password",
-          "toolPrefix": "Tool prefix",
-          "timeout": "Timeout (ms)",
-          "maxFileSizeMB": "Max. file size for tools (MB)",
-          "maxFileSizeMBHint": "Largest chat attachment handed to a tool parameter that takes a file.",
-          "allowedTools": "Tools offered to apps",
-          "appsEnabled": "Render interactive views (MCP Apps)",
-          "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",
-          "transportStreamableHttp": "Streamable HTTP (recommended)",
-          "transportSse": "SSE (legacy)",
-          "transportStdio": "stdio",
-          "transportWebsocket": "WebSocket",
-          "authHeader": "API key in custom header",
-          "headerName": "Header name",
-          "valuePrefix": "Value prefix (optional)",
-          "apiKey": "API key",
-          "valueRefHint": "Select a stored credential profile holding the API key.",
-          "headers": "Additional headers (optional)",
-          "headersHint": "One \"Name: value\" per line, sent with every request. Stored in plain text — put keys and tokens under Authentication instead.",
-          "allowedToolsHint": "Apps enable this server as a whole; they get exactly the tools allowed here. Users see the server as a single entry in the chat.",
-          "allowedToolsAll": "All tools the server offers",
-          "allowedToolsSelected": "Only the tools I select",
-          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead.",
-          "authOauthUser": "OAuth — each user signs in",
-          "oauthUserHttpOnly": "Per-user sign-in is available for the Streamable HTTP and SSE transports only.",
-          "oauthUserHint": "Every user connects their own account (authorization code + PKCE). iHub finds the authorization server and registers itself automatically. Behind a reverse proxy, set the MCP gateway public URL so the callback URL stays stable.",
-          "scopes": "Scopes (optional, comma-separated)",
-          "preregisteredClientId": "Client ID (optional)",
-          "preregisteredClientIdHint": "Only for a client registered at the authorization server by hand. Leave empty to let iHub register itself.",
-          "clientSecretOptional": "Client secret (optional)",
-          "clientSecretRefHint": "Select a stored credential profile holding the OAuth client secret.",
-          "authorizationServer": "Authorization server (optional override)"
-        }
       },
       "gateway": {
         "title": "MCP gateway (inbound)",
@@ -2550,39 +2453,6 @@
         "cimdApprovalAuto": "Connect automatically",
         "a2aDefaultSkill": "A2A default skill",
         "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none)."
-      },
-      "catalog": {
-        "open": "Browse catalog",
-        "title": "MCP server catalog",
-        "subtitle": "Hosted MCP servers iHub can connect to. Pick one to pre-fill the form, then add its API key, test and save.",
-        "searchPlaceholder": "Search servers…",
-        "category": "Category",
-        "allCategories": "All categories",
-        "loadError": "Failed to load the catalog: {{error}}",
-        "noResults": "No servers match your search.",
-        "installed": "Added",
-        "docs": "Documentation",
-        "use": "Add",
-        "emptyHint": "Start from the catalog of preconfigured servers, or add your own.",
-        "prefilledNoKey": "Pre-filled from the catalog. {{name}} needs no API key — test the connection and save.",
-        "prefilledKey": "Pre-filled from the catalog. Store the {{name}} API key as a credential, select it below, then test and save.",
-        "auth": {
-          "none": "No key needed",
-          "apiKey": "API key",
-          "basic": "Username & API token"
-        },
-        "categories": {
-          "documentation": "Documentation",
-          "development": "Development & operations",
-          "productivity": "Productivity",
-          "design": "Design & diagrams",
-          "content": "Content & media",
-          "automation": "Automation & web",
-          "customer": "Sales & support",
-          "analytics": "Analytics",
-          "data": "Data & research",
-          "finance": "Finance & payments"
-        }
       }
     },
     "a2a": {
@@ -2947,17 +2817,6 @@
             "hidden": "Hidden"
           }
         },
-        "mcpTools": {
-          "title": "MCP servers",
-          "desc": "Choose the MCP servers this app uses. Users see each one as a single entry in the chat.",
-          "loading": "Loading MCP servers…",
-          "error": "Failed to load MCP servers: {{error}}",
-          "empty": "No MCP servers are configured. Add one under Integrations → MCP servers to use it here.",
-          "disabled": "disabled",
-          "serverError": "Could not list tools: {{error}}",
-          "helper": "Which tools a server offers is set under Integrations → MCP servers.",
-          "legacySelection": "This app lists some of this server’s tools one by one. Turn the server off and on again to use the tools allowed on the server."
-        },
         "a2aAgents": {
           "loading": "Loading A2A agents…",
           "error": "Failed to load A2A agents: {{error}}",
@@ -3196,7 +3055,13 @@
         "disabled": "Disabled",
         "enable": "Enable",
         "disable": "Disable",
-        "definitionMissing": "Definition missing"
+        "definitionMissing": "Definition missing",
+        "unhealthy": "Unreachable",
+        "connected": "Connected",
+        "notConnected": "Not connected",
+        "toolCount": "{{count}} tools",
+        "userConnections_one": "1 connected user",
+        "userConnections_other": "{{count}} connected users"
       },
       "source": {
         "shipped": "Shipped",
@@ -3214,7 +3079,8 @@
         "edit": "Edit {{id}}",
         "enable": "Enable {{id}}",
         "disable": "Disable {{id}}",
-        "remove": "Remove {{id}}"
+        "remove": "Remove {{id}}",
+        "connections": "Connected users of {{id}}"
       },
       "confirmRemove": {
         "title": "Remove integration?",
@@ -3242,8 +3108,10 @@
           "service-account": "service account",
           "api-key-user": "user API key",
           "oauth-user": "user OAuth",
-          "enterprise-managed": "enterprise"
-        }
+          "enterprise-managed": "enterprise",
+          "oauth-client": "OAuth client"
+        },
+        "oauthClient": "iHub signs in with one OAuth client (client credentials)"
       },
       "wizard": {
         "installTitle": "Install integration",
@@ -3267,7 +3135,22 @@
         "needsToken": "Needs a shared service account; off while sign-in is \"none\".",
         "testResults": "Test results",
         "test": "Test connection",
-        "testing": "Testing…"
+        "testing": "Testing…",
+        "dynamicActionsEmpty": "The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.",
+        "dynamicActionsUnavailable": "The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.",
+        "dynamicActionsHint": "These are the tools the server lists; a tool the server adds later is on by default.",
+        "dynamicActionsAllowlistHint": "These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on."
+      },
+      "connections": {
+        "title": "Connected users",
+        "empty": "Nobody has connected their account yet.",
+        "connectedAt": "since {{date}}",
+        "expired": "expired",
+        "disconnect": "Disconnect",
+        "disconnectConfirm": "Disconnect \"{{user}}\" from {{label}}? They have to sign in again to use it.",
+        "resetRegistration": "Reset OAuth client registration",
+        "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
+        "resetDone": "OAuth client registration reset"
       }
     },
     "integrations": {

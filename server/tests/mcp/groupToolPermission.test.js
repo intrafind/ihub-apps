@@ -22,7 +22,8 @@ jest.unstable_mockModule('../../configCache.js', () => ({
   }
 }));
 
-const { getVisibleToolIds, toolVisibleInSet } = await import('../../services/mcp/permissions.js');
+const { getVisibleToolIds, getBoundIntegrationIds, toolVisibleInSet } =
+  await import('../../services/mcp/permissions.js');
 
 const platform = {};
 
@@ -93,5 +94,24 @@ describe('getVisibleToolIds', () => {
     const visible = await getVisibleToolIds(user, platform);
 
     expect(toolVisibleInSet('anything', visible)).toBe(true);
+  });
+});
+
+describe('getBoundIntegrationIds', () => {
+  it('collects the installations the accessible apps bind, nothing from tools', async () => {
+    appsForUser.value = [
+      { id: 'a', tools: ['drawio'], integrations: { github: { actions: ['search'] }, jira: {} } },
+      { id: 'b', integrations: { github: {} } },
+      { id: 'c', integrations: ['not-an-object'] },
+      { id: 'd' }
+    ];
+    const bound = await getBoundIntegrationIds({ id: 'u', groups: ['users'] }, platform);
+    expect([...bound].sort()).toEqual(['github', 'jira']);
+  });
+
+  it('is empty when no accessible app binds an installation', async () => {
+    appsForUser.value = [{ id: 'a', tools: ['drawio'] }];
+    const bound = await getBoundIntegrationIds({ id: 'u', groups: ['users'] }, platform);
+    expect(bound.size).toBe(0);
   });
 });

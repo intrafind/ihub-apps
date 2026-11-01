@@ -1,5 +1,36 @@
 {
-  "installed": [],
+  "installed": [
+    {
+      "id": "drawio",
+      "definition": "mcp/drawio",
+      "enabled": false,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      },
+      "allowedGroups": []
+    },
+    {
+      "id": "excalidraw",
+      "definition": "mcp/excalidraw",
+      "enabled": false,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      },
+      "allowedGroups": []
+    }
+  ],
   "security": {
     "blockPrivateIps": true,
     "allowedHosts": []

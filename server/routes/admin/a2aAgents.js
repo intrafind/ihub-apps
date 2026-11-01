@@ -12,6 +12,7 @@ import {
 import a2aClientManager from '../../services/a2a/A2aClientManager.js';
 import { findAgentIdConflict } from '../../services/a2a/a2aTools.js';
 import configCache from '../../configCache.js';
+import { installedIntegrationRefs } from '../../services/integrations/installedRefs.js';
 import { markConfigApplied } from '../../configReloadHooks.js';
 import logger from '../../utils/logger.js';
 
@@ -79,15 +80,16 @@ async function writeConfig(updated) {
 function refuseIdConflict(res, agentId) {
   const conflict = findAgentIdConflict(agentId, {
     tools: configCache.getTools?.(true)?.data || [],
-    mcpServers: configCache.getMcpServers?.()?.data?.servers || [],
+    mcpServers: installedIntegrationRefs(),
     peopleDirectories: configCache.getPeopleDirectories?.()?.data?.directories || []
   });
   if (!conflict) return false;
   const what =
-    { mcpServer: 'MCP server', peopleDirectory: 'people directory' }[conflict.kind] || 'tool';
+    { mcpServer: 'installed integration', peopleDirectory: 'people directory' }[conflict.kind] ||
+    'tool';
   res.status(409).json({
     success: false,
-    error: `Agent id "${agentId}" is already used by the ${what} "${conflict.id}". Apps and groups reference agents, tools, MCP servers and people directories by id, so the agent needs an id of its own.`,
+    error: `Agent id "${agentId}" is already used by the ${what} "${conflict.id}". Apps and groups reference agents, tools, installed integrations and people directories by id, so the agent needs an id of its own.`,
     conflict
   });
   return true;
@@ -225,7 +227,7 @@ export default function registerAdminA2aAgentsRoutes(app) {
     try {
       const taken = {
         tools: configCache.getTools?.(true)?.data || [],
-        mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+        mcpServers: installedIntegrationRefs()
       };
       const agents = (await a2aClientManager.listSkillsByAgent()).map(agent =>
         findAgentIdConflict(agent.id, taken) ? { ...agent, idConflict: true } : agent

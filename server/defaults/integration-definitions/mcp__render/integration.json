@@ -1,0 +1,67 @@
+{
+  "id": "mcp/render",
+  "version": "1.0.0",
+  "name": {
+    "en": "Render",
+    "de": "Render"
+  },
+  "description": {
+    "en": "Inspect Render services, deploys, logs and metrics, and update environment variables.",
+    "de": "Render-Services, Deploys, Logs und Metriken einsehen und Umgebungsvariablen ändern."
+  },
+  "publisher": {
+    "name": "Render"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://render.com/docs/mcp-server",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.render.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API key in the Render dashboard under Account Settings → API Keys.",
+        "de": "API-Schlüssel im Render-Dashboard unter Account Settings → API Keys erstellen."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["hosting", "deploy", "cloud"]
+  }
+}

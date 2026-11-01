@@ -128,7 +128,6 @@ before(async () => {
   await registry.reload();
 
   configCache.setCacheEntry('config/tools.json', []);
-  configCache.setCacheEntry('config/mcpServers.json', { servers: [] });
   configCache.setCacheEntry('config/a2aAgents.json', { agents: [] });
   configCache.setCacheEntry('config/peopleDirectories.json', { directories: [] });
   configCache.setCacheEntry('config/platform.json', {});

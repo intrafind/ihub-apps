@@ -92,6 +92,12 @@ export async function discoverIntegrationTools(language = null) {
   for (const resolved of resolvedAll) {
     const adapter = getProtocolAdapter(resolved.definition.protocol.type);
     try {
+      // An adapter over a system that already shapes tools (MCP) hands them
+      // over as they are, with the integration marker added.
+      if (typeof adapter.discoverTools === 'function') {
+        tools.push(...(await adapter.discoverTools(resolved, lang)));
+        continue;
+      }
       const actions = await adapter.discoverActions({
         definition: resolved.definition,
         instance: resolved.instance,
@@ -114,7 +120,13 @@ export async function discoverIntegrationTools(language = null) {
   return tools;
 }
 
-function userMayUse(instance, user) {
+/**
+ * Whether the installation's `allowedGroups` admit the user (every user when
+ * the list is empty). Holds on top of every tool grant and app binding.
+ * @param {object} instance
+ * @param {object} user
+ */
+export function userMayUse(instance, user) {
   const allowed = instance.allowedGroups || [];
   if (allowed.length === 0) return true;
   const groups = Array.isArray(user?.groups) ? user.groups : [];
@@ -174,7 +186,7 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
  * Run an integration tool. `params` is what `runTool` received: the model's
  * arguments plus iHub's context keys.
  */
-export async function runIntegrationTool(tool, params = {}) {
+export async function runIntegrationTool(tool, params = {}, options = {}) {
   const { instanceId, action: actionName } = tool._integration;
   const resolved = await installedIntegrationService.resolve(instanceId, params.language || 'en');
   if (!resolved?.definition) {
@@ -186,7 +198,10 @@ export async function runIntegrationTool(tool, params = {}) {
   if (!userMayUse(resolved.instance, params.user)) {
     throw new Error(`Integration ${instanceId} is not available to this user`);
   }
-  const action = resolved.definition.actions.find(a => a.name === actionName);
+  const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+  const action =
+    resolved.definition.actions.find(a => a.name === actionName) ||
+    (adapter.dynamicActions ? { name: actionName, sideEffect: 'unknown' } : null);
   if (!action) throw new Error(`Integration ${instanceId} has no action ${actionName}`);
 
   const args = {};
@@ -201,7 +216,6 @@ export async function runIntegrationTool(tool, params = {}) {
     scope = { id: picked, name: scopeNames.get(`${instanceId}:${picked}`) || picked };
   }
 
-  const adapter = getProtocolAdapter(resolved.definition.protocol.type);
   return adapter.run({
     definition: resolved.definition,
     instance: resolved.instance,
@@ -209,7 +223,7 @@ export async function runIntegrationTool(tool, params = {}) {
     security: resolved.security,
     action,
     args,
-    context: { scope, user: params.user, chatId: params.chatId, params }
+    context: { scope, user: params.user, chatId: params.chatId, params, tool, options }
   });
 }
 

@@ -23,7 +23,7 @@ jest.unstable_mockModule('../../configSync.js', () => ({
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
     getPlatform: () => ({}),
-    getMcpServers: () => ({ data: { servers: [] } }),
+    getIntegrations: () => ({ data: { installed: [] } }),
     getA2aAgents: () => ({ data: structuredClone(cache.a2a) })
   }
 }));

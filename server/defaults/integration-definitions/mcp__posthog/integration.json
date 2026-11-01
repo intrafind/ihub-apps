@@ -1,0 +1,67 @@
+{
+  "id": "mcp/posthog",
+  "version": "1.0.0",
+  "name": {
+    "en": "PostHog",
+    "de": "PostHog"
+  },
+  "description": {
+    "en": "Query product analytics, insights, feature flags, experiments and error tracking.\n\nEU Cloud projects use https://mcp-eu.posthog.com/mcp. Add ?features=flags,dashboards (for example) to the URL to limit the tools to those areas.",
+    "de": "Produktanalysen, Insights, Feature Flags, Experimente und Fehler-Tracking abfragen.\n\nProjekte in der EU Cloud nutzen https://mcp-eu.posthog.com/mcp. Mit ?features=flags,dashboards (Beispiel) an der URL werden die Tools auf diese Bereiche beschränkt."
+  },
+  "publisher": {
+    "name": "PostHog"
+  },
+  "categories": ["mcp", "analytics"],
+  "docsUrl": "https://posthog.com/docs/model-context-protocol",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.posthog.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create a personal API key with the “MCP Server” preset under Settings → Personal API keys (keys start with phx_).",
+        "de": "Persönlichen API-Schlüssel mit der Vorlage „MCP Server“ unter Settings → Personal API keys erstellen (beginnt mit phx_)."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["product analytics", "feature flags", "errors"]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "mcp/sanity",
+  "version": "1.0.0",
+  "name": {
+    "en": "Sanity",
+    "de": "Sanity"
+  },
+  "description": {
+    "en": "Query and edit structured content, schemas and releases in Sanity.",
+    "de": "Strukturierte Inhalte, Schemas und Releases in Sanity abfragen und bearbeiten."
+  },
+  "publisher": {
+    "name": "Sanity"
+  },
+  "categories": ["mcp", "content"],
+  "docsUrl": "https://www.sanity.io/docs/ai/mcp-server",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.sanity.io"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an API token at sanity.io/manage (project → API → Tokens); tools are limited to the token’s role.",
+        "de": "API-Token unter sanity.io/manage erstellen (Projekt → API → Tokens); die Tools sind auf die Rolle des Tokens beschränkt."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["cms", "headless", "content"]
+  }
+}

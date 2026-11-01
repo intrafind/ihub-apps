@@ -1,0 +1,67 @@
+{
+  "id": "mcp/stripe",
+  "version": "1.0.0",
+  "name": {
+    "en": "Stripe",
+    "de": "Stripe"
+  },
+  "description": {
+    "en": "Work with Stripe customers, payments, invoices, subscriptions and products, and search the Stripe docs.\n\nTest in a sandbox first. Stripe asks for human confirmation of some write actions, such as refunds.",
+    "de": "Mit Stripe-Kunden, Zahlungen, Rechnungen, Abos und Produkten arbeiten und die Stripe-Dokumentation durchsuchen.\n\nZuerst in einer Sandbox testen. Für manche schreibenden Aktionen, etwa Erstattungen, verlangt Stripe eine Bestätigung durch einen Menschen."
+  },
+  "publisher": {
+    "name": "Stripe"
+  },
+  "categories": ["mcp", "finance"],
+  "docsUrl": "https://docs.stripe.com/mcp",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.stripe.com"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create an agent API key (Dashboard → API keys, shown with an “Agent” badge) with only the permissions needed. From 31 October 2026 Stripe MCP rejects secret keys and restricted keys without the Agent tag.",
+        "de": "Agent-API-Schlüssel erstellen (Dashboard → API keys, mit „Agent“-Kennzeichnung) und nur die nötigen Berechtigungen vergeben. Ab 31. Oktober 2026 lehnt Stripe MCP Secret Keys und Restricted Keys ohne Agent-Kennzeichnung ab."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["payments", "billing", "subscriptions", "invoices"]
+  }
+}

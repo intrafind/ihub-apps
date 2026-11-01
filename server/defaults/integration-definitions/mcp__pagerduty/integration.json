@@ -1,0 +1,69 @@
+{
+  "id": "mcp/pagerduty",
+  "version": "1.0.0",
+  "name": {
+    "en": "PagerDuty",
+    "de": "PagerDuty"
+  },
+  "description": {
+    "en": "Look up incidents, services, schedules and on-call rotations in PagerDuty.\n\nEU accounts use https://mcp.eu.pagerduty.com/mcp.",
+    "de": "Incidents, Services, Dienstpläne und Rufbereitschaften in PagerDuty abrufen.\n\nEU-Konten nutzen https://mcp.eu.pagerduty.com/mcp."
+  },
+  "publisher": {
+    "name": "PagerDuty"
+  },
+  "categories": ["mcp", "development"],
+  "docsUrl": "https://support.pagerduty.com/main/docs/pagerduty-mcp-server-integration-guide",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.pagerduty.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "header",
+      "field": "apiKey",
+      "header": "Authorization",
+      "valuePrefix": "Token token="
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Use a PagerDuty user API token (My Profile → User Settings) or an account API key (Integrations → API Access Keys).",
+        "de": "PagerDuty-User-API-Token (My Profile → User Settings) oder Account-API-Schlüssel (Integrations → API Access Keys) verwenden."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["incidents", "on-call", "operations"]
+  }
+}

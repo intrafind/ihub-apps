@@ -39,7 +39,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     refreshCacheEntry: async key => state.refreshed.push(key),
     getPlatform: () => ({}),
     getTools: () => ({ data: state.tools }),
-    getMcpServers: () => ({ data: { servers: state.mcpServers } }),
+    getIntegrations: () => ({ data: { installed: state.mcpServers } }),
     getPeopleDirectories: () => ({ data: { directories: state.directories } })
   },
   resolveEnvVarsInObject: value => value
@@ -138,7 +138,7 @@ describe('admin A2A agent routes', () => {
     expect(state.writes).toHaveLength(0);
   });
 
-  it('refuse an id a local tool or an MCP server already uses (409)', async () => {
+  it('refuse an id a local tool or an installed integration already uses (409)', async () => {
     state.tools = [{ id: 'jira_searchTickets' }];
     state.mcpServers = [{ id: 'atlassian' }];
 
@@ -155,7 +155,7 @@ describe('admin A2A agent routes', () => {
       id: 'Atlassian'
     });
     expect(server.status).toBe(409);
-    expect(server.body.error).toMatch(/MCP server "atlassian"/);
+    expect(server.body.error).toMatch(/installed integration "atlassian"/);
     expect(state.writes).toHaveLength(0);
 
     // The skill catalog flags an agent that clashes (e.g. from a hand-edited file).

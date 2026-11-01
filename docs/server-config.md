@@ -79,7 +79,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
 
-For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.md). The legacy `MCP_SERVER_URL` env var was removed in favour of multi-server config at `contents/config/mcpServers.json`; existing installs are auto-migrated by V042.
+For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.md). The legacy `MCP_SERVER_URL` env var was removed; existing installs were auto-migrated by V042 into `mcpServers.json`, which V193 in turn moved into `contents/config/integrations.json` (**Admin → Integrations → Installed**).
 | `HTTP_PROXY`               | HTTP proxy URL for external requests                              | –                                                |
 | `HTTPS_PROXY`              | HTTPS proxy URL for external requests                             | –                                                |
 | `NO_PROXY`                 | Comma-separated list of hosts that bypass the proxy               | –                                                |

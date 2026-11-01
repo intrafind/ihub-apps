@@ -152,6 +152,9 @@ export const mcpServerConfigSchema = z
       .optional(),
     // Allowlist patterns; "*" means all tools. Otherwise exact match.
     allowedTools: z.array(z.string()).prefault(['*']),
+    // Tools never offered to the model, whatever the allowlist says (an
+    // installed integration's `actions.disabled`).
+    deniedTools: z.array(z.string()).prefault([]),
     // Hard timeout (ms) for `tools/call`; the client aborts past this.
     timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
     // MCP Apps (extension `io.modelcontextprotocol/ui`): when enabled, iHub

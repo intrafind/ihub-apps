@@ -60,7 +60,7 @@ import configCache from '../../configCache.js';
 import { enhanceUserWithPermissions } from '../../utils/authorization.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { isAdminUser, isAnonymousUser } from '../loop/runIdentity.js';
-import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
+import { getBoundIntegrationIds, getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import {
   getMcpOAuthClientStore,
   McpOAuthClientStore,
@@ -189,11 +189,32 @@ function withPermissions(user) {
 }
 
 /**
+ * Whether the installation behind a server admits the user: its
+ * `allowedGroups` hold on top of every grant and binding, as they do for its
+ * tools (`filterIntegrationToolsForUser`). A server without an installation
+ * is refused: the manager is fed from the installations only.
+ *
+ * The installed-integration service is imported here, not at the top: it
+ * reaches this module through the MCP adapter, and a static import would
+ * close that cycle.
+ */
+async function installationAdmitsUser(instanceId, user) {
+  const [{ default: installedIntegrationService }, { userMayUse }] = await Promise.all([
+    import('../integrations/InstalledIntegrationService.js'),
+    import('../integrations/integrationTools.js')
+  ]);
+  const instance = installedIntegrationService.get(instanceId);
+  return Boolean(instance) && instance.enabled !== false && userMayUse(instance, user);
+}
+
+/**
  * Whether a user may connect (and use) an `oauthUser` server: admins always
- * (they configure and test it); anyone else when an app they may open lists
- * the server, or one of its tools, or when a group grants one of them. The
- * check reuses the MCP gateway's visibility rule (`getVisibleToolIds` +
- * `toolVisibleInSet`), which also resolves "app lists the server id".
+ * (they configure and test it); anyone else when the installation's groups
+ * admit them and an app they may open binds the installation
+ * (`app.integrations`), or lists the server or one of its tools in `tools`,
+ * or a group grants one of them. The tool checks reuse the MCP gateway's
+ * visibility rule (`getVisibleToolIds` + `toolVisibleInSet`), which also
+ * resolves "app lists the server id".
  *
  * @param {Object} user - Signed-in user (req.user)
  * @param {Object} serverConfig
@@ -204,7 +225,10 @@ export async function isServerVisibleToUser(user, serverConfig, catalogTools = [
   if (isAnonymousUser(user) || !serverConfig?.id) return false;
   const enhanced = withPermissions(user);
   if (isAdminUser(enhanced)) return true;
+  if (!(await installationAdmitsUser(serverConfig.id, enhanced))) return false;
   const platform = configCache.getPlatform() || {};
+  const bound = await getBoundIntegrationIds(enhanced, platform);
+  if (bound.has(serverConfig.id)) return true;
   const visible = await getVisibleToolIds(enhanced, platform);
   if (toolVisibleInSet(serverConfig.id, visible, serverConfig.id)) return true;
   return (catalogTools || []).some(tool => toolVisibleInSet(tool.id, visible, serverConfig.id));

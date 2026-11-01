@@ -1,0 +1,67 @@
+{
+  "id": "mcp/monday",
+  "version": "1.0.0",
+  "name": {
+    "en": "monday.com",
+    "de": "monday.com"
+  },
+  "description": {
+    "en": "Read and update monday.com boards, items, updates and workspaces.",
+    "de": "monday.com-Boards, Items, Updates und Workspaces lesen und bearbeiten."
+  },
+  "publisher": {
+    "name": "monday.com"
+  },
+  "categories": ["mcp", "productivity"],
+  "docsUrl": "https://developer.monday.com/api-reference/docs/mcp-api-token",
+  "runs": "cloud",
+  "builtIn": true,
+  "protocol": {
+    "type": "mcp",
+    "transport": {
+      "type": "streamableHttp",
+      "url": "https://mcp.monday.com/mcp"
+    },
+    "apps": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "modes": ["service-account"],
+    "serviceAccount": {
+      "kind": "bearer",
+      "field": "apiKey"
+    }
+  },
+  "install": [
+    {
+      "key": "apiKey",
+      "type": "secret",
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "Create a personal API token via your profile picture → Developers → My access tokens. It acts with that user’s permissions.",
+        "de": "Persönliches API-Token über das Profilbild → Developers → My access tokens erstellen. Es handelt mit den Rechten dieses Benutzers."
+      }
+    },
+    {
+      "key": "headers",
+      "type": "list",
+      "title": {
+        "en": "Additional headers",
+        "de": "Zusätzliche Header"
+      },
+      "description": {
+        "en": "Non-secret headers sent on every request, one per line as \"Name: value\". A header named here replaces the one the definition sets.",
+        "de": "Nicht geheime Header, die mit jeder Anfrage gesendet werden, einer pro Zeile als „Name: Wert“. Ein hier genannter Header ersetzt den gleichnamigen der Definition."
+      },
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools", "views"],
+  "_meta": {
+    "tags": ["project management", "boards", "tasks"]
+  }
+}
