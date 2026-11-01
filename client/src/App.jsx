@@ -157,8 +157,8 @@ const AdminCopilotAgentPage = lazyWithRetry(
 const AdminNextcloudEmbedPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminNextcloudEmbedPage')
 );
-const AdminInstalledIntegrationsPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminInstalledIntegrationsPage')
+const AdminInstallationPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminInstallationPage')
 );
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
@@ -741,14 +741,16 @@ function App() {
               element={<LazyAdminRoute component={AdminCredentialsPage} />}
             />
 
-            {/* Integrations */}
+            {/* Integrations: Installed, Catalog and Inbound tabs */}
             <Route
               path="integrations"
               element={<LazyAdminRoute component={AdminIntegrationsPage} />}
             />
+            {/* One installation: overview, settings (dedicated editor or the
+                generic form), releases. */}
             <Route
-              path="integrations/installed"
-              element={<LazyAdminRoute component={AdminInstalledIntegrationsPage} />}
+              path="integrations/:instanceId"
+              element={<LazyAdminRoute component={AdminInstallationPage} />}
             />
             <Route
               path="office-integration"

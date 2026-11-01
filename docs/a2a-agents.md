@@ -12,8 +12,8 @@ This is the client side of A2A. For the opposite direction — other agents call
 ## Configuration
 
 A remote agent is an **installed integration**: an installation of the shipped definition
-**"A2A agent"** (`com.intrafind/a2a-agent`) under **Admin → Integrations → Installed**
-(`/admin/integrations/installed`; **Catalog** tab → **A2A agent** → **Install**, see
+**"A2A agent"** (`com.intrafind/a2a-agent`) under **Admin → Integrations**
+(`/admin/integrations`; **Catalog** tab → **A2A agent** → **Install**, see
 [Admin page](#admin-page)). Installations live in `contents/config/integrations.json`, next to
 MCP servers and the other [installed integrations](integrations.md):
 
@@ -249,8 +249,8 @@ Without a storage provider the memory is per server process (5,000 conversations
 
 ## Admin page
 
-Agents have no page of their own any more: **Admin → Integrations → Installed**
-(`/admin/integrations/installed`) lists each agent among the installed integrations with its
+Agents have no page of their own any more: **Admin → Integrations**
+(`/admin/integrations`) lists each agent among the installed integrations with its
 status — card loaded and number of skills, not contacted yet, unreachable, disabled — and offers
 **Test**, **Edit**, **Enable**/**Disable** and **Uninstall**, as for every installation. The
 **Catalog** tab → **A2A agent** → **Install** opens the wizard: the Agent Card URL, the

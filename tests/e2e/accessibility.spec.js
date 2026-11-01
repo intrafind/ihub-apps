@@ -355,7 +355,8 @@ const CLEAN_PAGES = [
   '/admin/mcp/gateway',
   '/admin/credentials',
   '/admin/integrations',
-  '/admin/integrations/installed',
+  // A built-in installation a fresh contents/ ships: its own page.
+  '/admin/integrations/websearch',
   '/admin/integrations/jira',
   '/admin/office-integration',
   '/admin/nextcloud-embed',

@@ -587,7 +587,7 @@ Outlook applies the same rule to other items, such as delivery and non-delivery 
 - **"You do not have access to this document":** the pane fetches documents with the signed-in
   user's own iFinder permissions, so this is an iFinder permission rather than an add-in problem.
   Check the user's iFinder access and the **User identity sent to iFinder** field of the
-  iFinder installation under **Admin → Integrations → Installed**.
+  iFinder installation under **Admin → Integrations**.
 - **Outlook refuses the attachment:** the notice names the Office error; a size complaint means the
   mailbox's message limit is below the document's size. Download it and share it another way.
 

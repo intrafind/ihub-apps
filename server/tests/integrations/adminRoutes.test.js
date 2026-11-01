@@ -270,6 +270,11 @@ describe('installed instances', () => {
       request(app).get('/api/admin/integrations/installed/ckan-demo')
     ).expect(200);
     expect(detail.body.values).toEqual({ baseUrl: 'https://portal.example', maxRows: 5 });
+    // `label` is the requested language; the stored translations travel along
+    // so an editor can change one language and keep the others.
+    expect(detail.body.instance.label).toBe('Demo');
+    expect(detail.body.instance.labelLocalized).toEqual({ en: 'Demo' });
+    expect(list.body.items[0].labelLocalized).toEqual({ en: 'Demo' });
     const actions = Object.fromEntries(detail.body.actions.map(a => [a.name, a]));
     expect(actions.search.available).toBe(true);
     expect(actions.search.parameters.properties.rows.maximum).toBe(5);
