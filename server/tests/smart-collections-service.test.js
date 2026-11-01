@@ -29,6 +29,7 @@ const {
   SMART_COLLECTIONS_ERRORS,
   MAX_COLLECTIONS
 } = await import('../services/integrations/SmartCollectionsService.js');
+const { installationsFor } = await import('./helpers/installedIFinder.js');
 
 const ADA = { id: 'u-ada', name: 'Ada', email: 'ada@example.com', groups: ['authenticated'] };
 const ID = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -37,10 +38,13 @@ let mock;
 
 function configure(baseUrl, extra = {}) {
   configCache.setCacheEntry('config/platform.json', {
-    iFinder: { baseUrl, jwtSubjectField: 'email' },
     proxy: { enabled: false },
     ...extra
   });
+  configCache.setCacheEntry(
+    'config/integrations.json',
+    installationsFor({ iFinder: { enabled: true, baseUrl, jwtSubjectField: 'email' } })
+  );
   iFinderService.resetConfig();
 }
 

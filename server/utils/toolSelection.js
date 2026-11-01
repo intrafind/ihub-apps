@@ -84,8 +84,13 @@ export function isToolSelected(tool, refs) {
   }
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
   // Tools of an installed integration (`<instanceId>__<action>`) are selected
-  // by the installation id, never by the `_`-split base id below.
-  if (tool._integration?.instanceId) return has(tool._integration.instanceId);
+  // by the installation id, never by the `_`-split base id below. A built-in
+  // that kept its old tool id (`iFinder_search`) also keeps answering to the
+  // old base id (`iFinder`), which group grants and apps may still use.
+  if (tool._integration?.instanceId) {
+    if (has(tool._integration.instanceId)) return true;
+    if (!tool._integration.fixedToolId) return false;
+  }
   if (tool._a2a?.agentId) {
     if (has(a2aAgentReference(tool._a2a.agentId))) return true;
     if (!tool._a2a.idConflict && has(tool._a2a.agentId)) return true;

@@ -17,6 +17,7 @@
  * @module routes/projectItemRoutes
  */
 import fs from 'node:fs/promises';
+import { isIFinderConfigured } from '../services/integrations/ifinderConfig.js';
 import multer from 'multer';
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
@@ -402,7 +403,7 @@ export async function sendItemText(req, res, { project }) {
 // --- pickers ----------------------------------------------------------------
 
 function ifinderConfigured() {
-  return Boolean(platformOf().iFinder?.baseUrl || process.env.IFINDER_API_URL);
+  return isIFinderConfigured();
 }
 
 function readablePage(pageConfig, user) {

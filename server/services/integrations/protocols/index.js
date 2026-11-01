@@ -23,8 +23,9 @@
  */
 
 import * as openapi from './openapi/OpenApiAdapter.js';
+import * as native from './native/NativeAdapter.js';
 
-const adapters = { openapi };
+const adapters = { openapi, native };
 
 /**
  * @param {string} protocolType

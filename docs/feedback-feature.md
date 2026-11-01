@@ -321,7 +321,7 @@ When using iAssistant (RAG-powered chat via iFinder), feedback automatically rou
 For iAssistant feedback to work:
 
 - **User must be authenticated** (anonymous users skip iFinder routing)
-- **iAssistant must be configured** in `platform.json`
+- **iAssistant must be installed** and enabled under Admin → Integrations → Installed (with the iFinder installation it runs on)
 - **Conversation metadata must exist** (conversationId and ifinderMessageId)
 - **Network connectivity** to iFinder API endpoint
 
@@ -836,9 +836,9 @@ grep "Failed to send feedback to iFinder API" server.log
 # Test iFinder API connectivity
 curl -I https://your-ifinder-instance.com/rag/api/v0
 
-# Verify JWT configuration (privateKeyRef points at a credential in
-# contents/config/credentials.json; IFINDER_PRIVATE_KEY env var, if set, wins)
-jq '.iFinder.privateKeyRef, .iFinder.useOidcKeyPair' contents/config/platform.json
+# Verify JWT configuration of the ifinder installation (privateKeyRef points at a
+# credential in contents/config/credentials.json; IFINDER_PRIVATE_KEY env var, if set, wins)
+jq '.installed[] | select(.id == "ifinder") | .values.privateKeyRef, .values.useOidcKeyPair' contents/config/integrations.json
 echo "IFINDER_PRIVATE_KEY set: $([ -n \"$IFINDER_PRIVATE_KEY\" ] && echo yes || echo no)"
 ```
 

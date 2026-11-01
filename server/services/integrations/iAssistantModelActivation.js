@@ -8,10 +8,11 @@ import logger from '../../utils/logger.js';
 export const ASSISTANT_MODEL_ID = 'iassistant-conversation';
 
 /**
- * Whether the iFinder block of the platform config is a working setup: switched
- * on and pointing at an iFinder instance.
+ * Whether an iFinder connection (`getIFinderConfig()`, or the installation's
+ * values with `enabled`) is a working setup: switched on and pointing at an
+ * iFinder instance.
  *
- * @param {Object} [iFinder] - `platform.iFinder`
+ * @param {Object} [iFinder]
  * @returns {boolean}
  */
 export function isIFinderConfigured(iFinder) {
@@ -28,8 +29,8 @@ export function isIFinderConfigured(iFinder) {
  * Acts on the transition only: a model an admin disabled later stays disabled
  * until the integration is switched off and configured again.
  *
- * @param {Object} [before] - `platform.iFinder` before the save
- * @param {Object} [after] - `platform.iFinder` after the save
+ * @param {Object} [before] - the iFinder connection before the change
+ * @param {Object} [after] - the iFinder connection after the change
  * @returns {Promise<boolean>} True when the model was enabled by this call
  */
 export async function enableAssistantModelOnIFinderSetup(before, after) {
@@ -43,7 +44,7 @@ export async function enableAssistantModelOnIFinderSetup(before, after) {
   await configStore.writeJson(path, { ...model, enabled: true });
   await configCache.refreshModelsCache();
   logger.info('Enabled the iAssistant conversation model after iFinder setup', {
-    component: 'AdminConfigs',
+    component: 'IFinderIntegration',
     modelId: ASSISTANT_MODEL_ID
   });
   return true;

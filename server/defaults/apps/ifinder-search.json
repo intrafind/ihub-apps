@@ -20,15 +20,6 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "sendChatHistory": true,
-  "tools": [
-    "iFinder_search",
-    "iFinder_getContent",
-    "iFinder_getMetadata",
-    "iFinder_getFields",
-    "iFinder_getFacetValues",
-    "iFinder_listProfiles",
-    "iFinder_discover"
-  ],
   "skills": ["ifinder-search"],
   "skillSettings": {
     "enabled": true
@@ -113,7 +104,6 @@
     }
   },
   "allowEmptyContent": false,
-  "requiredIntegrations": ["ifinder"],
   "integrations": {
     "ifinder": {
       "scopePicker": "menu"

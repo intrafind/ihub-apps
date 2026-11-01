@@ -13,7 +13,6 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
-import { enableAssistantModelOnIFinderSetup } from '../../services/integrations/iAssistantModelActivation.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
@@ -337,8 +336,6 @@ export default function registerAdminConfigRoutes(app) {
           newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
         jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
-        iFinder: newConfig.iFinder || existingConfig.iFinder,
-        iAssistant: newConfig.iAssistant || existingConfig.iAssistant,
         telemetry:
           newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
         speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
@@ -411,17 +408,10 @@ export default function registerAdminConfigRoutes(app) {
         });
       }
 
-      // Reset iFinder/iAssistant service caches so they pick up new config
-      const iFinderChanged =
-        JSON.stringify(existingConfig.iFinder) !== JSON.stringify(newConfig.iFinder);
-      const iAssistantChanged =
-        JSON.stringify(existingConfig.iAssistant) !== JSON.stringify(newConfig.iAssistant);
-      // A changed OIDC provider (token URL, client) invalidates exchanged
-      // iFinder tokens as well; the iFinder block below covers its own settings.
-      if (
-        !iFinderChanged &&
-        JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)
-      ) {
+      // A changed OIDC provider (token URL, client) invalidates the iFinder
+      // tokens exchanged through it. The iFinder installation itself lives in
+      // integrations.json and resets its caches from there.
+      if (JSON.stringify(existingConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth)) {
         try {
           const { clearExchangedTokenCache } =
             await import('../../services/integrations/iFinderTokenProvider.js');
@@ -430,45 +420,6 @@ export default function registerAdminConfigRoutes(app) {
           logger.warn('Could not clear the iFinder token cache', {
             component: 'AdminConfigs',
             error
-          });
-        }
-      }
-
-      if (iFinderChanged || iAssistantChanged) {
-        try {
-          const { default: iAssistantService } =
-            await import('../../services/integrations/iAssistantService.js');
-          const { default: iFinderService } =
-            await import('../../services/integrations/iFinderService.js');
-          const { clearExchangedTokenCache } =
-            await import('../../services/integrations/iFinderTokenProvider.js');
-          iAssistantService.resetConfig();
-          iFinderService.resetConfig();
-          // Exchanged tokens were issued for the old audience, scopes or provider.
-          clearExchangedTokenCache();
-          logger.info('iFinder/iAssistant service caches reset after config change', {
-            component: 'AdminConfigs'
-          });
-        } catch (error) {
-          logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error });
-        }
-
-        try {
-          if (
-            await enableAssistantModelOnIFinderSetup(existingConfig.iFinder, mergedConfig.iFinder)
-          ) {
-            await logAudit({
-              req,
-              action: 'toggle',
-              resource: 'model',
-              resourceId: 'iassistant-conversation',
-              summary: 'Enabled model iassistant-conversation after iFinder setup'
-            });
-          }
-        } catch (error) {
-          logger.warn('Could not enable the iAssistant conversation model', {
-            component: 'AdminConfigs',
-            error: error.message
           });
         }
       }

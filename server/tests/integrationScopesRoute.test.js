@@ -13,6 +13,10 @@ import configCache from '../configCache.js';
 import iFinderService from '../services/integrations/iFinderService.js';
 import iFinderSearchProfiles from '../services/integrations/iFinderSearchProfiles.js';
 import scopeRoutes from '../routes/integrations/scopes.js';
+import { stubInstallations } from './helpers/installedIFinder.js';
+import { registerScopeProvider } from '../services/integrations/scopes/index.js';
+import iFinderScopes from '../services/integrations/scopes/iFinderScopes.js';
+import iAssistantScopes from '../services/integrations/scopes/iAssistantScopes.js';
 
 const APPS = [
   {
@@ -21,8 +25,8 @@ const APPS = [
     integrations: { ifinder: { scopePicker: 'hidden' } }
   },
   { id: 'plain-chat', tools: [] },
-  { id: 'secret-app', tools: ['iFinder_search'] },
-  { id: 'off-app', tools: ['iFinder_search'], enabled: false }
+  { id: 'secret-app', tools: ['iFinder_search'], integrations: { ifinder: {} } },
+  { id: 'off-app', tools: ['iFinder_search'], integrations: { ifinder: {} }, enabled: false }
 ];
 
 function appFor(user) {
@@ -50,9 +54,11 @@ describe('integration scope routes', () => {
     originals.getApps = configCache.getApps;
     originals.getModels = configCache.getModels;
     originals.getUserSearchProfiles = iFinderSearchProfiles.getUserSearchProfiles;
-    configCache.getPlatform = () => ({
-      iFinder: { enabled: true, baseUrl: 'https://ifinder.example' }
-    });
+    const platform = { iFinder: { enabled: true, baseUrl: 'https://ifinder.example' } };
+    configCache.getPlatform = () => platform;
+    originals.restoreInstallations = stubInstallations(configCache, () => platform);
+    registerScopeProvider(iFinderScopes);
+    registerScopeProvider(iAssistantScopes);
     configCache.getApps = () => ({ data: APPS });
     configCache.getModels = () => ({ data: [] });
     iFinderSearchProfiles.getUserSearchProfiles = async () => [
@@ -63,6 +69,7 @@ describe('integration scope routes', () => {
   });
   afterEach(() => {
     configCache.getPlatform = originals.getPlatform;
+    originals.restoreInstallations();
     configCache.getApps = originals.getApps;
     configCache.getModels = originals.getModels;
     iFinderSearchProfiles.getUserSearchProfiles = originals.getUserSearchProfiles;

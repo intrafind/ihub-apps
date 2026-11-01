@@ -51,6 +51,24 @@ describe('resolveJwtSubject — standard fields', () => {
     assert.equal(resolveJwtSubject(user(), {}), 'Andreas.Leipold@bmas.bund.de');
   });
 
+  it('maps the id and name choices of the installation to the user fields', () => {
+    // The wizard offers "User id" and "Display name"; neither may fall into
+    // the template branch, which would sign the literal word for every user.
+    assert.equal(resolveJwtSubject(user(), { jwtSubjectField: 'id' }), 'user_a85086a4');
+    assert.equal(resolveJwtSubject(user(), { jwtSubjectField: 'name' }), 'Leipold, Andreas');
+  });
+
+  it('refuses a missing id or name instead of substituting', () => {
+    assert.throws(
+      () => resolveJwtSubject(user({ id: undefined }), { jwtSubjectField: 'id' }),
+      /has no user id/
+    );
+    assert.throws(
+      () => resolveJwtSubject(user({ name: '  ' }), { jwtSubjectField: 'name' }),
+      /has no display name/
+    );
+  });
+
   it('refuses to substitute the username when email is configured but absent', () => {
     assert.throws(
       () => resolveJwtSubject(user({ email: null }), { jwtSubjectField: 'email' }),

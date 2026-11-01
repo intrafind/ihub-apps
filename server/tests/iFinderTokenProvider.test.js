@@ -34,6 +34,10 @@ const { default: tokenStorageService } = await import('../services/TokenStorageS
 const { default: credentialService } = await import('../services/CredentialService.js');
 const { tokenStorageIdFor } = await import('../services/mcp/mcpUserTokens.js');
 const provider = await import('../services/integrations/iFinderTokenProvider.js');
+const { stubInstallations, installationsFor } = await import('./helpers/installedIFinder.js');
+const { iFinderConfigFromInstance } = await import('../services/integrations/ifinderConfig.js');
+/** The iFinder connection a platform-shaped fixture describes. */
+const ifinderOf = p => iFinderConfigFromInstance(installationsFor(p).installed[0] || null);
 const { USER_CLEANUP_STEPS } = await import('../services/userDeletion.js');
 
 const {
@@ -137,6 +141,7 @@ before(async () => {
   originals.storageBasePath = tokenStorageService.storageBasePath;
   originals.encryptionKey = tokenStorageService.encryptionKey;
   configCache.getPlatform = () => platform;
+  originals.restoreInstallations = stubInstallations(configCache, () => platform);
   credentialService.tryResolveSecret = ref => SECRETS[ref];
   tokenStorageService.storageBasePath = path.join(tmpRoot, 'integrations');
   tokenStorageService.encryptionKey = crypto.randomBytes(32).toString('hex');
@@ -144,6 +149,7 @@ before(async () => {
 
 after(() => {
   configCache.getPlatform = originals.getPlatform;
+  originals.restoreInstallations();
   credentialService.tryResolveSecret = originals.tryResolveSecret;
   tokenStorageService.storageBasePath = originals.storageBasePath;
   tokenStorageService.encryptionKey = originals.encryptionKey;
@@ -239,12 +245,11 @@ describe('exchange request shape', () => {
   });
 
   it('maps scopes through scopeMap, passes unmapped ones through and appends extraScopes', () => {
-    const settings = resolveExchangeSettings(
-      exchangePlatform({
-        scopeMap: { fa_index_read: 'urn:zitadel:iam:org:projects:roles', fa_iassistant: '' },
-        extraScopes: ['urn:zitadel:iam:org:project:id:42:aud']
-      })
-    );
+    const p = exchangePlatform({
+      scopeMap: { fa_index_read: 'urn:zitadel:iam:org:projects:roles', fa_iassistant: '' },
+      extraScopes: ['urn:zitadel:iam:org:project:id:42:aud']
+    });
+    const settings = resolveExchangeSettings(p, ifinderOf(p));
     assert.equal(
       mapScope('fa_index_read fa_iassistant fa_other', settings),
       'urn:zitadel:iam:org:projects:roles fa_iassistant fa_other urn:zitadel:iam:org:project:id:42:aud'
@@ -446,12 +451,13 @@ describe('users who cannot exchange', () => {
 
 describe('login token store', () => {
   it('is only on for the configured provider in the exchange mode', () => {
-    assert.equal(shouldStoreLoginTokens(PROVIDER, exchangePlatform()), true);
-    assert.equal(shouldStoreLoginTokens('other', exchangePlatform()), false);
+    const p = exchangePlatform();
+    assert.equal(shouldStoreLoginTokens(PROVIDER, p, ifinderOf(p)), true);
+    assert.equal(shouldStoreLoginTokens('other', p, ifinderOf(p)), false);
     const signed = exchangePlatform();
     signed.iFinder.authMode = 'ihubSigned';
-    assert.equal(shouldStoreLoginTokens(PROVIDER, signed), false);
-    assert.equal(shouldStoreLoginTokens(PROVIDER, {}), false);
+    assert.equal(shouldStoreLoginTokens(PROVIDER, signed, ifinderOf(signed)), false);
+    assert.equal(shouldStoreLoginTokens(PROVIDER, {}, ifinderOf({})), false);
   });
 
   it('files the tokens encrypted, keeps the refresh token on a sign-in without one', async () => {

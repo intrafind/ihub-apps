@@ -44,6 +44,8 @@ import {
   mintProjectId,
   usageOf
 } from '../services/projects/ProjectRepository.js';
+import { installationsFor } from './helpers/installedIFinder.js';
+import configCache from '../configCache.js';
 
 const ADA = {
   id: 'u-ada',
@@ -246,11 +248,15 @@ describe('item kinds', () => {
 
   it('hides iFinder kinds without a configured integration and honours the admin switch', () => {
     assert.equal(isItemKindEnabled('url', { platform: {} }), true);
+    // The iFinder kinds follow the iFinder installation (integrations.json).
+    configCache.setCacheEntry('config/integrations.json', installationsFor({}));
     assert.equal(isItemKindEnabled('ifinder-document', { platform: {} }), false);
-    assert.equal(
-      isItemKindEnabled('ifinder-document', { platform: { iFinder: { baseUrl: 'https://f' } } }),
-      true
+    configCache.setCacheEntry(
+      'config/integrations.json',
+      installationsFor({ iFinder: { baseUrl: 'https://f' } })
     );
+    assert.equal(isItemKindEnabled('ifinder-document', { platform: {} }), true);
+    configCache.setCacheEntry('config/integrations.json', installationsFor({}));
     assert.equal(
       isItemKindEnabled('url', { platform: {}, settings: { kinds: { url: false } } }),
       false

@@ -14,6 +14,7 @@ import {
   getLoginTokenStatus
 } from '../../services/integrations/iFinderTokenProvider.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { getIFinderConfig } from '../../services/integrations/ifinderConfig.js';
 
 const router = express.Router();
 
@@ -109,8 +110,9 @@ router.get('/document/metadata', authRequired, async (req, res) => {
  */
 function exchangeProvider() {
   const platform = configCache.getPlatform() || {};
-  if (platform.iFinder?.enabled !== true) return null;
-  const name = getExchangeProviderName(platform);
+  const iFinder = getIFinderConfig();
+  if (!iFinder.enabled) return null;
+  const name = getExchangeProviderName(platform, iFinder);
   if (!name) return null;
   const provider = (platform.oidcAuth?.providers || []).find(entry => entry.name === name);
   return { name, displayName: provider?.displayName || name };

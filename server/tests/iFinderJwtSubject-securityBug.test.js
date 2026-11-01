@@ -98,6 +98,20 @@ describe('iFinder JWT subject — env var resolution skip', () => {
     assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\svc_ifinder-indexer');
   });
 
+  it('skips the field in every installation of integrations.json (`[]` path)', () => {
+    const integrations = {
+      installed: [
+        { id: 'ifinder', values: { jwtSubjectField: 'BMG\\${username}', baseUrl: 'https://x/' } },
+        { id: 'other', values: { jwtSubjectField: '${username}' } }
+      ]
+    };
+    const resolved = resolveEnvVarsInObject(integrations, {
+      skipPaths: ['installed[].values.jwtSubjectField']
+    });
+    assert.equal(resolved.installed[0].values.jwtSubjectField, 'BMG\\${username}');
+    assert.equal(resolved.installed[1].values.jwtSubjectField, '${username}');
+  });
+
   it('accepts skipPaths as a Set', () => {
     const platform = { iFinder: { jwtSubjectField: 'BMG\\${username}' } };
     const resolved = resolveEnvVarsInObject(platform, {

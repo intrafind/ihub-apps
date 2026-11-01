@@ -8,6 +8,7 @@ import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import credentialService from '../services/CredentialService.js';
 import logger from './logger.js';
+import { getIFinderConfig as getInstalledIFinderConfig } from '../services/integrations/ifinderConfig.js';
 
 /**
  * iFinder JWT utility for generating tokens based on authenticated users
@@ -27,8 +28,7 @@ import logger from './logger.js';
  * @returns {Object} iFinder configuration
  */
 function getIFinderConfig() {
-  const platform = configCache.getPlatform() || {};
-  return platform.iFinder || {};
+  return getInstalledIFinderConfig();
 }
 
 /**
@@ -95,7 +95,7 @@ function getIFinderPrivateKey(iFinderConfig) {
 
   if (!privateKey) {
     throw new Error(
-      'iFinder private key not configured. Select or create a credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable in PEM format.'
+      'iFinder private key not configured. Pick or create the private key credential on the iFinder installation (Admin > Integrations > Installed), or set the IFINDER_PRIVATE_KEY environment variable in PEM format.'
     );
   }
 
@@ -173,6 +173,18 @@ export function resolveJwtSubject(user, config) {
         throw subjectFieldMissingError(field, ['username'], user);
       }
       resolved = user.username;
+      break;
+    case 'id':
+      if (!hasSubjectValue(user.id)) {
+        throw subjectFieldMissingError(field, ['user id'], user);
+      }
+      resolved = user.id;
+      break;
+    case 'name':
+      if (!hasSubjectValue(user.name)) {
+        throw subjectFieldMissingError(field, ['display name'], user);
+      }
+      resolved = user.name;
       break;
     case String.raw`domain\username`: {
       const missing = [];

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import configCache from '../../configCache.js';
+import { getIAssistantConfig, hasConfigOverride } from './ifinderConfig.js';
 
 /**
  * iAssistant Service
@@ -27,40 +27,8 @@ class IAssistantService {
    * @returns {Object} iAssistant API configuration
    */
   getConfig() {
-    if (!this.config) {
-      this.platform = configCache.getPlatform() || {};
-      const iAssistantConfig = this.platform.iAssistant || {};
-
-      this.config = {
-        baseUrl: this.platform.iFinder?.baseUrl,
-        defaultProfileId:
-          iAssistantConfig.defaultProfileId || process.env.IASSISTANT_PROFILE_ID || '',
-        defaultFilter: iAssistantConfig.defaultFilter || [],
-        // The search profile used when neither the app nor the model names
-        // one. It is the single place that decides what "unconfigured" means,
-        // so an installation can move it without editing every app.
-        defaultSearchProfile: iAssistantConfig.defaultSearchProfile || 'searchprofile-standard',
-        // Whether iHub checks the configured search profile against the ones
-        // the user has in iFinder before creating a conversation, and uses the
-        // user's default profile when they lack it. Off sends the configured
-        // profile as is.
-        verifySearchProfileAccess: iAssistantConfig.verifySearchProfileAccess !== false,
-        // How long a user's search profile list stays cached. Profiles are
-        // assigned by administrators, not per request, so minutes are the
-        // right scale.
-        searchProfileCacheTtlMs: Number.isFinite(iAssistantConfig.searchProfileCacheTtlMs)
-          ? iAssistantConfig.searchProfileCacheTtlMs
-          : 300000,
-        // The iFinder application whose search profile assignments that check
-        // reads. Ragtime does not check the assignment of a named profile, so
-        // a profile assigned only under another application would otherwise
-        // count as missing.
-        searchProfileApplication: this.platform.iFinder?.searchProfileApplication || 'ifinder',
-        // Installation-wide default for grounded-only answering. An app's own
-        // `iassistant.groundedOnly` wins over it in either direction.
-        groundedOnly: iAssistantConfig.groundedOnly === true
-      };
-    }
+    if (hasConfigOverride()) return getIAssistantConfig();
+    if (!this.config) this.config = getIAssistantConfig();
     return this.config;
   }
 }

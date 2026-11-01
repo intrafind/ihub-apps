@@ -59,6 +59,10 @@
     "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}). Address the user by name when appropriate and answer in the user's language."
   },
   "category": "utility",
-  "requiredIntegrations": ["ifinder"],
-  "enabled": true
+  "enabled": true,
+  "integrations": {
+    "iassistant": {
+      "actions": []
+    }
+  }
 }

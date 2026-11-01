@@ -329,12 +329,13 @@ describe('the iFinder picker of a project', () => {
   const search = h.handlersFor('get', '/api/projects/pickers/ifinder/search');
 
   it('offers the search profiles of the chat input and refuses one outside the allow-list', async () => {
-    h.platform.iFinder = {
-      ...h.platform.iFinder,
-      defaultSearchProfile: 'standard',
-      allowedSearchProfiles: ['standard', 'legal']
-    };
-    h.configCache.setCacheEntry('config/platform.json', h.platform);
+    h.setPlatform({
+      iFinder: {
+        ...h.platform.iFinder,
+        defaultSearchProfile: 'standard',
+        allowedSearchProfiles: ['standard', 'legal']
+      }
+    });
     const listed = await drive(profiles, { user: ADA });
     assert.equal(listed.statusCode, 200, JSON.stringify(listed.body));
     const ids = listed.body.profiles.map(profile => profile.id);
@@ -347,12 +348,13 @@ describe('the iFinder picker of a project', () => {
   });
 
   it('stores an iFinder item only with a profile the caller may search in', async () => {
-    h.platform.iFinder = {
-      ...h.platform.iFinder,
-      defaultSearchProfile: 'standard',
-      allowedSearchProfiles: ['standard', 'legal']
-    };
-    h.configCache.setCacheEntry('config/platform.json', h.platform);
+    h.setPlatform({
+      iFinder: {
+        ...h.platform.iFinder,
+        defaultSearchProfile: 'standard',
+        allowedSearchProfiles: ['standard', 'legal']
+      }
+    });
     const created = await drive(h.handlersFor('post', '/api/projects'), {
       user: ADA,
       method: 'POST',

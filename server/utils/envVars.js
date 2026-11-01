@@ -92,7 +92,7 @@ export function resolveEnvVarsInObject(obj, options = {}) {
   const resolved = {};
   for (const [key, value] of Object.entries(obj)) {
     const childPath = path ? `${path}.${key}` : key;
-    if (skipPaths.has(childPath)) {
+    if (skipPaths.has(childPath) || skipPaths.has(childPath.replaceAll(/\[\d+\]/g, '[]'))) {
       resolved[key] = value;
       continue;
     }

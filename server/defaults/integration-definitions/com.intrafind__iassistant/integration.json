@@ -1,0 +1,122 @@
+{
+  "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
+  "id": "com.intrafind/iassistant",
+  "version": "1.0.0",
+  "name": {
+    "en": "iAssistant",
+    "de": "iAssistant"
+  },
+  "description": {
+    "en": "IntraFind iAssistant: retrieval-augmented conversations over the iFinder index, with the user's own search profiles and iAssistants. Runs on the iFinder installation; chats use it through the iAssistant conversation model.",
+    "de": "IntraFind iAssistant: retrieval-gestützte Konversationen über den iFinder-Index mit den Suchprofilen und iAssistants des Benutzers. Läuft auf der iFinder-Installation; Chats nutzen ihn über das iAssistant-Konversationsmodell."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "url": "https://www.intrafind.com",
+    "verification": "intrafind"
+  },
+  "icon": "icon.svg",
+  "categories": ["assistant", "search", "intrafind"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/iFinder-Integration.md",
+  "runs": "on-prem",
+  "trusted": true,
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "iassistant"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "iassistant"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "capabilities": ["scopes", "model"],
+  "install": [
+    {
+      "key": "connection",
+      "type": "instance",
+      "definition": "com.intrafind/ifinder",
+      "title": {
+        "en": "iFinder installation",
+        "de": "iFinder-Installation"
+      },
+      "description": {
+        "en": "The iFinder connection whose base URL and sign-in iAssistant uses.",
+        "de": "Die iFinder-Verbindung, deren Basis-URL und Anmeldung iAssistant verwendet."
+      },
+      "default": "ifinder",
+      "required": true
+    },
+    {
+      "key": "defaultProfileId",
+      "type": "string",
+      "title": {
+        "en": "Default conversation profile",
+        "de": "Standard-Konversationsprofil"
+      },
+      "description": {
+        "en": "The iAssistant profile id used when an app names none.",
+        "de": "Die iAssistant-Profil-ID, wenn eine App keine nennt."
+      }
+    },
+    {
+      "key": "defaultSearchProfile",
+      "type": "string",
+      "title": {
+        "en": "Default search profile",
+        "de": "Standard-Suchprofil"
+      },
+      "description": {
+        "en": "Searched when neither the app nor the model names a profile.",
+        "de": "Wird durchsucht, wenn weder App noch Modell ein Profil nennen."
+      },
+      "default": "searchprofile-standard"
+    },
+    {
+      "key": "verifySearchProfileAccess",
+      "type": "boolean",
+      "title": {
+        "en": "Check the user's access to the search profile",
+        "de": "Zugriff des Benutzers auf das Suchprofil prüfen"
+      },
+      "description": {
+        "en": "Before a conversation is created, iHub checks that the user has the configured search profile and falls back to the user's default when not.",
+        "de": "Vor dem Anlegen einer Konversation prüft iHub, ob der Benutzer das konfigurierte Suchprofil hat, und weicht sonst auf dessen Standardprofil aus."
+      },
+      "default": true
+    },
+    {
+      "key": "groundedOnly",
+      "type": "boolean",
+      "title": {
+        "en": "Answer only from retrieved documents",
+        "de": "Nur aus gefundenen Dokumenten antworten"
+      },
+      "description": {
+        "en": "Installation-wide default; an app's own setting wins.",
+        "de": "Installationsweiter Standard; die Einstellung einer App gewinnt."
+      },
+      "default": false
+    },
+    {
+      "key": "searchProfileCacheTtlMs",
+      "type": "number",
+      "title": {
+        "en": "Search profile cache (ms)",
+        "de": "Cache der Suchprofile (ms)"
+      },
+      "default": 300000,
+      "min": 0,
+      "max": 86400000,
+      "advanced": true
+    }
+  ],
+  "scopes": {
+    "label": {
+      "en": "iAssistant",
+      "de": "iAssistant"
+    }
+  },
+  "actions": []
+}

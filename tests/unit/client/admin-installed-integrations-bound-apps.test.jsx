@@ -10,7 +10,7 @@
  *   - the app editor lists a binding whose installation is gone as "not
  *     installed", and its Unbind control drops the key from `app.integrations`.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -145,12 +145,25 @@ describe('AdminInstalledIntegrationsPage: bound apps', () => {
 
 describe('IntegrationsConfigSection: bindings to installations that are gone', () => {
   test('lists the stale binding and unbinds it', async () => {
+    // The built-ins are installations like any other: `ifinder` is installed
+    // here, `iassistant` is not, so only the latter is stale.
+    mockApi.fetchInstalledIntegrations.mockResolvedValue({
+      items: [
+        ...INSTALLED,
+        { id: 'ifinder', label: 'iFinder', definitionName: 'iFinder', enabled: true }
+      ]
+    });
     mockApi.fetchInstalledIntegration.mockResolvedValue({ actions: [], definition: null });
     const onChange = jest.fn();
     render(
       <MemoryRouter>
         <IntegrationsConfigSection
-          integrations={{ 'ckan-demo': { actions: ['search_datasets'] }, gone: {}, ifinder: {} }}
+          integrations={{
+            'ckan-demo': { actions: ['search_datasets'] },
+            gone: {},
+            ifinder: {},
+            iassistant: {}
+          }}
           onChange={onChange}
         />
       </MemoryRouter>
@@ -159,14 +172,18 @@ describe('IntegrationsConfigSection: bindings to installations that are gone', (
     const stale = await screen.findByTestId('stale-integration-gone');
     expect(stale).toHaveTextContent('gone');
     expect(stale).toHaveTextContent('Not installed');
+    expect(screen.getByTestId('stale-integration-iassistant')).toHaveTextContent('Not installed');
     expect(screen.queryByTestId('stale-integration-ifinder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stale-integration-ckan-demo')).not.toBeInTheDocument();
+    // The actions of the installed built-in are loaded like those of any installation.
+    expect(mockApi.fetchInstalledIntegration).toHaveBeenCalledWith('ifinder');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Unbind' }));
+    fireEvent.click(within(stale).getByRole('button', { name: 'Unbind' }));
 
     expect(onChange).toHaveBeenCalledWith({
       'ckan-demo': { actions: ['search_datasets'] },
-      ifinder: {}
+      ifinder: {},
+      iassistant: {}
     });
   });
 });

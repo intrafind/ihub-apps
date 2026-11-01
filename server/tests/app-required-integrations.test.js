@@ -29,7 +29,8 @@ const APPS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../def
 
 const APPS = [
   { id: 'chat', enabled: true },
-  { id: 'ifinder-search', enabled: true, requiredIntegrations: ['ifinder'] },
+  // Binds the built-in iFinder installation (V192).
+  { id: 'ifinder-search', enabled: true, integrations: { ifinder: {} } },
   { id: 'people-directory', enabled: true, requiredIntegrations: ['peopleDirectories'] },
   // Binds an installed integration (#3061): offered only while it is installed and on.
   { id: 'open-data', enabled: true, integrations: { 'open-data-portal': {} } }
@@ -42,16 +43,19 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(areAppIntegrationsEnabled({ id: 'chat' }, {}), true);
   });
 
-  it('follows platform.iFinder.enabled', () => {
+  it('follows the ifinder installation', () => {
+    const bound = { id: 'x', integrations: { ifinder: {} } };
+    assert.equal(areAppIntegrationsEnabled(bound, {}), false);
     assert.equal(
-      areAppIntegrationsEnabled(app, { platform: { iFinder: { enabled: true } } }),
-      true
-    );
-    assert.equal(
-      areAppIntegrationsEnabled(app, { platform: { iFinder: { enabled: false } } }),
+      areAppIntegrationsEnabled(bound, {
+        installedIntegrations: [{ id: 'ifinder', enabled: false }]
+      }),
       false
     );
-    assert.equal(areAppIntegrationsEnabled(app, {}), false);
+    assert.equal(
+      areAppIntegrationsEnabled(bound, { installedIntegrations: [{ id: 'ifinder' }] }),
+      true
+    );
   });
 
   it('counts people directories as on with one enabled directory', () => {
@@ -63,15 +67,12 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(on(undefined), false);
   });
 
-  it('reports every integration', () => {
-    assert.deepEqual(getIntegrationStatus({}), { ifinder: false, peopleDirectories: false });
-    assert.deepEqual(
-      getIntegrationStatus({
-        platform: { iFinder: { enabled: true } },
-        peopleDirectories: { directories: [{ id: 'a' }] }
-      }),
-      { ifinder: true, peopleDirectories: true }
-    );
+  it('reports every built-in check and every installation', () => {
+    const status = getIntegrationStatus({
+      peopleDirectories: { directories: [{ id: 'd', enabled: true }] },
+      installedIntegrations: [{ id: 'ifinder' }, { id: 'iassistant', enabled: false }]
+    });
+    assert.deepEqual(status, { ifinder: true, iassistant: false, peopleDirectories: true });
   });
 
   it('requires every installation an app binds to exist and be enabled', () => {
@@ -96,30 +97,64 @@ describe('areAppIntegrationsEnabled', () => {
     );
   });
 
-  it('treats the ifinder and iassistant bindings as the iFinder connection', () => {
+  it('reports a requirement and a binding once each, in order', () => {
+    const both = {
+      id: 'y',
+      requiredIntegrations: ['peopleDirectories'],
+      integrations: { ifinder: {} }
+    };
+    assert.deepEqual(missingAppIntegrations(both, {}), ['peopleDirectories', 'ifinder']);
     const scoped = {
       id: 'x',
       integrations: { ifinder: { defaultScope: 'contracts' }, iassistant: {} }
     };
+    assert.deepEqual(missingAppIntegrations(scoped, {}), ['ifinder', 'iassistant']);
     assert.deepEqual(
-      missingAppIntegrations(scoped, { platform: { iFinder: { enabled: false } } }),
-      ['ifinder', 'iassistant']
-    );
-    assert.deepEqual(
-      missingAppIntegrations(scoped, { platform: { iFinder: { enabled: true } } }),
+      missingAppIntegrations(scoped, {
+        installedIntegrations: [{ id: 'ifinder' }, { id: 'iassistant' }]
+      }),
       []
     );
-    // A requirement and a binding of the same thing are reported once.
-    const both = { id: 'y', requiredIntegrations: ['ifinder'], integrations: { ifinder: {} } };
-    assert.deepEqual(missingAppIntegrations(both, {}), ['ifinder']);
+  });
+
+  it('keeps an iAssistant app off while the iFinder installation it runs on is off', () => {
+    const app = { id: 'iassistant', integrations: { iassistant: { actions: [] } } };
+    // The iassistant installation is on, its connection (ifinder) is not.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'iassistant' }, { id: 'ifinder', enabled: false }]
+      }),
+      ['ifinder']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, { installedIntegrations: [{ id: 'iassistant' }] }),
+      ['ifinder']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'iassistant' }, { id: 'ifinder' }]
+      }),
+      []
+    );
+    // Both off: each is reported once.
+    assert.deepEqual(missingAppIntegrations(app, {}), ['iassistant', 'ifinder']);
+    // The connection the installation names is the one that has to be on.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [
+          { id: 'iassistant', values: { connection: 'ifinder-prod' } },
+          { id: 'ifinder', enabled: false },
+          { id: 'ifinder-prod' }
+        ]
+      }),
+      []
+    );
   });
 
   it('reports installed integrations by instance id', () => {
     const status = getIntegrationStatus({
-      platform: { iFinder: { enabled: true } },
       installedIntegrations: [{ id: 'open-data-portal' }, { id: 'archive', enabled: false }]
     });
-    assert.equal(status.ifinder, true);
     assert.equal(status['open-data-portal'], true);
     assert.equal(status.archive, false);
   });
@@ -128,21 +163,29 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(areAppIntegrationsEnabled({ requiredIntegrations: ['nope'] }, {}), false);
   });
 
-  it('is validated in the app schema, and the shipped iFinder apps use it', async () => {
+  it('is validated in the app schema, and the shipped apps bind their integrations', async () => {
     const shipped = {
-      iassistant: 'ifinder',
-      'ifinder-search': 'ifinder',
-      'people-directory': 'peopleDirectories'
+      iassistant: { integrations: { iassistant: { actions: [] } } },
+      'ifinder-search': { integrations: { ifinder: { scopePicker: 'menu' } } },
+      'people-directory': { requiredIntegrations: ['peopleDirectories'] }
     };
-    for (const [id, integration] of Object.entries(shipped)) {
+    for (const [id, expected] of Object.entries(shipped)) {
       const app = JSON.parse(await fs.readFile(path.join(APPS_DIR, `${id}.json`), 'utf8'));
-      assert.deepEqual(app.requiredIntegrations, [integration]);
+      for (const [key, value] of Object.entries(expected)) assert.deepEqual(app[key], value);
       assert.equal(app.enabled, true);
+      assert.equal(
+        (app.tools || []).some(t => String(t).startsWith('iFinder')),
+        false,
+        'iFinder tools come through the binding'
+      );
       const parsed = appConfigSchema.safeParse(app);
       assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
-      const typo = appConfigSchema.safeParse({ ...app, requiredIntegrations: ['ifindr'] });
-      assert.equal(typo.success, false);
     }
+    const typo = appConfigSchema.safeParse({ id: 'x', requiredIntegrations: ['ifindr'] });
+    assert.equal(typo.success, false);
+    // `ifinder` is an installation now, not a built-in requirement id.
+    const old = appConfigSchema.safeParse({ id: 'x', requiredIntegrations: ['ifinder'] });
+    assert.equal(old.success, false);
   });
 
   it('no longer ships the retired document actions app', async () => {
@@ -165,13 +208,13 @@ describe('configCache.getApps with requiredIntegrations', () => {
   }
 
   it('hides the app, with a new ETag, while the integration is off', () => {
-    serve({ iFinder: { enabled: false } });
+    serve({}, undefined, [{ id: 'ifinder', enabled: false }]);
     const off = configCache.getApps();
     assert.deepEqual(
       off.data.map(a => a.id),
       ['chat']
     );
-    serve({ iFinder: { enabled: true } });
+    serve({}, undefined, [{ id: 'ifinder' }]);
     const on = configCache.getApps();
     assert.deepEqual(
       on.data.map(a => a.id),
@@ -199,7 +242,7 @@ describe('configCache.getApps with requiredIntegrations', () => {
   });
 
   it('still lists it for admins', () => {
-    serve({ iFinder: { enabled: false } });
+    serve({}, undefined, [{ id: 'ifinder', enabled: false }]);
     assert.equal(configCache.getApps(true).data.length, APPS.length);
   });
 });

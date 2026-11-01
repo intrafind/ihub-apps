@@ -16,6 +16,7 @@ import iFinderAssistants from '../services/integrations/iFinderAssistants.js';
 import {
   applicableScopeProviders,
   getScopeProvider,
+  registerScopeProvider,
   resolveChatScopes
 } from '../services/integrations/scopes/index.js';
 import iFinderScopes, {
@@ -30,9 +31,15 @@ import iFinderTool from '../tools/iFinder.js';
 import { applyIntegrationScopes } from '../services/chat/RequestBuilder.js';
 import { normalizeChatSettings } from '../services/chat/ChatRepository.js';
 import { stripReservedToolContext } from '../utils/toolCallContext.js';
+import { stubInstallations } from './helpers/installedIFinder.js';
 
 const USER = { id: 'user-1', email: 'u@example.com' };
-const SEARCH_APP = { id: 'ifinder-search', tools: ['iFinder_search', 'iFinder_listProfiles'] };
+// Binds the iFinder installation (its actions are the app's iFinder tools).
+const SEARCH_APP = {
+  id: 'ifinder-search',
+  tools: ['iFinder_search', 'iFinder_listProfiles'],
+  integrations: { ifinder: {} }
+};
 const IASSISTANT_MODEL = { id: 'iassistant', provider: 'iassistant-conversation', config: {} };
 
 const PROFILES = [
@@ -61,6 +68,11 @@ beforeEach(() => {
   originals.listProfiles = iFinderService.listProfiles;
 
   configCache.getPlatform = () => platform;
+  originals.restoreInstallations = stubInstallations(configCache, () => platform);
+  // In the server these two are registered with their installations
+  // (integrationTools.syncIntegrationScopeProviders).
+  registerScopeProvider(iFinderScopes);
+  registerScopeProvider(iAssistantScopes);
   profileReads = 0;
   profilesAnswer = async () => PROFILES;
   assistantsAnswer = async () => [
@@ -84,6 +96,7 @@ beforeEach(() => {
 
 afterEach(() => {
   configCache.getPlatform = originals.getPlatform;
+  originals.restoreInstallations();
   iFinderSearchProfiles.getUserSearchProfiles = originals.getUserSearchProfiles;
   iFinderAssistants.listAssistants = originals.listAssistants;
   iFinderService.search = originals.search;
@@ -99,7 +112,7 @@ describe('scope registry', () => {
     assert.equal(getScopeProvider('nope'), null);
   });
 
-  it('offers iFinder scopes only to apps with iFinder tools, and only when iFinder is on', () => {
+  it('offers iFinder scopes only to apps that bind iFinder, and only when iFinder is on', () => {
     assert.deepEqual(
       applicableScopeProviders({ app: SEARCH_APP }).map(p => p.id),
       ['ifinder']

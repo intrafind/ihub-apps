@@ -6,16 +6,16 @@ No key generation, no key exchange. iHub signs with its OIDC key; iFinder
 verifies via iHub's JWKS endpoint. Full guide:
 [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
 
-**iHub** (`platform.json` or Admin → iFinder Integration):
+**iHub:** install iFinder under **Admin → Integrations → Installed → iFinder**
+with the base URL and **Sign with iHub's OIDC key pair** ticked. The
+installation in `contents/config/integrations.json`:
 
 ```json
-{
-  "oauth": { "issuer": "https://your-ihub.com" },
-  "iFinder": { "enabled": true, "baseUrl": "https://your-ifinder.com", "useOidcKeyPair": true }
-}
+{ "id": "ifinder", "definition": "com.intrafind/ifinder", "enabled": true,
+  "values": { "baseUrl": "https://your-ifinder.com", "useOidcKeyPair": true } }
 ```
 
-`oauth.issuer` must be your iHub public URL (used as the token `iss`; not auto-detected at signing time).
+`oauth.issuer` in `platform.json` (Admin → Authentication → OAuth Server) must be your iHub public URL (used as the token `iss`; not auto-detected at signing time).
 
 **iFinder** (Spring Boot):
 
@@ -37,18 +37,16 @@ export IFINDER_SEARCH_PROFILE="default"
 export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 ```
 
-...or, from Admin > Credentials, create a "Secret" credential holding the PEM
-key and select it in Admin > Integrations > iFinder's **Private Key** field
-(stored as `iFinder.privateKeyRef`). The env var takes precedence when both
-are set.
+...or, from Admin → Credentials, create a "Secret" credential holding the PEM
+key and select it in the **Private key** field of the iFinder installation
+(Admin → Integrations → Installed → iFinder; stored as `privateKeyRef` in its
+values). The env var takes precedence when both are set.
 
 ### 2. Test Configuration
 
-```bash
-# Start server and check logs for:
-✓ Cached: contents/tools/*.json
-✅ Loaded ifinder-document-explorer (enabled)
-```
+Click **Test** on the iFinder installation under **Admin → Integrations →
+Installed**: it checks DNS, TLS, the JWT and a real search request, step by
+step.
 
 ### 3. Test User Authentication
 
@@ -116,24 +114,30 @@ booleans take no suffix; `title`, `content`, `url` and `subject` have no
 | "iFinder search requires authenticated user" | User not logged in  | Ensure user authentication |
 | "iFinder authentication failed"              | JWT issue           | Check private key format   |
 | "Document not found"                         | Invalid document ID | Verify ID or search first  |
-| "Request timed out"                          | Network/performance | Increase `IFINDER_TIMEOUT` |
+| "Request timed out"                          | Network/performance | Raise the installation's request timeout |
 
 ## File Structure
 
 ```
 server/
-├── tools/
-│   └── iFinder.js                 # Unified iFinder tool
-├── utils/
-│   └── iFinderJwt.js             # JWT token generation
+├── defaults/integration-definitions/
+│   ├── com.intrafind__ifinder/       # Built-in iFinder definition (install fields, actions)
+│   └── com.intrafind__iassistant/    # Built-in iAssistant definition
+├── services/integrations/
+│   ├── ifinderConfig.js              # The installations' values as the code reads them
+│   └── protocols/native/connectors/  # iFinder and iAssistant connectors (the tools, Test)
+├── migrations/
+│   └── V192__ifinder_iassistant_installed_integrations.js  # platform.json → installations
+└── utils/
+    └── iFinderJwt.js                 # JWT token generation
 contents/
-├── apps/
-│   └── ifinder-document-explorer.json  # App configuration
-└── tools/
-    └── iFinder.json                   # Tool definition
+├── config/
+│   └── integrations.json             # The ifinder and iassistant installations
+└── apps/
+    └── ifinder-search.json           # Shipped app, binds the ifinder installation
 docs/
-├── iFinder-Integration.md        # Full documentation
-└── iFinder-Quick-Reference.md    # This file
+├── iFinder-Integration.md            # Full documentation
+└── iFinder-Quick-Reference.md        # This file
 ```
 
 ## Development Commands
@@ -154,8 +158,8 @@ console.log(jwt.generateIFinderJWT({id: 'test', email: 'test@example.com'}));
 
 ## Configuration Priority
 
-1. Environment variables (`IFINDER_*`)
-2. `platform.json` → `iFinder` section
+1. Environment variables (`IFINDER_API_URL`, `IFINDER_PRIVATE_KEY`; `IFINDER_SEARCH_PROFILE` only while the installation's default profile is empty)
+2. The `ifinder` installation in `contents/config/integrations.json` (Admin → Integrations → Installed)
 3. Default values
 
 ## Key Implementation Details

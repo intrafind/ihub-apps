@@ -17,9 +17,6 @@ import {
   SECONDARY_BUTTON_CLASS
 } from '../people-directories/formStyles';
 
-/** Keys of `app.integrations` that are built-in settings, not installed instances. */
-const BUILT_IN_KEYS = new Set(['ifinder', 'iassistant']);
-
 /**
  * App editor section: which installed integrations the app binds, which of
  * their actions, and the default scope. Writes `app.integrations[instanceId]`
@@ -46,7 +43,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
   const staleIds = useMemo(() => {
     if (loading || error) return [];
     const installedIds = new Set(installed.map(i => i.id));
-    return Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !installedIds.has(id));
+    return Object.keys(bindings).filter(id => !installedIds.has(id));
   }, [bindings, installed, loading, error]);
 
   useEffect(() => {
@@ -68,7 +65,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
 
   // Load the actions of every bound installation once it is bound.
   useEffect(() => {
-    const boundIds = Object.keys(bindings).filter(id => !BUILT_IN_KEYS.has(id) && !details[id]);
+    const boundIds = Object.keys(bindings).filter(id => !details[id]);
     if (boundIds.length === 0) return;
     let cancelled = false;
     void (async () => {
@@ -105,10 +102,11 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     }
   };
 
+  // `actions` absent means every action; a list, even an empty one, means
+  // exactly those (an empty list binds the installation for its scopes only).
   const toggleAction = (id, actionName, checked, allNames) => {
     const binding = bindings[id] || {};
-    const current =
-      Array.isArray(binding.actions) && binding.actions.length ? binding.actions : allNames;
+    const current = Array.isArray(binding.actions) ? binding.actions : allNames;
     const next = checked
       ? [...new Set([...current, actionName])]
       : current.filter(n => n !== actionName);
@@ -163,8 +161,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
             const detail = details[item.id];
             const actions = (detail?.actions || []).filter(a => a.available);
             const allNames = actions.map(a => a.name);
-            const selected =
-              Array.isArray(binding.actions) && binding.actions.length ? binding.actions : allNames;
+            const selected = Array.isArray(binding.actions) ? binding.actions : allNames;
             const hasScopes = Boolean(detail?.definition?.scopes);
             const checkboxId = `app-integration-${item.id}`;
             return (
@@ -222,9 +219,6 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                               type="checkbox"
                               className={`${CHECKBOX_CLASS} mt-0.5`}
                               checked={selected.includes(action.name)}
-                              // An empty list means "all": the last action
-                              // stays; unbind the installation instead.
-                              disabled={selected.length === 1 && selected.includes(action.name)}
                               onChange={e =>
                                 toggleAction(item.id, action.name, e.target.checked, allNames)
                               }

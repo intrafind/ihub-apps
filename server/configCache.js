@@ -146,6 +146,14 @@ const IHUB_ENV_PREFIXES = {
 };
 
 /**
+ * platform.json blocks that became installed integrations (V192). An
+ * `IHUB_PLATFORM__I_FINDER__*` / `IHUB_PLATFORM__I_ASSISTANT__*` override
+ * still set after the upgrade is ignored with a warning (once per variable).
+ */
+const MOVED_PLATFORM_BLOCKS = new Set(['iFinder', 'iAssistant']);
+const warnedMovedOverrides = new Set();
+
+/**
  * Per-cache-key config paths that must NOT be passed through env var
  * substitution. Used by `setCacheEntry` to opt specific fields out.
  *
@@ -157,7 +165,8 @@ const IHUB_ENV_PREFIXES = {
  * the templated field.
  */
 const ENV_VAR_SKIP_PATHS_BY_KEY = {
-  'config/platform.json': ['iFinder.jwtSubjectField']
+  // The iFinder installation's JWT subject may be a `${user.x}` template.
+  'config/integrations.json': ['installed[].values.jwtSubjectField']
 };
 
 /**
@@ -177,6 +186,22 @@ function applyIhubEnvOverrides(configPath, data) {
 
     const pathParts = pathStr.split('__').map(toCamelCase);
     if (pathParts.some(p => !p)) continue; // skip malformed keys
+
+    if (configPath === 'config/platform.json' && MOVED_PLATFORM_BLOCKS.has(pathParts[0])) {
+      // The block left platform.json (V192): the override would land on a key
+      // nothing reads. Say so once instead of silently doing nothing.
+      if (!warnedMovedOverrides.has(envKey)) {
+        warnedMovedOverrides.add(envKey);
+        logger.warn(
+          `Ignoring ${envKey}: platform.${pathParts[0]} moved into the installed integration ` +
+            `"${pathParts[0] === 'iFinder' ? 'ifinder' : 'iassistant'}" (Admin → Integrations → ` +
+            `Installed, config/integrations.json). Migration V192 copied the variable's value ` +
+            `into the installation once; edit the installation and remove the variable.`,
+          { component: 'ConfigCache' }
+        );
+      }
+      continue;
+    }
 
     const parsedValue = parseEnvValue(envValue);
     setNestedValue(data, pathParts, parsedValue);
