@@ -52,6 +52,26 @@ function emptyConfig() {
   return { installed: [], security: { blockPrivateIps: true, allowedHosts: [] } };
 }
 
+/**
+ * The installation an always-installed built-in (`alwaysInstalled`, iHub's
+ * own tools) has when the file does not hold one: enabled, every action on,
+ * open to everyone. It is served from here until an admin edits it, which
+ * writes it to the file.
+ * @param {object} definition
+ */
+function builtInInstance(definition) {
+  return {
+    id: definition.singleton.instanceId,
+    definition: definition.id,
+    definitionVersion: definition.version,
+    enabled: true,
+    values: {},
+    auth: { mode: definition.auth?.default || 'none' },
+    actions: { enabled: ['*'], disabled: [], overrides: {} },
+    allowedGroups: []
+  };
+}
+
 function credentialIdFor(instanceId, fieldKey) {
   return `integration-${instanceId}-${fieldKey}`;
 }
@@ -67,20 +87,20 @@ export class InstalledIntegrationService {
     this._queue = Promise.resolve();
   }
 
-  /** The whole file, validated, with defaults. */
+  /** The whole file, validated, with defaults and the always-installed built-ins. */
   readConfig() {
     const cached = configCache.get(INTEGRATIONS_FILE);
     const data = cached?.data;
-    if (!data) return emptyConfig();
+    if (!data) return this._withBuiltIns(emptyConfig());
     const result = validateIntegrationsConfig(data);
     if (!result.success) {
       logger.error('integrations.json is invalid; using an empty configuration', {
         component: COMPONENT,
         issues: result.errors.map(e => `${e.path.join('.')}: ${e.message}`)
       });
-      return emptyConfig();
+      return this._withBuiltIns(emptyConfig());
     }
-    return result.data;
+    return this._withBuiltIns(result.data);
   }
 
   /**
@@ -89,7 +109,7 @@ export class InstalledIntegrationService {
    */
   _readConfigForWrite() {
     const data = configCache.get(INTEGRATIONS_FILE)?.data;
-    if (!data) return emptyConfig();
+    if (!data) return this._withBuiltIns(emptyConfig());
     const result = validateIntegrationsConfig(data);
     if (!result.success) {
       throw new IntegrationError(
@@ -97,7 +117,40 @@ export class InstalledIntegrationService {
         { status: 500, code: 'INVALID_CONFIG', details: result.errors }
       );
     }
-    return result.data;
+    return this._withBuiltIns(result.data);
+  }
+
+  /** The definitions that are installed at all times (`alwaysInstalled`), as far as the registry has loaded them. */
+  _alwaysInstalledDefinitions() {
+    try {
+      return this.registry
+        .list()
+        .map(entry => entry.definition)
+        .filter(definition => definition?.alwaysInstalled && definition.singleton?.instanceId);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Whether an installation is one of the always-installed built-ins. */
+  isAlwaysInstalled(instanceId) {
+    return this._alwaysInstalledDefinitions().some(
+      definition => definition.singleton.instanceId === instanceId
+    );
+  }
+
+  /**
+   * The config with an installation for every always-installed built-in the
+   * file lacks, and with those it holds switched on: they can be edited
+   * (actions, groups) but never removed or disabled.
+   */
+  _withBuiltIns(config) {
+    for (const definition of this._alwaysInstalledDefinitions()) {
+      const existing = config.installed.find(inst => inst.id === definition.singleton.instanceId);
+      if (!existing) config.installed.push(builtInInstance(definition));
+      else if (existing.enabled === false) existing.enabled = true;
+    }
+    return config;
   }
 
   async writeConfig(config) {
@@ -298,6 +351,7 @@ export class InstalledIntegrationService {
       delete instance.auth.credentialRef;
     }
 
+    if (definition.alwaysInstalled) instance.enabled = true;
     instance.definitionVersion = definition.version;
     instance.installedAt = existing?.installedAt || nowIso();
     instance.updatedAt = nowIso();
@@ -411,6 +465,12 @@ export class InstalledIntegrationService {
 
   setEnabled(id, enabled) {
     return this._serialize(async () => {
+      if (!enabled && this.isAlwaysInstalled(id)) {
+        throw new IntegrationError(
+          `"${id}" is always installed and enabled; switch its actions off instead`,
+          { code: 'ALWAYS_INSTALLED' }
+        );
+      }
       const config = this._readConfigForWrite();
       const instance = config.installed.find(inst => inst.id === id);
       if (!instance)
@@ -426,6 +486,11 @@ export class InstalledIntegrationService {
 
   remove(id) {
     return this._serialize(async () => {
+      if (this.isAlwaysInstalled(id)) {
+        throw new IntegrationError(`"${id}" is always installed and cannot be removed`, {
+          code: 'ALWAYS_INSTALLED'
+        });
+      }
       const config = this._readConfigForWrite();
       const instance = config.installed.find(inst => inst.id === id);
       if (!instance)
@@ -447,9 +512,11 @@ export class InstalledIntegrationService {
    * Test an unsaved or saved instance. `payload` is validated like a create,
    * except that the id may already exist; a secret may be provided inline or
    * the stored credential is used. `req` is the admin's request, for connectors
-   * whose test shows request-derived values (the Jira redirect URI).
+   * whose test shows request-derived values (the Jira redirect URI);
+   * `testInput` is what the admin typed into the definition's `test.input`
+   * field (a directory's sample search), passed to the connector as it is.
    */
-  async test(payload, { language = 'en', user, req } = {}) {
+  async test(payload, { language = 'en', user, req, testInput } = {}) {
     const existing = payload?.id ? this.get(payload.id) : null;
     const { instance, definition, document, secretsToStore } = await this._prepare(payload, {
       existing
@@ -470,7 +537,8 @@ export class InstalledIntegrationService {
       language,
       user,
       req,
-      resolveSecret
+      resolveSecret,
+      testInput: testInput && typeof testInput === 'object' ? testInput : undefined
     });
   }
 

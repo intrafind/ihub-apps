@@ -1784,8 +1784,19 @@ describe('ingest pipeline', () => {
   it('keeps cloud kinds closed while the integrations feature is off', async () => {
     const features = configCache.getFeatures();
     const savedPlatform = platform;
-    const providers = [{ id: 'o365', type: 'office365', enabled: true }];
-    setPlatform({ cloudStorage: { providers } });
+    // The provider is the `office365` installation (its provider id stays `o365`).
+    configCache.setCacheEntry('config/integrations.json', {
+      installed: [
+        {
+          id: 'office365',
+          definition: 'com.intrafind/office365',
+          enabled: true,
+          values: { providerId: 'o365', tenantId: 't', clientId: 'c', clientSecretRef: 's' },
+          auth: { mode: 'oauth-user' }
+        }
+      ],
+      security: { blockPrivateIps: true, allowedHosts: [] }
+    });
     const office365 = getItemKind('office365');
     assert.ok(office365, 'the cloud kinds are registered');
     assert.equal(
@@ -1843,6 +1854,10 @@ describe('ingest pipeline', () => {
       configCache.setCacheEntry('config/features.json', features);
       platform = savedPlatform;
       configCache.setCacheEntry('config/platform.json', platform);
+      configCache.setCacheEntry('config/integrations.json', {
+        installed: [],
+        security: { blockPrivateIps: true, allowedHosts: [] }
+      });
     }
   });
 

@@ -1,0 +1,113 @@
+{
+  "id": "com.intrafind/google-drive",
+  "version": "1.0.0",
+  "name": {
+    "en": "Google Drive",
+    "de": "Google Drive"
+  },
+  "description": {
+    "en": "Let users browse and attach files from Google Drive — My Drive, shared drives and files shared with them — each signed in with their own Google account. Holds the OAuth 2.0 client of your Google Cloud project.",
+    "de": "Benutzer Dateien aus Google Drive durchsuchen und anhängen lassen – Meine Ablage, geteilte Ablagen und für sie freigegebene Dateien –, jeder mit dem eigenen Google-Konto angemeldet. Hält den OAuth-2.0-Client Ihres Google-Cloud-Projekts."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["storage", "google", "files"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/google-drive-integration.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "googledrive"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "googledrive"
+  },
+  "auth": {
+    "modes": ["oauth-user"]
+  },
+  "install": [
+    {
+      "key": "clientId",
+      "type": "string",
+      "required": true,
+      "title": {
+        "en": "Client ID",
+        "de": "Client-ID"
+      },
+      "description": {
+        "en": "The OAuth 2.0 client ID of the Google Cloud project (…apps.googleusercontent.com).",
+        "de": "Die OAuth-2.0-Client-ID des Google-Cloud-Projekts (…apps.googleusercontent.com)."
+      }
+    },
+    {
+      "key": "clientSecretRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "required": true,
+      "title": {
+        "en": "Client secret",
+        "de": "Client-Secret"
+      },
+      "description": {
+        "en": "A credential of type secret holding the OAuth client secret.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem OAuth-Client-Secret."
+      }
+    },
+    {
+      "key": "redirectUri",
+      "type": "url",
+      "title": {
+        "en": "Redirect URI",
+        "de": "Redirect-URI"
+      },
+      "description": {
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/googledrive/<provider id>/callback); the test shows the resulting URL.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/googledrive/<provider id>/callback); der Test zeigt die resultierende URL."
+      }
+    },
+    {
+      "key": "sourceMyDrive",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: My Drive",
+        "de": "Quelle: Meine Ablage"
+      }
+    },
+    {
+      "key": "sourceSharedDrives",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: shared drives",
+        "de": "Quelle: geteilte Ablagen"
+      }
+    },
+    {
+      "key": "sourceSharedWithMe",
+      "type": "boolean",
+      "default": true,
+      "title": {
+        "en": "Source: shared with me",
+        "de": "Quelle: für mich freigegeben"
+      }
+    },
+    {
+      "key": "providerId",
+      "type": "string",
+      "advanced": true,
+      "pattern": "^[A-Za-z0-9._-]{1,100}$",
+      "title": {
+        "en": "Provider id",
+        "de": "Anbieter-ID"
+      },
+      "description": {
+        "en": "The id in the callback URL (/api/integrations/googledrive/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
+        "de": "Die ID in der Callback-URL (/api/integrations/googledrive/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
+      }
+    }
+  ],
+  "capabilities": ["files"],
+  "actions": []
+}

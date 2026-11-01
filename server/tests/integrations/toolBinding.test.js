@@ -129,7 +129,6 @@ before(async () => {
 
   configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/a2aAgents.json', { agents: [] });
-  configCache.setCacheEntry('config/peopleDirectories.json', { directories: [] });
   configCache.setCacheEntry('config/platform.json', {});
   configCache.setCacheEntry('config/integrations.json', {
     installed: [

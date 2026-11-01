@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import {
   VOICE_LISTENING_STYLES,
@@ -417,7 +416,14 @@ export const platformConfigSchema = z
       })
       .prefault({}),
     proxy: proxyConfigSchema.prefault({}),
-    cloudStorage: cloudStorageConfigSchema.prefault({}),
+    // Retired (V200): the cloud storage providers are the installations
+    // `office365`, `googledrive` and `nextcloud` (config/integrations.json).
+    cloudStorage: z
+      .undefined({
+        message:
+          'platform.cloudStorage is retired; the providers are installed integrations (migration V200)'
+      })
+      .optional(),
     // Single source of truth for audit logging: retention + behavior + privacy.
     // (The legacy top-level `auditLog` block is migrated into here by V059.)
     audit: z

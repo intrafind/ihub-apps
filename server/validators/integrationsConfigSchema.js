@@ -21,6 +21,8 @@ import {
 const instanceIdSchema = zSafeId.min(1).max(64);
 
 const primitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+/** A `list` install field stores an array of strings. */
+const valueSchema = z.union([primitiveSchema, z.array(z.string())]);
 
 const installedAuthSchema = z.object({
   mode: z.enum(AUTH_MODES).prefault('none'),
@@ -54,8 +56,8 @@ export const installedIntegrationSchema = z.object({
   label: localizedStringSchema.optional(),
   description: localizedStringSchema.optional(),
   enabled: z.boolean().prefault(true),
-  /** Non-sensitive install field values. */
-  values: z.record(z.string(), primitiveSchema).prefault({}),
+  /** Non-sensitive install field values (a `list` field holds an array of strings). */
+  values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
   /** Groups allowed to use the instance; empty means everyone who may use the app. */
