@@ -2,7 +2,7 @@
 
 Users can ask iHub's chat for people: who someone is, their function, their unit and how to reach them. iHub searches **people directories** for that: the company's own LDAP or Active Directory, and any number of further directories such as the public directory of the German federal administration, **x500.bund.de**.
 
-A directory is an **installation** of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`) under **Admin → Integrations → Installed** — one installation per directory, installed, tested, edited and switched on and off like every other [integration](integrations.md). Each enabled directory becomes its own small set of read-only tools, named and described after the directory. The model reads those descriptions, decides which directory fits a question, and calls several when it needs to — for example the company directory and x500.bund.de in one answer. Nothing is merged server-side: every result says which directory it came from.
+A directory is an **installation** of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`) under **Admin → Integrations** — one installation per directory, installed, tested, edited and switched on and off like every other [integration](integrations.md). Each enabled directory becomes its own small set of read-only tools, named and described after the directory. The model reads those descriptions, decides which directory fits a question, and calls several when it needs to — for example the company directory and x500.bund.de in one answer. Nothing is merged server-side: every result says which directory it came from.
 
 The shipped **People search** app (`people-directory`) binds the definition — `"integrations": { "com.intrafind/ldap-directory": {} }` — and so uses every directory a user may use, including ones installed later. It ships enabled; users get it as soon as one directory installation is enabled, and not before. Admin → Apps marks it as hidden until then.
 
@@ -14,7 +14,7 @@ The shipped **People search** app (`people-directory`) binds the definition — 
 
 The directory of the German federal administration is reachable from the public internet and ships as a disabled installation, `x500bund`.
 
-1. Open **Admin → Integrations → Installed**.
+1. Open **Admin → Integrations**.
 2. Enable **Federal directory (IVBB)** (`x500bund`). The **People search** app appears for users with the first enabled directory.
 3. Optional: **Test** the installation. The install dialog's test takes a surname as the sample search and shows the mapped people next to the attributes they came from.
 
@@ -154,7 +154,7 @@ The installation's `allowedGroups` hold on top of that: an app that binds `x500b
 
 Admins sometimes need to see what is really in a directory: which attributes an entry has, how a branch is built, who is in a group. The LDAP browser answers that in plain words: the admin asks, the model writes the LDAP filter, and the raw entries come back. It is separate from people search, which only ever returns mapped fields and is safe to give to every user.
 
-Switch it on per directory with **LDAP browser for admins** in the install wizard (**Admin → Integrations → Installed → the directory → Edit**); the browser's own fields appear below the switch. In `integrations.json`:
+Switch it on per directory with **LDAP browser for admins** in the install wizard (**Admin → Integrations → the directory → Settings**); the browser's own fields appear below the switch. In `integrations.json`:
 
 ```jsonc
 {
@@ -273,7 +273,7 @@ It is trusted only by directories that name it in `tlsCa`.
 
 ## Admin page
 
-**Admin → Integrations → Installed** (`/admin/integrations/installed`) lists the directories among the other installations:
+**Admin → Integrations** (`/admin/integrations`) lists the directories among the other installations:
 
 - **List:** one row per installation with its label, the definition, an on/off switch, **Test**, **Edit** and **Remove**; badges for the transport (LDAPS, StartTLS, plain text) and for external data flow.
 - **Install wizard:** **Install** on the **LDAP people directory** catalog card (or **Use for people search** on an LDAP sign-in provider). Name and description; the settings — source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), units, data flow and the [LDAP browser](#ldap-browser-for-admins); under **Advanced** the search base, filter, searched attributes, the mapping with one list per field, TLS versions, trusted certificates, allowed hosts and the limits; who may use it; and the actions.

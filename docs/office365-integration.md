@@ -120,7 +120,7 @@ Office 365 is the built-in installed integration **Microsoft Office 365 (OneDriv
 ### Via Admin UI
 
 1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → Integrations → Installed**. Open the **Catalog** tab and click **Install** on **Microsoft Office 365**, or edit the `office365` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
+2. Navigate to **Admin → Integrations**. Open the **Catalog** tab and click **Install** on **Microsoft Office 365**, or edit the `office365` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
 3. Fill in the settings:
 
    | Field | Value |

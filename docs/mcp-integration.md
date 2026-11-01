@@ -19,8 +19,8 @@ already uses.
 ### Configuration
 
 An external MCP server is an [installed integration](integrations.md):
-it is installed under **Admin → Integrations → Installed**
-(`/admin/integrations/installed`) and stored in
+it is installed under **Admin → Integrations**
+(`/admin/integrations`) and stored in
 `contents/config/integrations.json`. There is no separate MCP servers page
 and no `mcpServers.json` any more (see [Migration](#migration-from-mcp_server_url)).
 
@@ -187,8 +187,7 @@ users connecting a fresh server at the same moment share one registration.
 It is stored in the storage provider (namespace `mcp-oauth-clients`, a client
 secret encrypted with the installation key) and dropped when the server's URL
 or auth block changes, when the authorization server answers
-`invalid_client`, or when an admin resets it (**Admin → Integrations →
-Installed**, the **Connected users** dialog of a per-user server). Reset it
+`invalid_client`, or when an admin resets it (**Admin → Integrations**, the **Connected users** dialog of a per-user server). Reset it
 when the authorization server
 lost its registered clients (for example an MCP server that keeps them in
 memory and was restarted): such a server refuses the sign-in on its own page,
@@ -294,7 +293,7 @@ authorization server's `revocation_endpoint` when it has one (RFC 7009, best
 effort) and deletes them.
 
 **Admins** see how many users connected each per-user server in the
-installed list under **Admin → Integrations → Installed**; its **Connected
+installed list under **Admin → Integrations**; its **Connected
 users** dialog lists them, disconnects one and resets iHub's client
 registration. **Test connection** uses the admin's own account; without one
 it offers **Connect my account**. In the edit wizard it tests with the
@@ -441,7 +440,7 @@ iHub ships two example apps to try it with, both **disabled**:
 `excalidraw` (definitions `mcp/drawio` and `mcp/excalidraw`), which ship
 **disabled** as well, so nothing contacts these public endpoints until an
 admin opts in. To try one, enable the installation under **Admin →
-Integrations → Installed**, then the app under **Admin → Apps**; while the
+Integrations**, then the app under **Admin → Apps**; while the
 installation is disabled the app is not offered.
 
 In `integrations.json` the installations look like this:
@@ -697,7 +696,7 @@ routes are gone.
 
 ### MCP servers in the Catalog
 
-**Admin → Integrations → Installed → Catalog** lists hosted MCP servers
+**Admin → Integrations → Catalog** lists hosted MCP servers
 that iHub can connect to with one shared credential, as definitions
 `mcp/<id>`. Each has a fixed endpoint, so **Install** asks only for the
 name, the credential and, where the vendor needs them, extra headers, and
@@ -1375,7 +1374,7 @@ is not moved: the migration writes it to
 under a free id and bind it to its apps, whose old references to the server
 select nothing. Per-user tokens and OAuth
 client registrations stay valid, since transport, URL and auth settings are
-preserved. Manage the servers under **Admin → Integrations → Installed**
+preserved. Manage the servers under **Admin → Integrations**
 from then on.
 
 ## Connecting Claude (claude.ai / Claude Desktop)
@@ -1523,7 +1522,7 @@ component, so `npm run logs` shows the reason a client was turned away.
 ## Agent-to-Agent (A2A) — iHub as an A2A agent
 
 iHub can also call remote agents: an A2A agent is an installed integration too (Admin →
-Integrations → Installed, Catalog → **A2A agent**), and its skills are tools that apps bind like
+Integrations, Catalog → **A2A agent**), and its skills are tools that apps bind like
 an MCP server's. See [Remote A2A agents as tools](a2a-agents.md).
 
 Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → **A2A**)

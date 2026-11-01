@@ -461,7 +461,7 @@ Cursor, etc).
 See [MCP Integration](mcp-integration.md) for the full guide:
 
 - Outbound: install external MCP servers as integrations under
-  **Admin → Integrations → Installed** (`/admin/integrations/installed`,
+  **Admin → Integrations** (`/admin/integrations`,
   stored in `contents/config/integrations.json`) and bind them to apps under
   `integrations`. Supports Streamable HTTP, SSE (legacy), stdio, and
   WebSocket transports with SSRF guards and encrypted credentials.
@@ -1080,17 +1080,17 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
-- **Type**: Server-side execution — an action of the built-in **Web search** installation (`websearch`, **Admin → Integrations → Installed**), not a tool file in `contents/tools/`; the same holds for `staanSearch`, `qwantSearch` and the page reader `read_url`. None of them appears under **Admin → Tools**
+- **Type**: Server-side execution — an action of the built-in **Web search** installation (`websearch`, **Admin → Integrations**), not a tool file in `contents/tools/`; the same holds for `staanSearch`, `qwantSearch` and the page reader `read_url`. None of them appears under **Admin → Tools**
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
   - `maxResults` (number, optional): Maximum results to return (default: configured by app's `websearch.maxResults`, max: 10)
   - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
-- **Authentication**: Reference a **secret** credential from the `websearch` installation (**Admin → Integrations → Installed → Web search → Brave Search API key**) or set the `BRAVE_SEARCH_API_KEY` environment variable
+- **Authentication**: Reference a **secret** credential from the `websearch` installation (**Admin → Integrations → Web search → Brave Search API key**) or set the `BRAVE_SEARCH_API_KEY` environment variable
 - **Configuration**:
   - **Installation Method** (Recommended):
     1. Store the key as a credential of type **secret** under Admin → Integrations → Credentials
-    2. Open Admin → Integrations → Installed → **Web search**
+    2. Open Admin → Integrations → **Web search**
     3. Pick that credential in the **Brave Search API key** field (Staan: **Staan API key**)
     4. Save changes — no server restart required; **Test** runs one live search
   - **Environment Variable Method**:
@@ -1168,7 +1168,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 ### People directories (`<directoryId>__search_people`, …)
 
-- **Description**: Search LDAP people directories — the company directory (reusing an LDAP sign-in provider) and external ones such as x500.bund.de. Each directory is an installation of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`, **Admin → Integrations → Installed**) and offers `<directoryId>__search_people`, `<directoryId>__get_person` and optionally `<directoryId>__list_units`, named and described after the directory so the model can choose between them
+- **Description**: Search LDAP people directories — the company directory (reusing an LDAP sign-in provider) and external ones such as x500.bund.de. Each directory is an installation of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`, **Admin → Integrations**) and offers `<directoryId>__search_people`, `<directoryId>__get_person` and optionally `<directoryId>__list_units`, named and described after the directory so the model can choose between them
 - **Type**: Actions of a `native` installation, run through the installation's connector
 - **App Usage**: bind the installation (`"integrations": { "x500bund": {} }`) for one directory, or the definition (`"integrations": { "com.intrafind/ldap-directory": {} }`) for every directory including ones installed later. The installation's groups still apply
 - **LDAP browser**: a directory with **LDAP browser for admins** on also offers `<directoryId>__browse_search`, `__browse_read` and `__browse_children` (raw entries, for the admins in its browser groups). They are bound only when an app names them in `actions`, or selected by `"tools": ["ldapBrowse"]`
@@ -1178,7 +1178,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Corporate directory integration for Microsoft Entra ID (formerly Azure AD) through Microsoft Graph
-- **Type**: Actions of the built-in installed integration **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra` under **Admin → Integrations → Installed**); there is no tool file any more
+- **Type**: Actions of the built-in installed integration **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra` under **Admin → Integrations**); there is no tool file any more
 - **Tools**: `entraPeopleSearch_findUser`, `entraPeopleSearch_getAllUserDetails`, `entraPeopleSearch_getUserManager`, `entraPeopleSearch_getUserGroups`, `entraPeopleSearch_getTeamMembers`, `entraPeopleSearch_getUserPhotoBase64` (ids unchanged)
 - **Configuration**: the installation holds the tenant id, the application (client) id and the client secret as a credential reference; each falls back to `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` when empty. The app registration needs the application permissions `User.Read.All` and `GroupMember.Read.All` with admin consent. **Test** acquires a token with the values as entered (never a token cached from the saved settings) and lists one user; it warns when the secret credential has no value and the environment variable stood in.
 - **Apps**: bind the installation (`"integrations": { "entra": {} }`, or `{ "actions": ["findUser", "getUserManager"] }`); an app that binds it is offered only while the installation is enabled. Migration V197 rewrote `tools: ["entraPeopleSearch"]` entries.
@@ -1186,10 +1186,10 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 ### iHub's own tools (`ask_user`, `knowledge_*`, `write_artifact`, …)
 
-- **Type**: Actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations → Installed**). There are no tool files for them any more (migration V199 retired `contents/tools/<id>.json`); the installation cannot be removed or disabled, only single actions can be switched off.
+- **Type**: Actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). There are no tool files for them any more (migration V199 retired `contents/tools/<id>.json`); the installation cannot be removed or disabled, only single actions can be switched off.
 - **Tools** (ids unchanged): `ask_user`; the project knowledge tools `knowledge_search`, `knowledge_read`, `knowledge_list`; the agent tools `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done`; the evidence tools `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport`; the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run`.
 - **Apps**: list them in `tools` as before — the exact id (`"ask_user"`) or the base id of a function-style tool (`"knowledge"`, `"evidence"`). `"ihub"` itself selects nothing. The special rules stay: `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
-- **Actions on/off**: **Admin → Integrations → Installed → iHub → Edit** switches single actions off for every app (the former `enabled: false` of a tool file). Group tool grants (`permissions.tools`) by tool id keep working.
+- **Actions on/off**: **Admin → Integrations → iHub → Settings** switches single actions off for every app (the former `enabled: false` of a tool file). Group tool grants (`permissions.tools`) by tool id keep working.
 - **Documentation**: [Ask User Tool](ask-user-tool.md), [Projects](projects.md), [Scheduled Tasks](scheduled-tasks.md)
 
 ## Related Documentation

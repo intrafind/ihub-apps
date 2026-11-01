@@ -6,7 +6,7 @@ No key generation, no key exchange. iHub signs with its OIDC key; iFinder
 verifies via iHub's JWKS endpoint. Full guide:
 [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
 
-**iHub:** install iFinder under **Admin → Integrations → Installed → iFinder**
+**iHub:** install iFinder under **Admin → Integrations → iFinder**
 with the base URL and **Sign with iHub's OIDC key pair** ticked. The
 installation in `contents/config/integrations.json`:
 
@@ -39,13 +39,12 @@ export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 
 ...or, from Admin → Credentials, create a "Secret" credential holding the PEM
 key and select it in the **Private key** field of the iFinder installation
-(Admin → Integrations → Installed → iFinder; stored as `privateKeyRef` in its
+(Admin → Integrations → iFinder; stored as `privateKeyRef` in its
 values). The env var takes precedence when both are set.
 
 ### 2. Test Configuration
 
-Click **Test** on the iFinder installation under **Admin → Integrations →
-Installed**: it checks DNS, TLS, the JWT and a real search request, step by
+Click **Test** on the iFinder installation under **Admin → Integrations**: it checks DNS, TLS, the JWT and a real search request, step by
 step.
 
 ### 3. Test User Authentication
@@ -159,7 +158,7 @@ console.log(jwt.generateIFinderJWT({id: 'test', email: 'test@example.com'}));
 ## Configuration Priority
 
 1. Environment variables (`IFINDER_API_URL`, `IFINDER_PRIVATE_KEY`; `IFINDER_SEARCH_PROFILE` only while the installation's default profile is empty)
-2. The `ifinder` installation in `contents/config/integrations.json` (Admin → Integrations → Installed)
+2. The `ifinder` installation in `contents/config/integrations.json` (Admin → Integrations)
 3. Default values
 
 ## Key Implementation Details
