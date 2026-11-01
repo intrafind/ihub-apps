@@ -27,6 +27,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [04 · Architecture](04-architecture.md) | Definition and instance formats, adapters, auth modes, approval gate, routes, client components, marketplace, migrations |
 | [05 · Roadmap](05-roadmap.md) | Phases, risks, open questions |
 | [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
+| [07 · Types and built-in configuration](07-types-and-built-in-configuration.md) | Integration types, one admin page with dedicated editors, web search per engine, storage providers, people directories, the iHub integration (decided 2026-11-01) |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals
@@ -62,6 +63,10 @@ We propose one **integrations platform** with three layers, the shape every comp
 ## Decisions
 
 See [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for). Taken: vocabulary (Integration, Connection, Action), server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes (2026-10-20); approval per [#2945](https://github.com/intrafind/ihub-apps/issues/2945) (2026-10-22, replaces "ask on every write by default"); integrations own their tools and the Tools page folds in (2026-10-23); clean break for the Tools admin routes, no shared OAuth connections, web search as a picker row, the public MCP registry only as an opt-in registry (2026-10-31, [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team)); versioning, compatibility, release notes and migrations per [Integration Versioning and Migrations → Decisions](../2026-10-31%20Integration%20Versioning%20and%20Migrations/README.md#7--decisions) (2026-10-31).
+
+## Revision 2026-11-01
+
+Testing the merged stack led to [07 · Types and built-in configuration](07-types-and-built-in-configuration.md), all decided the same day: definitions declare a **type** (`people-directory`, `web-search`, `storage`) that groups them and that apps bind as a whole (`type:<type>`); **one admin page** with grouped tiles, a page per installation and **dedicated editors** for the built-ins (the route `/admin/integrations/installed` goes); **web search per engine** (Brave, Staan, Qwant as separate integrations, native search without any; supersedes the 2026-10-31 "web search as a picker row" for the admin side); **storage providers** installable several times and bound per app; **People directory** as the name, Entra included, and the **LDAP browser** as its own integration; the **iHub** integration reduced to asking the user and scheduled tasks, project knowledge with projects; **group access** through `permissions.integrations` on groups (#3093, option B).
 
 ## Revision 2026-10-31
 
