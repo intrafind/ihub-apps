@@ -213,7 +213,10 @@ describe('connector test: redirect URI step', () => {
       const step = redirectUriStep({ redirectUri: '' }, req);
       assert.equal(step.status, 'ok');
       assert.match(step.message, /derived from the request/);
-      assert.ok(step.message.includes(DERIVED_BASE), step.message);
+      // The message quotes the derived URL; compare the quoted URL as a whole,
+      // not as a substring (CodeQL js/incomplete-url-substring-sanitization).
+      const quoted = step.message.match(/https?:\/\/[^\s'"`]+/)?.[0];
+      assert.equal(quoted, DERIVED_BASE, step.message);
     });
   });
 
