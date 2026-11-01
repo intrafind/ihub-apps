@@ -15,7 +15,10 @@
  * `app.integrations`, next to installation ids and definition ids.
  *
  * Pure module without imports: the app schema, the integration registry and
- * the tool loader all read it.
+ * the tool loader all read it. It also holds the type of every loaded
+ * definition (published by the definitions registry after each load), so
+ * `configCache` can tell an app's type bindings apart without importing the
+ * registry itself.
  *
  * @module services/integrations/integrationTypes
  */
@@ -41,4 +44,29 @@ export function typeOfBindingKey(key) {
 /** The binding key of a type (`people-directory` → `type:people-directory`). */
 export function bindingKeyOfType(type) {
   return `${TYPE_BINDING_PREFIX}${type}`;
+}
+
+/** definition id → type, of the definitions the registry loaded last. */
+let loadedDefinitionTypes = Object.freeze({});
+
+/**
+ * Publish the types of the loaded definitions (called by the definitions
+ * registry after a load).
+ * @param {Iterable<{ definition?: { id: string, type?: string } }>} entries
+ */
+export function publishDefinitionTypes(entries) {
+  const types = {};
+  for (const entry of entries) {
+    const definition = entry?.definition;
+    if (definition?.id && definition.type) types[definition.id] = definition.type;
+  }
+  loadedDefinitionTypes = Object.freeze(types);
+}
+
+/**
+ * The types of the loaded definitions.
+ * @returns {Readonly<Object<string, string>>} definition id → type
+ */
+export function getDefinitionTypes() {
+  return loadedDefinitionTypes;
 }

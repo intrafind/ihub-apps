@@ -28,7 +28,7 @@ import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { areAppIntegrationsEnabled } from './integrationRegistry.js';
-import integrationDefinitions from './services/integrations/definitions/IntegrationRegistry.js';
+import { getDefinitionTypes } from './services/integrations/integrationTypes.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
@@ -1251,14 +1251,11 @@ class ConfigCache {
    * @returns {{platform: Object, installedIntegrations: Array, definitionTypes: Object<string, string>}}
    */
   getIntegrationContext() {
-    const definitionTypes = {};
-    for (const entry of integrationDefinitions.list()) {
-      if (entry?.definition?.type) definitionTypes[entry.definition.id] = entry.definition.type;
-    }
     return {
       platform: this.get('config/platform.json')?.data || {},
       installedIntegrations: this.get('config/integrations.json')?.data?.installed || [],
-      definitionTypes
+      // Published by the definitions registry after each load.
+      definitionTypes: getDefinitionTypes()
     };
   }
 

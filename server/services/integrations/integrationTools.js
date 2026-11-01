@@ -5,8 +5,7 @@ import logger from '../../utils/logger.js';
 import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
 import { expandUserGroups } from '../../utils/groupInheritance.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
-import integrationRegistry from './definitions/IntegrationRegistry.js';
-import { bindingKeyOfType } from './integrationTypes.js';
+import { bindingKeyOfType, getDefinitionTypes } from './integrationTypes.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import {
@@ -102,9 +101,11 @@ export function appBindingFor(app, instance) {
   if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
     return bindings[instance.definition] || {};
   }
-  const type = instance.definition
-    ? integrationRegistry.get(instance.definition)?.definition?.type
-    : null;
+  const types = getDefinitionTypes();
+  const type =
+    instance.definition && Object.hasOwn(types, instance.definition)
+      ? types[instance.definition]
+      : null;
   if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) {
     return bindings[bindingKeyOfType(type)] || {};
   }

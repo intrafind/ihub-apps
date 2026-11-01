@@ -21,6 +21,8 @@ const { loadTools, getToolsForApp, runTool } = await import('../../toolLoader.js
 const { isToolSelected } = await import('../../utils/toolSelection.js');
 const { syncIntegrationScopeProviders } =
   await import('../../services/integrations/integrationTools.js');
+const { publishDefinitionTypes, getDefinitionTypes } =
+  await import('../../services/integrations/integrationTypes.js');
 const { getScopeProvider, resolveChatScopes, applicableScopeProviders } =
   await import('../../services/integrations/scopes/index.js');
 
@@ -241,6 +243,8 @@ describe('integration tools', () => {
     // The test definition has no type; give it one for this test only.
     const entry = registry.get('test.portal');
     entry.definition.type = 'people-directory';
+    publishDefinitionTypes(registry.list());
+    assert.equal(getDefinitionTypes()['test.portal'], 'people-directory');
     try {
       const app = { id: 'typed', tools: [], integrations: { 'type:people-directory': {} } };
       const tools = await getToolsForApp(app, 'en', { user: { id: 'u', groups: ['data-team'] } });
@@ -273,6 +277,7 @@ describe('integration tools', () => {
       );
     } finally {
       delete entry.definition.type;
+      publishDefinitionTypes(registry.list());
     }
   });
 
