@@ -31,8 +31,15 @@ import {
 } from './services/search/websearchConfig.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
+import { localizeTools } from './utils/toolLocalization.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
-import { hasProjectScope, knowledgeToolsFor } from './services/knowledge/knowledgeTools.js';
+import {
+  hasProjectScope,
+  isKnowledgeTool,
+  knowledgeToolsFor,
+  runKnowledgeTool
+} from './services/knowledge/knowledgeTools.js';
+import { platformToolDefinitions } from './services/tools/platformTools.js';
 import { mentionAccess } from './services/workflow/workflowAccess.js';
 import {
   isSystemSkillTool,
@@ -122,60 +129,6 @@ function buildWorkflowToolParams(workflow, language = 'en') {
     properties,
     required
   };
-}
-
-/**
- * Recursively extract language-specific values from multilingual objects
- * @param {any} obj - Object to process
- * @param {string} language - Target language
- * @param {string} fallbackLanguage - Fallback language
- * @returns {any} - Object with language-specific values
- */
-function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null) {
-  // Get platform default language if not provided
-  if (!fallbackLanguage) {
-    const platformConfig = configCache.getPlatform() || {};
-    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(item => extractLanguageFromObject(item, language, fallbackLanguage));
-  }
-
-  if (obj && typeof obj === 'object') {
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
-      // Skip processing for certain fields that should remain unchanged
-      if (key === 'id' || key === 'script' || key === 'enabled') {
-        result[key] = value;
-      } else if (
-        (key === 'description' || key === 'title' || key === 'name') &&
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')
-      ) {
-        // This is a multilingual field - an object with language codes as keys
-        result[key] = getLocalizedString(value, language, fallbackLanguage);
-      } else {
-        result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
-      }
-    }
-    return result;
-  }
-
-  return obj;
-}
-
-/**
- * Localize tools based on user language by extracting language-specific values from multilingual objects
- * @param {Array} tools - Array of tool objects
- * @param {string} language - User language (e.g., 'en', 'de')
- * @returns {Array} - Localized tools
- */
-function localizeTools(tools, language = 'en') {
-  const platformConfig = configCache.getPlatform() || {};
-  const fallbackLanguage = platformConfig?.defaultLanguage || 'en';
-  return tools.map(tool => extractLanguageFromObject(tool, language, fallbackLanguage));
 }
 
 /**
@@ -286,12 +239,62 @@ async function filterIntegrationToolsForUser(tools, user) {
 }
 
 /**
- * Load tools from local configuration and the installed integrations (which
- * include the MCP servers, the remote A2A agents and the people directories).
+ * The platform tools — the workflow and agent tools (agent workspace,
+ * evidence; see `services/tools/platformTools.js`) — localized, as plain
+ * tools. A file in `contents/tools/` with the same id takes the place of the
+ * shipped definition whether it is enabled or not, as a configured tool did
+ * before migration V199: an admin-edited file V199 kept keeps serving its
+ * tool, and one switched off (`enabled: false`) keeps it off.
+ *
+ * @param {string|null} language
+ * @returns {Object[]}
+ */
+function loadPlatformTools(language) {
+  const { data: files } = configCache.getTools(true);
+  const configuredIds = new Set((files || []).map(tool => tool?.id));
+  const platformConfig = configCache.getPlatform() || {};
+  const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
+  return localizeTools(
+    platformToolDefinitions().filter(tool => !configuredIds.has(tool.id)),
+    effectiveLanguage
+  );
+}
+
+/**
+ * iHub's local tools — every tool that is not an installed integration's: the
+ * configured tools (`contents/tools/`) and the platform tools of workflows and
+ * agents. The inbound MCP gateway offers these to the callers whose groups or
+ * apps grant them, as it offered the tool files before migration V199.
+ *
+ * A leftover `contents/tools/knowledge.json` (an admin-edited copy V199 kept)
+ * does not put a knowledge tool into the list: those ids are the projects'
+ * (see {@link loadTools}).
+ *
+ * @param {string|null} [language] - Language for localization (platform default when absent)
+ * @returns {Promise<Object[]>}
+ */
+export async function loadLocalTools(language = null) {
+  const configured = await loadConfiguredTools(language);
+  const platform = loadPlatformTools(language);
+  return [...configured, ...platform].filter(tool => !isKnowledgeTool(tool.id));
+}
+
+/**
+ * Load the tools a request can be offered by id: the configured tools
+ * (`contents/tools/`), the platform tools of workflows and agents, and the
+ * tools of the installed integrations (which include the MCP servers, the
+ * remote A2A agents, the people directories and iHub's own `ask_user` and
+ * scheduled-task tools). The first tool of an id wins, in that order.
+ *
+ * The project knowledge tools (`knowledge_*`) are never in this list: they
+ * belong to projects and come with the request's project scope
+ * (`getToolsForApp` → `knowledgeToolsFor`); `runTool` dispatches them itself.
+ *
  * @param {string} language - Optional language for localization
+ * @returns {Promise<Object[]>}
  */
 export async function loadTools(language = null) {
-  const configured = await loadConfiguredTools(language);
+  const local = await loadLocalTools(language);
   // Installed integrations include the MCP servers, the remote A2A agents and
   // the people directories (their tools keep `_mcp`, `_a2a` and
   // `_peopleDirectory`).
@@ -299,14 +302,17 @@ export async function loadTools(language = null) {
   const otherTools = discoveredIntegrationTools.filter(t => !t._a2a);
   const a2aTools = guardA2aAgentIds(
     discoveredIntegrationTools.filter(t => t._a2a),
-    [...configured, ...otherTools]
+    [...local, ...otherTools]
   );
   const discovered = [...otherTools, ...a2aTools];
-  const all = [...configured];
-  for (const tool of discovered) {
-    if (!all.find(t => t.id === tool.id)) {
-      all.push(tool);
-    }
+  const all = [];
+  const seen = new Set();
+  for (const tool of [...local, ...discovered]) {
+    // A discovered tool of a knowledge id does not put a knowledge tool into
+    // the list either.
+    if (seen.has(tool.id) || isKnowledgeTool(tool.id)) continue;
+    seen.add(tool.id);
+    all.push(tool);
   }
   return all;
 }
@@ -676,9 +682,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
     // whose tools a directory id or `ldapBrowse` select as before
     // (`isToolSelected`), with the directory's own `browse.groups` holding
     // too; and every other built-in action that kept its tool id
-    // (`fixedToolId`: iHub's own `ask_user`, `knowledge_*`, …), read as the
-    // plain tool it was — exact id or base id (`knowledge`), never the
-    // installation id.
+    // (`fixedToolId`: iHub's own `ask_user` and scheduled-task tools,
+    // `iFinder_*`, `jira_*`, …), read as the plain tool it was — exact id or
+    // base id (`iFinder`), never the installation id. The platform tools of
+    // workflows and agents (`write_artifact`, `evidence_*`, …) are plain
+    // tools and selected like any tool file.
     const webSearchOpen = isWebSearchAvailableTo(context.user);
     const selected = allTools.filter(t => {
       if (!t._integration) return isToolSelected(t, app.tools);
@@ -741,15 +749,16 @@ export async function getToolsForApp(app, language = null, context = {}) {
   // An app may also list the page reader in `tools` — offer it only once.
   appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
-  // Add the project knowledge tools when the request reaches a project
-  // (#1036): one definition, a scope per request in its description.
+  // Add the project knowledge tools when the projects feature is on and the
+  // request reaches a project (#1036): one shipped definition, a scope per
+  // request in its description. They belong to projects, so neither `tools`
+  // nor an integration adds or removes them.
   if (hasProjectScope(app) && context.user) {
     try {
       const knowledgeTools = await knowledgeToolsFor({
         app,
         user: context.user,
-        language,
-        allTools
+        language
       });
       appTools = appTools.concat(knowledgeTools.filter(t => !appTools.some(a => a.id === t.id)));
     } catch (error) {
@@ -1152,6 +1161,13 @@ export async function runTool(toolId, params = {}, options = {}) {
   if (toolId.startsWith('workflow_')) {
     const mod = await import('./tools/workflowRunner.js');
     return await mod.default({ ...params, workflowId: toolId.replace('workflow_', '') });
+  }
+
+  // The project knowledge tools belong to projects and are not in the tool
+  // list: the projects feature runs them, and the implementation resolves the
+  // request's project scope (`params.appConfig`, `params.user`) on every call.
+  if (isKnowledgeTool(toolId)) {
+    return await runKnowledgeTool(toolId, params);
   }
 
   // Find tool definition to determine the script file

@@ -19,6 +19,7 @@ const runTool = jest.fn();
 
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
+  loadLocalTools: jest.fn(async () => []),
   runTool,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),

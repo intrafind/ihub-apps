@@ -140,9 +140,11 @@ describe('a workflow node that lists the web search tools', () => {
     assert.equal(tool._integration.instanceId, 'websearch');
     assert.equal(tool._integration.action, 'brave');
     assert.equal(tool.parameters.properties.query.type, 'string');
-    // The installation id selects nothing through `tools`; neither does a base id.
+    // The installation id selects nothing through `tools`; neither does a base
+    // id (`read` still selects the agent tools `read_inbox` and `read_memory`,
+    // plain tools, as it did when they were tool files).
     assert.deepEqual(ids(await nodeTools(['websearch'], RESEARCHER)), []);
-    assert.deepEqual(ids(await nodeTools(['read'], RESEARCHER)), []);
+    assert.deepEqual(ids(await nodeTools(['read'], RESEARCHER)), ['read_inbox', 'read_memory']);
   });
 
   it('gets nothing while the installation is off', async () => {

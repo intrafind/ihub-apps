@@ -27,6 +27,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [04 · Architecture](04-architecture.md) | Definition and instance formats, adapters, auth modes, approval gate, routes, client components, marketplace, migrations |
 | [05 · Roadmap](05-roadmap.md) | Phases, risks, open questions |
 | [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
+| [2026-11-01 · iHub integration: chat tools only](2026-11-01%20iHub%20integration%20chat%20tools%20only.md) | Implementation note: which iHub tools are integration actions, which belong to projects, workflows and agents, and how they are loaded |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

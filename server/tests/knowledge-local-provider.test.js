@@ -41,6 +41,7 @@ import {
   scopeSummary
 } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeToolsFor } from '../services/knowledge/knowledgeTools.js';
+import { getToolsForApp, runTool } from '../toolLoader.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
 import { list, read, search } from '../tools/knowledge.js';
 import { projectSource, projectSourceProducer } from '../services/sources/producers/project.js';
@@ -828,59 +829,113 @@ describe('tools', () => {
     ...extra
   });
 
-  const installed = ['knowledge_search', 'knowledge_read', 'knowledge_list'].map(id => ({
-    id,
-    name: id,
-    description: `The ${id} tool`,
-    script: 'knowledge.js',
-    method: id.slice('knowledge_'.length),
-    enabled: true
-  }));
+  const ids = tools => tools.map(tool => tool.id);
+  const features = flags => configCache.setCacheEntry('config/features.json', flags);
+  const ihubWithoutKnowledge = {
+    installed: [
+      {
+        id: 'ihub',
+        definition: 'com.intrafind/ihub',
+        enabled: true,
+        values: {},
+        auth: { mode: 'none' },
+        // A switch an admin set before V201: it reaches the knowledge tools no more.
+        actions: { enabled: ['ask_user'], disabled: ['knowledge_search'], overrides: {} },
+        allowedGroups: ['nobody']
+      }
+    ],
+    security: { blockPrivateIps: true, allowedHosts: [] }
+  };
 
   it('are offered with the scope in their description', async () => {
     const tools = await knowledgeToolsFor({
       app: { id: 'chat', _projectId: textProject.id },
       user: ADA,
-      language: 'en',
-      allTools: installed
+      language: 'en'
     });
-    assert.deepEqual(
-      tools.map(tool => tool.id),
-      ['knowledge_search', 'knowledge_read', 'knowledge_list']
-    );
+    assert.deepEqual(ids(tools), ['knowledge_search', 'knowledge_read', 'knowledge_list']);
     assert.ok(
       tools[0].description.includes(`${textProject.id} ("Case 2026-114", 2 documents, search it)`)
     );
+    // The shipped definition, localized: plain strings for the model.
+    assert.equal(typeof tools[0].parameters.properties.query.description, 'string');
     assert.equal(tools[0].script, 'knowledge.js');
     assert.equal(tools[0].method, 'search');
+    assert.equal(tools[0]._integration, undefined, 'no integration owns them');
+    const german = await knowledgeToolsFor({
+      app: { id: 'chat', _projectId: textProject.id },
+      user: ADA,
+      language: 'de'
+    });
+    assert.match(german[0].description, /^Durchsucht die Projekte/);
     // A project loaded in full by configuration still offers the tools: the
     // planner may have to cut it at the hard limit, and the description says
     // it is already in context.
     const loaded = await knowledgeToolsFor({
       app: { id: 'chat', projects: [{ id: textProject.id, mode: 'context' }] },
-      user: ADA,
-      allTools: installed
+      user: ADA
     });
     assert.equal(loaded.length, 3);
     assert.ok(loaded[0].description.includes('loaded in full'));
-    assert.deepEqual(await knowledgeToolsFor({ app: { id: 'chat' }, user: ADA }), []);
-    // Only the installation's enabled definitions are advertised: what the
-    // admin disabled or removed cannot run, so it is not offered either.
-    const disabled = installed.map(tool =>
-      tool.id === 'knowledge_read' ? { ...tool, enabled: false } : tool
-    );
-    assert.deepEqual(
-      await knowledgeToolsFor({
-        app: { id: 'chat', _projectId: textProject.id },
+  });
+
+  it('come with every request that reaches a project, whatever the ihub installation says', async () => {
+    const original = configCache.get('config/integrations.json');
+    configCache.setCacheEntry('config/integrations.json', ihubWithoutKnowledge);
+    try {
+      // `tools` does not list them, and the installation names no knowledge action.
+      const offered = await getToolsForApp({ id: 'chat', _projectId: textProject.id }, 'en', {
+        user: ADA
+      });
+      assert.deepEqual(ids(offered), ['knowledge_search', 'knowledge_read', 'knowledge_list']);
+      // And they run: through the projects feature, not the installation.
+      const result = await runTool('knowledge_list', {
         user: ADA,
-        allTools: disabled
-      }),
-      []
-    );
+        chatId: 'c1',
+        appConfig: { id: 'chat', _projectId: textProject.id }
+      });
+      assert.ok(Array.isArray(result.projects), JSON.stringify(result));
+    } finally {
+      configCache.setCacheEntry('config/integrations.json', original?.data ?? null);
+    }
+  });
+
+  it('are not offered when no project is reached', async () => {
+    assert.deepEqual(await knowledgeToolsFor({ app: { id: 'chat' }, user: ADA }), []);
+    // `knowledge` in `tools` is no project: the tools belong to projects.
     assert.deepEqual(
-      await knowledgeToolsFor({ app: { id: 'chat', _projectId: textProject.id }, user: ADA }),
+      ids(await getToolsForApp({ id: 'chat', tools: ['knowledge'] }, 'en', { user: ADA })),
       []
     );
+    // A project the user may not use is not reached either.
+    assert.deepEqual(
+      await knowledgeToolsFor({ app: { id: 'chat', _projectId: 'prj_unknown' }, user: ADA }),
+      []
+    );
+  });
+
+  it('are neither offered nor run while the projects feature is off', async () => {
+    features({ projects: false, userProjects: true });
+    try {
+      assert.deepEqual(
+        await knowledgeToolsFor({ app: { id: 'chat', _projectId: textProject.id }, user: ADA }),
+        []
+      );
+      assert.deepEqual(
+        ids(await getToolsForApp({ id: 'chat', _projectId: textProject.id }, 'en', { user: ADA })),
+        []
+      );
+      await assert.rejects(
+        runTool('knowledge_search', {
+          query: 'deposit',
+          user: ADA,
+          appConfig: { id: 'chat', _projectId: textProject.id }
+        }),
+        /Tool knowledge_search is not available/
+      );
+    } finally {
+      features({ projects: true, userProjects: true });
+    }
   });
 
   it('search returns numbered hits and reports their sources beside the result', async () => {
