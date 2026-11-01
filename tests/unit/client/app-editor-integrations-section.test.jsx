@@ -36,7 +36,9 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   getAdminApiErrorMessage: err => err?.message || 'failed'
 }));
 
-import IntegrationsConfigSection from '../../../client/src/features/admin/components/app-form/IntegrationsConfigSection';
+import IntegrationsConfigSection, {
+  mergeInstallationDetails
+} from '../../../client/src/features/admin/components/app-form/IntegrationsConfigSection';
 
 const INSTALLED = [
   { id: 'websearch', definition: 'com.intrafind/web-search', type: 'web-search', builtIn: true },
@@ -128,5 +130,42 @@ describe('IntegrationsConfigSection', () => {
     fireEvent.click(await screen.findByLabelText(/Use in this app/));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ iassistant: {} });
+  });
+
+  it('offers a definition row the actions of all its installations', async () => {
+    mockFetchInstalled.mockResolvedValue({
+      items: [
+        { id: 'gh-a', definition: 'mcp/github', protocol: 'mcp', builtIn: true, label: 'A' },
+        { id: 'gh-b', definition: 'mcp/github', protocol: 'mcp', builtIn: true, label: 'B' }
+      ]
+    });
+    mockFetchOne.mockImplementation(id =>
+      Promise.resolve({
+        definition: { id: 'mcp/github' },
+        actions:
+          id === 'gh-a'
+            ? [{ name: 'list_issues', title: 'List issues', available: true }]
+            : [{ name: 'create_pr', title: 'Create PR', available: true }]
+      })
+    );
+    renderSection({ id: 'a', integrations: { 'mcp/github': {} } });
+    const row = await screen.findByTestId('definition-binding-mcp/github');
+    expect(await within(row).findByText('List issues')).toBeInTheDocument();
+    expect(within(row).getByText('Create PR')).toBeInTheDocument();
+  });
+});
+
+describe('mergeInstallationDetails', () => {
+  it('keeps every action once and survives an empty list', () => {
+    expect(mergeInstallationDetails([])).toEqual({ actions: [], definition: null });
+    const merged = mergeInstallationDetails([
+      { definition: { id: 'd' }, actions: [{ name: 'a', title: 'first' }] },
+      { definition: { id: 'd' }, actions: [{ name: 'a', title: 'second' }, { name: 'b' }] }
+    ]);
+    expect(merged.definition).toEqual({ id: 'd' });
+    expect(merged.actions.map(a => [a.name, a.title])).toEqual([
+      ['a', 'first'],
+      ['b', undefined]
+    ]);
   });
 });

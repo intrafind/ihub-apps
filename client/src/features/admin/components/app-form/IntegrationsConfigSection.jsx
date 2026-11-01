@@ -39,6 +39,24 @@ function hasOwnPanel(item) {
   return item.type === 'web-search' || item.type === 'storage';
 }
 
+/**
+ * One detail for a row from the details of one or more installations: the
+ * first one's definition, and every action once (by name), the first
+ * installation that offers it winning.
+ * @param {Array<Object>} results - `GET …/installed/:id` responses
+ * @returns {{ actions: Object[], definition: Object|null }}
+ */
+export function mergeInstallationDetails(results) {
+  if (results.length === 0) return { actions: [], definition: null };
+  const actions = new Map();
+  for (const result of results) {
+    for (const action of result.actions || []) {
+      if (!actions.has(action.name)) actions.set(action.name, action);
+    }
+  }
+  return { ...results[0], actions: [...actions.values()] };
+}
+
 function Card({ title, description, children, testId }) {
   return (
     <div
@@ -168,7 +186,7 @@ function IntegrationsConfigSection({ app, onChange }) {
         type: row.type,
         protocol: row.protocol,
         builtIn: row.builtIn,
-        firstInstanceId: row.instances[0]?.id,
+        instanceIds: row.instances.map(instance => instance.id),
         label: t('admin.apps.edit.integrations.allInstallations', 'All {{name}} installations', {
           name: row.name || row.id
         }),
@@ -198,9 +216,11 @@ function IntegrationsConfigSection({ app, onChange }) {
   // A definition row of the LDAP directories stays in the directories card.
   const directoryDefinitionRows = definitionRows.filter(row => row.type === 'people-directory');
 
-  // Load the actions of every bound installation or definition once bound
-  // (a definition row reads them through its first installation; type rows
-  // offer no actions).
+  // Load the actions of every bound installation or definition once bound.
+  // A definition row merges the actions of all its installations (an MCP
+  // server lists its own tools, so two installations of one definition can
+  // differ); one installation that fails to load does not hide the others.
+  // Type rows offer no actions.
   useEffect(() => {
     const ids = Object.keys(bindings).filter(id => !id.startsWith(TYPE_PREFIX) && !details[id]);
     if (ids.length === 0 || loading) return;
@@ -210,14 +230,13 @@ function IntegrationsConfigSection({ app, onChange }) {
       await Promise.all(
         ids.map(async id => {
           const row = definitionRows.find(entry => entry.id === id);
-          const instanceId = row ? row.firstInstanceId : id;
-          try {
-            loaded[id] = instanceId
-              ? await fetchInstalledIntegration(instanceId)
-              : { actions: [], definition: null };
-          } catch {
-            loaded[id] = { actions: [], definition: null };
-          }
+          const instanceIds = row ? row.instanceIds : [id];
+          const results = (
+            await Promise.all(
+              instanceIds.map(instanceId => fetchInstalledIntegration(instanceId).catch(() => null))
+            )
+          ).filter(Boolean);
+          loaded[id] = mergeInstallationDetails(results);
         })
       );
       if (!cancelled) setDetails(prev => ({ ...prev, ...loaded }));
