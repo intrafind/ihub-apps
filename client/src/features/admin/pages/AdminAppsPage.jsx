@@ -51,6 +51,7 @@ function AppNameCell({ app, currentLanguage }) {
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
   websearch: 'Web search integration',
+  jira: 'Jira integration',
   ifinder: 'iFinder integration',
   iassistant: 'iAssistant integration',
   peopleDirectories: 'People directories'

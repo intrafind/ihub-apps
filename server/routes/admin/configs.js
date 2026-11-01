@@ -334,7 +334,6 @@ export default function registerAdminConfigRoutes(app) {
         // toggles revert on the next load.
         mcpServer:
           newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
-        jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         telemetry:
           newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,

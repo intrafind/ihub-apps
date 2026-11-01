@@ -10,7 +10,9 @@ import { registerConnector } from './index.js';
 import ifinder from './ifinder/index.js';
 import iassistant from './iassistant.js';
 import websearch from './websearch/index.js';
+import jira from './jira/index.js';
 
 registerConnector(ifinder);
 registerConnector(iassistant);
 registerConnector(websearch);
+registerConnector(jira);

@@ -168,12 +168,18 @@ for (const p of providers) {
     check('/auth without providerId is a 400', noProvider.status === 400);
   }
 
-  const started = await run(authHandler, {
-    query: { providerId, returnUrl: '/apps/chat' },
-    user: { id: 'u1' },
+  // What the browser's requests carry; the callback arrives at the redirect
+  // URI, so it has the same Host as /auth (Jira derives the redirect URI from
+  // both when none is configured).
+  const browser = {
     headers: { host: 'ihub.example' },
     get: () => 'ihub.example',
     protocol: 'https'
+  };
+  const started = await run(authHandler, {
+    ...browser,
+    query: { providerId, returnUrl: '/apps/chat' },
+    user: { id: 'u1' }
   });
   check(
     '/auth redirects to the identity provider',
@@ -200,7 +206,7 @@ for (const p of providers) {
 
   const callbackHandler = lastHandler(router, p.callbackPath);
   const callback = query =>
-    run(callbackHandler, { query, params: { providerId }, user: { id: 'u1' } });
+    run(callbackHandler, { ...browser, query, params: { providerId }, user: { id: 'u1' } });
 
   const ok = await callback({ code: 'c', state });
   check(
@@ -227,7 +233,11 @@ for (const p of providers) {
     '/\t/evil.example',
     'https://evil.example/x'
   ]) {
-    await run(authHandler, { query: { providerId, returnUrl: evil }, user: { id: 'u1' } });
+    await run(authHandler, {
+      ...browser,
+      query: { providerId, returnUrl: evil },
+      user: { id: 'u1' }
+    });
     const evilState = key === 'jira' ? authArgs[0] : authArgs[1];
     const evilCallback = await callback({ code: 'c', state: evilState });
     check(

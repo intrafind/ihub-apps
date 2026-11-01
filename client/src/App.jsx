@@ -163,9 +163,6 @@ const AdminInstalledIntegrationsPage = lazyWithRetry(
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
-const AdminIntegrationsJiraPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminIntegrationsJiraPage')
-);
 const AdminIntegrationsOffice365Page = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsOffice365Page')
 );
@@ -767,10 +764,6 @@ function App() {
             <Route
               path="integrations/installed"
               element={<LazyAdminRoute component={AdminInstalledIntegrationsPage} />}
-            />
-            <Route
-              path="integrations/jira"
-              element={<LazyAdminRoute component={AdminIntegrationsJiraPage} />}
             />
             <Route
               path="integrations/office365"

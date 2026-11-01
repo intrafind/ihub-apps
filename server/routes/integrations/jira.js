@@ -6,6 +6,7 @@
 
 import express from 'express';
 import JiraService from '../../services/integrations/JiraService.js';
+import { resolveJiraRedirectUri } from '../../services/integrations/jiraConfig.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
@@ -32,15 +33,19 @@ const jiraAuthLimiter = rateLimit({
 
 // Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
 // Jira has a single connection per user, so there is no providerId in any route.
+// The redirect URI is the configured one or derived from the request; the
+// callback request arrives at that very URL, so deriving it again there yields
+// the value the authorize step sent (see resolveJiraRedirectUri).
 createOAuthIntegrationRouter(router, {
   providerKey: 'jira',
   displayName: 'JIRA',
   requiresProviderId: false,
   usesPkce: true,
   authLimiter: jiraAuthLimiter,
-  buildAuthUrl: ({ state, codeVerifier }) => JiraService.generateAuthUrl(state, codeVerifier),
-  exchangeCodeForTokens: ({ code, codeVerifier }) =>
-    JiraService.exchangeCodeForTokens(code, codeVerifier),
+  buildAuthUrl: ({ state, codeVerifier, req }) =>
+    JiraService.generateAuthUrl(state, codeVerifier, resolveJiraRedirectUri(req)),
+  exchangeCodeForTokens: ({ code, codeVerifier, req }) =>
+    JiraService.exchangeCodeForTokens(code, codeVerifier, resolveJiraRedirectUri(req)),
   storeUserTokens: (userId, tokens) => JiraService.storeUserTokens(userId, tokens),
   isUserAuthenticated: userId => JiraService.isUserAuthenticated(userId),
   getUserInfo: userId => JiraService.getUserInfo(userId),

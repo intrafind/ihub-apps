@@ -239,7 +239,7 @@ export async function run({ definition, instance, action, args = {}, context = {
 }
 
 /** Test an installation: the connector's steps in the shared report shape. */
-export async function test({ definition, instance, language = 'en', user }) {
+export async function test({ definition, instance, language = 'en', user, req }) {
   const started = Date.now();
   let connector;
   try {
@@ -254,7 +254,7 @@ export async function test({ definition, instance, language = 'en', user }) {
   let steps;
   try {
     steps = connector.test
-      ? await connector.test({ definition, instance, values, language, user })
+      ? await connector.test({ definition, instance, values, language, user, req })
       : [{ id: 'module', label: 'Connector module', status: 'ok', message: 'Loaded' }];
   } catch (error) {
     steps = [{ id: 'test', label: 'Test', status: 'fail', message: error.message }];
@@ -284,6 +284,38 @@ export function scopeProvider(resolved) {
       ? loadedScriptConnector(resolved.definition)
       : getConnector(resolved.definition.protocol.module);
   return connector?.scopeProvider ? connector.scopeProvider(resolved) : null;
+}
+
+/** The connector of a definition when it is already loaded (sync callers), or null. */
+function loadedConnector(definition) {
+  return definition.protocol.type === 'script'
+    ? loadedScriptConnector(definition)
+    : getConnector(definition.protocol.module);
+}
+
+/** Live status of an installation, when its connector reports one. */
+export function status(instance) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return null;
+  const connector = loadedConnector(definition);
+  return connector?.status ? connector.status(instance) : null;
+}
+
+/** The users who connected their own account, for connectors that sign users in. */
+export async function listConnections(instance) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return [];
+  const connector = await connectorFor(definition);
+  return connector.listConnections ? connector.listConnections(instance) : [];
+}
+
+/** Disconnect one user from an installation whose connector signs users in. */
+export async function disconnectUser(instance, userId) {
+  const definition = integrationRegistry.get(instance?.definition)?.definition;
+  if (!definition) return { removed: false, unknownServer: true };
+  const connector = await connectorFor(definition);
+  if (!connector.disconnectUser) return { removed: false, unsupported: true };
+  return connector.disconnectUser(instance, userId);
 }
 
 export function invalidate(instanceId) {
