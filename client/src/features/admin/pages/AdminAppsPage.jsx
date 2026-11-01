@@ -98,7 +98,10 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
     if (integrationStatus[id] === true) continue;
     const name =
       INTEGRATION_NAMES[id] ||
-      t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
+      t('admin.apps.missingInstalledIntegration', {
+        defaultValue: 'Installed integration "{{id}}"',
+        id
+      });
     if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
   }
   return [...missingFeatures, ...missingIntegrations];
@@ -442,7 +445,7 @@ function AdminAppsPage() {
       // Users (and so the chat UI) do not get an app whose features are off.
       disabled: app =>
         app.enabled === false ||
-        missingRequirements(app, platformConfig, integrationStatus, currentLanguage).length > 0
+        missingRequirements(app, platformConfig, integrationStatus, currentLanguage, t).length > 0
     },
     {
       id: 'edit',
