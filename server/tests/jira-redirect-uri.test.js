@@ -215,7 +215,7 @@ describe('connector test: redirect URI step', () => {
       assert.match(step.message, /derived from the request/);
       // The message quotes the derived URL; compare the quoted URL as a whole,
       // not as a substring (CodeQL js/incomplete-url-substring-sanitization).
-      const quoted = step.message.match(/https?:\/\/[^\s'"`]+/)?.[0];
+      const quoted = step.message.match(/https?:\/\/[^\s'"`;,)]+/)?.[0];
       assert.equal(quoted, DERIVED_BASE, step.message);
     });
   });
