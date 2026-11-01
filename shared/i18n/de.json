@@ -121,7 +121,8 @@
     "selectLanguage": "Sprache auswählen",
     "export": "Exportieren",
     "enabled": "Aktiviert",
-    "disabled": "Deaktiviert"
+    "disabled": "Deaktiviert",
+    "saving": "Speichern…"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -2578,7 +2579,6 @@
       "logging": "Logging",
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
-      "installedIntegrations": "Installierte Integrationen",
       "telemetry": "Telemetrie",
       "systemResources": "Systemressourcen",
       "voiceInput": "Spracheingabe",
@@ -3165,14 +3165,11 @@
       }
     },
     "integrationCatalog": {
-      "title": "Installierte Integrationen",
-      "subtitle": "Installiere eine Integration aus dem Katalog, richte sie auf dein System aus und binde sie an Apps. Jede Installation bringt ihre Aktionen zum Modell.",
       "install": "Installieren",
       "reload": "Katalog neu laden",
       "reloaded": "Katalog neu geladen.",
       "saved": "Integration \"{{id}}\" gespeichert.",
       "removed": "Integration \"{{id}}\" entfernt.",
-      "searchPlaceholder": "Katalog durchsuchen",
       "catalogEmpty": "Keine Definition passt. Integrationen lassen sich auch aus dem Marktplatz installieren.",
       "installedCount": "{{count}} installiert",
       "notInstalled": "Nicht installiert",
@@ -3289,7 +3286,8 @@
         "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen.",
         "description": "Beschreibung",
         "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
-        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab."
+        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab.",
+        "onePerLine": "Ein Eintrag pro Zeile"
       },
       "connections": {
         "title": "Verbundene Benutzer",
@@ -3315,14 +3313,6 @@
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
       "cards": {
-        "installed": {
-          "title": "Installierte Integrationen",
-          "description": "Installiere Integrationen aus dem Katalog oder dem Marktplatz (z. B. ein CKAN-Open-Data-Portal), richte sie auf deine Systeme aus und binde ihre Aktionen an Apps."
-        },
-        "nextcloud": {
-          "title": "Nextcloud",
-          "description": "Benutzer Dateien aus einer Nextcloud-Instanz im Chat durchsuchen und anhängen lassen. Installiert als Integration „nextcloud“."
-        },
         "nextcloudEmbed": {
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
@@ -3331,14 +3321,258 @@
           "title": "Microsoft 365 Copilot",
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
         },
-        "peopleDirectories": {
-          "description": "Das Modell Personen, ihre Funktion und Kontaktdaten in LDAP-Verzeichnissen nachschlagen lassen – im eigenen und in externen wie x500.bund.de. Jedes Verzeichnis ist eine Installation der Integration „LDAP-Personenverzeichnis“.",
-          "title": "Personenverzeichnisse"
+        "outlook": {
+          "title": "Outlook-Add-in",
+          "description": "iHub-Apps im Aufgabenbereich von Outlook. Benutzer melden sich mit ihrem iHub-Konto an und führen Prompts auf der gerade ausgewählten E-Mail aus."
+        },
+        "browserExtension": {
+          "title": "Browser-Erweiterung",
+          "description": "Seitenleisten-Erweiterung für Chrome / Edge / Firefox. Führt jede iHub-App auf der Seite aus, die der Benutzer gerade liest."
+        },
+        "mcpGateway": {
+          "title": "MCP-Gateway",
+          "description": "Externe MCP-Clients nutzen die Apps von iHub als Tools, angemeldet über den eigenen OAuth-Server von iHub."
         }
       },
-      "categories": {
-        "data": "Daten & APIs",
-        "directories": "Verzeichnisse"
+      "tabs": {
+        "inbound": "Eingehend"
+      },
+      "searchPlaceholder": "Integrationen durchsuchen…",
+      "noMatch": "Nichts passt zu „{{query}}“.",
+      "featureFlagOff": "Das Feature-Flag „integrations“ ist aus. Schalten Sie es unter Admin → Features ein, damit Clients die Integrations-Endpunkte sehen.",
+      "title": "Integrationen",
+      "subtitle": "Die Systeme, mit denen iHub arbeitet: Installieren Sie eine Integration aus dem Katalog, richten Sie sie auf Ihr System aus und binden Sie sie an Apps. „Eingehend“ listet, was sich mit iHub verbindet.",
+      "closeTestResults": "Testergebnisse schließen",
+      "page": {
+        "loadError": "Die Installation konnte nicht geladen werden",
+        "tabs": {
+          "overview": "Überblick",
+          "settings": "Einstellungen",
+          "releases": "Versionen"
+        },
+        "remove": "Entfernen",
+        "definitionMissing": "Die Definition „{{definition}}“ dieser Installation ist nicht geladen: Sie bietet keine Aktionen und lässt sich nicht bearbeiten. Installieren Sie die Definition erneut aus dem Marketplace oder entfernen Sie die Installation.",
+        "tabsLabel": "Installation",
+        "facts": "Konfiguration",
+        "noFacts": "Nichts über die Standardwerte hinaus konfiguriert.",
+        "editSettings": "Einstellungen bearbeiten",
+        "actions": "Aktionen",
+        "noLiveActions": "Das System listet seine Aktionen, sobald iHub sich verbindet. Testen Sie die Verbindung, um sie zu sehen.",
+        "noActions": "Diese Integration bietet dem Modell keine Aktionen; Apps nutzen sie über ihre eigenen Einstellungen.",
+        "actionOff": "Aus",
+        "actionUnavailable": "Nicht verfügbar",
+        "about": "Über",
+        "groups": "Gruppen",
+        "everyone": "Alle, die eine gebundene App nutzen dürfen",
+        "docs": "Dokumentation",
+        "opensInNewTab": "(öffnet in einem neuen Tab)",
+        "apps": "Apps, die sie nutzen",
+        "noApps": "Noch bindet keine App diese Installation. Binden Sie sie im Abschnitt „Integrationen“ einer App.",
+        "via": {
+          "installation": "über diese Installation",
+          "definition": "jede {{name}}-Installation",
+          "type": "jede Installation ihres Typs"
+        },
+        "notEditable": "Diese Installation lässt sich nicht bearbeiten, solange ihre Definition fehlt oder inkompatibel ist."
+      },
+      "catalog": {
+        "installAria": "{{name}} installieren"
+      },
+      "inbound": {
+        "status": {
+          "on": "An",
+          "available": "Verfügbar"
+        },
+        "description": "Was sich mit iHub verbindet: andere Anwendungen, die iHub einbetten oder seine Apps aufrufen. Jede wird auf ihrer eigenen Seite konfiguriert."
+      },
+      "tile": {
+        "everyone": "Gruppen: alle, die eine gebundene App nutzen dürfen"
+      },
+      "facts": {
+        "credential": "Zugangsdaten",
+        "sources": "Quellen",
+        "baseUrl": "Basis-URL",
+        "authentication": "Authentifizierung",
+        "oidcProvider": "OIDC-Provider",
+        "signingKey": "Signaturschlüssel",
+        "privateKey": "Privater Schlüssel",
+        "defaultSearchProfile": "Standard-Suchprofil",
+        "runsOn": "Läuft auf",
+        "defaultProfile": "Standardprofil",
+        "groundedOnly": "Antworten nur aus Dokumenten",
+        "signInProvider": "Anmelde-Provider",
+        "directoryUrl": "Verzeichnis-URL",
+        "baseDn": "Basis-DN",
+        "bindPassword": "Bind-Passwort",
+        "browse": "LDAP-Browser",
+        "tenantId": "Tenant-ID",
+        "clientId": "Client-ID",
+        "clientSecret": "Client-Secret",
+        "defaultEngine": "Standard-Suchmaschine",
+        "braveKey": "Brave-API-Schlüssel",
+        "staanKey": "Staan-API-Schlüssel",
+        "serverUrl": "Server-URL",
+        "siteUrl": "Site-URL",
+        "portalUrl": "Portal-URL",
+        "defaultFilter": "Filter",
+        "maxRows": "Treffer pro Suche",
+        "command": "Befehl",
+        "transport": "Transport",
+        "agentCard": "Agent Card",
+        "endpoint": "Endpunkt",
+        "secretSet": "gesetzt",
+        "secretNotSet": "nicht gesetzt",
+        "yes": "ja",
+        "no": "nein",
+        "choices": {
+          "ihubSigned": "JWT von iHub signiert",
+          "oidcTokenExchange": "OIDC-Token-Austausch",
+          "auto": "Automatisch",
+          "brave": "Brave Search",
+          "staan": "Staan",
+          "qwant": "Qwant",
+          "streamableHttp": "Streamable HTTP",
+          "sse": "SSE",
+          "websocket": "WebSocket",
+          "stdio": "Lokaler Prozess (stdio)",
+          "oidcKeyPair": "OIDC-Schlüsselpaar von iHub"
+        }
+      },
+      "groups": {
+        "peopleDirectories": {
+          "title": "Personenverzeichnisse",
+          "description": "LDAP- und Entra-ID-Verzeichnisse, in denen das Modell Personen nachschlägt."
+        },
+        "webSearch": {
+          "title": "Websuche",
+          "description": "Die Suchmaschinen und der Seitenleser von Apps mit eingeschalteter Websuche."
+        },
+        "storage": {
+          "title": "Speicheranbieter",
+          "description": "Cloud-Speicher, aus denen Benutzer im Chat und in Projekten Dateien durchsuchen und anhängen."
+        },
+        "mcp": {
+          "title": "MCP-Server",
+          "description": "Server des Model Context Protocol; ihre Tools sind die Aktionen."
+        },
+        "agents": {
+          "title": "Agenten",
+          "description": "Entfernte Agenten (A2A), an die das Modell Aufgaben übergibt; ihre Skills sind die Aktionen."
+        },
+        "builtIn": {
+          "title": "Eingebaut",
+          "description": "Integrationen, die mit iHub ausgeliefert werden, etwa iFinder, iAssistant und Jira."
+        },
+        "catalog": {
+          "title": "Aus dem Katalog",
+          "description": "Integrationen aus dem Katalog oder einer Marketplace-Registry."
+        }
+      },
+      "editors": {
+        "iassistant": {
+          "connectionRequired": "Wählen Sie die iFinder-Installation, auf der iAssistant läuft.",
+          "connectionSection": "Verbindung",
+          "connectionSectionHelp": "iAssistant nutzt die Basis-URL und die Anmeldung einer iFinder-Installation; konfigurieren Sie diese dort.",
+          "settingsSection": "iAssistant-Einstellungen",
+          "defaultProfileId": "Standard-Profil-ID",
+          "defaultProfileIdHelp": "Das iAssistant-Profil, wenn eine App keines nennt (Klartext oder Base64-kodiert).",
+          "defaultSearchProfile": "Standard-Suchprofil",
+          "defaultSearchProfileHelp": "Das Suchprofil, das iAssistant-Konversationen durchsuchen, wenn weder die App noch das Modell eines nennt.",
+          "testResults": "Verbindungstest iAssistant",
+          "testHelp": "Der Test erreicht iAssistant über die gewählte iFinder-Installation mit Ihrem eigenen Admin-Konto, mit den Werten oben (ungespeichert)."
+        },
+        "ifinder": {
+          "privateKey": "Privater Schlüssel",
+          "privateKeyHelp": "Die gespeicherten Zugangsdaten mit dem privaten RSA- oder EC-Schlüssel (PEM), der das iFinder-JWT signiert. Alternativ die Umgebungsvariable IFINDER_PRIVATE_KEY auf dem Server setzen.",
+          "algorithm": "JWT-Algorithmus",
+          "issuer": "JWT-Aussteller",
+          "audience": "JWT-Zielgruppe",
+          "tokenExpiration": "Token-Lebensdauer (Sekunden)",
+          "effectiveIssuer": "Wirksame OAuth-Aussteller-URL",
+          "issuerNotAvailable": "Nicht verfügbar",
+          "autoDetected": "Automatisch erkannt",
+          "effectiveIssuerConfiguredHelp": "Konfiguriert unter Admin → OAuth-Server.",
+          "effectiveIssuerAutoHelp": "Aus der URL Ihres Servers erkannt. Einen eigenen Aussteller setzen Sie bei Bedarf unter Admin → OAuth-Server.",
+          "oidcKeyPairReady": "OIDC-Schlüsselpaar bereit",
+          "oidcKeyPairReadyHelp": "Konfigurieren Sie iFinder mit:",
+          "oidcKeyPairMissingIssuer": "OAuth-Aussteller-URL erforderlich",
+          "oidcKeyPairMissingIssuerHelp": "Setzen Sie vor dem Speichern die OAuth-Aussteller-URL unter Admin → Authentifizierung → OAuth-Server.",
+          "info": {
+            "title": "iFinder-JWT-Authentifizierung",
+            "description": "Jeder Aufruf läuft als angemeldeter Benutzer: iHub signiert ein JWT für den Benutzer oder tauscht dessen Anmelde-Token bei einem gemeinsamen OIDC-Provider. iAssistant läuft auf dieser Verbindung."
+          },
+          "connectionSection": "iFinder-Verbindung",
+          "baseUrl": "iFinder-Basis-URL",
+          "baseUrlHelp": "Ihr iFinder-/iAssistant-Server; die API-Pfade werden angehängt.",
+          "authMode": {
+            "label": "Token-Aussteller",
+            "ihubSigned": "iHub signiert das Token",
+            "oidcTokenExchange": "Gemeinsamer OIDC-Provider (Token-Austausch)",
+            "oidcTokenExchangeHelp": "iHub und iFinder teilen sich einen OIDC-Provider. iHub bewahrt das Anmelde-Token jedes Benutzers auf und tauscht es beim Provider gegen ein Token für iFinder. Benutzer müssen sich über diesen Provider bei iHub anmelden; Hintergrundläufe nutzen das gespeicherte Refresh-Token.",
+            "ihubSignedHelp": "iHub signiert das iFinder-Token selbst, mit einem privaten Schlüssel oder dem OIDC-Schlüsselpaar von iHub. iFinder vertraut iHub als Aussteller."
+          },
+          "useOidcKeyPair": "Mit dem OIDC-Schlüsselpaar von iHub signieren",
+          "useOidcKeyPairHelp": "Tokens werden mit dem RSA-Schlüssel des OIDC-Servers von iHub signiert. iFinder prüft sie über JWKS-Discovery (/.well-known/jwks.json); kein Schlüssel muss verteilt werden.",
+          "defaultScope": "Token-Scope",
+          "jwtSubjectField": "An iFinder gesendete Benutzeridentität",
+          "jwtSubject": {
+            "email": "E-Mail-Adresse",
+            "username": "Benutzername",
+            "id": "Benutzer-ID",
+            "name": "Anzeigename",
+            "domainUsername": "Domäne\\Benutzername (NTLM-Stil)",
+            "custom": "Eigene Vorlage"
+          },
+          "jwtSubjectFieldHelp": "Der „sub“-Claim des iFinder-JWT: welches Benutzerattribut den Benutzer so identifiziert, wie iFinder ihn kennt.",
+          "jwtSubjectTemplate": "Eigene Subject-Vorlage",
+          "jwtSubjectTemplateHelp": "Platzhalter: ${user.email}, ${user.username}, ${user.domain}, ${user.id}, ${user.name}.",
+          "searchSection": "Suchprofile",
+          "searchSectionHelp": "Welches iFinder-Suchprofil ein Chat durchsucht und welche Benutzer wählen dürfen.",
+          "defaultSearchProfile": "Standard-Suchprofil",
+          "defaultSearchProfileHelp": "Das Suchprofil, das ein Chat durchsucht, bis der Benutzer ein anderes wählt.",
+          "allowedSearchProfiles": "Suchprofile, die Benutzer wählen dürfen",
+          "allowedSearchProfilesPlaceholder": "Alle Profile des Benutzers",
+          "allowedSearchProfilesHelp": "Eine Suchprofil-ID pro Zeile. Leer bietet jedes Profil an, das der Benutzer in iFinder hat.",
+          "allowUserSearchProfileChange": "Benutzer dürfen das Suchprofil wechseln",
+          "allowUserSearchProfileChangeHelp": "Aus: Jeder Chat durchsucht das Standard-Suchprofil, und weder der Benutzer noch das Modell können ein anderes wählen.",
+          "advancedSection": "Erweitert",
+          "advancedToggle": "Zeitlimit, Download-Verzeichnis und API-Pfade",
+          "testResults": "Verbindungstest iFinder",
+          "diagnostics": {
+            "exchangeDescription": "Der Test tauscht Ihr eigenes gespeichertes Anmelde-Token beim OIDC-Provider und ruft die Endpunkte der Integration auf, mit den Werten oben (ungespeichert). Er läuft immer als Sie: Der Austausch braucht Ihre Anmeldung.",
+            "description": "Der Test signiert ein JWT für Ihr eigenes Admin-Konto und ruft die Endpunkte der Integration auf, mit den Werten oben (ungespeichert)."
+          },
+          "tokenExchange": {
+            "provider": "OIDC-Provider",
+            "selectProvider": "Provider wählen…",
+            "providerDisabled": "deaktiviert",
+            "noProviders": "Kein OIDC-Provider konfiguriert. Legen Sie zuerst den Provider, den iFinder nutzt, unter Admin → Authentifizierung an.",
+            "providerHelp": "Der Provider, den sich iHub und iFinder teilen. Seine Anmelde-Tokens werden (verschlüsselt) aufbewahrt und mit der dort unter Admin → Authentifizierung konfigurierten Client-ID und dem Secret gegen iFinder-Tokens getauscht. Ergänzen Sie „offline_access“ in seinen Scopes, damit Hintergrundläufe weiter funktionieren.",
+            "grantType": "Grant-Typ",
+            "grantEntraObo": "On-Behalf-Of (Microsoft Entra ID)",
+            "grantTokenExchange": "Token-Austausch (RFC 8693: Zitadel, Keycloak)",
+            "audience": "Zielgruppe",
+            "audienceObo": "Von On-Behalf-Of nicht genutzt: Entra entnimmt die Zielgruppe dem Scope (api://<ifinder-app-id>/.default).",
+            "audienceHelp": "Die Client- oder Projekt-ID von iFinder beim Provider. Das ausgestellte Token trägt sie als „aud“.",
+            "scopeMap": "Scope-Zuordnung",
+            "scopeMapHelp": "Übersetzt die Scopes, die iHub anfragt, in die Scopes des Providers (Zitadel-Rollen-Scopes, Entra api://…/.default). Ein leerer Wert sendet den iHub-Scope unverändert.",
+            "providerScopeFor": "Provider-Scope für {{scope}}",
+            "unchanged": "(unverändert)",
+            "extraScopes": "Zusätzliche Scopes",
+            "extraScopesHelp": "Durch Leerzeichen getrennte Scopes, die bei jedem Austausch mitgesendet werden.",
+            "ifinderSetupTitle": "Konfigurieren Sie iFinder mit:",
+            "providerIssuer": "Aussteller-URL des Providers",
+            "ifinderSetupHelp": "Das Token, das iHub sendet, muss auch die fa_*-Claims tragen, die iFinder liest – als angefragte Scopes oder über einen Claim-Mapper beim Provider. Der Verbindungstest zeigt, welche vorhanden sind.",
+            "providerRequired": "Wählen Sie den OIDC-Provider, den sich iHub mit iFinder teilt."
+          },
+          "baseUrlRequired": "Geben Sie die iFinder-Basis-URL ein.",
+          "oidcKeyPairNeedsIssuer": "Signieren mit dem OIDC-Schlüsselpaar braucht eine OAuth-Aussteller-URL. Sie wird aus der URL Ihres Servers erkannt, oder Sie setzen sie unter Admin → Authentifizierung → OAuth-Server."
+        },
+        "nameSection": "Name",
+        "nameSectionHelp": "Wie Benutzer diese Integration im Chat sehen. Die ID bleibt fest.",
+        "accessSection": "Wer sie nutzen darf",
+        "actionsSection": "Aktionen, die das Modell aufrufen darf",
+        "actionsSectionHelp": "Eine App, die diese Integration bindet, bietet die angehakten Aktionen an; sie kann sie weiter einschränken."
       }
     },
     "sidebar": {
