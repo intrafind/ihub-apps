@@ -354,6 +354,22 @@ export async function syncIntegrationScopeProviders() {
     // A native connector brings its own provider (it knows the system's
     // per-user listings); declarative protocols get the generic one.
     const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+    if (resolved.definition.protocol.type === 'script') {
+      // The adapter's `scopeProvider` is sync and only sees a loaded module:
+      // after a restart nothing has loaded it yet. A module that does not
+      // load gets no provider and does not stop the others.
+      try {
+        await adapter.getConnectorFor(resolved.definition);
+      } catch (error) {
+        logger.warn('Integration connector module could not be loaded; no scope provider', {
+          component: COMPONENT,
+          instanceId: resolved.instance.id,
+          definition: resolved.definition.id,
+          error: error.message
+        });
+        continue;
+      }
+    }
     const own = adapter?.scopeProvider ? adapter.scopeProvider(resolved) : null;
     registerScopeProvider(own || scopeProviderFor(resolved));
     wanted.add(resolved.instance.id);

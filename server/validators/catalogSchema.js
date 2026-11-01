@@ -25,7 +25,9 @@ const catalogSourceSchema = z.discriminatedUnion('type', [
     type: z.literal('relative'),
     path: z.string(),
     /** Relative paths of companion files next to the main file (skills, integrations) */
-    companions: z.array(z.string()).optional()
+    companions: z.array(z.string()).optional(),
+    /** `path → "sha256-<base64>"` (or hex) of companion files; required for code files */
+    integrity: z.record(z.string(), z.string()).optional()
   }),
   z.object({
     type: z.literal('github'),
@@ -40,7 +42,9 @@ const catalogSourceSchema = z.discriminatedUnion('type', [
     /** Relative paths of companion files alongside SKILL.md (e.g. "references/phase-1.md") */
     companions: z.array(z.string()).optional(),
     /** Raw content base URL used to construct companion file URLs during installation */
-    rawBase: z.string().optional()
+    rawBase: z.string().optional(),
+    /** `path → "sha256-<base64>"` (or hex) of companion files; required for code files */
+    integrity: z.record(z.string(), z.string()).optional()
   })
 ]);
 

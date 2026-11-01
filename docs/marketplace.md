@@ -108,6 +108,7 @@ registry out of browsing without deleting it.
 | Catalog URL      | The URL of the `catalog.json` (or of the directory that holds it)                               |
 | Authentication   | **None**, **Bearer Token**, **Basic Auth** or **Custom Header** — for private catalogs, e.g. a private GitHub repository read with a token |
 | Auto Refresh     | Re-fetch the catalog periodically, every 1–168 hours (default 24)                               |
+| Trust for code   | Off by default. On, the registry may deliver integrations that run their own connector module in the server process (`script` protocol); every code file must carry a hash in the catalog. Turn it on only for a publisher you trust |
 
 **Test Connection** fetches the catalog with the entered values before you save. Credentials are
 stored encrypted with the other platform secrets.
@@ -122,7 +123,10 @@ in [Configuration Validation → Catalog Schema](configuration-validation.md#9-c
 the [ihub-marketplace](https://github.com/intrafind/ihub-marketplace) repository is a complete
 example, including a script that regenerates the catalog from its content folders. Items of type
 `integration` and `skill` may list companion files in `source.companions`; for an integration the
-OpenAPI document and the icon named in the definition are fetched even when not listed.
+OpenAPI document and the icon named in the definition are fetched even when not listed. An
+integration that brings code (`script` protocol) must list a hash for every code file in
+`source.integrity` (`{ "connector.js": "sha256-<base64 of the SHA-256>" }`); iHub installs it only
+from a registry the admin trusts for code and refuses a file that does not match its hash.
 
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.

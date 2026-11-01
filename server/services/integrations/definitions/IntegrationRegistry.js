@@ -15,6 +15,7 @@ import {
   definitionIdToDirName
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
+import { checkScriptCodeFiles } from './scriptModule.js';
 
 /**
  * Loads integration definitions (the catalog) from two trees:
@@ -137,6 +138,13 @@ export class IntegrationRegistry {
     }
     if (validation.data.id !== id) {
       throw new Error(`Definition id "${validation.data.id}" does not match "${id}"`);
+    }
+    if (validation.data.protocol.type === 'script') {
+      const moduleFile = validation.data.protocol.module;
+      if (typeof files[moduleFile] !== 'string') {
+        throw new Error(`Connector module "${moduleFile}" is missing from the integration files`);
+      }
+      checkScriptCodeFiles(validation.data, files);
     }
     if (validation.data.protocol.type === 'mcp') {
       // A registry may only publish remote servers with a fixed transport: a
@@ -318,6 +326,18 @@ export class IntegrationRegistry {
       return null;
     }
     const entry = { definition, source, dir, id: definition.id };
+    if (definition.protocol.type === 'script') {
+      try {
+        await fs.access(path.join(dir, definition.protocol.module));
+      } catch {
+        logger.warn('Skipping integration definition: connector module is missing', {
+          component: COMPONENT,
+          file,
+          module: definition.protocol.module
+        });
+        return null;
+      }
+    }
     if (definition.protocol.type === 'openapi') {
       const documentRef = definition.protocol.document;
       if (!isHttpUrl(documentRef)) {

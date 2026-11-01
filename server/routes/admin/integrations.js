@@ -70,6 +70,8 @@ function catalogEntryView(entry, language, instances) {
     supported: Boolean(getProtocolAdapter(def.protocol.type)),
     /** The actions are asked from the system (MCP), not listed in the definition. */
     dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
+    /** The definition brings a connector module that runs in the server process. */
+    runsCode: def.protocol.type === 'script',
     authModes: def.auth.modes,
     /** Sign-in modes the adapter can run in this release (all declared ones when absent). */
     supportedAuthModes: getProtocolAdapter(def.protocol.type)?.supportedAuthModes || [

@@ -27,8 +27,8 @@
  * (definitions were reloaded: re-derive whatever the adapter keeps from them,
  * see {@link notifyDefinitionsChanged}).
  *
- * `openapi`, `native`, `mcp` and `a2a` have adapters; the other protocol
- * types validate but cannot be installed.
+ * `openapi`, `native`, `script`, `mcp` and `a2a` have adapters; the other
+ * protocol types validate but cannot be installed.
  */
 
 import * as openapi from './openapi/OpenApiAdapter.js';
@@ -37,7 +37,8 @@ import * as mcp from './mcp/McpAdapter.js';
 import * as a2a from './a2a/A2aAdapter.js';
 import logger from '../../../utils/logger.js';
 
-const adapters = { openapi, native, mcp, a2a };
+// `script` is the native adapter with the connector loaded from the folder.
+const adapters = { openapi, native, mcp, a2a, script: native };
 
 /**
  * Tell every adapter that definitions changed: a definition was (re-)installed
@@ -49,8 +50,11 @@ const adapters = { openapi, native, mcp, a2a };
  * @param {{ definitionIds?: string[] }} [context] - the changed definitions, when known
  */
 export async function notifyDefinitionsChanged(context = {}) {
+  const told = new Set();
   for (const [type, adapter] of Object.entries(adapters)) {
-    if (typeof adapter.onChanged !== 'function') continue;
+    // `native` and `script` are one module: told once.
+    if (typeof adapter.onChanged !== 'function' || told.has(adapter)) continue;
+    told.add(adapter);
     try {
       await adapter.onChanged(context);
     } catch (error) {
