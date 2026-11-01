@@ -17,7 +17,6 @@
  * @module services/marketplace/RegistryService
  */
 
-import { throttledFetch } from '../../requestThrottler.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
@@ -25,6 +24,7 @@ import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
 import { getLocalContentIds, installationStatusFor } from './localContent.js';
+import { marketplaceFetch } from './marketplaceFetch.js';
 import {
   checkCompatibility,
   describeIncompatibility
@@ -176,7 +176,8 @@ function toRawGitHubUrl(url) {
 
 /**
  * Validate and normalize a registry source URL before it is used for outbound HTTP calls.
- * Currently restricts hosts to GitHub raw/content domains to mitigate SSRF risks.
+ * Requires HTTPS. Which hosts the server then fetches from is decided per request
+ * (and per redirect hop) by `marketplaceFetch.js`.
  *
  * @param {string} source
  * @returns {string} sanitized URL string
@@ -254,19 +255,21 @@ function resolveItemUrl(itemSource, registrySource) {
 /**
  * Fetch JSON content from a URL with optional auth headers.
  * Handles GitHub Contents API responses (base64-encoded content).
+ * The URL must be one the registry may send the server to
+ * (see `marketplaceFetch.js`).
  *
  * @param {string} url - URL to fetch
- * @param {Record<string, string>} [authHeaders={}] - Additional request headers
+ * @param {Record<string, string>} [authHeaders={}] - The registry's credentials
+ * @param {object} registry - Registry config (`source` names its own host)
  * @returns {Promise<object>} Parsed JSON response body
- * @throws {Error} When the HTTP response is not OK
+ * @throws {Error} When the target is refused or the HTTP response is not OK
  */
-async function fetchContent(url, authHeaders = {}) {
-  const headers = {
-    Accept: 'application/json, text/plain, application/vnd.github.raw+json',
-    ...authHeaders
-  };
-
-  const response = await throttledFetch('marketplace-registry', url, { headers });
+async function fetchContent(url, authHeaders = {}, registry) {
+  const response = await marketplaceFetch('marketplace-registry', url, {
+    registry,
+    headers: { Accept: 'application/json, text/plain, application/vnd.github.raw+json' },
+    authHeaders
+  });
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -328,13 +331,16 @@ function parseGitHubUrl(url) {
  * @param {string} repo - GitHub repository name
  * @param {string} ref - Branch, tag, or commit SHA
  * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+ * @param {object} registry - Registry config the tree is read for
  * @returns {Promise<Array<{ path: string, type: string }>>} Tree entries
- * @throws {Error} When the API call fails
+ * @throws {Error} When the target is refused or the API call fails
  */
-async function fetchGitHubTree(owner, repo, ref, authHeaders = {}) {
+async function fetchGitHubTree(owner, repo, ref, authHeaders = {}, registry) {
   const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
-  const response = await throttledFetch('marketplace-registry', url, {
-    headers: { Accept: 'application/json', ...authHeaders }
+  const response = await marketplaceFetch('marketplace-registry', url, {
+    registry,
+    headers: { Accept: 'application/json' },
+    authHeaders
   });
   if (!response.ok) throw new Error(`GitHub tree API: HTTP ${response.status}`);
   const data = await response.json();
@@ -376,13 +382,14 @@ function findCompanionFiles(tree, dirPrefix) {
  *
  * Falls back to one-item-per-plugin for non-GitHub registries.
  *
- * @param {string} registrySource - Registry source URL (marketplace.json URL)
+ * @param {object} registry - Registry config; `source` is the marketplace.json URL
  * @param {Array} plugins - Plugin entries from marketplace.json
  * @param {object|undefined} owner - Top-level owner object from marketplace.json (for author fallback)
  * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
  * @returns {Promise<Array>} Catalog items — one per individual skill
  */
-async function resolvePluginSkills(registrySource, plugins, owner, authHeaders = {}) {
+async function resolvePluginSkills(registry, plugins, owner, authHeaders = {}) {
+  const registrySource = registry.source;
   const ghInfo = parseGitHubUrl(registrySource);
 
   if (!ghInfo) {
@@ -408,7 +415,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
     .replace(/\/$/, '');
 
   // Fetch the full tree once for companion file discovery and Phase 2 scanning
-  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders, registry);
 
   const items = [];
   let needsTreeScan = false;
@@ -700,12 +707,12 @@ class RegistryService {
 
     logger.info('Fetching catalog', { component: COMPONENT, catalogUrl });
 
-    const rawData = await fetchContent(catalogUrl, authHeaders);
+    const rawData = await fetchContent(catalogUrl, authHeaders, registry);
 
     // Plugins format: resolve each plugin to its individual skills via GitHub tree API
     if (rawData && Array.isArray(rawData.plugins)) {
       const items = await resolvePluginSkills(
-        registry.source,
+        registry,
         rawData.plugins,
         rawData.owner,
         authHeaders
@@ -947,7 +954,7 @@ class RegistryService {
         const itemUrl = resolveItemUrl(item.source, registry.source);
         if (itemUrl) {
           const authHeaders = buildAuthHeaders(registry.auth);
-          contentPreview = await fetchContent(itemUrl, authHeaders);
+          contentPreview = await fetchContent(itemUrl, authHeaders, registry);
         }
       } catch (error) {
         logger.warn('Could not fetch content preview', {
@@ -1127,9 +1134,13 @@ class RegistryService {
    *
    * @param {string} skillMdUrl - Raw GitHub URL of the SKILL.md file
    * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
-   * @returns {Promise<string[]>} Relative paths of companion files, or [] on failure
+   * @param {object} [registry] - Registry the skill comes from; decides which
+   *   hosts may be fetched (see `marketplaceFetch.js`)
+   * @returns {Promise<string[]>} Relative paths of companion files, or [] when
+   *   the URL is not a GitHub one
+   * @throws {Error} When the tree fetch is refused or fails
    */
-  async discoverCompanions(skillMdUrl, authHeaders = {}) {
+  async discoverCompanions(skillMdUrl, authHeaders = {}, registry) {
     const ghInfo = parseGitHubUrl(skillMdUrl);
     if (!ghInfo) return [];
 
@@ -1142,7 +1153,13 @@ class RegistryService {
     dirPath = dirPath.replace(/\/SKILL\.md$/, '');
     if (!dirPath) return [];
 
-    const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+    const tree = await fetchGitHubTree(
+      ghInfo.owner,
+      ghInfo.repo,
+      ghInfo.ref,
+      authHeaders,
+      registry
+    );
     return findCompanionFiles(tree, `${dirPath}/`);
   }
 

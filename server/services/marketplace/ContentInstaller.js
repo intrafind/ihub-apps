@@ -38,6 +38,11 @@ import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import registryService from './RegistryService.js';
 import { getLocalContentIds } from './localContent.js';
+import {
+  MARKETPLACE_TARGET_BLOCKED,
+  marketplaceFetch,
+  sharesCredentialScope
+} from './marketplaceFetch.js';
 import { isSystemSkill } from '../skillLoader.js';
 import logger from '../../utils/logger.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
@@ -267,13 +272,12 @@ export async function fetchItemContent(registryId, type, name) {
   // Build auth headers from the (already decrypted) registry config
   const authHeaders = authHeadersFor(registry);
 
-  const { throttledFetch } = await import('../../requestThrottler.js');
-
-  const response = await throttledFetch('marketplace-installer', itemUrl, {
-    headers: {
-      Accept: 'application/json, text/plain, application/vnd.github.raw+json',
-      ...authHeaders
-    }
+  // The item's manifest is fetched like any other marketplace file: the
+  // registry's own host as it is, any other host only on a public address.
+  const response = await marketplaceFetch('marketplace-installer', itemUrl, {
+    registry,
+    headers: { Accept: 'application/json, text/plain, application/vnd.github.raw+json' },
+    authHeaders
   });
 
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -285,7 +289,7 @@ export async function fetchItemContent(registryId, type, name) {
     responseData = JSON.parse(text);
   } catch {
     // Non-JSON content (e.g., SKILL.md markdown) — check for companion files
-    return { item, content: await buildSkillContent(item, text, authHeaders) };
+    return { item, content: await buildSkillContent(item, text, authHeaders, registry) };
   }
 
   // GitHub Contents API wraps file content in base64
@@ -296,7 +300,7 @@ export async function fetchItemContent(registryId, type, name) {
     try {
       responseData = JSON.parse(decoded);
     } catch {
-      return { item, content: await buildSkillContent(item, decoded, authHeaders) };
+      return { item, content: await buildSkillContent(item, decoded, authHeaders, registry) };
     }
   }
 
@@ -438,7 +442,9 @@ export function integrationCompanionUrl(relativePath, item, itemUrl) {
 /**
  * Fetch one companion file of an integration item as text. The registry's
  * credentials travel only where the registry itself lives
- * (`sharesCredentialScope`); a `rawBase` elsewhere is fetched without them.
+ * (`sharesCredentialScope`); a `rawBase` elsewhere is fetched without them,
+ * and only when it is the registry's own host or a public address
+ * (`marketplaceFetch`).
  *
  * @param {string} relativePath
  * @param {object} item - Catalog item
@@ -457,12 +463,10 @@ async function fetchIntegrationCompanionText(relativePath, item, itemUrl, authHe
       itemUrl
     });
   }
-  const { throttledFetch } = await import('../../requestThrottler.js');
-  const res = await throttledFetch('marketplace-installer', companionUrl, {
-    headers: {
-      Accept: 'text/plain, application/json, application/vnd.github.raw+json',
-      ...(trusted ? authHeaders : {})
-    }
+  const res = await marketplaceFetch('marketplace-installer', companionUrl, {
+    registry,
+    headers: { Accept: 'text/plain, application/json, application/vnd.github.raw+json' },
+    authHeaders: trusted ? authHeaders : {}
   });
   if (!res.ok) {
     throw new Error(`Companion file '${relativePath}' could not be fetched (HTTP ${res.status})`);
@@ -548,48 +552,6 @@ function authHeadersFor(registry) {
   return authHeaders;
 }
 
-/** Hosts that share one GitHub token: the Contents API and the raw host. */
-const GITHUB_HOSTS = new Set(['api.github.com', 'raw.githubusercontent.com', 'github.com']);
-
-/**
- * Whether a companion URL may carry the registry's credentials: it is an
- * http(s) URL on the host of one of the `trustedUrls` (integration.json, the
- * registry's catalog), or both are GitHub hosts.
- *
- * @param {string} url
- * @param {Array<string|undefined>} trustedUrls
- * @returns {boolean}
- */
-export function sharesCredentialScope(url, trustedUrls) {
-  let target;
-  try {
-    target = new URL(url);
-  } catch {
-    return false;
-  }
-  if (target.protocol !== 'https:' && target.protocol !== 'http:') return false;
-  for (const trusted of trustedUrls) {
-    if (typeof trusted !== 'string') continue;
-    let known;
-    try {
-      known = new URL(trusted);
-    } catch {
-      continue;
-    }
-    // Same host *and* scheme: a catalog must not move the credentials from
-    // https to plain http, where they would travel in the clear.
-    if (known.protocol === target.protocol && known.host === target.host) return true;
-    if (
-      target.protocol === 'https:' &&
-      GITHUB_HOSTS.has(known.hostname) &&
-      GITHUB_HOSTS.has(target.hostname)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * The GitHub Contents API wraps a file in `{ content: <base64>, encoding }`;
  * a raw host returns the file itself. Returns the file either way.
@@ -614,12 +576,19 @@ function unwrapGitHubContent(text) {
  * lists them. Returns a `{ files: {...} }` map when companions are present,
  * or the bare markdown string when there are none.
  *
+ * A missing or unreachable companion is left out with a warning, as before;
+ * a companion on a host the registry may not send the server to
+ * (`MARKETPLACE_TARGET_BLOCKED`) fails the whole fetch, so the admin sees
+ * which host the catalog pointed at.
+ *
  * @param {object} item - Catalog item descriptor (may have source.companions)
  * @param {string} skillMd - Raw SKILL.md content
  * @param {Record<string, string>} authHeaders - Auth headers for companion fetches
+ * @param {object} registry - Registry config (`source` names its own host)
  * @returns {Promise<string|{ files: Record<string, string> }>}
+ * @throws {import('./marketplaceFetch.js').MarketplaceTargetError} When a companion's host is refused
  */
-async function buildSkillContent(item, skillMd, authHeaders) {
+async function buildSkillContent(item, skillMd, authHeaders, registry) {
   let companions = item.source?.companions;
 
   // Fallback: discover companions at install time if cache is stale (no companions field)
@@ -629,8 +598,9 @@ async function buildSkillContent(item, skillMd, authHeaders) {
     item.source.url?.endsWith('/SKILL.md')
   ) {
     try {
-      companions = await registryService.discoverCompanions(item.source.url, authHeaders);
+      companions = await registryService.discoverCompanions(item.source.url, authHeaders, registry);
     } catch (error) {
+      if (error.code === MARKETPLACE_TARGET_BLOCKED) throw error;
       logger.warn('Companion discovery fallback failed', { component: COMPONENT, error });
     }
   }
@@ -642,17 +612,14 @@ async function buildSkillContent(item, skillMd, authHeaders) {
 
   const files = { 'SKILL.md': skillMd };
 
-  const { throttledFetch } = await import('../../requestThrottler.js');
-
   await Promise.all(
     companions.map(async relativePath => {
       const companionUrl = `${skillDirUrl}/${relativePath}`;
       try {
-        const res = await throttledFetch('marketplace-installer', companionUrl, {
-          headers: {
-            Accept: 'text/plain, application/vnd.github.raw+json, */*',
-            ...authHeaders
-          }
+        const res = await marketplaceFetch('marketplace-installer', companionUrl, {
+          registry,
+          headers: { Accept: 'text/plain, application/vnd.github.raw+json, */*' },
+          authHeaders
         });
         if (res.ok) {
           files[relativePath] = await res.text();
@@ -664,6 +631,7 @@ async function buildSkillContent(item, skillMd, authHeaders) {
           });
         }
       } catch (error) {
+        if (error.code === MARKETPLACE_TARGET_BLOCKED) throw error;
         logger.warn('Failed to fetch companion file', {
           component: COMPONENT,
           relativePath,

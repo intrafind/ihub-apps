@@ -115,6 +115,25 @@ jest.unstable_mockModule('../services/integrations/integrationTools.js', () => (
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');
 const { default: integrationRegistry } =
   await import('../services/integrations/definitions/IntegrationRegistry.js');
+const { marketplaceTargetGuard, MARKETPLACE_TARGET_BLOCKED } =
+  await import('../services/marketplace/marketplaceFetch.js');
+const { assertPublicTarget } = await import('../utils/ssrfGuard.js');
+
+/**
+ * Hosts the fake DNS knows, with the addresses they "resolve" to. The public
+ * check is the real one for IP literals; a name it would resolve is answered
+ * from here instead of the network.
+ */
+const FAKE_DNS = { 'files.elsewhere.example': ['93.184.216.34'] };
+const realCheckTarget = marketplaceTargetGuard.checkTarget;
+marketplaceTargetGuard.checkTarget = async url => {
+  const addresses = FAKE_DNS[url.hostname];
+  if (addresses) return { ok: true, addresses };
+  return assertPublicTarget(url);
+};
+afterAll(() => {
+  marketplaceTargetGuard.checkTarget = realCheckTarget;
+});
 
 const FOLDER = 'org.example__service';
 const definitionDir = () => path.join(state.rootDir, 'contents', 'integration-definitions', FOLDER);
@@ -227,6 +246,23 @@ describe('ContentInstaller: integration definitions', () => {
       expect(headers).toBeDefined();
       expect(headers.Authorization).toBeUndefined();
     }
+  });
+
+  test('refuses companions the catalog places on an internal address, naming the host', async () => {
+    publish(definition, { companions: ['README.md'] });
+    // A public registry's catalog points the folder at the cloud metadata endpoint.
+    state.items[0].source.rawBase = 'http://169.254.169.254/latest/meta-data';
+
+    await expect(
+      contentInstaller.install('reg', 'integration', FOLDER, 'admin')
+    ).rejects.toMatchObject({
+      code: MARKETPLACE_TARGET_BLOCKED,
+      host: '169.254.169.254',
+      message: expect.stringContaining("'169.254.169.254' refused")
+    });
+    // integration.json came from the registry's own host; nothing reached the internal address.
+    expect(state.fetches.map(f => new URL(f.url).host)).toEqual(['registry.example']);
+    await expect(fs.access(definitionDir())).rejects.toThrow();
   });
 
   const connectorSource = `export default { id: 'org.example/script', actions: { ping: { parameters: { type: 'object', properties: {} }, run: async () => 'pong' } } };\n`;
