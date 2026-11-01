@@ -153,8 +153,9 @@ Two app config values control the plugin's behaviour. Set them via `occ`:
 sudo -u www-data php occ config:app:set ihub_chat ihub_base_url \
   --value=https://ihub.example.com
 
-# The cloudStorage provider id from Step 1a. Defaults to `nextcloud-main`
-# if you omit this; set it explicitly if you used a different id.
+# The provider id of iHub's Nextcloud installation (Admin → Integrations →
+# Installed → Nextcloud → Advanced → Provider id; the installation id
+# `nextcloud` when empty). Defaults to `nextcloud-main` if you omit this.
 sudo -u www-data php occ config:app:set ihub_chat ihub_provider_id \
   --value=nextcloud-main
 ```
@@ -243,7 +244,7 @@ When a new iHub release is out:
 | Clicking the action shows _"iHub Chat could not open"_. | The configured base URL or provider id failed validation (non-HTTP scheme, illegal characters, opaque-host, …). | Re-check the values stored via `occ config:app:get`. |
 | Iframe shows a Content-Security-Policy error in the browser console. | The Nextcloud origin is not in iHub's **Allowed Nextcloud Origins**. | Open **iHub Admin → Integrations → Nextcloud Embed** and add the exact origin (including scheme, no trailing slash). |
 | Iframe loads, but the user is shown as **anonymous** without an OAuth prompt. | A stale iHub access token sits in the iframe's localStorage. The full-embed entry probes `/api/oauth/userinfo` to detect this — if the probe fails the gate is shown. | Should auto-recover. If it doesn't, clear `office_ihubtoken` from the iHub origin's localStorage in devtools and reload. |
-| Files don't auto-attach after the user picks an app. | iHub has no Nextcloud cloud storage provider with the id the plugin announces, or the user has not OAuth-linked Nextcloud to iHub. | Check the provider id matches (`occ config:app:get ihub_chat ihub_provider_id` ↔ iHub's cloudStorage providers list). The user can OAuth-link from any iHub chat via the cloud-storage picker. |
+| Files don't auto-attach after the user picks an app. | iHub's Nextcloud installation has another provider id than the plugin announces, or the user has not OAuth-linked Nextcloud to iHub. | Check the provider id matches (`occ config:app:get ihub_chat ihub_provider_id` ↔ the `nextcloud` installation's **Provider id** value, `nextcloud` when emptyrs list). The user can OAuth-link from any iHub chat via the cloud-storage picker. |
 | Updated plugin files but old behaviour persists. | PHP opcache. | See **Updating the plugin** above. |
 
 ---

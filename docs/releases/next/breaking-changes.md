@@ -133,3 +133,90 @@ integration `entra` and are no longer listed under **Admin → Tools**.
   `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` are set, and the variables stay
   the fallback for empty fields. Without them the installation exists disabled until an admin
   fills it in.
+
+## People Directories Moved From `peopleDirectories.json` to Installed Integrations
+
+Migration V198 turns every directory of `contents/config/peopleDirectories.json` into an installed
+integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
+`contents/config/integrations.json` and removes the file; nothing reads it any more.
+
+- **Admin page and API:** **Admin → Integrations → People directories**
+  (`/admin/integrations/people-directories`, `.../new`, `.../<id>`) is gone, replaced by
+  **Admin → Integrations → Installed**; the routes `GET`/`PUT /api/admin/people-directories`,
+  `GET /api/admin/people-directories/presets` and `POST /api/admin/people-directories/test` are
+  removed. Test a directory with `POST /api/admin/integrations/installed/<id>/_test` (an unsaved
+  one with `POST /api/admin/integrations/catalog/com.intrafind%2Fldap-directory/_test`); the
+  sample search travels as `testInput: { "query": "…" }`.
+- **Apps:** `requiredIntegrations` is retired — the schema accepts only an empty list — and
+  `tools: ["peopleDirectories"]` selects nothing any more. The migration turns both into the
+  definition binding `"integrations": { "com.intrafind/ldap-directory": {} }`; a directory id or
+  `<id>__search_people` in `tools` becomes a binding of that installation (narrowed to the action
+  where one was named). `ldapBrowse` and `<id>__browse_*` entries stay and keep working. The
+  shipped `ldap-browser` app binds the browse actions of every directory instead of
+  `requiredIntegrations`.
+- **Groups:** a directory's `groups` became the installation's `allowedGroups`; `["*"]` became
+  "everyone" (an empty list). A browse-only directory (empty `groups`) keeps its people search
+  closed because the migration switches its search actions off; switch them on in the wizard to
+  open it.
+- **Deployments that write `peopleDirectories.json`** (Helm values, templates, scripts) have to
+  write installations; the field names are listed in `docs/people-directory-search.md`. The
+  shipped `x500bund` entry is now a disabled installation in the default `integrations.json`;
+  `examples/config/peopleDirectories.json` is gone.
+- **A directory whose id another installation already holds** is not moved: it is kept in
+  `contents/config/peopleDirectories.unmigrated.json` with a warning in the log. Install it as an
+  LDAP people directory under a free id and bind it to its apps.
+
+## iHub's Own Tool Files Retired
+
+Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `evidence.json`,
+`write_artifact.json`, `read_memory.json`, `write_memory.json`, `read_inbox.json`,
+`write_inbox.json`, `create_task.json`, `list_tasks.json`, `mark_task_done.json`,
+`schedule_task.json`, `list_scheduled_tasks.json`, `update_scheduled_task.json`,
+`delete_scheduled_task.json`, `run_scheduled_task_now.json`, `list_task_runs.json` and
+`get_task_run.json` when they are the shipped files; the always-installed integration `ihub`
+(`com.intrafind/ihub`) owns these tools under the same ids.
+
+- **Admin → Tools** no longer lists them and they cannot be switched off there; switch the
+  action off on the `ihub` installation instead (a file that was `enabled: false` is migrated
+  into `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a
+  warning in the log and keeps serving its tool in place of the installation's action until it
+  is deleted; move the change over first.
+- **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
+  grants keep selecting the tools. `tools: ["ihub"]` selects nothing.
+- **The `ihub` installation** cannot be removed or disabled: `DELETE
+  /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
+  (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
+- **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
+  shipped copy is deleted on the next start.
+
+## Cloud Storage Providers Moved Out of `platform.json`
+
+Migration V200 moves `platform.cloudStorage.providers[]` into the installed integrations
+`office365` (`com.intrafind/office365`), `googledrive` (`com.intrafind/google-drive`) and
+`nextcloud` (`com.intrafind/nextcloud`) in `contents/config/integrations.json` and removes the
+block. The platform schema rejects a `cloudStorage` key afterwards, so a `platform.json`
+restored from a backup after the upgrade fails validation until the block is removed, and
+`PUT /api/admin/configs/platform` no longer carries `cloudStorage`.
+
+- **Admin pages:** **Admin → Integrations → Office 365 / Google Drive / Nextcloud**
+  (`/admin/integrations/office365`, `/admin/integrations/google-drive`,
+  `/admin/integrations/nextcloud`) and the shared provider editor are gone; use
+  **Admin → Integrations → Installed**. The user-facing routes
+  `/api/integrations/{office365,googledrive,nextcloud}/*` and `/api/auth/status` (its
+  `cloudStorage` payload is filled from the installations) are unchanged.
+- **One installation per provider type.** Each definition is a singleton; the first enabled
+  provider of a type (else the first) becomes the installation, further providers of the same type
+  are kept in `contents/config/cloudStorage.unmigrated.json` with a warning in the log. The
+  provider's `id` becomes the installation's **Provider id** value when it differs from the
+  installation id, so callback URLs, stored user tokens and the Nextcloud embed plugin's
+  `ihub_provider_id` keep working.
+- **Office 365 tenant id:** the tenant id is an identifier, not a secret; the migration decrypts
+  the former `tenantIdRef` credential into the plain `tenantId` value (the credential entry is
+  left in the store). A plain `clientSecret` in a hand-edited file goes into the credential store
+  as `integration-<id>-clientSecretRef`.
+- **Deployments that write `platform.json` themselves** (Helm values, templates, scripts) have
+  to write the installations instead; the field names are listed in
+  `docs/office365-integration.md`, `docs/google-drive-integration.md` and
+  `docs/nextcloud-integration.md`. There were no `IHUB_PLATFORM__CLOUD_STORAGE__*` environment
+  overrides in use by the shipped configuration; an override of that path no longer applies.
+- **Validator:** `server/validators/cloudStorageSchema.js` is removed.

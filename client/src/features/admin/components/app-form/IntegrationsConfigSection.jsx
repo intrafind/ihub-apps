@@ -15,12 +15,19 @@ import {
   INPUT_CLASS,
   LABEL_CLASS,
   SECONDARY_BUTTON_CLASS
-} from '../people-directories/formStyles';
+} from '../formStyles';
+
+/** Definitions whose "every installation" row is offered even with a single installation. */
+const ALWAYS_DEFINITION_ROW = new Set(['com.intrafind/ldap-directory']);
 
 /**
  * App editor section: which installed integrations the app binds, which of
  * their actions, and the default scope. Writes `app.integrations[instanceId]`
- * (the object that also carries the scope picker settings of #3050).
+ * (the object that also carries the scope picker settings of #3050). A
+ * definition with several installations (or one that is meant to be
+ * installed many times, like the LDAP people directory) also gets a row
+ * "All … installations", which writes `app.integrations[definitionId]`: every
+ * installation of it, including ones installed later.
  *
  * @param {Object} props
  * @param {Object} props.integrations - `app.integrations`
@@ -38,13 +45,36 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     [integrations]
   );
 
+  // Definitions offered as "every installation" rows: with 2+ installations,
+  // the ones meant for many installations, and any definition the app already
+  // binds (so the binding stays editable while only one is installed).
+  const definitionRows = useMemo(() => {
+    const byDefinition = new Map();
+    for (const item of installed) {
+      if (!item.definition) continue;
+      const row = byDefinition.get(item.definition) || {
+        id: item.definition,
+        name: item.definitionName,
+        instances: []
+      };
+      row.instances.push(item);
+      byDefinition.set(item.definition, row);
+    }
+    return [...byDefinition.values()].filter(
+      row =>
+        row.instances.length > 1 ||
+        ALWAYS_DEFINITION_ROW.has(row.id) ||
+        Object.hasOwn(bindings, row.id)
+    );
+  }, [installed, bindings]);
+
   // Bindings to installations that are gone: the app is hidden from users
   // until they are unbound, so they are listed with a way to do that.
   const staleIds = useMemo(() => {
     if (loading || error) return [];
-    const installedIds = new Set(installed.map(i => i.id));
-    return Object.keys(bindings).filter(id => !installedIds.has(id));
-  }, [bindings, installed, loading, error]);
+    const known = new Set([...installed.map(i => i.id), ...definitionRows.map(row => row.id)]);
+    return Object.keys(bindings).filter(id => !known.has(id));
+  }, [bindings, installed, definitionRows, loading, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +93,9 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     };
   }, []);
 
-  // Load the actions of every bound installation once it is bound.
+  // Load the actions of every bound installation once it is bound. A bound
+  // definition reads the actions of its first installation (all installations
+  // of a definition declare the same actions).
   useEffect(() => {
     const boundIds = Object.keys(bindings).filter(id => !details[id]);
     if (boundIds.length === 0) return;
@@ -72,8 +104,12 @@ function IntegrationsConfigSection({ integrations, onChange }) {
       const loaded = {};
       await Promise.all(
         boundIds.map(async id => {
+          const row = definitionRows.find(entry => entry.id === id);
+          const instanceId = row ? row.instances[0]?.id : id;
           try {
-            loaded[id] = await fetchInstalledIntegration(id);
+            loaded[id] = instanceId
+              ? await fetchInstalledIntegration(instanceId)
+              : { actions: [], definition: null };
           } catch {
             loaded[id] = { actions: [], definition: null };
           }
@@ -84,7 +120,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     return () => {
       cancelled = true;
     };
-  }, [bindings, details]);
+  }, [bindings, details, definitionRows]);
 
   const setBinding = (id, binding) => {
     const next = { ...bindings };
@@ -102,17 +138,20 @@ function IntegrationsConfigSection({ integrations, onChange }) {
     }
   };
 
-  // `actions` absent means every action; a list, even an empty one, means
-  // exactly those (an empty list binds the installation for its scopes only).
-  const toggleAction = (id, actionName, checked, allNames) => {
+  // `actions` absent means every action except those bound explicitly only
+  // (`bindExplicitly`, e.g. a directory's LDAP browser); a list, even an
+  // empty one, means exactly those (an empty list binds the installation for
+  // its scopes only).
+  const toggleAction = (id, actionName, checked, implicitNames) => {
     const binding = bindings[id] || {};
-    const current = Array.isArray(binding.actions) ? binding.actions : allNames;
+    const current = Array.isArray(binding.actions) ? binding.actions : implicitNames;
     const next = checked
       ? [...new Set([...current, actionName])]
       : current.filter(n => n !== actionName);
-    const sameAsAll = next.length === allNames.length && allNames.every(n => next.includes(n));
+    const sameAsImplicit =
+      next.length === implicitNames.length && implicitNames.every(n => next.includes(n));
     const { actions: _drop, ...rest } = binding;
-    setBinding(id, sameAsAll ? rest : { ...rest, actions: next });
+    setBinding(id, sameAsImplicit ? rest : { ...rest, actions: next });
   };
 
   // Absent `required` means required; only an explicit `false` is optional.
@@ -150,29 +189,57 @@ function IntegrationsConfigSection({ integrations, onChange }) {
             </p>
           )}
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          {!loading && !error && installed.length === 0 && staleIds.length === 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
-              <Link
-                to="/admin/integrations/installed?tab=catalog"
-                className="text-blue-700 dark:text-blue-300 hover:underline"
-              >
-                {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
-              </Link>
-            </p>
-          )}
-          {installed.map(item => {
+          {!loading &&
+            !error &&
+            installed.length === 0 &&
+            staleIds.length === 0 &&
+            definitionRows.length === 0 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
+                <Link
+                  to="/admin/integrations/installed?tab=catalog"
+                  className="text-blue-700 dark:text-blue-300 hover:underline"
+                >
+                  {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
+                </Link>
+              </p>
+            )}
+          {[
+            ...definitionRows.map(row => ({
+              id: row.id,
+              label: t(
+                'admin.apps.edit.integrations.allInstallations',
+                'All {{name}} installations',
+                {
+                  name: row.name || row.id
+                }
+              ),
+              definitionName: t(
+                'admin.apps.edit.integrations.allInstallationsHelp',
+                'Every installation of this integration, including ones installed later ({{count}} now).',
+                { count: row.instances.length }
+              ),
+              enabled: row.instances.some(i => i.enabled !== false),
+              isDefinition: true
+            })),
+            ...installed
+          ].map(item => {
             const bound = Boolean(bindings[item.id]);
             const binding = bindings[item.id] || {};
             const detail = details[item.id];
-            const actions = (detail?.actions || []).filter(a => a.available);
-            const allNames = actions.map(a => a.name);
-            const selected = Array.isArray(binding.actions) ? binding.actions : allNames;
+            // A definition row lists the actions the definition declares (through
+            // its first installation); an installation row its available ones.
+            const actions = (detail?.actions || []).filter(a =>
+              item.isDefinition ? a.enabledByDefault !== false || a.enabled : a.available
+            );
+            const implicitNames = actions.filter(a => !a.bindExplicitly).map(a => a.name);
+            const selected = Array.isArray(binding.actions) ? binding.actions : implicitNames;
             const hasScopes = Boolean(detail?.definition?.scopes);
-            const checkboxId = `app-integration-${item.id}`;
+            const checkboxId = `app-integration-${item.id.replace('/', '__')}`;
             return (
               <div
                 key={item.id}
+                data-testid={item.isDefinition ? `definition-binding-${item.id}` : undefined}
                 className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
               >
                 <label htmlFor={checkboxId} className="flex items-start gap-3 cursor-pointer">
@@ -226,7 +293,7 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                               className={`${CHECKBOX_CLASS} mt-0.5`}
                               checked={selected.includes(action.name)}
                               onChange={e =>
-                                toggleAction(item.id, action.name, e.target.checked, allNames)
+                                toggleAction(item.id, action.name, e.target.checked, implicitNames)
                               }
                             />
                             <span>
@@ -234,6 +301,14 @@ function IntegrationsConfigSection({ integrations, onChange }) {
                               <span className="ml-1 font-mono text-xs text-gray-500 dark:text-gray-400">
                                 {action.name}
                               </span>
+                              {action.bindExplicitly && (
+                                <span className={`${HELP_CLASS} block`}>
+                                  {t(
+                                    'admin.apps.edit.integrations.explicitAction',
+                                    'Only when ticked here; never part of "every action".'
+                                  )}
+                                </span>
+                              )}
                             </span>
                           </label>
                         ))}

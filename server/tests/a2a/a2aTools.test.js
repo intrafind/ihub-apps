@@ -408,10 +408,6 @@ describe('agent ids that clash with tool or MCP server ids', () => {
     });
     expect(findAgentIdConflict('exc', { mcpServers })).toMatchObject({ id: 'excalidraw' });
     expect(findAgentIdConflict('langdock', { tools, mcpServers })).toBeNull();
-    // A people directory, switched off or not: its tools are not loaded yet.
-    expect(
-      findAgentIdConflict('Corp', { peopleDirectories: [{ id: 'corp', enabled: false }] })
-    ).toEqual({ kind: 'peopleDirectory', id: 'corp' });
     // Another agent's tools are no clash (duplicates are the admin route's business).
     expect(
       findAgentIdConflict('x', { tools: [{ id: 'a2a__x__ask', _a2a: { agentId: 'x' } }] })

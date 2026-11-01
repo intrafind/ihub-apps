@@ -1,0 +1,364 @@
+{
+  "id": "com.intrafind/ihub",
+  "version": "1.0.0",
+  "name": {
+    "en": "iHub",
+    "de": "iHub"
+  },
+  "description": {
+    "en": "iHub’s own tools: asking the user a question, project knowledge, artifacts, agent memory, inboxes and tasks, evidence records and scheduled tasks. Always installed; apps list the tools they need by their ids (ask_user, knowledge, write_artifact, …) as before.",
+    "de": "Die eigenen Werkzeuge von iHub: Rückfragen an den Benutzer, Projektwissen, Artefakte, Agenten-Gedächtnis, Posteingänge und Aufgaben, Beleg-Datensätze und geplante Aufgaben. Immer installiert; Apps führen die benötigten Tools wie bisher unter ihren IDs auf (ask_user, knowledge, write_artifact, …)."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["ihub", "internal"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/tools.md",
+  "builtIn": true,
+  "alwaysInstalled": true,
+  "singleton": {
+    "instanceId": "ihub"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "ihub"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "ask_user",
+      "toolId": "ask_user",
+      "title": {
+        "en": "Ask the user",
+        "de": "Benutzer fragen"
+      },
+      "description": {
+        "en": "Pause the turn and ask the user a clarifying question",
+        "de": "Die Antwort unterbrechen und dem Benutzer eine Rückfrage stellen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "knowledge_search",
+      "toolId": "knowledge_search",
+      "title": {
+        "en": "Search project knowledge",
+        "de": "Projektwissen durchsuchen"
+      },
+      "description": {
+        "en": "Search the attached projects for passages that answer a question",
+        "de": "Die angehängten Projekte nach Passagen durchsuchen, die eine Frage beantworten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "knowledge_read",
+      "toolId": "knowledge_read",
+      "title": {
+        "en": "Read a project document",
+        "de": "Projektdokument lesen"
+      },
+      "description": {
+        "en": "Read one document of a project in full, or one of its sections",
+        "de": "Ein Dokument eines Projekts vollständig oder abschnittsweise lesen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "knowledge_list",
+      "toolId": "knowledge_list",
+      "title": {
+        "en": "List project documents",
+        "de": "Projektdokumente auflisten"
+      },
+      "description": {
+        "en": "List the documents of the available projects",
+        "de": "Die Dokumente der verfügbaren Projekte auflisten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "write_artifact",
+      "toolId": "write_artifact",
+      "title": {
+        "en": "Write an artifact",
+        "de": "Artefakt schreiben"
+      },
+      "description": {
+        "en": "Save a file the run produced as an artifact of the chat",
+        "de": "Eine im Lauf erzeugte Datei als Artefakt des Chats speichern"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "read_memory",
+      "toolId": "read_memory",
+      "title": {
+        "en": "Read memory",
+        "de": "Gedächtnis lesen"
+      },
+      "description": {
+        "en": "Read the agent’s or task’s persistent memory",
+        "de": "Das dauerhafte Gedächtnis des Agenten oder der Aufgabe lesen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "write_memory",
+      "toolId": "write_memory",
+      "title": {
+        "en": "Write memory",
+        "de": "Gedächtnis schreiben"
+      },
+      "description": {
+        "en": "Update the agent’s or task’s persistent memory",
+        "de": "Das dauerhafte Gedächtnis des Agenten oder der Aufgabe aktualisieren"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "read_inbox",
+      "toolId": "read_inbox",
+      "title": {
+        "en": "Read the inbox",
+        "de": "Posteingang lesen"
+      },
+      "description": {
+        "en": "Read messages from the agent’s inbox",
+        "de": "Nachrichten aus dem Posteingang des Agenten lesen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "write_inbox",
+      "toolId": "write_inbox",
+      "title": {
+        "en": "Write to an inbox",
+        "de": "In einen Posteingang schreiben"
+      },
+      "description": {
+        "en": "Send a message to an agent’s inbox",
+        "de": "Eine Nachricht in den Posteingang eines Agenten legen"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "create_task",
+      "toolId": "create_task",
+      "title": {
+        "en": "Create an agent task",
+        "de": "Agentenaufgabe anlegen"
+      },
+      "description": {
+        "en": "Create a task for an agent",
+        "de": "Eine Aufgabe für einen Agenten anlegen"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "list_tasks",
+      "toolId": "list_tasks",
+      "title": {
+        "en": "List agent tasks",
+        "de": "Agentenaufgaben auflisten"
+      },
+      "description": {
+        "en": "List the tasks of an agent",
+        "de": "Die Aufgaben eines Agenten auflisten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "mark_task_done",
+      "toolId": "mark_task_done",
+      "title": {
+        "en": "Mark a task done",
+        "de": "Aufgabe als erledigt markieren"
+      },
+      "description": {
+        "en": "Mark an agent task as done",
+        "de": "Eine Agentenaufgabe als erledigt markieren"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "evidence_collect",
+      "toolId": "evidence_collect",
+      "title": {
+        "en": "Collect evidence",
+        "de": "Belege sammeln"
+      },
+      "description": {
+        "en": "Validate a per-document extraction and build a structured evidence record",
+        "de": "Eine Extraktion pro Dokument prüfen und einen strukturierten Beleg-Datensatz erzeugen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "evidence_validateQuotesFastPath",
+      "toolId": "evidence_validateQuotesFastPath",
+      "title": {
+        "en": "Validate quotes",
+        "de": "Zitate prüfen"
+      },
+      "description": {
+        "en": "Check a batch of quotes against the source text",
+        "de": "Eine Liste von Zitaten gegen den Quelltext prüfen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "evidence_composeReport",
+      "toolId": "evidence_composeReport",
+      "title": {
+        "en": "Compose the evidence report",
+        "de": "Belegbericht erstellen"
+      },
+      "description": {
+        "en": "Render the final report from the collected records, optionally saved as a run artifact",
+        "de": "Den Abschlussbericht aus den gesammelten Datensätzen erzeugen, optional als Artefakt des Laufs gespeichert"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "schedule_task",
+      "toolId": "schedule_task",
+      "title": {
+        "en": "Schedule a task",
+        "de": "Aufgabe planen"
+      },
+      "description": {
+        "en": "Create a scheduled task that runs an app on a schedule",
+        "de": "Eine geplante Aufgabe anlegen, die eine App nach Zeitplan ausführt"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "list_scheduled_tasks",
+      "toolId": "list_scheduled_tasks",
+      "title": {
+        "en": "List scheduled tasks",
+        "de": "Geplante Aufgaben auflisten"
+      },
+      "description": {
+        "en": "List the user’s scheduled tasks",
+        "de": "Die geplanten Aufgaben des Benutzers auflisten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "update_scheduled_task",
+      "toolId": "update_scheduled_task",
+      "title": {
+        "en": "Update a scheduled task",
+        "de": "Geplante Aufgabe ändern"
+      },
+      "description": {
+        "en": "Change a scheduled task",
+        "de": "Eine geplante Aufgabe ändern"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "delete_scheduled_task",
+      "toolId": "delete_scheduled_task",
+      "title": {
+        "en": "Delete a scheduled task",
+        "de": "Geplante Aufgabe löschen"
+      },
+      "description": {
+        "en": "Delete a scheduled task",
+        "de": "Eine geplante Aufgabe löschen"
+      },
+      "sideEffect": "destructive",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "run_scheduled_task_now",
+      "toolId": "run_scheduled_task_now",
+      "title": {
+        "en": "Run a scheduled task now",
+        "de": "Geplante Aufgabe jetzt ausführen"
+      },
+      "description": {
+        "en": "Start a scheduled task at once",
+        "de": "Eine geplante Aufgabe sofort starten"
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "list_task_runs",
+      "toolId": "list_task_runs",
+      "title": {
+        "en": "List task runs",
+        "de": "Aufgabenläufe auflisten"
+      },
+      "description": {
+        "en": "List the earlier runs of a scheduled task (scheduled runs only)",
+        "de": "Die früheren Läufe einer geplanten Aufgabe auflisten (nur in geplanten Läufen)"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    },
+    {
+      "name": "get_task_run",
+      "toolId": "get_task_run",
+      "title": {
+        "en": "Read a task run",
+        "de": "Aufgabenlauf lesen"
+      },
+      "description": {
+        "en": "Read one earlier run of a scheduled task (scheduled runs only)",
+        "de": "Einen früheren Lauf einer geplanten Aufgabe lesen (nur in geplanten Läufen)"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "none"
+    }
+  ]
+}

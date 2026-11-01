@@ -12,9 +12,15 @@
  *   id: 'ifinder',
  *   // name → { parameters (JSON schema, descriptions may be { en, de }),
  *   //          run(args, ctx) }
+ *   // `parameters` may be a function of the listing context
+ *   // `{ definition, instance, values, language }`, for a connector whose
+ *   // schema depends on the installation (a directory's mapped fields); so
+ *   // may the optional `description(ctx)`, `dataFlow(ctx)`, `available(ctx)`
+ *   // and `extras(ctx)` (fields merged into the tool, e.g. a marker).
  *   actions: { search: { parameters, run } },
- *   // The installation test, as a list of steps.
- *   test({ definition, instance, values, language }) → Promise<Array<step>>,
+ *   // The installation test, as a list of steps. `testInput` holds what the
+ *   // admin typed into the definition's `test.input` field, when it has one.
+ *   test({ definition, instance, values, language, testInput }) → Promise<Array<step>>,
  *   // Optional: the chat scope provider of an installation (see scopes/index.js).
  *   scopeProvider(resolved) → provider | null,
  *   // Optional: called when an installation changed, to drop caches.

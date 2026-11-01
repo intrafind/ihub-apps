@@ -32,6 +32,7 @@ import {
   searchPeople
 } from '../../services/peopleDirectory/LdapDirectory.js';
 import { resolveDirectory } from '../../services/peopleDirectory/PeopleDirectoryService.js';
+import { installationsOf } from './installations.js';
 import {
   runPeopleDirectoryTool,
   testDirectory
@@ -52,7 +53,11 @@ const state = {
   }
 };
 configCache.getPlatform = () => state.platform;
-configCache.getPeopleDirectories = () => ({ data: { directories: state.directories } });
+// Directories are installations of `com.intrafind/ldap-directory`.
+configCache.getIntegrations = () => ({
+  data: { installed: installationsOf(state.directories) },
+  etag: 'integrations'
+});
 configCache.getGroups = () => ({ data: { groups: state.groups } });
 credentialService.resolveSecret = ref => (ref === 'svc' ? 'bind-secret' : undefined);
 

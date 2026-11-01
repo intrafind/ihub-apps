@@ -6,11 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../../../../shared/components/Modal';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
-import {
-  CALLOUT_CLASS,
-  DANGER_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../people-directories/formStyles';
+import { CALLOUT_CLASS, DANGER_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import {
   disconnectIntegrationUser,
   fetchIntegrationConnections,

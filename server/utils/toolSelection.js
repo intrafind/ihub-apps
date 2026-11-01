@@ -4,13 +4,11 @@
 /** Prefix of every tool id that maps to a remote A2A agent's skill. */
 const A2A_TOOL_PREFIX = 'a2a__';
 
-/** Reference that selects the tools of every people directory. */
-export const PEOPLE_DIRECTORIES_REFERENCE = 'peopleDirectories';
-
 /**
- * Reference that selects the admin LDAP browser tools of every directory
- * (`<directoryId>__browse_search`, …). Nothing else selects them: not the
- * directory id and not `peopleDirectories`.
+ * Reference that selects the admin LDAP browser tools of every people
+ * directory installation (`<directoryId>__browse_search`, …). Nothing else
+ * selects them: not the directory id, and not a binding of the directory
+ * definition without the browse actions.
  */
 export const LDAP_BROWSE_REFERENCE = 'ldapBrowse';
 
@@ -63,9 +61,10 @@ export function a2aAgentReference(agentId) {
  *   That reference lives in the prefix of the agent's own tool ids
  *   (`a2a__<agentId>__<skill>`; agent ids hold no `__`), so it names one
  *   agent and none of the others;
- * - for a tool of a people directory (`<directoryId>__search_people`, …), the
- *   directory's id, or `peopleDirectories` for every directory — including
- *   ones added later. `peopleDirectories` selects no other tool;
+ * - for a tool of a people directory installation (`<directoryId>__search_people`,
+ *   …), the directory's id. Every directory at once is an app binding of the
+ *   definition (`app.integrations["com.intrafind/ldap-directory"]`), not a
+ *   tool reference;
  * - for a directory's LDAP browser tool (`<directoryId>__browse_search`, …),
  *   only `ldapBrowse` (or its exact id): raw LDAP access is never part of
  *   what selects a directory's people search.
@@ -80,7 +79,7 @@ export function isToolSelected(tool, refs) {
   if (has(tool.id)) return true;
   if (tool._peopleDirectory?.id) {
     if (tool._peopleDirectory.browse) return has(LDAP_BROWSE_REFERENCE);
-    return has(tool._peopleDirectory.id) || has(PEOPLE_DIRECTORIES_REFERENCE);
+    return has(tool._peopleDirectory.id);
   }
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
   // Tools of an installed integration (`<instanceId>__<action>`) are selected
@@ -102,5 +101,5 @@ export function isToolSelected(tool, refs) {
   }
   if (tool._a2a || tool.id.startsWith(A2A_TOOL_PREFIX)) return false;
   const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
-  return baseId !== PEOPLE_DIRECTORIES_REFERENCE && baseId !== LDAP_BROWSE_REFERENCE && has(baseId);
+  return baseId !== LDAP_BROWSE_REFERENCE && has(baseId);
 }

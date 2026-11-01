@@ -97,6 +97,8 @@ function catalogEntryView(entry, language, instances, updates) {
     dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
     /** The definition brings a connector module that runs in the server process. */
     runsCode: def.protocol.type === 'script',
+    /** Installed at all times (iHub's own tools): no enable switch, no remove. */
+    alwaysInstalled: def.alwaysInstalled === true,
     authModes: def.auth.modes,
     /** Sign-in modes the adapter can run in this release (all declared ones when absent). */
     supportedAuthModes: getProtocolAdapter(def.protocol.type)?.supportedAuthModes || [
@@ -129,6 +131,16 @@ function definitionDetailView(entry, language, instances, updates) {
         }
       : null,
     health: def.health || null,
+    /** The free-text input the installation test takes besides the settings, when the definition has one. */
+    test: def.test?.input
+      ? {
+          input: {
+            key: def.test.input.key,
+            title: localized(def.test.input.title, language, def.test.input.key),
+            description: localized(def.test.input.description, language)
+          }
+        }
+      : null,
     instructions: localized(def.instructions, language),
     actions: def.actions.map(a => ({
       name: a.name,
@@ -138,6 +150,7 @@ function definitionDetailView(entry, language, instances, updates) {
       sideEffect: a.sideEffect,
       dataFlow: a.dataFlow,
       enabledByDefault: a.enabledByDefault,
+      bindExplicitly: a.bindExplicitly === true,
       connection: a.connection,
       requires: a.requires,
       guidance: localized(a.guidance, language),
@@ -176,7 +189,9 @@ function instanceView(instance, resolved, language, updates) {
     /** A newer, compatible version waits in the marketplace catalog (registry-installed definitions only). */
     updateAvailable: Boolean(update?.compatible),
     latestVersion: update?.latestVersion || null,
-    update
+    update,
+    /** An always-installed built-in (iHub's own tools): never removed or disabled. */
+    locked: Boolean(resolved?.definition?.alwaysInstalled)
   };
 }
 
@@ -346,11 +361,13 @@ export default function registerAdminIntegrationsRoutes(app) {
       const id = definitionIdOf(req, res);
       if (!id) return;
       try {
-        const payload = { ...(req.body || {}), definition: id, id: req.body?.id || 'draft' };
+        const { testInput, ...body } = req.body || {};
+        const payload = { ...body, definition: id, id: body.id || 'draft' };
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
           user: req.user,
-          req
+          req,
+          testInput
         });
         logAudit({
           req,
@@ -619,11 +636,13 @@ export default function registerAdminIntegrationsRoutes(app) {
       try {
         const existing = installedIntegrationService.get(id);
         if (!existing) return sendNotFound(res, 'Integration');
-        const payload = req.body && Object.keys(req.body).length ? { ...req.body, id } : existing;
+        const { testInput, ...body } = req.body || {};
+        const payload = Object.keys(body).length ? { ...body, id } : existing;
         const result = await installedIntegrationService.test(payload, {
           language: languageOf(req),
           user: req.user,
-          req
+          req,
+          testInput
         });
         logAudit({
           req,
