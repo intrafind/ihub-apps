@@ -43,7 +43,7 @@ function ToolChoiceSelect({ toolChoice, onChange }) {
 function ToolsConfigSection({
   selectedTools,
   onToolsChange,
-  mcpToolIds,
+  mcpToolIds = [],
   toolChoice,
   onToolChoiceChange
 }) {

@@ -178,6 +178,7 @@ function assignSkillSlugs(skillIds, budget) {
 export function buildSkillTools(agentConfig, card) {
   const allow = Array.isArray(agentConfig.allowedSkills) ? agentConfig.allowedSkills : ['*'];
   const allowAll = allow.includes('*');
+  const deny = new Set(Array.isArray(agentConfig.deniedSkills) ? agentConfig.deniedSkills : []);
   const prefix = `${A2A_TOOL_PREFIX}${agentConfig.id}__`;
   const budget = Math.max(1, Math.min(MAX_SKILL_SLUG_LENGTH, MAX_TOOL_ID_LENGTH - prefix.length));
   const tools = [];
@@ -195,7 +196,7 @@ export function buildSkillTools(agentConfig, card) {
   for (const skill of skills) {
     if (seen.has(skill.id)) continue; // a card listing one skill id twice
     seen.add(skill.id);
-    if (!allowAll && !allow.includes(skill.id)) continue;
+    if ((!allowAll && !allow.includes(skill.id)) || deny.has(skill.id)) continue;
 
     const id = `${prefix}${slugs.get(skill.id)}`;
     // The schema keeps agent ids to what a provider accepts; a hand-edited id

@@ -88,8 +88,13 @@ export function isToolSelected(tool, refs) {
   // that kept its old tool id (`iFinder_search`) also keeps answering to the
   // old base id (`iFinder`), which group grants and apps may still use.
   if (tool._integration?.instanceId) {
-    if (has(tool._integration.instanceId)) return true;
-    if (!tool._integration.fixedToolId) return false;
+    // An A2A installation whose id is also a local tool's, an MCP server's or
+    // a people directory's id (`_a2a.idConflict`) is not selected by that id:
+    // the reference means the other one.
+    if (has(tool._integration.instanceId) && !tool._a2a?.idConflict) return true;
+    // A remote agent's skill (an A2A installation) also answers to the
+    // agent references below, which group grants may use.
+    if (!tool._integration.fixedToolId && !tool._a2a) return false;
   }
   if (tool._a2a?.agentId) {
     if (has(a2aAgentReference(tool._a2a.agentId))) return true;

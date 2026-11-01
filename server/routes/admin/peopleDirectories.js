@@ -113,7 +113,7 @@ function findIdConflict(directories) {
   const others = {
     tools: configCache.getTools?.(true)?.data || [],
     mcpServers: installedIntegrationRefs(),
-    a2aAgents: configCache.getA2aAgents?.()?.data?.agents || []
+    a2aAgents: []
   };
   for (const directory of directories) {
     const conflict = findDirectoryIdConflict(directory.id, others);

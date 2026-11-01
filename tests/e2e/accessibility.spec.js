@@ -353,7 +353,6 @@ const CLEAN_PAGES = [
   '/admin/agents/runs',
   '/admin/marketplace',
   '/admin/mcp/gateway',
-  '/admin/a2a/agents',
   '/admin/credentials',
   '/admin/integrations',
   '/admin/integrations/installed',

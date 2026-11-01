@@ -130,6 +130,9 @@ export const a2aAgentConfigSchema = z.object({
   auth: authSchema,
   // Skill ids (as the card names them) offered as tools; "*" means all.
   allowedSkills: z.array(z.string()).prefault(['*']),
+  // Skill ids never offered, whatever the allowlist says (an installed
+  // integration's `actions.disabled`).
+  deniedSkills: z.array(z.string()).prefault([]),
   // Whole-call budget (ms): request, streaming and polling included. Past it
   // the task is cancelled (best effort) and the tool call fails.
   timeoutMs: z.number().int().min(1000).max(600000).prefault(60000),

@@ -29,6 +29,10 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 An MCP server is an installed integration of the `mcp` protocol. iHub ships the generic **MCP server** definition (`com.intrafind/mcp-server`: any Streamable HTTP, SSE or WebSocket endpoint, or a local process over stdio) and one definition per hosted server of the former built-in catalog (`mcp/microsoft-learn`, `mcp/context7`, `mcp/github`, `mcp/drawio`, …), each with its endpoint fixed and its sign-in mode set. All of them are `builtIn` and may be installed several times (two GitHub organisations, two draw.io installations). The server's tools are the installation's actions: they are not written into the definition but listed when iHub connects, so the wizard shows them after **Test connection** and the admin switches single tools off. Tool ids are `<toolPrefix or id__><tool>`, e.g. `drawio__create_diagram`; per-user OAuth, MCP App views and the inbound gateway are as described in [MCP Integration](mcp-integration.md). Migration V193 turned every server of the former `config/mcpServers.json` into an installation under the same id.
 
+### Remote A2A agents
+
+A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a` protocol, installed from the shipped **A2A agent** definition (`com.intrafind/a2a-agent`): the Agent Card URL, a sign-in mode (none, a shared token or API key, or an OAuth client) and the call budget are its install values. The card's skills are the installation's actions, listed after **Test connection**; tool ids stay `a2a__<id>__<skill>`. Calling an agent, its conversations and the inbound side are described in [A2A Agents](a2a-agents.md). Migration V194 turned every agent of the former `config/a2aAgents.json` into an installation under the same id.
+
 ## Installing
 
 1. **Admin → Integrations → Installed → Catalog** lists every definition: shipped ones and those installed from the [Marketplace](marketplace.md) (type **Integrations**).
@@ -60,7 +64,7 @@ In the chat, every bound action appears as a tool `<instanceId>__<action>` named
 
 ## How an action runs
 
-Three protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
+Four protocols have an adapter: `native`, for the built-in iFinder and iAssistant connectors; `mcp`, which hands the installation to the MCP client manager (connections, per-user OAuth, MCP Apps and the shared tool catalog as before; the installation's `actions.disabled` becomes the server's denied tools); `a2a`, which hands it to the A2A client manager the same way (`actions.disabled` becomes the agent's denied skills); and `openapi`, for every other catalog integration. For `openapi`, the definition names an OpenAPI document (a companion file) and each action names an `operationId`. At call time the adapter:
 
 1. builds the base URL and static headers from the install values (`{baseUrl}{apiPath}`), and adds the shared secret as a header when the sign-in mode is *service account*;
 2. applies the action's **enforced defaults**: `fixed` (the install value is sent, the model's dropped), `cap` (the smaller number wins), `append` (install value and model value are joined, Solr `fq` style), `default` (only fills a gap); then the chat's scope;
@@ -112,6 +116,8 @@ Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `all
 
 An `mcp` definition has no actions and no document; its `protocol` fixes what the definition knows and leaves the rest to install fields of the same name: `{ "type": "mcp", "transport": { "type": "streamableHttp", "url": "https://mcp.example.com/mcp", "headers": { "X-Scope": "read" } }, "toolPrefix": "ex_", "timeoutMs": 60000, "apps": { "enabled": true } }`. A registry may publish MCP definitions with a fixed remote transport only; a local process (`stdio`) is installed from the shipped generic definition. The sign-in modes are `none`, `service-account`, `oauth-client` (`auth.oauthClient.field` names the client-secret field) and `oauth-user` (`auth.oauthUser.field` optionally names the secret of a pre-registered client); the adapter decides which of the declared modes it can run.
 
+An `a2a` definition is the same idea for a remote agent: `{ "type": "a2a", "cardUrl": "https://agent.example/.well-known/agent-card.json", "timeoutMs": 60000 }`, every setting optional and otherwise read from the install fields `cardUrl`, `timeoutMs`, `streaming`, `pollIntervalMs`; sign-in modes `none`, `service-account` (`authKind` bearer or apiKey) and `oauth-client`.
+
 A field may carry a `when` clause so it applies only in some cases: `{ "field": "transport", "in": ["streamableHttp", "sse"] }`, `{ "field": "authKind", "equals": "basic" }` or `{ "authMode": ["oauth-user"] }`. A field that does not apply is hidden in the wizard, never required, and its stored value is ignored.
 
 `scopes.paging` makes the adapter call the scope action page by page (`offset` and `limit` name its parameters, `size` is the portal's cap per call) until a page comes back short, at most 1000 scopes. A service account's secret goes into a header (`kind: header` with `header` and `valuePrefix`, `bearer`, or `basic`); a secret in a query parameter is not supported. Field types: `string` (with optional `suggestions` and `pattern`), `number` (`min`, `max`), `boolean`, `enum` (`choices` with localized labels), `url` (a trailing slash is stripped, since the value is joined with paths in templates; `"keepTrailingSlash": true` keeps the URL verbatim for an endpoint whose exact string matters, such as the MCP server URL and the OAuth issuer of the generic MCP definition, to which per-user tokens and client registrations are bound), `secret` (always sensitive, stored in the credential store), `credential` (a reference to an entry of the credential store, picked in the wizard; the iFinder private key uses it), `instance` (another installation, whose definition `definition` names; the iAssistant `connection` field uses it), `list` (a list of strings), `file`, `directory`. `scope: "user"` fields are reserved for per-user connections. The schema is `server/validators/integrationDefinitionSchema.js`; the sources mapping is the [declared-sources format](answer-sources.md) with `urlTemplate` on top.
@@ -143,6 +149,7 @@ Every write is audited with resource `integration`.
 | `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js` | the `openapi` adapter: actions, run, test, scopes |
 | `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js` | the `native` adapter and the iFinder and iAssistant connectors; the installations' values as the connectors read them |
 | `server/services/integrations/protocols/mcp/` | the `mcp` adapter; `serverConfig.js` projects an installation onto the MCP client manager's server config, `manager.js` feeds the manager from the installations |
+| `server/services/integrations/protocols/a2a/` | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager |
 | `server/services/integrations/integrationTools.js` | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers |
 | `server/routes/admin/integrations.js` | the admin API |
 | `server/services/marketplace/ContentInstaller.js` | marketplace type `integration` |
@@ -150,5 +157,5 @@ Every write is audited with resource `integration`.
 | `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx` | app editor binding |
 | `server/defaults/integration-definitions/org.ckan__open-data-portal/` | the shipped CKAN definition |
 | `server/defaults/integration-definitions/com.intrafind__mcp-server/`, `mcp__*/` | the generic MCP server definition and the shipped hosted MCP servers |
-| `server/migrations/V193__mcp_servers_installed_integrations.js` | `mcpServers.json` → installations |
+| `server/migrations/V193__mcp_servers_installed_integrations.js`, `V194__a2a_agents_installed_integrations.js` | `mcpServers.json` and `a2aAgents.json` → installations |
 | `server/defaults/integration-definitions/com.intrafind__ifinder/`, `com.intrafind__iassistant/` | the built-in iFinder and iAssistant definitions |

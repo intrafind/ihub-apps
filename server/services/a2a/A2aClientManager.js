@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { A2aAgentConnection, TASK_NOT_FOUND_RPC_CODE } from './A2aAgentConnection.js';
-import { A2A_CLIENT_ERRORS } from './a2aTools.js';
+import { buildSkillTools, A2A_CLIENT_ERRORS } from './a2aTools.js';
 import {
   a2aAgentsFileSchema,
   a2aAgentConfigSchema
@@ -57,7 +57,7 @@ function summarizeCard(card) {
  * Singleton that owns one A2aAgentConnection per configured remote agent.
  *
  * Lifecycle mirrors McpClientManager:
- *   1. `initialize(config)` validates `a2aAgents.json`, builds connections
+ *   1. `initialize(config)` validates the agent configs, builds connections
  *      (the card is fetched lazily on first use) and keeps the parsed config.
  *   2. A later `initialize` diffs: agents that disappeared or whose card URL
  *      or auth changed get a fresh connection; the others keep theirs.
@@ -79,13 +79,14 @@ class A2aClientManager {
   }
 
   /**
-   * (Re)load the manager from a raw a2aAgents.json object.
+   * (Re)load the manager from a `{ agents, security }` config: the installed A2A
+   * integrations projected onto agent configs (`protocols/a2a/agentConfig.js`).
    * @param {Object} rawConfig
    */
   async initialize(rawConfig) {
     const parsed = a2aAgentsFileSchema.safeParse(rawConfig || { agents: [] });
     if (!parsed.success) {
-      logger.error('Invalid a2aAgents.json — refusing to load A2A client config', {
+      logger.error('Invalid A2A agent config — refusing to load A2A client config', {
         component: 'A2aClientManager',
         errors: parsed.error.issues
       });
@@ -197,6 +198,43 @@ class A2aClientManager {
       seen.add(tool.id);
       return true;
     });
+  }
+
+  /**
+   * The tools of one configured agent, or an empty list.
+   * @param {string} agentId
+   * @returns {Promise<Object[]>}
+   */
+  async toolsOfAgent(agentId) {
+    const conn = this.connections.get(agentId);
+    if (!conn || conn.config.enabled === false) return [];
+    try {
+      return await conn.listTools({ maxWaitMs: DISCOVERY_WAIT_MS });
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Every skill of an agent's card (the allowlist and denylist ignored), each
+   * with the tool id it has or would have, for the admin editor.
+   * @param {string} agentId
+   * @returns {Promise<Array<Object>>} `summarizeSkill` entries
+   */
+  async allSkillsOfAgent(agentId) {
+    const conn = this.connections.get(agentId);
+    if (!conn) return [];
+    let card;
+    try {
+      card = await conn.getCard();
+    } catch {
+      return [];
+    }
+    const { skillsByToolId } = buildSkillTools(
+      { ...conn.config, allowedSkills: ['*'], deniedSkills: [] },
+      card
+    );
+    return [...skillsByToolId].map(([toolId, skill]) => summarizeSkill(skill, toolId));
   }
 
   /**

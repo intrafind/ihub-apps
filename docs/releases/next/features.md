@@ -77,3 +77,16 @@ integration, and no longer on a page of their own.
   (`drawio__create_diagram`) and group grants are unchanged.
 - **Migrated for you:** migration V193 moves every server of `mcpServers.json` into an
   installation under the same id; per-user sign-ins and OAuth client registrations stay valid.
+
+## Remote A2A Agents Are Installed Integrations
+
+Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** definition under
+**Admin → Integrations → Installed**, and no longer on a page of their own.
+
+- **One wizard:** Agent Card URL, sign-in (none, a shared token or API key, or an OAuth client)
+  and the call budget; **Test connection** fetches the card and lists the skills, each of which
+  can be switched off. The installed list shows whether the card could be read.
+- **Apps bind the agent** in **Admin → Apps → Edit → Installed integrations**, optionally
+  narrowed to some skills; tool ids (`a2a__<id>__<skill>`) and group grants are unchanged.
+- **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
+  installation under the same id.

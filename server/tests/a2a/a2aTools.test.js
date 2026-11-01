@@ -121,6 +121,13 @@ describe('tool selection of A2A tools', () => {
     const clashing = { ...tool, _a2a: { agentId: 'langdock', idConflict: true } };
     expect(isToolSelected(clashing, ['langdock'])).toBe(false);
     expect(isToolSelected(clashing, ['a2a__langdock__ask'])).toBe(true);
+    // The installation marker of an installed agent does not undo the clash.
+    const installed = { ...clashing, _integration: { instanceId: 'langdock' } };
+    expect(isToolSelected(installed, ['langdock'])).toBe(false);
+    expect(isToolSelected(installed, ['a2a__langdock'])).toBe(true);
+    expect(
+      isToolSelected({ ...tool, _integration: { instanceId: 'langdock' } }, ['langdock'])
+    ).toBe(true);
   });
 
   it('selects every skill of an agent by a2a__<agentId>, clash or not', () => {

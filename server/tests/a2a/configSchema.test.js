@@ -1,16 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from '@jest/globals';
 import {
   a2aAgentConfigSchema,
   a2aAgentsFileSchema
 } from '../../validators/a2aAgentConfigSchema.js';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
 
 const minimal = {
   id: 'langdock',
@@ -120,12 +115,5 @@ describe('a2aAgentsFileSchema', () => {
   it('defaults an empty file to no agents and a blocking SSRF policy', () => {
     const { data } = a2aAgentsFileSchema.safeParse({});
     expect(data).toEqual({ agents: [], security: { blockPrivateIps: true, allowedHosts: [] } });
-  });
-
-  it('accepts the shipped default file', () => {
-    const file = JSON.parse(
-      fs.readFileSync(path.join(here, '../../defaults/config/a2aAgents.json'), 'utf8')
-    );
-    expect(a2aAgentsFileSchema.safeParse(file).success).toBe(true);
   });
 });

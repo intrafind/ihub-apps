@@ -1,0 +1,135 @@
+{
+  "id": "com.intrafind/a2a-agent",
+  "version": "1.0.0",
+  "name": { "en": "A2A agent", "de": "A2A-Agent" },
+  "description": {
+    "en": "A remote agent that speaks the Agent-to-Agent protocol. Its Agent Card lists skills; each skill becomes an action the model can delegate to. The agent runs on its own servers and keeps the conversation of a chat.",
+    "de": "Ein entfernter Agent, der das Agent-to-Agent-Protokoll spricht. Seine Agent Card listet Fähigkeiten; jede wird zu einer Aktion, an die das Modell delegieren kann. Der Agent läuft auf eigenen Servern und führt die Unterhaltung eines Chats fort."
+  },
+  "publisher": { "name": "IntraFind Software AG", "verification": "intrafind" },
+  "categories": ["a2a", "agents"],
+  "docsUrl": "https://a2a-protocol.org",
+  "builtIn": true,
+  "protocol": { "type": "a2a" },
+  "auth": {
+    "modes": ["none", "service-account", "oauth-client"],
+    "serviceAccount": { "kind": "bearer", "field": "secret" },
+    "oauthClient": { "field": "oauthClientSecret" }
+  },
+  "install": [
+    {
+      "key": "cardUrl",
+      "type": "url",
+      "title": { "en": "Agent Card URL", "de": "Agent-Card-URL" },
+      "description": {
+        "en": "Usually https://<agent>/.well-known/agent-card.json (https; http only for localhost).",
+        "de": "Meist https://<agent>/.well-known/agent-card.json (https; http nur für localhost)."
+      },
+      "required": true
+    },
+    {
+      "key": "authKind",
+      "type": "enum",
+      "title": { "en": "How the credential is sent", "de": "Wie die Zugangsdaten gesendet werden" },
+      "default": "bearer",
+      "choices": [
+        {
+          "value": "bearer",
+          "label": { "en": "Authorization: Bearer <token>", "de": "Authorization: Bearer <Token>" }
+        },
+        {
+          "value": "apiKey",
+          "label": { "en": "API key in a header", "de": "API-Schlüssel in einem Header" }
+        }
+      ],
+      "when": { "authMode": ["service-account"] }
+    },
+    {
+      "key": "headerName",
+      "type": "string",
+      "title": { "en": "Header name", "de": "Header-Name" },
+      "description": {
+        "en": "Empty takes the name from the card's apiKey security scheme, else X-API-Key.",
+        "de": "Leer übernimmt den Namen aus dem apiKey-Sicherheitsschema der Card, sonst X-API-Key."
+      },
+      "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$",
+      "when": { "field": "authKind", "equals": "apiKey" }
+    },
+    {
+      "key": "secret",
+      "type": "secret",
+      "title": { "en": "Token or API key", "de": "Token oder API-Schlüssel" },
+      "when": { "authMode": ["service-account"] }
+    },
+    {
+      "key": "oauthTokenUrl",
+      "type": "url",
+      "title": { "en": "Token URL", "de": "Token-URL" },
+      "description": {
+        "en": "The authorization server's token endpoint (client credentials grant).",
+        "de": "Der Token-Endpunkt des Autorisierungsservers (Client-Credentials-Grant)."
+      },
+      "required": true,
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthClientId",
+      "type": "string",
+      "title": { "en": "Client ID", "de": "Client-ID" },
+      "required": true,
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthScope",
+      "type": "string",
+      "title": { "en": "Scope", "de": "Scope" },
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "oauthClientSecret",
+      "type": "secret",
+      "title": { "en": "Client secret", "de": "Client-Secret" },
+      "when": { "authMode": ["oauth-client"] }
+    },
+    {
+      "key": "timeoutMs",
+      "type": "number",
+      "title": { "en": "Whole-call timeout (ms)", "de": "Zeitlimit pro Aufruf (ms)" },
+      "description": {
+        "en": "Request, streaming and polling included; past it the task is cancelled.",
+        "de": "Anfrage, Streaming und Abfrage eingeschlossen; danach wird die Aufgabe abgebrochen."
+      },
+      "default": 60000,
+      "min": 1000,
+      "max": 600000,
+      "advanced": true
+    },
+    {
+      "key": "streaming",
+      "type": "enum",
+      "title": { "en": "Streaming", "de": "Streaming" },
+      "default": "auto",
+      "choices": [
+        {
+          "value": "auto",
+          "label": { "en": "When the card declares it", "de": "Wenn die Card es ankündigt" }
+        },
+        {
+          "value": "never",
+          "label": { "en": "Never (send and poll)", "de": "Nie (senden und abfragen)" }
+        }
+      ],
+      "advanced": true
+    },
+    {
+      "key": "pollIntervalMs",
+      "type": "number",
+      "title": { "en": "Poll interval (ms)", "de": "Abfrageintervall (ms)" },
+      "default": 1500,
+      "min": 250,
+      "max": 60000,
+      "advanced": true
+    }
+  ],
+  "capabilities": ["tools"]
+}
