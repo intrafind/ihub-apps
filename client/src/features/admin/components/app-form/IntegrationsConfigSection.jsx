@@ -258,25 +258,22 @@ function IntegrationsConfigSection({ app, onChange }) {
     return Object.keys(bindings).filter(id => !known.has(id));
   }, [bindings, installed, definitionRows, directoryRows, loading, error]);
 
-  const webSearchInstallation = installed.find(i => i.id === WEBSEARCH_INSTANCE_ID);
+  const webSearchInstalled = installed.some(i => i.id === WEBSEARCH_INSTANCE_ID);
   const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
-  const showWebSearch = Boolean(webSearchInstallation) || app.websearch?.enabled === true;
+  const showWebSearch = webSearchInstalled || app.websearch?.enabled === true;
   const showIAssistant =
     Boolean(iAssistantInstallation) ||
     app.iassistant?.enabled === true ||
     Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID);
 
   const notInstalledNotice = name => (
-    <p
-      className="text-sm rounded-md px-3 py-2 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
-      role="status"
-    >
+    <output className="block text-sm rounded-md px-3 py-2 bg-yellow-50 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
       {t(
         'admin.apps.edit.integrations.panelNotInstalled',
         '{{name}} is not installed. Install it under Integrations to use these settings.',
         { name }
       )}
-    </p>
+    </output>
   );
 
   const groupTitle = id =>
@@ -304,7 +301,7 @@ function IntegrationsConfigSection({ app, onChange }) {
           app={app}
           onChange={onChange}
           notice={
-            webSearchInstallation
+            webSearchInstalled
               ? null
               : notInstalledNotice(t('admin.apps.edit.websearch', 'Web Search'))
           }

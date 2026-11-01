@@ -4,6 +4,13 @@
 import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../formStyles';
 
+/** A shallow copy of `object` without `key`. */
+function withoutKey(object, key) {
+  const copy = { ...object };
+  delete copy[key];
+  return copy;
+}
+
 /**
  * One row of the app editor's integration bindings: a checkbox that binds an
  * installation, a definition (every installation of it) or a type (every
@@ -45,13 +52,13 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
     const next = checked ? [...new Set([...base, actionName])] : base.filter(n => n !== actionName);
     const sameAsImplicit =
       next.length === implicitNames.length && implicitNames.every(n => next.includes(n));
-    const { actions: _drop, ...rest } = current;
+    const rest = withoutKey(current, 'actions');
     onBindingChange(sameAsImplicit ? rest : { ...rest, actions: next });
   };
 
   // Absent `required` means required; only an explicit `false` is optional.
   const setRequired = required => {
-    const { required: _drop, ...rest } = current;
+    const rest = withoutKey(current, 'required');
     onBindingChange(required ? rest : { ...rest, required: false });
   };
 
