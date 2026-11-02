@@ -57,6 +57,21 @@ export function mergeInstallationDetails(results) {
   return { ...results[0], actions: [...actions.values()] };
 }
 
+/** Load one installation, or null when it fails. */
+function loadInstallation(instanceId) {
+  return fetchInstalledIntegration(instanceId).catch(() => null);
+}
+
+/**
+ * The detail of one row: the installations it covers, loaded together and
+ * merged (see {@link mergeInstallationDetails}).
+ * @param {string[]} instanceIds
+ */
+async function loadRowDetail(instanceIds) {
+  const results = await Promise.all(instanceIds.map(loadInstallation));
+  return mergeInstallationDetails(results.filter(Boolean));
+}
+
 function Card({ title, description, children, testId }) {
   return (
     <div
@@ -230,13 +245,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       await Promise.all(
         ids.map(async id => {
           const row = definitionRows.find(entry => entry.id === id);
-          const instanceIds = row ? row.instanceIds : [id];
-          const results = (
-            await Promise.all(
-              instanceIds.map(instanceId => fetchInstalledIntegration(instanceId).catch(() => null))
-            )
-          ).filter(Boolean);
-          loaded[id] = mergeInstallationDetails(results);
+          loaded[id] = await loadRowDetail(row ? row.instanceIds : [id]);
         })
       );
       if (!cancelled) setDetails(prev => ({ ...prev, ...loaded }));
