@@ -452,6 +452,26 @@ says where the answer searched (**Searched in Contracts**) or which iAssistant i
 - The names come from the same per-user list as the search profile picker; a profile whose name
   is unknown shows its id. Shared chats leave the labels out, like the documents themselves.
 
+## Integrations: Example Apps and a Chat Test on the Installation Page
+
+Admins can now try an integration the way users get it, without building an app first.
+**Test in chat** on the page of an installation opens the real chat beside the page, running an
+app that uses the installation.
+
+- **One click to an example app:** when no app uses the installation yet, the panel (and
+  **Create example app** under _Apps that use it_) creates one, bound to this installation. The
+  **LDAP browser** and **CKAN Open Data Portal** integrations ship their own example apps (_LDAP
+  browser_, _Open Data Assistant_); every other integration gets an assistant generated from its
+  description, instructions and example questions. Change it in the app editor afterwards.
+- **Pick the app:** with several apps using the installation, choose which one to chat with.
+- **Test after every save:** the chat restarts when the installation's settings are saved, so a
+  changed setting is tested with the next message.
+- **Hints:** the panel says when the installation is disabled, when your own groups do not grant
+  it, and when the chosen app is disabled.
+- The chat only runs enabled apps: an example app created with **Available to users now** is
+  visible to groups that may use all apps; untick it to create the app disabled.
+- Integration definitions from the marketplace can ship example apps too (`exampleApps`).
+
 ## Chat: Tool Calls Name the Action and the System They Asked
 
 The list of tool calls above an answer now reads the way users think about it: each call shows
