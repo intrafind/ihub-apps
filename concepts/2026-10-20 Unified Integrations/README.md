@@ -29,6 +29,8 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
 | [07 · Types and built-in configuration](07-types-and-built-in-configuration.md) | Integration types, one admin page with dedicated editors, web search per engine, storage providers, people directories, the iHub integration (decided 2026-11-01) |
 | [2026-11-01 · Admin integrations page and installation editors](2026-11-01%20Admin%20integrations%20page%20and%20installation%20editors.md) | Implementation notes: the one admin page, groups, tiles, the installation page, the editor registry and how to add an editor |
+| [2026-11-02 · Storage providers as installations](2026-11-02%20Storage%20providers%20as%20installations.md) | Implementation notes: several installations per provider (installation id = provider id), migration V205, the per-app binding, the base-path-aware redirect URI, the storage editor |
+| [2026-11-01 · Storage provider contract](2026-11-01%20Storage%20provider%20contract.md) | Design for third-party storage providers: the `files` connector contract, generic routes, browser and project kind, and the issue text to file |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

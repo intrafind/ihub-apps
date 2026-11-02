@@ -92,10 +92,11 @@ The redirect URI is the URL Microsoft redirects to after the user grants access.
 2. Under **"Platform configurations"**, click **"+ Add a platform"**
 3. Select **"Web"**
 4. Under **"Redirect URIs"**, add the URI for your deployment:
-   - **Production**: `https://your-ihub-domain.com/api/integrations/office365/{providerId}/callback`
-   - **Development**: `http://localhost:3000/api/integrations/office365/{providerId}/callback`
+   - **Production**: `https://your-ihub-domain.com/api/integrations/office365/{installationId}/callback`
+   - **Under a base path**: `https://your-ihub-domain.com/ihub/api/integrations/office365/{installationId}/callback`
+   - **Development**: `http://localhost:3000/api/integrations/office365/{installationId}/callback`
 
-   > **Important**: Replace `{providerId}` with the provider ID you will configure in the iHub Apps admin panel (e.g., `office365-1`). The URI must match exactly, including the provider ID.
+   > **Important**: `{installationId}` is the id of the installation in iHub Apps (e.g., `office365` or `o365-emea`). The URI must match exactly, including the base path and the installation id. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
 
 5. Under **"Implicit grant and hybrid flows"**, leave all checkboxes unchecked
 6. Click **"Configure"**
@@ -115,27 +116,29 @@ The redirect URI is the URL Microsoft redirects to after the user grants access.
 
 ## Step 5: Configure iHub Apps
 
-Office 365 is the built-in installed integration **Microsoft Office 365 (OneDrive / SharePoint)** (`com.intrafind/office365`, installation `office365`; see [Integrations](integrations.md#built-in-integrations)).
+Office 365 is the built-in installed integration **Microsoft Office 365** (`com.intrafind/office365`, a storage provider; see [Integrations](integrations.md#built-in-integrations)). Install it once per app registration — for example one installation per tenant. **The installation id is the provider id**: it is part of the callback URL and of every user's stored connection, and it never changes after the installation is created.
 
 ### Via Admin UI
 
 1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → Integrations**. Open the **Catalog** tab and click **Install** on **Microsoft Office 365**, or edit the `office365` installation if it exists (an upgrade created it from the former `platform.cloudStorage` provider)
-3. Fill in the settings:
+2. Navigate to **Admin → Integrations**. Open the **Catalog** tab and click **Install** on **Microsoft Office 365** (again for a second tenant), choosing the installation id, or open an existing installation (an upgrade created it from the former `platform.cloudStorage` provider, under the id the provider had)
+3. The installation's **Settings** tab is the Office 365 editor:
 
-   | Field | Value |
+   | Section / field | Value |
    |-------|-------|
-   | **Label** | Name shown to users in the file picker (e.g., `OneDrive`) |
-   | **Tenant ID** | The Directory (tenant) ID from Step 1 |
-   | **Client ID** | The Application (client) ID from Step 1 |
-   | **Client secret** | A credential of type secret (**Admin → Credentials**) holding the client secret value from Step 4 |
-   | **Redirect URI** | Optional — leave blank to derive it from the incoming request; **Test connection** shows the resulting URL |
-   | **Source: …** | Which sources users get: **personal OneDrive**, **followed SharePoint sites**, **Microsoft Teams** |
-   | **SharePoint site URL**, **Drive ID** (Advanced) | Optional — restrict access to a single site or drive |
-   | **Provider id** (Advanced) | The `{providerId}` in the callback URL and in the users' stored connections. Empty: `office365`. An upgrade keeps the id the provider had before; change it only when you re-register the redirect URI |
+   | **Name** | Label shown to users in the file picker (e.g., `OneDrive EMEA`) and description |
+   | **Register iHub with the provider** | The **redirect URI to register** in Step 3, with a **Copy** button: derived from your browser's address, the base path and the installation id, or the configured one. **Redirect URI (optional)** overrides the derived URL for an unusual proxy setup |
+   | **OAuth app → Directory (tenant) ID** | The Directory (tenant) ID from Step 1 (an identifier, stored in the clear) |
+   | **OAuth app → Client ID** | The Application (client) ID from Step 1 |
+   | **OAuth app → Client secret** | A credential of type secret (**Admin → Integrations → Credentials**) holding the client secret value from Step 4 |
+   | **Sources users may browse** | **Personal OneDrive**, **Followed SharePoint sites**, **Microsoft Teams** — sign-in asks only for the permissions the checked sources need |
+   | **Advanced settings** | **SharePoint site URL**, **Drive ID** — optional, restrict access to a single site or drive |
+   | **Connection and users** | Whether the installation is enabled, how many users connected, and the **Connected users** dialog (disconnect a user) |
 
-4. **Test connection** checks the client, the settings, the redirect URI and the route to `login.microsoftonline.com`, and counts the connected users
+4. **Test connection** checks the unsaved values: the client and secret, the tenant, the redirect URI and the route to `login.microsoftonline.com`, and counts the connected users
 5. Click **Install** (or **Save**)
+
+The tile on **Admin → Integrations** shows the tenant id, the sources, the client id and whether the client secret is set.
 
 ### In `integrations.json`
 
@@ -153,7 +156,7 @@ The installation lives in `contents/config/integrations.json`; the client secret
         "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         "clientSecretRef": "integration-office365-clientSecretRef",
-        "redirectUri": "https://your-ihub-domain.com/api/integrations/office365/office365/callback",
+        "redirectUri": "https://your-ihub-domain.com/ihub/api/integrations/office365/office365/callback",
         "sourcePersonalDrive": true,
         "sourceFollowedSites": true,
         "sourceTeams": true
@@ -166,7 +169,9 @@ The installation lives in `contents/config/integrations.json`; the client secret
 
 > **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
-> Migration V200 moved the former `platform.cloudStorage` provider here. Its `id` (e.g. `office365-1`) became the installation's **Provider id** value when it differed from `office365`, so the registered redirect URI and the users' connections stayed valid.
+> **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/office365` for every Office 365 installation, or `type:storage` for all storage providers). The chat's file picker offers the bound providers the user's groups grant. See [Apps → Upload](apps.md#upload-configuration).
+
+> **Upgrades:** migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V205 renamed that installation to the provider's former `id` (e.g. `office365-1`) and installed further Office 365 providers V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs and the users' connections stay valid. V205 also restored a tenant id V200 could not decrypt and deleted the tenant id credentials (`cloudstorage_<id>_tenant`) nothing uses any more.
 
 ---
 
@@ -190,9 +195,9 @@ In **Admin → Platform Settings** (or in `platform.json`):
 
 Once configured, users authorize iHub Apps to access their Microsoft 365 content:
 
-1. Open a chat app that supports file uploads with cloud storage enabled
-2. Click the **cloud storage** icon in the file picker
-3. Select **Office 365** as the source
+1. Open a chat app that binds the Office 365 installation (or all storage providers)
+2. Open the **+** menu of the message box; the storage providers are listed there
+3. Select the Office 365 provider (by its label, when there are several)
 4. A **"Connect Office 365"** button appears — click it
 5. The user is redirected to Microsoft's OAuth consent screen
 6. The user logs in with their Microsoft account and grants the requested permissions
@@ -216,7 +221,7 @@ The integration exposes three source categories that map to different parts of M
 | `sharepoint` | SharePoint Sites | Drives from sites the user follows | `/me/followedSites` then `/sites/{id}/drives` |
 | `teams` | Microsoft Teams | Drives from the user's joined Teams | `/me/joinedTeams` then `/groups/{id}/drive` (batch) |
 
-Each source is controlled by the `sources` configuration object in the provider settings. Set a source to `false` to hide it from users.
+Each source is switched on and off under **Sources users may browse** (`sourcePersonalDrive`, `sourceFollowedSites`, `sourceTeams`; on unless `false`). A source that is off is hidden from users and its permissions are not requested.
 
 ---
 
@@ -224,18 +229,17 @@ Each source is controlled by the `sources` configuration object in the provider 
 
 ### "Office 365 provider not found or not enabled"
 
-- Verify the provider is configured in the admin panel
-- Check that the `type` is set to `office365` (exactly, lowercase)
-- Ensure `enabled` is set to `true`
-- Confirm `tenantId`, `clientId`, and `clientSecret` are all present and non-empty
+- Verify the installation exists under **Admin → Integrations** and is enabled
+- The request names the installation by its id (`?providerId=<installation id>`); a request without one is refused with `400 STORAGE_PROVIDER_REQUIRED`, an unknown id with `404 STORAGE_PROVIDER_NOT_FOUND`
+- Confirm the tenant id, client id and client secret are all set (the tile shows them)
 
 ### "redirect_uri_mismatch" error from Microsoft
 
 - The redirect URI registered in Azure must match **exactly** what iHub Apps sends
-- The URI includes the provider ID: `/api/integrations/office365/{providerId}/callback`
-- Common mismatches: trailing slash, `http` vs `https`, wrong port, wrong provider ID
-- Check what URI iHub Apps is generating by looking at server logs when the OAuth flow starts
-- If `redirectUri` is not set in the provider config, iHub Apps auto-detects it from the incoming request (using `X-Forwarded-Proto` and `X-Forwarded-Host` headers behind a reverse proxy)
+- The URI includes the base path and the installation id: `/ihub/api/integrations/office365/{installationId}/callback`
+- Common mismatches: trailing slash, `http` vs `https`, wrong port, missing base path, wrong installation id
+- The installation's **Settings** tab shows the URI iHub Apps sends; **Test connection** shows the one derived from your own request
+- Without a configured **Redirect URI**, iHub Apps derives it from each request: scheme and host from the `X-Forwarded-Proto` / `X-Forwarded-Host` headers of a trusted proxy, the base path from `X-Forwarded-Prefix` (the same way as for Jira). The `OFFICE365_OAUTH_REDIRECT_URI` environment variable is no longer read
 
 ### No refresh token received
 
@@ -312,8 +316,10 @@ No server-side session, shared session store or sticky routing is involved, so t
 ```
 server/
 ├── services/integrations/Office365Service.js   # Microsoft Graph API calls and Microsoft-specific OAuth endpoints
+├── services/integrations/cloudStorageConfig.js # The installations in the provider shape; redirect URI derivation
 ├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
 ├── routes/integrations/office365.js            # Browsing API routes + provider config for the shared OAuth routes
+├── routes/integrations/cloudStorageAccess.js   # ?providerId= required, unknown → 404, not granted → 403
 └── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
 
 client/src/features/upload/
@@ -322,5 +328,8 @@ client/src/features/upload/
 ├── hooks/useCloudStorageBrowser.js             # Shared state-management factory
 └── hooks/useOffice365Browser.js                # Thin adapter over the factory
 
-contents/integrations/office365/                # Encrypted token storage, one file per (user, provider)
+client/src/features/admin/components/integrations/editors/
+└── StorageProviderEditor.jsx                   # The Settings tab (with storageEditorModel.js)
+
+contents/integrations/office365/                # Encrypted token storage, <userId>__<installationId>.json
 ```
