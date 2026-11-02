@@ -18,6 +18,7 @@ import {
 } from '../../validators/integrationDefinitionSchema.js';
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
 import { installationMigrationState } from './definitions/migrationPlanner.js';
+import { compareCodeUnits } from '../../utils/actionFingerprint.js';
 
 /**
  * Installed integrations (04-architecture §1.3): the admin's instances of
@@ -102,7 +103,7 @@ function nowIso() {
 /** A copy of a string record with its keys sorted (stable diffs of integrations.json). */
 function sortedRecord(record) {
   const out = {};
-  for (const key of Object.keys(record || {}).sort()) out[key] = record[key];
+  for (const key of Object.keys(record || {}).sort(compareCodeUnits)) out[key] = record[key];
   return out;
 }
 
@@ -687,7 +688,7 @@ export class InstalledIntegrationService {
       };
       instance.updatedAt = reviewedAt;
       await this.writeConfig(config);
-      return { instance, reviewed: reviewed.sort() };
+      return { instance, reviewed: reviewed.sort(compareCodeUnits) };
     });
   }
 

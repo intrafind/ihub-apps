@@ -13,6 +13,7 @@ import {
   actionFingerprint,
   actionReviewState,
   canonicalSchema,
+  compareCodeUnits,
   isFingerprint
 } from '../../utils/actionFingerprint.js';
 import { resolveToolApproval, _resetLoggedLoosening } from '../../utils/toolApproval.js';
@@ -79,6 +80,42 @@ test('fingerprint: stable across key order, documentation keywords and required 
   const canonical = canonicalSchema(SCHEMA);
   assert.ok(canonical.properties.description, 'a property called "description" is kept');
   assert.equal(canonical.title, undefined);
+});
+
+test('fingerprint: identical whatever the key insertion order (code-unit order, no locale)', () => {
+  const keys = ['zeta', 'Alpha', 'émoji', 'beta', 'Zulu', '_x', '10', '9'];
+  const build = order => {
+    const properties = {};
+    for (const key of order) properties[key] = { type: 'string', enum: ['b', 'a'] };
+    return { type: 'object', properties, required: [...order].reverse() };
+  };
+  const forward = actionFingerprint({ name: 'act', sideEffect: 'read', parameters: build(keys) });
+  const backward = actionFingerprint({
+    name: 'act',
+    sideEffect: 'read',
+    parameters: build([...keys].reverse())
+  });
+  const shuffled = actionFingerprint({
+    name: 'act',
+    sideEffect: 'read',
+    parameters: build(['beta', '9', 'Zulu', 'émoji', 'zeta', '_x', 'Alpha', '10'])
+  });
+  assert.equal(backward, forward);
+  assert.equal(shuffled, forward);
+  // Code units, not the locale: uppercase before lowercase. (Integer-like keys
+  // are always enumerated numerically by JS objects, hence by JSON.stringify.)
+  assert.deepEqual(Object.keys(canonicalSchema(build(keys)).properties), [
+    '9',
+    '10',
+    'Alpha',
+    'Zulu',
+    '_x',
+    'beta',
+    'zeta',
+    'émoji'
+  ]);
+  assert.deepEqual(['b', 'B', 'a', 'A'].sort(compareCodeUnits), ['A', 'B', 'a', 'b']);
+  assert.equal(compareCodeUnits('x', 'x'), 0);
 });
 
 test('fingerprint: name, side effect and the schema itself all count', () => {
