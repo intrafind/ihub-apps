@@ -51,12 +51,24 @@ function AppNameCell({ app, currentLanguage }) {
 /** The key of "any web search engine" in the integration status (`type:<type>`). */
 const WEB_SEARCH_TYPE_KEY = 'type:web-search';
 
-/** Names of the integrations an app can require, as shown to admins. */
+/** Names of the integrations an app can require, as shown to admins: [i18n key, English]. */
 const INTEGRATION_NAMES = {
-  jira: 'Jira integration',
-  ifinder: 'iFinder integration',
-  iassistant: 'iAssistant integration',
-  'com.intrafind/ldap-directory': 'LDAP people directory (any installation)'
+  [WEB_SEARCH_TYPE_KEY]: ['admin.apps.missingWebSearchEngine', 'A web search engine'],
+  jira: ['admin.apps.integrationNames.jira', 'Jira integration'],
+  ifinder: ['admin.apps.integrationNames.ifinder', 'iFinder integration'],
+  iassistant: ['admin.apps.integrationNames.iassistant', 'iAssistant integration'],
+  'type:people-directory': [
+    'admin.apps.integrationNames.peopleDirectories',
+    'People directories (any installation)'
+  ],
+  'com.intrafind/ldap-directory': [
+    'admin.apps.integrationNames.ldapDirectory',
+    'People directory (LDAP) (any installation)'
+  ],
+  'com.intrafind/ldap-browser': [
+    'admin.apps.integrationNames.ldapBrowser',
+    'LDAP browser (any installation)'
+  ]
 };
 
 /**
@@ -111,19 +123,17 @@ function requiredWebSearchIds(app) {
 }
 
 /**
- * The name an admin sees for a required integration that is off.
+ * The name an admin sees for a required integration that is off: its name
+ * from {@link INTEGRATION_NAMES}, or the id as it is.
  *
- * @param {string} id - Installation or definition id, or `type:web-search`.
+ * @param {string} id - Installation or definition id, or a `type:<type>` key.
  * @param {Function} t - Translator.
  * @returns {string}
  */
 function integrationDisplayName(id, t) {
-  if (id === WEB_SEARCH_TYPE_KEY)
-    return t('admin.apps.missingWebSearchEngine', 'A web search engine');
-  return (
-    INTEGRATION_NAMES[id] ||
-    t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id })
-  );
+  const known = INTEGRATION_NAMES[id];
+  if (known) return t(known[0], known[1]);
+  return t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
 }
 
 /**

@@ -108,8 +108,10 @@ function Card({ title, description, children, testId }) {
  * - **People directories**: "All people directories" (`type:people-directory`)
  *   and each directory.
  * - **Integrations**: every other installation, grouped into MCP servers,
- *   agents, built-in and catalog integrations; a definition with several
- *   installations also gets "All … installations" (`app.integrations[<definition id>]`).
+ *   agents, built-in and catalog integrations (the LDAP browsers are built-in:
+ *   they have no type; a browser binding without `actions` binds all three
+ *   browse actions); a definition with several installations also gets
+ *   "All … installations" (`app.integrations[<definition id>]`).
  *
  * Storage providers have no rows here: they bring no model actions and are
  * offered through the upload settings.

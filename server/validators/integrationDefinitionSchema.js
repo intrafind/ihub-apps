@@ -511,8 +511,8 @@ export const integrationActionSchema = z.object({
   /**
    * An app binds this action only by naming it in the binding's `actions`; a
    * binding without `actions` ("every action") leaves it out. For an action
-   * whose reach goes beyond the integration's purpose (a directory's raw LDAP
-   * browser next to its people search).
+   * whose reach goes beyond the integration's purpose (e.g. raw access next
+   * to a curated search); no shipped definition uses it.
    */
   bindExplicitly: z.boolean().prefault(false),
   /** Which identity the action needs; `token` means it refuses to run without a credential. */

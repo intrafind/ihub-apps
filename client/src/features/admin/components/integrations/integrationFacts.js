@@ -161,6 +161,17 @@ const IFINDER_AUTH = {
   oidcTokenExchange: [`${FACT_PREFIX}.choices.oidcTokenExchange`, 'OIDC token exchange']
 };
 
+const LDAP_PRESETS = {
+  openldap: [`${FACT_PREFIX}.choices.openldap`, 'OpenLDAP'],
+  activeDirectory: [`${FACT_PREFIX}.choices.activeDirectory`, 'Active Directory'],
+  ivbb: [`${FACT_PREFIX}.choices.ivbb`, 'IVBB directory (x500.bund.de)']
+};
+
+const BROWSER_ACCOUNTS = {
+  directory: [`${FACT_PREFIX}.choices.directoryAccount`, "the directory's account"],
+  anonymous: [`${FACT_PREFIX}.choices.anonymous`, 'anonymous']
+};
+
 const MCP_TRANSPORTS = {
   streamableHttp: [`${FACT_PREFIX}.choices.streamableHttp`, 'Streamable HTTP'],
   sse: [`${FACT_PREFIX}.choices.sse`, 'SSE'],
@@ -187,7 +198,7 @@ function keyedEngineFacts(item, keyEnv) {
   ];
 }
 
-/** The label of another installation, for `instance` fields (iAssistant's iFinder). */
+/** The label of another installation, for `instance` fields (iAssistant's iFinder, an LDAP browser's directory). */
 function installationName(id, context) {
   const other = context?.installations?.find(entry => entry?.id === id);
   return other?.label && other.label !== id ? `${other.label} (${id})` : id;
@@ -319,7 +330,42 @@ const FACTS_BY_DEFINITION = {
       !values.authProvider && values.bindMode === 'service'
         ? secretFact('bindPassword', label('bindPassword', 'Bind password'), values.bindPasswordRef)
         : null,
-      fieldFact(item, 'browse', 'browse', label('browse', 'LDAP browser'), { context })
+      choiceFact('preset', label('directoryType', 'Directory type'), values.preset, LDAP_PRESETS)
+    ];
+  },
+  'com.intrafind/ldap-browser': (item, context) => {
+    const values = item.values || {};
+    return [
+      values.directory
+        ? {
+            id: 'directory',
+            ...label('directory', 'Directory'),
+            text: installationName(values.directory, context)
+          }
+        : null,
+      values.baseDn
+        ? fieldFact(item, 'baseDn', 'baseDn', label('browseBase', 'Browse base'), {
+            mono: true,
+            context
+          })
+        : {
+            id: 'baseDn',
+            ...label('browseBase', 'Browse base'),
+            valueKey: `${FACT_PREFIX}.choices.directoryBase`,
+            valueDefault: "the directory's base DN"
+          },
+      values.bindMode === 'service'
+        ? secretFact('bindPassword', label('bindPassword', 'Bind password'), values.bindPasswordRef)
+        : choiceFact(
+            'account',
+            label('account', 'Account'),
+            values.bindMode || 'directory',
+            BROWSER_ACCOUNTS
+          ),
+      fieldFact(item, 'maxResults', 'maxResults', label('maxRows', 'Results per search'), {
+        fallback: 50,
+        context
+      })
     ];
   },
   'com.intrafind/entra-directory': (item, context) => [

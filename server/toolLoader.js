@@ -22,6 +22,7 @@ import { installedIntegrationRefs } from './services/integrations/installedRefs.
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
+import { filterBrowserToolsForUser } from './services/peopleDirectory/LdapBrowserService.js';
 import {
   getWebSearchEngine,
   isWebSearchEngineConfigured,
@@ -725,14 +726,14 @@ export async function getToolsForApp(app, language = null, context = {}) {
     // third-party engine's `<id>__search`) — a workflow node, or an app, that
     // lists one keeps getting it while that engine is installed, enabled and
     // granted; the installation id selects nothing here; the people
-    // directories, whose tools a directory id or `ldapBrowse` select as
-    // before (`isToolSelected`), with the directory's own `browse.groups`
-    // holding too; and every other built-in action that kept its tool id
-    // (`fixedToolId`: iHub's own `ask_user` and scheduled-task tools,
+    // directories, whose tools a directory id selects as before
+    // (`isToolSelected`); and every other built-in action that kept its tool
+    // id (`fixedToolId`: iHub's own `ask_user` and scheduled-task tools,
     // `iFinder_*`, `jira_*`, …), read as the plain tool it was — exact id or
     // base id (`iFinder`), never the installation id. The platform tools of
     // workflows and agents (`write_artifact`, `evidence_*`, …) and the page
-    // reader `read_url` are plain tools and selected like any tool file.
+    // reader `read_url` are plain tools and selected like any tool file. An
+    // LDAP browser's tools come only through a binding.
     const selected = allTools.filter(t => {
       if (!t._integration) return isToolSelected(t, app.tools);
       if (t._peopleDirectory) return isToolSelected(t, app.tools);
@@ -740,8 +741,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
       if (t._integration.fixedToolId) return isToolSelected({ id: t.id }, app.tools);
       return false;
     });
-    appTools = filterDirectoryToolsForUser(
-      await filterIntegrationToolsForUser(selected, context.user),
+    appTools = filterBrowserToolsForUser(
+      filterDirectoryToolsForUser(
+        await filterIntegrationToolsForUser(selected, context.user),
+        context.user
+      ),
       context.user
     );
 
@@ -768,9 +772,13 @@ export async function getToolsForApp(app, language = null, context = {}) {
     try {
       const { getIntegrationToolsForApp, isBoundToolEnabled } =
         await import('./services/integrations/integrationTools.js');
-      // A people directory's own `browse.groups` hold on top of the binding.
-      let bound = filterDirectoryToolsForUser(
-        getIntegrationToolsForApp(app, allTools, context),
+      // An LDAP browser's own rules (signed-in, non-delegated users, its
+      // directory enabled) hold on top of the binding and the group grant.
+      let bound = filterBrowserToolsForUser(
+        filterDirectoryToolsForUser(
+          getIntegrationToolsForApp(app, allTools, context),
+          context.user
+        ),
         context.user
       );
       if (Array.isArray(context.enabledTools)) {

@@ -14,9 +14,12 @@ import {
  * `com.intrafind/ldap-directory`; `services/integrations/ldapDirectoryConfig.js`
  * turns the installation's values into this shape. Every enabled directory
  * becomes the tools `<id>__search_people`, `<id>__get_person` and, with
- * `units`, `<id>__list_units` (see services/peopleDirectory/PeopleDirectoryService.js);
- * with `browse` on, also the admin LDAP browser tools `<id>__browse_search`,
- * `<id>__browse_read` and `<id>__browse_children` (services/peopleDirectory/LdapBrowser.js).
+ * `units`, `<id>__list_units` (see services/peopleDirectory/PeopleDirectoryService.js).
+ *
+ * The admin LDAP browser is an integration of its own
+ * (`com.intrafind/ldap-browser`) that names a directory installation and
+ * reuses its connection; its shape is {@link ldapBrowserSchema} (see
+ * services/peopleDirectory/LdapBrowserService.js).
  *
  * Secrets are never stored here: a service bind names a credential profile
  * (`passwordRef`), and the schema refuses anything else that looks like a
@@ -133,47 +136,6 @@ const bindSchema = z.discriminatedUnion('mode', [
 ]);
 
 /**
- * The admin LDAP browser of a directory: raw entries for admins, off unless
- * switched on. It shares the directory's connection, and by default its bind.
- *
- * - `groups`: who may browse, separate from who may use the directory (the
- *   groups' `permissions.integrations`). Never `*`: raw directory content is
- *   not for every caller.
- * - `base`: the DN the browser is confined to; the directory's base DN when
- *   left out.
- * - `bind`: a separate (ideally read-only) account for browsing.
- * - `denyAttributes`: attributes withheld on top of the built-in list.
- */
-const browseSchema = z
-  .object({
-    enabled: z.boolean().prefault(false),
-    groups: z
-      .array(
-        z
-          .string()
-          .trim()
-          .min(1)
-          .refine(group => group !== '*', {
-            message: 'The LDAP browser is never open to every caller; name groups'
-          })
-      )
-      .prefault(['admins']),
-    maxResults: z
-      .number()
-      .int()
-      .min(1)
-      .max(LDAP_BROWSE_LIMITS.maxResults)
-      .prefault(LDAP_BROWSE_DEFAULTS.maxResults),
-    base: z.string().trim().min(1).max(1024).optional(),
-    bind: bindSchema.optional(),
-    denyAttributes: z
-      .array(z.string().regex(ATTRIBUTE_NAME, 'Not an LDAP attribute name'))
-      .max(64)
-      .optional()
-  })
-  .strict();
-
-/**
  * Whether a value is a usable `ldap://` or `ldaps://` URL: a host, an optional
  * port, and nothing else (no credentials, path, query or fragment).
  * @param {string} value
@@ -262,7 +224,6 @@ export const peopleDirectorySchema = z
       .max(PEOPLE_DIRECTORY_LIMITS.requestDelayMs)
       .prefault(PEOPLE_DIRECTORY_DEFAULTS.requestDelayMs),
     dataFlow: z.enum(['internal', 'external']).prefault('internal'),
-    browse: browseSchema.optional(),
     name: localizedStringSchema.optional(),
     description: localizedStringSchema.optional()
   })
@@ -303,3 +264,44 @@ export const peopleDirectoriesFileSchema = z
       seen.add(directory.id);
     });
   });
+
+/**
+ * The admin LDAP browser, the shape `services/peopleDirectory/LdapBrowserService.js`
+ * works on: an installation of `com.intrafind/ldap-browser`, read by
+ * `integrations/ldapDirectoryConfig.browserFromInstance`. Raw entries for the
+ * groups that are granted the installation (`permissions.integrations`).
+ *
+ * - `directory`: the id of the `com.intrafind/ldap-directory` installation
+ *   whose connection (URL, TLS settings, trusted certificates, allowed hosts,
+ *   base DN) and, by default, bind account the browser uses.
+ * - `base`: the DN the browser is confined to; the directory's base DN when
+ *   left out.
+ * - `bind`: a separate (ideally read-only) account for browsing.
+ * - `denyAttributes`: attributes withheld on top of the built-in list.
+ */
+export const ldapBrowserSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(
+        PEOPLE_DIRECTORY_ID_PATTERN,
+        'Use letters, digits, dots, hyphens and underscores (no "__")'
+      ),
+    enabled: z.boolean().prefault(true),
+    directory: z.string().regex(PEOPLE_DIRECTORY_ID_PATTERN, 'Not an installation id'),
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .max(LDAP_BROWSE_LIMITS.maxResults)
+      .prefault(LDAP_BROWSE_DEFAULTS.maxResults),
+    base: z.string().trim().min(1).max(1024).optional(),
+    bind: bindSchema.optional(),
+    denyAttributes: z
+      .array(z.string().regex(ATTRIBUTE_NAME, 'Not an LDAP attribute name'))
+      .max(64)
+      .optional(),
+    name: localizedStringSchema.optional(),
+    description: localizedStringSchema.optional()
+  })
+  .strict();

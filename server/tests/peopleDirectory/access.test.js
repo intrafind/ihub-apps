@@ -332,6 +332,18 @@ describe('people directory access', () => {
       ]);
     });
 
+    it('binding the type (the shipped People search app) selects the same directory tools', async () => {
+      const app = { id: 'people-directory', integrations: { 'type:people-directory': {} } };
+      const tools = await getToolsForApp(app, 'en', { user: member });
+      assert.deepEqual(directoryToolIds(tools), [
+        'corp__get_person',
+        'corp__search_people',
+        'x500bund__get_person',
+        'x500bund__list_units',
+        'x500bund__search_people'
+      ]);
+    });
+
     it('a definition binding narrowed to actions, and an installation binding on top', async () => {
       const app = {
         id: 'a',

@@ -2,11 +2,13 @@
 
 Users can ask iHub's chat for people: who someone is, their function, their unit and how to reach them. iHub searches **people directories** for that: the company's own LDAP or Active Directory, and any number of further directories such as the public directory of the German federal administration, **x500.bund.de**.
 
-A directory is an **installation** of the built-in integration **LDAP people directory** (`com.intrafind/ldap-directory`) under **Admin → Integrations** — one installation per directory, installed, tested, edited and switched on and off like every other [integration](integrations.md). Each enabled directory becomes its own small set of read-only tools, named and described after the directory. The model reads those descriptions, decides which directory fits a question, and calls several when it needs to — for example the company directory and x500.bund.de in one answer. Nothing is merged server-side: every result says which directory it came from.
+A directory is an **installation** of the built-in integration **People directory (LDAP)** (`com.intrafind/ldap-directory`) under **Admin → Integrations** — one installation per directory, installed, tested, edited and switched on and off like every other [integration](integrations.md). Each enabled directory becomes its own small set of read-only tools, named and described after the directory. The model reads those descriptions, decides which directory fits a question, and calls several when it needs to — for example the company directory and x500.bund.de in one answer. Nothing is merged server-side: every result says which directory it came from.
 
-The shipped **People search** app (`people-directory`) binds the definition — `"integrations": { "com.intrafind/ldap-directory": {} }` — and so uses every directory a user may use, including ones installed later. It ships enabled; users get it as soon as one directory installation is enabled, and not before. Admin → Apps marks it as hidden until then.
+People directories are an [integration type](integrations.md#integration-types) (`people-directory`): the LDAP directories and the built-in **Microsoft Entra ID directory** (installation `entra`, see [Tool Calling](tool-calling.md#entrapeoplesearch)) are listed together under **People directories** on the Integrations page and in the app editor.
 
-> Microsoft Entra ID is not a directory type of this integration. The Entra people search is the built-in installed integration **Microsoft Entra ID directory** (installation `entra`); see [Tool Calling](tool-calling.md#entrapeoplesearch).
+The shipped **People search** app (`people-directory`) binds the type — `"integrations": { "type:people-directory": {} }` — and so uses every people directory a user may use, LDAP and Entra ID, including ones installed later. It ships enabled; users get it as soon as one people directory installation is enabled, and not before. Admin → Apps marks it as hidden until then.
+
+The admin [LDAP browser](#ldap-browser-for-admins), which shows raw entries, is an integration of its own (**LDAP browser**, `com.intrafind/ldap-browser`) that reuses a directory's connection.
 
 ## Quick start
 
@@ -25,13 +27,15 @@ The iHub server needs a direct route to `x500.bund.de` on port 636 (LDAP does no
 If LDAP sign-in is configured, the company directory needs one click:
 
 1. Open **Admin → Authentication → LDAP** and choose **Use for people search** on the provider.
-2. The install wizard of the LDAP people directory opens with the provider selected and its display name as the label. Check the label and the description (the model reads both), the groups who may use it, test, and install.
+2. The install wizard of **People directory (LDAP)** opens with the provider selected and its display name as the label. Check the label and the description (the model reads both), test, and install.
+3. Grant the directory to the groups who may use it (**Admin → Groups → Integrations**), unless they already hold `*` or **All people directories**.
+4. Fine-tune it on its page (**Admin → Integrations → the directory → Settings**), the [directory editor](#admin-page).
 
 The directory reuses the provider's URL, base DN, preset, TLS version settings and bind account. A search cannot run "as the user", because iHub never keeps a user's LDAP password, so the provider needs a **bind account** — or the directory sets **Access** to anonymous when the directory allows anonymous search (Active Directory normally does not).
 
 ## Configuration
 
-Directories live in `contents/config/integrations.json` as installations of `com.intrafind/ldap-directory`, edited in the install wizard. Changes take effect without a restart.
+Directories live in `contents/config/integrations.json` as installations of `com.intrafind/ldap-directory`, installed with the install wizard and edited in the [directory editor](#admin-page). Changes take effect without a restart.
 
 ```jsonc
 {
@@ -73,7 +77,7 @@ Directories live in `contents/config/integrations.json` as installations of `com
 }
 ```
 
-The installation's **label** is the directory's name and its **description** the model-facing description, each per language (the wizard edits the current language). Who may use a directory is granted on the groups (`groups.json` → `permissions.integrations`): the directory's id (`x500bund`), the definition (`com.intrafind/ldap-directory`, every LDAP directory) or `type:people-directory` (every people directory, Entra included). The shipped groups grant every installation to signed-in users and none of the directories to anonymous callers. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration). The install values (**Settings** in the wizard; fields marked _advanced_ are folded away):
+The installation's **label** is the directory's name and its **description** the model-facing description, each per language (the directory editor edits English and German side by side). Who may use a directory is granted on the groups (`groups.json` → `permissions.integrations`): the directory's id (`x500bund`), the definition (`com.intrafind/ldap-directory`, every LDAP directory) or `type:people-directory` (every people directory, Entra included). The shipped groups grant every installation to signed-in users and none of the directories to anonymous callers. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration). The install values (fields marked _advanced_ are folded away in the install wizard):
 
 | Value | Meaning |
 | --- | --- |
@@ -92,7 +96,8 @@ The installation's **label** is the directory's name and its **description** the
 | `timeoutMs` | Default 8000, at most 30000. |
 | `concurrency`, `requestDelayMs` | Default 2 and 0. One queue per directory, shared by all its tools and its test. |
 | `dataFlow` | `internal` (default) or `external`: the search terms leave your network. Shown as a badge on the installed list and carried on the tools. |
-| `browse`, `browse*` | The admin [LDAP browser](#ldap-browser-for-admins) of this directory. Off unless `browse` is on. |
+
+The admin LDAP browser is not a value of the directory any more: it is an installation of [LDAP browser](#ldap-browser-for-admins) that names the directory (migration V205 moved the former `browse*` values there).
 
 ## Tools
 
@@ -138,9 +143,10 @@ How a search works:
 
 ### Binding directories to an app
 
-An app binds directories under `integrations` (**Admin → Apps → Edit → Installed integrations**):
+An app binds directories under `integrations` (**Admin → Apps → Edit → Integrations → People directories**):
 
-- `"integrations": { "com.intrafind/ldap-directory": {} }` — the row **All LDAP people directory installations**: every directory, including ones installed later (the shipped app uses this);
+- `"integrations": { "type:people-directory": {} }` — the row **All people directories**: every people directory, LDAP and Entra ID, including ones installed later (the shipped People search app uses this);
+- `"integrations": { "com.intrafind/ldap-directory": {} }` — every LDAP directory, including ones installed later (offered as **All People directory (LDAP) installations** when two or more are installed);
 - `"integrations": { "x500bund": {} }` — one directory, all of its search tools; `{ "actions": ["search_people"] }` narrows it;
 - both together: the installation's own binding wins for that directory.
 
@@ -152,49 +158,61 @@ The group grant (`permissions.integrations`) holds on top of that: an app that b
 
 Admins sometimes need to see what is really in a directory: which attributes an entry has, how a branch is built, who is in a group. The LDAP browser answers that in plain words: the admin asks, the model writes the LDAP filter, and the raw entries come back. It is separate from people search, which only ever returns mapped fields and is safe to give to every user.
 
-Switch it on per directory with **LDAP browser for admins** in the install wizard (**Admin → Integrations → the directory → Settings**); the browser's own fields appear below the switch. In `integrations.json`:
+The browser is a built-in integration of its own, **LDAP browser** (`com.intrafind/ldap-browser`), installed any number of times. An installation names a **People directory (LDAP)** installation and reuses its connection: the URL, StartTLS, TLS versions, trusted certificates, allowed hosts, the reused sign-in provider, the base DN and — unless the browser has an account of its own — the bind account. The directory must be installed and enabled; with the directory off, its browsers offer no tools. A browse-only directory switches its search actions off (**Actions** in its editor).
+
+Install it under **Admin → Integrations → Catalog → LDAP browser**: pick the directory, then refine it on its page (**Settings**: the [browser editor](#admin-page)). In `integrations.json`:
 
 ```jsonc
 {
-  "id": "corp",
-  "definition": "com.intrafind/ldap-directory",
+  "id": "corp-browser",
+  "definition": "com.intrafind/ldap-browser",
+  "enabled": true,
+  "label": { "en": "Company directory – LDAP browser" },
   "values": {
-    "authProvider": "corp-ad",
-    "browse": true,                        // default false
-    "browseGroups": ["admins"],            // default; "*" is refused
-    "browseMaxResults": 50,                // default 50, at most 200
-    "browseBase": "dc=corp,dc=example",    // default: the directory's baseDn
-    "browseBindMode": "service",
-    "browseBindDn": "cn=ldap-reader,dc=corp,dc=example",
-    "browseBindPasswordRef": "ldap-reader",
-    "browseDenyAttributes": ["info"]       // withheld on top of the built-in list
+    "directory": "corp",                        // a com.intrafind/ldap-directory installation
+    "baseDn": "dc=corp,dc=example",             // default: the directory's base DN
+    "maxResults": 50,                           // default 50, at most 200
+    "bindMode": "service",                      // empty: the directory's bind
+    "bindDn": "cn=ldap-reader,dc=corp,dc=example",
+    "bindPasswordRef": "ldap-reader",
+    "denyAttributes": ["info"]                  // withheld on top of the built-in list
   }
 }
 ```
 
 | Field | Meaning |
 | --- | --- |
-| `browse` | The browse tools exist only while this is on and the directory itself is enabled and usable. |
-| `browseGroups` | Who may browse. A browsing admin also needs the directory granted to one of their groups (`permissions.integrations`); `browseGroups` does not grant it, and the grant does not grant browsing. Only signed-in users; `"*"` is refused. Personal API keys, OAuth clients and tokens and agents never browse, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API. A browse-only directory switches its search actions off in the wizard's **Actions** step. |
-| `browseMaxResults` | The most entries one search returns. |
-| `browseBase` | The DN the browser is confined to. Defaults to the directory's base DN — the whole directory, not just the people search base — so groups and other branches are in reach. Set a narrower branch to limit what admins can see. |
-| `browseBindMode`, `browseBindDn`, `browseBindPasswordRef` | A separate account for browsing, same shape as the directory's access. **Without it, the browser reads whatever the directory's bind account can read**, minus the deny list. Use a read-only account with the reach you want. |
-| `browseDenyAttributes` | Attribute names withheld for this directory, on top of the built-in list. |
+| `directory` | Required. The People directory (LDAP) installation whose connection the browser uses. |
+| `baseDn` | The DN the browser is confined to. Defaults to the directory's base DN — the whole directory, not just the people search base — so groups and other branches are in reach. Set a narrower branch to limit what admins can see. |
+| `maxResults` | The most entries one search returns. |
+| `bindMode`, `bindDn`, `bindPasswordRef` | A separate account for browsing: `anonymous`, or `service` with the bind DN and a credential of type secret holding the password. **Without it, the browser reads whatever the directory's bind account can read**, minus the deny list. Use a read-only account with the reach you want. |
+| `denyAttributes` | Attribute names withheld for this browser, on top of the built-in list. |
 
-The browse actions are marked `bindExplicitly` in the definition: a binding of a directory (or of all directories) without `actions` never includes them. The shipped **LDAP browser** app (`ldap-browser`) binds them for every directory with `"integrations": { "com.intrafind/ldap-directory": { "actions": ["browse_search", "browse_read", "browse_children"] } }`; `"tools": ["ldapBrowse"]` still selects them too. It ships **disabled**; enable it under **Admin → Apps**. Users outside the browser groups who open it get no browse tools, so restrict the app to admins in **Admin → Groups** as well.
+**Who may browse** is the browser installation's grant on the groups (`permissions.integrations`): its id (`corp-browser`) or `com.intrafind/ldap-browser` (every browser). The directory's own grant is not needed. On top of the grant:
+
+- only signed-in users browse; personal API keys, OAuth clients and tokens and agents never do, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API;
+- the tools are never offered over iHub's MCP gateway.
+
+> **`*` grants every installation, the browser included.** The shipped `users` and `authenticated` groups hold `"*"` in `permissions.integrations`. Raw directory entries are not for every user: give those groups the installations they need instead of `"*"`, or keep the browser out of their apps (the shipped **LDAP browser** app ships disabled; restrict it to admin groups under **Admin → Groups**).
+
+**Binding.** An app binds a browser like any installation: `"integrations": { "corp-browser": {} }` binds its three browse actions (a browser binding without `actions` binds all three; `{ "actions": ["browse_read"] }` narrows it), `"integrations": { "com.intrafind/ldap-browser": {} }` every browser, including later ones. The shipped **LDAP browser** app (`ldap-browser`) binds the definition. A binding of a directory, of `com.intrafind/ldap-directory` or of `type:people-directory` never includes a browser, and neither does a `tools` entry: the `ldapBrowse` reference is retired.
+
+**Migration V205** turned every directory that had the browser switched on (`browse: true`) into a browser installation `<directory id>-browser` (a numbered suffix when the id was taken), enabled like the directory and labelled "<directory label> – LDAP browser". Its groups (`browseGroups`, `admins` when empty) were granted the browser; an unknown group was skipped with a warning, and the log names the groups that hold `*` and may now browse. App bindings and `tools` entries of the browse actions were rewritten to bind the browser.
 
 ### Browse tools
 
 | Tool | Parameters | Returns |
 | --- | --- | --- |
-| `<id>__browse_search` | `filter` (required, RFC 4515, e.g. `(&(objectClass=group)(cn=*admin*))`), `base` (a DN inside the browse base), `scope` (`base`, `one` or `sub`, default `sub`), `attributes` (names; default all user attributes), `maxResults` | `{ directory, base, scope, entries: [{ dn, attributes, omitted? }], truncated, hint? }` |
-| `<id>__browse_read` | `dn` (required), `attributes` | `{ directory, entry: { dn, attributes, omitted? } }` |
-| `<id>__browse_children` | `dn` (default: the browse base) | `{ directory, dn, children: [{ dn, rdn, objectClass }], truncated }` |
+| `<browserId>__browse_search` | `filter` (required, RFC 4515, e.g. `(&(objectClass=group)(cn=*admin*))`), `base` (a DN inside the browse base), `scope` (`base`, `one` or `sub`, default `sub`), `attributes` (names; default all user attributes), `maxResults` | `{ directory, base, scope, entries: [{ dn, attributes, omitted? }], truncated, hint? }` |
+| `<browserId>__browse_read` | `dn` (required), `attributes` | `{ directory, entry: { dn, attributes, omitted? } }` |
+| `<browserId>__browse_children` | `dn` (default: the browse base) | `{ directory, dn, children: [{ dn, rdn, objectClass }], truncated }` |
+
+`directory` in a result is the id of the directory the browser reads. Each tool's description names the browser, the directory and the browse base, so the model can tell several browsers apart.
 
 - Values come back as the server returns them, every attribute as a list. Binary values are shown as `[binary, N bytes]`; values over 500 characters are cut with their length. An attribute returns at most 100 values (a large group's `member`, for example); a cut attribute ends with `… (N more values)` and is named in the entry's `cut` list. One response holds about 30,000 characters, and so does a single entry; beyond that, or beyond `maxResults` or the server's own size limit, `truncated` is `true`.
 - Operational attributes (`memberOf`, `createTimestamp`, …) come only when named in `attributes`.
 - Every DN — the search base, the entry read, the parent listed, and every entry returned — must lie in the browse base. The check works on parsed DNs, like `get_person`'s.
-- The browse tools are reachable only through a binding that names them, `ldapBrowse` or their exact ids: not through a directory id or a binding of the directory alone, so the People search app never gets them. They are never offered over iHub's MCP gateway.
+- The browse tools are reachable only through a binding of the browser installation or of `com.intrafind/ldap-browser`: not through a directory id or a binding of a directory, so the People search app never gets them. They are never offered over iHub's MCP gateway. Every call — like the people search — goes through the throttle queue of the directory the browser reads.
 
 ### Secrets
 
@@ -202,11 +220,11 @@ These attributes never leave a directory — not in people search, not in the br
 
 - In results, a withheld attribute is left out and named in the entry's `omitted` list.
 - A filter that names one, anywhere — nested, negated, in an extensible match — is refused before anything is sent, so a value cannot be guessed one character at a time with `(userPassword=a*)`. An extensible match without an attribute type (`(:caseExactMatch:=x)`) is refused for the same reason, and so is a filter that does not parse.
-- The list holds names only. A site that keeps secrets in custom attributes adds them to `browseDenyAttributes`.
+- The list holds names only. A site that keeps secrets in custom attributes adds them to the browser's `denyAttributes`.
 
 ### Audit
 
-Every browse call — answered, refused for a bad argument, or refused for lack of access — writes an audit record (**Admin → Audit log**, resource `ldapBrowse`, the directory id as resource id). It holds the user, the tool, the filter, base, scope, DN and attributes asked for (text cut at 1,000 characters, at most 50 attribute names), how many entries came back and whether the result was truncated. Entry values are never written. Filters are recorded as sent and can contain names or e-mail addresses; they follow the audit log's retention.
+Every browse call — answered, refused for a bad argument, or refused for lack of access — writes an audit record (**Admin → Audit log**, resource `ldapBrowse`, the browser installation id as resource id). It holds the user, the tool, the directory, the filter, base, scope, DN and attributes asked for (text cut at 1,000 characters, at most 50 attribute names), how many entries came back and whether the result was truncated. Entry values are never written. Filters are recorded as sent and can contain names or e-mail addresses; they follow the audit log's retention.
 
 ## Presets and mapping
 
@@ -270,13 +288,22 @@ It is trusted only by directories that name it in `tlsCa`.
 
 ## Admin page
 
-**Admin → Integrations** (`/admin/integrations`) lists the directories among the other installations:
+**Admin → Integrations** (`/admin/integrations`) lists the directories under **People directories**, next to the Entra ID directory; the LDAP browsers are among the **Built-in** integrations.
 
-- **List:** one row per installation with its label, the definition, an on/off switch, **Test**, **Edit** and **Remove**; badges for the transport (LDAPS, StartTLS, plain text) and for external data flow.
-- **Install wizard:** **Install** on the **LDAP people directory** catalog card (or **Use for people search** on an LDAP sign-in provider). Name and description; the settings — source (reuse a sign-in provider, or connect directly), access (anonymous, or a service account whose password comes from the credential store), units, data flow and the [LDAP browser](#ldap-browser-for-admins); under **Advanced** the search base, filter, searched attributes, the mapping with one list per field, TLS versions, trusted certificates, allowed hosts and the limits; who may use it; and the actions.
-- **Test:** runs the connection test on the form as it stands — effective configuration, address check, connect, StartTLS, bind, and with a name in the sample-search field next to the button, a search with the mapped people next to the attributes they came from. Nothing is saved.
+- **Tiles:** one per installation with its label, the definition, its state, **Test**, **Edit** and **Remove**; the facts that matter (directory URL or the sign-in provider it reuses, base DN, whether the bind password is set, the directory type; for a browser: its directory, browse base, account and result limit) and badges for the transport (LDAPS, StartTLS, plain text) and for external data flow.
+- **Install wizard:** **Install** on the **People directory (LDAP)** catalog card (or **Use for people search** on an LDAP sign-in provider, which opens it with the provider selected and its display name as the label), or on the **LDAP browser** card. It holds the definition's fields; the dedicated editor below is the place to refine an installation.
+- **Directory editor** (the directory's page → **Settings**):
+  - **Model-facing name and description**, in English and German, with a preview of what the model sees and the tool ids;
+  - **Source:** reuse a sign-in provider (its URL, base DN, type and bind account are shown, each can be overridden) or connect directly;
+  - **Access:** the provider's bind account, anonymous, or a service account whose password is a credential from **Admin → Credentials**;
+  - **Network:** the transport, plain text (with the warning), hosts allowed on private addresses, trusted certificates, and folded away TLS versions and cipher suites;
+  - **Visibility:** the groups that grant the directory (edited on **Admin → Groups**) and the data flow;
+  - **Limits** and units; **Search and mapping** with the preset's value next to every field; **Actions**;
+  - **Test connection** with a sample search next to the button. The page shows the problems of the saved configuration above the form.
+- **Browser editor** (a browser's page → **Settings**): the directory it reuses with what it takes over (URL or sign-in provider, base DN, bind account, transport) and a link to it; the browse base, the result limit, the account for browsing and the attributes to withhold; who may use it; the actions; **Test connection**, which binds with the browser's account and lists the entries directly under the browse base.
+- **Test:** runs the connection test on the form as it stands — effective configuration, address check, connect, StartTLS, bind, and with a name in the sample-search field, a search with the mapped people next to the attributes they came from. Nothing is saved.
 
-The admin API is the [integrations API](integrations.md#api): `POST /api/admin/integrations/catalog/com.intrafind%2Fldap-directory/_test` tests an unsaved directory (`testInput: { "query": "Mustermann" }` runs the sample search), `POST /api/admin/integrations/installed/<id>/_test` a saved one. The former `/api/admin/people-directories*` routes are gone (migration V198).
+The admin API is the [integrations API](integrations.md#api): `POST /api/admin/integrations/catalog/com.intrafind%2Fldap-directory/_test` tests an unsaved directory (`testInput: { "query": "Mustermann" }` runs the sample search), `POST /api/admin/integrations/installed/<id>/_test` a saved one. `GET /api/admin/integrations/people-directories/editor-context` gives the editors the search presets with their mappings, the person fields, the limits and the LDAP sign-in providers (without secrets). The former `/api/admin/people-directories*` routes are gone (migration V198).
 
 ## Troubleshooting
 

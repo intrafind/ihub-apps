@@ -34,6 +34,19 @@ export function mergedLabel(stored, lang, text) {
 }
 
 /**
+ * A language map without empty texts (trimmed), or `undefined` when none is left.
+ *
+ * @param {Object<string,string>|null|undefined} texts - e.g. `{ en: 'Company', de: '' }`
+ * @returns {Object<string,string>|undefined} e.g. `{ en: 'Company' }`
+ */
+export function nonEmptyTexts(texts) {
+  const entries = Object.entries(texts || {})
+    .filter(([, text]) => typeof text === 'string' && text.trim())
+    .map(([lang, text]) => [lang, text.trim()]);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
  * Install values without the empty ones: an empty field means "use the
  * definition's default", which the server applies when the key is absent.
  *
@@ -61,6 +74,10 @@ export function cleanInstallValues(values) {
  * @param {string} changes.lang - the language `label` and `description` are edited in
  * @param {string} [changes.label] - the label in `lang`; omitted keeps the stored label
  * @param {string} [changes.description] - the description in `lang`; omitted keeps it
+ * @param {Object<string,string>} [changes.labelMap] - the label in every language, for an
+ *   editor that edits all of them (a people directory's model-facing name); replaces the
+ *   stored label and wins over `label`. Empty texts are dropped.
+ * @param {Object<string,string>} [changes.descriptionMap] - the same for the description
  * @param {Object} [changes.actions] - the action policy; omitted keeps the stored one
  * @param {Object} [changes.secrets] - a new secret for the sign-in mode, never stored in `values`
  * @returns {Object} the PUT body
@@ -69,17 +86,21 @@ export function buildInstallationPayload(instance, changes) {
   const storedLabel = instance.labelLocalized ?? null;
   const storedDescription =
     instance.description && typeof instance.description === 'object' ? instance.description : null;
+  let label =
+    changes.label === undefined
+      ? storedLabel || undefined
+      : mergedLabel(storedLabel, changes.lang, changes.label.trim());
+  if (changes.labelMap !== undefined) label = nonEmptyTexts(changes.labelMap);
+  let description =
+    changes.description === undefined
+      ? storedDescription || undefined
+      : mergedLabel(storedDescription, changes.lang, changes.description.trim());
+  if (changes.descriptionMap !== undefined) description = nonEmptyTexts(changes.descriptionMap);
   const payload = {
     id: instance.id,
     definition: instance.definition,
-    label:
-      changes.label === undefined
-        ? storedLabel || undefined
-        : mergedLabel(storedLabel, changes.lang, changes.label.trim()),
-    description:
-      changes.description === undefined
-        ? storedDescription || undefined
-        : mergedLabel(storedDescription, changes.lang, changes.description.trim()),
+    label,
+    description,
     enabled: instance.enabled !== false,
     values: cleanInstallValues(changes.values),
     auth: { mode: instance.auth?.mode || 'none' },

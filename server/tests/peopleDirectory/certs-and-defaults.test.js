@@ -236,13 +236,13 @@ describe('schema', () => {
 describe('shipped People search app', () => {
   const appFile = path.join(defaultsDir, 'apps', 'people-directory.json');
 
-  it('passes the app schema and binds every directory installation', () => {
+  it('passes the app schema and binds every people directory, Entra ID included', () => {
     const app = JSON.parse(fs.readFileSync(appFile, 'utf8'));
     const parsed = appConfigSchema.safeParse(app);
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
-    // Shipped on, but users get it only once a directory installation is enabled
+    // Shipped on, but users get it only once a people directory installation is enabled
     assert.equal(app.enabled, true);
-    assert.deepEqual(app.integrations, { 'com.intrafind/ldap-directory': {} });
+    assert.deepEqual(app.integrations, { 'type:people-directory': {} });
     assert.equal(app.tools, undefined);
     assert.equal(app.requiredIntegrations, undefined);
     assert.ok(app.system.en && app.system.de);

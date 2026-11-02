@@ -17,8 +17,8 @@ function withoutKey(object, key) {
  * installation of every definition of it), and, once bound, its actions, the
  * Required switch and the scope settings.
  *
- * `actions` absent in the binding means every action except those bound
- * explicitly only (`bindExplicitly`, e.g. a directory's LDAP browser); a
+ * `actions` absent in the binding means every action except those a
+ * definition marks as bound explicitly only (`bindExplicitly`); a
  * list, even an empty one, means exactly those (an empty list binds the
  * installation for its scopes only). A type row offers no action list: the
  * definitions of one type name their actions differently, so a type binding
