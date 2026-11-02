@@ -9,10 +9,11 @@ import '@testing-library/jest-dom';
  * App editor → Integrations: each integration in one place. Web search keeps
  * its own panel for every chat app (native search needs no engine), whose
  * engine select lists Auto and the installed engines; iAssistant keeps its
- * panel while installed or in use; the people directories get a card with
- * "All people directories" (`type:people-directory`), the storage providers a
- * card with "All storage providers" (`type:storage`); and the generic list
- * never repeats a web search engine, iAssistant or a storage provider.
+ * panel while installed or in use, its switch being the `iassistant` binding;
+ * the people directories and the storage providers get a card each whose
+ * switch binds every installation of the type (`type:people-directory`,
+ * `type:storage`); and the generic list never repeats a web search engine,
+ * iAssistant or a storage provider.
  */
 
 jest.mock('react-i18next', () => {
@@ -188,15 +189,65 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.getByRole('status')).toHaveTextContent('iAssistant is not installed');
   });
 
-  it('binds every people directory with the type key', async () => {
+  it('binds every people directory with the type key from the card switch', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a' });
     const card = await screen.findByTestId('app-integrations-people-directories');
-    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
-    expect(within(card).getByText('Entra ID')).toBeInTheDocument();
-    fireEvent.click(within(card).getByLabelText(/All people directories/));
+    // Off: no choice and no rows yet.
+    expect(within(card).queryByText('Corporate directory')).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable people directories' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ 'type:people-directory': {} });
+  });
+
+  it('shows the type binding once, with its Required setting, and the directories below', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({
+      id: 'a',
+      integrations: { 'type:people-directory': {} }
+    });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('All people directories')).toBeChecked();
+    expect(within(card).getAllByText('All people directories')).toHaveLength(1);
+    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
+    expect(within(card).getByText('Entra ID')).toBeInTheDocument();
+    fireEvent.click(within(card).getByLabelText(/Required/));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      'type:people-directory': { required: false }
+    });
+  });
+
+  it('switches to selected directories and back, and off removes every directory binding', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const app = {
+      id: 'a',
+      integrations: { 'type:people-directory': {}, corp: { actions: [] }, drawio: {} }
+    };
+    const onChange = renderSection(app);
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    fireEvent.click(within(card).getByLabelText('Only selected directories'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      corp: { actions: [] },
+      drawio: {}
+    });
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable people directories' }));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ drawio: {} });
+  });
+
+  it('keeps the switch on for an app that binds single directories only', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { entra: {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('Only selected directories')).toBeChecked();
+    expect(within(card).getByLabelText(/Entra ID/)).toBeChecked();
   });
 
   it('lists LDAP browsers among the built-ins, never in the people directories card', async () => {
@@ -241,12 +292,36 @@ describe('IntegrationsConfigSection', () => {
     });
   });
 
-  it('binds the iAssistant installation from inside its panel', async () => {
+  it('binds the iAssistant installation with the Enable iAssistant switch', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a' });
-    fireEvent.click(await screen.findByLabelText(/Use in this app/));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable iAssistant' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
-    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ iassistant: {} });
+    const app = onChange.mock.calls.at(-1)[0];
+    expect(app.integrations).toEqual({ iassistant: {} });
+    expect(app.iassistant).toEqual({ enabled: true });
+    expect(screen.queryByText(/Use in this app/)).not.toBeInTheDocument();
+  });
+
+  it('shows the iAssistant binding settings inside the panel, and off unbinds', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    mockFetchOne.mockResolvedValue({
+      actions: [],
+      definition: { id: 'com.intrafind/iassistant', scopes: { label: 'iAssistant' } }
+    });
+    const onChange = renderSection({
+      id: 'a',
+      iassistant: { enabled: true },
+      integrations: { iassistant: { required: false } }
+    });
+    expect(await screen.findByLabelText('Default iAssistant')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Required/)).not.toBeChecked();
+    // No empty action list for an integration without actions.
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable iAssistant' }));
+    const app = onChange.mock.calls.at(-1)[0];
+    expect(app.integrations).toBeUndefined();
+    expect(app.iassistant).toEqual({ enabled: false });
   });
 
   it('does not list a definition or type binding of an installed integration as not installed', async () => {
@@ -321,17 +396,23 @@ describe('IntegrationsConfigSection: storage providers', () => {
     const onChange = renderSection({ id: 'a' });
     const card = await screen.findByTestId('app-integrations-storage-providers');
     expect(within(card).getByText('Storage providers')).toBeInTheDocument();
-    expect(within(card).getByLabelText(/All storage providers/)).toBeInTheDocument();
-    expect(within(card).getByText(/\(3 now\)/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/All Nextcloud installations/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/Branch office/)).toBeInTheDocument();
     // A new storage binding starts optional.
-    fireEvent.click(within(card).getByLabelText(/All storage providers/));
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable storage providers' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
       'type:storage': { required: false }
     });
+  });
+
+  it('lists all storage providers, all of one provider and each installation once enabled', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: [...INSTALLED, ...NEXTCLOUD] });
+    renderSection({ id: 'a', integrations: { 'type:storage': { required: false } } });
+    const card = await screen.findByTestId('app-integrations-storage-providers');
+    expect(within(card).getByLabelText('All storage providers')).toBeChecked();
+    expect(within(card).getByText(/\(3 now\)/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/All Nextcloud installations/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/Branch office/)).toBeInTheDocument();
   });
 
   it('shows a bound storage provider with the Required switch and no action list', async () => {

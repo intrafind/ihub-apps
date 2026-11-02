@@ -3001,7 +3001,6 @@
           "allPeopleDirectories": "Alle Personenverzeichnisse",
           "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
           "panelNotInstalled": "{{name}} ist nicht installiert. Unter Integrationen installieren, um diese Einstellungen zu nutzen.",
-          "iassistantBinding": "In dieser App verwenden",
           "peopleDirectoriesTitle": "Personenverzeichnisse",
           "peopleDirectoriesDesc": "Das Modell Personen in den Verzeichnissen nachschlagen lassen: in allen oder in einzelnen.",
           "groups": {
@@ -3013,7 +3012,13 @@
           "allStorageProviders": "Alle Speicheranbieter",
           "storageRequiredHelp": "Die App ausblenden, solange dieser Speicheranbieter deaktiviert ist oder fehlt. Aus: Die App bleibt verfügbar, und die Dateiauswahl bietet die vorhandenen Anbieter an.",
           "storageProvidersTitle": "Speicheranbieter",
-          "storageProvidersDesc": "Benutzer Dateien für den Chat aus den Speicheranbietern auswählen lassen: aus allen oder aus einzelnen. Benutzer sehen die, die ihre Gruppen freigeben; ausgewählte Dateien folgen den Upload-Einstellungen."
+          "storageProvidersDesc": "Benutzer Dateien für den Chat aus den Speicheranbietern auswählen lassen: aus allen oder aus einzelnen. Benutzer sehen die, die ihre Gruppen freigeben; ausgewählte Dateien folgen den Upload-Einstellungen.",
+          "enablePeopleDirectories": "Personenverzeichnisse aktivieren",
+          "selectedPeopleDirectories": "Nur ausgewählte Verzeichnisse",
+          "enableStorageProviders": "Speicheranbieter aktivieren",
+          "selectedStorageProviders": "Nur ausgewählte Speicheranbieter",
+          "typeOverrideHelp": "Haken Sie einen Eintrag an, um ihm eigene Einstellungen zu geben; die übrigen folgen den Einstellungen oben.",
+          "typePickHelp": "Die App verwendet nur die hier angehakten Einträge."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
