@@ -42,7 +42,8 @@
  *    of the directory definition next to `ldapBrowse` is removed.
  *    The People search app (`people-directory`) binds `type:people-directory`
  *    instead of the V198 binding `"com.intrafind/ldap-directory": {}`, so it
- *    follows the Entra ID directory too.
+ *    follows the Entra ID directory too; next to a type binding (a fresh
+ *    install: the shipped app, then V185 and V198) that binding is removed.
  * 4. **Group tool grants.** `permissions.tools` entries `ldapBrowse` become
  *    the browser installation ids, and `<directory id>__browse_*` the tool ids
  *    of the directory's browser.
@@ -370,19 +371,27 @@ export function migrateApp(app, { browserOf, directoryIds }) {
   }
 
   // 4. The People search app follows every people directory, Entra included.
+  //    Its V198 binding of the directory definition becomes the type binding;
+  //    next to a type binding (a fresh install copies the shipped app, then
+  //    V185 and V198 add the definition binding) it is redundant, and as a
+  //    required binding it would hide the app while no LDAP directory is on.
   let integrationsOut = bindings;
   if (
     app.id === PEOPLE_SEARCH_APP_ID &&
     isObject(bindings[DIRECTORY_DEFINITION]) &&
-    Object.keys(bindings[DIRECTORY_DEFINITION]).length === 0 &&
-    !Object.hasOwn(bindings, PEOPLE_DIRECTORY_TYPE_KEY)
+    Object.keys(bindings[DIRECTORY_DEFINITION]).length === 0
   ) {
+    const hasType = Object.hasOwn(bindings, PEOPLE_DIRECTORY_TYPE_KEY);
     integrationsOut = {};
     for (const [key, value] of Object.entries(bindings)) {
-      if (key === DIRECTORY_DEFINITION) integrationsOut[PEOPLE_DIRECTORY_TYPE_KEY] = {};
-      else integrationsOut[key] = value;
+      if (key !== DIRECTORY_DEFINITION) integrationsOut[key] = value;
+      else if (!hasType) integrationsOut[PEOPLE_DIRECTORY_TYPE_KEY] = {};
     }
-    notes.push(`binding "${DIRECTORY_DEFINITION}" → "${PEOPLE_DIRECTORY_TYPE_KEY}"`);
+    notes.push(
+      hasType
+        ? `binding "${DIRECTORY_DEFINITION}" removed: "${PEOPLE_DIRECTORY_TYPE_KEY}" covers it`
+        : `binding "${DIRECTORY_DEFINITION}" → "${PEOPLE_DIRECTORY_TYPE_KEY}"`
+    );
     changed = true;
   }
 

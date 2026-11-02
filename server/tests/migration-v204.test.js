@@ -324,6 +324,21 @@ describe('V204 LDAP browser installations', () => {
       assert.equal(other.changed, false);
     });
 
+    it('drops the V198 definition binding next to the shipped type binding (fresh install)', () => {
+      // A fresh install copies the shipped app (type binding); V185 and V198
+      // then add the definition binding, which would hide the app while no
+      // LDAP directory is enabled, Entra or not.
+      const { app, changed } = migrateApp(
+        {
+          ...peopleSearchApp,
+          integrations: { [PEOPLE_DIRECTORY_TYPE_KEY]: {}, [DIRECTORY_DEFINITION]: {} }
+        },
+        context
+      );
+      assert.equal(changed, true);
+      assert.deepEqual(app.integrations, { [PEOPLE_DIRECTORY_TYPE_KEY]: {} });
+    });
+
     it('moves the browse actions of a directory binding to its browser and keeps the rest', () => {
       const { app, warnings } = migrateApp(
         {
