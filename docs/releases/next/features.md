@@ -279,7 +279,7 @@ Integrations**, and no longer three pages of their own with a shared provider ed
   including the base path (as for Jira), so iHub under `/ihub` sends
   `https://<host>/ihub/api/integrations/<provider>/<installation id>/callback`.
 - **Nothing changes for connected users:** existing connections, registered redirect URIs, project
-  cloud documents and the Nextcloud embed plugin keep working. Migrations V200 and V205 move the
+  cloud documents and the Nextcloud embed plugin keep working. Migrations V200 and V206 move the
   `platform.cloudStorage` providers into installations under the ids they had — a second provider
   of one type included — restore an Office 365 tenant id the first migration could not read, clean
   up the old tenant id credentials and bind every storage provider in the apps that had cloud

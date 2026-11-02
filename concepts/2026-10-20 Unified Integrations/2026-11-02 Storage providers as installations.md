@@ -1,7 +1,7 @@
 # Storage providers as installations (implementation notes)
 
 **Date:** 2026-11-02
-**Status:** Implemented on `claude/exciting-feynman-2aju98-storage` (migration V205)
+**Status:** Implemented on `claude/exciting-feynman-2aju98-storage` (migration V206)
 **Decision:** [07 · Types and built-in configuration, section 5](07-types-and-built-in-configuration.md), issue intrafind/ihub-apps#3094
 **User docs:** [docs/integrations.md → Built-in integrations](../../docs/integrations.md#built-in-integrations), [docs/apps.md → Files from storage providers](../../docs/apps.md#files-from-storage-providers), the three provider docs
 **Follow-up:** [2026-11-01 Storage provider contract](2026-11-01%20Storage%20provider%20contract.md) (third-party storage providers, not implemented)
@@ -35,7 +35,7 @@ installation id is used everywhere a provider id was: the routes
 (`/api/integrations/<service>/auth?providerId=<installation id>`), the callback URL
 (`/api/integrations/<service>/<installation id>/callback`), the users' token files
 (`contents/integrations/<service>/<userId>__<installation id>.json`), project cloud documents
-(`ref.providerId`) and the Nextcloud embed plugin (`ihub_provider_id`). V205 renamed every upgraded
+(`ref.providerId`) and the Nextcloud embed plugin (`ihub_provider_id`). V206 renamed every upgraded
 installation to the provider id it had, so nothing an admin registered or a user connected changed.
 
 Why not keep `providerId` as a separate value? With several installations two ids per provider
@@ -53,7 +53,7 @@ have.
 | `server/services/integrations/{Office365,GoogleDrive,Nextcloud}Service.js` | Unchanged apart from the redirect call; they work per `providerId` (= installation id) as before |
 | `server/routes/integrations/cloudStorageAccess.js` | Router middleware of the three route files: `providerId` required (400), unknown installation (404, not on `/status` and `/disconnect`), not granted (403); the callback path is left to the route |
 | `server/services/integrations/protocols/native/connectors/cloudStorage/index.js` | The connectors: test (client, settings, redirect URI, reachability, connected users), status and connections **per installation** |
-| `server/migrations/V205__storage_provider_installations.js` | The migration (below) |
+| `server/migrations/V206__storage_provider_installations.js` | The migration (below) |
 | `shared/storageBindings.js` | **Pure, server and client.** Which storage providers an app binds (`type:storage`, definition id, installation id) |
 | `client/src/shared/hooks/useFileUploadHandler.js` | `createUploadConfig(app, model).cloudStorage = { enabled, providers }`: the bound providers among those `/api/auth/status` lists (granted) |
 | `client/src/features/chat/components/ChatInput.jsx`, `ChatInputActionsMenu.jsx`, `client/src/features/upload/components/CloudStoragePicker.jsx` | Read `uploadConfig.cloudStorage.providers`; the picker takes `providers` as a prop |
@@ -66,7 +66,7 @@ have.
 | `server/validators/appConfigSchema.js` | `upload.cloudStorageUpload` refused with a message naming the binding |
 | `server/tests/integration-definition-releases.test.js` | #3092: every shipped definition a migration names has a release entry whose newest version is the definition's (allow-list `NOT_YET_RELEASED`, empty; it fails when a listed definition has its entry). This branch's own `integrations/definitionReleases.test.js` was folded into it when the people directories branch was merged in. |
 
-## The migration V205
+## The migration V206
 
 Order matters, so a run that stops half-way finds its work again on the next start:
 
@@ -94,15 +94,15 @@ Order matters, so a run that stops half-way finds its work again on the next sta
 
 Example: V200 left `{ id: "office365", values: { providerId: "o365-corp", … } }`, a group
 `finance` granting `["office365"]` and `cloudStorage.unmigrated.json` with a second Nextcloud
-`nextcloud-branch`. After V205: installations `o365-corp` and `nextcloud-branch`, `finance` grants
+`nextcloud-branch`. After V206: installations `o365-corp` and `nextcloud-branch`, `finance` grants
 `["o365-corp"]`, the users' `erin__o365-corp.json` still matches, and the parked file is gone.
 
 The encryption is the token storage service's, imported lazily and initialized by the migration
-(`deps.crypto` replaces it in tests), as V200 does. Tests: `server/tests/migration-v205.test.js`.
+(`deps.crypto` replaces it in tests), as V200 does. Tests: `server/tests/migration-v206.test.js`.
 
 **Found on the way:** V200 has the same uninitialized-key problem — its `tenantIdRef` decryption
 always fell into the warning branch, and a plain-text `clientSecret` would make it throw. V200 is
-applied and must not change; V205 repairs the tenant id, and the plain-text case is rare (V061
+applied and must not change; V206 repairs the tenant id, and the plain-text case is rare (V061
 moved secrets into the store long before).
 
 ## Redirect URI
@@ -128,11 +128,11 @@ no provider is enabled, which is rarely what an admin wants for a file picker.
 
 ## Tests
 
-- Server: `server/tests/migration-v205.test.js`, `integrations/cloudStorageConnector.test.js` (two
+- Server: `server/tests/migration-v206.test.js`, `integrations/cloudStorageConnector.test.js` (two
   Nextcloud installations side by side, per-installation counts, redirect derivation with base
   path), `integration-access.test.js` (grants per installation, the route middleware),
   `oauth-integration-refresh.test.js`, `migration-v200.test.js` (V200 output read back after
-  V205's rename), `integration-definition-releases.test.js`.
+  V206's rename), `integration-definition-releases.test.js`.
 - Client: `tests/unit/client/storage-provider-bindings.test.jsx` (binding, picker filter by
   binding and grant), `admin-storage-provider-editor.test.jsx`, the Storage providers card in
   `app-editor-integrations-section.test.jsx`, facts in `integration-groups-and-facts.test.jsx`.

@@ -15,7 +15,7 @@
  * - an installation id, e.g. `"nextcloud-hq"` — that installation.
  *
  * The binding replaced the app switch `upload.cloudStorageUpload.enabled`
- * (migration V205). The chat's file picker offers the providers the app binds
+ * (migration V206). The chat's file picker offers the providers the app binds
  * AND the user's groups grant: the server lists only granted providers in
  * `/api/auth/status` → `cloudStorage.providers`, and this module narrows that
  * list to the app's bindings.

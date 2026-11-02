@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: the Nextcloud providers of platform.cloudStorage become installations (migration V200); several installations per provider, the installation id is the provider id (migration V205).",
-        "de": "Erste Version: die Nextcloud-Anbieter aus platform.cloudStorage werden Installationen (Migration V200); mehrere Installationen je Anbieter, die Installations-ID ist die Anbieter-ID (Migration V205)."
+        "en": "First version: the Nextcloud providers of platform.cloudStorage become installations (migration V200); several installations per provider, the installation id is the provider id (migration V206).",
+        "de": "Erste Version: die Nextcloud-Anbieter aus platform.cloudStorage werden Installationen (Migration V200); mehrere Installationen je Anbieter, die Installations-ID ist die Anbieter-ID (Migration V206)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",
