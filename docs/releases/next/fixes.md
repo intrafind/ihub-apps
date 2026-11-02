@@ -15,7 +15,6 @@ named by the text they show (WCAG 2.5.3 Label in Name), for example "Select lang
 instead of "Select language". Speech-input users can activate them by reading the text on the
 button, and screen readers announce the same words that are visible.
 
-
 ## Admin Sidebar in German
 
 With German as the interface language, the admin sidebar showed most section and page names in
@@ -38,3 +37,24 @@ keyboard and with a screen reader.
   toggles its switch.
 - Workflow editor: for a workflow file without an `enabled` setting, the first click on the
   **Enabled** switch did nothing. It now turns the workflow off.
+
+## Marketplace: Downloads Stay Off Internal Addresses
+
+A registry's catalog could make the iHub server fetch from any address, including internal ones
+such as the cloud metadata endpoint: an item, a skill's or an integration's companion files and
+redirects were downloaded wherever the catalog pointed. The server now fetches from the
+registry's own host (also on a private address, so registries inside the company network keep
+working), from `api.github.com` and `raw.githubusercontent.com` for a registry on GitHub, and
+from any other host only when it has a public address.
+
+- Every redirect is checked again, at most 5 are followed, and a redirect to another host gets
+  none of the registry's credentials (between the GitHub hosts they are kept).
+- A refused download fails with a message that names the host, for example:
+
+  > Marketplace fetch from '169.254.169.254' refused: the host is not the registry's own host
+  > and not a public address (IP 169.254.169.254 is private)
+
+- A private registry whose items or companion files live on another internal host than its
+  catalog has to serve them from the catalog's host.
+
+See [Marketplace → Security](../../marketplace.md#security).
