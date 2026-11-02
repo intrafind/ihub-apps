@@ -31,7 +31,6 @@ import { getBoundIntegrationIds, getVisibleToolIds, toolVisibleInSet } from './p
 import { getMcpOAuthClientStore } from './mcpOAuthClientStore.js';
 import { McpAuthRequiredError, McpTokenRefreshError } from './McpUserOAuthProvider.js';
 import { readUserTokens, writeUserTokens, tokenBindingFor } from './mcpUserTokens.js';
-import { mcpConnectPath } from './mcpOAuthPublicUrl.js';
 import { OAuthUserClient, definitiveOAuthRejection } from '../integrations/auth/OAuthUserClient.js';
 import {
   NO_CLIENT_REGISTRATION,
@@ -125,16 +124,15 @@ export async function isServerVisibleToUser(user, serverConfig, catalogTools = [
 
 /**
  * The structured "connect first" tool result — returned, never thrown, so the
- * model can tell the user and the chat can render a Connect card. The common
- * fields are those of every integration (`INTEGRATION_AUTH_REQUIRED`); the
- * `authRequired` marker is what the chat's Connect card reads.
+ * model can tell the user and the chat can render the one Connect card
+ * (`INTEGRATION_AUTH_REQUIRED`, the same fields as every integration).
  *
  * @param {Object} serverConfig
  * @param {string} [language]
  * @param {Object} [options]
  * @param {string} [options.reason='not_connected'] - `not_connected` | `expired` | `insufficient_scope`
  * @param {string[]} [options.scopes] - Step-up: the scopes the re-authorization asks for
- * @returns {{error: string, integration: string, reason: string, message: string, connectUrl: string, authRequired: {serverId: string, serverName: string, connectUrl: string}}}
+ * @returns {{error: string, integration: string, reason: string, message: string, connectUrl: string, scopes?: string[]}}
  */
 export function buildAuthRequiredResult(
   serverConfig,
@@ -143,15 +141,13 @@ export function buildAuthRequiredResult(
 ) {
   const serverName = serverDisplayName(serverConfig, language);
   const stepUp = Array.isArray(scopes) && scopes.length > 0;
-  const connectUrl = stepUp
-    ? `${mcpConnectPath(serverConfig.id)}&scope=${encodeURIComponent(scopes.join(' '))}`
-    : mcpConnectPath(serverConfig.id);
   return integrationAuthRequiredResult({
     integration: serverConfig.id,
-    reason,
-    message: `Connect ${serverName} to use this tool: ${connectUrl}`,
-    connectUrl,
-    extra: { authRequired: { serverId: serverConfig.id, serverName, connectUrl } }
+    reason: stepUp ? INTEGRATION_AUTH_REASONS.INSUFFICIENT_SCOPE : reason,
+    message: stepUp
+      ? `${serverName} needs more permissions for this tool. Ask the user to reconnect ${serverName} with the Connect card in the chat.`
+      : `Connect ${serverName} to use this tool. Ask the user to connect ${serverName} with the Connect card in the chat.`,
+    ...(stepUp ? { scopes } : {})
   });
 }
 

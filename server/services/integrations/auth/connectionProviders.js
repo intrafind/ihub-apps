@@ -23,7 +23,6 @@
  */
 import tokenStorage from '../../TokenStorageService.js';
 import configCache from '../../../configCache.js';
-import { buildServerPath } from '../../../utils/basePath.js';
 import {
   JIRA_INSTANCE_ID,
   JIRA_TOKEN_SERVICE,
@@ -43,6 +42,7 @@ import {
 } from '../cloudStorageConfig.js';
 import { IASSISTANT_DEFINITION_ID, IFINDER_DEFINITION_ID } from '../ifinderConfig.js';
 import { settingsFingerprint, tokenSecretRef, tokenStorageIdFor } from './tokenSecrets.js';
+import { integrationConnectPath } from './integrationAuthRequired.js';
 
 /** The issuer of Atlassian Cloud's OAuth 2.0 (3LO) authorization server. */
 export const ATLASSIAN_ISSUER = 'https://auth.atlassian.com';
@@ -159,7 +159,7 @@ function jiraDescriptor() {
     fingerprint: settingsFingerprint({ stack: 'jira', clientId: cfg.clientId }),
     service: JIRA_TOKEN_SERVICE,
     resultKey: 'jira',
-    connectUrl: buildServerPath('/api/integrations/jira/auth'),
+    connectUrl: integrationConnectPath(JIRA_INSTANCE_ID),
     secret: tokenStoreSecret({ service: JIRA_TOKEN_SERVICE, providerId: null }),
     async strategy() {
       const { default: JiraService } = await import('../JiraService.js');
@@ -168,9 +168,15 @@ function jiraDescriptor() {
     redirectUri(req) {
       return resolveJiraRedirectUri(req, cfg);
     },
-    // Jira has never checked group grants on connect; the tools gate usage.
+    // The routes check the user's group grant; Jira itself adds nothing.
     async mayConnect() {
       return true;
+    },
+    /** "Connected as …": the Atlassian account the tokens belong to (best effort). */
+    async accountLabel(userId) {
+      const { default: JiraService } = await import('../JiraService.js');
+      const info = await JiraService.getUserInfo(userId);
+      return info?.emailAddress || info?.displayName || null;
     },
     async onConnected({ wasConnected }) {
       if (wasConnected) return;
@@ -228,9 +234,7 @@ function cloudDescriptor(instance) {
     fingerprint: cloudFingerprint(provider),
     service: spec.service,
     resultKey: provider.type,
-    connectUrl: buildServerPath(
-      `/api/integrations/${spec.service}/auth?providerId=${encodeURIComponent(provider.id)}`
-    ),
+    connectUrl: integrationConnectPath(provider.id),
     secret: tokenStoreSecret({ service: spec.service, providerId: provider.id }),
     async strategy() {
       const { default: service } = await loadService();
@@ -249,6 +253,21 @@ function cloudDescriptor(instance) {
     },
     async mayConnect(user) {
       return mayUseCloudStorageProvider(user, provider.id, provider.type);
+    },
+    /** "Connected as …": the provider account the tokens belong to (best effort). */
+    async accountLabel(userId) {
+      const { default: service } = await loadService();
+      if (typeof service.getUserInfo !== 'function') return null;
+      const info = await service.getUserInfo(userId, provider.id);
+      return (
+        info?.mail ||
+        info?.userPrincipalName ||
+        info?.emailAddress ||
+        info?.email ||
+        info?.displayName ||
+        info?.id ||
+        null
+      );
     },
     async onDisconnected({ removed }) {
       if (!removed) return;
@@ -362,7 +381,7 @@ async function mcpDescriptor(installationId) {
     fingerprint: clientStore.registrationFingerprint(serverConfig),
     service: tokens.MCP_TOKEN_SERVICE,
     resultKey: 'mcp',
-    connectUrl: publicUrl.mcpConnectPath(installationId),
+    connectUrl: integrationConnectPath(installationId),
     serverConfig,
     secret: mcpSecretStore(serverConfig, tokens),
     async strategy() {
@@ -374,6 +393,18 @@ async function mcpDescriptor(installationId) {
     },
     redirectUri(_req, ctx = {}) {
       return publicUrl.mcpCallbackUrl(ctx.publicBase, installationId);
+    },
+    /**
+     * What a sign-in needs from the request: iHub's public base (the
+     * callback and CIMD URLs are built on it) and whether that base may
+     * replace a client registration made for another one — only a configured
+     * Public URL or an admin's own sign-in may, never one request's Host.
+     */
+    async connectContext(req, user) {
+      const { publicBase, configured } = publicUrl.resolveMcpPublicBaseInfo(req);
+      if (!publicBase) return null;
+      const { isAdminUser } = await import('../../loop/runIdentity.js');
+      return { publicBase, trustedBase: Boolean(configured || isAdminUser(user)) };
     },
     async mayConnect(user) {
       if (serverConfig.enabled === false) return false;

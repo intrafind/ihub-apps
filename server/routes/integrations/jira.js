@@ -10,101 +10,28 @@ import { JIRA_INSTANCE_ID } from '../../services/integrations/jiraConfig.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import rateLimit from 'express-rate-limit';
 import {
   sendInternalError,
   sendAuthRequired,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
+import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
 
 // Gate all Jira routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
 
-// Same 10 req/min cap the other OAuth integrations put on flow initiation.
-const jiraAuthLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
-// Jira has a single connection per user, so there is no providerId in any route.
+// The OAuth callback registered in the vendor app: an alias of the one integration
+// callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
+// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
 // The redirect URI sent to Atlassian is the configured one or derived from the
-// request (resolveJiraRedirectUri); `/callback` is an alias of the one
-// integration callback, kept because it is registered in the Atlassian app.
-createOAuthIntegrationRouter(router, {
+// request (resolveJiraRedirectUri).
+registerIntegrationCallbackAlias(router, {
   providerKey: 'jira',
-  displayName: 'JIRA',
   requiresProviderId: false,
   installationId: JIRA_INSTANCE_ID,
-  stack: 'jira',
-  authLimiter: jiraAuthLimiter,
-  isUserAuthenticated: userId => JiraService.isUserAuthenticated(userId),
-  getUserInfo: userId => JiraService.getUserInfo(userId),
-  getTokenExpirationInfo: userId => JiraService.getTokenExpirationInfo(userId),
-  deleteUserTokens: (userId, _providerId, req) => JiraService.deleteUserTokens(userId, req),
-  formatUserInfo: userInfo => ({
-    displayName: userInfo.displayName,
-    emailAddress: userInfo.emailAddress,
-    accountType: userInfo.accountType,
-    active: userInfo.active
-  })
-});
-
-/**
- * Refresh JIRA connection and force token refresh
- * POST /api/integrations/jira/refresh
- */
-router.post('/refresh', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    logger.info('Manual JIRA refresh requested', { component: 'Jira', userId: req.user.id });
-
-    // Force a fresh check of authentication which will trigger refresh if needed
-    const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
-
-    if (!isAuthenticated) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
-
-    // Get user info to confirm everything is working
-    const userInfo = await JiraService.getUserInfo(req.user.id);
-
-    // Get updated token info
-    const tokenInfo = await JiraService.getTokenExpirationInfo(req.user.id);
-
-    res.json({
-      success: true,
-      userInfo: {
-        displayName: userInfo.displayName,
-        emailAddress: userInfo.emailAddress,
-        accountType: userInfo.accountType,
-        active: userInfo.active
-      },
-      tokenInfo: {
-        expiresAt: tokenInfo.expiresAt,
-        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-        isExpiring: tokenInfo.isExpiring,
-        isExpired: tokenInfo.isExpired
-      },
-      message: 'JIRA connection refreshed successfully'
-    });
-  } catch (error) {
-    logger.error('Error refreshing JIRA connection', { component: 'Jira', error });
-
-    if (error.message.includes('authentication required') || error.message.includes('expired')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
-
-    return sendInternalError(res, error, 'refresh JIRA connection');
-  }
+  stack: 'jira'
 });
 
 /**

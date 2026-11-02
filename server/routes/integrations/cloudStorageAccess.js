@@ -5,33 +5,28 @@ import {
   findCloudStorageProvider,
   mayUseCloudStorage
 } from '../../services/integrations/cloudStorageConfig.js';
-
-/**
- * Paths of a storage router that stay open whatever the grant and whether the
- * installation still exists: a user whose group lost a provider, or whose
- * provider was removed, can still see that a connection exists and remove it.
- */
-const ALWAYS_OPEN_PATHS = new Set(['/status', '/disconnect']);
+import {
+  INTEGRATION_AUTH_REASONS,
+  INTEGRATION_AUTH_REQUIRED,
+  integrationAuthRequiredResult,
+  isIntegrationAuthRequired
+} from '../../services/integrations/auth/integrationAuthRequired.js';
 
 /**
  * The OAuth callback (`/<installation id>/callback`) carries the installation
- * id in the path and is bound to the user by the signed `state` ticket; the
+ * id in the path and is bound to the user by the server-side `state`; the
  * provider redirects the browser there, so it cannot name a query parameter.
  */
 const CALLBACK_PATH = /^\/[^/]+\/callback$/;
 
 /**
- * The installation a request names: `?providerId=` (every route), or
- * `providerId` in the JSON body (`POST /disconnect`).
+ * The installation a request names: `?providerId=` (every route).
  * @param {import('express').Request} req
  * @returns {string}
  */
 export function requestedProviderId(req) {
   if (typeof req.query?.providerId === 'string' && req.query.providerId) {
     return req.query.providerId;
-  }
-  if (typeof req.body?.providerId === 'string' && req.body.providerId) {
-    return req.body.providerId;
   }
   return '';
 }
@@ -44,11 +39,9 @@ export function requestedProviderId(req) {
  * 400. Then:
  *
  * - an installation that does not exist (or belongs to another provider) is
- *   refused with 404 — except on `/status` and `/disconnect`, which answer for
- *   connections whose installation is gone;
+ *   refused with 404;
  * - an installation the user's groups do not grant
- *   (`groups.json` → `permissions.integrations`; #3093) is refused with 403 —
- *   again except `/status` and `/disconnect`;
+ *   (`groups.json` → `permissions.integrations`; #3093) is refused with 403;
  * - the OAuth callback (`/<installation id>/callback`) is left to the route.
  *
  * @param {string} type - Provider type: `office365` | `googledrive` | `nextcloud`
@@ -68,7 +61,6 @@ export function requireCloudStorageGrant(type) {
         code: 'STORAGE_PROVIDER_REQUIRED'
       });
     }
-    if (ALWAYS_OPEN_PATHS.has(req.path)) return next();
     const provider = findCloudStorageProvider(providerId, type);
     if (!provider) {
       return res.status(404).json({
@@ -82,6 +74,40 @@ export function requireCloudStorageGrant(type) {
       code: 'INTEGRATION_NOT_GRANTED'
     });
   };
+}
+
+/**
+ * Answer a browse or download request that failed because the user has no
+ * usable connection to the provider with the one "connect first" body
+ * (`INTEGRATION_AUTH_REQUIRED`, `reason`, `connectUrl`), status 409 — not 401,
+ * which would read as an expired iHub session. The file browser then shows
+ * the Connect card.
+ *
+ * @param {import('express').Response} res
+ * @param {Error} error - What the provider service threw
+ * @param {string} installationId - The provider installation the request named
+ * @returns {boolean} True when a response was sent
+ *
+ * @example
+ * } catch (error) {
+ *   if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
+ *   return sendInternalError(res, error, 'list items');
+ * }
+ */
+export function respondIfAuthRequired(res, error, installationId) {
+  if (!isIntegrationAuthRequired(error)) return false;
+  const integration = error.integration || installationId;
+  res.status(409).json({
+    ...integrationAuthRequiredResult({
+      integration,
+      reason: error.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
+      message: error.message,
+      connectUrl: error.connectUrl || undefined,
+      scopes: error.scopes || undefined
+    }),
+    code: INTEGRATION_AUTH_REQUIRED
+  });
+  return true;
 }
 
 export default requireCloudStorageGrant;

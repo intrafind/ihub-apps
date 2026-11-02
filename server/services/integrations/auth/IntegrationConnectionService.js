@@ -124,49 +124,31 @@ export function returnPathWith(returnUrl, params = {}) {
   return `/${pathPart}`;
 }
 
-/** The query parameters a stack's result page reads (`jira_connected`, `mcp_error`, …). */
-export function resultParams(descriptorOrStack, outcome) {
-  const stack =
-    typeof descriptorOrStack === 'string' ? descriptorOrStack : descriptorOrStack?.stack;
-  const key =
-    typeof descriptorOrStack === 'object' && descriptorOrStack?.resultKey
-      ? descriptorOrStack.resultKey
-      : 'integration';
-  const installationId =
-    typeof descriptorOrStack === 'object' ? descriptorOrStack?.installationId : undefined;
-  if (outcome.ok) {
-    return stack === 'mcp' ? { mcp_connected: installationId } : { [`${key}_connected`]: 'true' };
-  }
-  const code = stackErrorCode(stack, outcome.code);
-  return stack === 'mcp'
-    ? { mcp_error: code, ...(installationId ? { mcp_server: installationId } : {}) }
-    : { [`${key}_error`]: code };
-}
-
 /**
- * The stable error code a stack's client page knows. MCP and the other stacks
- * grew their own vocabularies before they shared a callback; both are kept.
+ * The query parameters the browser comes back with after a sign-in, the same
+ * for every protocol: `integration_connected=<installation id>` on success,
+ * `integration_error=<code>&integration=<installation id>` on failure. `code`
+ * is one of `OAUTH_FLOW_ERROR_CODES` (stable, never text from the
+ * authorization server). The chat's Connect card and Settings → Integrations
+ * read them (client `features/integrations/connect/connectResult.js`).
+ *
+ * @param {string|{installationId?: string}|null} descriptorOrId - The installation (id or descriptor)
+ * @param {{ok: boolean, code?: string}} outcome
+ * @returns {Record<string, string>}
+ *
+ * @example
+ *   resultParams('jira', { ok: true });                  // { integration_connected: 'jira' }
+ *   resultParams('jira', { ok: false, code: 'access_denied' });
+ *   // { integration_error: 'access_denied', integration: 'jira' }
  */
-function stackErrorCode(stack, code) {
-  if (stack === 'mcp') {
-    if (code === OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND) return 'server_not_found';
-    if (code === OAUTH_FLOW_ERROR_CODES.ACCESS_DENIED) return 'oauth_failed';
-    if (code === OAUTH_FLOW_ERROR_CODES.INVALID_CLIENT) return 'exchange_failed';
-    if (code === OAUTH_FLOW_ERROR_CODES.CALLBACK_FAILED) return 'exchange_failed';
-    return code;
-  }
-  switch (code) {
-    case OAUTH_FLOW_ERROR_CODES.STATE_EXPIRED:
-      return 'session_expired';
-    case OAUTH_FLOW_ERROR_CODES.USER_MISMATCH:
-    case OAUTH_FLOW_ERROR_CODES.INTEGRATION_NOT_FOUND:
-      return 'invalid_state';
-    case OAUTH_FLOW_ERROR_CODES.EXCHANGE_FAILED:
-    case OAUTH_FLOW_ERROR_CODES.ISSUER_MISMATCH:
-      return 'callback_failed';
-    default:
-      return code;
-  }
+export function resultParams(descriptorOrId, outcome) {
+  const installationId =
+    typeof descriptorOrId === 'string' ? descriptorOrId : descriptorOrId?.installationId || null;
+  if (outcome.ok) return { integration_connected: installationId };
+  return {
+    integration_error: outcome.code || OAUTH_FLOW_ERROR_CODES.OAUTH_FAILED,
+    ...(installationId ? { integration: installationId } : {})
+  };
 }
 
 /**
@@ -389,13 +371,15 @@ export class IntegrationConnectionService {
    */
   async resolve(principal, installationId, { requiredScopes = [] } = {}) {
     const descriptor = await this.describe(installationId);
-    const fail = (reason, message, connectUrl = descriptor?.connectUrl) => ({
+    const fail = (reason, message, connectUrl = descriptor?.connectUrl, scopes) => ({
       ok: false,
       error: new IntegrationAuthRequiredError({
         integration: installationId,
         reason,
         message,
-        connectUrl
+        // `insufficient_scope` goes to the reconnect route (the error's default).
+        connectUrl: reason === INTEGRATION_AUTH_REASONS.INSUFFICIENT_SCOPE ? undefined : connectUrl,
+        scopes
       })
     });
     if (!descriptor || descriptor.enabled === false) {
@@ -456,7 +440,10 @@ export class IntegrationConnectionService {
     if (granted.size > 0 && missing.length > 0) {
       return fail(
         INTEGRATION_AUTH_REASONS.INSUFFICIENT_SCOPE,
-        `${descriptor.displayName} needs more permissions (${missing.join(', ')}). Please reconnect your account.`
+        `${descriptor.displayName} needs more permissions (${missing.join(', ')}). Please reconnect your account.`,
+        undefined,
+        // What a reconnect asks for: everything granted plus what is missing.
+        unionScopes([...granted], missing)
       );
     }
     return { ok: true, kind: 'oauth-user', connection: record };
@@ -566,7 +553,19 @@ export class IntegrationConnectionService {
       );
     }
     const userId = String(user.id);
-    const ctx = { publicBase, trustedBase };
+    // A protocol that needs more from the request than the redirect URI (MCP:
+    // the public base its callback and CIMD URLs are built on) says so itself.
+    let ctx = { publicBase, trustedBase };
+    if (!publicBase && typeof descriptor.connectContext === 'function') {
+      const derived = await descriptor.connectContext(req, user);
+      if (!derived) {
+        throw new OAuthFlowError(
+          OAUTH_FLOW_ERROR_CODES.DISCOVERY_FAILED,
+          `The public URL of ${installationId} is unknown`
+        );
+      }
+      ctx = derived;
+    }
     const redirectUri = descriptor.redirectUri(req, ctx);
     let stepUp = null;
     if (Array.isArray(scopes) && scopes.length) {
@@ -852,6 +851,31 @@ export class IntegrationConnectionService {
       summary: `Connected ${descriptor.displayName} (${descriptor.installationId})${flow.stepUp ? ' with additional scopes' : ''}`
     });
     await descriptor.onConnected?.({ userId, user: req?.user, wasConnected });
+    await this._recordAccountLabel(descriptor, id, userId);
+  }
+
+  /**
+   * "Connected as …": ask the provider whose account the new tokens belong to
+   * and keep the label on the record (`externalAccount.label`), so listing a
+   * user's integrations never calls a vendor. Best effort: a failure leaves
+   * the record without a label.
+   */
+  async _recordAccountLabel(descriptor, id, userId) {
+    if (typeof descriptor.accountLabel !== 'function') return;
+    try {
+      const label = await descriptor.accountLabel(userId);
+      if (typeof label !== 'string' || !label) return;
+      const record = await this.getConnection(id);
+      await this.updateConnection(id, {
+        externalAccount: { ...(record?.externalAccount || {}), label: label.slice(0, 512) }
+      });
+    } catch (error) {
+      logger.info('Could not read the account of a new connection', {
+        component: COMPONENT,
+        integration: descriptor.installationId,
+        error: error.message
+      });
+    }
   }
 
   // ── Use and refresh ─────────────────────────────────────────────────────
@@ -1191,6 +1215,7 @@ export class IntegrationConnectionService {
       reason: error.reason,
       message: error.message,
       connectUrl: error.connectUrl || undefined,
+      scopes: error.scopes || undefined,
       extra
     });
   }

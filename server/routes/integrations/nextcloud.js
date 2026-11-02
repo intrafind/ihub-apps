@@ -9,16 +9,18 @@ import NextcloudService from '../../services/integrations/NextcloudService.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import rateLimit from 'express-rate-limit';
 import {
   sendInternalError,
   sendAuthRequired,
-  sendBadRequest,
-  sendErrorResponse
+  sendBadRequest
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
-import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
-import { requireCloudStorageGrant } from './cloudStorageAccess.js';
+import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
+import {
+  requireCloudStorageGrant,
+  requestedProviderId,
+  respondIfAuthRequired
+} from './cloudStorageAccess.js';
 
 const router = express.Router();
 
@@ -43,35 +45,14 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('nextcloud'));
 
-const nextcloudAuthLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
+// The OAuth callback registered in the vendor app: an alias of the one integration
+// callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
+// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
 // The sign-in runs through the connection service (PKCE, server-side state).
-createOAuthIntegrationRouter(router, {
+registerIntegrationCallbackAlias(router, {
   providerKey: 'nextcloud',
-  displayName: 'Nextcloud',
   requiresProviderId: true,
-  stack: 'cloud-storage',
-  authLimiter: nextcloudAuthLimiter,
-  tolerateUserInfoFailure: true,
-  isUserAuthenticated: (userId, providerId) =>
-    NextcloudService.isUserAuthenticated(userId, providerId),
-  getUserInfo: (userId, providerId) => NextcloudService.getUserInfo(userId, providerId),
-  getTokenExpirationInfo: (userId, providerId) =>
-    NextcloudService.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId, req) =>
-    NextcloudService.deleteUserTokens(userId, providerId, req),
-  formatUserInfo: userInfo => ({
-    displayName: userInfo.displayName,
-    email: userInfo.email,
-    userPrincipalName: userInfo.id,
-    serverUrl: userInfo.serverUrl
-  })
+  stack: 'cloud-storage'
 });
 
 /**
@@ -150,9 +131,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       ]
     });
   } catch (error) {
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
     return sendInternalError(res, error, 'list Nextcloud drives');
   }
 });
@@ -196,9 +175,7 @@ router.get('/items', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'list Nextcloud items');
   }
@@ -243,9 +220,7 @@ router.get('/download', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (error.message.includes('authentication required')) {
-      return sendErrorResponse(res, 401, 'Authentication required');
-    }
+    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
 
     return sendInternalError(res, error, 'download Nextcloud file');
   }

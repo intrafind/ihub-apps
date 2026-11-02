@@ -22,7 +22,8 @@ import {
   readUserTokens,
   readUserTokensFor
 } from './mcpUserTokens.js';
-import { resolveMcpPublicBase, mcpConnectPath } from './mcpOAuthPublicUrl.js';
+import { resolveMcpPublicBase } from './mcpOAuthPublicUrl.js';
+import { integrationConnectPath } from '../integrations/auth/integrationAuthRequired.js';
 import {
   buildAuthRequiredResult,
   isUserOAuthServer,
@@ -706,12 +707,13 @@ class McpClientManager {
   }
 
   /**
-   * The relative path a user opens to connect a server.
+   * The route that starts a user's sign-in to a server (the one connect flow,
+   * `POST /api/integrations/:id/connect`).
    * @param {string} serverId
    * @returns {string}
    */
   connectUrlFor(serverId) {
-    return mcpConnectPath(serverId);
+    return integrationConnectPath(serverId);
   }
 
   /**
