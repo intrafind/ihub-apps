@@ -90,14 +90,14 @@ describe('what a tool result says about its integration', () => {
         integration: 'jira',
         reason: 'not_connected',
         message: 'Please connect your JIRA account to search tickets',
-        connectUrl: '/api/integrations/jira/auth'
+        connectUrl: '/api/integrations/jira/connect'
       }),
       {
         toolId: 'jira_searchTickets',
         message: 'Please connect your JIRA account to search tickets',
         integration: 'jira',
         reason: 'not_connected',
-        connectUrl: '/api/integrations/jira/auth'
+        connectUrl: '/api/integrations/jira/connect'
       }
     );
   });

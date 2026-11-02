@@ -479,6 +479,26 @@ The **Settings** tab of these installations is a dedicated editor instead of the
 
 See [Integrations → Editors](../../integrations.md#editors).
 
+## One Connect Card for Every Integration
+
+When a request needs an integration the user has not connected yet — Jira, a storage provider or
+an MCP server with per-user sign-in — the chat now shows one Connect card that looks and works the
+same for all of them, and the request goes on by itself once the user is connected.
+
+- The card says why iHub needs to act as the user for this request, which permissions that covers
+  in plain words (the integration's actions, grouped as read and write) and where the sign-in
+  happens, with **Connect** and **Not now**.
+- After the vendor's consent the user lands back in the same chat, and the request that needed
+  the connection is retried once. A call that failed for any other reason is never retried by
+  itself, because a change may already have been made.
+- A connection that expired or lacks a permission shows **Reconnect** and says why and what
+  changes; the connection is kept and gains the new permission.
+- The file pickers of Office 365, Google Drive and Nextcloud show the same card when the user is
+  not connected.
+- `GET /api/integrations` lists, for the signed-in user, every integration their groups allow with
+  its actions and how it runs for them: connected as their account, signed in via SSO, service
+  account, shared key, not connected, or reconnect needed.
+
 ## Sources Panel: Where Each Document Was Found
 
 The sources panel under an answer now says where each document came from. Every iFinder card
