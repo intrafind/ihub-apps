@@ -27,7 +27,6 @@
  * Template escaping and the response mapping live in `httpTemplates.js`.
  */
 import credentialService from '../../../CredentialService.js';
-import { resolveCredentialAuth } from '../../../tools/OpenApiToolRunner.js';
 import { safeFetch, assertSafeHost } from '../../../mcp/safeFetch.js';
 import { httpFetch, describeProxyRouting } from '../../../../utils/httpConfig.js';
 import logger from '../../../../utils/logger.js';
@@ -76,6 +75,8 @@ async function authFor(definition, instance, values, resolveSecret, ssrfOpts) {
   const account = definition.auth.serviceAccount || {};
   const kind = account.kind || 'header';
   if (kind === 'credential' && resolveSecret === storedSecret) {
+    // Lazy: the runner pulls in the OpenAPI parser, which an http-only call never needs.
+    const { resolveCredentialAuth } = await import('../../../tools/OpenApiToolRunner.js');
     return resolveCredentialAuth(ref, ssrfOpts);
   }
   const secret = resolveSecret(ref);

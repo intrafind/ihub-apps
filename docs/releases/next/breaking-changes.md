@@ -259,6 +259,40 @@ restored from a backup after the upgrade fails validation until the block is rem
   overrides in use by the shipped configuration; an override of that path no longer applies.
 - **Validator:** `server/validators/cloudStorageSchema.js` is removed.
 
+## The Tools Page Is Gone: Admin Tools Became Custom Integrations
+
+**Admin → Tools** (the list, the tool editor, the OpenAPI tool editor and the script editor) is
+removed without a redirect, and so are its routes. Migration V211 turns every tool file an admin
+created in `contents/tools/` into a custom integration, which **Admin → Integrations → Add
+manually** builds and **Edit in builder** edits.
+
+- **Removed endpoints** (no aliases): `GET` / `POST /api/admin/tools`,
+  `GET` / `PUT` / `DELETE /api/admin/tools/:toolId`, `POST /api/admin/tools/:toolId/toggle`,
+  `GET` / `PUT /api/admin/tools/:toolId/script` and `POST /api/admin/tools/openapi/parse`. Use
+  `/api/admin/integrations/builder*` (create, read, save, `_import`, `_export`) and
+  `GET /api/admin/integrations/tools` (every tool id an app, workflow or agent can name) instead.
+- **Tool files migrated:** a script tool becomes a `script` integration whose generated module runs
+  the same script in `server/tools/`, one action per function; an OpenAPI tool becomes an `openapi`
+  integration with its document copied (or its URL kept) and its credential sent as before. Every
+  action keeps its **tool id** (`myTool`, `myTool_search`), so apps, workflows, agent profiles,
+  group tool grants, the MCP and A2A gateways and app approval overrides keep working. The tools'
+  `enabled`, `approval`, `sideEffect` and `dataFlow` move onto the installation and its actions;
+  apps that listed a tool bind its integration instead (`app.integrations`). Groups with an explicit
+  integrations list get the new installations. The tool file is deleted.
+- **Not carried over:** `passthrough`, `concurrency` and `requestDelayMs` of a tool file (named in
+  the log). A tool whose id cannot be kept, or whose functions collide as action names, stays in
+  `contents/tools/` with a warning. Shipped and platform tools are not touched.
+- **OpenAPI tool files** are no longer read: one put back by hand is skipped with a warning. A
+  hand-written script tool file still loads as a plain tool, but has no admin page; switching a
+  platform tool such as `read_url` off is done in its file.
+- **Admin pickers** (app and agent tool selectors, workflow tool and prompt nodes, agent memory)
+  read `GET /api/admin/integrations/tools` and now list every tool, not only tool files.
+
+**Before upgrading:** Deployments or scripts that call `/api/admin/tools*` or write OpenAPI tool
+files have to use the integration builder routes instead. Review the migrated integrations in the
+**Custom** group of **Admin → Integrations** after the upgrade, and check the log for tool files
+V211 left in place.
+
 ## Installed Integrations No Longer Carry Groups
 
 Who may use an installed integration is now granted on the groups (`groups.json` →

@@ -44,7 +44,7 @@ can only tighten them, never loosen them (a looser app value is ignored and logg
 | # | Layer                    | Where                                                                                         | Set by |
 | - | ------------------------ | --------------------------------------------------------------------------------------------- | ------ |
 | 1 | Platform default         | `platform.json` → `toolApproval.defaults.internal` / `.external`, else `.default`. **Admin → Security → Tool approval** | Admin |
-| 2 | Tool file                | `contents/tools/<id>.json` → `approval` (per function, else the tool's). `requiresApproval: true` counts as `always`. **Admin → Tools → Edit → Approval** | Admin |
+| 2 | Tool file                | `contents/tools/<id>.json` → `approval` (per function, else the tool's). `requiresApproval: true` counts as `always`. a hand-written tool file; the admin-created ones became custom integrations (V211), whose approval is set per action in the [integration builder](integrations.md#custom-integrations-add-manually) | Admin |
 | 2 | Installation default     | `integrations.json` → `installed[].approval.default`. **Admin → Integrations → an installation → Overview** | Admin |
 | 3 | Installation action      | `installed[].approval.actions[<action name>]`, keyed by the action's own name (an MCP tool's name, never the prefixed tool id) | Admin |
 | 4 | App override             | App → `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default`. **Admin → Apps → Edit → Tools** | App author |

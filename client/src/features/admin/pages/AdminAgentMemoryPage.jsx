@@ -11,7 +11,7 @@ import {
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
-import { fetchToolsBasic } from '../../../api/endpoints/misc';
+import { fetchAdminToolCatalog } from '../../../api/integrationsAdminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import MemoryEditor from '../../../shared/components/MemoryEditor';
 
@@ -38,8 +38,8 @@ export default function AdminAgentMemoryPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const list = await fetchToolsBasic();
-        // The tool listing (`GET /api/tools`) has every function of a
+        const list = await fetchAdminToolCatalog();
+        // The tool catalog (`GET /api/admin/integrations/tools`) has every function of a
         // function-style tool as its own entry already (`iFinder_discover`,
         // carrying `method`); an entry that still holds `functions` and no
         // `method` is expanded the same way here for the picker.

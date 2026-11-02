@@ -184,6 +184,17 @@ export const resetIntegrationRegistration = async id =>
 export const fetchPeopleDirectoryEditorContext = async () =>
   (await makeAdminApiCall(`${BASE}/people-directories/editor-context`)).data;
 
+/**
+ * Every tool an app, workflow or agent can name (the admin pickers): the
+ * platform tools, tool files left in `contents/tools/` and the actions of the
+ * enabled installations, each with `integration: { instanceId, label, action }`
+ * when it belongs to one. Replaces the removed `GET /api/admin/tools`.
+ */
+export const fetchAdminToolCatalog = async () => {
+  const data = (await makeAdminApiCall(`${BASE}/tools`)).data;
+  return Array.isArray(data) ? data : [];
+};
+
 // --- Integration builder (Admin → Integrations → Add manually) -------------
 // Server: `server/routes/admin/integrationBuilder.js`.
 

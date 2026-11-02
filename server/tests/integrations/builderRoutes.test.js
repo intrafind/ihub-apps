@@ -60,6 +60,16 @@ jest.unstable_mockModule('../../services/integrations/integrationTools.js', () =
   syncIntegrationScopeProviders: async () => []
 }));
 jest.unstable_mockModule('../../configSync.js', () => ({ announceConfigChange: () => {} }));
+jest.unstable_mockModule('../../toolLoader.js', () => ({
+  loadTools: async () => [
+    { id: 'write_memory', name: 'Write memory', description: 'Agent memory' },
+    {
+      id: 'legacyLookup',
+      name: 'Legacy: lookup',
+      _integration: { instanceId: 'legacy', instanceLabel: 'Legacy', action: 'lookup' }
+    }
+  ]
+}));
 // The runner pulls in the dereferencing parser, which jest cannot load as ESM.
 jest.unstable_mockModule('../../services/tools/OpenApiToolRunner.js', () => ({
   invalidateSpecCache: () => {},
@@ -176,6 +186,7 @@ afterAll(async () => {
 
 describe('admin only', () => {
   it.each([
+    ['get', '/api/admin/integrations/tools'],
     ['post', '/api/admin/integrations/builder'],
     ['get', '/api/admin/integrations/builder/orders'],
     ['put', '/api/admin/integrations/builder/orders'],
@@ -406,6 +417,20 @@ describe('export', () => {
       request(app).post('/api/admin/integrations/builder/_export/local')
     ).expect(409);
     expect(res.body.code).toBe('NOT_PUBLISHABLE');
+  });
+});
+
+describe('tool catalog', () => {
+  it('lists every tool the admin pickers offer, with its installation', async () => {
+    const res = await admin(request(app).get('/api/admin/integrations/tools')).expect(200);
+    expect(res.body).toEqual([
+      { id: 'write_memory', name: 'Write memory', description: 'Agent memory' },
+      {
+        id: 'legacyLookup',
+        name: 'Legacy: lookup',
+        integration: { instanceId: 'legacy', label: 'Legacy', action: 'lookup' }
+      }
+    ]);
   });
 });
 

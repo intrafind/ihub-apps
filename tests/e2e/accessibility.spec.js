@@ -344,7 +344,6 @@ const CLEAN_PAGES = [
   '/start',
   '/admin/providers',
   '/admin/prompts',
-  '/admin/tools',
   '/admin/skills',
   '/admin/workflows',
   '/admin/agents',
@@ -355,6 +354,8 @@ const CLEAN_PAGES = [
   '/admin/mcp/gateway',
   '/admin/credentials',
   '/admin/integrations',
+  // The integration builder (Add manually), which replaced the Tools page.
+  '/admin/integrations/builder/new',
   // A built-in installation a fresh contents/ ships: its own page.
   '/admin/integrations/websearch',
   '/admin/integrations/jira',

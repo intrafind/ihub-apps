@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import FormField from './FormField';
 import JsonField from './JsonField';
 import ResourcePicker from './ResourcePicker';
-import { fetchToolsBasic } from '../../../../../api/endpoints/misc';
+import { fetchAdminToolCatalog } from '../../../../../api/integrationsAdminApi';
 
 /**
  * Resolves the localized-or-plain `name`/`description` shapes the tools API
@@ -20,12 +20,12 @@ function text(value, fallback = '') {
 /**
  * A workflow calls one function of a multi-function tool by its expanded id
  * — `iFinder` holds `getContent`, which `runTool` reaches as
- * `iFinder_getContent`. The tool listing (`GET /api/tools`) already has one
+ * `iFinder_getContent`. The tool catalog (`GET /api/admin/integrations/tools`) has one
  * entry per function (carrying `method`); an entry that still holds a
  * `functions` map is expanded here, so the picker's value is something the
  * engine can actually run.
  *
- * @param {Array<object>} tools - Tool list from `GET /api/tools`
+ * @param {Array<object>} tools - Tool list from `GET /api/admin/integrations/tools`
  * @returns {Array<{id: string, name: string, description: string}>}
  */
 export function expandToolFunctions(tools) {
@@ -56,7 +56,7 @@ export function expandToolFunctions(tools) {
 
 function ToolForm({ config, onChange, variables }) {
   const fetchToolsFn = useCallback(async () => {
-    const tools = await fetchToolsBasic();
+    const tools = await fetchAdminToolCatalog();
     return expandToolFunctions(Array.isArray(tools) ? tools : tools?.tools);
   }, []);
 

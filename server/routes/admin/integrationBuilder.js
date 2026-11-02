@@ -26,6 +26,7 @@ import { builderImportSchema } from '../../validators/integrationBuilderSchema.j
  * | `PUT  /api/admin/integrations/builder/:id`           | save a custom integration                   |
  * | `POST /api/admin/integrations/builder/_import`       | list the actions of an OpenAPI, MCP or A2A source |
  * | `POST /api/admin/integrations/builder/_export/:id`   | the package a registry serves               |
+ * | `GET  /api/admin/integrations/tools`                 | every tool id the admin pickers offer       |
  *
  * Every route is admin-only.
  */
@@ -48,7 +49,51 @@ function sendBuilderError(res, error, context) {
   return sendInternalError(res, error, context);
 }
 
+/** A tool as the admin pickers list it. */
+export function toolCatalogEntry(tool) {
+  const integration = tool._integration
+    ? {
+        instanceId: tool._integration.instanceId,
+        label: tool._integration.instanceLabel,
+        action: tool._integration.action
+      }
+    : null;
+  return {
+    id: tool.id,
+    name: tool.name,
+    description: tool.description,
+    ...(integration ? { integration } : {})
+  };
+}
+
 export default function registerAdminIntegrationBuilderRoutes(app) {
+  /**
+   * @swagger
+   * /api/admin/integrations/tools:
+   *   get:
+   *     summary: Every tool an app, workflow or agent can name
+   *     description: |
+   *       The tool ids the admin pickers offer (app and agent editors, workflow tool and
+   *       prompt nodes, agent memory): the platform tools of workflows and agents, tool files
+   *       left in `contents/tools/`, and every available action of the enabled installed
+   *       integrations (custom ones included), each with the installation it belongs to.
+   *       Not filtered by the admin's own group grants.
+   *     tags:
+   *       - Admin - Integrations
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   */
+  app.get(buildServerPath('/api/admin/integrations/tools'), adminAuth, async (req, res) => {
+    try {
+      const { loadTools } = await import('../../toolLoader.js');
+      const tools = await loadTools(languageOf(req));
+      res.json((tools || []).map(toolCatalogEntry));
+    } catch (error) {
+      sendInternalError(res, error, 'list tools');
+    }
+  });
+
   /**
    * @swagger
    * /api/admin/integrations/builder/_import:
