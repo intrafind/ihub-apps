@@ -79,12 +79,13 @@ Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/ne
         "redirectUri": "https://ihub.example.com/api/integrations/nextcloud/nextcloud-main/callback",
         "providerId": "nextcloud-main"
       },
-      "auth": { "mode": "oauth-user" },
-      "allowedGroups": []
+      "auth": { "mode": "oauth-user" }
     }
   ]
 }
 ```
+
+> **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
 > **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider here.
 

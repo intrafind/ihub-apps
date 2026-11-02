@@ -158,12 +158,13 @@ The installation lives in `contents/config/integrations.json`; the client secret
         "sourceFollowedSites": true,
         "sourceTeams": true
       },
-      "auth": { "mode": "oauth-user" },
-      "allowedGroups": []
+      "auth": { "mode": "oauth-user" }
     }
   ]
 }
 ```
+
+> **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
 > Migration V200 moved the former `platform.cloudStorage` provider here. Its `id` (e.g. `office365-1`) became the installation's **Provider id** value when it differed from `office365`, so the registered redirect URI and the users' connections stayed valid.
 

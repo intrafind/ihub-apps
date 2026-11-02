@@ -62,10 +62,13 @@ installation looks like this:
   "enabled": true,
   "values": { "transport": "streamableHttp", "url": "https://api.githubcopilot.com/mcp/" },
   "auth": { "mode": "service-account", "credentialRef": "integration-github-secret" },
-  "actions": { "enabled": ["*"], "disabled": [] },
-  "allowedGroups": []
+  "actions": { "enabled": ["*"], "disabled": [] }
 }
 ```
+
+Who may use the server is granted on the groups (`groups.json` →
+`permissions.integrations`: `*`, the installation id, the definition id), see
+[Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
 The file's `security` block (`blockPrivateIps`, `allowedHosts`) applies to
 every integration, MCP servers included (see [Security](#security)).
@@ -417,8 +420,8 @@ by default, or some of them by action name:
 ```
 
 Listing a server id or a prefixed tool id in `app.tools` (`["drawio"]`,
-`["drawio__create_diagram"]`) no longer selects anything. The installation's
-groups (`allowedGroups`) and the binding's action list apply in the chat and
+`["drawio__create_diagram"]`) no longer selects anything. The group grant
+(`permissions.integrations`) and the binding's action list apply in the chat and
 in `GET /api/tools?appId=`; an app whose installation is missing or disabled
 is not offered to users. In the chat's **+** menu each installation is one
 toggle. See [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
