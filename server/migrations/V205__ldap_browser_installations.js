@@ -79,7 +79,7 @@ export const BROWSE_ACTIONS = Object.freeze(['browse_search', 'browse_read', 'br
 export const LDAP_BROWSE_REFERENCE = 'ldapBrowse';
 export const PEOPLE_SEARCH_APP_ID = 'people-directory';
 export const PEOPLE_DIRECTORY_TYPE_KEY = 'type:people-directory';
-/** The `browse*` install values of a directory as of V198 to V203 (snapshot). */
+/** The `browse*` install values of a directory as of V198 to V204 (snapshot). */
 export const BROWSE_VALUE_KEYS = Object.freeze([
   'browse',
   'browseGroups',

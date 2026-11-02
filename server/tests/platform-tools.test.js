@@ -45,7 +45,7 @@ const AGENT_WORKSPACE = [
   'write_memory'
 ];
 const EVIDENCE = ['evidence_collect', 'evidence_validateQuotesFastPath', 'evidence_composeReport'];
-/** The page reader of the web search feature (V203: a platform tool, no engine's action). */
+/** The page reader of the web search feature (V204: a platform tool, no engine's action). */
 const PAGE_READER = 'read_url';
 
 const everything = { tools: new Set(['*']), apps: new Set(['*']) };
