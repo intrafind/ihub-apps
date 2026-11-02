@@ -63,10 +63,10 @@ them into `contents/tools/` again.
   group grants (`configCache.getToolsForUser`), a scheduled run's memory tools
   (`server/services/scheduler/tasks/runMemory.js`, which now reads `loadTools()`), and `runTool`.
 
-## Migration V201
+## Migration V202
 
-`server/migrations/V201__ihub_integration_chat_tools_only.js`, test
-`server/tests/migration-v201.test.js`:
+`server/migrations/V202__ihub_integration_chat_tools_only.js`, test
+`server/tests/migration-v202.test.js`:
 
 1. Removes the retired tool files that are back in `contents/tools/` as shipped (initial setup
    had copied them again on every start since V199). A switched-off iHub file becomes an entry of
@@ -87,7 +87,7 @@ Missing files or installation: no-op. A second run changes nothing.
 | `server/tests/integrations/ihubConnector.test.js` | the installation's tools are exactly the eight kept ones; selection by id; switches |
 | `server/tests/knowledge-local-provider.test.js` (`describe('tools')`) | knowledge tools offered without any knowledge action on `ihub`; not offered without a project or with projects off; run through `runTool` |
 | `server/tests/platform-tools.test.js` | platform tools load as plain tools, ignore the `ihub` switches, give way to a tool file, are not seeded, resolve for prompt nodes, agent runs, grants, the MCP gateway, `runTool`, memory tools |
-| `server/tests/migration-v201.test.js`, `migration-v199.test.js` | the migrations |
+| `server/tests/migration-v202.test.js`, `migration-v199.test.js` | the migrations |
 
 Run: `npm run test:integrations`, `npm run test:tool-loading`, `npm run test:projects`,
 `npm run test:migrations`.

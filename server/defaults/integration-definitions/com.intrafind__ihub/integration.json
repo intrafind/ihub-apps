@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: the ihub installation owns asking the user a question and the scheduled-task tools; their tool files are retired (migrations V199, V201).",
-        "de": "Erste Version: die Installation ihub besitzt die Rückfrage an den Benutzer und die Werkzeuge der geplanten Aufgaben; ihre Werkzeugdateien entfallen (Migrationen V199, V201)."
+        "en": "First version: the ihub installation owns asking the user a question and the scheduled-task tools; their tool files are retired (migrations V199, V202).",
+        "de": "Erste Version: die Installation ihub besitzt die Rückfrage an den Benutzer und die Werkzeuge der geplanten Aufgaben; ihre Werkzeugdateien entfallen (Migrationen V199, V202)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",
