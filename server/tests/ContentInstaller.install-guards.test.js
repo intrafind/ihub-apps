@@ -12,6 +12,9 @@
  *   overwritten unless the caller confirms with `replaceLocal`.
  * - A model written over an existing one keeps that one's encrypted `apiKey`
  *   and `default` flag.
+ * - An item is fetched only from the registry's own host or a public address
+ *   (`marketplaceFetch.js`); a catalog entry naming an internal address is
+ *   refused before any request is made.
  *
  * Note: The repo's source is native ESM, so this file uses
  * `jest.unstable_mockModule` + dynamic imports. Run with
@@ -27,6 +30,10 @@ const state = {
   rootDir: os.tmpdir(),
   /** Catalog item content served by the fake registry, keyed by `type:name`. */
   content: {},
+  /** Absolute item URLs (`source.type: "url"`) the catalog names, keyed by `type:name`. */
+  itemUrls: {},
+  /** Every URL the installer fetched. */
+  fetched: [],
   /** What the fake ConfigCache reports as loaded, per type. */
   loaded: { apps: [], models: [], prompts: [], workflows: [], skills: [] },
   installations: { installations: {} }
@@ -56,21 +63,33 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 jest.unstable_mockModule('../services/marketplace/RegistryService.js', () => ({
   default: {
-    getRegistryWithAuth: async () => ({ id: 'reg', auth: { type: 'none' } }),
+    // The items live on the registry's own host, which the fetch guard admits.
+    getRegistryWithAuth: async () => ({
+      id: 'reg',
+      source: 'https://registry.example/catalog.json',
+      auth: { type: 'none' }
+    }),
     getCachedCatalogAsync: async () => ({
       catalog: {
         items: Object.keys(state.content).map(key => {
           const [type, name] = key.split(':');
-          return { type, name, version: '1.0.0', source: { type: 'relative', path: key } };
+          const source = state.itemUrls[key]
+            ? { type: 'url', url: state.itemUrls[key] }
+            : { type: 'relative', path: key };
+          return { type, name, version: '1.0.0', source };
         })
       }
     }),
-    resolveItemUrl: item => `https://registry.example/${item.type}/${item.name}`
+    resolveItemUrl: item =>
+      item.source?.type === 'url'
+        ? item.source.url
+        : `https://registry.example/${item.type}/${item.name}`
   }
 }));
 
 jest.unstable_mockModule('../requestThrottler.js', () => ({
   throttledFetch: async (_id, url) => {
+    state.fetched.push(url);
     const [type, name] = url.split('/').slice(-2);
     return {
       ok: true,
@@ -81,6 +100,7 @@ jest.unstable_mockModule('../requestThrottler.js', () => ({
 }));
 
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');
+const { MARKETPLACE_TARGET_BLOCKED } = await import('../services/marketplace/marketplaceFetch.js');
 
 const contentsPath = rel => path.join(state.rootDir, 'contents', rel);
 const readContents = async rel => JSON.parse(await fs.readFile(contentsPath(rel), 'utf8'));
@@ -116,6 +136,8 @@ describe('ContentInstaller install guards', () => {
       await fs.mkdir(contentsPath(dir), { recursive: true });
     }
     state.content = {};
+    state.itemUrls = {};
+    state.fetched = [];
     state.loaded = { apps: [], models: [], prompts: [], workflows: [], skills: [] };
     state.installations = { installations: {} };
   });
@@ -220,6 +242,31 @@ describe('ContentInstaller install guards', () => {
       const written = await readContents('models/gemini-flash-latest.json');
       expect(written.default).toBe(false);
       expect(written.apiKey).toBeUndefined();
+    });
+  });
+
+  describe('fetch targets', () => {
+    test('fetches an item from the registry host itself', async () => {
+      state.content['app:note-assistant'] = validApp;
+      state.itemUrls['app:note-assistant'] = 'https://registry.example/apps/app/note-assistant';
+
+      await contentInstaller.install('reg', 'app', 'note-assistant');
+
+      expect(state.fetched).toEqual(['https://registry.example/apps/app/note-assistant']);
+    });
+
+    test('refuses an item the catalog places on an internal address, naming the host', async () => {
+      state.content['app:note-assistant'] = validApp;
+      // The catalog of a public registry points the item at the cloud metadata endpoint.
+      state.itemUrls['app:note-assistant'] = 'http://169.254.169.254/latest/app/note-assistant';
+
+      await expect(contentInstaller.install('reg', 'app', 'note-assistant')).rejects.toMatchObject({
+        code: MARKETPLACE_TARGET_BLOCKED,
+        host: '169.254.169.254',
+        message: expect.stringContaining("'169.254.169.254' refused")
+      });
+      expect(state.fetched).toEqual([]);
+      await expect(fs.access(contentsPath('apps/note-assistant.json'))).rejects.toThrow();
     });
   });
 });

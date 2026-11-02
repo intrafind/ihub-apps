@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import Badge from '../../../shared/components/Badge';
+import Switch from '../../../shared/components/Switch';
 
 function AdminFeaturesPage() {
   const { t, i18n } = useTranslation();
@@ -124,32 +126,20 @@ function AdminFeaturesPage() {
                             {getLocalizedContent(feature.name, lang)}
                           </span>
                           {feature.preview && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
+                            <Badge tone="info" shape="rounded">
                               {t('admin.features.preview', 'Preview')}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                           {getLocalizedContent(feature.description, lang)}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={feature.enabled}
+                      <Switch
+                        checked={feature.enabled}
+                        onChange={() => handleToggle(feature.id, feature.enabled)}
                         aria-labelledby={`feature-name-${feature.id}`}
-                        onClick={() => handleToggle(feature.id, feature.enabled)}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-                          feature.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            feature.enabled ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
+                      />
                     </div>
                   ))}
                 </div>

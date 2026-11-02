@@ -1,36 +1,35 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
+/** One settings row: label and description on the left, the switch on the right. */
 function Toggle({ checked, onChange, label, description }) {
+  const id = useId();
+  const labelId = `${id}-label`;
+  const descriptionId = `${id}-description`;
   return (
     <div className="flex items-center justify-between py-3">
       <div className="flex-1 pr-4">
-        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</div>
+        <div id={labelId} className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          {label}
+        </div>
         {description && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</div>
+          <div id={descriptionId} className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {description}
+          </div>
         )}
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={typeof label === 'string' ? label : undefined}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-          checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
-        }`}
-      >
-        <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-            checked ? 'translate-x-5' : 'translate-x-0'
-          }`}
-        />
-      </button>
+      <Switch
+        checked={checked}
+        onChange={onChange}
+        aria-labelledby={labelId}
+        aria-describedby={description ? descriptionId : undefined}
+      />
     </div>
   );
 }

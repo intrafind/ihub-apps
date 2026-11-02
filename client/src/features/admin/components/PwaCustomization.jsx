@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import Switch from '../../../shared/components/Switch';
+
 const DISPLAY_OPTIONS = ['standalone', 'fullscreen', 'minimal-ui', 'browser'];
 
 const ICON_FIELDS = [
@@ -55,31 +57,25 @@ function PwaCustomization({ config, onUpdate, t }) {
       {/* Enable toggle */}
       <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div>
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <p
+            id="pwa-enabled-label"
+            className="text-sm font-medium text-gray-900 dark:text-gray-100"
+          >
             {t('admin.ui.pwa.enable', 'Enable PWA')}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p id="pwa-enabled-help" className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {t(
               'admin.ui.pwa.enableHint',
               'Injects web app manifest link and meta tags into all pages. Registers a service worker for offline fallback.'
             )}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!pwa.enabled}
-          onClick={() => handleChange('enabled', !pwa.enabled)}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-            pwa.enabled ? 'bg-indigo-600' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-              pwa.enabled ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </button>
+        <Switch
+          checked={!!pwa.enabled}
+          onChange={enabled => handleChange('enabled', enabled)}
+          aria-labelledby="pwa-enabled-label"
+          aria-describedby="pwa-enabled-help"
+        />
       </div>
 
       {/* App identity */}

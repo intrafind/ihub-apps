@@ -2589,7 +2589,30 @@
       "projects": "Projekte",
       "overview": "Übersicht",
       "integrations": "Integrationen",
-      "documentTemplates": "Dokumentvorlagen"
+      "documentTemplates": "Dokumentvorlagen",
+      "apps": "Apps",
+      "models": "Modelle",
+      "providers": "Anbieter",
+      "prompts": "Prompts",
+      "tools": "Tools",
+      "skills": "Skills",
+      "workflows": "Workflows",
+      "agents": "Agenten",
+      "users": "Benutzer",
+      "groups": "Gruppen",
+      "authentication": "Authentifizierung",
+      "oauth": "OAuth",
+      "credentials": "Zugangsdaten",
+      "ui": "UI-Anpassung",
+      "pages": "Seiten",
+      "shortlinks": "Kurzlinks",
+      "usage": "Nutzungsberichte",
+      "auditLog": "Audit-Log",
+      "features": "Funktionen",
+      "security": "Sicherheit",
+      "backup": "Backup & Wiederherstellung",
+      "updates": "Updates",
+      "advanced": "Erweitert"
     },
     "mcp": {
       "common": {
@@ -4060,7 +4083,16 @@
       "searchPlaceholder": "Admin durchsuchen... Cmd+K",
       "navLabel": "Admin-Navigation",
       "openMenu": "Menü öffnen",
-      "closeMenu": "Menü schließen"
+      "closeMenu": "Menü schließen",
+      "sections": {
+        "overview": "Übersicht",
+        "aiWorkspace": "KI-Arbeitsbereich",
+        "accessIdentity": "Zugriff & Identität",
+        "integrations": "Integrationen",
+        "customization": "Anpassung",
+        "observability": "Überwachung",
+        "platform": "Plattform"
+      }
     },
     "ui": {
       "tabs": {
@@ -5264,6 +5296,13 @@
         "page": "Seite {{current}} von {{total}}",
         "slide": "Folie {{current}} von {{total}}"
       }
+    },
+    "statusDot": {
+      "ok": "In Ordnung",
+      "warn": "Warnung",
+      "degraded": "Eingeschränkt",
+      "error": "Fehler",
+      "off": "Aus"
     }
   },
   "feedback": {
