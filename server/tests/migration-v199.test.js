@@ -53,7 +53,7 @@ describe('V199 iHub tools → installed integration', () => {
     // Since V201 the files are read by three owners: the iHub connector
     // (ask_user, scheduled tasks), the platform tools of workflows and agents,
     // and the project knowledge tools. Together they are the files V199 retired.
-    // The page reader (`read_url`) joined the platform tools with V203; V195
+    // The page reader (`read_url`) joined the platform tools with V204; V195
     // had retired its file, not V199.
     const ids = [
       ...IHUB_TOOL_FILE_IDS,

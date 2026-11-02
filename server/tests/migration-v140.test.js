@@ -82,7 +82,7 @@ async function scratch(name) {
 }
 
 // The search tools ship as the `search` actions of the built-in engine
-// connectors (V195, V203: one parameters file keyed by engine); the page
+// connectors (V195, V204: one parameters file keyed by engine); the page
 // reader as the platform tool `server/defaults/tools/read_url.json`.
 // NEW_PARAMETERS still keys them by the migration-era tool ids.
 const CONNECTOR_ACTION = {

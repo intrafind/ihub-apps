@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: Brave Search is its own web search engine integration, installed as brave (migration V203).",
-        "de": "Erste Version: Brave Search ist eine eigene Websuchmaschinen-Integration, installiert als brave (Migration V203)."
+        "en": "First version: Brave Search is its own web search engine integration, installed as brave (migration V204).",
+        "de": "Erste Version: Brave Search ist eine eigene Websuchmaschinen-Integration, installiert als brave (Migration V204)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",

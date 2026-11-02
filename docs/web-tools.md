@@ -326,7 +326,7 @@ Migration V195 then moved the engines into one installation, `websearch` (in 5.6
   it keeps searching with that engine; the change is logged per app. A
   `read_url` reference stays
 
-Migration V203 makes every engine its own installation and removes
+Migration V204 makes every engine its own installation and removes
 `websearch` ("keep what worked"):
 
 - `brave` is installed where a Brave key was configured (the credential
@@ -345,7 +345,7 @@ Migration V203 makes every engine its own installation and removes
 - a fresh install gets no engine
 
 No manual action is required — the migrations run automatically. Check the
-server log for the `V203` lines: they name each engine installed or not, and
+server log for the `V204` lines: they name each engine installed or not, and
 why.
 
 ## Answer Source Attribution
@@ -404,7 +404,7 @@ Integrations**: the engine, or **All web search engines**,
 search tool away from every app; native search is not affected.
 
 Credentials are encrypted at rest using AES-256-GCM. On an upgrade, migrations
-V195 and V203 carry the keys that were stored under **Admin → Providers** into
+V195 and V204 carry the keys that were stored under **Admin → Providers** into
 the credentials `integration-websearch-brave` and `integration-websearch-staan`
 and reference them from the engine installations, so nothing has to be
 re-entered.
@@ -726,7 +726,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V203 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
+**Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V204 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
@@ -868,13 +868,13 @@ The web content extractor includes protection against Server-Side Request Forger
 
 5. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
-   - Migrations V195 and V203 move the Brave and Staan keys from **Admin → Providers** into the
+   - Migrations V195 and V204 move the Brave and Staan keys from **Admin → Providers** into the
      credentials `integration-websearch-brave` / `integration-websearch-staan` and install one
      engine per key (and Qwant where it was reachable); check under **Admin → Integrations → Web
      search** that the app's engine exists and is enabled, and that one of the user's groups
      grants it (**Admin → Groups → Integrations**). Without an engine the app searches only on
      models with native search
-   - Check server logs for migration output (`V203` names each engine it installed or not, and
+   - Check server logs for migration output (`V204` names each engine it installed or not, and
      why)
    - Verify the app has `websearch.enabled: true` in its configuration
 
