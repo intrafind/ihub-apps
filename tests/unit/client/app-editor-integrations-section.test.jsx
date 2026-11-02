@@ -242,6 +242,32 @@ describe('IntegrationsConfigSection', () => {
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ drawio: {} });
   });
 
+  it('keeps the card on when the last selected directory is unticked', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <IntegrationsConfigSection
+          app={{ id: 'a', integrations: { entra: {} } }}
+          onChange={onChange}
+        />
+      </MemoryRouter>
+    );
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    fireEvent.click(within(card).getByLabelText(/Entra ID/));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toBeUndefined();
+    rerender(
+      <MemoryRouter>
+        <IntegrationsConfigSection app={{ id: 'a' }} onChange={onChange} />
+      </MemoryRouter>
+    );
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('Only selected directories')).toBeChecked();
+  });
+
   it('keeps the switch on for an app that binds single directories only', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     renderSection({ id: 'a', integrations: { entra: {} } });

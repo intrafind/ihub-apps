@@ -56,12 +56,13 @@ function TypeBindingCard({
   notice = null
 }) {
   const { t } = useTranslation();
-  // "Only selected" with nothing ticked yet binds nothing; remember the choice
-  // so the switch stays on while the admin ticks the first one.
-  const [pickSome, setPickSome] = useState(false);
   const has = key => Object.hasOwn(bindings, key);
   const typeBound = has(typeKey);
   const rowBound = rows.some(row => has(row.id));
+  // "Only selected" with nothing ticked binds nothing; remember the choice so
+  // the switch stays on while no row is ticked (before the first one, or after
+  // unticking the last one of an app that was saved that way).
+  const [pickSome, setPickSome] = useState(() => !typeBound && rowBound);
   const enabled = typeBound || rowBound || pickSome;
   const idPrefix = `app-integration-${typeKey.replace(/[/:]/g, '__')}`;
 
