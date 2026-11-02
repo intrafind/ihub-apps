@@ -750,7 +750,7 @@ export async function up(ctx, deps = {}) {
 /**
  * Snapshot of V061's `sanitizeId` (2026-11-02): how it named a provider's
  * credentials. Its `^_+|_+$` trim is {@link trimChars} (same result, linear).
- * @param {unknown} raw
+ * @param {string|number|null|undefined} raw - a provider id from the old config
  * @returns {string}
  */
 export function v061IdOf(raw) {
@@ -898,7 +898,9 @@ async function removeTenantIdLeftovers(ctx, { store, installed, unmigratedTenant
 
   const referenced = await referencedStrings(ctx);
   const readable = await Promise.all(
-    candidates.map(id => (referenced.has(id) ? undefined : plainOf(storedValueOf(credentials[id]))))
+    candidates.map(id =>
+      referenced.has(id) ? Promise.resolve(undefined) : plainOf(storedValueOf(credentials[id]))
+    )
   );
   let removed = 0;
   for (const [index, id] of candidates.entries()) {
