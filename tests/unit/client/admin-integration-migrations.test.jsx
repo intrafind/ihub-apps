@@ -504,7 +504,7 @@ describe('installation page: migration failed', () => {
     const panel = await screen.findByTestId('migration-panel');
     fireEvent.click(within(panel).getByRole('button', { name: 'Uninstall' }));
     const dialog = screen.getByRole('alertdialog', { name: 'Remove integration?' });
-    expect(dialog).toHaveTextContent('Bound by: Open data search');
+    expect(dialog).toHaveTextContent('Used by: Open data search');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mockApi.deleteInstalledIntegration).toHaveBeenCalledWith('govdata'));
     expect(await screen.findByTestId('list-page')).toBeInTheDocument();
