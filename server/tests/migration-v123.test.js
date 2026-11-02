@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { up, precondition, version } from '../migrations/V123__web_page_reader_entry_point.js';
 
 // The page reader ships as the platform tool `read_url` now (V157 renamed its
-// id, V195 moved it into the web search connector, V203 back into
+// id, V195 moved it into the web search connector, V204 back into
 // `server/defaults/tools/read_url.json`); its parameters — what V123 cares
 // about — are unchanged, and a definition as this release last shipped it
 // carried the entry point already.

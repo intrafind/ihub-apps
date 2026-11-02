@@ -23,7 +23,7 @@ const DEFINITIONS_DIR = path.join(here, '..', 'defaults', 'integration-definitio
 
 /**
  * Definitions a migration creates or changes that have no release entry yet.
- * Empty since every migrated built-in got its entry (web search V203, LDAP
+ * Empty since every migrated built-in got its entry (web search V204, LDAP
  * browser V205, storage providers V206, iHub V201). Do not add to this list:
  * give the definition a `releases` entry instead. The list only shrinks: a
  * definition on it that has an entry by now fails the last test below.

@@ -50,7 +50,7 @@ app.websearch.enabled ──► model runs native search? ──yes──► nat
 | `server/services/sources/producers/web.js` | Shipped engines' hits are public; a third-party engine's `search` is recognised by its definition type and its hits stay private. |
 | `server/validators/appConfigSchema.js` | `websearch.provider` is any safe installation id (was an enum). |
 | `server/validators/integrationDefinitionSchema.js` | A `web-search` definition (not MCP/A2A) must declare an action `search`. |
-| `server/migrations/V203__web_search_engines.js` | The upgrade (below). |
+| `server/migrations/V204__web_search_engines.js` | The upgrade (below). |
 | `client/src/features/admin/components/integrations/editors/WebSearchEngineEditor.jsx` | The dedicated editor, registered for the three definitions in `editors/index.js`. |
 | `client/src/features/admin/components/integrations/integrationFacts.js` | Tile facts: `API key: set / not set` + `Without a key: <ENV>`; Qwant: `no key needed`. |
 | `client/src/features/admin/components/app-form/WebSearchSection.jsx`, `webSearchEngines.js`, `IntegrationsConfigSection.jsx` | The app editor: panel on every chat app, engine select (Auto + installed engines in Auto's order, disabled marked, missing warned), no "not installed" notice. |
@@ -81,7 +81,7 @@ app.websearch.enabled ──► model runs native search? ──yes──► nat
   by exact id, then `filterIntegrationToolsForUser` checks enabled + grant. `read_url` is a
   plain platform tool (exact or base id, like any tool file).
 
-## Migration V203
+## Migration V204
 
 Input: the `websearch` installation (V195) in `config/integrations.json`.
 
@@ -99,7 +99,7 @@ Input: the `websearch` installation (V195) in `config/integrations.json`.
 
 **Fresh install detection.** All migrations run on a fresh install too, after initial setup copied
 the defaults. V195 (already applied elsewhere, so it cannot change) creates `websearch` with
-default `auto` and no key — which would read as "Qwant was reachable". V203 therefore reads
+default `auto` and no key — which would read as "Qwant was reachable". V204 therefore reads
 `contents/.migration-history.json`: when its first entry is younger than 15 minutes
 (`FRESH_RUN_WINDOW_MS`), the history began in this run and the install is fresh, so the `auto`
 default is not taken as evidence. Keys and apps naming Qwant still count. A missing history counts
@@ -119,7 +119,7 @@ removed.
 | `server/tests/websearch-installation-access.test.js` | Native search without engine and grant, page reader on Anthropic/OpenAI without an engine, nothing on other models without an engine, named engine missing → native only, `app.tools` / workflow node references by id, `webSearch` fallback, the native-search fallback tools |
 | `server/tests/websearch-page-reader.test.js` | The reader as a platform tool, switched off by a tool file, offered once |
 | `server/tests/websearch-engine-connectors.test.js` | Definitions valid, connectors registered, API key step, test with the unsaved key |
-| `server/tests/migration-v203.test.js` | Every migration rule, fresh install, idempotence, missing files |
+| `server/tests/migration-v204.test.js` | Every migration rule, fresh install, idempotence, missing files |
 | `server/tests/helpers/webSearchEngines.js` | Fixtures: real definitions and connectors, per-test installations, groups, tool files |
 | `tests/unit/client/admin-installation-page.test.jsx`, `admin-integrations-page.test.jsx`, `integration-groups-and-facts.test.jsx`, `app-editor-integrations-section.test.jsx`, `chat-actions-menu-websearch-keyboard.test.jsx` | The editor, tiles and facts, the catalog group, the app editor's engine list and warnings, the chat toggle per model |
 

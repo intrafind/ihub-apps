@@ -171,7 +171,7 @@ npx jest --config tests/config/jest.config.js tests/unit/client/admin-people-dir
   documented `AZURE_*` fallback can be used from the editor (the server always fell back).
 - The allow-list of `integration-definition-releases.test.js` is empty since the storage branch
   merged this one (2026-11-02): every shipped definition a migration names (iHub V201, web search
-  V203, LDAP browser V205, storage providers V206, …) has its release entry. The storage branch's
+  V204, LDAP browser V205, storage providers V206, …) has its release entry. The storage branch's
   own copy of the check (`server/tests/integrations/definitionReleases.test.js`) was folded into
   it.
 - Workflow nodes or agent profiles that name a `<dirId>__browse_*` tool id are not rewritten (no

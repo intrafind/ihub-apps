@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: Staan is its own web search engine integration, installed as staan (migration V203).",
-        "de": "Erste Version: Staan ist eine eigene Websuchmaschinen-Integration, installiert als staan (Migration V203)."
+        "en": "First version: Staan is its own web search engine integration, installed as staan (migration V204).",
+        "de": "Erste Version: Staan ist eine eigene Websuchmaschinen-Integration, installiert als staan (Migration V204)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",
