@@ -136,7 +136,10 @@ function requiredWebSearchIds(app) {
 function integrationDisplayName(id, t) {
   const known = INTEGRATION_NAMES[id];
   if (known) return t(known[0], known[1]);
-  return t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
+  return t('admin.apps.missingInstalledIntegration', {
+    defaultValue: 'Installed integration "{{id}}"',
+    id
+  });
 }
 
 /**
