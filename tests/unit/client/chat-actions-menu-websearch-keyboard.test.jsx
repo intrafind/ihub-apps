@@ -143,11 +143,16 @@ describe('ChatInputActionsMenu web search toggle', () => {
   });
 
   it('keeps the visual switch out of the accessibility tree and the tab order', () => {
-    const { container } = openMenu();
+    const { container } = openMenu({ websearchEnabled: true });
 
-    const input = container.querySelector('input[type="checkbox"]');
-    expect(input).toHaveAttribute('aria-hidden', 'true');
-    expect(input).toHaveAttribute('tabindex', '-1');
+    const row = screen.getByRole('menuitemcheckbox', { name: /Web Search/ });
+    // The shared SwitchIndicator: drawn, hidden from assistive technology,
+    // and no nested control (checkbox, switch, button) inside the menu item.
+    const indicator = row.querySelector('[data-state]');
+    expect(indicator).toHaveAttribute('aria-hidden', 'true');
+    expect(indicator).toHaveAttribute('data-state', 'on');
+    expect(row.querySelector('input, button, [role="switch"], [tabindex]')).toBeNull();
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   });
 });
 

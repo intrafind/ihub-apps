@@ -94,8 +94,8 @@ itself are refused as well.
 **Private certificates.** `streamableHttp` and `sse` connections trust the
 operating system's certificate store and honor `ssl.ignoreInvalidCertificates`
 plus `ssl.domainWhitelist` in `platform.json`; for a whitelisted host iHub does
-not follow HTTP redirects on its own. The `websocket` transport takes no TLS
-options, so the whitelist does not apply to it. See
+not follow HTTP redirects on its own. The `websocket` transport follows the
+same whitelist for `wss://` servers. See
 [SSL Certificates](ssl-certificates.md).
 
 ### Authentication

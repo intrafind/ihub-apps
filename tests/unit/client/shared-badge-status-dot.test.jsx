@@ -124,3 +124,25 @@ describe('StatusDot', () => {
     expect(container.firstChild).toHaveAttribute('data-status', 'unknown');
   });
 });
+
+describe('StatusDot inside a Badge', () => {
+  it('takes the text style of the badge with labelClassName=""', () => {
+    render(
+      <Badge tone="success">
+        <StatusDot status="ok" label="Connected" showLabel labelClassName="" size="sm" />
+      </Badge>
+    );
+    const text = screen.getByText('Connected');
+    expect(text).not.toHaveClass('sr-only');
+    expect(text).not.toHaveAttribute('class');
+    expect(text.closest('[data-status]')).toHaveAttribute('data-status', 'ok');
+  });
+
+  it('keeps its own text style by default and hides the text without showLabel', () => {
+    const { rerender } = render(<StatusDot status="error" label="Unreachable" showLabel />);
+    expect(screen.getByText('Unreachable')).toHaveClass('text-sm', 'text-gray-700');
+
+    rerender(<StatusDot status="error" label="Unreachable" labelClassName="" />);
+    expect(screen.getByText('Unreachable')).toHaveClass('sr-only');
+  });
+});

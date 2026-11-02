@@ -181,27 +181,13 @@ function applyIhubEnvOverrides(configPath, data) {
   if (!prefix || !data || typeof data !== 'object' || Array.isArray(data)) return data;
 
   for (const [envKey, envValue] of Object.entries(process.env)) {
-    if (!envKey.startsWith(prefix)) continue;
-
-    const pathStr = envKey.slice(prefix.length);
-    if (!pathStr) continue;
-
-    const pathParts = pathStr.split('__').map(toCamelCase);
-    if (pathParts.some(p => !p)) continue; // skip malformed keys
+    const pathParts = envOverridePath(envKey, prefix);
+    if (!pathParts) continue;
 
     if (configPath === 'config/platform.json' && MOVED_PLATFORM_BLOCKS.has(pathParts[0])) {
       // The block left platform.json (V192): the override would land on a key
       // nothing reads. Say so once instead of silently doing nothing.
-      if (!warnedMovedOverrides.has(envKey)) {
-        warnedMovedOverrides.add(envKey);
-        logger.warn(
-          `Ignoring ${envKey}: platform.${pathParts[0]} moved into the installed integration ` +
-            `"${pathParts[0] === 'iFinder' ? 'ifinder' : 'iassistant'}" (Admin → Integrations → ` +
-            `Installed, config/integrations.json). Migration V192 copied the variable's value ` +
-            `into the installation once; edit the installation and remove the variable.`,
-          { component: 'ConfigCache' }
-        );
-      }
+      warnMovedOverrideOnce(envKey, pathParts[0]);
       continue;
     }
 
@@ -215,6 +201,76 @@ function applyIhubEnvOverrides(configPath, data) {
   }
 
   return data;
+}
+
+/**
+ * The config path an `IHUB_*` variable overrides, in camelCase segments:
+ * `IHUB_PLATFORM__AUTH__MODE` with the prefix `IHUB_PLATFORM__` gives
+ * `['auth', 'mode']`. Null for a variable of another prefix, one with
+ * nothing after the prefix, or a malformed one (an empty segment).
+ *
+ * @param {string} envKey - the variable's name
+ * @param {string} prefix - the config's prefix (`IHUB_ENV_PREFIXES`)
+ * @returns {string[]|null}
+ */
+function envOverridePath(envKey, prefix) {
+  if (!envKey.startsWith(prefix)) return null;
+  const pathStr = envKey.slice(prefix.length);
+  if (!pathStr) return null;
+  const pathParts = pathStr.split('__').map(toCamelCase);
+  return pathParts.some(p => !p) ? null : pathParts;
+}
+
+/**
+ * Warn, once per variable, that an override of a platform block that moved
+ * into an installed integration (V192) is ignored.
+ *
+ * @param {string} envKey - the variable's name
+ * @param {string} block - the moved block (`iFinder` or `iAssistant`)
+ */
+function warnMovedOverrideOnce(envKey, block) {
+  if (warnedMovedOverrides.has(envKey)) return;
+  warnedMovedOverrides.add(envKey);
+  logger.warn(
+    `Ignoring ${envKey}: platform.${block} moved into the installed integration ` +
+      `"${block === 'iFinder' ? 'ifinder' : 'iassistant'}" (Admin → Integrations → ` +
+      `Installed, config/integrations.json). Migration V192 copied the variable's value ` +
+      `into the installation once; edit the installation and remove the variable.`,
+    { component: 'ConfigCache' }
+  );
+}
+
+/**
+ * The tool grants the tools listing filters by: the user's
+ * `permissions.tools`, an empty set for anyone without them when anonymous
+ * access is on (no default tools for anonymous), or null (no filtering).
+ *
+ * @param {Object|undefined} user - user with resolved permissions
+ * @param {Object} platformConfig - platform configuration
+ * @returns {Set<string>|null}
+ */
+function allowedToolsFor(user, platformConfig) {
+  if (user?.permissions?.tools) return user.permissions.tools;
+  if (isAnonymousAccessAllowed(platformConfig)) return new Set();
+  return null;
+}
+
+/**
+ * Whether a tool no group grant covers is listed because the app the chat
+ * runs in offers it: an installed integration's tool the app gets
+ * (`getIntegrationToolsForApp`), a built-in action under its old tool id
+ * (`ask_user`, `read_url`) the app's `tools` name, as `getToolsForApp`
+ * offers it, or any other tool the app's `tools` reference.
+ *
+ * @param {Object} tool
+ * @param {Set<Object>} appIntegrationTools - the app's integration tools
+ * @param {Array<string>} appToolRefs - the app's `tools`
+ * @returns {boolean}
+ */
+function isListedThroughApp(tool, appIntegrationTools, appToolRefs) {
+  if (!tool._integration) return isToolSelected(tool, appToolRefs);
+  if (appIntegrationTools.has(tool)) return true;
+  return Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs);
 }
 
 function expandToolFunctions(tools = []) {
@@ -1807,66 +1863,15 @@ class ConfigCache {
     // into the tools list returned to the chat UI.
 
     const originalToolsCount = tools.length;
-    let userSpecificEtag = toolsEtag || 'no-etag';
-    // The tools of installed integrations come from integrations.json, which
-    // the tools ETag does not cover: a renamed or re-enabled installation must
-    // not be answered with a 304 for the old list.
-    const { etag: integrationsEtag } = this.getIntegrations();
-    if (integrationsEtag) {
-      const integrationsHash = createHash('md5')
-        .update(String(integrationsEtag))
-        .digest('hex')
-        .substring(0, 8);
-      userSpecificEtag = etagWithSuffix(userSpecificEtag, `i${integrationsHash}`);
-    }
+    let userSpecificEtag = this._toolsEtagWithIntegrations(toolsEtag);
 
     // Apply filtering based on user permissions
-    let allowedTools = null;
-    if (user && user.permissions && user.permissions.tools) {
-      allowedTools = user.permissions.tools;
-    } else if (isAnonymousAccessAllowed(platformConfig)) {
-      // For anonymous users, filter to only anonymous-allowed tools
-      allowedTools = new Set(); // No default tools for anonymous
-    }
-
+    const allowedTools = allowedToolsFor(user, platformConfig);
     if (allowedTools) {
-      // A group grant reads like an app's `tools` reference, as it does for
-      // the MCP gateway (`getVisibleToolIds`): besides the exact tool id
-      // (case-insensitive), a base id covers a function-style tool's
-      // functions, an MCP server id that server's tools and an A2A agent id
-      // that agent's skills.
-      const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
-      for (const tool of tools) {
-        if (isToolSelected(tool, allowedTools)) granted.add(tool);
-      }
-      // The chat's tools menu asks for the tools of the app it runs in. Those
-      // are callable in that app whatever the group grants say, so they are
-      // listed too — otherwise the menu cannot name them or tell which MCP
-      // server they belong to.
-      const app = appId ? await this.getAppForUserById(user, platformConfig, appId) : null;
-      const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
-      // An installed integration's tools are listed as the chat gets them
-      // (`getIntegrationToolsForApp`): only when the app binds the
-      // installation, the user's groups grant it (`permissions.integrations`)
-      // and the binding allows the action — never through the instance id alone.
-      let appIntegrationTools = new Set();
-      if (app?.integrations && typeof app.integrations === 'object') {
-        const { getIntegrationToolsForApp } =
-          await import('./services/integrations/integrationTools.js');
-        appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
-      }
-      tools = tools.filter(tool => {
-        if (granted.has(tool)) return true;
-        if (tool._integration) {
-          if (appIntegrationTools.has(tool)) return true;
-          // A built-in action under its old tool id (`ask_user`, `read_url`)
-          // is listed when the app's `tools` name it, as `getToolsForApp`
-          // offers it.
-          return (
-            Boolean(tool._integration.fixedToolId) && isToolSelected({ id: tool.id }, appToolRefs)
-          );
-        }
-        return isToolSelected(tool, appToolRefs);
+      tools = await this._filterToolsByGrants(tools, allowedTools, {
+        user,
+        platformConfig,
+        appId
       });
     }
 
@@ -1895,6 +1900,65 @@ class ConfigCache {
     }
 
     return { data: tools, etag: userSpecificEtag };
+  }
+
+  /**
+   * The tools ETag extended by the integrations ETag. The tools of installed
+   * integrations come from integrations.json, which the tools ETag does not
+   * cover: a renamed or re-enabled installation must not be answered with a
+   * 304 for the old list.
+   *
+   * @param {string|null|undefined} toolsEtag - the ETag of the tools config
+   * @returns {string}
+   */
+  _toolsEtagWithIntegrations(toolsEtag) {
+    const etag = toolsEtag || 'no-etag';
+    const { etag: integrationsEtag } = this.getIntegrations();
+    if (!integrationsEtag) return etag;
+    const integrationsHash = createHash('md5')
+      .update(String(integrationsEtag))
+      .digest('hex')
+      .substring(0, 8);
+    return etagWithSuffix(etag, `i${integrationsHash}`);
+  }
+
+  /**
+   * The tools a user's group grants list, plus the tools of the app the chat
+   * runs in. A group grant reads like an app's `tools` reference, as it does
+   * for the MCP gateway (`getVisibleToolIds`): besides the exact tool id
+   * (case-insensitive), a base id covers a function-style tool's functions,
+   * an MCP server id that server's tools and an A2A agent id that agent's
+   * skills.
+   *
+   * @param {Array<object>} tools - every tool, localized
+   * @param {Set<string>} allowedTools - the user's tool grants (`allowedToolsFor`)
+   * @param {{ user: object, platformConfig: object, appId?: string }} context
+   * @returns {Promise<Array<object>>} the listed tools, in their original order
+   */
+  async _filterToolsByGrants(tools, allowedTools, { user, platformConfig, appId }) {
+    const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
+    for (const tool of tools) {
+      if (isToolSelected(tool, allowedTools)) granted.add(tool);
+    }
+    // The chat's tools menu asks for the tools of the app it runs in. Those
+    // are callable in that app whatever the group grants say, so they are
+    // listed too — otherwise the menu cannot name them or tell which MCP
+    // server they belong to.
+    const app = appId ? await this.getAppForUserById(user, platformConfig, appId) : null;
+    const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
+    // An installed integration's tools are listed as the chat gets them
+    // (`getIntegrationToolsForApp`): only when the app binds the
+    // installation, the user's groups grant it (`permissions.integrations`)
+    // and the binding allows the action — never through the instance id alone.
+    let appIntegrationTools = new Set();
+    if (app?.integrations && typeof app.integrations === 'object') {
+      const { getIntegrationToolsForApp } =
+        await import('./services/integrations/integrationTools.js');
+      appIntegrationTools = new Set(getIntegrationToolsForApp(app, tools, { user }));
+    }
+    return tools.filter(
+      tool => granted.has(tool) || isListedThroughApp(tool, appIntegrationTools, appToolRefs)
+    );
   }
 
   /**

@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import Switch from '../../../../shared/components/Switch';
 import { CALLOUT_CLASS } from '../formStyles';
 import { AUTO_ENGINE, webSearchEngineStatus } from './webSearchEngines';
 
@@ -60,18 +61,17 @@ function WebSearchSection({ app, onChange, engines = null }) {
         <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
           {/* Enable Web Search toggle */}
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="websearch-enabled"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.apps.edit.websearchEnabled', 'Enable Web Search')}
             </label>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={app.websearch?.enabled ?? false}
-                onChange={e => handleWebSearchChange({ enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-            </label>
+            <Switch
+              id="websearch-enabled"
+              checked={app.websearch?.enabled ?? false}
+              onChange={enabled => handleWebSearchChange({ enabled })}
+            />
           </div>
 
           {/* Web Search settings - only shown when enabled */}
@@ -176,25 +176,29 @@ function WebSearchSection({ app, onChange, engines = null }) {
               {/* Use Native Search */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="websearch-use-native"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchUseNative', 'Use Native Search')}
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p
+                    id="websearch-use-native-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
                     {t(
                       'admin.apps.edit.websearchUseNativeDesc',
                       "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)"
                     )}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer ml-4">
-                  <input
-                    type="checkbox"
-                    checked={app.websearch?.useNativeSearch ?? true}
-                    onChange={e => handleWebSearchChange({ useNativeSearch: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </label>
+                <Switch
+                  id="websearch-use-native"
+                  className="ml-4"
+                  checked={app.websearch?.useNativeSearch ?? true}
+                  onChange={value => handleWebSearchChange({ useNativeSearch: value })}
+                  aria-describedby="websearch-use-native-desc"
+                />
               </div>
 
               {/* Max Searches per model call (native search cap) */}
@@ -267,25 +271,29 @@ function WebSearchSection({ app, onChange, engines = null }) {
               {/* Extract Content */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="websearch-extract-content"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchExtractContent', 'Extract Content')}
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p
+                    id="websearch-extract-content-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
                     {t(
                       'admin.apps.edit.websearchExtractContentDesc',
                       'Fetch and extract full page content from search results'
                     )}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer ml-4">
-                  <input
-                    type="checkbox"
-                    checked={app.websearch?.extractContent ?? true}
-                    onChange={e => handleWebSearchChange({ extractContent: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </label>
+                <Switch
+                  id="websearch-extract-content"
+                  className="ml-4"
+                  checked={app.websearch?.extractContent ?? true}
+                  onChange={value => handleWebSearchChange({ extractContent: value })}
+                  aria-describedby="websearch-extract-content-desc"
+                />
               </div>
 
               {/* Content Max Length */}
@@ -319,33 +327,40 @@ function WebSearchSection({ app, onChange, engines = null }) {
               {/* Enabled by Default */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="websearch-enabled-by-default"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchEnabledByDefault', 'Enabled by Default')}
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p
+                    id="websearch-enabled-by-default-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
                     {t(
                       'admin.apps.edit.websearchEnabledByDefaultDesc',
                       'Whether web search is turned on by default for users'
                     )}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer ml-4">
-                  <input
-                    type="checkbox"
-                    checked={app.websearch?.enabledByDefault ?? false}
-                    onChange={e => handleWebSearchChange({ enabledByDefault: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </label>
+                <Switch
+                  id="websearch-enabled-by-default"
+                  className="ml-4"
+                  checked={app.websearch?.enabledByDefault ?? false}
+                  onChange={value => handleWebSearchChange({ enabledByDefault: value })}
+                  aria-describedby="websearch-enabled-by-default-desc"
+                />
               </div>
 
               {/* Required: hide the app while its web search engine is not available */}
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="websearch-required"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchRequired', 'Required')}
-                  </span>
+                  </label>
                   <p
                     id="websearch-required-desc"
                     className="text-xs text-gray-500 dark:text-gray-400"
@@ -356,44 +371,41 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     )}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer ml-4">
-                  <span className="sr-only">
-                    {t('admin.apps.edit.websearchRequired', 'Required')}
-                  </span>
-                  <input
-                    id="websearch-required"
-                    type="checkbox"
-                    aria-describedby="websearch-required-desc"
-                    checked={app.websearch?.required ?? false}
-                    onChange={e => handleWebSearchChange({ required: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </label>
+                <Switch
+                  id="websearch-required"
+                  className="ml-4"
+                  checked={app.websearch?.required ?? false}
+                  onChange={required => handleWebSearchChange({ required })}
+                  aria-describedby="websearch-required-desc"
+                />
               </div>
 
               {/* Multi-step research guidance */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="websearch-research-guidance"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchResearchGuidance', 'Research in Several Steps')}
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p
+                    id="websearch-research-guidance-desc"
+                    className="text-xs text-gray-500 dark:text-gray-400"
+                  >
                     {t(
                       'admin.apps.edit.websearchResearchGuidanceDesc',
                       'Tells the model to run several searches, check sources and combine the findings, instead of answering after one search'
                     )}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer ml-4">
-                  <input
-                    type="checkbox"
-                    checked={researchGuidanceOn}
-                    onChange={e => handleWebSearchChange({ researchGuidance: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </label>
+                <Switch
+                  id="websearch-research-guidance"
+                  className="ml-4"
+                  checked={researchGuidanceOn}
+                  onChange={value => handleWebSearchChange({ researchGuidance: value })}
+                  aria-describedby="websearch-research-guidance-desc"
+                />
               </div>
 
               {researchGuidanceOn && (
