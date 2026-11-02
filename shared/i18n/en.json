@@ -2709,7 +2709,6 @@
           "allPeopleDirectories": "All people directories",
           "allOfTypeHelp": "Every installation of this kind, including ones installed later ({{count}} now).",
           "panelNotInstalled": "{{name}} is not installed. Install it under Integrations to use these settings.",
-          "iassistantBinding": "Use in this app",
           "peopleDirectoriesTitle": "People directories",
           "peopleDirectoriesDesc": "Let the model look people up in the directories: all of them, or single ones.",
           "groups": {
@@ -2721,7 +2720,15 @@
           "allStorageProviders": "All storage providers",
           "storageRequiredHelp": "Hide the app while this storage provider is disabled or missing. Off: the app stays available and the file picker offers the providers that are there.",
           "storageProvidersTitle": "Storage providers",
-          "storageProvidersDesc": "Let users pick files for the chat from the storage providers: all of them, or single ones. Users see the ones their groups grant; picked files follow the upload settings."
+          "storageProvidersDesc": "Let users pick files for the chat from the storage providers: all of them, or single ones. Users see the ones their groups grant; picked files follow the upload settings.",
+          "enablePeopleDirectories": "Enable people directories",
+          "selectedPeopleDirectories": "Only selected directories",
+          "enableStorageProviders": "Enable storage providers",
+          "selectedStorageProviders": "Only selected storage providers",
+          "typeOverrideHelp": "Tick one to give it settings of its own; the others follow the settings above.",
+          "typePickHelp": "The app uses only the ones ticked here.",
+          "disabledHidden": "Disabled integrations are not offered here ({{count}}). Enable one under Integrations to bind it to this app.",
+          "openIntegrations": "Open Integrations"
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
