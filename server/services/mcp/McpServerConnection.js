@@ -5,10 +5,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import { URL } from 'node:url';
 import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
+import { McpWebSocketTransport } from './McpWebSocketTransport.js';
 import {
   appsEnabledFor,
   buildClientCapabilities,
@@ -284,7 +284,9 @@ export class McpServerConnection {
     if (t.type === 'websocket') {
       const url = new URL(t.url);
       await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
-      return new WebSocketClientTransport(url);
+      // Our own transport: the SDK's takes no TLS options, so it could not honor
+      // ssl.domainWhitelist for a wss:// server behind a private CA.
+      return new McpWebSocketTransport(url);
     }
 
     if (t.type === 'stdio') {
