@@ -82,13 +82,14 @@ function browserLink(...values) {
  */
 function profileName(searchProfile, names) {
   if (!searchProfile) return undefined;
-  const name =
-    names instanceof Map
-      ? names.get(searchProfile)
-      : names && typeof names === 'object' && Object.hasOwn(names, searchProfile)
-        ? names[searchProfile]
-        : undefined;
-  return textOf(name) || searchProfile;
+  return textOf(nameIn(names, searchProfile)) || searchProfile;
+}
+
+/** The entry for `id` in a Map or a plain object of names, if any. */
+function nameIn(names, id) {
+  if (names instanceof Map) return names.get(id);
+  if (names && typeof names === 'object' && Object.hasOwn(names, id)) return names[id];
+  return undefined;
 }
 
 /**
@@ -245,22 +246,31 @@ function iAssistantDocument(item, { searchProfile, scopeNames }, fields) {
 export function iAssistantSourceFrame(payload, { searchProfile, scopeNames, scope } = {}) {
   if (!payload || typeof payload !== 'object') return null;
   const context = { searchProfile, scopeNames };
-  const items = [];
-  const resultItems = Array.isArray(payload.resultItems) ? payload.resultItems : [];
-  resultItems.forEach((item, position) => {
-    const source = iAssistantDocument(item, context, { markers: [`r:${position + 1}`] });
-    if (source?.title) items.push(source);
-  });
-  for (const reference of Array.isArray(payload.references) ? payload.references : []) {
-    const content = textOf(reference?.content);
-    const marker = Number.isInteger(reference?.index) ? `s:${reference.index}` : undefined;
-    const source = iAssistantDocument(reference, context, {
-      passages: content ? [{ text: content, ...(marker ? { marker } : {}) }] : []
-    });
-    if (source && (source.title || source.passages.length)) items.push(source);
-  }
+  const items = [...resultItemSources(payload, context), ...referenceSources(payload, context)];
   if (!items.length) return null;
   return scope ? { items, scopes: [scope] } : { items };
+}
+
+/** The payload's result items as sources (marker `r:<position>`), titled ones only. */
+function resultItemSources(payload, context) {
+  const resultItems = Array.isArray(payload.resultItems) ? payload.resultItems : [];
+  return resultItems
+    .map((item, position) => iAssistantDocument(item, context, { markers: [`r:${position + 1}`] }))
+    .filter(source => source?.title);
+}
+
+/** The payload's references as sources with their passage (marker `s:<index>`). */
+function referenceSources(payload, context) {
+  const references = Array.isArray(payload.references) ? payload.references : [];
+  return references
+    .map(reference => {
+      const content = textOf(reference?.content);
+      const marker = Number.isInteger(reference?.index) ? `s:${reference.index}` : undefined;
+      return iAssistantDocument(reference, context, {
+        passages: content ? [{ text: content, ...(marker ? { marker } : {}) }] : []
+      });
+    })
+    .filter(source => source && (source.title || source.passages.length));
 }
 
 /**

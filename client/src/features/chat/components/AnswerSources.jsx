@@ -610,11 +610,10 @@ function ScopeFilter({ scopes, selected, onSelect }) {
     ...scopes
   ];
   return (
-    <div
-      role="group"
-      aria-label={t('sources.scopeFilter', 'Filter by where the sources were found')}
-      className="mb-3 flex flex-wrap gap-1"
-    >
+    <fieldset className="mb-3 flex min-w-0 flex-wrap gap-1 border-0 p-0">
+      <legend className="sr-only">
+        {t('sources.scopeFilter', 'Filter by where the sources were found')}
+      </legend>
       {options.map(option => {
         const active = option.id === selected;
         return (
@@ -634,7 +633,7 @@ function ScopeFilter({ scopes, selected, onSelect }) {
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 
