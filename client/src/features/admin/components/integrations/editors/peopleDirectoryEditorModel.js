@@ -178,7 +178,7 @@ export function parseList(text) {
  * @returns {string[]} e.g. ["givenName sn", "cn"]
  */
 export function parseMappingCandidates(text) {
-  return parseList(String(text ?? '').replace(/\n/g, ',')).map(candidate =>
+  return parseList(String(text ?? '').replaceAll('\n', ',')).map(candidate =>
     candidate.replace(/\s+/g, ' ')
   );
 }
@@ -189,7 +189,7 @@ export function parseMappingCandidates(text) {
  * @returns {Object<string,string>}
  */
 export function withFormLanguages(value) {
-  const map = typeof value === 'string' ? { en: value } : { ...(value || {}) };
+  const map = typeof value === 'string' ? { en: value } : { ...value };
   const result = {};
   for (const lang of FORM_LANGUAGES) result[lang] = typeof map[lang] === 'string' ? map[lang] : '';
   for (const [lang, text] of Object.entries(map)) {
@@ -212,6 +212,30 @@ export function withoutEmptyTexts(value) {
 }
 
 /**
+ * A stored bind mode as the form's choice: `service` and `anonymous` as they
+ * are, anything else (none stored) as `fallback`.
+ *
+ * @param {unknown} bindMode - The stored `bindMode`
+ * @param {string} fallback - The choice for every other value
+ * @returns {string}
+ */
+function bindModeChoice(bindMode, fallback) {
+  return bindMode === 'service' || bindMode === 'anonymous' ? bindMode : fallback;
+}
+
+/**
+ * A stored StartTLS switch as the form's choice: `on`, `off`, or `inherit`
+ * (none stored: the reused sign-in provider's).
+ *
+ * @param {unknown} starttls - The stored `starttls`
+ * @returns {'on'|'off'|'inherit'}
+ */
+function starttlsChoice(starttls) {
+  if (starttls === true) return 'on';
+  return starttls === false ? 'off' : 'inherit';
+}
+
+/**
  * The editor's form state from an installation's (effective) values and its
  * stored label and description.
  *
@@ -227,20 +251,14 @@ export function directoryValuesToForm(values = {}, { label, description } = {}) 
     if (key.startsWith('mapping_'))
       mapping[key.slice('mapping_'.length)] = asList(value).join(', ');
   }
-  const bindMode =
-    values.bindMode === 'service'
-      ? 'service'
-      : values.bindMode === 'anonymous'
-        ? 'anonymous'
-        : 'default';
   return {
     sourceMode: trimmed(values.authProvider) ? 'provider' : 'direct',
     authProvider: values.authProvider ?? '',
     url: values.url ?? '',
-    starttls: values.starttls === true ? 'on' : values.starttls === false ? 'off' : 'inherit',
+    starttls: starttlsChoice(values.starttls),
     baseDn: values.baseDn ?? '',
     preset: values.preset ?? '',
-    bindMode,
+    bindMode: bindModeChoice(values.bindMode, 'default'),
     bindDn: values.bindDn ?? '',
     bindPasswordRef: values.bindPasswordRef ?? '',
     searchBase: values.searchBase ?? '',
@@ -265,6 +283,81 @@ export function directoryValuesToForm(values = {}, { label, description } = {}) 
 }
 
 /**
+ * Put a text on `values` when it is not empty after trimming.
+ * @param {Object} values - Install values (changed in place)
+ * @param {string} key
+ * @param {unknown} value
+ */
+function setText(values, key, value) {
+  const text = trimmed(value);
+  if (text) values[key] = text;
+}
+
+/**
+ * Put a list on `values` when it is not empty.
+ * @param {Object} values - Install values (changed in place)
+ * @param {string} key
+ * @param {string[]} list
+ */
+function setList(values, key, list) {
+  if (list.length > 0) values[key] = list;
+}
+
+/**
+ * The connection values of the form: the source (a sign-in provider, or a
+ * URL), StartTLS, base DN, preset and bind. Without a sign-in provider, "the
+ * provider's account" means anonymous.
+ * @param {Object} values - Install values (changed in place)
+ * @param {Object} form - Form state
+ */
+function addConnectionValues(values, form) {
+  if (form.sourceMode === 'provider') setText(values, 'authProvider', form.authProvider);
+  setText(values, 'url', form.url);
+  if (form.starttls === 'on') values.starttls = true;
+  else if (form.starttls === 'off') values.starttls = false;
+  setText(values, 'baseDn', form.baseDn);
+  setText(values, 'preset', form.preset);
+  const bindMode =
+    form.sourceMode !== 'provider' && form.bindMode === 'default' ? 'anonymous' : form.bindMode;
+  if (bindMode === 'anonymous' || bindMode === 'service') values.bindMode = bindMode;
+  if (bindMode === 'service') {
+    setText(values, 'bindDn', form.bindDn);
+    setText(values, 'bindPasswordRef', form.bindPasswordRef);
+  }
+}
+
+/**
+ * The search values of the form: search base, person filter, search
+ * attributes, the mapping overrides and the units switch.
+ * @param {Object} values - Install values (changed in place)
+ * @param {Object} form - Form state
+ */
+function addSearchValues(values, form) {
+  setText(values, 'searchBase', form.searchBase);
+  setText(values, 'personFilter', form.personFilter);
+  setList(values, 'searchAttributes', parseList(form.searchAttributes));
+  for (const [field, text] of Object.entries(form.attributeMapping || {})) {
+    setList(values, `mapping_${field}`, parseMappingCandidates(text));
+  }
+  if (form.units) values.units = true;
+}
+
+/**
+ * The transport security values of the form: plain text allowed, trusted
+ * certificates, allowed hosts and the TLS versions and ciphers.
+ * @param {Object} values - Install values (changed in place)
+ * @param {Object} form - Form state
+ */
+function addTlsValues(values, form) {
+  if (form.allowPlaintext) values.allowPlaintext = true;
+  setList(values, 'tlsCa', parseList(form.tlsCa));
+  setList(values, 'allowedHosts', parseList(form.allowedHosts));
+  setText(values, 'tlsMinVersion', form.tlsMinVersion);
+  setText(values, 'tlsMaxVersion', form.tlsMaxVersion);
+  setText(values, 'tlsCiphers', form.tlsCiphers);
+}
+
+/**
  * The install values of the form, without empty optional fields: an omitted
  * field takes the sign-in provider's value, the preset's or the definition's
  * default. Only keys of the definition's `install` fields are written.
@@ -274,41 +367,9 @@ export function directoryValuesToForm(values = {}, { label, description } = {}) 
  */
 export function directoryFormToValues(form) {
   const values = {};
-  const setText = (key, value) => {
-    const text = trimmed(value);
-    if (text) values[key] = text;
-  };
-  if (form.sourceMode === 'provider') setText('authProvider', form.authProvider);
-  setText('url', form.url);
-  if (form.starttls === 'on') values.starttls = true;
-  else if (form.starttls === 'off') values.starttls = false;
-  setText('baseDn', form.baseDn);
-  setText('preset', form.preset);
-  // Without a sign-in provider, "the provider's account" means anonymous.
-  const bindMode =
-    form.sourceMode !== 'provider' && form.bindMode === 'default' ? 'anonymous' : form.bindMode;
-  if (bindMode === 'anonymous' || bindMode === 'service') values.bindMode = bindMode;
-  if (bindMode === 'service') {
-    setText('bindDn', form.bindDn);
-    setText('bindPasswordRef', form.bindPasswordRef);
-  }
-  setText('searchBase', form.searchBase);
-  setText('personFilter', form.personFilter);
-  const searchAttributes = parseList(form.searchAttributes);
-  if (searchAttributes.length > 0) values.searchAttributes = searchAttributes;
-  for (const [field, text] of Object.entries(form.attributeMapping || {})) {
-    const candidates = parseMappingCandidates(text);
-    if (candidates.length > 0) values[`mapping_${field}`] = candidates;
-  }
-  if (form.units) values.units = true;
-  if (form.allowPlaintext) values.allowPlaintext = true;
-  const tlsCa = parseList(form.tlsCa);
-  if (tlsCa.length > 0) values.tlsCa = tlsCa;
-  const allowedHosts = parseList(form.allowedHosts);
-  if (allowedHosts.length > 0) values.allowedHosts = allowedHosts;
-  setText('tlsMinVersion', form.tlsMinVersion);
-  setText('tlsMaxVersion', form.tlsMaxVersion);
-  setText('tlsCiphers', form.tlsCiphers);
+  addConnectionValues(values, form);
+  addSearchValues(values, form);
+  addTlsValues(values, form);
   for (const field of LIMIT_FIELDS) {
     const text = trimmed(form[field]);
     if (text !== '') values[field] = Number(text);
@@ -337,15 +398,12 @@ function limitProblem(field, text, min, max, prefix = K) {
 }
 
 /**
- * Check the form before it is saved, so the admin sees what is missing next
- * to the field instead of a server error. The server validates again.
- *
+ * What the form's source is missing: a sign-in provider to reuse, or a URL
+ * and base DN of its own; and a URL that is no LDAP URL.
  * @param {Object} form - Form state
- * @param {Object} [context]
- * @param {Object} [context.limits] - Upper bounds by limit field (editor context)
- * @returns {Array<{field: string, message: {key: string, defaultValue: string, values?: Object}}>}
+ * @returns {Object[]} Problems ({@link problem})
  */
-export function validateDirectoryForm(form, { limits = {} } = {}) {
+function sourceProblems(form) {
   const errors = [];
   if (form.sourceMode === 'provider') {
     if (!trimmed(form.authProvider)) {
@@ -362,19 +420,38 @@ export function validateDirectoryForm(form, { limits = {} } = {}) {
       problem('url', 'urlPattern', 'Use ldaps://host:636 or ldap://host:389, without a path.')
     );
   }
-  if (form.bindMode === 'service') {
-    if (!trimmed(form.bindDn))
-      errors.push(problem('bindDn', 'bindDnRequired', 'Enter the bind DN.'));
-    if (!trimmed(form.bindPasswordRef)) {
-      errors.push(
-        problem(
-          'bindPasswordRef',
-          'passwordRefRequired',
-          'Choose the credential that holds the password.'
-        )
-      );
-    }
+  return errors;
+}
+
+/**
+ * What a service account bind is missing: its DN or its password credential.
+ * @param {Object} form - Form state
+ * @returns {Object[]} Problems ({@link problem})
+ */
+function bindProblems(form) {
+  if (form.bindMode !== 'service') return [];
+  const errors = [];
+  if (!trimmed(form.bindDn)) errors.push(problem('bindDn', 'bindDnRequired', 'Enter the bind DN.'));
+  if (!trimmed(form.bindPasswordRef)) {
+    errors.push(
+      problem(
+        'bindPasswordRef',
+        'passwordRefRequired',
+        'Choose the credential that holds the password.'
+      )
+    );
   }
+  return errors;
+}
+
+/**
+ * The first malformed entry of each list field: a certificate name, the
+ * person filter, a search attribute name.
+ * @param {Object} form - Form state
+ * @returns {Object[]} Problems ({@link problem})
+ */
+function formatProblems(form) {
+  const errors = [];
   const badCa = parseList(form.tlsCa).find(name => !CERTIFICATE_NAME_PATTERN.test(name));
   if (badCa) {
     errors.push(
@@ -406,16 +483,32 @@ export function validateDirectoryForm(form, { limits = {} } = {}) {
       })
     );
   }
-  for (const field of LIMIT_FIELDS) {
-    const found = limitProblem(
-      field,
-      trimmed(form[field]),
-      LIMIT_MINIMA[field],
-      limits[field] ?? FALLBACK_LIMIT_MAXIMA[field]
-    );
-    if (found) errors.push(found);
-  }
   return errors;
+}
+
+/**
+ * Check the form before it is saved, so the admin sees what is missing next
+ * to the field instead of a server error. The server validates again.
+ *
+ * @param {Object} form - Form state
+ * @param {Object} [context]
+ * @param {Object} [context.limits] - Upper bounds by limit field (editor context)
+ * @returns {Array<{field: string, message: {key: string, defaultValue: string, values?: Object}}>}
+ */
+export function validateDirectoryForm(form, { limits = {} } = {}) {
+  return [
+    ...sourceProblems(form),
+    ...bindProblems(form),
+    ...formatProblems(form),
+    ...LIMIT_FIELDS.map(field =>
+      limitProblem(
+        field,
+        trimmed(form[field]),
+        LIMIT_MINIMA[field],
+        limits[field] ?? FALLBACK_LIMIT_MAXIMA[field]
+      )
+    ).filter(Boolean)
+  ];
 }
 
 /**
@@ -430,6 +523,20 @@ export function inputIdForField(field) {
 }
 
 /**
+ * Whether a connection would use StartTLS: the form's choice, or for
+ * `inherit` the reused sign-in provider's.
+ *
+ * @param {Object} form - Form state
+ * @param {Object} [provider] - The reused sign-in provider (none: not reused)
+ * @returns {boolean}
+ */
+function effectiveStarttls(form, provider) {
+  if (form.starttls === 'on') return true;
+  if (form.starttls === 'off') return false;
+  return provider?.starttls === true;
+}
+
+/**
  * How a connection would be secured, from the URL and StartTLS the form ends
  * up with, including what it inherits from a reused sign-in provider.
  *
@@ -440,12 +547,7 @@ export function inputIdForField(field) {
 export function transportOf(form, provider) {
   const reuses = form.sourceMode === 'provider';
   const url = trimmed(form.url) || (reuses ? trimmed(provider?.url) : '');
-  const starttls =
-    form.starttls === 'on'
-      ? true
-      : form.starttls === 'off'
-        ? false
-        : reuses && provider?.starttls === true;
+  const starttls = effectiveStarttls(form, reuses ? provider : undefined);
   if (/^ldaps:\/\//i.test(url)) return 'ldaps';
   if (/^ldap:\/\//i.test(url)) return starttls ? 'starttls' : 'plaintext';
   return 'unknown';
@@ -491,12 +593,7 @@ export function browserValuesToForm(values = {}) {
     directory: values.directory ?? '',
     baseDn: values.baseDn ?? '',
     maxResults: numberText(values.maxResults),
-    bindMode:
-      values.bindMode === 'service'
-        ? 'service'
-        : values.bindMode === 'anonymous'
-          ? 'anonymous'
-          : 'directory',
+    bindMode: bindModeChoice(values.bindMode, 'directory'),
     bindDn: values.bindDn ?? '',
     bindPasswordRef: values.bindPasswordRef ?? '',
     denyAttributes: asList(values.denyAttributes).join('\n')

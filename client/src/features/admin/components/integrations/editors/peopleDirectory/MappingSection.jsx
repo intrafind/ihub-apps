@@ -8,6 +8,18 @@ import { HELP_CLASS, LABEL_CLASS, MONO_INPUT_CLASS } from '../../../formStyles';
 const K = 'admin.integrations.editors.peopleDirectory.mapping';
 
 /**
+ * A preset value (one attribute or a list of them) as the text shown next to
+ * a field: the list joined with ", ", empty for none.
+ *
+ * @param {string|string[]|undefined} value
+ * @returns {string}
+ */
+function presetText(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  return value ? String(value) : '';
+}
+
+/**
  * Section "Search and mapping" of the People directory (LDAP) editor: where
  * people are searched, which entries are people, which attributes free text
  * is matched against, and where each `Person` field is read from.
@@ -31,10 +43,6 @@ const K = 'admin.integrations.editors.peopleDirectory.mapping';
 function MappingSection({ form, update, preset, presetLabel, fields, baseDnHint, errors }) {
   const { t } = useTranslation();
   const presetMapping = preset?.attributeMapping || {};
-  const presetText = value => {
-    const list = Array.isArray(value) ? value : value ? [value] : [];
-    return list.length > 0 ? list.join(', ') : '';
-  };
   const updateField = (field, text) =>
     update({ attributeMapping: { ...form.attributeMapping, [field]: text } });
 

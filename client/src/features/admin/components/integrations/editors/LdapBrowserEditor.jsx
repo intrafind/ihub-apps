@@ -69,6 +69,27 @@ function Fact({ label, children, mono = false }) {
 }
 
 /**
+ * The bind account the chosen directory searches with, as the browser's
+ * "directory's account" option shows it: its service account, anonymous, or
+ * the bind account of the sign-in provider it reuses (anonymous without one).
+ *
+ * @param {Object} directoryValues - Install values of the chosen directory
+ * @param {Function} t - Translator
+ * @returns {string}
+ */
+function directoryBindLabel(directoryValues, t) {
+  if (directoryValues.bindMode === 'service') {
+    return t(`${K}.bindOfDirectoryService`, 'Service account {{dn}}', {
+      dn: directoryValues.bindDn || '—'
+    });
+  }
+  if (directoryValues.bindMode !== 'anonymous' && directoryValues.authProvider) {
+    return t(`${K}.bindOfDirectoryProvider`, "The sign-in provider's bind account");
+  }
+  return t(`${K}.bindOfDirectoryAnonymous`, 'Anonymous');
+}
+
+/**
  * The dedicated editor of an **LDAP browser** installation
  * (`com.intrafind/ldap-browser`): the admin tool that reads raw entries.
  *
@@ -163,16 +184,7 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
     void editor.save(browserFormToValues(form));
   };
 
-  const directoryBind =
-    directoryValues.bindMode === 'service'
-      ? t(`${K}.bindOfDirectoryService`, 'Service account {{dn}}', {
-          dn: directoryValues.bindDn || '—'
-        })
-      : directoryValues.bindMode === 'anonymous'
-        ? t(`${K}.bindOfDirectoryAnonymous`, 'Anonymous')
-        : directoryValues.authProvider
-          ? t(`${K}.bindOfDirectoryProvider`, "The sign-in provider's bind account")
-          : t(`${K}.bindOfDirectoryAnonymous`, 'Anonymous');
+  const directoryBind = directoryBindLabel(directoryValues, t);
 
   const bindOptions = [
     {
@@ -246,7 +258,7 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
               ))}
             </select>
             <FieldError message={fieldErrors.directory} />
-            {directories && directories.length === 0 && (
+            {directories?.length === 0 && (
               <p className={HELP_CLASS}>
                 {t(
                   `${K}.noDirectories`,
