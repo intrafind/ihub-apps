@@ -11,10 +11,10 @@ import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
+import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
+import { modelSupportsWebSearch } from '../webSearch';
 import {
   currentScopeOf,
   scopeActionLabel,
@@ -70,7 +70,6 @@ function ChatInputActionsMenu({
   onIntegrationScopeChange = null
 }) {
   const { t, i18n } = useTranslation();
-  const { platformConfig } = usePlatformConfig();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
   // its `contextToggles` array. Empty in the main web app — the section
@@ -100,20 +99,15 @@ function ChatInputActionsMenu({
     onClose: handleActionsMenuClose
   });
 
-  // Get enabled cloud storage providers
-  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
-  const cloudStorageConfig = uploadConfig?.cloudStorageUpload || {};
-  const isCloudStorageEnabledForApp = cloudStorageConfig.enabled === true;
-  const enabledCloudProviders =
-    cloudStorage.enabled && isCloudStorageEnabledForApp
-      ? cloudStorage.providers.filter(p => p.enabled)
-      : [];
+  // The storage providers the app binds and the user's groups grant
+  // (`useFileUploadHandler().createUploadConfig` → `cloudStorage.providers`)
+  const enabledCloudProviders = uploadConfig?.cloudStorage?.providers || [];
 
   // Load tool metadata when component mounts. Workflows live in app.workflows now
   // and are triggered via @mentions, so they are intentionally not surfaced here.
   useEffect(() => {
     const loadTools = async () => {
-      if ((!app?.tools || app.tools.length === 0) && boundIntegrationRefs(app).length === 0) return;
+      if (appToolRefs(app).length === 0) return;
 
       try {
         setToolsLoading(true);
@@ -154,9 +148,7 @@ function ChatInputActionsMenu({
     availableTools.find(tool => tool.id === toolId)?.requiresUserInput === true;
   // Installed integrations the app binds are tools too, one toggle per
   // installation (its actions fold into it like an MCP server's tools).
-  const selectableToolRefs = [...(app?.tools || []), ...boundIntegrationRefs(app)].filter(
-    id => !isInteractiveToolRef(id)
-  );
+  const selectableToolRefs = appToolRefs(app).filter(id => !isInteractiveToolRef(id));
 
   const { grouped, individual } = groupToolsByMcpServer(selectableToolRefs, availableTools, name =>
     getLocalizedContent(name, i18n.language)
@@ -197,7 +189,12 @@ function ChatInputActionsMenu({
   const menuToolRefs = [...grouped.flatMap(g => g.matchedTools), ...individual];
   const toolCount = menuToolRefs.length;
   const enabledCount = hasTools ? menuToolRefs.filter(ref => enabledTools.includes(ref)).length : 0;
-  const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  // Not offered on a model web search does not work with: no native search
+  // there and no engine available (the server's `websearchAvailability`).
+  const hasWebsearch =
+    app?.websearch?.enabled === true &&
+    onWebsearchEnabledChange !== null &&
+    modelSupportsWebSearch(app, model) !== false;
   const scopeIntegrations = (Array.isArray(integrationScopes) ? integrationScopes : []).filter(
     integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
   );

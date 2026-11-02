@@ -6,16 +6,17 @@
  *
  * Returns the list of tool IDs that should be auto-registered for an agent
  * run, based on the Profile's capabilities and the current node's role in
- * the lifecycle. The actual tool definitions live in `contents/tools/`
- * (originally added by migration V042 / V045 / V046, now shipped as
- * individual default files) and the implementation lives in
+ * the lifecycle. The tool definitions are the platform tools of workflows
+ * and agents — the shipped files in `server/defaults/tools/`, loaded by
+ * `loadTools()` through `services/tools/platformTools.js` (originally added
+ * by migration V042 / V045 / V046) — and the implementation lives in
  * `server/tools/agentTools.js`.
  *
  * Lifecycle redesign (V047+): deterministic lifecycle operations are owned
  * by the runtime, not the LLM. The registrar therefore no longer
  * auto-attaches `read_inbox`, `write_inbox`, `write_artifact`, or
- * `mark_task_done`. These tools still exist (and are still defined in
- * tools.json) so profile authors can add them to `profile.tools[]` as an
+ * `mark_task_done`. These tools still exist (they are platform tools) so
+ * profile authors can add them to `profile.tools[]` as an
  * escape hatch — but they are no longer pushed into every agent prompt by
  * default. That alone eliminates the planner-hallucination class of bugs
  * we were defending against with `"DO NOT include orchestration steps"`

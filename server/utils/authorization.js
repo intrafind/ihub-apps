@@ -69,6 +69,7 @@ export function resolveGroupInheritance(groupsConfig) {
         workflows: new Set(),
         skills: new Set(),
         tools: new Set(),
+        integrations: new Set(),
         adminAccess: false,
         contentAdmin: false,
         scheduledTasks: false,
@@ -108,6 +109,11 @@ export function resolveGroupInheritance(groupsConfig) {
         // Merge tools
         if (Array.isArray(parentPerms.tools)) {
           parentPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
+        }
+
+        // Merge integrations (installation ids, definition ids, `type:<type>`, `*`)
+        if (Array.isArray(parentPerms.integrations)) {
+          parentPerms.integrations.forEach(key => mergedPermissions.integrations.add(key));
         }
 
         // Admin access: if any parent has admin access, inherit it
@@ -152,6 +158,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.tools)) {
         ownPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
       }
+      if (Array.isArray(ownPerms.integrations)) {
+        ownPerms.integrations.forEach(key => mergedPermissions.integrations.add(key));
+      }
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
       }
@@ -178,6 +187,7 @@ export function resolveGroupInheritance(groupsConfig) {
           workflows: Array.from(mergedPermissions.workflows),
           skills: Array.from(mergedPermissions.skills),
           tools: Array.from(mergedPermissions.tools),
+          integrations: Array.from(mergedPermissions.integrations),
           adminAccess: mergedPermissions.adminAccess,
           contentAdmin: mergedPermissions.contentAdmin,
           scheduledTasks: mergedPermissions.scheduledTasks,
@@ -282,6 +292,7 @@ export function loadGroupPermissions() {
       workflows: group.permissions?.workflows || [],
       skills: group.permissions?.skills || [],
       tools: group.permissions?.tools || [],
+      integrations: group.permissions?.integrations || [],
       adminAccess: group.permissions?.adminAccess || false,
       contentAdmin: group.permissions?.contentAdmin || false,
       scheduledTasks: group.permissions?.scheduledTasks === true,
@@ -399,6 +410,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     workflows: new Set(),
     skills: new Set(),
     tools: new Set(),
+    integrations: new Set(),
     adminAccess: false,
     contentAdmin: false,
     scheduledTasks: false,
@@ -461,6 +473,15 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.tools.forEach(tool => permissions.tools.add(tool));
     }
 
+    // Integrations the group may use: `*`, installation ids, definition ids
+    // and type keys (`type:people-directory`). Checked on top of every app
+    // binding and tool grant (`services/integrations/integrationAccess.js`).
+    if (groupPerms.integrations?.includes('*')) {
+      permissions.integrations.add('*');
+    } else if (Array.isArray(groupPerms.integrations)) {
+      groupPerms.integrations.forEach(key => permissions.integrations.add(key));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
@@ -492,6 +513,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     models: Array.from(permissions.models),
     workflows: Array.from(permissions.workflows),
     skills: Array.from(permissions.skills),
+    integrations: Array.from(permissions.integrations),
     adminAccess: permissions.adminAccess
   });
 
@@ -540,6 +562,8 @@ export function intersectWithClientAllowList(userAllowed, clientAllowed) {
  * keys users mint for themselves): the token acts as a specific user, and the OAuth
  * client (e.g. the Outlook add-in) may define additional restrictions. If the client
  * configures no restrictions, the user keeps their full group-granted permissions.
+ * Clients have no integration allow-list, so `permissions.integrations` stays the
+ * owner's.
  *
  * @param {Object} permissions - User permissions object with apps/models/prompts Sets.
  * @param {Object} user - User object carrying clientAllowedApps/clientAllowedModels/clientAllowedPrompts.
@@ -730,6 +754,10 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       models: new Set(user.allowedModels || []),
       workflows: new Set(), // OAuth clients don't have workflow permissions
       skills: new Set(), // OAuth clients don't have skill permissions
+      // A machine client holds no group grants and has no integration
+      // allow-list of its own: what it may reach is bounded by `allowedApps`,
+      // and an integration reaches it only through the bindings of those apps.
+      integrations: new Set(['*']),
       adminAccess: false, // OAuth clients never have admin access
       scheduledTasks: false, // nor may they plant recurring work
       projects: false, // nor hold projects

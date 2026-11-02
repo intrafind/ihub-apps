@@ -57,7 +57,7 @@ describe('"Use for people search" on LDAP sign-in providers', () => {
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute(
       'href',
-      '/admin/integrations/installed?install=com.intrafind__ldap-directory&v.authProvider=corp-ad&label=Corporate+AD'
+      '/admin/integrations?install=com.intrafind__ldap-directory&v.authProvider=corp-ad&label=Corporate+AD'
     );
     // "branch" is only in the form, so a directory could not find it yet.
     expect(screen.queryByText(SAVE_FIRST)).not.toBeInTheDocument();

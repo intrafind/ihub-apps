@@ -72,6 +72,7 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
     workflows: list('workflows'),
     skills: list('skills'),
     tools: list('tools'),
+    integrations: list('integrations'),
     adminAccess:
       adminAccess !== undefined
         ? adminAccess
@@ -131,6 +132,19 @@ function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = u
  *           items:
  *             type: string
  *           example: ["iFinder"]
+ *         integrations:
+ *           type: array
+ *           description: >
+ *             Installed integrations members may use, or ['*'] for all of them (the ones
+ *             installed later included). An entry is an installation id (`x500bund`), a
+ *             definition id (every installation of it, `com.intrafind/ldap-directory`) or a
+ *             type key (every installation of that type, `type:people-directory`,
+ *             `type:web-search`, `type:storage`). Checked on top of every app binding:
+ *             an app that binds an installation offers it only to members of a group
+ *             that grants it. Inherited like `apps`.
+ *           items:
+ *             type: string
+ *           example: ["type:web-search", "x500bund"]
  *         adminAccess:
  *           type: boolean
  *           description: Whether the group has administrative access

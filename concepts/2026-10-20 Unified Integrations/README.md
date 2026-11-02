@@ -27,6 +27,13 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [04 · Architecture](04-architecture.md) | Definition and instance formats, adapters, auth modes, approval gate, routes, client components, marketplace, migrations |
 | [05 · Roadmap](05-roadmap.md) | Phases, risks, open questions |
 | [06 · Implementation kickoff](06-implementation-kickoff.md) | The prompt and model recommendations to start one issue per session |
+| [07 · Types and built-in configuration](07-types-and-built-in-configuration.md) | Integration types, one admin page with dedicated editors, web search per engine, storage providers, people directories, the iHub integration (decided 2026-11-01) |
+| [2026-11-01 · Admin integrations page and installation editors](2026-11-01%20Admin%20integrations%20page%20and%20installation%20editors.md) | Implementation notes: the one admin page, groups, tiles, the installation page, the editor registry and how to add an editor |
+| [2026-11-01 · Storage provider contract](2026-11-01%20Storage%20provider%20contract.md) | Design for third-party storage providers: the `files` connector contract, generic routes, browser and project kind, and the issue text to file |
+| [2026-11-01 · iHub integration: chat tools only](2026-11-01%20iHub%20integration%20chat%20tools%20only.md) | Implementation note: which iHub tools are integration actions, which belong to projects, workflows and agents, and how they are loaded |
+| [2026-11-02 · Web search engines](2026-11-02%20Web%20search%20engines.md) | Implementation notes: one integration per engine, Auto's order, native search without an engine, the page reader as a platform tool, migration V204, the engine contract |
+| [2026-11-02 · People directories and the LDAP browser](2026-11-02%20People%20directories%20and%20the%20LDAP%20browser.md) | Implementation notes: People directory (LDAP), the LDAP browser as its own integration, migration V205, the dedicated directory, browser and Entra editors |
+| [2026-11-02 · Storage providers as installations](2026-11-02%20Storage%20providers%20as%20installations.md) | Implementation notes: several installations per provider (installation id = provider id), migration V206, the per-app binding, the base-path-aware redirect URI, the storage editor |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals
@@ -62,6 +69,10 @@ We propose one **integrations platform** with three layers, the shape every comp
 ## Decisions
 
 See [03 · Product concept → Decisions](03-product-concept.md#10-decisions-this-concept-asks-for). Taken: vocabulary (Integration, Connection, Action), server-side chat state, marketplace type `integration`, clean break for the admin MCP and A2A routes (2026-10-20); approval per [#2945](https://github.com/intrafind/ihub-apps/issues/2945) (2026-10-22, replaces "ask on every write by default"); integrations own their tools and the Tools page folds in (2026-10-23); clean break for the Tools admin routes, no shared OAuth connections, web search as a picker row, the public MCP registry only as an opt-in registry (2026-10-31, [05 · Roadmap → Open questions](05-roadmap.md#open-questions-for-the-team)); versioning, compatibility, release notes and migrations per [Integration Versioning and Migrations → Decisions](../2026-10-31%20Integration%20Versioning%20and%20Migrations/README.md#7--decisions) (2026-10-31).
+
+## Revision 2026-11-01
+
+Testing the merged stack led to [07 · Types and built-in configuration](07-types-and-built-in-configuration.md), all decided the same day: definitions declare a **type** (`people-directory`, `web-search`, `storage`) that groups them and that apps bind as a whole (`type:<type>`); **one admin page** with grouped tiles, a page per installation and **dedicated editors** for the built-ins (the route `/admin/integrations/installed` goes); **web search per engine** (Brave, Staan, Qwant as separate integrations, native search without any; supersedes the 2026-10-31 "web search as a picker row" for the admin side); **storage providers** installable several times and bound per app; **People directory** as the name, Entra included, and the **LDAP browser** as its own integration; the **iHub** integration reduced to asking the user and scheduled tasks, project knowledge with projects; **group access** through `permissions.integrations` on groups (#3093, option B).
 
 ## Revision 2026-10-31
 

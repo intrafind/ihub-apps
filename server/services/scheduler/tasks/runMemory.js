@@ -19,7 +19,7 @@
  *
  * @module services/scheduler/tasks/runMemory
  */
-import { loadConfiguredTools } from '../../../toolLoader.js';
+import { loadTools } from '../../../toolLoader.js';
 import logger from '../../../utils/logger.js';
 import { modelSupportsTools } from '../../../../shared/modelCapabilities.js';
 import { readMemory, readMemoryForPrompt } from '../../memory/memoryService.js';
@@ -136,16 +136,19 @@ export function buildProtocolNote({ toolsOffered, continuation = false }) {
 /**
  * Add the memory and history tools to the run's own tool list.
  *
- * They are not app tools, so they are taken from the configured tools (the
- * localized definitions, not the raw files) and put in directly; a tool an
- * admin disabled or removed is skipped.
+ * They are not app tools, so they are taken from the localized tool list
+ * every request reads (`loadTools`) and put in directly: `read_memory` and
+ * `write_memory` are platform tools of agents, `list_task_runs` and
+ * `get_task_run` actions of the iHub integration. A tool an admin switched
+ * off (a disabled tool file, an action switched off on the `ihub`
+ * installation) or removed is skipped.
  *
  * @param {Object} prepared - Mutated: `prepared.tools`.
  * @param {string} language
  * @returns {Promise<{added: string[], missing: string[]}>}
  */
 export async function addMemoryTools(prepared, language) {
-  const definitions = await loadConfiguredTools(language);
+  const definitions = await loadTools(language);
   const added = [];
   const missing = [];
   for (const id of [...MEMORY_TOOL_IDS, ...HISTORY_TOOL_IDS]) {

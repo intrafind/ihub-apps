@@ -6,9 +6,9 @@ import { describe, it, expect, jest, afterEach } from '@jest/globals';
 /**
  * The tool listing (`configCache.getToolsForUser`, GET /api/tools?appId=…)
  * lists an installed integration's tools as the chat gets them: the app binds
- * the installation, the user is in its groups and the binding allows the
- * action. The instance id alone grants nothing — except as an explicit group
- * grant in groups.json.
+ * the installation, the user's groups grant it (`permissions.integrations`,
+ * #3093) and the binding allows the action. The instance id alone grants
+ * nothing — except as an explicit tool grant in groups.json.
  */
 
 const tools = [
@@ -18,8 +18,11 @@ const tools = [
 ];
 
 const instances = {
-  portal: { id: 'portal', enabled: true, allowedGroups: ['analysts'] }
+  portal: { id: 'portal', definition: 'com.example/portal', enabled: true }
 };
+
+/** What each group's `permissions.integrations` grants, as the enhanced user carries it. */
+const INTEGRATION_GRANTS = { analysts: ['portal'], guests: [] };
 
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   loadTools: async () => tools
@@ -45,7 +48,14 @@ afterEach(() => {
 
 const listFor = async ({ app, groups = ['analysts'], grants = [] }) => {
   configCache.getAppsForUser = async () => ({ data: app ? [app] : [] });
-  const user = { id: 'u', groups, permissions: { tools: new Set(grants) } };
+  const user = {
+    id: 'u',
+    groups,
+    permissions: {
+      tools: new Set(grants),
+      integrations: new Set(groups.flatMap(group => INTEGRATION_GRANTS[group] || []))
+    }
+  };
   const { data } = await configCache.getToolsForUser(user, {}, 'en', { appId: 'chat' });
   return data.map(tool => tool.id).sort();
 };
@@ -65,7 +75,7 @@ describe('installed integration tools in the tool listing', () => {
     expect(await listFor({ app })).toEqual(['portal__purge', 'portal__search']);
   });
 
-  it('lists nothing of an installation whose groups exclude the user', async () => {
+  it("lists nothing of an installation the user's groups do not grant", async () => {
     const app = { id: 'chat', tools: ['braveSearch'], integrations: { portal: {} } };
     expect(await listFor({ app, groups: ['guests'] })).toEqual(['braveSearch']);
   });
@@ -75,7 +85,7 @@ describe('installed integration tools in the tool listing', () => {
     expect(await listFor({ app })).toEqual(['braveSearch']);
   });
 
-  it('keeps an explicit group grant on the instance id for a member of its groups', async () => {
+  it('keeps an explicit tool grant on the instance id for a user whose groups grant the installation', async () => {
     const app = { id: 'chat', tools: [] };
     expect(await listFor({ app, groups: ['analysts'], grants: ['portal'] })).toEqual([
       'portal__purge',
@@ -83,7 +93,7 @@ describe('installed integration tools in the tool listing', () => {
     ]);
   });
 
-  it('lists nothing for a grant holder outside the installation groups', async () => {
+  it('lists nothing for a tool grant holder whose groups do not grant the installation', async () => {
     const app = { id: 'chat', tools: [] };
     expect(await listFor({ app, groups: ['guests'], grants: ['portal'] })).toEqual([]);
     expect(await listFor({ app, groups: ['guests'], grants: ['*'] })).toEqual(['braveSearch']);

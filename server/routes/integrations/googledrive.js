@@ -18,6 +18,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
+import { requireCloudStorageGrant } from './cloudStorageAccess.js';
 
 const router = express.Router();
 
@@ -34,6 +35,9 @@ function isValidFileId(fileId) {
 
 // Gate all Google Drive routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
+// A provider the user's groups do not grant (`permissions.integrations`) can
+// be neither connected nor browsed.
+router.use(requireCloudStorageGrant('googledrive'));
 
 // Rate limiter for Google Drive OAuth initiation to prevent abuse/DoS
 const googleDriveAuthLimiter = rateLimit({

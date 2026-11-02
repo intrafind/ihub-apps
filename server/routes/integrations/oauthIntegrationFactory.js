@@ -53,7 +53,8 @@ function isAnonymous(user) {
  * @param {object} config
  * @param {string} config.providerKey - route/state/query-param slug, e.g. 'office365'
  * @param {string} config.displayName - human-readable name used in logs/messages, e.g. 'Office 365'
- * @param {boolean} config.requiresProviderId - true for multi-provider integrations (office365/googledrive/nextcloud), false for single-provider ones (jira)
+ * @param {boolean} config.requiresProviderId - true for the storage providers (office365/googledrive/nextcloud), whose
+ *   `providerId` is the id of one installation (there may be several per provider); false for single-installation ones (jira)
  * @param {boolean} config.usesPkce - whether to generate/forward a PKCE code verifier
  * @param {(ctx: {providerId, state, codeVerifier, req}) => string} config.buildAuthUrl
  * @param {(ctx: {providerId, code, codeVerifier, req}) => Promise<{refreshToken?: string}>} config.exchangeCodeForTokens
@@ -96,7 +97,7 @@ export function createOAuthIntegrationRouter(
 
   /**
    * Initiate the OAuth2 flow.
-   * GET /api/integrations/<providerKey>/auth?providerId=xxx
+   * GET /api/integrations/<providerKey>/auth?providerId=<installation id>
    */
   router.get('/auth', authRequired, ...(authLimiter ? [authLimiter] : []), (req, res) => {
     try {
@@ -149,7 +150,7 @@ export function createOAuthIntegrationRouter(
 
   /**
    * Handle the OAuth2 callback.
-   * GET /api/integrations/<providerKey>/:providerId/callback (multi-provider)
+   * GET /api/integrations/<providerKey>/:providerId/callback (storage providers: the installation id)
    * GET /api/integrations/<providerKey>/callback (single-provider)
    */
   router.get(

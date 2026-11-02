@@ -19,7 +19,7 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | **Overview** | Dashboard, What's New |
 | **AI Workspace** | Apps, Models, Providers, Prompts, Tools, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
-| **Integrations** | Integrations (Jira, Office 365, Google Drive, Nextcloud, Outlook add-in, browser extension, …), Installed integrations (iFinder, iAssistant, MCP servers, remote A2A agents, catalog integrations), MCP gateway, Credentials |
+| **Integrations** | Integrations (tabs **Installed**, **Catalog** and **Inbound**: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
 | **Customization** | UI Customization, Localization, Pages, Short Links |
 | **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
 | **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |
@@ -202,7 +202,7 @@ Models define which AI providers and specific model versions are available on yo
 
 **AI Workspace → Providers** holds the connections: API keys for the LLM providers (OpenAI, Anthropic, Google, Mistral, local, AWS Bedrock, OpenRouter). A model without a key of its own uses its provider's key, then the provider's environment variable (e.g. `GOOGLE_API_KEY`). Keys are stored encrypted and shown masked; **Test All** checks every configured key.
 
-The web search engines (Brave, Staan, Qwant) are not providers: they are the built-in **Web search** installation under **Integrations → Installed**, which references their API keys as **secret** credentials from **Integrations → Credentials** (the environment variables `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY` apply when no credential is referenced), sets the default engine and restricts who gets web search; its **Test** runs one live search. See [Web Tools](web-tools.md#api-key-setup).
+The web search engines (Brave, Staan, Qwant) are not providers: each is an integration of its own under **Integrations → Web search**, installed only when wanted. Brave and Staan reference their API key as a **secret** credential from **Integrations → Credentials** (the environment variables `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY` apply when no credential is referenced); the groups decide who may use an engine, and its **Test** runs one live search. Apps with web search on search natively on Google, OpenAI and Anthropic models without any engine. See [Web Tools](web-tools.md#api-key-setup).
 
 ![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
 

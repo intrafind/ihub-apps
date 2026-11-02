@@ -4,10 +4,10 @@
 /**
  * Integration versioning in the admin UI:
  *
- *   - Admin → Integrations → Installed shows each installation's version, an
- *     "Update available" badge when the marketplace catalog has a newer
- *     compatible definition, and an "Incompatible" pill with the reason when
- *     the definition cannot run on this server;
+ *   - Admin → Integrations (Installed tab) shows each installation's version
+ *     on its tile, an "Update available" badge when the marketplace catalog
+ *     has a newer compatible definition, and an "Incompatible" pill with the
+ *     reason when the definition cannot run on this server;
  *   - a catalog card of an incompatible definition is greyed with Install
  *     disabled;
  *   - a marketplace card of an incompatible item is greyed with its button
@@ -33,9 +33,14 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
+  fetchAdminPlatformConfig: jest.fn().mockResolvedValue(null),
   getAdminApiErrorMessage: err => err?.message || 'error',
   makeAdminApiCall: jest.fn(),
   installMarketplaceItem: jest.fn()
+}));
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => ({ isEnabled: () => true })
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
@@ -62,8 +67,8 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } })
 }));
 
-const AdminInstalledIntegrationsPage =
-  require('../../../client/src/features/admin/pages/AdminInstalledIntegrationsPage').default;
+const AdminIntegrationsPage =
+  require('../../../client/src/features/admin/pages/AdminIntegrationsPage').default;
 const MarketplaceItemCard =
   require('../../../client/src/features/admin/components/marketplace/MarketplaceItemCard').default;
 
@@ -141,10 +146,10 @@ beforeEach(() => {
   mockApi.fetchAdminApps.mockResolvedValue([]);
 });
 
-const renderPage = (path = '/admin/integrations/installed') =>
+const renderPage = (path = '/admin/integrations') =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <AdminInstalledIntegrationsPage />
+      <AdminIntegrationsPage />
     </MemoryRouter>
   );
 
@@ -178,17 +183,17 @@ describe('installed integrations: versions, updates and compatibility', () => {
   });
 
   test('the catalog greys an incompatible definition and disables Install', async () => {
-    renderPage('/admin/integrations/installed?tab=catalog');
+    renderPage('/admin/integrations?tab=catalog');
     const cards = await screen.findAllByTestId('catalog-card');
     const legacy = cards.find(card => card.getAttribute('data-compatible') === 'false');
     expect(legacy).toHaveClass('opacity-60');
-    expect(within(legacy).getByRole('button', { name: 'Install' })).toBeDisabled();
+    expect(within(legacy).getByRole('button', { name: 'Install Legacy' })).toBeDisabled();
     expect(within(legacy).getByTestId('incompatible-reason')).toHaveTextContent(
       'Cannot be installed: needs iHub >=9.0.0, this server runs 5.7.2.'
     );
     const ckan = cards.find(card => card.getAttribute('data-compatible') === 'true');
     expect(ckan).not.toHaveClass('opacity-60');
-    expect(within(ckan).getByRole('button', { name: 'Install' })).toBeEnabled();
+    expect(within(ckan).getByRole('button', { name: 'Install CKAN' })).toBeEnabled();
     expect(within(ckan).getByText('Update to v1.4.0 available')).toBeInTheDocument();
   });
 });

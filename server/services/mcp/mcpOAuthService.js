@@ -189,10 +189,11 @@ function withPermissions(user) {
 }
 
 /**
- * Whether the installation behind a server admits the user: its
- * `allowedGroups` hold on top of every grant and binding, as they do for its
- * tools (`filterIntegrationToolsForUser`). A server without an installation
- * is refused: the manager is fed from the installations only.
+ * Whether the installation behind a server admits the user: the user's
+ * groups must grant it (`permissions.integrations`), on top of every grant
+ * and binding, as for its tools (`filterIntegrationToolsForUser`). A server
+ * without an installation is refused: the manager is fed from the
+ * installations only.
  *
  * The installed-integration service is imported here, not at the top: it
  * reaches this module through the MCP adapter, and a static import would
@@ -209,8 +210,8 @@ async function installationAdmitsUser(instanceId, user) {
 
 /**
  * Whether a user may connect (and use) an `oauthUser` server: admins always
- * (they configure and test it); anyone else when the installation's groups
- * admit them and an app they may open binds the installation
+ * (they configure and test it); anyone else when their groups grant the
+ * installation (`permissions.integrations`) and an app they may open binds it
  * (`app.integrations`), or lists the server or one of its tools in `tools`,
  * or a group grants one of them. The tool checks reuse the MCP gateway's
  * visibility rule (`getVisibleToolIds` + `toolVisibleInSet`), which also
