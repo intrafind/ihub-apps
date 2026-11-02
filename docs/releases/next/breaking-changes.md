@@ -173,21 +173,32 @@ Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `eviden
 `write_inbox.json`, `create_task.json`, `list_tasks.json`, `mark_task_done.json`,
 `schedule_task.json`, `list_scheduled_tasks.json`, `update_scheduled_task.json`,
 `delete_scheduled_task.json`, `run_scheduled_task_now.json`, `list_task_runs.json` and
-`get_task_run.json` when they are the shipped files; the always-installed integration `ihub`
-(`com.intrafind/ihub`) owns these tools under the same ids.
+`get_task_run.json` when they are the shipped files, and iHub no longer copies them back on
+start. The tools keep their ids: `ask_user` and the scheduled-task tools are actions of the
+always-installed integration `ihub` (`com.intrafind/ihub`), the knowledge tools belong to
+projects, and the agent workspace and evidence tools to workflows and agents.
 
-- **Admin → Tools** no longer lists them and they cannot be switched off there; switch the
-  action off on the `ihub` installation instead (a file that was `enabled: false` is migrated
-  into `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a
-  warning in the log and keeps serving its tool in place of the installation's action until it
-  is deleted; move the change over first.
+- **Admin → Tools** no longer lists them. Switch `ask_user` or a scheduled-task tool off on the
+  `ihub` installation instead (a file that was `enabled: false` is migrated into
+  `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a warning in
+  the log and keeps serving its tool until it is deleted; move the change over first.
+- **The knowledge tools can no longer be switched off:** a disabled `knowledge.json`, or a
+  knowledge action switched off on the `ihub` installation, no longer applies — every request that
+  reaches a project gets them while the projects feature is on. An edited `knowledge.json` is not
+  read any more (migration V201 warns about it); delete it.
+- **The agent workspace and evidence tools are no longer listed under the iHub integration**
+  (migration V201 removes them from the installation's actions). One that was switched off there
+  stays off: V201 writes its tool file to `contents/tools/` with `enabled: false`. A single
+  evidence function cannot be switched off on its own; V201 names one in a warning.
 - **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
-  grants keep selecting the tools. `tools: ["ihub"]` selects nothing.
+  grants keep selecting the tools. `tools: ["ihub"]` selects nothing, and neither does
+  `tools: ["knowledge"]`: the knowledge tools come with the request's projects.
 - **The `ihub` installation** cannot be removed or disabled: `DELETE
   /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
-- **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
-  shipped copy is deleted on the next start.
+- **Deployments that ship these tool files themselves** (templates, scripts) have to drop them:
+  the migrations remove a shipped copy once, and a copy written later takes the place of the
+  built-in tool again, out of reach of the `ihub` installation's switches.
 
 ## Cloud Storage Providers Moved Out of `platform.json`
 
