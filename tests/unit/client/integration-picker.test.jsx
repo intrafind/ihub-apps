@@ -185,6 +185,18 @@ describe('the "+" menu as the integrations picker', () => {
       'aria-checked',
       'false'
     );
+    // The switch in a row is the shared SwitchIndicator: drawn only, hidden
+    // from assistive technology, no nested control in the menu item.
+    for (const [name, state] of [
+      [/iFinder/, 'on'],
+      [/enaio DMS/, 'off']
+    ]) {
+      const row = within(menu).getByRole('menuitemcheckbox', { name });
+      const indicator = row.querySelector('[data-state]');
+      expect(indicator).toHaveAttribute('aria-hidden', 'true');
+      expect(indicator).toHaveAttribute('data-state', state);
+      expect(row.querySelector('input, button, [role="switch"]')).toBeNull();
+    }
     expect(within(menu).getByRole('menuitem', { name: /Jira & Confluence/ })).toHaveTextContent(
       'Connect →'
     );

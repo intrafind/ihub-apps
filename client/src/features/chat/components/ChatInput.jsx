@@ -104,7 +104,8 @@ function ChatInput({
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
   magicPromptLoading = false,
-  enabledTools = [],
+  // `null`: the app offers no tool selection; left out: nothing selected yet.
+  enabledTools: enabledToolsProp,
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
@@ -218,10 +219,14 @@ function ChatInput({
   const ephemeralToggleAvailable =
     typeof onEphemeralChange === 'function' && app?.settings?.ephemeral?.enabled !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
+  // Callers pass `null` on purpose (no tool selection), so it is told apart
+  // from a prop that was left out (an empty selection).
+  const offersToolSelection = enabledToolsProp !== null;
+  const enabledTools = enabledToolsProp === undefined ? [] : enabledToolsProp;
   // The integrations picker (#2923): one row per integration of the app,
   // from the server; the "+" menu, the chips and `@` all show these rows.
   const picker = useIntegrationPicker({
-    app: enabledTools !== null && appToolRefs(app).length > 0 ? app : null,
+    app: offersToolSelection && appToolRefs(app).length > 0 ? app : null,
     language: currentLanguage,
     enabledTools,
     onEnabledToolsChange
@@ -444,7 +449,7 @@ function ChatInput({
   // This logic mirrors the calculation in ChatInputActionsMenu.jsx: the menu
   // has a picker when the server lists rows for the app (the ask-the-user
   // channel is never one), or web search, scopes, storage or image generation.
-  const hasTools = enabledTools !== null && (picker.rows.length > 0 || picker.loading);
+  const hasTools = offersToolSelection && (picker.rows.length > 0 || picker.loading);
   // Local upload (paper-clip + dropzone) is independent from cloud storage
   // upload, which is rendered as separate entries in the actions menu.
   const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
