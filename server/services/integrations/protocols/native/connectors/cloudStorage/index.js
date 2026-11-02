@@ -83,6 +83,31 @@ function probeUrl(provider) {
   }
 }
 
+/**
+ * The OAuth client step: a client id and a client secret credential with a
+ * value.
+ *
+ * @param {Object} provider - The provider (`providerFromInstance`)
+ * @param {string} secret - The client secret's value; empty when it has none
+ * @returns {{ id: string, label: string, status: string, message: string }}
+ */
+function clientStep(provider, secret) {
+  return {
+    id: 'client',
+    label: 'OAuth client',
+    status: provider.clientId && secret ? 'ok' : 'fail',
+    message: clientStepMessage(provider, secret)
+  };
+}
+
+/** What the OAuth client step reports: the first thing missing, or the client. */
+function clientStepMessage(provider, secret) {
+  if (!provider.clientId) return 'No client id';
+  if (!provider.clientSecretRef) return 'No client secret credential';
+  if (!secret) return `Credential "${provider.clientSecretRef}" has no value or does not exist`;
+  return `Client ${provider.clientId.slice(0, 8)}… with secret`;
+}
+
 /** The required settings of a provider type beyond the OAuth client. */
 function settingsStep(provider) {
   const step = { id: 'settings', label: 'Provider settings' };
@@ -185,24 +210,14 @@ async function test(type, { instance, values, user, req }) {
     values,
     enabled: true
   });
-  const steps = [];
   const secret = provider.clientSecretRef
     ? credentialService.tryResolveSecret(provider.clientSecretRef)
     : '';
-  steps.push({
-    id: 'client',
-    label: 'OAuth client',
-    status: provider.clientId && secret ? 'ok' : 'fail',
-    message: !provider.clientId
-      ? 'No client id'
-      : !provider.clientSecretRef
-        ? 'No client secret credential'
-        : !secret
-          ? `Credential "${provider.clientSecretRef}" has no value or does not exist`
-          : `Client ${provider.clientId.slice(0, 8)}… with secret`
-  });
-  steps.push(settingsStep(provider));
-  steps.push(redirectUriStep(provider, req));
+  const steps = [
+    clientStep(provider, secret),
+    settingsStep(provider),
+    redirectUriStep(provider, req)
+  ];
   const url = steps.some(step => step.status === 'fail') ? null : probeUrl(provider);
   if (url) {
     const started = Date.now();

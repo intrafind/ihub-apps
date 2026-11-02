@@ -54,6 +54,23 @@ const REGISTER_HELP = {
 };
 
 /**
+ * The default text of the OAuth section's help (`oauthSectionHelp.<type>`):
+ * what the provider's OAuth app is.
+ *
+ * @param {string} type - Provider type (`office365`, `googledrive`, `nextcloud`)
+ * @returns {string}
+ */
+function oauthSectionHelp(type) {
+  if (type === 'office365') {
+    return 'The Azure app registration users sign in with (Microsoft Graph, delegated permissions).';
+  }
+  if (type === 'googledrive') {
+    return 'The OAuth 2.0 client (Web application) of your Google Cloud project, with the Drive API enabled.';
+  }
+  return 'The Nextcloud server and the OAuth 2.0 client registered in it.';
+}
+
+/**
  * A text input of the editor with its label, help and field error.
  *
  * @param {Object} props
@@ -294,14 +311,7 @@ function StorageProviderEditor({ instance, definition, onSaved, onCancel }) {
         <EditorSection
           id={`${p}-oauth`}
           title={t(`${K}.oauthSection`, 'OAuth app')}
-          description={t(
-            `${K}.oauthSectionHelp.${spec.type}`,
-            spec.type === 'office365'
-              ? 'The Azure app registration users sign in with (Microsoft Graph, delegated permissions).'
-              : spec.type === 'googledrive'
-                ? 'The OAuth 2.0 client (Web application) of your Google Cloud project, with the Drive API enabled.'
-                : 'The Nextcloud server and the OAuth 2.0 client registered in it.'
-          )}
+          description={t(`${K}.oauthSectionHelp.${spec.type}`, oauthSectionHelp(spec.type))}
         >
           {spec.type === 'nextcloud' &&
             field('serverUrl', t(`${K}.serverUrl`, 'Nextcloud server URL'), {

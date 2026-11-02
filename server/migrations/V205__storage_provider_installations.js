@@ -122,6 +122,28 @@ function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+/** Put a text on `values` when it is not empty after trimming. */
+function setText(values, key, value) {
+  if (text(value)) values[key] = text(value);
+}
+
+/**
+ * `value` without the leading and trailing characters that are in `chars`.
+ * The same as `value.replace(/^[<chars>]+|[<chars>]+$/g, '')`, in linear time:
+ * that regex backtracks over every run of `chars` that does not end the
+ * string (quadratic on a long run).
+ * @param {string} value
+ * @param {string} chars - the characters to strip, e.g. `-._`
+ * @returns {string}
+ */
+export function trimChars(value, chars) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && chars.includes(value[start])) start += 1;
+  while (end > start && chars.includes(value[end - 1])) end -= 1;
+  return value.slice(start, end);
+}
+
 /** The provider type of a storage definition id, or null. */
 export function storageTypeOf(definitionId) {
   return (
@@ -155,16 +177,47 @@ export function isUsableId(id, taken) {
  * @returns {string}
  */
 export function fallbackId(type, providerId, taken) {
-  const cleaned = String(providerId || '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/_{2,}/g, '_')
-    .replace(/^[-._]+|[-._]+$/g, '');
+  const cleaned = trimChars(
+    String(providerId || '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/_{2,}/g, '_'),
+    '-._'
+  );
   const base = (cleaned ? `${type}-${cleaned}` : type).slice(0, 56);
   if (isUsableId(base, taken)) return base;
   let n = 2;
   while (!isUsableId(`${base}-${n}`, taken)) n += 1;
   return `${base}-${n}`;
 }
+
+/** Office 365's own install values of a former provider. */
+function office365Values(provider, sources, values) {
+  setText(values, 'tenantId', provider.tenantId);
+  setText(values, 'siteUrl', provider.siteUrl);
+  setText(values, 'driveId', provider.driveId);
+  if (sources.personalDrive === false) values.sourcePersonalDrive = false;
+  if (sources.followedSites === false) values.sourceFollowedSites = false;
+  if (sources.teams === false) values.sourceTeams = false;
+}
+
+/** Google Drive's own install values of a former provider. */
+function googleDriveValues(provider, sources, values) {
+  if (sources.myDrive === false) values.sourceMyDrive = false;
+  if (sources.sharedDrives === false) values.sourceSharedDrives = false;
+  if (sources.sharedWithMe === false) values.sourceSharedWithMe = false;
+}
+
+/** Nextcloud's own install values of a former provider. */
+function nextcloudValues(provider, sources, values) {
+  setText(values, 'serverUrl', provider.serverUrl);
+}
+
+/** Provider type → the function that adds the type's own install values. */
+const TYPE_VALUES = new Map([
+  ['office365', office365Values],
+  ['googledrive', googleDriveValues],
+  ['nextcloud', nextcloudValues]
+]);
 
 /**
  * The installation an unmigrated provider becomes, without its secrets (a
@@ -178,24 +231,10 @@ export function instanceFrom(provider, id, cloudStorageEnabled = true) {
   const definition = STORAGE_DEFINITIONS[provider?.type];
   if (!definition) return null;
   const values = {};
-  if (text(provider.clientId)) values.clientId = text(provider.clientId);
-  if (text(provider.clientSecretRef)) values.clientSecretRef = text(provider.clientSecretRef);
-  if (text(provider.redirectUri)) values.redirectUri = text(provider.redirectUri);
-  const sources = provider.sources || {};
-  if (provider.type === 'office365') {
-    if (text(provider.tenantId)) values.tenantId = text(provider.tenantId);
-    if (text(provider.siteUrl)) values.siteUrl = text(provider.siteUrl);
-    if (text(provider.driveId)) values.driveId = text(provider.driveId);
-    if (sources.personalDrive === false) values.sourcePersonalDrive = false;
-    if (sources.followedSites === false) values.sourceFollowedSites = false;
-    if (sources.teams === false) values.sourceTeams = false;
-  } else if (provider.type === 'googledrive') {
-    if (sources.myDrive === false) values.sourceMyDrive = false;
-    if (sources.sharedDrives === false) values.sourceSharedDrives = false;
-    if (sources.sharedWithMe === false) values.sourceSharedWithMe = false;
-  } else if (provider.type === 'nextcloud') {
-    if (text(provider.serverUrl)) values.serverUrl = text(provider.serverUrl);
-  }
+  setText(values, 'clientId', provider.clientId);
+  setText(values, 'clientSecretRef', provider.clientSecretRef);
+  setText(values, 'redirectUri', provider.redirectUri);
+  TYPE_VALUES.get(provider.type)?.(provider, provider.sources || {}, values);
   const instance = {
     id,
     definition,
@@ -261,6 +300,44 @@ export function renamedGrants(list, renames) {
 }
 
 /**
+ * Rename the bindings of renamed installations (step 4). Mutates the app.
+ * @param {object} app
+ * @param {Map<string, string>} renames
+ * @returns {string[]} what changed, for the log
+ */
+function renameBindings(app, renames) {
+  const bindings = app.integrations;
+  if (!bindings || typeof bindings !== 'object' || Array.isArray(bindings)) return [];
+  const changes = [];
+  for (const [from, to] of renames) {
+    if (!Object.hasOwn(bindings, from)) continue;
+    if (!Object.hasOwn(bindings, to)) bindings[to] = bindings[from];
+    delete bindings[from];
+    changes.push(`binding "${from}" → "${to}"`);
+  }
+  return changes;
+}
+
+/**
+ * Replace `upload.cloudStorageUpload` by the optional `type:storage` binding
+ * when it was on; remove it either way (step 4). Mutates the app.
+ * @param {object} app
+ * @returns {string[]} what changed, for the log
+ */
+function replaceCloudStorageUpload(app) {
+  const upload = app.upload && typeof app.upload === 'object' ? app.upload : null;
+  if (!upload || !Object.hasOwn(upload, 'cloudStorageUpload')) return [];
+  const enabled = upload.cloudStorageUpload?.enabled === true;
+  delete upload.cloudStorageUpload;
+  if (!enabled) return ['upload.cloudStorageUpload (off) removed'];
+  if (!app.integrations || typeof app.integrations !== 'object') app.integrations = {};
+  if (!Object.hasOwn(app.integrations, STORAGE_TYPE_BINDING)) {
+    app.integrations[STORAGE_TYPE_BINDING] = { required: false };
+  }
+  return [`upload.cloudStorageUpload → integrations["${STORAGE_TYPE_BINDING}"]`];
+}
+
+/**
  * Migrate one app: rename bindings of renamed installations and replace
  * `upload.cloudStorageUpload` by the `type:storage` binding (step 4).
  * Mutates the app.
@@ -269,35 +346,8 @@ export function renamedGrants(list, renames) {
  * @returns {string[]} what changed, for the log; empty when nothing did
  */
 export function migrateApp(app, renames) {
-  const changes = [];
-  if (!app || typeof app !== 'object') return changes;
-  const bindings =
-    app.integrations && typeof app.integrations === 'object' && !Array.isArray(app.integrations)
-      ? app.integrations
-      : null;
-  if (bindings) {
-    for (const [from, to] of renames) {
-      if (!Object.hasOwn(bindings, from)) continue;
-      if (!Object.hasOwn(bindings, to)) bindings[to] = bindings[from];
-      delete bindings[from];
-      changes.push(`binding "${from}" → "${to}"`);
-    }
-  }
-  const upload = app.upload && typeof app.upload === 'object' ? app.upload : null;
-  if (upload && Object.hasOwn(upload, 'cloudStorageUpload')) {
-    const enabled = upload.cloudStorageUpload?.enabled === true;
-    delete upload.cloudStorageUpload;
-    if (enabled) {
-      if (!app.integrations || typeof app.integrations !== 'object') app.integrations = {};
-      if (!Object.hasOwn(app.integrations, STORAGE_TYPE_BINDING)) {
-        app.integrations[STORAGE_TYPE_BINDING] = { required: false };
-      }
-      changes.push(`upload.cloudStorageUpload → integrations["${STORAGE_TYPE_BINDING}"]`);
-    } else {
-      changes.push('upload.cloudStorageUpload (off) removed');
-    }
-  }
-  return changes;
+  if (!app || typeof app !== 'object') return [];
+  return [...renameBindings(app, renames), ...replaceCloudStorageUpload(app)];
 }
 
 /** Every string anywhere in a JSON value. */
@@ -317,25 +367,50 @@ function storedValueOf(entry) {
 }
 
 /**
- * @param {object} ctx - migration context
- * @param {{ crypto?: { encrypt: (v: string) => string, decrypt: (v: string) => string } }} [deps]
- *   the credential store's encryption (the token storage service when absent; injectable for tests)
+ * A lazy, single-flight loader: `load` runs on the first call and its result
+ * is kept; calls while it runs share it; after a failure the next call runs
+ * it again.
+ * @template T
+ * @param {() => Promise<T>} load
+ * @returns {() => Promise<T>}
  */
-export async function up(ctx, deps = {}) {
-  let cryptoTools = deps.crypto;
-  async function tools() {
-    if (!cryptoTools) {
-      const { default: tokenStorage } = await import('../services/TokenStorageService.js');
-      // Migrations run before the server loads the key; V200 did not, so its
-      // tenant id decryption could never succeed (see step 3).
-      if (!tokenStorage.encryptionKey) await tokenStorage.initializeEncryptionKey();
-      cryptoTools = {
-        encrypt: value => tokenStorage.encryptString(value),
-        decrypt: value => tokenStorage.decryptString(value)
-      };
-    }
-    return cryptoTools;
-  }
+function lazy(load) {
+  let pending = null;
+  return () => {
+    pending ??= load().catch(error => {
+      pending = null;
+      throw error;
+    });
+    return pending;
+  };
+}
+
+/** The credential store's encryption: the token storage service, its key loaded. */
+async function loadTokenStorageCrypto() {
+  const { default: tokenStorage } = await import('../services/TokenStorageService.js');
+  // Migrations run before the server loads the key; V200 did not, so its
+  // tenant id decryption could never succeed (see step 3).
+  if (!tokenStorage.encryptionKey) await tokenStorage.initializeEncryptionKey();
+  return {
+    encrypt: value => tokenStorage.encryptString(value),
+    decrypt: value => tokenStorage.decryptString(value)
+  };
+}
+
+/**
+ * Lazy access to the credential store and its encryption for one run: each
+ * is loaded on first use, once.
+ *
+ * @param {object} ctx - migration context
+ * @param {{ crypto?: { encrypt: (v: string) => string, decrypt: (v: string) => string } }} deps
+ * @returns {{
+ *   tools: () => Promise<{ encrypt: (v: string) => string, decrypt: (v: string) => string }>,
+ *   plainOf: (stored: unknown) => Promise<string|undefined>,
+ *   credentialStore: () => Promise<{ credentials: object }>
+ * }}
+ */
+function credentialAccess(ctx, deps) {
+  const tools = deps.crypto ? async () => deps.crypto : lazy(loadTokenStorageCrypto);
   /** Decrypt a stored credential value; plain text passes, a failure is undefined. */
   async function plainOf(stored) {
     if (typeof stored !== 'string' || !stored) return undefined;
@@ -346,187 +421,360 @@ export async function up(ctx, deps = {}) {
       return undefined;
     }
   }
+  const credentialStore = lazy(async () => {
+    const store = (await ctx.fileExists(CREDENTIALS_FILE))
+      ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
+      : {};
+    if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
+    return store;
+  });
+  return { tools, plainOf, credentialStore };
+}
 
+/**
+ * What becomes of one parked provider (step 2).
+ * @typedef {Object} ParkedPlan
+ * @property {object} provider - the parked `providers[]` entry
+ * @property {object|null} instance - its installation; null for an unknown type
+ * @property {string} [ownId] - its own id
+ * @property {string} [id] - the installation id (its own, or a fallback)
+ * @property {string} [tenantRef] - the credential its Office 365 tenant id is to be read from
+ * @property {string} [secret] - a plain-text client secret to move into the credential store
+ * @property {string} [credentialId] - the credential the client secret goes to
+ * @property {string} [tenantId] - the tenant id read from `tenantRef` (resolved)
+ * @property {string} [encryptedSecret] - `secret` encrypted, when its credential is new (resolved)
+ */
+
+/**
+ * Plan the parked providers in the order of the file: the id and the
+ * installation of each provider of a known type, and which secrets it needs.
+ * Ids are taken in that order, so a provider's fallback id never collides
+ * with an earlier one.
+ * @param {object[]} providers - the parked providers
+ * @param {object[]} installed - `integrations.json` → `installed`
+ * @param {boolean} [cloudStorageEnabled] - the former block's `enabled`
+ * @returns {ParkedPlan[]}
+ */
+function planParkedProviders(providers, installed, cloudStorageEnabled) {
+  const taken = new Set(installed.filter(Boolean).map(i => i.id));
+  const plans = [];
+  for (const provider of providers) {
+    if (!STORAGE_DEFINITIONS[provider.type]) {
+      plans.push({ provider, instance: null });
+      continue;
+    }
+    const ownId = text(provider.id);
+    const id = isUsableId(ownId, taken) ? ownId : fallbackId(provider.type, ownId, taken);
+    taken.add(id);
+    const instance = instanceFrom(provider, id, cloudStorageEnabled);
+    const needsTenantId = provider.type === 'office365' && !instance.values.tenantId;
+    plans.push({
+      provider,
+      instance,
+      ownId,
+      id,
+      tenantRef: needsTenantId ? text(provider.tenantIdRef) : undefined,
+      secret: text(provider.clientSecretRef) ? undefined : text(provider.clientSecret),
+      credentialId: `integration-${id}-clientSecretRef`
+    });
+  }
+  return plans;
+}
+
+/**
+ * Read the tenant ids and encrypt the client secrets the plans need, in
+ * parallel (each provider's secrets are its own). A client secret whose
+ * credential exists already is not encrypted.
+ * @param {ParkedPlan[]} plans - completed in place
+ * @param {ReturnType<typeof credentialAccess>} secrets
+ * @returns {Promise<object|null>} the credential store; null when no plan needs it
+ */
+async function resolveParkedSecrets(plans, { tools, plainOf, credentialStore }) {
+  if (!plans.some(plan => plan.tenantRef || plan.secret)) return null;
+  const store = await credentialStore();
+  await Promise.all(
+    plans.map(async plan => {
+      if (plan.tenantRef) {
+        plan.tenantId = await plainOf(storedValueOf(store.credentials[plan.tenantRef]));
+      }
+      if (plan.secret && !Object.hasOwn(store.credentials, plan.credentialId)) {
+        plan.encryptedSecret = (await tools()).encrypt(plan.secret);
+      }
+    })
+  );
+  return store;
+}
+
+/**
+ * Install one planned provider: its tenant id, its client secret moved into
+ * the credential store, its timestamps; appended to `installed`.
+ * @param {object} ctx - migration context
+ * @param {ParkedPlan} plan - resolved by {@link resolveParkedSecrets}
+ * @param {Object} target
+ * @param {object[]} target.installed - `integrations.json` → `installed`
+ * @param {object|null} target.store - the credential store
+ * @param {ParkedResult} target.parked - updated here
+ */
+function installParkedProvider(ctx, plan, { installed, store, parked }) {
+  const { provider, instance, ownId, id } = plan;
+  if (id !== ownId) {
+    ctx.warn(
+      `Cloud storage provider "${ownId}" (${provider.type}) installed as "${id}": its own id cannot be an installation id. Users connect again, and the redirect URI of "${id}" has to be registered with the provider.`
+    );
+  }
+  if (plan.tenantRef && plan.tenantId) {
+    instance.values.tenantId = plan.tenantId;
+    parked.tenantRefs.add(plan.tenantRef);
+  } else if (plan.tenantRef) {
+    ctx.warn(
+      `Office 365 provider "${ownId}": the tenant id credential "${plan.tenantRef}" was not found or could not be decrypted; enter the tenant id on the installation "${id}"`
+    );
+  }
+  if (plan.secret) {
+    if (Object.hasOwn(plan, 'encryptedSecret')) {
+      store.credentials[plan.credentialId] = {
+        id: plan.credentialId,
+        type: 'secret',
+        name: `${instance.label?.en || id}: client secret`,
+        description: `Managed by the installed integration "${id}"`,
+        value: plan.encryptedSecret
+      };
+      parked.credentialsAdded = true;
+    }
+    instance.values.clientSecretRef = plan.credentialId;
+    ctx.log(
+      `Cloud storage provider "${ownId}": client secret moved to credential "${plan.credentialId}"`
+    );
+  }
+  const now = new Date().toISOString();
+  instance.installedAt = now;
+  instance.updatedAt = now;
+  installed.push(instance);
+  parked.installedAny = true;
+  ctx.log(
+    `Unmigrated cloud storage provider "${ownId}" (${provider.type}) → installed integration "${id}" (${instance.enabled ? 'enabled' : 'disabled'})`
+  );
+}
+
+/**
+ * The outcome of step 2.
+ * @typedef {Object} ParkedResult
+ * @property {object|null} unmigrated - the parked file's content; null without the file
+ * @property {object[]} leftovers - providers of an unknown type, kept in the file
+ * @property {Set<string>} tenantRefs - credentials a provider named as its tenant id
+ * @property {boolean} installedAny - whether a provider was installed
+ * @property {boolean} credentialsAdded - whether a client secret went into the credential store
+ */
+
+/**
+ * Step 2: install the providers V200 parked, in the order of the file
+ * (`installed` is appended to). Providers of an unknown type are left over.
+ * @param {object} ctx - migration context
+ * @param {object[]} installed - `integrations.json` → `installed`
+ * @param {ReturnType<typeof credentialAccess>} secrets
+ * @returns {Promise<ParkedResult>}
+ */
+async function installParkedProviders(ctx, installed, secrets) {
+  /** @type {ParkedResult} */
+  const parked = {
+    unmigrated: null,
+    leftovers: [],
+    tenantRefs: new Set(),
+    installedAny: false,
+    credentialsAdded: false
+  };
+  if (!(await ctx.fileExists(UNMIGRATED_FILE))) return parked;
+  const unmigrated = (await ctx.readJson(UNMIGRATED_FILE)) || {};
+  parked.unmigrated = unmigrated;
+  const providers = Array.isArray(unmigrated.providers) ? unmigrated.providers.filter(Boolean) : [];
+  const plans = planParkedProviders(providers, installed, unmigrated.enabled);
+  const store = await resolveParkedSecrets(plans, secrets);
+  for (const plan of plans) {
+    if (plan.instance) {
+      installParkedProvider(ctx, plan, { installed, store, parked });
+      continue;
+    }
+    parked.leftovers.push(plan.provider);
+    ctx.warn(
+      `Unmigrated cloud storage provider "${plan.provider.id}" has an unknown type "${plan.provider.type}"; kept in ${UNMIGRATED_FILE}`
+    );
+  }
+  return parked;
+}
+
+/**
+ * Step 4, groups: grants of renamed installations.
+ * @param {object} ctx - migration context
+ * @param {Map<string, string>} renames - old id → new id
+ */
+async function renameGroupGrants(ctx, renames) {
+  if (renames.size === 0 || !(await ctx.fileExists(GROUPS_FILE))) return;
+  const groupsFile = (await ctx.readJson(GROUPS_FILE)) || {};
+  let changed = false;
+  for (const [groupId, group] of Object.entries(groupsFile.groups || {})) {
+    const next = renamedGrants(group?.permissions?.integrations, renames);
+    if (!next) continue;
+    group.permissions.integrations = next;
+    changed = true;
+    ctx.log(`Group "${groupId}": storage provider grants renamed`);
+  }
+  if (changed) await ctx.writeJson(GROUPS_FILE, groupsFile);
+}
+
+/**
+ * Step 4, `apps/*.json`. The files are independent, so they are read and
+ * written in parallel; the warnings and the log follow the order of the
+ * files. An unreadable file is skipped with a warning.
+ * @param {object} ctx - migration context
+ * @param {Map<string, string>} renames - old id → new id
+ * @returns {Promise<number>} how many changed apps bind `type:storage`
+ */
+async function migrateAppFiles(ctx, renames) {
+  const files = await ctx.listFiles('apps', '*.json');
+  const read = await Promise.all(
+    files.map(async file => {
+      const rel = `apps/${file}`;
+      try {
+        return { file, rel, app: await ctx.readJson(rel) };
+      } catch (error) {
+        return { file, rel, error };
+      }
+    })
+  );
+  const apps = read.map(entry =>
+    entry.error ? entry : { ...entry, changes: migrateApp(entry.app, renames) }
+  );
+  const changed = apps.filter(entry => entry.changes?.length > 0);
+  await Promise.all(changed.map(({ rel, app }) => ctx.writeJson(rel, app)));
+  let bound = 0;
+  for (const { file, rel, app, changes, error } of apps) {
+    if (error) ctx.warn(`Skipped ${rel}: ${error.message}`);
+    if (!changes?.length) continue;
+    if (app.integrations?.[STORAGE_TYPE_BINDING]) bound += 1;
+    ctx.log(`App "${app.id || file}": ${changes.join(', ')}`);
+  }
+  return bound;
+}
+
+/**
+ * Step 4, the legacy `config/apps.json` array (unreadable: skipped with a
+ * warning).
+ * @param {object} ctx - migration context
+ * @param {Map<string, string>} renames - old id → new id
+ */
+async function migrateLegacyApps(ctx, renames) {
+  if (!(await ctx.fileExists(LEGACY_APPS_FILE))) return;
+  let apps = null;
+  try {
+    apps = await ctx.readJson(LEGACY_APPS_FILE);
+  } catch (error) {
+    ctx.warn(`Skipped ${LEGACY_APPS_FILE}: ${error.message}`);
+  }
+  if (!Array.isArray(apps)) return;
+  let changed = false;
+  for (const app of apps) {
+    const changes = migrateApp(app, renames);
+    if (changes.length === 0) continue;
+    changed = true;
+    ctx.log(`App "${app?.id}" (${LEGACY_APPS_FILE}): ${changes.join(', ')}`);
+  }
+  if (changed) await ctx.writeJson(LEGACY_APPS_FILE, apps);
+}
+
+/** Write `integrations.json`, with the default security block when it has none. */
+async function writeInstallations(ctx, config) {
+  if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
+  await ctx.writeJson(INTEGRATIONS_FILE, config);
+}
+
+/**
+ * The parked file after step 2: rewritten with the providers left over, or
+ * deleted when every provider is an installation now.
+ * @param {object} ctx - migration context
+ * @param {ParkedResult} parked
+ */
+async function finishParkedFile(ctx, { unmigrated, leftovers }) {
+  if (leftovers.length > 0) {
+    await ctx.writeJson(UNMIGRATED_FILE, { enabled: unmigrated.enabled, providers: leftovers });
+    return;
+  }
+  await ctx.deleteFile(UNMIGRATED_FILE);
+  ctx.log(`${UNMIGRATED_FILE} removed: every provider in it is an installation now`);
+}
+
+/**
+ * @param {object} ctx - migration context
+ * @param {{ crypto?: { encrypt: (v: string) => string, decrypt: (v: string) => string } }} [deps]
+ *   the credential store's encryption (the token storage service when absent; injectable for tests)
+ */
+export async function up(ctx, deps = {}) {
+  const secrets = credentialAccess(ctx, deps);
   const hasConfig = await ctx.fileExists(INTEGRATIONS_FILE);
   const config = hasConfig ? (await ctx.readJson(INTEGRATIONS_FILE)) || {} : {};
   if (!Array.isArray(config.installed)) config.installed = [];
   const installed = config.installed;
 
-  let store = null;
-  async function credentialStore() {
-    if (!store) {
-      store = (await ctx.fileExists(CREDENTIALS_FILE))
-        ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
-        : {};
-      if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
-    }
-    return store;
-  }
-  let credentialsAdded = false;
-
   // 1. Rename the installations to their provider ids.
   const { renames, changed: renamedAny } = renameToProviderIds(installed, ctx);
-  let integrationsChanged = renamedAny;
 
   // 2. Install the providers V200 parked.
-  /** Credentials an unmigrated provider named as its tenant id. */
-  const unmigratedTenantRefs = new Set();
-  let unmigrated = null;
-  const leftovers = [];
-  if (await ctx.fileExists(UNMIGRATED_FILE)) {
-    unmigrated = (await ctx.readJson(UNMIGRATED_FILE)) || {};
-    const providers = Array.isArray(unmigrated.providers)
-      ? unmigrated.providers.filter(Boolean)
-      : [];
-    for (const provider of providers) {
-      if (!STORAGE_DEFINITIONS[provider.type]) {
-        leftovers.push(provider);
-        ctx.warn(
-          `Unmigrated cloud storage provider "${provider.id}" has an unknown type "${provider.type}"; kept in ${UNMIGRATED_FILE}`
-        );
-        continue;
-      }
-      const taken = new Set(installed.filter(Boolean).map(i => i.id));
-      const ownId = text(provider.id);
-      const id = isUsableId(ownId, taken) ? ownId : fallbackId(provider.type, ownId, taken);
-      const instance = instanceFrom(provider, id, unmigrated.enabled);
-      if (id !== ownId) {
-        ctx.warn(
-          `Cloud storage provider "${ownId}" (${provider.type}) installed as "${id}": its own id cannot be an installation id. Users connect again, and the redirect URI of "${id}" has to be registered with the provider.`
-        );
-      }
-      if (
-        provider.type === 'office365' &&
-        !instance.values.tenantId &&
-        text(provider.tenantIdRef)
-      ) {
-        const ref = text(provider.tenantIdRef);
-        const plain = await plainOf(storedValueOf((await credentialStore()).credentials[ref]));
-        if (plain) {
-          instance.values.tenantId = plain;
-          unmigratedTenantRefs.add(ref);
-        } else {
-          ctx.warn(
-            `Office 365 provider "${ownId}": the tenant id credential "${ref}" was not found or could not be decrypted; enter the tenant id on the installation "${id}"`
-          );
-        }
-      }
-      if (!text(provider.clientSecretRef) && text(provider.clientSecret)) {
-        const credentialId = `integration-${id}-clientSecretRef`;
-        const credentials = (await credentialStore()).credentials;
-        if (!Object.hasOwn(credentials, credentialId)) {
-          credentials[credentialId] = {
-            id: credentialId,
-            type: 'secret',
-            name: `${instance.label?.en || id}: client secret`,
-            description: `Managed by the installed integration "${id}"`,
-            value: (await tools()).encrypt(text(provider.clientSecret))
-          };
-          credentialsAdded = true;
-        }
-        instance.values.clientSecretRef = credentialId;
-        ctx.log(
-          `Cloud storage provider "${ownId}": client secret moved to credential "${credentialId}"`
-        );
-      }
-      const now = new Date().toISOString();
-      instance.installedAt = now;
-      instance.updatedAt = now;
-      installed.push(instance);
-      integrationsChanged = true;
-      ctx.log(
-        `Unmigrated cloud storage provider "${ownId}" (${provider.type}) → installed integration "${id}" (${instance.enabled ? 'enabled' : 'disabled'})`
-      );
-    }
+  const parked = await installParkedProviders(ctx, installed, secrets);
+  if (parked.credentialsAdded) {
+    await ctx.writeJson(CREDENTIALS_FILE, await secrets.credentialStore());
   }
 
-  if (credentialsAdded) await ctx.writeJson(CREDENTIALS_FILE, store);
-
-  // 4 (references first). Groups: grants of renamed installations.
-  if (renames.size > 0 && (await ctx.fileExists(GROUPS_FILE))) {
-    const groupsFile = (await ctx.readJson(GROUPS_FILE)) || {};
-    let groupsChanged = false;
-    for (const [groupId, group] of Object.entries(groupsFile.groups || {})) {
-      const next = renamedGrants(group?.permissions?.integrations, renames);
-      if (!next) continue;
-      group.permissions.integrations = next;
-      groupsChanged = true;
-      ctx.log(`Group "${groupId}": storage provider grants renamed`);
-    }
-    if (groupsChanged) await ctx.writeJson(GROUPS_FILE, groupsFile);
-  }
-
-  // Apps: renamed bindings and the storage binding instead of the switch.
-  let bound = 0;
-  for (const file of await ctx.listFiles('apps', '*.json')) {
-    const rel = `apps/${file}`;
-    let app;
-    try {
-      app = await ctx.readJson(rel);
-    } catch (error) {
-      ctx.warn(`Skipped ${rel}: ${error.message}`);
-      continue;
-    }
-    const changes = migrateApp(app, renames);
-    if (changes.length === 0) continue;
-    if (app.integrations?.[STORAGE_TYPE_BINDING]) bound += 1;
-    await ctx.writeJson(rel, app);
-    ctx.log(`App "${app.id || file}": ${changes.join(', ')}`);
-  }
-  if (await ctx.fileExists(LEGACY_APPS_FILE)) {
-    let apps = null;
-    try {
-      apps = await ctx.readJson(LEGACY_APPS_FILE);
-    } catch (error) {
-      ctx.warn(`Skipped ${LEGACY_APPS_FILE}: ${error.message}`);
-    }
-    if (Array.isArray(apps)) {
-      let legacyChanged = false;
-      for (const app of apps) {
-        const changes = migrateApp(app, renames);
-        if (changes.length === 0) continue;
-        legacyChanged = true;
-        ctx.log(`App "${app?.id}" (${LEGACY_APPS_FILE}): ${changes.join(', ')}`);
-      }
-      if (legacyChanged) await ctx.writeJson(LEGACY_APPS_FILE, apps);
-    }
-  }
+  // 4 (references first). Groups: grants of renamed installations; apps:
+  // renamed bindings and the storage binding instead of the switch.
+  await renameGroupGrants(ctx, renames);
+  const bound = await migrateAppFiles(ctx, renames);
+  await migrateLegacyApps(ctx, renames);
   if (bound > 0) ctx.log(`${bound} app(s) bind every storage provider (type:storage, optional)`);
 
   // The installations themselves.
-  if (integrationsChanged) {
-    if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
-    await ctx.writeJson(INTEGRATIONS_FILE, config);
-  }
-
-  if (unmigrated) {
-    if (leftovers.length > 0) {
-      await ctx.writeJson(UNMIGRATED_FILE, { enabled: unmigrated.enabled, providers: leftovers });
-    } else {
-      await ctx.deleteFile(UNMIGRATED_FILE);
-      ctx.log(`${UNMIGRATED_FILE} removed: every provider in it is an installation now`);
-    }
-  }
+  if (renamedAny || parked.installedAny) await writeInstallations(ctx, config);
+  if (parked.unmigrated) await finishParkedFile(ctx, parked);
 
   // 3. Tenant ids V200 could not decrypt, then the credentials nothing names any more.
   if (await ctx.fileExists(CREDENTIALS_FILE)) {
-    const state = { store: await credentialStore(), installed, unmigratedTenantRefs, plainOf };
-    if (await recoverTenantIds(ctx, state)) {
-      if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
-      await ctx.writeJson(INTEGRATIONS_FILE, config);
-    }
+    const state = {
+      store: await secrets.credentialStore(),
+      installed,
+      unmigratedTenantRefs: parked.tenantRefs,
+      plainOf: secrets.plainOf
+    };
+    if (await recoverTenantIds(ctx, state)) await writeInstallations(ctx, config);
     await removeTenantIdLeftovers(ctx, state);
   }
 }
 
-/** Snapshot of V061's `sanitizeId` (2026-11-02): how it named a provider's credentials. */
-function v061IdOf(raw) {
+/**
+ * Snapshot of V061's `sanitizeId` (2026-11-02): how it named a provider's
+ * credentials. Its `^_+|_+$` trim is {@link trimChars} (same result, linear).
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function v061IdOf(raw) {
   return (
-    String(raw || '')
-      .replace(/[^a-zA-Z0-9._-]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 60) || 'default'
+    trimChars(String(raw || '').replace(/[^a-zA-Z0-9._-]+/g, '_'), '_').slice(0, 60) || 'default'
   );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/**
+ * The credential V061 filed an Office 365 installation's tenant id under:
+ * `cloudstorage_<provider id>_tenant`, else a numbered one (`…_tenant_2`).
+ * @param {object} instance - the installation
+ * @param {object} credentials - the credential store's entries
+ * @returns {string|undefined}
+ */
+function v061TenantRefOf(instance, credentials) {
+  const base = `cloudstorage_${v061IdOf(instance.id)}_tenant`;
+  if (Object.hasOwn(credentials, base)) return base;
+  const numbered = new RegExp(String.raw`^${escapeRegExp(base)}_\d+$`);
+  return Object.keys(credentials).find(id => numbered.test(id));
 }
 
 /**
@@ -535,27 +783,32 @@ function v061IdOf(raw) {
  * V200 meant to decrypt it, but migrations run before the server loads the
  * encryption key, so V200 left the tenant id empty with a warning. The
  * provider id is the installation id now (step 1). Mutates the installations.
+ * The credentials are read in parallel; the log follows the installations.
  * @param {object} ctx
  * @param {{ store: object, installed: object[], plainOf: (v: string) => Promise<string|undefined> }} state
  * @returns {Promise<boolean>} whether a tenant id was recovered
  */
 async function recoverTenantIds(ctx, { store, installed, plainOf }) {
   const credentials = store.credentials || {};
+  const missing = installed.filter(
+    instance =>
+      instance?.definition === STORAGE_DEFINITIONS.office365 && !text(instance.values?.tenantId)
+  );
+  const found = await Promise.all(
+    missing.map(async instance => {
+      const ref = v061TenantRefOf(instance, credentials);
+      const plain = ref ? await plainOf(storedValueOf(credentials[ref])) : undefined;
+      return { instance, ref, plain };
+    })
+  );
   let recovered = false;
-  for (const instance of installed) {
-    if (instance?.definition !== STORAGE_DEFINITIONS.office365) continue;
-    if (text(instance.values?.tenantId)) continue;
-    const base = `cloudstorage_${v061IdOf(instance.id)}_tenant`;
-    const ref = Object.hasOwn(credentials, base)
-      ? base
-      : Object.keys(credentials).find(id => new RegExp(`^${escapeRegExp(base)}_\\d+$`).test(id));
+  for (const { instance, ref, plain } of found) {
     if (!ref) {
       ctx.warn(
         `Office 365 installation "${instance.id}" has no tenant id; enter it on the installation`
       );
       continue;
     }
-    const plain = await plainOf(storedValueOf(credentials[ref]));
     if (!plain) {
       ctx.warn(
         `Office 365 installation "${instance.id}" has no tenant id and the credential "${ref}" could not be read; enter the tenant id on the installation`
@@ -573,15 +826,56 @@ async function recoverTenantIds(ctx, { store, installed, plainOf }) {
   return recovered;
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * Whether a credential holds an Office 365 tenant id: one an unmigrated
+ * provider named or V061 created, or a `secret` whose id or name mentions
+ * "tenant" and whose value is an Office 365 installation's tenant id.
+ * @param {string} id
+ * @param {unknown} entry
+ * @param {{ unmigratedTenantRefs: Set<string>, tenantIds: Set<string>, plainOf: (v: string) => Promise<string|undefined> }} known
+ * @returns {Promise<boolean>}
+ */
+async function isTenantIdCredential(id, entry, { unmigratedTenantRefs, tenantIds, plainOf }) {
+  if (unmigratedTenantRefs.has(id) || V061_TENANT_CREDENTIAL.test(id)) return true;
+  const type = typeof entry === 'object' ? entry?.type : undefined;
+  const name = typeof entry?.name === 'string' ? entry.name : '';
+  if (type !== 'secret' || !/tenant/i.test(`${id} ${name}`) || tenantIds.size === 0) return false;
+  const plain = await plainOf(storedValueOf(entry));
+  return Boolean(plain) && tenantIds.has(plain.trim());
+}
+
+/**
+ * Every string in the JSON files of {@link REFERENCE_DIRS} but the
+ * credential store: whatever may name a credential. The files are read in
+ * parallel; an unreadable one is skipped.
+ * @param {object} ctx
+ * @returns {Promise<Set<string>>}
+ */
+async function referencedStrings(ctx) {
+  const referenced = new Set();
+  const listed = await Promise.all(
+    REFERENCE_DIRS.map(async dir =>
+      (await ctx.listFiles(dir, '*.json')).map(file => `${dir}/${file}`)
+    )
+  );
+  const files = listed.flat().filter(rel => rel !== CREDENTIALS_FILE);
+  await Promise.all(
+    files.map(async rel => {
+      try {
+        collectStrings(await ctx.readJson(rel), referenced);
+      } catch {
+        /* an unreadable file names nothing we can see; keep going */
+      }
+    })
+  );
+  return referenced;
 }
 
 /**
  * Step 3b: delete the Office 365 tenant id credentials (`tenantIdRef`) that
  * V061 created or V200 left behind, when no config file names them. A
  * credential whose value cannot be read is kept: it may be the only copy of a
- * tenant id.
+ * tenant id. The credentials are read in parallel; the log follows the store.
  * @param {object} ctx
  * @param {{ store: object, installed: object[], unmigratedTenantRefs: Set<string>, plainOf: (v: string) => Promise<string|undefined> }} state
  */
@@ -593,50 +887,34 @@ async function removeTenantIdLeftovers(ctx, { store, installed, unmigratedTenant
       .map(i => text(i.values?.tenantId))
       .filter(Boolean)
   );
-  const candidates = [];
-  for (const [id, entry] of Object.entries(credentials)) {
-    if (unmigratedTenantRefs.has(id) || V061_TENANT_CREDENTIAL.test(id)) {
-      candidates.push(id);
-      continue;
-    }
-    const type = typeof entry === 'object' ? entry?.type : undefined;
-    const name = typeof entry?.name === 'string' ? entry.name : '';
-    if (type !== 'secret' || !/tenant/i.test(`${id} ${name}`) || tenantIds.size === 0) continue;
-    const plain = await plainOf(storedValueOf(entry));
-    if (plain && tenantIds.has(plain.trim())) candidates.push(id);
-  }
+  const entries = Object.entries(credentials);
+  const verdicts = await Promise.all(
+    entries.map(([id, entry]) =>
+      isTenantIdCredential(id, entry, { unmigratedTenantRefs, tenantIds, plainOf })
+    )
+  );
+  const candidates = entries.filter((_, index) => verdicts[index]).map(([id]) => id);
   if (candidates.length === 0) return;
 
-  const referenced = new Set();
-  for (const dir of REFERENCE_DIRS) {
-    for (const file of await ctx.listFiles(dir, '*.json')) {
-      const rel = `${dir}/${file}`;
-      if (rel === CREDENTIALS_FILE) continue;
-      try {
-        collectStrings(await ctx.readJson(rel), referenced);
-      } catch {
-        /* an unreadable file names nothing we can see; keep going */
-      }
-    }
-  }
-
+  const referenced = await referencedStrings(ctx);
+  const readable = await Promise.all(
+    candidates.map(id => (referenced.has(id) ? undefined : plainOf(storedValueOf(credentials[id]))))
+  );
   let removed = 0;
-  for (const id of candidates) {
+  for (const [index, id] of candidates.entries()) {
     if (referenced.has(id)) {
       ctx.warn(
         `Credential "${id}" looks like a former Office 365 tenant id but is still referenced; kept`
       );
-      continue;
-    }
-    if (!(await plainOf(storedValueOf(credentials[id])))) {
+    } else if (readable[index]) {
+      delete credentials[id];
+      removed += 1;
+      ctx.log(`Credential "${id}" removed: the Office 365 tenant id is stored on the installation`);
+    } else {
       ctx.warn(
         `Credential "${id}" looks like a former Office 365 tenant id but could not be read; kept`
       );
-      continue;
     }
-    delete credentials[id];
-    removed += 1;
-    ctx.log(`Credential "${id}" removed: the Office 365 tenant id is stored on the installation`);
   }
   if (removed > 0) await ctx.writeJson(CREDENTIALS_FILE, store);
 }

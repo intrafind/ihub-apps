@@ -20,6 +20,8 @@ import {
   renameToProviderIds,
   renamedGrants,
   migrateApp,
+  trimChars,
+  v061IdOf,
   STORAGE_TYPE_BINDING
 } from '../migrations/V205__storage_provider_installations.js';
 import {
@@ -564,5 +566,42 @@ describe('V205 storage provider installations', () => {
       'type:storage': { required: false }
     });
     assert.deepEqual(files['config/apps.json'][1], app('other'));
+  });
+});
+
+describe('V205 id cleanup without regex backtracking', () => {
+  it('trims only leading and trailing characters of the set', () => {
+    assert.equal(trimChars('', '-._'), '');
+    assert.equal(trimChars('---', '-._'), '');
+    assert.equal(trimChars('-._a_b.-', '-._'), 'a_b');
+    assert.equal(trimChars('a--b', '-._'), 'a--b');
+    assert.equal(trimChars('_-a-_', '_'), '-a-');
+    assert.equal(trimChars('a', '_'), 'a');
+  });
+
+  it('cleans a provider id for the fallback id as the former regexes did', () => {
+    assert.equal(fallbackId('office365', '--x--', new Set()), 'office365-x');
+    assert.equal(fallbackId('office365', '...', new Set()), 'office365');
+    assert.equal(fallbackId('office365', ' a ', new Set()), 'office365-a');
+    assert.equal(fallbackId('office365', 'a..b', new Set()), 'office365-a..b');
+    assert.equal(fallbackId('office365', '__a__', new Set()), 'office365-a');
+  });
+
+  it("derives V061's credential id as V061 did", () => {
+    assert.equal(v061IdOf('__a b__'), 'a_b');
+    assert.equal(v061IdOf('-a-'), '-a-');
+    assert.equal(v061IdOf('___'), 'default');
+    assert.equal(v061IdOf(''), 'default');
+    assert.equal(v061IdOf(undefined), 'default');
+    assert.equal(v061IdOf('x'.repeat(70)), 'x'.repeat(60));
+  });
+
+  it('stays linear on a long inner run (the former regexes took seconds)', () => {
+    const started = performance.now();
+    const dashes = `a${'-'.repeat(100_000)}b`;
+    const underscores = `a${'_'.repeat(100_000)}b`;
+    assert.equal(fallbackId('office365', dashes, new Set()), `office365-a${'-'.repeat(45)}`);
+    assert.equal(v061IdOf(underscores), `a${'_'.repeat(59)}`);
+    assert.ok(performance.now() - started < 1000);
   });
 });

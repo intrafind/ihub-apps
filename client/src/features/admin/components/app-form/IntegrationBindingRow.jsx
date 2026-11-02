@@ -88,7 +88,7 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
           className={`${CHECKBOX_CLASS} mt-1`}
           checked={bound}
           onChange={e =>
-            onBindingChange(e.target.checked ? { ...(item.newBinding || {}), ...current } : null)
+            onBindingChange(e.target.checked ? { ...item.newBinding, ...current } : null)
           }
         />
         <span className="flex-1">
