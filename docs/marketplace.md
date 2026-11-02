@@ -51,9 +51,22 @@ Each card shows the item's type, version, tags, author and its state:
 | **Update available** | Installed, and the catalog offers a newer version                                                            | **Update** opens a dialog with what changed |
 | *greyed*             | The item needs an iHub version this server does not have (`compatibility.ihub` or `minVersion` in the catalog); the card says which | **Install** and **Update** are disabled |
 
+An integration card also shows four fixed facts, read from the item's definition when the catalog
+is refreshed:
+
+| Fact          | Shows                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| Sign-in       | The sign-in modes the definition offers (`none`, `service account`, `user API key`, `user OAuth`, …) |
+| Effect        | **read** when every action only reads, **read · write** as soon as one writes or deletes, **not declared** when the actions do not say |
+| Where it runs | **cloud**, **on-premises** or **local** (the definition's `runs`), **not stated** without one       |
+| Actions       | The number of actions the definition declares; **listed by the server** for an MCP server or A2A agent, whose actions are known only once iHub connects |
+
 Click a card to open its details: description, tags, registry, category, license (linked to the
 license text when the catalog provides one) and, when the item declares one, the iHub version range
-it needs. The **Content** tab previews the item itself — the app or model JSON, or a skill's
+it needs. For an integration the details add **Integration facts**: the four facts and the actions
+the definition declares, each with its effect (read, write, destructive, unknown) as a badge. When
+the definition could not be read from the registry, the details say so and the card shows no
+facts. The **Content** tab previews the item itself — the app or model JSON, or a skill's
 `SKILL.md`. An integration with a release history gets a **Releases** tab: one entry per version
 with its date and summary, and the notes per category (features, fixes, breaking changes) are
 fetched from the registry and rendered when you open them, without installing anything.
@@ -171,6 +184,20 @@ integration that brings code (`script` protocol) must list a hash for every code
 `source.integrity` (`{ "connector.js": "sha256-<base64 of the SHA-256>" }`); iHub installs it only
 from a registry the admin trusts for code and refuses a file that does not match its hash.
 
+When a catalog is refreshed (or tested), iHub fetches the `integration.json` of every integration
+item from the registry, at most four at a time, and derives the facts the cards show from it; the
+catalog file itself carries no facts (a `facts` field in it is ignored). A registry never offers a
+local process: an item whose definition is an MCP server over `stdio`, or one without a fixed
+remote transport, is left out of the catalog and the server log names the registry, the item and
+the reason:
+
+> Catalog item 'integration:local-files' of registry 'acme' rejected: An MCP integration from a
+> registry needs a fixed remote transport (stdio is not allowed)
+
+Install refuses such a definition as well, so a catalog cached before this check cannot install
+it. An item whose definition cannot be fetched stays in the catalog without facts. A `script`
+integration is not affected by this check; it is governed by the registry's trust for code.
+
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.
 
@@ -222,8 +249,8 @@ add skills with are listed under [Skills → API](skills.md#api).
 
 | Method & path                                                                 | Purpose                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------- |
-| `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters) |
-| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an installed integration also `migrationPreview` (below) |
+| `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters); an integration item carries `facts` (`authModes`, `effect`, `runs`, `actionCount`, `protocol`; null when its definition could not be read) |
+| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an integration also `facts` with its `actions` (`name`, `title`, `sideEffect`), and an installed one `migrationPreview` (below) |
 | `GET …/items/integration/:name/_file?path=…`                                  | One Markdown companion file of an integration item (a release's notes), fetched from the registry |
 | `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy) |
 | `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update, uninstall, detach; an integration update answers with `integrationMigrations` (one result per installation: `migrated`, `stamped`, `failed`, `skipped`) and is `409 MIGRATION_LOCKED` while a migration of one of them runs |

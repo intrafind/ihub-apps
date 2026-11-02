@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import Switch from '../../../client/src/shared/components/Switch';
+import Switch, { SwitchIndicator } from '../../../client/src/shared/components/Switch';
 
 /** A switch that holds its own state, as a screen would. */
 function Controlled({ initial = false, onChange = () => {}, ...props }) {
@@ -173,5 +173,37 @@ describe('Switch', () => {
     expect(toggle).toHaveAttribute('role', 'switch');
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(toggle).toHaveAttribute('id', 'flag');
+  });
+});
+
+describe('SwitchIndicator', () => {
+  it('draws the switch hidden from assistive technology, with no control of its own', () => {
+    const { container } = render(<SwitchIndicator checked />);
+    const indicator = container.firstChild;
+
+    expect(indicator.tagName).toBe('SPAN');
+    expect(indicator).toHaveAttribute('aria-hidden', 'true');
+    expect(indicator).toHaveAttribute('data-state', 'on');
+    expect(indicator).not.toHaveAttribute('role');
+    expect(indicator).not.toHaveAttribute('tabindex');
+    expect(indicator).toHaveClass('pointer-events-none', 'bg-indigo-600');
+    expect(indicator.firstChild).toHaveClass('translate-x-5');
+  });
+
+  it('looks like the Switch of the same size and state', () => {
+    const { container } = render(
+      <>
+        <Switch checked={false} onChange={() => {}} size="sm" aria-label="Flag" />
+        <SwitchIndicator checked={false} size="sm" />
+      </>
+    );
+    const [button, indicator] = container.children;
+
+    expect(indicator).toHaveAttribute('data-state', 'off');
+    for (const name of ['h-5', 'w-9', 'rounded-full', 'bg-gray-200', 'dark:bg-gray-600']) {
+      expect(button).toHaveClass(name);
+      expect(indicator).toHaveClass(name);
+    }
+    expect(indicator.firstChild.className).toBe(button.firstChild.className);
   });
 });

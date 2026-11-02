@@ -42,6 +42,9 @@ const SIZES = {
   md: 'h-2.5 w-2.5'
 };
 
+/** Style of the visible status text when the caller sets none. */
+const DEFAULT_LABEL_CLASS = 'text-sm text-gray-700 dark:text-gray-300';
+
 /** The statuses a StatusDot accepts. */
 export const STATUS_DOT_STATUSES = Object.keys(STATUSES);
 
@@ -64,12 +67,29 @@ export const STATUS_DOT_STATUSES = Object.keys(STATUSES);
  *   instead of hiding it visually.
  * @param {'sm'|'md'} [props.size='md'] - Dot diameter, 8px or 10px.
  * @param {string} [props.className] - Extra classes for the wrapper.
+ * @param {string} [props.labelClassName] - Classes of the visible text (with
+ *   `showLabel`), replacing the default `text-sm` grey. Pass `''` to inherit
+ *   the font and colour of the parent, e.g. inside a {@link Badge}.
  * @returns {JSX.Element}
  *
  * @example
  * <StatusDot status="degraded" label={t('integrations.status.slow', 'Responding slowly')} showLabel />
+ *
+ * @example
+ * // A status badge: the badge's tone and text style, the dot's shape
+ * <Badge tone="success">
+ *   <StatusDot status="ok" label={t('status.connected', 'Connected')} showLabel labelClassName="" size="sm" />
+ * </Badge>
  */
-function StatusDot({ status, label, showLabel = false, size = 'md', className = '', ...rest }) {
+function StatusDot({
+  status,
+  label,
+  showLabel = false,
+  size = 'md',
+  className = '',
+  labelClassName = DEFAULT_LABEL_CLASS,
+  ...rest
+}) {
   const { t } = useTranslation();
   const known = STATUSES[status];
   const style = known || STATUSES.off;
@@ -87,9 +107,7 @@ function StatusDot({ status, label, showLabel = false, size = 'md', className = 
         title={showLabel ? undefined : tooltip}
         className={`inline-block shrink-0 rounded-full ${SIZES[size] || SIZES.md} ${style.dot}`}
       />
-      <span className={showLabel ? 'text-sm text-gray-700 dark:text-gray-300' : 'sr-only'}>
-        {text}
-      </span>
+      <span className={showLabel ? labelClassName || undefined : 'sr-only'}>{text}</span>
     </span>
   );
 }

@@ -303,6 +303,22 @@ See [Integrations → Built-in integrations](../../integrations.md#built-in-inte
   `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
   **Admin → Tools** lists only custom tools from now on.
 
+## Marketplace: Integration Cards Show Sign-in, Effect, Where It Runs and Actions
+
+An integration in **Admin → Marketplace** now shows what it does before you install it: the card
+lists four fixed facts, and the details list every action the definition declares.
+
+- **Four facts on every integration card:** the sign-in modes, the effect (**read** or **read ·
+  write**), where it runs (cloud, on-premises, local) and the number of actions (**listed by the
+  server** for an MCP server or A2A agent).
+- **Actions in the details:** each declared action with its effect (read, write, destructive) as a
+  badge, under **Integration facts**.
+- **No local processes from a registry:** an integration item that would start a local MCP
+  process (`stdio`) is left out of the catalog when it is refreshed, and the server log names the
+  registry, the item and the reason. Install refuses it as before.
+
+See [Marketplace](../../marketplace.md).
+
 ## Storage Providers Are Installed Integrations, Several per Provider, Bound per App
 
 Office 365 (OneDrive / SharePoint / Teams), Google Drive and Nextcloud are the built-in storage

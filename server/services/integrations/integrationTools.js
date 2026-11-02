@@ -257,17 +257,25 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
     if (!binding) continue;
     granted ??= integrationPermissionsOf(context.user);
     if (!grantsIntegration(granted, instance)) continue;
-    // `actions` absent: every action except those bound explicitly only; a
-    // list (even empty): exactly those. An empty list binds the installation
-    // for its scopes and nothing else.
-    if (Array.isArray(binding.actions)) {
-      if (!binding.actions.includes(action)) continue;
-    } else if (tool._integration.bindExplicitly) {
-      continue;
-    }
-    out.push(tool);
+    if (bindingOffersAction(binding, action, tool._integration)) out.push(tool);
   }
   return out;
+}
+
+/**
+ * Whether an app's binding of an installation offers one of its actions.
+ * `actions` absent: every action except those bound explicitly only; a list
+ * (even empty): exactly those. An empty list binds the installation for its
+ * scopes and nothing else.
+ *
+ * @param {{ actions?: string[] }} binding - the app's binding (`appBindingFor`)
+ * @param {string} action - the action's name
+ * @param {{ bindExplicitly?: boolean }} integration - the tool's `_integration`
+ * @returns {boolean}
+ */
+function bindingOffersAction(binding, action, integration) {
+  if (Array.isArray(binding.actions)) return binding.actions.includes(action);
+  return !integration.bindExplicitly;
 }
 
 /**
