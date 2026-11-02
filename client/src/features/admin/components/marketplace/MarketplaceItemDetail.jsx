@@ -15,6 +15,8 @@ import {
 } from '../../../../api/adminApi';
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
+import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
+import { UPDATE_RETRY_CODES, previewLabels } from './updateMigrationRows';
 
 /**
  * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
@@ -68,7 +70,10 @@ const TYPE_COLORS = {
  *
  * An item this server version cannot run (`compatible: false`) keeps its
  * detail but Install and Update are disabled with the reason. Updating shows
- * the releases between the installed and the latest version first.
+ * the releases between the installed and the latest version first and, for
+ * an integration with installations, what the update's migrations change per
+ * installation (`migrationPreview`); after the update it reports each
+ * installation's migration (`integrationMigrations`) with a link to its page.
  *
  * @param {Object} props
  * @param {Object} props.item - Initial item data from the browse grid (used as fallback)
@@ -83,6 +88,10 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [confirmAction, setConfirmAction] = useState(null);
+  // After an integration update: `{ results, labels }` of `integrationMigrations`.
+  const [updateReport, setUpdateReport] = useState(null);
+  // Why the update was refused (shown in the update dialog instead of an alert).
+  const [updateError, setUpdateError] = useState(null);
 
   // Resolve localized text for the current language
   const lang = i18n.language?.split('-')[0] || 'en';
@@ -132,6 +141,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
    */
   const handleAction = async action => {
     setActionLoading(action);
+    if (action === 'update') setUpdateError(null);
     try {
       if (action === 'install') {
         await installMarketplaceItem(item.registryId, item.type, item.name);
@@ -140,7 +150,16 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           replaceLocal: true
         });
       } else if (action === 'update') {
-        await updateMarketplaceItem(item.registryId, item.type, item.name);
+        const updated = await updateMarketplaceItem(item.registryId, item.type, item.name);
+        // The preview held the installation labels; the results carry ids only.
+        setUpdateReport(
+          Array.isArray(updated?.integrationMigrations) && updated.integrationMigrations.length > 0
+            ? {
+                results: updated.integrationMigrations,
+                labels: previewLabels(item.migrationPreview, lang)
+              }
+            : null
+        );
       } else if (action === 'uninstall') {
         await uninstallMarketplaceItem(item.registryId, item.type, item.name);
       } else if (action === 'detach') {
@@ -153,7 +172,15 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
       onAction?.();
       setConfirmAction(null);
     } catch (err) {
-      alert(err.message || `${action} failed`);
+      if (action === 'update') {
+        const data = err?.response?.data;
+        setUpdateError({
+          retry: UPDATE_RETRY_CODES.includes(data?.code),
+          message: data?.error || err?.message || ''
+        });
+      } else {
+        alert(err.message || `${action} failed`);
+      }
     } finally {
       setActionLoading(null);
     }
@@ -224,9 +251,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 <button
                   onClick={() => {
                     onClose();
-                    navigate(
-                      `/admin/integrations/installed?install=${encodeURIComponent(item.name)}`
-                    );
+                    navigate(`/admin/integrations?install=${encodeURIComponent(item.name)}`);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >
@@ -300,9 +325,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 <button
                   onClick={() => {
                     onClose();
-                    navigate(
-                      `/admin/integrations/installed?install=${encodeURIComponent(item.name)}`
-                    );
+                    navigate(`/admin/integrations?install=${encodeURIComponent(item.name)}`);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >
@@ -378,6 +401,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 'The installed files are replaced with the catalog version; local edits are lost.'
               )}
             </p>
+            {item?.type === 'integration' && (
+              <IntegrationUpdatePreview preview={item.migrationPreview || null} />
+            )}
             {hasReleases && (
               <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-md">
                 <IntegrationReleaseNotes
@@ -394,6 +420,23 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 />
               </div>
             )}
+            {updateError && (
+              <div
+                role="alert"
+                className="mb-3 p-3 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-sm text-red-800 dark:text-red-200"
+                data-testid="update-error"
+              >
+                {updateError.retry && (
+                  <p className="font-medium">
+                    {t(
+                      'admin.marketplace.migration.locked',
+                      'A migration of an installation of this integration is running. Nothing was changed; try again in a moment.'
+                    )}
+                  </p>
+                )}
+                <p className="break-words">{updateError.message}</p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => handleAction('update')}
@@ -403,13 +446,25 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 {actionLoading === 'update' ? '...' : t('admin.marketplace.update', 'Update')}
               </button>
               <button
-                onClick={() => setConfirmAction(null)}
+                onClick={() => {
+                  setConfirmAction(null);
+                  setUpdateError(null);
+                }}
                 className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-sm text-sm"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
             </div>
           </div>
+        )}
+
+        {/* After an integration update: what happened to each installation */}
+        {updateReport && (
+          <IntegrationUpdateReport
+            results={updateReport.results}
+            labels={updateReport.labels}
+            onDismiss={() => setUpdateReport(null)}
+          />
         )}
 
         {/* Destructive action confirmation inline panel */}

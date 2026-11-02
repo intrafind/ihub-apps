@@ -8,9 +8,16 @@ import { FORBIDDEN_ATTRIBUTES } from './presets.js';
 import { ToolArgumentError, resolveResultLimit, timeLimitSeconds } from './query.js';
 
 /**
- * The admin LDAP browser: `<id>__browse_search`, `<id>__browse_read` and
- * `<id>__browse_children`. Raw entries, any attribute, for the admins in
- * `browse.groups`; the runner checks access and writes the audit record.
+ * The admin LDAP browser's operations: `<browserId>__browse_search`,
+ * `<browserId>__browse_read` and `<browserId>__browse_children` of an
+ * installation of `com.intrafind/ldap-browser`. Raw entries, any attribute,
+ * for the users the installation is granted to; the runner
+ * (`ldapBrowserRunner.js`) checks access and writes the audit record.
+ *
+ * Every operation takes a resolved browser (`LdapBrowserService.resolveBrowser`):
+ * it connects with the connection of the directory the browser reuses
+ * (`browser.directory`) and the browser's bind (`browser.bind`), and confines
+ * itself to `browser.base`.
  *
  * Unlike people search, the model writes the LDAP filter. It is parsed, never
  * passed through as text, and refused when it names an attribute on the deny
@@ -58,9 +65,9 @@ function normalizeAttribute(name) {
 
 /**
  * Whether an attribute never leaves the directory: the built-in list
- * ({@link FORBIDDEN_ATTRIBUTES}) or the directory's `browse.denyAttributes`.
+ * ({@link FORBIDDEN_ATTRIBUTES}) or the browser's `denyAttributes`.
  * @param {string} name
- * @param {Set<string>} extra - Lower-cased `browse.denyAttributes`
+ * @param {Set<string>} extra - Lower-cased `denyAttributes` of the browser
  * @returns {boolean}
  */
 export function isDeniedAttribute(name, extra = new Set()) {
@@ -68,8 +75,8 @@ export function isDeniedAttribute(name, extra = new Set()) {
   return FORBIDDEN_ATTRIBUTES.has(type) || FORBIDDEN_OIDS.has(type) || extra.has(type);
 }
 
-function denySet(browse) {
-  return new Set((browse.denyAttributes || []).map(normalizeAttribute));
+function denySet(browser) {
+  return new Set((browser.denyAttributes || []).map(normalizeAttribute));
 }
 
 /**
@@ -77,7 +84,7 @@ function denySet(browse) {
  * negated clauses included.
  *
  * @param {*} text - The `filter` argument
- * @param {Set<string>} deny - Lower-cased `browse.denyAttributes`
+ * @param {Set<string>} deny - Lower-cased `denyAttributes` of the browser
  * @returns {import('ldapts').Filter}
  * @throws {ToolArgumentError}
  */
@@ -249,33 +256,43 @@ function withinResponseSize(items) {
 const VALUES_CUT_HINT =
   'Some attributes have more values than were returned (named in "cut"). Ask for the attributes you need by name; for the members of a large group, search for them instead, e.g. (memberOf=<group DN>).';
 
-/** Run `work` connected with the browser's bind (the directory's by default). */
-function withBrowseConnection(resolved, deps, work) {
-  return withConnection({ ...resolved, bind: resolved.browse.bind }, deps, work);
+/**
+ * Run `work` connected with the connection of the directory the browser
+ * reuses and the browser's bind (the directory's, unless it has its own).
+ */
+function withBrowseConnection(browser, deps, work) {
+  return withConnection({ ...browser.directory, bind: browser.bind }, deps, work);
+}
+
+/** The time limit of a browse search, from the directory's timeout. */
+function browseTimeLimit(browser) {
+  return timeLimitSeconds(browser.directory.timeoutMs);
 }
 
 /**
- * `<id>__browse_search`.
+ * `<browserId>__browse_search`.
  *
- * @param {Object} resolved - Resolved directory with `browse`
+ * @param {Object} browser - Resolved browser (`LdapBrowserService.resolveBrowser`)
  * @param {Object} args - `filter`, `base`, `scope`, `attributes`, `maxResults`
  * @param {Object} [deps] - `{ connect, connectOptions }` for tests
  * @returns {Promise<Object>}
  * @throws {ToolArgumentError|DirectoryConnectionError}
  */
-export async function browseSearch(resolved, args = {}, deps = {}) {
-  const { browse } = resolved;
-  const deny = denySet(browse);
+export async function browseSearch(browser, args = {}, deps = {}) {
+  const deny = denySet(browser);
   const filter = parseBrowseFilter(args.filter, deny);
-  const base = dnInBase(args.base, browse.base, 'base');
+  const base = dnInBase(args.base, browser.base, 'base');
   const scope = args.scope ?? 'sub';
   if (!SCOPES.has(scope)) {
     throw new ToolArgumentError('"scope" is one of base, one or sub.');
   }
   const attributes = requestedAttributes(args.attributes, deny);
-  const { effectiveMaxResults, sizeLimit } = resolveResultLimit(args.maxResults, browse.maxResults);
+  const { effectiveMaxResults, sizeLimit } = resolveResultLimit(
+    args.maxResults,
+    browser.maxResults
+  );
 
-  return withBrowseConnection(resolved, deps, async client => {
+  return withBrowseConnection(browser, deps, async client => {
     let outcome;
     try {
       outcome = await boundedSearch(client, base, {
@@ -283,16 +300,16 @@ export async function browseSearch(resolved, args = {}, deps = {}) {
         filter,
         attributes,
         sizeLimit,
-        timeLimit: timeLimitSeconds(resolved.timeoutMs)
+        timeLimit: browseTimeLimit(browser)
       });
     } catch (error) {
       if (error instanceof NoSuchObjectError) {
-        return notFound(resolved, `No entry at ${base}.`);
+        return notFound(browser, `No entry at ${base}.`);
       }
       throw error;
     }
     let { truncated } = outcome;
-    let entries = outcome.entries.filter(entry => inBase(entry, browse.base));
+    let entries = outcome.entries.filter(entry => inBase(entry, browser.base));
     if (entries.length > effectiveMaxResults) {
       entries = entries.slice(0, effectiveMaxResults);
       truncated = true;
@@ -308,7 +325,7 @@ export async function browseSearch(resolved, args = {}, deps = {}) {
     if (valuesCut) hints.push(VALUES_CUT_HINT);
     if (kept.length === 0 && !truncated) hints.push('No entry matches.');
     return {
-      directory: resolved.id,
+      directory: browser.directoryId,
       base,
       scope,
       entries: kept,
@@ -319,18 +336,20 @@ export async function browseSearch(resolved, args = {}, deps = {}) {
 }
 
 /**
- * `<id>__browse_read`: one entry by its DN.
+ * `<browserId>__browse_read`: one entry by its DN.
+ * @param {Object} browser - Resolved browser
+ * @param {Object} args - `dn`, `attributes`
+ * @param {Object} [deps]
  * @returns {Promise<Object>}
  */
-export async function browseRead(resolved, args = {}, deps = {}) {
-  const { browse } = resolved;
+export async function browseRead(browser, args = {}, deps = {}) {
   if (typeof args.dn !== 'string' || !args.dn.trim()) {
     throw new ToolArgumentError('"dn" is required: the full DN of the entry.');
   }
-  const deny = denySet(browse);
-  const dn = dnInBase(args.dn, browse.base, 'dn');
+  const deny = denySet(browser);
+  const dn = dnInBase(args.dn, browser.base, 'dn');
   const attributes = requestedAttributes(args.attributes, deny);
-  return withBrowseConnection(resolved, deps, async client => {
+  return withBrowseConnection(browser, deps, async client => {
     let entries;
     try {
       ({ entries } = await boundedSearch(client, dn, {
@@ -338,18 +357,18 @@ export async function browseRead(resolved, args = {}, deps = {}) {
         filter: '(objectClass=*)',
         attributes,
         sizeLimit: 1,
-        timeLimit: timeLimitSeconds(resolved.timeoutMs)
+        timeLimit: browseTimeLimit(browser)
       }));
     } catch (error) {
-      if (error instanceof NoSuchObjectError) return notFound(resolved, `No entry at ${dn}.`);
+      if (error instanceof NoSuchObjectError) return notFound(browser, `No entry at ${dn}.`);
       throw error;
     }
-    const entry = entries.find(candidate => inBase(candidate, browse.base));
-    if (!entry) return notFound(resolved, `No entry at ${dn}.`);
+    const entry = entries.find(candidate => inBase(candidate, browser.base));
+    if (!entry) return notFound(browser, `No entry at ${dn}.`);
     // presentEntry keeps one entry within the response limit.
     const presented = presentEntry(entry, deny);
     return {
-      directory: resolved.id,
+      directory: browser.directoryId,
       entry: presented,
       truncated: Boolean(presented.cut),
       ...(presented.cut && { hint: VALUES_CUT_HINT })
@@ -358,13 +377,15 @@ export async function browseRead(resolved, args = {}, deps = {}) {
 }
 
 /**
- * `<id>__browse_children`: the direct children of a DN, without attributes.
+ * `<browserId>__browse_children`: the direct children of a DN, without attributes.
+ * @param {Object} browser - Resolved browser
+ * @param {Object} args - `dn` (default: the browse base)
+ * @param {Object} [deps]
  * @returns {Promise<Object>}
  */
-export async function browseChildren(resolved, args = {}, deps = {}) {
-  const { browse } = resolved;
-  const parent = dnInBase(args.dn, browse.base, 'dn');
-  return withBrowseConnection(resolved, deps, async client => {
+export async function browseChildren(browser, args = {}, deps = {}) {
+  const parent = dnInBase(args.dn, browser.base, 'dn');
+  return withBrowseConnection(browser, deps, async client => {
     let outcome;
     try {
       outcome = await boundedSearch(client, parent, {
@@ -372,14 +393,14 @@ export async function browseChildren(resolved, args = {}, deps = {}) {
         filter: '(objectClass=*)',
         attributes: ['objectClass'],
         sizeLimit: MAX_CHILDREN + 1,
-        timeLimit: timeLimitSeconds(resolved.timeoutMs)
+        timeLimit: browseTimeLimit(browser)
       });
     } catch (error) {
-      if (error instanceof NoSuchObjectError) return notFound(resolved, `No entry at ${parent}.`);
+      if (error instanceof NoSuchObjectError) return notFound(browser, `No entry at ${parent}.`);
       throw error;
     }
     let { truncated } = outcome;
-    let entries = outcome.entries.filter(entry => inBase(entry, browse.base));
+    let entries = outcome.entries.filter(entry => inBase(entry, browser.base));
     if (entries.length > MAX_CHILDREN) {
       entries = entries.slice(0, MAX_CHILDREN);
       truncated = true;
@@ -400,7 +421,7 @@ export async function browseChildren(resolved, args = {}, deps = {}) {
     });
     const { kept, cut } = withinResponseSize(children);
     return {
-      directory: resolved.id,
+      directory: browser.directoryId,
       dn: parent,
       children: kept,
       truncated: truncated || cut,
@@ -415,6 +436,6 @@ function inBase(entry, base) {
   return typeof entry?.dn === 'string' && (dnEquals(entry.dn, base) || isDnWithin(entry.dn, base));
 }
 
-function notFound(resolved, message) {
-  return { directory: resolved.id, error: { code: 'not_found', message } };
+function notFound(browser, message) {
+  return { directory: browser.directoryId, error: { code: 'not_found', message } };
 }

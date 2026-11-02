@@ -30,7 +30,7 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 ## Configuration
 
 iFinder is a [built-in installed integration](integrations.md#built-in-integrations):
-it is configured under **Admin → Integrations → Installed → iFinder** (**Install**,
+it is configured under **Admin → Integrations → iFinder** (**Install**,
 later **Edit**), and its settings are stored as the `ifinder` installation in
 `contents/config/integrations.json`, not in `platform.json`. The installation's
 own switch enables or disables the integration; **Test** checks the connection.
@@ -65,7 +65,7 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 
 ### 2. The iFinder Installation
 
-Open **Admin → Integrations → Installed**, pick **iFinder** in the catalog and
+Open **Admin → Integrations**, pick **iFinder** in the catalog and
 **Install** (or **Edit** the existing installation). The wizard asks for the
 connection, the authentication and the search settings; advanced fields are
 folded away. The private key is never stored in a config file: create a
@@ -487,7 +487,7 @@ Here are the 3 most recent contracts:
 
 ### iFinder Search App
 
-The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled and binds the `ifinder` installation (`"integrations": { "ifinder": { "scopePicker": "menu" } }`): users see the app only while the installation under **Admin → Integrations → Installed** exists and is enabled.
+The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled and binds the `ifinder` installation (`"integrations": { "ifinder": { "scopePicker": "menu" } }`): users see the app only while the installation under **Admin → Integrations** exists and is enabled.
 
 It handles two kinds of requests:
 
@@ -655,7 +655,7 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-The settings live in the `ifinder` installation (**Admin → Integrations → Installed → iFinder**, `values` in `contents/config/integrations.json`); the full list is under [Configuration](#2-the-ifinder-installation).
+The settings live in the `ifinder` installation (**Admin → Integrations → iFinder**, `values` in `contents/config/integrations.json`); the full list is under [Configuration](#2-the-ifinder-installation).
 
 | Setting          | Environment Variable     | Installation Field             | Default                           | Description                                                                    |
 | ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |

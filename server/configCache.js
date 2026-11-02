@@ -28,9 +28,11 @@ import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { areAppFeaturesEnabled } from './featureRegistry.js';
 import { areAppIntegrationsEnabled } from './integrationRegistry.js';
+import { getDefinitionTypes } from './services/integrations/integrationTypes.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
+import { filterBrowserToolsForUser } from './services/peopleDirectory/LdapBrowserService.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
 
 // Re-exported under the name it has always had here: `telemetry.js` and the
@@ -1247,12 +1249,14 @@ class ConfigCache {
    * The config an integration check (integrationRegistry) reads: the platform
    * config and the people directories. Tolerates a cache that is not loaded yet.
    *
-   * @returns {{platform: Object, installedIntegrations: Array}}
+   * @returns {{platform: Object, installedIntegrations: Array, definitionTypes: Object<string, string>}}
    */
   getIntegrationContext() {
     return {
       platform: this.get('config/platform.json')?.data || {},
-      installedIntegrations: this.get('config/integrations.json')?.data?.installed || []
+      installedIntegrations: this.get('config/integrations.json')?.data?.installed || [],
+      // Published by the definitions registry after each load.
+      definitionTypes: getDefinitionTypes()
     };
   }
 
@@ -1843,8 +1847,8 @@ class ConfigCache {
       const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
       // An installed integration's tools are listed as the chat gets them
       // (`getIntegrationToolsForApp`): only when the app binds the
-      // installation, the user is in its groups and the binding allows the
-      // action — never through the instance id alone.
+      // installation, the user's groups grant it (`permissions.integrations`)
+      // and the binding allows the action — never through the instance id alone.
       let appIntegrationTools = new Set();
       if (app?.integrations && typeof app.integrations === 'object') {
         const { getIntegrationToolsForApp } =
@@ -1866,16 +1870,19 @@ class ConfigCache {
       });
     }
 
-    // An installation's own groups hold on top of every grant, `*` included:
-    // a tool the user could not run is not listed.
+    // The group grant of an installation (`permissions.integrations`) holds
+    // on top of every tool grant, `*` included: a tool the user could not run
+    // is not listed.
     if (tools.some(tool => tool._integration)) {
       const { filterIntegrationToolsForUser } =
         await import('./services/integrations/integrationTools.js');
       tools = filterIntegrationToolsForUser(tools, user);
     }
 
-    // A people directory's own `groups` hold on top of every grant, `*` included.
-    tools = filterDirectoryToolsForUser(tools, user);
+    // A people directory's grant, and an LDAP browser's own rules (signed-in,
+    // non-delegated users, its directory enabled), hold on top of every
+    // grant, `*` included.
+    tools = filterBrowserToolsForUser(filterDirectoryToolsForUser(tools, user), user);
 
     // Generate user-specific ETag if tools were filtered
     if (tools.length < originalToolsCount) {

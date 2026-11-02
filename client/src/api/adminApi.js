@@ -844,6 +844,16 @@ export const fetchAdminGroups = async () => {
   return response.data;
 };
 
+/**
+ * `platform.json` as the admin reads it (secrets redacted): the inbound
+ * channels' switches, the OIDC providers, the OAuth issuer, …
+ * @returns {Promise<Object>}
+ */
+export const fetchAdminPlatformConfig = async () => {
+  const response = await makeAdminApiCall('/admin/configs/platform');
+  return response.data ?? null;
+};
+
 // Content access: which groups may use one app / prompt / skill / tool /
 // workflow. Content admins get only the groups they belong to (and the groups
 // inheriting from those); full admins get every group.

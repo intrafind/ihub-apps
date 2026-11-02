@@ -116,7 +116,17 @@ describe('shipped BSI root PCA-1-Verwaltung-23', () => {
     const parsed = peopleDirectorySchema.safeParse(directory);
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
     assert.deepEqual(directory.tlsCa, ['pca-1-verwaltung-23']);
-    assert.deepEqual(directory.groups, ['authenticated']);
+    // Who may use it is up to the groups (#3093): every signed-in user, not
+    // anonymous callers, as `allowedGroups: ["authenticated"]` said before.
+    assert.equal(Object.hasOwn(x500, 'allowedGroups'), false);
+    assert.equal(directory.groups, undefined);
+    const { groups } = JSON.parse(
+      fs.readFileSync(path.join(defaultsDir, 'config', 'groups.json'), 'utf8')
+    );
+    assert.deepEqual(groups.authenticated.permissions.integrations, ['*']);
+    const anonymous = groups.anonymous.permissions.integrations;
+    assert.ok(!anonymous.includes('*') && !anonymous.includes('x500bund'));
+    assert.ok(!anonymous.some(key => key === x500.definition || key === 'type:people-directory'));
   });
 });
 
@@ -226,13 +236,13 @@ describe('schema', () => {
 describe('shipped People search app', () => {
   const appFile = path.join(defaultsDir, 'apps', 'people-directory.json');
 
-  it('passes the app schema and binds every directory installation', () => {
+  it('passes the app schema and binds every people directory, Entra ID included', () => {
     const app = JSON.parse(fs.readFileSync(appFile, 'utf8'));
     const parsed = appConfigSchema.safeParse(app);
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
-    // Shipped on, but users get it only once a directory installation is enabled
+    // Shipped on, but users get it only once a people directory installation is enabled
     assert.equal(app.enabled, true);
-    assert.deepEqual(app.integrations, { 'com.intrafind/ldap-directory': {} });
+    assert.deepEqual(app.integrations, { 'type:people-directory': {} });
     assert.equal(app.tools, undefined);
     assert.equal(app.requiredIntegrations, undefined);
     assert.ok(app.system.en && app.system.de);

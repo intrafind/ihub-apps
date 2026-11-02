@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
 import GroupMultiSelect from './GroupMultiSelect';
+import GroupIntegrationsSection from './GroupIntegrationsSection';
 import {
   validateWithSchema,
   errorsToFieldErrors,
@@ -22,6 +23,7 @@ function GroupFormEditor({
   onChange,
   onValidationChange,
   resources = { apps: [], models: [], prompts: [], workflows: [], skills: [], tools: [] },
+  groups = {},
   jsonSchema
 }) {
   const { t } = useTranslation();
@@ -449,6 +451,13 @@ function GroupFormEditor({
                   onSelectionChange={selected => handlePermissionChange('tools', selected)}
                   placeholder="Search tools to add..."
                   emptyMessage="No tools selected - tools are only reachable through apps that declare them"
+                />
+
+                {/* Integrations Permission (#3093) */}
+                <GroupIntegrationsSection
+                  group={group}
+                  groups={groups}
+                  onChange={selected => handlePermissionChange('integrations', selected)}
                 />
               </div>
             </div>

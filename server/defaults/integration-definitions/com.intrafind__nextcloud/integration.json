@@ -1,24 +1,39 @@
 {
   "id": "com.intrafind/nextcloud",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: the Nextcloud providers of platform.cloudStorage become installations (migration V200); several installations per provider, the installation id is the provider id (migration V206).",
+        "de": "Erste Version: die Nextcloud-Anbieter aus platform.cloudStorage werden Installationen (Migration V200); mehrere Installationen je Anbieter, die Installations-ID ist die Anbieter-ID (Migration V206)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Nextcloud",
     "de": "Nextcloud"
   },
   "description": {
-    "en": "Let users browse and attach files from a Nextcloud instance, each signed in with their own Nextcloud account (OAuth 2.0). Holds the instance URL and the OAuth client registered in Nextcloud.",
-    "de": "Benutzer Dateien aus einer Nextcloud-Instanz durchsuchen und anhängen lassen, jeder mit dem eigenen Nextcloud-Konto angemeldet (OAuth 2.0). Hält die Instanz-URL und den in Nextcloud registrierten OAuth-Client."
+    "en": "Let users browse and attach files from a Nextcloud instance, each signed in with their own Nextcloud account (OAuth 2.0). Holds the instance URL and the OAuth client registered in Nextcloud. Install it once per Nextcloud server; apps offer it by binding it.",
+    "de": "Benutzer Dateien aus einer Nextcloud-Instanz durchsuchen und anhängen lassen, jeder mit dem eigenen Nextcloud-Konto angemeldet (OAuth 2.0). Hält die Instanz-URL und den in Nextcloud registrierten OAuth-Client. Einmal je Nextcloud-Server installieren; Apps bieten sie an, indem sie sie binden."
   },
   "publisher": {
     "name": "IntraFind Software AG",
     "verification": "intrafind"
   },
   "categories": ["storage", "files"],
+  "type": "storage",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/nextcloud-integration.md",
   "builtIn": true,
-  "singleton": {
-    "instanceId": "nextcloud"
-  },
   "protocol": {
     "type": "native",
     "module": "nextcloud"
@@ -75,22 +90,8 @@
         "de": "Redirect-URI"
       },
       "description": {
-        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/nextcloud/<provider id>/callback); the test shows the resulting URL.",
-        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/nextcloud/<provider id>/callback); der Test zeigt die resultierende URL."
-      }
-    },
-    {
-      "key": "providerId",
-      "type": "string",
-      "advanced": true,
-      "pattern": "^[A-Za-z0-9._-]{1,100}$",
-      "title": {
-        "en": "Provider id",
-        "de": "Anbieter-ID"
-      },
-      "description": {
-        "en": "The id in the callback URL (/api/integrations/nextcloud/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
-        "de": "Die ID in der Callback-URL (/api/integrations/nextcloud/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request the way the browser sees it: scheme and host (X-Forwarded-Proto / X-Forwarded-Host of a trusted proxy), the base path (X-Forwarded-Prefix), then /api/integrations/nextcloud/<installation id>/callback. The Settings tab shows the URL to register.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage so abgeleitet, wie der Browser sie sieht: Schema und Host (X-Forwarded-Proto / X-Forwarded-Host eines vertrauenswürdigen Proxys), der Basispfad (X-Forwarded-Prefix), dann /api/integrations/nextcloud/<Installations-ID>/callback. Der Reiter Einstellungen zeigt die zu registrierende URL."
       }
     }
   ],

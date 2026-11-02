@@ -19,6 +19,7 @@ const runTool = jest.fn();
 
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   loadConfiguredTools: jest.fn(async () => []),
+  loadLocalTools: jest.fn(async () => []),
   runTool,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
@@ -31,10 +32,12 @@ jest.unstable_mockModule('../../toolLoader.js', () => ({
   MAX_SKILL_NAME_ENUM: 100,
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES: 5,
   NATIVE_SEARCH_WITH_PAGE_READER: new Set(),
-  NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID: 'braveSearch',
+  NATIVE_WEB_SEARCH_FALLBACK_ENGINE: 'auto',
   READ_URL_TOOL_ID: 'read_url',
-  WEBSEARCH_TOOL_IDS: Object.freeze([]),
-  resolveWebsearchToolId: jest.fn(() => null),
+  resolveWebSearchEngine: jest.fn(() => null),
+  resolveWebSearchEngineTool: jest.fn(() => null),
+  resolveWebSearchEngineToolId: jest.fn(async () => null),
+  isWebSearchAvailableTo: jest.fn(() => false),
   describeWebSearchAvailability: jest.fn(async () => ({})),
   resolveNativeWebSearchFallbackTools: jest.fn(async () => [])
 }));

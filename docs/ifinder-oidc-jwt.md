@@ -129,7 +129,7 @@ matters here is the **issuer URL** (below).
 
 1. Set `oauth.issuer` to your iHub public URL under **Admin → Authentication →
    OAuth Server** (see the important note below) and restart the server.
-2. Open **Admin → Integrations → Installed**, pick **iFinder** in the catalog
+2. Open **Admin → Integrations**, pick **iFinder** in the catalog
    and **Install** (or **Edit** the existing installation).
 3. Set the **iFinder base URL** and leave **Authentication** at *JWT signed by
    iHub*.
@@ -268,7 +268,7 @@ pins the issuer.
 
 ### From iHub
 
-- Under **Admin → Integrations → Installed**, click **Test** on the iFinder
+- Under **Admin → Integrations**, click **Test** on the iFinder
   installation (and on the iAssistant installation). A green result means iHub
   could reach iFinder and the token was accepted.
 - Confirm the endpoints iFinder will read are reachable and, for RS256, return a
@@ -480,8 +480,8 @@ iHub-signed tokens.
 
 ### Configure iHub
 
-In the iFinder installation (**Admin → Integrations → Installed → iFinder →
-Edit**), set **Authentication** to *OIDC token exchange*, then:
+In the iFinder installation (**Admin → Integrations → iFinder →
+Settings**), set **Authentication** to *OIDC token exchange*, then:
 
 | Field | Installation value | Purpose |
 |---|---|---|
@@ -601,7 +601,7 @@ Entra does not support RFC 8693; choose the grant type **On-Behalf-Of**.
 
 ### Verify
 
-**Test** on the iFinder installation (**Admin → Integrations → Installed**) runs the exchange for your
+**Test** on the iFinder installation (**Admin → Integrations**) runs the exchange for your
 own account (you must have signed in through the selected provider), decodes
 the token without verifying it, and shows `iss`, `aud`, `sub`, the scope claim
 and which of the expected `fa_*` claims are present. It then calls the iFinder

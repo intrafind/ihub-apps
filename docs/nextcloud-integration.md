@@ -22,7 +22,7 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 ## Step 1: Register an OAuth 2.0 Client in Nextcloud
 
-> **Tip:** The easiest workflow is to do **Step 2 first** so iHub Apps shows you the exact callback URL to register. Open **Admin → Integrations → Nextcloud → Add Provider** in iHub, type the **Name** (provider ID) you want to use, and copy the auto-generated **Callback URL** straight into the Redirection URI field below. Then come back and finish step 1.
+> **Tip:** The easiest workflow is to do **Step 2 first** so iHub Apps shows you the exact callback URL to register. Install **Nextcloud** under **Admin → Integrations → Catalog** with the installation id you want (e.g. `nextcloud-hq`), open its **Settings** tab and copy the **Redirect URI to register** straight into the Redirection URI field below. Then come back and finish step 1.
 
 1. Sign in to your Nextcloud instance as an administrator.
 2. Go to **Settings → Administration → Security**.
@@ -31,36 +31,34 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 5. Enter the **Redirection URI** — either paste the value from iHub's admin UI (recommended) or construct it manually:
 
    ```
-   https://<your-ihub-host>/api/integrations/nextcloud/<providerId>/callback
+   https://<your-ihub-host>[/<base path>]/api/integrations/nextcloud/<installationId>/callback
    ```
 
-   - Replace `<your-ihub-host>` with your iHub Apps hostname.
-   - Replace `<providerId>` with the provider ID you will create in iHub (e.g. `nextcloud-main`).
+   - Replace `<your-ihub-host>` with your iHub Apps hostname, followed by its base path when iHub runs under one (e.g. `/ihub`).
+   - Replace `<installationId>` with the id of the Nextcloud installation in iHub (e.g. `nextcloud-hq`).
 
-   > The redirect URI must match exactly — including scheme, host, port (if any), path, and the provider ID segment. The iHub admin UI displays the auto-detected callback URL live as you type the provider ID, with a copy button — using it avoids manual transcription mistakes.
+   > The redirect URI must match exactly — including scheme, host, port (if any), base path, path, and the installation id. The installation's **Settings** tab shows it with a **Copy** button — using it avoids manual transcription mistakes.
 
 6. Click **Add**. Nextcloud will show you a **Client Identifier** and a **Secret**. Copy both — the secret is shown only once.
 
-> **Tip — multiple instances:** If you operate several Nextcloud servers, repeat this step on each instance and create one iHub provider per server. End users can be connected to all of them concurrently — tokens are stored per `(user, service, provider)` so flows don't overwrite each other.
+> **Tip — several Nextcloud servers:** repeat this step on each server and install **Nextcloud** once per server in iHub (each installation with its own id, server URL and OAuth client). End users can be connected to all of them at once — tokens are stored per user and installation (`<userId>__<installationId>.json`), so flows don't overwrite each other.
 
 ---
 
 ## Step 2: Configure the Nextcloud Provider in iHub Apps
 
-Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/nextcloud`, installation `nextcloud`; see [Integrations](integrations.md#built-in-integrations)).
+Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/nextcloud`, a storage provider; see [Integrations](integrations.md#built-in-integrations)). Install it once per Nextcloud server. **The installation id is the provider id**: it is part of the callback URL, of every user's stored connection and of the embed plugin's `ihub_provider_id`, and it never changes after the installation is created.
 
 ### Option A: Admin UI (recommended)
 
 1. Sign in to iHub Apps as an administrator.
-2. Navigate to **Admin → Integrations → Installed**, open the **Catalog** tab and click **Install** on **Nextcloud** (or edit the `nextcloud` installation an upgrade created).
-3. Fill in:
-   - **Label** — the friendly name shown to end users (e.g. `Company Nextcloud`).
-   - **Nextcloud server URL** — base URL of the instance, no trailing slash (e.g. `https://nextcloud.example.com`).
-   - **Client ID** — the Client Identifier from step 1.
-   - **Client secret** — a credential of type secret (**Admin → Credentials**) holding the Secret from step 1.
-   - **Redirect URI** — optional; leave blank to derive it from the request (**Test connection** shows the URL to register), or paste the full URL you registered in Nextcloud.
-   - **Provider id** (Advanced) — the `<providerId>` in the callback URL, in the users' stored connections and in the embed plugin's `ihub_provider_id`. Empty: `nextcloud`. An upgrade keeps the id the provider had before (e.g. `nextcloud-main`).
-4. **Test connection**, then **Install**.
+2. Navigate to **Admin → Integrations**, open the **Catalog** tab and click **Install** on **Nextcloud** with the installation id you want (or open an installation an upgrade created; it keeps the id the provider had, e.g. `nextcloud-main`).
+3. The installation's **Settings** tab is the Nextcloud editor:
+   - **Name** — the label shown to end users (e.g. `Company Nextcloud`) and a description.
+   - **Register iHub with the provider** — the **Redirect URI to register** in step 1, with a **Copy** button (derived from your browser's address, the base path and the installation id, or the configured one), and **Redirect URI (optional)** to override the derived URL for an unusual proxy setup.
+   - **OAuth app** — **Nextcloud server URL** (base URL of the instance, no trailing slash, e.g. `https://nextcloud.example.com`), **Client ID** (the Client Identifier from step 1), **Client secret** (a credential of type secret, **Admin → Integrations → Credentials**, holding the Secret from step 1).
+   - **Connection and users** — whether it is enabled, how many users connected, and the **Connected users** dialog.
+4. **Test connection** (checks the unsaved values, the redirect URI and `<serverUrl>/status.php`, and counts the connected users), then **Install** (or **Save**).
 
 ### Option B: `integrations.json`
 
@@ -76,31 +74,33 @@ Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/ne
         "serverUrl": "https://nextcloud.example.com",
         "clientId": "<client-identifier-from-nextcloud>",
         "clientSecretRef": "integration-nextcloud-clientSecretRef",
-        "redirectUri": "https://ihub.example.com/api/integrations/nextcloud/nextcloud-main/callback",
-        "providerId": "nextcloud-main"
+        "redirectUri": "https://ihub.example.com/ihub/api/integrations/nextcloud/nextcloud/callback"
       },
-      "auth": { "mode": "oauth-user" },
-      "allowedGroups": []
+      "auth": { "mode": "oauth-user" }
     }
   ]
 }
 ```
 
-> **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider here.
+> **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
+
+> **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/nextcloud` for every Nextcloud installation, or `type:storage`). See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
+
+> **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed it to the provider's former id (e.g. `nextcloud-main`) and installed a second Nextcloud provider V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs, the users' connections and the embed plugin's `ihub_provider_id` stay valid.
 
 ---
 
 ## Step 3: User Sign-In Flow
 
-Once configured, end users see Nextcloud as an option in the cloud storage picker that appears when they upload a file inside a chat:
+Once configured, end users see each Nextcloud installation in the cloud file picker of the apps that bind it:
 
-1. The user opens an app that has uploads enabled.
-2. They click the upload icon and pick **Cloud Storage**.
-3. They select the Nextcloud provider.
+1. The user opens an app that binds the Nextcloud installation (or all storage providers).
+2. They open the **+** menu of the message box; the storage providers are listed there.
+3. They select the Nextcloud provider (by its label, when there are several).
 4. They click **Connect to Nextcloud** — they are redirected to the Nextcloud login page, sign in (and grant the OAuth scope), and are redirected back to iHub.
 5. iHub stores their encrypted access token + refresh token. From now on the user can browse their Nextcloud files directly from the picker.
 
-The token is per-user and per-provider — switching Nextcloud instances requires reconnecting.
+The token is per user and per installation — each Nextcloud server is connected on its own.
 
 ---
 
@@ -115,14 +115,14 @@ The token is per-user and per-provider — switching Nextcloud instances require
 
 - **PKCE not supported by Nextcloud OAuth**: iHub relies on the `state` parameter for CSRF protection, which matches what Nextcloud's OAuth 2.0 app supports. The `state` is a signed ticket (HMAC) that names the provider and the signed-in user who started the flow; the callback requires the same user, so a ticket from one browser cannot complete a flow in another. It expires after 15 minutes. No server-side session is kept.
 - **Path-traversal protection**: All `folderPath` / `filePath` parameters are validated to reject `..` segments and NUL bytes before being passed to WebDAV.
-- **Encrypted tokens at rest**: Access and refresh tokens are written to `contents/integrations/nextcloud/<userId>.json` via `TokenStorageService.encryptTokens`, which encrypts with AES-256-CBC (the same crypto used for Office 365 / Google Drive user tokens; AES-256-GCM is only used by `TokenStorageService.encryptString` for platform-secret encryption like `clientSecret` in `platform.json`).
+- **Encrypted tokens at rest**: Access and refresh tokens are written to `contents/integrations/nextcloud/<userId>__<installationId>.json` via `TokenStorageService.encryptTokens`, which encrypts with AES-256-CBC (the same crypto used for Office 365 / Google Drive user tokens; AES-256-GCM is only used by `TokenStorageService.encryptString` for platform-secret encryption like `clientSecret` in `platform.json`).
 - **Rate limiting**: The OAuth initiation endpoint is rate-limited to 10 requests per minute per IP to prevent abuse.
 
 ## Troubleshooting
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
-| `invalid_redirect_uri` from Nextcloud | The redirect URI registered in Nextcloud doesn't exactly match the one iHub is sending. | Re-register the OAuth client in Nextcloud with the exact URI shown in the iHub admin UI hint, including the provider ID segment. |
+| `invalid_redirect_uri` from Nextcloud | The redirect URI registered in Nextcloud doesn't exactly match the one iHub is sending. | Re-register the OAuth client in Nextcloud with the exact URI the installation's **Settings** tab shows, including the base path and the installation id. Without a configured **Redirect URI** iHub derives it from each request (scheme, host and base path from `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Prefix` of a trusted proxy); the `NEXTCLOUD_OAUTH_REDIRECT_URI` environment variable is no longer read. |
 | Back in iHub after consent, Nextcloud is still `Not Connected` and the URL has `?nextcloud_error=invalid_state` | The callback needs the iHub sign-in of the user who started the flow. It is refused when a different user, or nobody, is signed in in that browser (for example the sign-in cookie was blocked or the iHub session ended during consent), or when the ticket belongs to another provider. With several iHub instances it also appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Allow cookies for iHub Apps and make sure no proxy strips the iHub sign-in cookie. |
 | `?nextcloud_error=session_expired` | The sign-in ticket is older than 15 minutes: consent took too long. | Start again and approve within 15 minutes. |
 | `?nextcloud_error=access_denied`, `oauth_failed`, `missing_code` or `callback_failed` | The user declined, Nextcloud returned an error, the callback arrived without an authorization code, or exchanging the code for tokens failed (for example a wrong client secret or redirect URI). | Start again; for `callback_failed` check the server logs and the OAuth client registered in Nextcloud. |
@@ -195,7 +195,7 @@ See `nextcloud-app/README.md` for the full instructions.
 | iHub authentication | Existing iHub session | Embedded OAuth (auto-created PKCE client) |
 | Nextcloud authentication | OAuth-link via the picker | Same OAuth-link reused; first-time users link from the embed CTA |
 | Server-side code path | `/api/integrations/nextcloud/*` | **Same** `/api/integrations/nextcloud/*` |
-| New iHub config | `cloudStorage.providers[]` (existing) | `nextcloudEmbed` (this section) |
+| iHub config | a Nextcloud installation (Admin → Integrations) | `nextcloudEmbed` (this section) |
 
 ## Security considerations specific to the embed
 

@@ -23,26 +23,26 @@ jest.unstable_mockModule('../utils/httpConfig.js', () => ({ httpFetch }));
 const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.unstable_mockModule('../utils/logger.js', () => ({ default: logger }));
 
-// The providers are installations; `providerId` keeps the ids the tests use.
-const installation = (id, definition, providerId, values) => ({
+// The providers are installations; the installation id is the provider id.
+const installation = (id, definition, values) => ({
   id,
   definition,
   enabled: true,
-  values: { providerId, clientId: 'cid', clientSecretRef: 'sec', ...values },
+  values: { clientId: 'cid', clientSecretRef: 'sec', ...values },
   auth: { mode: 'oauth-user' }
 });
 const integrations = {
   installed: [
-    installation('googledrive', 'com.intrafind/google-drive', 'g1', {}),
-    installation('office365', 'com.intrafind/office365', 'o1', { tenantId: 'resolved-ten' }),
-    installation('nextcloud', 'com.intrafind/nextcloud', 'n1', {
+    installation('g1', 'com.intrafind/google-drive', {}),
+    installation('o1', 'com.intrafind/office365', { tenantId: 'resolved-ten' }),
+    installation('n1', 'com.intrafind/nextcloud', {
       serverUrl: 'https://nc.example.com/'
     })
   ]
 };
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
-    get: () => undefined,
+    get: name => (name === 'config/integrations.json' ? { data: integrations } : undefined),
     getPlatform: () => ({}),
     getIntegrations: () => ({ data: integrations })
   }

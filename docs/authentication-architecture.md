@@ -505,11 +505,21 @@ Groups are hierarchical with inheritance:
 ```
 
 Besides `apps`, `prompts` and `models`, a group may carry `workflows`,
-`skills` and `tools`. `tools` grants a tool directly over the MCP and A2A
-gateways without an app declaring it — see
+`skills`, `tools` and `integrations`. `tools` grants a tool directly over the
+MCP and A2A gateways without an app declaring it — see
 [MCP Integration](mcp-integration.md#who-sees-which-tool). It has no effect
 on chat, where an app's own `tools` list still decides what the model may
 call.
+
+`integrations` lists the installed integrations members may use: `*`,
+installation ids (`x500bund`), definition ids (`com.intrafind/ldap-directory`)
+and type keys (`type:people-directory`, `type:web-search`, `type:storage`).
+It is resolved with inheritance like `apps`, exposed as
+`req.user.permissions.integrations`, and checked on top of every app binding
+(`services/integrations/integrationAccess.js`). A delegated token (OAuth
+client acting for a user, personal API key) keeps its owner's list; a machine
+OAuth client gets `*`, bounded by its allowed apps. See
+[Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
 ### Inheritance Resolution
 
@@ -531,7 +541,7 @@ req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 ```
 
 This adds to `req.user`:
-- `permissions`: { apps, prompts, models, workflows, skills, tools }
+- `permissions`: { apps, prompts, models, workflows, skills, tools, integrations }
 - `isAdmin`: true/false
 - Resolved group permissions
 

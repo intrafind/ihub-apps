@@ -190,7 +190,7 @@ removes JWT key management entirely: iHub signs the iFinder token with the same
 RSA key it uses for its OIDC server, and iFinder validates it by fetching iHub's
 public key from `/.well-known/jwks.json`.
 
-**iHub side:** set `oauth.issuer` in `platform.json` (**Admin → Authentication → OAuth Server**), then install iFinder under **Admin → Integrations → Installed → iFinder** with **Sign with iHub's OIDC key pair** ticked. The installation in `contents/config/integrations.json`:
+**iHub side:** set `oauth.issuer` in `platform.json` (**Admin → Authentication → OAuth Server**), then install iFinder under **Admin → Integrations → iFinder** with **Sign with iHub's OIDC key pair** ticked. The installation in `contents/config/integrations.json`:
 
 ```json
 {
@@ -271,8 +271,7 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 
 ### 2. The iFinder Installation
 
-iFinder is a built-in installed integration. Open **Admin → Integrations →
-Installed**, pick **iFinder** in the catalog and **Install** (later **Edit**).
+iFinder is a built-in installed integration. Open **Admin → Integrations**, pick **iFinder** in the catalog and **Install** (later **Edit**).
 The private key itself is never stored inline: create a "Secret"-type
 credential under **Admin → Credentials** holding the PEM key, then pick it in
 the **Private key** field of the wizard; the installation stores a
@@ -358,7 +357,7 @@ export IASSISTANT_PROFILE_ID="iassistant-workspace"
 ### 2. The iAssistant Installation
 
 iAssistant runs on the iFinder connection and has no base URL of its own. Install it
-under **Admin → Integrations → Installed → iAssistant** after iFinder; the wizard's
+under **Admin → Integrations → iAssistant** after iFinder; the wizard's
 **iFinder installation** field names the `ifinder` installation it uses. In
 `contents/config/integrations.json`:
 
@@ -673,7 +672,7 @@ dev key distinct from production — there is no per-environment env var name;
 ## Testing and Validation
 
 > **Use the built-in diagnostics first.** The **Test** button of the iFinder and iAssistant
-> installations under **Admin → Integrations → Installed** (also in the install wizard, before
+> installations under **Admin → Integrations** (also in the install wizard, before
 > anything is saved) performs every check below in one run — DNS, TLS, JWT generation, JWKS
 > reachability and a real API request — and shows the decoded token claims, the URLs used and what
 > to check for each failure. See [Connection Diagnostics](#0-start-here-connection-diagnostics). The manual
@@ -747,7 +746,7 @@ Use a JWT decoder tool to verify token structure:
    - Test download functionality
 
 **Test iAssistant (Workspace) Integration:**
-1. Install iAssistant under **Admin → Integrations → Installed**
+1. Install iAssistant under **Admin → Integrations**
 2. Create a test app with the `iassistant-conversation` model that binds the installation (`"integrations": { "iassistant": { "actions": [] } }`)
 3. Test conversational question answering:
    - Ask questions about known documents
@@ -793,7 +792,7 @@ Use a JWT decoder tool to verify token structure:
 ### 0. Start Here: Connection Diagnostics
 
 Before digging through logs, run the built-in diagnostics: **Test** on the iFinder and on the
-iAssistant installation under **Admin → Integrations → Installed** (the install wizard has the same
+iAssistant installation under **Admin → Integrations** (the install wizard has the same
 button, for values that are not saved yet). Instead of a single pass/fail message it walks the whole
 connection path and reports what it observed at every step, so you can see exactly where it breaks:
 

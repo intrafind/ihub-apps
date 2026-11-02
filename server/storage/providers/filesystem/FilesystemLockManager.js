@@ -32,6 +32,13 @@
  * and carried on — two holders at once, with nothing logged on the side that
  * lost.
  *
+ * Every acquisition is also issued a **fencing token** (`LockLease.token`):
+ * a per-name counter in `<base>/locks/<digest>.fence`, incremented by the
+ * holder right after it won the lease and written with a rename, so it only
+ * grows and survives restarts. The lease file records the token it was issued
+ * with; {@link FilesystemLockManager#isTokenCurrent} compares both, which is
+ * how a holder that was taken over finds out before it publishes.
+ *
  * @module storage/providers/filesystem/FilesystemLockManager
  */
 import { promises as fs } from 'node:fs';
@@ -67,12 +74,27 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  * @returns {string} File name, digest plus `.lock`
  */
 function leaseFileName(name) {
-  const digest = crypto
+  return `${nameDigest(name)}.lock`;
+}
+
+/**
+ * Fencing counter file name for a lock name: the same digest as the lease,
+ * so the two sit side by side.
+ *
+ * @param {string} name - Lock name
+ * @returns {string} File name, digest plus `.fence`
+ */
+function fenceFileName(name) {
+  return `${nameDigest(name)}.fence`;
+}
+
+/** The hex digest a lock name is stored under. */
+function nameDigest(name) {
+  return crypto
     .createHash('sha256')
     .update(name, 'utf8')
     .digest('hex')
     .slice(0, NAME_DIGEST_LENGTH);
-  return `${digest}.lock`;
 }
 
 /**
@@ -195,8 +217,12 @@ export class FilesystemLockManager extends LockManager {
    * waits for a lease its own caller holds and therefore fails with
    * {@link LockTimeoutError} after `waitMs`.
    *
+   * `fn` receives the lease (`{ name, token, isCurrent }`): `token` is this
+   * acquisition's fencing token, `isCurrent()` whether it still holds the
+   * lease (see {@link FilesystemLockManager#isTokenCurrent}).
+   *
    * @param {string} name - Lock name; any non-empty string
-   * @param {() => Promise<T>|T} fn - The critical section
+   * @param {(lease: import('../../LockManager.js').LockLease) => Promise<T>|T} fn - The critical section
    * @param {Object} [opts]
    * @param {number} [opts.ttlMs=30000] - Lease lifetime; an older lease is taken over
    * @param {number} [opts.waitMs=5000] - How long to wait for a held lease
@@ -228,9 +254,26 @@ export class FilesystemLockManager extends LockManager {
     const owner = crypto.randomUUID();
     await this._acquire(lockPath, owner, ttl, wait, name);
     this._held.set(lockPath, { owner, name });
-    const stopRenewal = renew > 0 ? this._startRenewal(lockPath, owner, ttl, renew, name) : null;
+    let token;
     try {
-      return await fn();
+      token = await this._issueToken(name);
+      // The lease names its token, so `isTokenCurrent` can tell this lease
+      // from one a later holder created after taking the name over.
+      await this._touch(lockPath, owner, ttl, name, token);
+    } catch (error) {
+      this._held.delete(lockPath);
+      await this._release(lockPath, owner, name);
+      throw error;
+    }
+    const lease = Object.freeze({
+      name,
+      token,
+      isCurrent: () => this.isTokenCurrent(name, token)
+    });
+    const stopRenewal =
+      renew > 0 ? this._startRenewal(lockPath, owner, ttl, renew, name, token) : null;
+    try {
+      return await fn(lease);
     } finally {
       stopRenewal?.();
       this._held.delete(lockPath);
@@ -262,10 +305,11 @@ export class FilesystemLockManager extends LockManager {
    * @param {number} ttlMs - Lease lifetime rewritten on each refresh
    * @param {number} renewMs - Interval between refreshes
    * @param {string} name - Lock name, for the log message
+   * @param {number} token - The fencing token the lease carries
    * @returns {() => void} Stops the renewal; safe to call more than once
    * @private
    */
-  _startRenewal(lockPath, owner, ttlMs, renewMs, name) {
+  _startRenewal(lockPath, owner, ttlMs, renewMs, name, token) {
     let stopped = false;
     let inFlight = false;
     const stop = () => {
@@ -277,7 +321,7 @@ export class FilesystemLockManager extends LockManager {
       // a loaded disk that would spend the whole budget writing lease files.
       if (stopped || inFlight) return;
       inFlight = true;
-      void this._touch(lockPath, owner, ttlMs, name)
+      void this._touch(lockPath, owner, ttlMs, name, token)
         .then(kept => {
           // Once the lease is gone it is not coming back, and the section can
           // run for a long time yet: stop rather than re-open the file on
@@ -309,10 +353,11 @@ export class FilesystemLockManager extends LockManager {
    * @param {string} owner - This holder's token
    * @param {number} ttlMs - Lease lifetime to record
    * @param {string} name - Lock name, for the log message
+   * @param {number} [token] - The fencing token to record with the lease
    * @returns {Promise<boolean>} False once the lease is no longer ours
    * @private
    */
-  async _touch(lockPath, owner, ttlMs, name) {
+  async _touch(lockPath, owner, ttlMs, name, token) {
     let handle;
     try {
       handle = await fs.open(lockPath, 'r+');
@@ -351,7 +396,8 @@ export class FilesystemLockManager extends LockManager {
         owner,
         pid: process.pid,
         at: new Date().toISOString(),
-        ttlMs
+        ttlMs,
+        ...(token === undefined ? {} : { token })
       });
       await handle.write(payload, 0, 'utf8');
       await handle.truncate(Buffer.byteLength(payload, 'utf8'));
@@ -366,6 +412,90 @@ export class FilesystemLockManager extends LockManager {
     } finally {
       await handle.close().catch(() => {});
     }
+  }
+
+  /**
+   * Whether `token` still holds the lease named `name`: it is the newest
+   * token the fencing counter issued for the name, the lease file in place
+   * carries it, and that lease has not aged past its TTL. Any other answer —
+   * a released lease, a takeover, a counter that moved on, a lease nobody
+   * refreshed in time — is false.
+   *
+   * @param {string} name - Lock name
+   * @param {number} token - The token `fn` received
+   * @returns {Promise<boolean>}
+   */
+  async isTokenCurrent(name, token) {
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new InvalidKeyError(`Invalid lock name: ${String(name).slice(0, 64)}`);
+    }
+    if (!Number.isSafeInteger(token) || token <= 0) return false;
+    const issued = await this._readToken(name);
+    if (issued !== token) return false;
+    const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
+    const lease = await readJsonMarker(lockPath);
+    if (lease?.data?.token !== token) return false;
+    return !isExpiredLease(lease, DEFAULT_TTL_MS);
+  }
+
+  /**
+   * The last fencing token issued for a name: 0 when none was, null when
+   * the counter file cannot be read as one.
+   *
+   * @param {string} name - Lock name
+   * @returns {Promise<number|null>}
+   * @private
+   */
+  async _readToken(name) {
+    const fencePath = containedPath(this._baseDir, LOCKS_DIR, fenceFileName(name));
+    let text;
+    try {
+      text = await fs.readFile(fencePath, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return 0;
+      throw error;
+    }
+    try {
+      const token = JSON.parse(text)?.token;
+      return Number.isSafeInteger(token) && token >= 0 ? token : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Issue the next fencing token for a name. Called by the holder right after
+   * it won the lease, so no other acquisition of the name runs it at the same
+   * time; written to a scratch file and renamed into place, so a reader sees
+   * the old counter or the new one, never a torn one. A counter file that
+   * cannot be read (damaged by hand) continues from the clock in
+   * milliseconds, which is larger than any counter a name reaches, so the
+   * token still grows.
+   *
+   * @param {string} name - Lock name
+   * @returns {Promise<number>} The new token
+   * @private
+   */
+  async _issueToken(name) {
+    const fencePath = containedPath(this._baseDir, LOCKS_DIR, fenceFileName(name));
+    let previous = await this._readToken(name);
+    if (previous === null) {
+      logger.warn('Storage lock fencing counter is unreadable; continuing from the clock', {
+        component: COMPONENT,
+        name: String(name).slice(0, 64)
+      });
+      previous = Date.now();
+    }
+    const token = previous + 1;
+    const scratch = `${fencePath}.${process.pid}-${crypto.randomUUID()}`;
+    await fs.mkdir(this.lockDir, { recursive: true });
+    try {
+      await fs.writeFile(scratch, JSON.stringify({ token }), 'utf8');
+      await fs.rename(scratch, fencePath);
+    } finally {
+      await removeIfExists(scratch).catch(() => {});
+    }
+    return token;
   }
 
   /**

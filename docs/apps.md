@@ -485,8 +485,8 @@ These optional fields work for all app types:
 | `order`                | Number  | -       | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder                                                                                                                                                                                                                                             |
 | `category`             | String  | -       | App category for grouping                                                                                                                                                                                                                                                                                                                                             |
 | `requiredFeatures`     | Array   | -       | Feature ids (Admin → Features) the app needs, e.g. `["skills"]`. While one of them is off, users do not get the app at all, as if it were disabled; Admin → Apps still lists it, marked as hidden. Only ids of existing features are accepted; an unknown id counts as off                                                                                            |
-| `requiredIntegrations` | Array   | -       | Retired. The last built-in requirement, `peopleDirectories`, became installations of the LDAP people directory in migration V198; bind the installation or its definition under `integrations` instead. The schema accepts only an empty list |
-| `integrations`         | Object  | -       | The installed integrations (Admin → Integrations → Installed) the app offers, the actions it offers of each, and the chat settings for the integration's scope. The shipped `ifinder-search` and `iassistant` apps use it. See [Integrations](#integrations-binding-an-installed-integration)                                                                         |
+| `requiredIntegrations` | Array   | -       | Retired. The last built-in requirement, `peopleDirectories`, became installations of People directory (LDAP) in migration V198; bind the installation or its definition under `integrations` instead. The schema accepts only an empty list |
+| `integrations`         | Object  | -       | The installed integrations (Admin → Integrations) the app offers, the actions it offers of each, and the chat settings for the integration's scope. The shipped `ifinder-search` and `iassistant` apps use it. See [Integrations](#integrations-binding-an-installed-integration)                                                                         |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
@@ -1068,9 +1068,6 @@ The `upload` property controls file and media upload capabilities:
     "enabled": true,
     "maxFileSizeMB": 20,
     "supportedFormats": ["application/pdf", "text/plain", "text/csv"]
-  },
-  "cloudStorageUpload": {
-    "enabled": true
   }
 }
 ```
@@ -1098,7 +1095,37 @@ Every upload type has its own size limit, and a file is held to the limit of its
 | `upload.fileUpload.trackedChanges`    | String  | `"accepted"`                                                      | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view                                                                                                                                                                                            |
 | `upload.fileUpload.comments`          | String  | `"ignore"`                                                        | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to                                                                                                                                                                                                                                   |
 | `upload.fileUpload.speakerNotes`      | String  | `"ignore"`                                                        | `"include"` sends the speaker notes of PowerPoint and OpenDocument slides as `[Notes]` after the slide text                                                                                                                                                                                                            |
-| `upload.cloudStorageUpload.enabled`   | Boolean | `false`                                                           | Enable the cloud storage file picker (requires cloud storage configured in platform.json)                                                                                                                                                                                                                              |
+
+##### Files from storage providers
+
+The cloud file picker (Office 365, Google Drive, Nextcloud, in the **+** menu of the message box) is
+not an upload switch: an app offers storage providers by **binding** them in `integrations`, like
+any installed integration (**Admin → Apps → Edit → Integrations → Storage providers**):
+
+```json
+"integrations": {
+  "type:storage": { "required": false }
+}
+```
+
+| Key                         | Binds                                                                     |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `type:storage`              | every storage provider installation, the ones installed later included    |
+| `com.intrafind/nextcloud`   | every installation of one provider (also `com.intrafind/office365`, `com.intrafind/google-drive`) |
+| `nextcloud-branch`          | one installation, by its id                                               |
+
+- The picker offers the bound providers that are enabled and that the user's groups grant
+  (`permissions.integrations`); with several installations of one provider each one is listed under
+  its label.
+- `required: false` keeps the app available while no bound provider is enabled (the picker is then
+  simply not offered); without it the app is hidden like for any required integration. The editor
+  creates storage bindings as optional.
+- Picked files are processed like uploads and follow `upload.enabled` and the `fileUpload`
+  extraction options (`trackedChanges`, `comments`, `speakerNotes`); `upload.enabled: false` turns
+  the picker off too.
+- `upload.cloudStorageUpload` is retired: migration V206 turned every
+  `upload.cloudStorageUpload.enabled: true` into `"type:storage": { "required": false }`, and the
+  app schema refuses the key.
 
 #### Skill Settings
 
@@ -1166,7 +1193,7 @@ Requirements and behavior:
 
 #### iAssistant Configuration
 
-The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the settings of the `iassistant` installation (**Admin → Integrations → Installed → iAssistant**, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The app also binds that installation under `integrations` (`"iassistant": { "actions": [] }`, see [Integrations](#integrations-binding-an-installed-integration)); the shipped `iassistant` app shows both.
+The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the settings of the `iassistant` installation (**Admin → Integrations → iAssistant**, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The app also binds that installation under `integrations` (`"iassistant": { "actions": [] }`, see [Integrations](#integrations-binding-an-installed-integration)); the shipped `iassistant` app shows both.
 
 ```json
 "iassistant": {
@@ -1301,7 +1328,7 @@ is no longer accepted — see [Models](models.md#model-thinking-configuration).
 
 ### Integrations: binding an installed integration
 
-An app offers an [installed integration](integrations.md) (**Admin → Integrations → Installed**) by binding it under `integrations`, keyed by the installation id. **Admin → Apps → Edit → Installed integrations** writes this object; in JSON:
+An app offers an [installed integration](integrations.md) (**Admin → Integrations**) by binding it under `integrations`, keyed by the installation id. **Admin → Apps → Edit → Installed integrations** writes this object; in JSON:
 
 ```json
 "integrations": {
@@ -1316,17 +1343,19 @@ An app offers an [installed integration](integrations.md) (**Admin → Integrati
 | `required`                                                             | Boolean | `true`                            | Whether the app is hidden while the installation is disabled or missing. `false`: the app stays available without the installation's actions, scopes and sources |
 | `scopePicker`, `defaultScope`, `pinnedScope`, `allowAllSearchProfiles` |         |                                   | The scope settings, see [Integration scopes](#integration-scopes-where-to-search-and-whom-to-ask)                                                                |
 
-The binding is also the requirement: the app is offered to users only while every installation it binds with `required` on (the default) exists and is enabled. Otherwise users do not get the app, as with a `requiredFeatures` entry that is off, and **Admin → Apps** names the missing installation. With `"required": false` the app stays available and simply lacks that integration while it is off. Web search (`websearch`) is optional by default and hides the app only with `websearch.required: true`, see [Web Search](#web-search).
+The binding is also the requirement: the app is offered to users only while every installation it binds with `required` on (the default) exists and is enabled. Otherwise users do not get the app, as with a `requiredFeatures` entry that is off, and **Admin → Apps** names the missing installation. With `"required": false` the app stays available and simply lacks that integration while it is off. Web search (`websearch`) is optional by default and hides the app only with `websearch.required: true` while its engine is not available, see [Web Search Configuration](#web-search-configuration).
 
 **iFinder.** The seven iFinder tools (`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_discover`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`) are the actions of the built-in `ifinder` installation and are not listed in `tools`. The action names are the tool ids without the `iFinder_` prefix: `"ifinder": { "actions": ["search", "getContent"] }` offers two of them, `"ifinder": {}` all seven, `"ifinder": { "actions": [] }` none (the chat still gets the search profile picker). The tools keep their ids in the chat and in group tool grants (`permissions.tools`).
 
 **iAssistant.** An app on the iAssistant model (`preferredModel: "iassistant-conversation"`) binds `"iassistant": { "actions": [] }`: the installation has no tools, the binding ties the app to it and carries the scope settings. The `iassistant` object of the app holds the per-app overrides, see [iAssistant Configuration](#iassistant-configuration).
 
-**MCP servers.** An [MCP server](mcp-integration.md) is an installation too (**Admin → Integrations → Installed**), and its tools are its actions: `"drawio": {}` offers every tool the installation has enabled, `"drawio": { "actions": ["create_diagram"] }` one of them. The tools keep their ids in the chat and in group tool grants (`drawio__create_diagram`). The shipped **draw.io Diagrams** and **Excalidraw Sketches** apps bind the `drawio` and `excalidraw` installations, which ship disabled; enable the installation to offer the app.
+**MCP servers.** An [MCP server](mcp-integration.md) is an installation too (**Admin → Integrations**), and its tools are its actions: `"drawio": {}` offers every tool the installation has enabled, `"drawio": { "actions": ["create_diagram"] }` one of them. The tools keep their ids in the chat and in group tool grants (`drawio__create_diagram`). The shipped **draw.io Diagrams** and **Excalidraw Sketches** apps bind the `drawio` and `excalidraw` installations, which ship disabled; enable the installation to offer the app.
 
-**Every installation of a definition.** A key may be a definition id, with its one `/`: `"integrations": { "com.intrafind/ldap-directory": {} }` binds every installation of the LDAP people directory definition, including directories installed later, with the same `actions` and `required` for each; an installation's own key on top of it wins for that installation. The app is offered while at least one installation of the definition is enabled. The app editor shows such a row as **All … installations** for definitions with several installations (and always for the people directories). An action the definition marks `bindExplicitly` (the directories' LDAP browser) is bound only when `actions` names it: `"com.intrafind/ldap-directory": { "actions": ["browse_search", "browse_read", "browse_children"] }` is the shipped LDAP browser app.
+**Every installation of a definition.** A key may be a definition id, with its one `/`: `"integrations": { "com.intrafind/ldap-directory": {} }` binds every installation of the People directory (LDAP) definition, including directories installed later, with the same `actions` and `required` for each; an installation's own key on top of it wins for that installation. The app is offered while at least one installation of the definition is enabled. The app editor shows such a row as **All … installations** for definitions with several installations (and always for the people directories). A type key binds every installation of every definition of that type: `"type:people-directory": {}` is the shipped People search app (every LDAP directory and the Entra ID directory), and `"com.intrafind/ldap-browser": {}` the shipped LDAP browser app (every LDAP browser, all three browse actions). An action a definition marks `bindExplicitly` is bound only when `actions` names it.
 
-**Remote A2A agents.** A [remote A2A agent](a2a-agents.md) is an installation of the "A2A agent" definition (**Admin → Integrations → Installed**), and the skills of its Agent Card are its actions: `"langdock": {}` offers every skill the installation has enabled, `"langdock": { "actions": ["<skill id>"] }` only the named ones (skill ids as the card names them). The tools keep their ids (`a2a__langdock__<skill>`) in the chat and in group tool grants.
+**Storage providers.** Office 365, Google Drive and Nextcloud installations bring no actions: binding one (by installation id, by its definition id, or all of them with `"type:storage"`) offers it in the chat's cloud file picker. See [Files from storage providers](#files-from-storage-providers).
+
+**Remote A2A agents.** A [remote A2A agent](a2a-agents.md) is an installation of the "A2A agent" definition (**Admin → Integrations**), and the skills of its Agent Card are its actions: `"langdock": {}` offers every skill the installation has enabled, `"langdock": { "actions": ["<skill id>"] }` only the named ones (skill ids as the card names them). The tools keep their ids (`a2a__langdock__<skill>`) in the chat and in group tool grants.
 
 Earlier versions required iFinder with `requiredIntegrations: ["ifinder"]` and listed the `iFinder_*` tools in `tools`; migration V192 rewrites both into the binding. People directories followed in migration V198: `requiredIntegrations: ["peopleDirectories"]` and `tools: ["peopleDirectories"]` became the definition binding `"integrations": { "com.intrafind/ldap-directory": {} }` (every directory installation, including later ones), a directory id in `tools` became a binding of that installation, and `requiredIntegrations` knows no id any more (the schema rejects a non-empty list). Likewise, earlier versions selected an MCP server by listing its id (`"tools": ["drawio"]`) or single tools (`"drawio__create_diagram"`) in `tools`; migration V193 rewrites those into the binding, and such entries in `tools` select nothing now. Remote A2A agents, once listed in `tools` by agent id (`"langdock"`, `"a2a__langdock"`) or tool id and picked in the app editor's **Remote A2A agents** list, are bound the same way since migration V194 (a tool-id reference becomes a binding of the whole agent); that picker is gone.
 
@@ -1632,7 +1661,8 @@ Web search is configured per-app using the `websearch` object. This replaces the
 | Property           | Type              | Default  | Description                                                                                                                                                                                                                                          |
 | ------------------ | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`          | Boolean           | `false`  | Enable web search for this app                                                                                                                                                                                                                       |
-| `provider`         | String            | `"auto"` | Search provider: `"auto"` or `"brave"`                                                                                                                                                                                                               |
+| `provider`         | String            | `"auto"` | Search engine for models without native search: `"auto"` (the first engine the user may use: Brave, Staan, Qwant, then any other) or an engine installation id (`"brave"`, `"staan"`, `"qwant"`, a third-party engine's id). A named engine that is not available means no search on those models |
+| `required`         | Boolean           | `false`  | Hide the app while its engine is not available (`auto`: no engine installed and enabled; a named engine: that one missing or disabled). Off, the app stays available and searches natively where the model can                                     |
 | `useNativeSearch`  | Boolean           | `true`   | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when the model supports it                                                                                                               |
 | `maxResults`       | Number            | `5`      | Maximum number of search results (1-20)                                                                                                                                                                                                              |
 | `extractContent`   | Boolean           | `true`   | Extract full page content from search results                                                                                                                                                                                                        |
@@ -1641,7 +1671,7 @@ Web search is configured per-app using the `websearch` object. This replaces the
 | `maxSearches`      | Number            | `5`      | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50)                                                                                                                                                  |
 | `researchGuidance` | Boolean or String | `true`   | Research instruction added to the system prompt when web search is on (several searches, check sources, combine). `false` turns it off; a string replaces the built-in text. See [Web Tools → Multi-Step Research](web-tools.md#multi-step-research) |
 
-The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
+The server automatically selects the best search at runtime: native Google/OpenAI/Anthropic search when the model supports it (no engine needed), or the app's engine — an installed integration of type `web-search` — for other models.
 
 For full details including provider setup and API keys, see **[Web Tools](web-tools.md)**.
 

@@ -200,13 +200,6 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: true
         },
         {
-          key: 'installed-integrations',
-          label: t('admin.nav.installedIntegrations', 'Installed integrations'),
-          href: '/admin/integrations/installed',
-          icon: LinkIcon,
-          visible: true
-        },
-        {
           key: 'mcp-gateway',
           label: t('admin.nav.mcpGateway', 'MCP gateway'),
           href: '/admin/mcp/gateway',

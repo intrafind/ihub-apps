@@ -19,6 +19,11 @@ export const groupConfigSchema = z
         // Direct tool access over the MCP/A2A gateways. Empty by default:
         // a chat app's own `tools` list is what grants tool use in chat.
         tools: z.array(z.string()).prefault([]),
+        // Installed integrations members may use (#3093): `*`, installation
+        // ids (`x500bund`), definition ids (`com.intrafind/ldap-directory`)
+        // and type keys (`type:people-directory`). Checked on top of every
+        // app binding — see `services/integrations/integrationAccess.js`.
+        integrations: z.array(z.string()).prefault([]),
         adminAccess: z.boolean().prefault(false),
         // Content administration (apps, prompts, sources) without full admin
         // rights — see `middleware/contentAdminAuth.js`. Every permission

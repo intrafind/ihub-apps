@@ -44,6 +44,24 @@ import { NotSupportedError } from './errors.js';
  */
 
 /**
+ * What {@link LockManager#withLock} hands its critical section: the lease it
+ * runs under. A section that has no use for it simply ignores the argument.
+ *
+ * @typedef {Object} LockLease
+ * @property {string} name - The lock name.
+ * @property {number} token - The **fencing token** of this acquisition: a
+ *   positive integer per lock name that only ever grows. Every acquisition of
+ *   a name gets a larger token than every acquisition before it, also across
+ *   restarts and across the workers sharing the provider, and a takeover of
+ *   an abandoned lease gets a new one. A resource the section writes can
+ *   remember the token and refuse a write carrying an older one.
+ * @property {() => Promise<boolean>} isCurrent - Whether this acquisition
+ *   still holds the lease: the token is still the newest one issued for the
+ *   name and the lease has neither been taken over nor aged out. Shorthand
+ *   for `isTokenCurrent(name, token)`.
+ */
+
+/**
  * Abstract locking facet. Extend it; do not instantiate it.
  */
 export class LockManager {
@@ -72,10 +90,19 @@ export class LockManager {
    * - **Reentrancy is not supported.** A nested `withLock` on the same name
    *   from inside `fn` deadlocks until `waitMs` expires and then throws
    *   {@link LockTimeoutError}; callers must not nest.
+   * - **Fencing.** `fn` is called with a {@link LockLease} whose `token` is
+   *   larger than the token of every earlier acquisition of the same name
+   *   (per name, never reused, kept across restarts). Because the overlap
+   *   above cannot be closed by the lease alone, a section whose writes must
+   *   never come from a holder that lost its lease checks
+   *   `lease.isCurrent()` (or {@link LockManager#isTokenCurrent}) right before
+   *   it publishes them, and gives up when it answers false. Existing callers
+   *   that take no argument are unaffected.
    *
    * @param {string} name - Lease name. Any string; providers derive a safe
    *   storage location from it (e.g. a hash), so it need not be path-safe.
-   * @param {() => Promise<T>|T} fn - The critical section.
+   * @param {(lease: LockLease) => Promise<T>|T} fn - The critical section;
+   *   it may ignore the lease.
    * @param {LockOptions} [opts] - Lease lifetime and wait budget.
    * @returns {Promise<T>} Whatever `fn` returned.
    * @throws {LockTimeoutError} When the lock could not be acquired in `waitMs`.
@@ -83,5 +110,27 @@ export class LockManager {
    */
   async withLock(_name, _fn, _opts = {}) {
     throw new NotSupportedError('LockManager.withLock is not implemented');
+  }
+
+  /**
+   * Whether `token` is still the current holder of the lease named `name`.
+   *
+   * True only while all of this holds: `token` is the newest token issued
+   * for the name, the lease that carries it is still in place (not released,
+   * not taken over), and it has not aged past its TTL. A holder that was
+   * wedged long enough to be taken over therefore learns it here, before it
+   * publishes anything, instead of overwriting the new holder's work.
+   *
+   * The answer is a snapshot: a takeover can still land right after a true.
+   * It narrows the stale-writer window to the time between this check and
+   * the write, the way a fencing token checked by the resource itself would
+   * close it entirely.
+   *
+   * @param {string} name - Lease name.
+   * @param {number} token - The token `fn` received.
+   * @returns {Promise<boolean>}
+   */
+  async isTokenCurrent(_name, _token) {
+    throw new NotSupportedError('LockManager.isTokenCurrent is not implemented');
   }
 }

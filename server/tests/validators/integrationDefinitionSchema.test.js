@@ -301,7 +301,16 @@ describe('integrationsConfigSchema', () => {
     expect(result.data.enabled).toBe(true);
     expect(result.data.auth).toEqual({ mode: 'none' });
     expect(result.data.actions.enabled).toEqual(['*']);
-    expect(result.data.allowedGroups).toEqual([]);
+  });
+
+  it('keeps no allowedGroups: the groups decide who may use an installation (#3093)', () => {
+    const result = validateInstalledIntegration({
+      id: 'ckan-demo',
+      definition: 'org.ckan/open-data-portal',
+      allowedGroups: ['admins']
+    });
+    expect(result.success).toBe(true);
+    expect(Object.hasOwn(result.data, 'allowedGroups')).toBe(false);
   });
 
   it('rejects duplicate instance ids and unsafe ids', () => {

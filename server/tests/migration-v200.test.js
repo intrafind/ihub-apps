@@ -13,6 +13,7 @@ import {
   chooseProviders
 } from '../migrations/V200__cloud_storage_installed_integrations.js';
 import { providerFromInstance } from '../services/integrations/cloudStorageConfig.js';
+import { renameToProviderIds } from '../migrations/V206__storage_provider_installations.js';
 
 function makeCtx(files) {
   const logs = [];
@@ -98,11 +99,15 @@ describe('V200 cloud storage → installed integrations', () => {
     assert.equal(instanceFrom({ id: 'x', type: 'dropbox' }), null);
   });
 
-  it('reads back as the provider the services expect', () => {
-    const provider = providerFromInstance({
-      ...instanceFrom(NEXTCLOUD),
-      values: { ...instanceFrom(NEXTCLOUD).values, clientSecretRef: 'ref' }
-    });
+  it('reads back, once V206 renamed it to its provider id, as the provider the services expect', () => {
+    const installed = [
+      {
+        ...instanceFrom(NEXTCLOUD),
+        values: { ...instanceFrom(NEXTCLOUD).values, clientSecretRef: 'ref' }
+      }
+    ];
+    renameToProviderIds(installed, { log() {}, warn() {} });
+    const provider = providerFromInstance(installed[0]);
     assert.equal(provider.id, 'nextcloud-main');
     assert.equal(provider.type, 'nextcloud');
     assert.equal(provider.serverUrl, 'https://nextcloud.example.com');

@@ -62,3 +62,49 @@ export function buildActionsPolicy({ knownActions, checkedActions, stored = null
     overrides: kept
   };
 }
+
+/**
+ * The actions an editor offers and which of them start checked.
+ *
+ * - Static actions (OpenAPI, native): the definition's; a saved policy
+ *   decides which are on (`enabled` with `*` means "the default-on ones",
+ *   `disabled` switches some off), a new installation starts with the
+ *   default-on ones.
+ * - Dynamic actions (MCP, A2A): what the system listed when the installation
+ *   was read (`liveActions`), each with its current `enabled` state.
+ *
+ * @param {object} params
+ * @param {{ dynamicActions?: boolean, actions?: Array<{ name: string, enabledByDefault?: boolean }> }} params.definition
+ * @param {{ actions?: { enabled?: string[], disabled?: string[] } }|null} [params.instance] - the saved installation, null for a new one
+ * @param {Array<{ name: string, enabled?: boolean }>} [params.liveActions] - the actions the system lists now
+ * @returns {{ knownActions: object[], checked: Set<string> }}
+ */
+export function initialCheckedActions({ definition, instance = null, liveActions = [] }) {
+  const knownActions = definition?.dynamicActions ? liveActions || [] : definition?.actions || [];
+  const defaultOn = new Set(
+    knownActions.filter(a => a.enabledByDefault !== false).map(a => a.name)
+  );
+  if (definition?.dynamicActions && instance) {
+    return {
+      knownActions,
+      checked: new Set(knownActions.filter(a => a.enabled !== false).map(a => a.name))
+    };
+  }
+  if (instance?.actions) {
+    const enabled = instance.actions.enabled || ['*'];
+    const disabled = new Set(instance.actions.disabled || []);
+    return {
+      knownActions,
+      checked: new Set(
+        knownActions
+          .map(a => a.name)
+          .filter(
+            name =>
+              !disabled.has(name) &&
+              (enabled.includes(name) || (enabled.includes('*') && defaultOn.has(name)))
+          )
+      )
+    };
+  }
+  return { knownActions, checked: defaultOn };
+}

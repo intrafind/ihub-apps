@@ -18,19 +18,21 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
  */
 
 const runTool = jest.fn(async () => ({ ok: true }));
-const loadConfiguredTools = jest.fn();
+const loadLocalTools = jest.fn();
 
 // Provide every named export toolLoader.js has — ESM link-checks all of them
 // even though only a couple are used on the tools-only code path.
 jest.unstable_mockModule('../toolLoader.js', () => ({
-  loadConfiguredTools,
+  loadConfiguredTools: jest.fn(async () => []),
+  loadLocalTools,
   runTool,
   loadTools: jest.fn(async () => []),
   discoverMcpTools: jest.fn(async () => []),
   resolveNativeWebSearchProvider: jest.fn(() => null),
   resolveAppNativeWebSearch: jest.fn(() => null),
   getToolsForApp: jest.fn(async () => []),
-  localizeTools: jest.fn(tools => tools)
+  localizeTools: jest.fn(tools => tools),
+  READ_URL_TOOL_ID: 'read_url'
 }));
 
 jest.unstable_mockModule('../services/mcp/permissions.js', () => ({
@@ -58,7 +60,7 @@ const iFinderSearchTool = {
 };
 
 async function connectGateway(user) {
-  loadConfiguredTools.mockResolvedValue([iFinderSearchTool]);
+  loadLocalTools.mockResolvedValue([iFinderSearchTool]);
   const platform = {
     defaultLanguage: 'en',
     mcpServer: { expose: { tools: true, apps: false, workflows: false, resources: false } }
@@ -73,7 +75,7 @@ async function connectGateway(user) {
 describe('MCP gateway native tool calls carry user context', () => {
   beforeEach(() => {
     runTool.mockClear();
-    loadConfiguredTools.mockReset();
+    loadLocalTools.mockReset();
   });
 
   const user = {

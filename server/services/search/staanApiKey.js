@@ -21,7 +21,7 @@ import { resolveStaanApiKey } from './websearchConfig.js';
 
 /**
  * Resolve the Staan Search API key, in order:
- * 1. the credential the `websearch` installation references
+ * 1. the credential the `staan` installation references (`apiKeyRef`)
  * 2. the `STAAN_API_KEY` environment variable
  *
  * @returns {string|undefined} The key, or undefined when none is configured

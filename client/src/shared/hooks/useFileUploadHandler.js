@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useCallback, useState } from 'react';
+import { usePlatformConfig } from '../contexts/PlatformConfigContext';
+import { storageProvidersBoundBy } from '../../../../shared/storageBindings.js';
 
 /**
  * Custom hook for handling file uploads in chat applications.
@@ -11,7 +13,10 @@ import { useCallback, useState } from 'react';
  * @returns {boolean} returns.showUploader - Whether uploader UI is visible
  * @returns {Function} returns.handleFileSelect - Handle file selection (fileData) => void
  * @returns {Function} returns.toggleUploader - Toggle uploader visibility () => void
- * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, modelObject) => Object
+ * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, modelObject) => Object;
+ *   its `cloudStorage` is `{ enabled, providers }`: the storage providers the app binds
+ *   (`app.integrations`, see `shared/storageBindings.js`) among those the user's groups grant
+ *   (`/api/auth/status` → `cloudStorage.providers`)
  * @returns {Function} returns.clearSelectedFile - Clear the selected file () => void
  * @returns {Function} returns.hideUploader - Hide the uploader UI () => void
  * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
@@ -22,6 +27,10 @@ import { useCallback, useState } from 'react';
  *   (id, busy) => void; `id` tells the uploaders sharing this handler apart
  */
 export function useFileUploadHandler() {
+  const { platformConfig } = usePlatformConfig();
+  // The storage providers the user's groups grant (no secrets), for the
+  // cloud file picker; an app narrows them to the ones it binds.
+  const grantedStorageProviders = platformConfig?.cloudStorage?.providers;
   const [selectedFile, setSelectedFile] = useState(null);
   const [showUploader, setShowUploader] = useState(false);
   // The ids of the uploaders processing a file right now. A page can mount more
@@ -63,7 +72,6 @@ export function useFileUploadHandler() {
     const audioConfig = uploadConfig?.audioUpload || {};
     const videoConfig = uploadConfig?.videoUpload || {};
     const fileConfig = uploadConfig?.fileUpload || {};
-    const cloudStorageConfig = uploadConfig?.cloudStorageUpload || {};
 
     // A transcription model selected in the chat takes audio and video only —
     // they are its whole input — so it offers them in every app that does not
@@ -81,12 +89,15 @@ export function useFileUploadHandler() {
         fileConfig?.enabled === true ||
         transcriptionUpload);
 
-    // Cloud storage is offered through the actions menu and can be enabled
-    // independently from local file upload (issue #1426).
-    const cloudStorageUploadEnabled =
-      uploadConfig?.enabled !== false && cloudStorageConfig?.enabled === true;
+    // Cloud storage is offered through the actions menu, independently from
+    // local file upload (issue #1426): the enabled storage providers the app
+    // binds (`app.integrations`: an installation, a provider's definition or
+    // `type:storage`) among those the user's groups grant.
+    const storageProviders =
+      uploadConfig?.enabled !== false ? storageProvidersBoundBy(app, grantedStorageProviders) : [];
+    const cloudStorage = { enabled: storageProviders.length > 0, providers: storageProviders };
 
-    if (!localUploadEnabled && !cloudStorageUploadEnabled) {
+    if (!localUploadEnabled && !cloudStorage.enabled) {
       return { enabled: false, localUploadEnabled: false };
     }
 
@@ -96,7 +107,7 @@ export function useFileUploadHandler() {
       return {
         enabled: true,
         localUploadEnabled: false,
-        cloudStorageUpload: { ...cloudStorageConfig, enabled: true },
+        cloudStorage,
         // Cloud picks are extracted like local uploads, so they follow the app's Word review
         // options too (see extractionOptionsOf)
         fileUpload: {
@@ -247,8 +258,8 @@ export function useFileUploadHandler() {
             'application/pdf'
           ]
         : [],
-      // Cloud storage upload settings
-      cloudStorageUpload: { ...cloudStorageConfig, enabled: cloudStorageUploadEnabled }
+      // The storage providers the cloud file picker offers
+      cloudStorage
     };
   };
 

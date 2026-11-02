@@ -688,12 +688,12 @@ class RequestBuilder {
         await getToolsForApp(app, language, context),
         integrationScopes
       );
+      // Native search is the app's own: it needs no engine installation.
       const nativeWebSearch = resolveAppNativeWebSearch(
         app,
         model.provider,
         websearchEnabled,
-        model,
-        user
+        model
       );
 
       // A web-search-enabled app's system prompt typically instructs the model

@@ -270,6 +270,11 @@ describe('installed instances', () => {
       request(app).get('/api/admin/integrations/installed/ckan-demo')
     ).expect(200);
     expect(detail.body.values).toEqual({ baseUrl: 'https://portal.example', maxRows: 5 });
+    // `label` is the requested language; the stored translations travel along
+    // so an editor can change one language and keep the others.
+    expect(detail.body.instance.label).toBe('Demo');
+    expect(detail.body.instance.labelLocalized).toEqual({ en: 'Demo' });
+    expect(list.body.items[0].labelLocalized).toEqual({ en: 'Demo' });
     const actions = Object.fromEntries(detail.body.actions.map(a => [a.name, a]));
     expect(actions.search.available).toBe(true);
     expect(actions.search.parameters.properties.rows.maximum).toBe(5);
@@ -339,6 +344,43 @@ describe('installed instances', () => {
         .send({ ...payload, id: 'z', values: { baseUrl: 'https://x.org', apiToken: 'leak' } })
     ).expect(400);
     expect(sensitive.body.details[0].key).toBe('apiToken');
+  });
+
+  it('refuses allowedGroups on install, update and test, naming the group page (#3093)', async () => {
+    const install = await admin(
+      request(app)
+        .post('/api/admin/integrations/installed')
+        .send({ ...payload, allowedGroups: ['admins'] })
+    ).expect(400);
+    expect(install.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+    expect(install.body.error).toMatch(/Admin → Groups/);
+    expect(install.body.error).toMatch(/permissions\.integrations/);
+    expect(state.integrations.installed).toEqual([]);
+
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    // Even an empty list: the field is gone, not merely ignored.
+    const update = await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo')
+        .send({ ...payload, allowedGroups: [] })
+    ).expect(400);
+    expect(update.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+    expect(state.integrations.installed[0]).not.toHaveProperty('allowedGroups');
+
+    const draft = await admin(
+      request(app)
+        .post(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}/_test`)
+        .send({ ...payload, allowedGroups: ['admins'] })
+    ).expect(400);
+    expect(draft.body.code).toBe('ALLOWED_GROUPS_REMOVED');
+
+    // The admin API no longer reports groups on an installation.
+    const list = await admin(request(app).get('/api/admin/integrations/installed')).expect(200);
+    expect(list.body.items[0]).not.toHaveProperty('allowedGroups');
+    const detail = await admin(
+      request(app).get('/api/admin/integrations/installed/ckan-demo')
+    ).expect(200);
+    expect(detail.body.instance).not.toHaveProperty('allowedGroups');
   });
 
   it('stores the service-account secret in the credential store, never in integrations.json', async () => {
