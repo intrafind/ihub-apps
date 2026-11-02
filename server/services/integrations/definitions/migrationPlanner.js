@@ -61,12 +61,22 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
+/**
+ * Order two strings by UTF-16 code units, the order `Array#sort` uses without
+ * a compare function: deterministic and independent of the server's locale
+ * (lock order across workers, canonical key order).
+ */
+export function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 /** Canonical JSON (sorted keys) for comparing two stored values or blocks. */
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.keys(value)
-      .sort()
+      .sort(compareCodeUnits)
       .filter(key => value[key] !== undefined)
       .map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
       .join(',')}}`;
