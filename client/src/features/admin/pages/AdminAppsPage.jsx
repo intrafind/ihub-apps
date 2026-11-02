@@ -48,9 +48,11 @@ function AppNameCell({ app, currentLanguage }) {
   );
 }
 
+/** The key of "any web search engine" in the integration status (`type:<type>`). */
+const WEB_SEARCH_TYPE_KEY = 'type:web-search';
+
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
-  websearch: 'Web search integration',
   jira: 'Jira integration',
   ifinder: 'iFinder integration',
   iassistant: 'iAssistant integration',
@@ -92,13 +94,21 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
   // iAssistant runs on the iFinder connection; the server hides the app while
   // that installation is off (missingAppIntegrations), so say so here too.
   const connection = bound.includes('iassistant') ? ['ifinder'] : [];
-  // Web search hides the app only when the app says it is required.
-  const websearch = app.websearch?.enabled && app.websearch.required === true ? ['websearch'] : [];
+  // Web search hides the app only when the app says it is required, and then
+  // while its engine is off: any engine for Auto (`type:web-search`), the
+  // named one otherwise (server: `integrationRegistry.requiredWebSearchKey`).
+  const engine = app.websearch?.provider;
+  const websearch =
+    app.websearch?.enabled && app.websearch.required === true
+      ? [engine && engine !== 'auto' ? engine : WEB_SEARCH_TYPE_KEY]
+      : [];
   for (const id of new Set([...bound, ...connection, ...websearch])) {
     if (integrationStatus[id] === true) continue;
     const name =
-      INTEGRATION_NAMES[id] ||
-      t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
+      id === WEB_SEARCH_TYPE_KEY
+        ? t('admin.apps.missingWebSearchEngine', 'A web search engine')
+        : INTEGRATION_NAMES[id] ||
+          t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
     if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
   }
   return [...missingFeatures, ...missingIntegrations];

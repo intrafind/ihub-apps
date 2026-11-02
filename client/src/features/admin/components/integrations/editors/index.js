@@ -4,6 +4,7 @@
 import { createElement } from 'react';
 import IFinderEditor from './IFinderEditor';
 import IAssistantEditor from './IAssistantEditor';
+import WebSearchEngineEditor from './WebSearchEngineEditor';
 
 /**
  * Dedicated installation editors, keyed by definition id.
@@ -45,7 +46,11 @@ import IAssistantEditor from './IAssistantEditor';
  */
 const EDITORS = Object.freeze({
   'com.intrafind/ifinder': IFinderEditor,
-  'com.intrafind/iassistant': IAssistantEditor
+  'com.intrafind/iassistant': IAssistantEditor,
+  // The web search engines (`type: "web-search"`) share one editor.
+  'com.intrafind/brave-search': WebSearchEngineEditor,
+  'com.intrafind/staan-search': WebSearchEngineEditor,
+  'com.intrafind/qwant-search': WebSearchEngineEditor
 });
 
 /**

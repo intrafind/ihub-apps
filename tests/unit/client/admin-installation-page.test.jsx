@@ -7,7 +7,8 @@
  *   - Overview lists the key facts (never a secret), the actions with their
  *     side effects and the apps that bind the installation;
  *   - Settings renders the dedicated iFinder editor for the iFinder
- *     installation and the generic form for a CKAN portal;
+ *     installation, the web search engine editor for Brave and Qwant, and
+ *     the generic form for a CKAN portal;
  *   - the iFinder editor checks its cross-field rules, then saves its values
  *     with the label's other languages and the groups kept;
  *   - Test, Remove (with confirmation) work from the header;
@@ -193,6 +194,60 @@ const CKAN_DETAIL = {
   }
 };
 
+/** A web search engine's detail, as `GET …/installed/:id` returns it. */
+function engineDetail(id, name, values, install) {
+  const definition = {
+    id: `com.intrafind/${id}-search`,
+    name,
+    version: '1.0.0',
+    protocol: 'native',
+    type: 'web-search',
+    builtIn: true,
+    authModes: ['none'],
+    releases: [{ version: '1.0.0', summary: 'First version' }],
+    install,
+    actions: [{ name: 'search', title: 'Search the web', sideEffect: 'read' }]
+  };
+  return {
+    instance: {
+      id,
+      definition: definition.id,
+      definitionName: name,
+      label: name,
+      labelLocalized: null,
+      enabled: true,
+      protocol: 'native',
+      builtIn: true,
+      type: 'web-search',
+      auth: { mode: 'none' },
+      actions: { enabled: ['*'], disabled: [], overrides: {} }
+    },
+    values,
+    actions: [
+      { name: 'search', toolId: `${id}Search`, title: 'Search the web', sideEffect: 'read' }
+    ],
+    definition
+  };
+}
+
+const BRAVE_DETAIL = engineDetail('brave', 'Brave Search', { apiKeyRef: 'brave-key' }, [
+  {
+    key: 'apiKeyRef',
+    type: 'credential',
+    scope: 'admin',
+    credentialTypes: ['secret'],
+    title: { en: 'API key' }
+  }
+]);
+const QWANT_DETAIL = engineDetail('qwant', 'Qwant', {}, []);
+
+const DETAILS = {
+  ifinder: IFINDER_DETAIL,
+  govdata: CKAN_DETAIL,
+  brave: BRAVE_DETAIL,
+  qwant: QWANT_DETAIL
+};
+
 const APPS = [
   { id: 'ifinder-search', name: { en: 'iFinder search' }, integrations: { ifinder: {} } },
   { id: 'chat', name: { en: 'Chat' } }
@@ -208,9 +263,7 @@ beforeEach(() => {
     oidcAuth: { providers: [] },
     oauth: { issuer: 'https://ihub.example.com' }
   });
-  mockApi.fetchInstalledIntegration.mockImplementation(async id =>
-    id === 'ifinder' ? IFINDER_DETAIL : CKAN_DETAIL
-  );
+  mockApi.fetchInstalledIntegration.mockImplementation(async id => DETAILS[id] || CKAN_DETAIL);
   mockApi.updateInstalledIntegration.mockImplementation(async (id, body) => ({ ...body }));
   mockApi.testInstalledIntegration.mockResolvedValue({ success: true, steps: [] });
   mockApi.deleteInstalledIntegration.mockResolvedValue(undefined);
@@ -358,6 +411,49 @@ describe('installation page: settings', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Releases/ }));
     expect(await screen.findByTestId('release-notes')).toBeInTheDocument();
+  });
+
+  test('a web search engine gets the engine editor: API key credential, env fallback, test, save', async () => {
+    renderAt('/admin/integrations/brave?tab=settings');
+    const editor = await screen.findByTestId('web-search-engine-editor');
+    expect(screen.queryByTestId('generic-installation-editor')).not.toBeInTheDocument();
+    expect(within(editor).getByTestId('credential-web-search-engine-api-key')).toHaveTextContent(
+      'API key: brave-key'
+    );
+    expect(within(editor).getByTestId('web-search-engine-env-hint')).toHaveTextContent(
+      'BRAVE_SEARCH_API_KEY'
+    );
+    expect(within(editor).queryByTestId('web-search-engine-no-key')).not.toBeInTheDocument();
+
+    // The editor's own test (the page header has one for the saved values).
+    fireEvent.click(within(editor).getByRole('button', { name: 'Test connection' }));
+    await waitFor(() => expect(mockApi.testInstalledIntegration).toHaveBeenCalledTimes(1));
+    const [testedId, tested] = mockApi.testInstalledIntegration.mock.calls[0];
+    expect(testedId).toBe('brave');
+    expect(tested.values).toEqual({ apiKeyRef: 'brave-key' });
+    expect(await screen.findByTestId('test-results')).toHaveTextContent('Search engine test');
+
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
+    const [savedId, body] = mockApi.updateInstalledIntegration.mock.calls[0];
+    expect(savedId).toBe('brave');
+    expect(body.values).toEqual({ apiKeyRef: 'brave-key' });
+    expect(body.definition).toBe('com.intrafind/brave-search');
+    expectNoMissingKeys();
+  });
+
+  test('Qwant gets the engine editor without a key field', async () => {
+    renderAt('/admin/integrations/qwant?tab=settings');
+    const editor = await screen.findByTestId('web-search-engine-editor');
+    expect(within(editor).getByTestId('web-search-engine-no-key')).toHaveTextContent(
+      'Qwant needs no API key.'
+    );
+    expect(
+      within(editor).queryByTestId('credential-web-search-engine-api-key')
+    ).not.toBeInTheDocument();
+    expect(within(editor).queryByTestId('web-search-engine-env-hint')).not.toBeInTheDocument();
+    expect(editor).toHaveTextContent('Qwant blocks many data-centre IP addresses');
+    expectNoMissingKeys();
   });
 
   test('an installation without a release history has no Releases tab', async () => {

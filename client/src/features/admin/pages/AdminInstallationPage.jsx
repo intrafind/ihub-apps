@@ -157,6 +157,26 @@ function InstallationPageContent({ instanceId }) {
     () => (instance ? appsBindingInstallation(apps, instance, lang) : []),
     [apps, instance, lang]
   );
+  /** How an app uses this installation, as the Overview lists it. */
+  const boundViaText = via => {
+    switch (via) {
+      case 'installation':
+        return t('admin.integrations.page.via.installation', 'by this installation');
+      case 'definition':
+        return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
+          name: instance.definitionName || instance.definition
+        });
+      case 'webSearch':
+        return t('admin.integrations.page.via.webSearch', 'its web search engine');
+      case 'webSearchAuto':
+        return t(
+          'admin.integrations.page.via.webSearchAuto',
+          'web search on Auto (the first engine a user may use)'
+        );
+      default:
+        return t('admin.integrations.page.via.type', 'every installation of its type');
+    }
+  };
   const preloaded = useMemo(
     () => (detail && definition ? { definition, existing: detail } : null),
     [detail, definition]
@@ -584,18 +604,7 @@ function InstallationPageContent({ instanceId }) {
                         {app.name}
                       </Link>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {app.via === 'installation'
-                          ? t('admin.integrations.page.via.installation', 'by this installation')
-                          : app.via === 'definition'
-                            ? t(
-                                'admin.integrations.page.via.definition',
-                                'every {{name}} installation',
-                                { name: instance.definitionName || instance.definition }
-                              )
-                            : t(
-                                'admin.integrations.page.via.type',
-                                'every installation of its type'
-                              )}
+                        {boundViaText(app.via)}
                       </span>
                     </li>
                   ))}

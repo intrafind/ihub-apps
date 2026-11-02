@@ -50,7 +50,7 @@ const LDAP = 'com.intrafind/ldap-directory';
 const INSTALLED = [
   { id: 'corp', definition: LDAP, type: 'people-directory', builtIn: true, label: 'Corp' },
   { id: 'x500bund', definition: LDAP, type: 'people-directory', builtIn: true, label: 'IVBB' },
-  { id: 'websearch', definition: 'com.intrafind/web-search', type: 'web-search', builtIn: true },
+  { id: 'brave', definition: 'com.intrafind/brave-search', type: 'web-search', builtIn: true },
   { id: 'office365', definition: 'com.intrafind/office365', type: 'storage', builtIn: true },
   { id: 'drawio', definition: 'mcp/drawio', protocol: 'mcp', builtIn: true, label: 'draw.io' },
   { id: 'langdock', definition: 'com.intrafind/a2a-agent', protocol: 'a2a', label: 'Langdock' },

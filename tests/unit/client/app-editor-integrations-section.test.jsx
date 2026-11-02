@@ -6,11 +6,12 @@ import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
 /**
- * App editor → Integrations: each integration in one place. Web search and
- * iAssistant keep their own panels (shown while installed or in use), the
- * people directories get a card with "All people directories"
- * (`type:people-directory`), and the generic list never repeats web search,
- * iAssistant or a storage provider.
+ * App editor → Integrations: each integration in one place. Web search keeps
+ * its own panel for every chat app (native search needs no engine), whose
+ * engine select lists Auto and the installed engines; iAssistant keeps its
+ * panel while installed or in use; the people directories get a card with
+ * "All people directories" (`type:people-directory`); and the generic list
+ * never repeats a web search engine, iAssistant or a storage provider.
  */
 
 jest.mock('react-i18next', () => {
@@ -39,9 +40,27 @@ jest.mock('../../../client/src/api/adminApi', () => ({
 import IntegrationsConfigSection, {
   mergeInstallationDetails
 } from '../../../client/src/features/admin/components/app-form/IntegrationsConfigSection';
+import {
+  webSearchEngineStatus,
+  webSearchEnginesOf
+} from '../../../client/src/features/admin/components/app-form/webSearchEngines';
 
 const INSTALLED = [
-  { id: 'websearch', definition: 'com.intrafind/web-search', type: 'web-search', builtIn: true },
+  {
+    id: 'qwant',
+    definition: 'com.intrafind/qwant-search',
+    type: 'web-search',
+    builtIn: true,
+    label: 'Qwant'
+  },
+  {
+    id: 'brave',
+    definition: 'com.intrafind/brave-search',
+    type: 'web-search',
+    builtIn: true,
+    label: 'Brave Search',
+    enabled: false
+  },
   { id: 'iassistant', definition: 'com.intrafind/iassistant', builtIn: true, label: 'iAssistant' },
   { id: 'ifinder', definition: 'com.intrafind/ifinder', builtIn: true, label: 'iFinder' },
   { id: 'office365', definition: 'com.intrafind/office365', type: 'storage', builtIn: true },
@@ -86,7 +105,8 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.getByText('Enable iAssistant')).toBeInTheDocument();
 
     const generic = screen.getByTestId('app-integrations');
-    expect(within(generic).queryByText('websearch')).not.toBeInTheDocument();
+    expect(within(generic).queryByText('Qwant')).not.toBeInTheDocument();
+    expect(within(generic).queryByText('Brave Search')).not.toBeInTheDocument();
     expect(within(generic).queryByText('iassistant')).not.toBeInTheDocument();
     expect(within(generic).queryByText('office365')).not.toBeInTheDocument();
     // The rest is grouped.
@@ -96,21 +116,65 @@ describe('IntegrationsConfigSection', () => {
     expect(within(generic).getByText('GovData')).toBeInTheDocument();
   });
 
-  it('hides the web search and iAssistant panels while they are not installed and unused', async () => {
+  it('shows the web search panel without any engine, and hides an unused iAssistant', async () => {
     mockFetchInstalled.mockResolvedValue({
-      items: INSTALLED.filter(i => i.id !== 'websearch' && i.id !== 'iassistant')
+      items: INSTALLED.filter(i => i.type !== 'web-search' && i.id !== 'iassistant')
     });
-    renderSection({ id: 'a' });
+    renderSection({ id: 'a', websearch: { enabled: true } });
     await screen.findByTestId('app-integrations-people-directories');
-    expect(screen.queryByText('Web Search')).not.toBeInTheDocument();
+    expect(screen.getByText('Web Search')).toBeInTheDocument();
     expect(screen.queryByText('Enable iAssistant')).not.toBeInTheDocument();
+    // No "not installed" notice: native search needs no engine.
+    expect(screen.queryByText(/Web Search is not installed/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('websearch-no-engine')).toHaveTextContent(
+      'the app searches only on models with native search'
+    );
+    expect(screen.getByRole('link', { name: 'Install an engine' })).toHaveAttribute(
+      'href',
+      '/admin/integrations?tab=catalog'
+    );
   });
 
-  it('keeps a panel the app already uses, with a notice that it is not installed', async () => {
+  it('lists Auto and the installed engines in Auto’s order, disabled ones marked', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({ id: 'a', websearch: { enabled: true } });
+    const select = await screen.findByLabelText('Search engine');
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual(['Auto', 'Brave Search (brave) — disabled', 'Qwant (qwant)']);
+    expect(select).toHaveValue('auto');
+    expect(screen.queryByTestId('websearch-no-engine')).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'qwant' } });
+    expect(onChange.mock.calls.at(-1)[0].websearch).toEqual({ enabled: true, provider: 'qwant' });
+  });
+
+  it('warns about an engine the app names that is not installed, or is disabled', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', websearch: { enabled: true, provider: 'staan' } });
+    const select = await screen.findByLabelText('Search engine');
+    expect(select).toHaveValue('staan');
+    expect(within(select).getByRole('option', { name: 'staan — not installed' })).toBeTruthy();
+    expect(screen.getByTestId('websearch-engine-missing')).toHaveTextContent(
+      'The engine "staan" is not installed'
+    );
+  });
+
+  it('warns about a disabled engine the app names', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', websearch: { enabled: true, provider: 'brave' } });
+    expect(await screen.findByTestId('websearch-engine-disabled')).toHaveTextContent(
+      'The engine "brave" is disabled'
+    );
+    expect(screen.queryByTestId('websearch-engine-missing')).not.toBeInTheDocument();
+  });
+
+  it('keeps the iAssistant panel the app already uses, with a notice that it is not installed', async () => {
     mockFetchInstalled.mockResolvedValue({ items: [] });
-    renderSection({ id: 'a', websearch: { enabled: true } });
-    expect(await screen.findByText('Web Search')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Web Search is not installed');
+    renderSection({ id: 'a', iassistant: { enabled: true } });
+    expect(await screen.findByText('Enable iAssistant')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('iAssistant is not installed');
   });
 
   it('binds every people directory with the type key', async () => {
@@ -167,5 +231,30 @@ describe('mergeInstallationDetails', () => {
       ['a', 'first'],
       ['b', undefined]
     ]);
+  });
+});
+
+describe('webSearchEngines', () => {
+  it('lists the engines in Auto’s order: Brave, Staan, Qwant, then the others by id', () => {
+    const engines = webSearchEnginesOf([
+      { id: 'zeta', type: 'web-search' },
+      { id: 'qwant', type: 'web-search' },
+      { id: 'jira' },
+      { id: 'acme', type: 'web-search' },
+      { id: 'staan', type: 'web-search' },
+      { id: 'brave', type: 'web-search' }
+    ]);
+    expect(engines.map(engine => engine.id)).toEqual(['brave', 'staan', 'qwant', 'acme', 'zeta']);
+    expect(webSearchEnginesOf(null)).toEqual([]);
+  });
+
+  it('tells what the engine an app names means', () => {
+    const engines = [{ id: 'qwant' }, { id: 'brave', enabled: false }];
+    expect(webSearchEngineStatus(undefined, engines)).toBe('auto');
+    expect(webSearchEngineStatus('auto', engines)).toBe('auto');
+    expect(webSearchEngineStatus('qwant', engines)).toBe('ok');
+    expect(webSearchEngineStatus('brave', engines)).toBe('disabled');
+    expect(webSearchEngineStatus('staan', engines)).toBe('missing');
+    expect(webSearchEngineStatus('staan', null)).toBe('unknown');
   });
 });
