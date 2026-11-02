@@ -163,6 +163,7 @@ function Drawer({
   return createPortal(
     <div
       inert={!open}
+      aria-hidden={open ? undefined : true}
       className={`fixed inset-0 z-50 ${
         open
           ? 'visible'
