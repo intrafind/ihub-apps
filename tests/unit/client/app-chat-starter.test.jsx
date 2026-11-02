@@ -150,6 +150,22 @@ it('starts the chat with the caller’s parameters and runs its hook first', asy
   expect(consumePendingChatStart('chat')).toMatchObject({ appId: 'chat' });
 });
 
+it('starts an app that binds iFinder with the iFinder tools on', async () => {
+  // The upgraded iFinder Search app: no `tools`, an `ifinder` binding. The
+  // binding is the reference that keeps its tools in the chat's narrowing.
+  const api = require('../../../client/src/api');
+  api.fetchAppDetails.mockResolvedValueOnce({
+    ...mockApp,
+    tools: [],
+    integrations: { ifinder: { scopePicker: 'menu' }, iassistant: {} }
+  });
+  await renderStarter();
+  await send('Find the lease');
+  expect(consumePendingChatStart('chat')).toMatchObject({
+    settings: { enabledTools: ['ifinder'] }
+  });
+});
+
 it('takes a long message where no limit is set, as the start page does', async () => {
   await renderStarter();
   await send('x'.repeat(MAX_START_PATH_LENGTH));
