@@ -189,6 +189,48 @@ describe('IntegrationsConfigSection', () => {
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ 'type:people-directory': {} });
   });
 
+  it('lists LDAP browsers among the built-ins, never in the people directories card', async () => {
+    const browsers = [
+      {
+        id: 'corp-browser',
+        definition: 'com.intrafind/ldap-browser',
+        definitionName: 'LDAP browser',
+        builtIn: true,
+        label: 'Company directory – LDAP browser'
+      },
+      {
+        id: 'infra-browser',
+        definition: 'com.intrafind/ldap-browser',
+        definitionName: 'LDAP browser',
+        builtIn: true,
+        label: 'Infra – LDAP browser'
+      }
+    ];
+    mockFetchInstalled.mockResolvedValue({ items: [...INSTALLED, ...browsers] });
+    mockFetchOne.mockResolvedValue({
+      actions: [
+        { name: 'browse_search', title: 'Search entries', available: true },
+        { name: 'browse_read', title: 'Read an entry', available: true },
+        { name: 'browse_children', title: 'List children', available: true }
+      ],
+      definition: { id: 'com.intrafind/ldap-browser' }
+    });
+    const onChange = renderSection({ id: 'a' });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).queryByText(/LDAP browser/)).not.toBeInTheDocument();
+
+    const generic = screen.getByTestId('app-integrations');
+    const builtIn = within(generic).getByText('Built-in').closest('section');
+    expect(within(builtIn).getByText('Company directory – LDAP browser')).toBeInTheDocument();
+    // Two installations: "All LDAP browser installations" binds the definition.
+    fireEvent.click(within(builtIn).getByLabelText(/All LDAP browser installations/));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    // A browser binding without actions binds all three browse actions.
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      'com.intrafind/ldap-browser': {}
+    });
+  });
+
   it('binds the iAssistant installation from inside its panel', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a' });

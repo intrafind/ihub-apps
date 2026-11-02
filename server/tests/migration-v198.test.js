@@ -13,7 +13,11 @@ import {
   plainPasswordsOf,
   valuesFromDirectory
 } from '../migrations/V198__people_directories_installed_integrations.js';
-import { directoryFromInstance } from '../services/integrations/ldapDirectoryConfig.js';
+import {
+  browserFromInstance,
+  directoryFromInstance
+} from '../services/integrations/ldapDirectoryConfig.js';
+import { browserValuesOf } from '../migrations/V204__ldap_browser_installations.js';
 import { peopleDirectorySchema } from '../validators/peopleDirectorySchema.js';
 
 function makeCtx(files) {
@@ -113,16 +117,28 @@ describe('V198 people directories → installed integrations', () => {
 
   it('round-trips through the installation reader into a valid directory', () => {
     for (const directory of [CORP, X500]) {
-      const back = directoryFromInstance(instanceFrom(directory));
+      const instance = instanceFrom(directory);
+      const back = directoryFromInstance(instance);
       const parsed = peopleDirectorySchema.safeParse(back);
       assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
       assert.equal(back.id, directory.id);
-      assert.deepEqual(back.groups, directory.groups);
+      // Groups are no part of the directory shape (V202 moved them onto the
+      // groups); V198 wrote them as `allowedGroups`, `["*"]` as everyone (`[]`).
+      assert.deepEqual(
+        instance.allowedGroups,
+        directory.groups.includes('*') ? [] : directory.groups
+      );
       assert.deepEqual(back.name, directory.name);
       if (directory.bind) assert.deepEqual(back.bind, directory.bind);
       if (directory.browse) {
-        assert.deepEqual(back.browse.bind, directory.browse.bind);
-        assert.deepEqual(back.browse.denyAttributes, directory.browse.denyAttributes);
+        // V204 moves the browse values into an LDAP browser installation.
+        const browser = browserFromInstance({
+          id: `${directory.id}-browser`,
+          values: browserValuesOf(directory.id, instance.values)
+        });
+        assert.equal(browser.directory, directory.id);
+        assert.deepEqual(browser.bind, directory.browse.bind);
+        assert.deepEqual(browser.denyAttributes, directory.browse.denyAttributes);
       }
       if (directory.attributeMapping) {
         assert.deepEqual(back.attributeMapping, { department: ['ou'], location: ['dn:l', 'l'] });

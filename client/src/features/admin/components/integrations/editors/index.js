@@ -5,6 +5,9 @@ import { createElement } from 'react';
 import IFinderEditor from './IFinderEditor';
 import IAssistantEditor from './IAssistantEditor';
 import StorageProviderEditor from './StorageProviderEditor';
+import PeopleDirectoryEditor from './PeopleDirectoryEditor';
+import LdapBrowserEditor from './LdapBrowserEditor';
+import EntraDirectoryEditor from './EntraDirectoryEditor';
 import WebSearchEngineEditor from './WebSearchEngineEditor';
 
 /**
@@ -53,6 +56,9 @@ const EDITORS = Object.freeze({
   'com.intrafind/office365': StorageProviderEditor,
   'com.intrafind/google-drive': StorageProviderEditor,
   'com.intrafind/nextcloud': StorageProviderEditor,
+  'com.intrafind/ldap-directory': PeopleDirectoryEditor,
+  'com.intrafind/ldap-browser': LdapBrowserEditor,
+  'com.intrafind/entra-directory': EntraDirectoryEditor,
   // The web search engines (`type: "web-search"`) share one editor.
   'com.intrafind/brave-search': WebSearchEngineEditor,
   'com.intrafind/staan-search': WebSearchEngineEditor,

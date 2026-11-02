@@ -64,7 +64,7 @@ have.
 | `client/src/features/admin/components/integrations/integrationFacts.js` | Tile facts; sources count as on unless stored as `false` |
 | `server/utils/appUsageGuide.js` | The usage guide mentions cloud files when the app binds an enabled provider |
 | `server/validators/appConfigSchema.js` | `upload.cloudStorageUpload` refused with a message naming the binding |
-| `server/tests/integrations/definitionReleases.test.js` | #3092: every shipped definition a migration names has a release entry (allow-list `WITHOUT_RELEASES` for ihub and ldap-directory, which other PRs fill) |
+| `server/tests/integration-definition-releases.test.js` | #3092: every shipped definition a migration names has a release entry whose newest version is the definition's (allow-list `NOT_YET_RELEASED`, empty; it fails when a listed definition has its entry). This branch's own `integrations/definitionReleases.test.js` was folded into it when the people directories branch was merged in. |
 
 ## The migration V205
 
@@ -132,7 +132,7 @@ no provider is enabled, which is rarely what an admin wants for a file picker.
   Nextcloud installations side by side, per-installation counts, redirect derivation with base
   path), `integration-access.test.js` (grants per installation, the route middleware),
   `oauth-integration-refresh.test.js`, `migration-v200.test.js` (V200 output read back after
-  V205's rename), `integrations/definitionReleases.test.js`.
+  V205's rename), `integration-definition-releases.test.js`.
 - Client: `tests/unit/client/storage-provider-bindings.test.jsx` (binding, picker filter by
   binding and grant), `admin-storage-provider-editor.test.jsx`, the Storage providers card in
   `app-editor-integrations-section.test.jsx`, facts in `integration-groups-and-facts.test.jsx`.
@@ -147,5 +147,3 @@ no provider is enabled, which is rarely what an admin wants for a file picker.
 - Credential ids created by V200 keep the old installation id in their name
   (`integration-office365-clientSecretRef` on the installation `o365-corp`); harmless, the
   reference is what counts.
-- `definitionReleases.test.js` only reports (does not fail) when an allow-listed definition got a
-  release entry; remove the entry from `WITHOUT_RELEASES` when merging the PR that adds it.

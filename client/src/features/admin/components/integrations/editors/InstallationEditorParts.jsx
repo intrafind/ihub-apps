@@ -18,9 +18,9 @@ import {
 
 /**
  * Building blocks of the dedicated installation editors (iFinder,
- * iAssistant, and those that follow): a section card, the name, who may use
- * it, the actions and the footer with Test, Cancel and Save. They read and
- * write the state of `useInstallationEditor`.
+ * iAssistant, the people directories, the LDAP browser): a section card, the
+ * name, who may use it, the actions and the footer with Test, Cancel and
+ * Save. They read and write the state of `useInstallationEditor`.
  */
 
 /**
@@ -197,8 +197,10 @@ export function ActionsSection({ editor, definition, instance, idPrefix }) {
  * @param {() => void} props.onCancel
  * @param {string} [props.testHelp] - what the test does, shown next to the button
  * @param {string} [props.testTitle] - heading of the test results
+ * @param {React.ReactNode} [props.testInput] - an input the test takes (a sample
+ *   search), shown above the button
  */
-export function EditorFooter({ editor, formId, onTest, onCancel, testHelp, testTitle }) {
+export function EditorFooter({ editor, formId, onTest, onCancel, testHelp, testTitle, testInput }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-4">
@@ -215,6 +217,7 @@ export function EditorFooter({ editor, formId, onTest, onCancel, testHelp, testT
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 min-w-[240px]">
+          {testInput && <div className="mb-2 max-w-md">{testInput}</div>}
           <button
             type="button"
             className={SECONDARY_BUTTON_CLASS}

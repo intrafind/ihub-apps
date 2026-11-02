@@ -32,6 +32,7 @@ import { getDefinitionTypes } from './services/integrations/integrationTypes.js'
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
+import { filterBrowserToolsForUser } from './services/peopleDirectory/LdapBrowserService.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
 
 // Re-exported under the name it has always had here: `telemetry.js` and the
@@ -1878,8 +1879,10 @@ class ConfigCache {
       tools = filterIntegrationToolsForUser(tools, user);
     }
 
-    // A people directory's LDAP browser (`browse.groups`) holds on top of every grant, `*` included.
-    tools = filterDirectoryToolsForUser(tools, user);
+    // A people directory's grant, and an LDAP browser's own rules (signed-in,
+    // non-delegated users, its directory enabled), hold on top of every
+    // grant, `*` included.
+    tools = filterBrowserToolsForUser(filterDirectoryToolsForUser(tools, user), user);
 
     // Generate user-specific ETag if tools were filtered
     if (tools.length < originalToolsCount) {

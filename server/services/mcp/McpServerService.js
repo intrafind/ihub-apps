@@ -234,7 +234,7 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   if (tool._a2a) return false;
   // The admin LDAP browser returns raw directory entries; it stays in iHub's
   // own chat, where its calls are audited per admin.
-  if (tool._peopleDirectory?.browse) return false;
+  if (tool._ldapBrowser) return false;
   return toolVisibleInSet(tool.id, visibleToolIds, undefined, undefined, tool._peopleDirectory?.id);
 }
 
@@ -302,8 +302,9 @@ export async function buildMcpServer({ user, platform }) {
     const localTools = await loadLocalTools(language);
     // People directory tools are iHub's own (its connection, not a proxied
     // server's), offered to callers whose groups grant the installation
-    // (`permissions.integrations`; `browse.groups` for the LDAP browser). They are actions of the `com.intrafind/ldap-directory`
-    // installations; the other installed integrations stay out, as before.
+    // (`permissions.integrations`). They are actions of the
+    // `com.intrafind/ldap-directory` installations; the other installed
+    // integrations — the LDAP browser included — stay out, as before.
     const { discoverIntegrationTools, filterIntegrationToolsForUser } =
       await import('../integrations/integrationTools.js');
     const directoryTools = filterDirectoryToolsForUser(

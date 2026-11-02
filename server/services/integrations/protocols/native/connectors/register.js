@@ -17,6 +17,7 @@ import {
 import jira from './jira/index.js';
 import entra from './entra/index.js';
 import ldapDirectory from './ldapDirectory/index.js';
+import ldapBrowser from './ldapBrowser/index.js';
 import ihub from './ihub/index.js';
 import {
   googleDriveConnector,
@@ -32,6 +33,7 @@ registerConnector(qwantSearchConnector);
 registerConnector(jira);
 registerConnector(entra);
 registerConnector(ldapDirectory);
+registerConnector(ldapBrowser);
 registerConnector(ihub);
 registerConnector(office365Connector);
 registerConnector(googleDriveConnector);

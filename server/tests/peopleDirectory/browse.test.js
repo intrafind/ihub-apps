@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The admin LDAP browser of a people directory (`browse`, concept
- * "People Directory Organization Search and LDAP Browser", part 2).
+ * The admin LDAP browser (`com.intrafind/ldap-browser`): an installation of
+ * its own that names a people directory installation and reuses its
+ * connection (concept "Unified Integrations" 07 §6, migration V204).
  *
- * Who sees and runs the browse tools (`browse.groups`, never the directory's
- * `groups`, never through a binding of the directory alone or its id, never
- * over MCP), the deny list in results and in filters, the DN scope, the
- * limits, and the audit record. The LDAP client is a fake passed as the
- * `connect` dependency.
+ * Who sees and runs the browse tools (the browser installation's group grant,
+ * signed-in non-delegated users only, its directory enabled, never through a
+ * binding of the directory, never over MCP), the deny list in results and in
+ * filters, the DN scope, the limits, and the audit record. The LDAP client is
+ * a fake passed as the `connect` dependency.
  */
 import { after, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,12 +29,14 @@ const { mayRunTool } = await import('../../routes/toolRoutes.js');
 const { buildMcpServer } = await import('../../services/mcp/McpServerService.js');
 const { MCP_SCOPES } = await import('../../services/mcp/scopes.js');
 const { flushAuditLog } = await import('../../services/AuditLogService.js');
-const { peopleDirectorySchema } = await import('../../validators/peopleDirectorySchema.js');
-const { mayBrowseDirectory, resolveDirectory } =
-  await import('../../services/peopleDirectory/PeopleDirectoryService.js');
-const { DEFINITION_ID, installDirectories } = await import('./installations.js');
-const { runPeopleDirectoryTool } =
-  await import('../../services/peopleDirectory/peopleDirectoryRunner.js');
+const { ldapBrowserSchema, peopleDirectorySchema } =
+  await import('../../validators/peopleDirectorySchema.js');
+const { browserToolOfId, mayUseBrowser, resolveBrowser } =
+  await import('../../services/peopleDirectory/LdapBrowserService.js');
+const { BROWSER_DEFINITION_ID, DEFINITION_ID, installDirectoriesAndBrowsers } =
+  await import('./installations.js');
+const { runLdapBrowserTool, testBrowser } =
+  await import('../../services/peopleDirectory/ldapBrowserRunner.js');
 const { MAX_RESPONSE_LENGTH, MAX_VALUE_LENGTH, MAX_VALUES_PER_ATTRIBUTE, parseBrowseFilter } =
   await import('../../services/peopleDirectory/LdapBrowser.js');
 
@@ -47,8 +50,7 @@ const DIRECTORIES = [
     searchBase: `ou=people,${BASE}`,
     preset: 'activeDirectory',
     bind: { mode: 'service', dn: `cn=svc,${BASE}`, passwordRef: 'svc' },
-    name: { en: 'Company directory' },
-    browse: { enabled: true, maxResults: 3, denyAttributes: ['info'] }
+    name: { en: 'Company directory' }
   },
   {
     // Browse-only: nobody may use its people search (V198 switches the search
@@ -57,8 +59,7 @@ const DIRECTORIES = [
     url: 'ldaps://ldap.infra.example:636',
     baseDn: 'o=infra',
     bind: { mode: 'anonymous' },
-    groups: [],
-    browse: { enabled: true, groups: ['ops'] }
+    groups: []
   },
   {
     id: 'x500bund',
@@ -66,21 +67,41 @@ const DIRECTORIES = [
     baseDn: 'o=Bund,c=DE',
     preset: 'ivbb',
     bind: { mode: 'anonymous' }
-  }
+  },
+  { id: 'off', enabled: false, url: 'ldaps://off.example:636', baseDn: 'o=off' }
+];
+
+const BROWSERS = [
+  {
+    id: 'corp-browser',
+    directory: 'corp',
+    maxResults: 3,
+    denyAttributes: ['info'],
+    name: { en: 'Company directory – LDAP browser' }
+  },
+  { id: 'infra-browser', directory: 'infra' },
+  // Its directory is disabled, or not installed at all: no tools.
+  { id: 'off-browser', directory: 'off' },
+  { id: 'lost-browser', directory: 'gone' }
 ];
 
 configCache.setCacheEntry('config/tools.json', []);
 configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
-// Which directories each group may use (`permissions.integrations`, #3093);
-// the LDAP browser needs `browse.groups` on top.
+// Which installations each group may use (`permissions.integrations`, #3093):
+// admins the company browser, ops the infra browser, browser-team every
+// browser through the definition.
 configCache.getGroups = () => ({
   data: {
     groups: {
-      admins: { inherits: ['users'], permissions: { adminAccess: true } },
+      admins: {
+        inherits: ['users'],
+        permissions: { adminAccess: true, integrations: ['corp-browser'] }
+      },
       users: { inherits: ['authenticated'], permissions: { integrations: ['corp'] } },
       authenticated: { permissions: { integrations: ['infra', 'x500bund'] } },
-      ops: { permissions: { integrations: ['infra'] } }
+      ops: { permissions: { integrations: ['infra-browser', 'off-browser', 'lost-browser'] } },
+      'browser-team': { permissions: { integrations: [BROWSER_DEFINITION_ID] } }
     }
   }
 });
@@ -98,12 +119,24 @@ const admin = {
 };
 const member = { id: 'member', groups: ['users'], permissions: everything };
 const operator = { id: 'operator', groups: ['ops'], permissions: everything };
+const browserTeam = { id: 'team', groups: ['browser-team'], permissions: everything };
 
 const browseIds = tools =>
   tools
-    .filter(tool => tool._peopleDirectory?.browse)
+    .filter(tool => tool._ldapBrowser)
     .map(tool => tool.id)
     .sort();
+
+const CORP_BROWSE_IDS = [
+  'corp-browser__browse_children',
+  'corp-browser__browse_read',
+  'corp-browser__browse_search'
+];
+const INFRA_BROWSE_IDS = [
+  'infra-browser__browse_children',
+  'infra-browser__browse_read',
+  'infra-browser__browse_search'
+];
 
 /**
  * A fake ldapts client: `entries(base, options)` answers each search.
@@ -112,8 +145,10 @@ const browseIds = tools =>
 function fakeConnect(entries, { resultCode = 0 } = {}) {
   const searches = [];
   const binds = [];
+  const connections = [];
   const connect = async resolved => {
     binds.push(resolved.bind);
+    connections.push(resolved);
     const client = {
       lastSearchResultCode: null,
       async search(base, options) {
@@ -126,18 +161,18 @@ function fakeConnect(entries, { resultCode = 0 } = {}) {
     };
     return { client };
   };
-  return { connect, searches, binds };
+  return { connect, searches, binds, connections };
 }
 
-function browseTool(directoryId, action) {
+function browseTool(browserId, action) {
   return {
-    id: `${directoryId}__${action}`,
-    _peopleDirectory: { id: directoryId, action, browse: true }
+    id: `${browserId}__${action}`,
+    _ldapBrowser: { id: browserId, action }
   };
 }
 
-const run = (action, args, deps, user = admin, directoryId = 'corp') =>
-  runPeopleDirectoryTool(browseTool(directoryId, action), { ...args, user }, deps);
+const run = (action, args, deps, user = admin, browserId = 'corp-browser') =>
+  runLdapBrowserTool(browseTool(browserId, action), { ...args, user }, deps);
 
 async function auditEntries() {
   await flushAuditLog();
@@ -159,30 +194,33 @@ after(() => fs.rmSync(contentsDir, { recursive: true, force: true }));
 
 describe('LDAP browser', () => {
   beforeEach(() => {
-    installDirectories(configCache, DIRECTORIES);
+    installDirectoriesAndBrowsers(configCache, DIRECTORIES, BROWSERS);
   });
 
-  describe('schema', () => {
-    const base = { id: 'corp', url: 'ldaps://a.example', baseDn: 'o=a' };
+  describe('schema and resolution', () => {
+    it('has a result limit of 50 by default and at most 200, and no unknown fields', () => {
+      const parsed = ldapBrowserSchema.parse({ id: 'b', directory: 'corp' });
+      assert.equal(parsed.maxResults, 50);
+      assert.equal(
+        ldapBrowserSchema.safeParse({ id: 'b', directory: 'corp', maxResults: 201 }).success,
+        false
+      );
+      for (const extra of [{ groups: ['admins'] }, { filter: 'x' }]) {
+        assert.equal(
+          ldapBrowserSchema.safeParse({ id: 'b', directory: 'corp', ...extra }).success,
+          false,
+          JSON.stringify(extra)
+        );
+      }
+    });
 
-    it('is off unless switched on, for admins by default, never for "*"', () => {
-      const parsed = peopleDirectorySchema.parse({ ...base, browse: {} });
-      assert.equal(parsed.browse.enabled, false);
-      assert.deepEqual(parsed.browse.groups, ['admins']);
-      assert.equal(parsed.browse.maxResults, 50);
-      assert.equal(
-        peopleDirectorySchema.safeParse({ ...base, browse: { enabled: true, groups: ['*'] } })
-          .success,
-        false
-      );
-      assert.equal(
-        peopleDirectorySchema.safeParse({ ...base, browse: { enabled: true, filter: 'x' } })
-          .success,
-        false
-      );
+    it('is not part of a directory any more', () => {
+      const base = { id: 'corp', url: 'ldaps://a.example', baseDn: 'o=a' };
+      assert.equal(peopleDirectorySchema.safeParse({ ...base, browse: {} }).success, false);
     });
 
     it('refuses a mapping onto the new AD secrets and password histories, like the old ones', () => {
+      const base = { id: 'corp', url: 'ldaps://a.example', baseDn: 'o=a' };
       for (const attribute of [
         'ms-Mcs-AdmPwd',
         'msLAPS-Password',
@@ -200,33 +238,75 @@ describe('LDAP browser', () => {
       }
     });
 
-    it('defaults the base to the base DN and the bind to the directory bind', () => {
-      const resolved = resolveDirectory(DIRECTORIES[0]);
-      assert.equal(resolved.browse.base, BASE);
-      assert.deepEqual(resolved.browse.bind, DIRECTORIES[0].bind);
-      assert.deepEqual(resolved.browse.problems, []);
-      assert.equal(resolveDirectory(DIRECTORIES[2]).browse, null);
+    it("reuses the directory's connection, base DN and bind unless it has its own", () => {
+      const resolved = resolveBrowser(BROWSERS[0]);
+      assert.deepEqual(resolved.problems, []);
+      assert.equal(resolved.directoryId, 'corp');
+      assert.equal(resolved.directoryEnabled, true);
+      assert.equal(resolved.directory.url, 'ldaps://dc.corp.example:636');
+      assert.equal(resolved.base, BASE);
+      assert.deepEqual(resolved.bind, DIRECTORIES[0].bind);
+      assert.equal(resolved.ownBind, false);
+      assert.equal(resolved.maxResults, 3);
+      assert.equal(resolved.transport, 'ldaps');
+
+      const own = { mode: 'service', dn: `cn=reader,${BASE}`, passwordRef: 'reader' };
+      const narrowed = resolveBrowser({ ...BROWSERS[0], base: `ou=groups,${BASE}`, bind: own });
+      assert.equal(narrowed.base, `ou=groups,${BASE}`);
+      assert.deepEqual(narrowed.bind, own);
+      assert.equal(narrowed.ownBind, true);
+    });
+
+    it('reports a missing or unknown directory, and a disabled one apart from problems', () => {
+      assert.match(
+        resolveBrowser({ id: 'b', directory: '' }).problems.join(),
+        /No people directory/
+      );
+      assert.match(resolveBrowser(BROWSERS[3]).problems.join(), /no People directory \(LDAP\)/);
+      const off = resolveBrowser(BROWSERS[2]);
+      assert.deepEqual(off.problems, []);
+      assert.equal(off.directoryEnabled, false);
+    });
+
+    it('reads the browser from a tool id without loading tools', () => {
+      assert.deepEqual(browserToolOfId('corp-browser__browse_read'), {
+        id: 'corp-browser',
+        directory: 'corp',
+        action: 'browse_read'
+      });
+      assert.equal(browserToolOfId('corp__browse_read'), null);
+      assert.equal(browserToolOfId('corp-browser__search_people'), null);
     });
   });
 
   describe('access', () => {
-    it('offers the browse tools only where browse is on', async () => {
-      assert.deepEqual(browseIds(await loadTools('en')), [
-        'corp__browse_children',
-        'corp__browse_read',
-        'corp__browse_search',
-        'infra__browse_children',
-        'infra__browse_read',
-        'infra__browse_search'
-      ]);
+    it('offers the browse tools of every browser whose directory is enabled and installed', async () => {
+      assert.deepEqual(browseIds(await loadTools('en')), [...CORP_BROWSE_IDS, ...INFRA_BROWSE_IDS]);
+      const tools = await loadTools('en');
+      const search = tools.find(tool => tool.id === 'corp-browser__browse_search');
+      assert.equal(search._integration.instanceId, 'corp-browser');
+      assert.deepEqual(search._ldapBrowser, {
+        id: 'corp-browser',
+        directory: 'corp',
+        action: 'browse_search'
+      });
+      assert.equal(search._peopleDirectory, undefined);
+      assert.match(
+        search.description,
+        /^Company directory – LDAP browser – Company directory \(dc=corp,dc=example\)/
+      );
+      assert.equal(search.parameters.properties.maxResults.maximum, 3);
     });
 
-    it('checks browse.groups, never the group grant of the installation alone', () => {
-      assert.equal(mayBrowseDirectory(admin, 'corp'), true);
-      assert.equal(mayBrowseDirectory(member, 'corp'), false);
-      assert.equal(mayBrowseDirectory(operator, 'infra'), true);
-      assert.equal(mayBrowseDirectory(admin, 'infra'), false);
-      assert.equal(mayBrowseDirectory({ id: 'anonymous', groups: ['admins'] }, 'corp'), false);
+    it("checks the browser's grant, signed-in and non-delegated users only", () => {
+      assert.equal(mayUseBrowser(admin, 'corp-browser'), true);
+      assert.equal(mayUseBrowser(member, 'corp-browser'), false);
+      assert.equal(mayUseBrowser(operator, 'infra-browser'), true);
+      assert.equal(mayUseBrowser(admin, 'infra-browser'), false);
+      // The definition grants every browser.
+      assert.equal(mayUseBrowser(browserTeam, 'corp-browser'), true);
+      assert.equal(mayUseBrowser(browserTeam, 'infra-browser'), true);
+      assert.equal(mayUseBrowser({ id: 'anonymous', groups: ['admins'] }, 'corp-browser'), false);
       // Delegated and machine principals never browse, whatever their groups:
       // through an app they would reach it over MCP, A2A or the chat API.
       for (const delegated of [
@@ -236,77 +316,67 @@ describe('LDAP browser', () => {
         { ...admin, isOAuthClient: true },
         { ...admin, isAgent: true }
       ]) {
-        assert.equal(mayBrowseDirectory(delegated, 'corp'), false, JSON.stringify(delegated));
+        assert.equal(mayUseBrowser(delegated, 'corp-browser'), false, JSON.stringify(delegated));
       }
-      assert.equal(mayBrowseDirectory(admin, 'x500bund'), false);
+      // A disabled or missing directory closes its browser.
+      assert.equal(mayUseBrowser(operator, 'off-browser'), false);
+      assert.equal(mayUseBrowser(operator, 'lost-browser'), false);
+      assert.equal(mayUseBrowser(admin, 'corp'), false);
+    });
+
+    it('needs no grant of the directory itself', () => {
+      // `ops` is not granted `infra`: the browser's grant alone counts.
+      assert.equal(mayUseBrowser(operator, 'infra-browser'), true);
     });
 
     it('narrows the /api/tools listing, even with a "*" tool grant', async () => {
       const platform = { defaultLanguage: 'en' };
       const forAdmin = await configCache.getToolsForUser(admin, platform, 'en');
-      assert.deepEqual(browseIds(forAdmin.data), [
-        'corp__browse_children',
-        'corp__browse_read',
-        'corp__browse_search'
-      ]);
+      assert.deepEqual(browseIds(forAdmin.data), CORP_BROWSE_IDS);
       const forMember = await configCache.getToolsForUser(member, platform, 'en');
       assert.deepEqual(browseIds(forMember.data), []);
       assert.ok(forMember.data.some(tool => tool.id === 'corp__search_people'));
+      const forOperator = await configCache.getToolsForUser(operator, platform, 'en');
+      assert.deepEqual(browseIds(forOperator.data), INFRA_BROWSE_IDS);
     });
 
-    it('needs the installation granted to the groups too, browse.groups alone lists nothing', async () => {
-      const platform = { defaultLanguage: 'en' };
-      const granted = await configCache.getToolsForUser(operator, platform, 'en');
-      assert.deepEqual(browseIds(granted.data), [
-        'infra__browse_children',
-        'infra__browse_read',
-        'infra__browse_search'
-      ]);
-      const ungranted = { ...operator, permissions: { ...everything, integrations: new Set() } };
-      const listed = await configCache.getToolsForUser(ungranted, platform, 'en');
-      assert.deepEqual(browseIds(listed.data), []);
-    });
-
-    it('is selected only by "ldapBrowse" or an explicit binding of the browse actions', async () => {
-      for (const tools of [['corp'], ['corp__search_people']]) {
+    it('is bound like any installation, never through the directory or a tool reference', async () => {
+      for (const tools of [['corp'], ['corp__search_people'], ['ldapBrowse'], ['corp-browser']]) {
         const offered = await getToolsForApp({ id: 'a', tools }, 'en', { user: admin });
         assert.deepEqual(browseIds(offered), [], tools.join());
       }
-      // A binding of the directory (or of every directory) without the browse
-      // actions brings the people search only.
-      for (const integrations of [{ corp: {} }, { [DEFINITION_ID]: {} }]) {
+      // A binding of the directory (or of every directory, or of the type)
+      // brings the people search only.
+      for (const integrations of [
+        { corp: {} },
+        { [DEFINITION_ID]: {} },
+        { 'type:people-directory': {} }
+      ]) {
         const offered = await getToolsForApp({ id: 'a', integrations }, 'en', { user: admin });
         assert.deepEqual(browseIds(offered), [], JSON.stringify(integrations));
-        assert.ok(offered.some(tool => tool.id === 'corp__search_people'));
       }
-      const browserIds = ['corp__browse_children', 'corp__browse_read', 'corp__browse_search'];
-      const browser = await getToolsForApp({ id: 'ldap-browser', tools: ['ldapBrowse'] }, 'en', {
+      // A browser binding without actions binds all three.
+      const one = await getToolsForApp({ id: 'a', integrations: { 'corp-browser': {} } }, 'en', {
         user: admin
       });
-      assert.deepEqual(browser.map(tool => tool.id).sort(), browserIds);
-      // The shipped LDAP browser app: the definition bound to the browse actions.
-      const bound = await getToolsForApp(
-        {
-          id: 'ldap-browser',
-          integrations: {
-            [DEFINITION_ID]: { actions: ['browse_search', 'browse_read', 'browse_children'] }
-          }
-        },
+      assert.deepEqual(browseIds(one), CORP_BROWSE_IDS);
+      const narrowed = await getToolsForApp(
+        { id: 'a', integrations: { 'corp-browser': { actions: ['browse_read'] } } },
         'en',
         { user: admin }
       );
-      assert.deepEqual(bound.map(tool => tool.id).sort(), browserIds);
-      for (const app of [
-        { id: 'ldap-browser', tools: ['ldapBrowse'] },
-        {
-          id: 'ldap-browser',
-          integrations: {
-            [DEFINITION_ID]: { actions: ['browse_search', 'browse_read', 'browse_children'] }
-          }
-        }
-      ]) {
-        assert.deepEqual(await getToolsForApp(app, 'en', { user: member }), []);
-      }
+      assert.deepEqual(browseIds(narrowed), ['corp-browser__browse_read']);
+      // The shipped LDAP browser app: every browser the user may use.
+      const app = { id: 'ldap-browser', integrations: { [BROWSER_DEFINITION_ID]: {} } };
+      assert.deepEqual(
+        browseIds(await getToolsForApp(app, 'en', { user: admin })),
+        CORP_BROWSE_IDS
+      );
+      assert.deepEqual(browseIds(await getToolsForApp(app, 'en', { user: browserTeam })), [
+        ...CORP_BROWSE_IDS,
+        ...INFRA_BROWSE_IDS
+      ]);
+      assert.deepEqual(await getToolsForApp(app, 'en', { user: member }), []);
     });
 
     it('leaves people search of a browse-only directory closed', async () => {
@@ -316,11 +386,13 @@ describe('LDAP browser', () => {
       assert.ok(!tools.some(tool => tool.id.startsWith('infra__')));
     });
 
-    it('refuses a direct run to admins outside browse.groups', async () => {
+    it('refuses a direct run to users the browser is not granted to', async () => {
       const platform = { defaultLanguage: 'en' };
-      assert.equal(await mayRunTool(admin, platform, 'corp__browse_search'), true);
-      assert.equal(await mayRunTool(member, platform, 'corp__browse_search'), false);
-      assert.equal(await mayRunTool(admin, platform, 'infra__browse_read'), false);
+      assert.equal(await mayRunTool(admin, platform, 'corp-browser__browse_search'), true);
+      assert.equal(await mayRunTool(member, platform, 'corp-browser__browse_search'), false);
+      assert.equal(await mayRunTool(admin, platform, 'infra-browser__browse_read'), false);
+      // The old directory tool ids are gone.
+      assert.equal(browserToolOfId('corp__browse_search'), null);
     });
 
     it('is never offered over the MCP gateway', async () => {
@@ -345,7 +417,39 @@ describe('LDAP browser', () => {
       const refused = (await auditEntries()).filter(entry => entry.actor.id === 'member');
       assert.equal(refused.length, 1);
       assert.equal(refused[0].result, 'failure');
+      assert.equal(refused[0].resourceId, 'corp-browser');
       assert.match(refused[0].summary, /access_denied/);
+    });
+  });
+
+  describe('test', () => {
+    it("binds with the browser's account over the directory's connection and lists the base", async () => {
+      const fake = fakeConnect(() => [
+        { dn: `ou=people,${BASE}`, objectClass: ['organizationalUnit'] }
+      ]);
+      const own = { mode: 'service', dn: `cn=reader,${BASE}`, passwordRef: 'reader' };
+      const result = await testBrowser({ ...BROWSERS[0], bind: own }, { deps: fake });
+      assert.equal(result.success, true, JSON.stringify(result.steps));
+      assert.equal(fake.connections[0].url, 'ldaps://dc.corp.example:636');
+      assert.deepEqual(fake.binds[0], own);
+      assert.equal(fake.searches[0].base, BASE);
+      assert.equal(fake.searches[0].scope, 'one');
+      const base = result.steps.find(step => step.id === 'base');
+      assert.match(base.message, /^1 entry directly under dc=corp,dc=example/);
+    });
+
+    it('fails on the configuration without connecting', async () => {
+      const fake = fakeConnect(() => []);
+      const result = await testBrowser(BROWSERS[3], { deps: fake });
+      assert.equal(result.success, false);
+      assert.equal(fake.connections.length, 0);
+      assert.equal(result.steps[0].status, 'fail');
+    });
+
+    it('warns that a disabled directory offers no tools', async () => {
+      const result = await testBrowser(BROWSERS[2], { deps: fakeConnect(() => []) });
+      assert.equal(result.steps[0].status, 'warn');
+      assert.match(result.steps[0].hints.join(' '), /disabled/);
     });
   });
 
@@ -407,18 +511,18 @@ describe('LDAP browser', () => {
       assert.match(entry.attributes.logonHours[0], /^\[binary, \d+ bytes\]$/);
       assert.match(entry.attributes.description[0], /… \(520 characters\)$/);
       assert.equal(result.truncated, false);
-      // The directory's own bind, unless browse.bind is set.
+      // The directory's own bind, unless the browser has its own.
       assert.deepEqual(fake.binds[0], DIRECTORIES[0].bind);
+      assert.equal(result.directory, 'corp');
     });
 
-    it('uses browse.bind when one is set', async () => {
+    it("uses the browser's own account when one is set", async () => {
       const own = { mode: 'service', dn: `cn=reader,${BASE}`, passwordRef: 'reader' };
-      installDirectories(configCache, [
-        { ...DIRECTORIES[0], browse: { ...DIRECTORIES[0].browse, bind: own } }
-      ]);
+      installDirectoriesAndBrowsers(configCache, DIRECTORIES, [{ ...BROWSERS[0], bind: own }]);
       const fake = fakeConnect(() => []);
       await run('browse_read', { dn: `cn=Erika,ou=people,${BASE}` }, fake);
       assert.deepEqual(fake.binds[0], own);
+      assert.equal(fake.connections[0].url, 'ldaps://dc.corp.example:636');
     });
 
     it('refuses requested attributes on the deny list and DNs outside the browse base', async () => {
@@ -587,10 +691,11 @@ describe('LDAP browser', () => {
       const entries = (await auditEntries()).filter(entry => entry.actor.id === 'admin');
       const ok = entries.find(entry => entry.summary.includes('(cn=Erika)'));
       assert.equal(ok.action, 'read');
-      assert.equal(ok.resourceId, 'corp');
+      assert.equal(ok.resourceId, 'corp-browser');
       assert.equal(ok.result, 'success');
       assert.deepEqual(JSON.parse(ok.summary), {
         tool: 'browse_search',
+        directory: 'corp',
         filter: '(cn=Erika)',
         entries: 1,
         truncated: false
@@ -604,9 +709,6 @@ describe('LDAP browser', () => {
   it('leaves people search of the same directory as it was', async () => {
     const tools = await loadTools('en');
     const ids = tools.filter(tool => tool.id.startsWith('corp__')).map(tool => tool.id);
-    assert.deepEqual(ids.filter(id => !id.includes('browse')).sort(), [
-      'corp__get_person',
-      'corp__search_people'
-    ]);
+    assert.deepEqual(ids.sort(), ['corp__get_person', 'corp__search_people']);
   });
 });

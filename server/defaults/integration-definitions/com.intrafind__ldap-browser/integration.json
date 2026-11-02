@@ -1,0 +1,209 @@
+{
+  "id": "com.intrafind/ldap-browser",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: the admin LDAP browser is its own integration that reuses a people directory's connection; migration V204 created one for every directory that had the browser switched on.",
+        "de": "Erste Version: der LDAP-Browser für Administratoren ist eine eigene Integration, die die Verbindung eines Personenverzeichnisses nutzt; Migration V204 hat für jedes Verzeichnis mit eingeschaltetem Browser eine angelegt."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "LDAP browser",
+    "de": "LDAP-Browser"
+  },
+  "description": {
+    "en": "Let administrators ask about an LDAP directory in plain words and see the raw entries: attributes, branches, group members. Reuses the connection and bind account of a People directory (LDAP) installation, with its own base, result limit, withheld attributes and an optional read-only account. Every call is audited; it is never offered over the MCP gateway.",
+    "de": "Administratoren in normaler Sprache Fragen zu einem LDAP-Verzeichnis stellen und die rohen Einträge sehen lassen: Attribute, Zweige, Gruppenmitglieder. Nutzt die Verbindung und das Bind-Konto einer Installation von Personenverzeichnis (LDAP), mit eigener Basis, Trefferzahl, zurückgehaltenen Attributen und optional einem eigenen lesenden Konto. Jeder Aufruf wird protokolliert; über das MCP-Gateway wird er nie angeboten."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["directory", "ldap", "admin"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/people-directory-search.md#ldap-browser-for-admins",
+  "builtIn": true,
+  "protocol": {
+    "type": "native",
+    "module": "ldapBrowser"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "directory",
+      "type": "instance",
+      "definition": "com.intrafind/ldap-directory",
+      "required": true,
+      "title": {
+        "en": "People directory (LDAP)",
+        "de": "Personenverzeichnis (LDAP)"
+      },
+      "description": {
+        "en": "The directory installation whose connection the browser uses: URL, TLS settings, trusted certificates, allowed hosts, base DN and bind account. The directory must be enabled.",
+        "de": "Die Verzeichnis-Installation, deren Verbindung der Browser nutzt: URL, TLS-Einstellungen, vertrauenswürdige Zertifikate, erlaubte Hosts, Basis-DN und Bind-Konto. Das Verzeichnis muss eingeschaltet sein."
+      }
+    },
+    {
+      "key": "baseDn",
+      "type": "string",
+      "title": {
+        "en": "Browse base",
+        "de": "Browse-Basis"
+      },
+      "description": {
+        "en": "The DN the browser is confined to: every DN it reads must lie here. Empty: the directory's base DN, the whole directory.",
+        "de": "Der DN, auf den der Browser beschränkt ist: jeder gelesene DN muss darunter liegen. Leer: der Basis-DN des Verzeichnisses, also das ganze Verzeichnis."
+      }
+    },
+    {
+      "key": "maxResults",
+      "type": "number",
+      "min": 1,
+      "max": 200,
+      "default": 50,
+      "title": {
+        "en": "Entries per search",
+        "de": "Einträge pro Suche"
+      },
+      "description": {
+        "en": "The most entries one search returns.",
+        "de": "Die meisten Einträge, die eine Suche liefert."
+      }
+    },
+    {
+      "key": "bindMode",
+      "type": "enum",
+      "title": {
+        "en": "Account for browsing",
+        "de": "Konto zum Browsen"
+      },
+      "description": {
+        "en": "A separate (ideally read-only) account for browsing. Empty: the directory's own bind account, whose whole reach the browser then has.",
+        "de": "Ein eigenes (idealerweise lesendes) Konto zum Browsen. Leer: das Bind-Konto des Verzeichnisses, dessen gesamte Reichweite der Browser dann hat."
+      },
+      "choices": [
+        {
+          "value": "anonymous",
+          "label": {
+            "en": "Anonymous bind",
+            "de": "Anonymer Bind"
+          }
+        },
+        {
+          "value": "service",
+          "label": {
+            "en": "Service account",
+            "de": "Dienstkonto"
+          },
+          "requires": ["bindDn", "bindPasswordRef"]
+        }
+      ]
+    },
+    {
+      "key": "bindDn",
+      "type": "string",
+      "title": {
+        "en": "Bind DN",
+        "de": "Bind-DN"
+      },
+      "when": {
+        "field": "bindMode",
+        "equals": "service"
+      },
+      "description": {
+        "en": "The account that browses, e.g. cn=ldap-reader,ou=service,dc=corp,dc=example.",
+        "de": "Das Konto, das browst, z. B. cn=ldap-reader,ou=service,dc=corp,dc=example."
+      }
+    },
+    {
+      "key": "bindPasswordRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Bind password",
+        "de": "Bind-Passwort"
+      },
+      "when": {
+        "field": "bindMode",
+        "equals": "service"
+      },
+      "description": {
+        "en": "A credential of type secret holding the account's password (Admin → Credentials). Passwords are never stored in the installation.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Passwort des Kontos (Administration → Zugangsdaten). Passwörter werden nie in der Installation gespeichert."
+      }
+    },
+    {
+      "key": "denyAttributes",
+      "type": "list",
+      "title": {
+        "en": "Further attributes to withhold",
+        "de": "Weitere zurückgehaltene Attribute"
+      },
+      "description": {
+        "en": "Attribute names withheld on top of the built-in list of secrets (passwords, LAPS and BitLocker secrets, certificates, photos). They cannot be used in a filter either.",
+        "de": "Attributnamen, die zusätzlich zur eingebauten Liste der Geheimnisse (Passwörter, LAPS- und BitLocker-Geheimnisse, Zertifikate, Fotos) zurückgehalten werden. Sie können auch nicht in einem Filter vorkommen."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "instructions": {
+    "en": "The browser returns raw LDAP entries as the directory stores them. Never invent attributes or values; attributes listed in \"omitted\" hold secrets and are never shown. On \"truncated\": true narrow the filter or the base instead of paging.",
+    "de": "Der Browser liefert rohe LDAP-Einträge, wie das Verzeichnis sie speichert. Erfinde nie Attribute oder Werte; Attribute in \"omitted\" enthalten Geheimnisse und werden nie gezeigt. Bei \"truncated\": true Filter oder Basis eingrenzen statt zu blättern."
+  },
+  "actions": [
+    {
+      "name": "browse_search",
+      "title": {
+        "en": "Search entries",
+        "de": "Einträge suchen"
+      },
+      "description": {
+        "en": "Search raw directory entries with an LDAP filter",
+        "de": "Rohe Verzeichniseinträge mit einem LDAP-Filter suchen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service"
+    },
+    {
+      "name": "browse_read",
+      "title": {
+        "en": "Read an entry",
+        "de": "Eintrag lesen"
+      },
+      "description": {
+        "en": "Read one entry by its full DN, with its raw attributes",
+        "de": "Einen Eintrag anhand seines DN mit rohen Attributen lesen"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service"
+    },
+    {
+      "name": "browse_children",
+      "title": {
+        "en": "List children",
+        "de": "Kinder auflisten"
+      },
+      "description": {
+        "en": "List the direct children of a DN",
+        "de": "Die direkten Kinder eines DN auflisten"
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "service"
+    }
+  ]
+}

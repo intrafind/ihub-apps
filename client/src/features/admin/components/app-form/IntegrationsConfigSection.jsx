@@ -115,8 +115,10 @@ function Card({ title, description, children, testId }) {
  *   installed or the app binds one (`storageBindingRows.js`). Replaces the
  *   former upload switch `upload.cloudStorageUpload`.
  * - **Integrations**: every other installation, grouped into MCP servers,
- *   agents, built-in and catalog integrations; a definition with several
- *   installations also gets "All … installations" (`app.integrations[<definition id>]`).
+ *   agents, built-in and catalog integrations (the LDAP browsers are built-in:
+ *   they have no type; a browser binding without `actions` binds all three
+ *   browse actions); a definition with several installations also gets
+ *   "All … installations" (`app.integrations[<definition id>]`).
  *
  *
  * @param {Object} props

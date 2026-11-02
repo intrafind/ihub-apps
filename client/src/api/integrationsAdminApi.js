@@ -101,3 +101,14 @@ export const resetIntegrationRegistration = async id =>
       ...json({})
     })
   ).data;
+
+/**
+ * What the dedicated People directory (LDAP), LDAP browser and Entra ID
+ * editors need besides the installation: the search presets with their
+ * mappings, the person fields, the defaults and upper bounds of the limits,
+ * the LDAP sign-in providers a directory can reuse (without secrets) and
+ * which `AZURE_*` environment variables the server has (set or not, never the
+ * value). Server: `server/routes/admin/peopleDirectoryEditor.js`.
+ */
+export const fetchPeopleDirectoryEditorContext = async () =>
+  (await makeAdminApiCall(`${BASE}/people-directories/editor-context`)).data;

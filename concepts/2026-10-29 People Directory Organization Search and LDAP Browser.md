@@ -3,6 +3,11 @@
 Status: part 1 draft for review; part 2 implemented (see
 `docs/people-directory-search.md`, "LDAP browser (for admins)"). Date: 2026-10-29.
 
+Update 2026-11-02: the admin LDAP browser of part 2 is now an integration of its own
+(`com.intrafind/ldap-browser`) that reuses a directory's connection; `browse.groups` became the
+installation's group grant (migration V204). See
+`concepts/2026-10-20 Unified Integrations/2026-11-02 People directories and the LDAP browser.md`.
+
 Two independent parts that share the LDAP connection layer. They can be
 planned and built separately; part 1 first.
 
