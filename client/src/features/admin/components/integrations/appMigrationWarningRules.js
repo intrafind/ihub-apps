@@ -20,7 +20,7 @@
  *
  * Pure; `AppMigrationWarnings.jsx` renders them.
  *
- * @module features/admin/components/integrations/appMigrationWarnings
+ * @module features/admin/components/integrations/appMigrationWarningRules
  */
 
 /** The warning codes that concern an app. */

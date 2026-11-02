@@ -11,7 +11,10 @@ import {
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
 import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import AppMigrationWarnings from '../integrations/AppMigrationWarnings';
-import { appMigrationWarnings, warningsByBindingKey } from '../integrations/appMigrationWarnings';
+import {
+  appMigrationWarnings,
+  warningsByBindingKey
+} from '../integrations/appMigrationWarningRules';
 import IntegrationBindingRow from './IntegrationBindingRow';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';

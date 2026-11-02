@@ -671,7 +671,12 @@ export function MigrationOutcome({ outcome, onDismiss, linkToInstallation = fals
             {t('admin.integrations.migration.log.reason', 'Reason: {{reason}}', {
               reason: outcome.reason
             })}
-            {outcome.code && <span className="ml-1 font-mono text-xs">({outcome.code})</span>}
+            {outcome.code && (
+              <>
+                {' '}
+                <span className="font-mono text-xs">({outcome.code})</span>
+              </>
+            )}
           </p>
         )}
         {retry && (

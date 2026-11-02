@@ -11,7 +11,7 @@ import { pickText } from '../integrations/ConfigFieldInput';
  * `integrationMigrations` after it. Pure; `IntegrationUpdateMigrations.jsx`
  * renders the sentences.
  *
- * @module features/admin/components/marketplace/integrationUpdateMigrations
+ * @module features/admin/components/marketplace/updateMigrationRows
  */
 
 /** Codes of `POST …/_update` that mean "a migration holds the lock, try again" (409). */

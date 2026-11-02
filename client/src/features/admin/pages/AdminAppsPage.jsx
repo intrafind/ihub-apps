@@ -21,7 +21,7 @@ import {
 import { fetchUIConfig } from '../../../api';
 import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
 import AppMigrationWarnings from '../components/integrations/AppMigrationWarnings';
-import { appMigrationWarnings } from '../components/integrations/appMigrationWarnings';
+import { appMigrationWarnings } from '../components/integrations/appMigrationWarningRules';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -525,7 +525,7 @@ function AdminAppsPage() {
       // Users (and so the chat UI) do not get an app whose features are off.
       disabled: app =>
         app.enabled === false ||
-        missingRequirements(app, platformConfig, integrationStatus, currentLanguage).length > 0
+        missingRequirements(app, platformConfig, integrationStatus, currentLanguage, t).length > 0
     },
     {
       id: 'edit',

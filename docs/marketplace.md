@@ -95,6 +95,15 @@ fetched from the registry and rendered when you open them, without installing an
   also brings the previous package back) or uninstalls it; the others are updated. When the
   commit itself fails, the previous folder, every installation and the manifest stay as they
   were. See [Integrations → Migrations](integrations.md#migrations).
+- **The update dialog** (the item's **Update** button) lists, under the release notes, every
+  installation of the definition with what the update does to it: "This update changes 2
+  install values and 1 action of *GovData*; a backup is made first.", the apps that lose an
+  action, an installation whose migration will fail ("the update still goes in, but it stays on
+  its version and offers no actions until you act on its page"), one that is planned only when
+  the update is downloaded, one that needs a review and is not migrated. After the update it
+  reports each installation's result (migrated, version recorded, failed with the reason,
+  skipped), each with a link to the installation's page; a migration that holds the lock is
+  reported in the dialog ("try again in a moment").
 - **Compatibility** is enforced on install and update: an item whose `compatibility.ihub` (or the
   short form `minVersion`, read as `>=minVersion`) this server does not satisfy is refused with
   `INCOMPATIBLE_IHUB_VERSION`, also when the API is called directly; an integration definition
@@ -201,7 +210,8 @@ add skills with are listed under [Skills → API](skills.md#api).
   "errors": [],                     // migrations in the catalog this server cannot read
   "installations": [
     {
-      "id": "govdata", "from": "1.2.0", "to": "1.4.0", "planFromCatalog": true,
+      "id": "govdata", "label": { "en": "GovData" },   // the stored label, or null
+      "from": "1.2.0", "to": "1.4.0", "planFromCatalog": true,
       "migrations": ["1.3.0", "1.4.0"],
       "summary": { "values": 2, "actions": 1, "apps": 1 },
       "warnings": [], "collisions": [], "ok": true, "reason": null

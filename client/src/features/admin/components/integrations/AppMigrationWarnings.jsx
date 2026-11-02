@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { APP_WARNING_CODES } from './appMigrationWarnings';
+import { APP_WARNING_CODES } from './appMigrationWarningRules';
 
 /**
  * One app migration warning as a sentence from the app's point of view.

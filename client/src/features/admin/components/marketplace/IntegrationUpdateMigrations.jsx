@@ -13,7 +13,7 @@ import {
   previewNotPlanned,
   previewRowKind,
   resultReasonOf
-} from './integrationUpdateMigrations';
+} from './updateMigrationRows';
 
 const LINK_CLASS =
   'underline rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500';

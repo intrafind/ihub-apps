@@ -16,7 +16,7 @@ import {
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
-import { UPDATE_RETRY_CODES, previewLabels } from './integrationUpdateMigrations';
+import { UPDATE_RETRY_CODES, previewLabels } from './updateMigrationRows';
 
 /**
  * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
