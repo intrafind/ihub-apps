@@ -29,7 +29,12 @@ import defaultInteractionService from '../loop/InteractionService.js';
 import { newRunId } from '../loop/RunLog.js';
 import { resolvePrincipal } from '../loop/runIdentity.js';
 import { approvalDisplayData } from '../loop/seams/approvalSeam.js';
-import { directCallNeedsApproval, resolveToolApproval } from '../../utils/toolApproval.js';
+import { actionFingerprint } from '../../utils/actionFingerprint.js';
+import {
+  directCallNeedsApproval,
+  resolveToolApproval,
+  sideEffectFromAnnotations
+} from '../../utils/toolApproval.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { toViewToolResult } from './mcpApps.js';
 
@@ -41,6 +46,16 @@ const LAPSED = new Set(['expired', 'cancelled']);
 
 /** The tool definition a view's call is resolved as (approval, side effect, names). */
 export function viewCallToolDef({ serverId, name, target, viewTool }) {
+  // The called action's own fingerprint, from the same inputs as the model's
+  // tool (`fingerprintOfTool`): name, side effect from the annotations, input
+  // schema. Without it a new or changed action would pass the newOrChanged gate.
+  const fingerprint = target
+    ? actionFingerprint({
+        name,
+        sideEffect: sideEffectFromAnnotations(target.annotations),
+        parameters: target.inputSchema || { type: 'object', properties: {} }
+      })
+    : null;
   return {
     id: name,
     name: target?.title || name,
@@ -53,6 +68,7 @@ export function viewCallToolDef({ serverId, name, target, viewTool }) {
     _integration: {
       instanceId: serverId,
       action: name,
+      ...(fingerprint ? { fingerprint } : {}),
       ...(viewTool?._integration?.instanceLabel
         ? { instanceLabel: viewTool._integration.instanceLabel }
         : {})

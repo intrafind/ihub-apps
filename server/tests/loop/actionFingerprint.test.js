@@ -24,6 +24,7 @@ import {
   reviewStatesOf
 } from '../../services/integrations/actionReview.js';
 import { McpServerConnection } from '../../services/mcp/McpServerConnection.js';
+import { viewCallToolDef } from '../../services/mcp/mcpViewToolApproval.js';
 import { buildSkillTools } from '../../services/a2a/a2aTools.js';
 import {
   compareCodeUnits,
@@ -181,6 +182,51 @@ test('fingerprint: an MCP tool and its admin action listing agree', () => {
   // What McpAdapter.discoverActions lists for the same raw tool.
   const action = { name: raw.name, sideEffect: 'read', parameters: raw.inputSchema };
   assert.equal(fingerprintOfTool(tool), fingerprintsOfActions([action], { actions: [] }).search);
+});
+
+test('fingerprint: a schema property named __proto__ is part of the hash', () => {
+  const schemaWith = type =>
+    JSON.parse(`{"type":"object","properties":{"__proto__":{"type":"${type}"}}}`);
+  assert.notEqual(
+    actionFingerprint({ name: 'x', parameters: schemaWith('string') }),
+    actionFingerprint({ name: 'x', parameters: schemaWith('number') })
+  );
+});
+
+test('fingerprint: an MCP App view call carries the same fingerprint as the model tool', () => {
+  const raw = {
+    name: 'delete_page',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    annotations: { destructiveHint: true }
+  };
+  const conn = Object.create(McpServerConnection.prototype);
+  conn.config = { id: 'wiki', mcpApps: { enabled: true } };
+  const { tools, appTools } = conn.buildToolSets([raw]);
+  const modelFingerprint = fingerprintOfTool(tools[0]);
+  const target = appTools.get('delete_page') || {
+    name: raw.name,
+    inputSchema: raw.inputSchema,
+    annotations: raw.annotations
+  };
+  const viewDef = viewCallToolDef({ serverId: 'wiki', name: 'delete_page', target });
+  assert.ok(modelFingerprint);
+  assert.equal(viewDef._integration.fingerprint, modelFingerprint);
+
+  // Accepted as it is: no newOrChanged. Changed schema: newOrChanged asks.
+  const installation = {
+    id: 'wiki',
+    approval: { default: 'never' },
+    actions: { fingerprints: { delete_page: modelFingerprint } }
+  };
+  const known = resolveToolApproval(viewDef, null, {}, { installation });
+  assert.notEqual(known.approvalSource, 'newOrChanged');
+  const changed = viewCallToolDef({
+    serverId: 'wiki',
+    name: 'delete_page',
+    target: { ...target, inputSchema: { type: 'object', properties: { id: { type: 'number' } } } }
+  });
+  const policy = resolveToolApproval(changed, null, {}, { installation });
+  assert.deepEqual([policy.approval, policy.approvalSource], ['always', 'newOrChanged']);
 });
 
 test('fingerprint: an A2A skill tool and its admin action listing agree', () => {

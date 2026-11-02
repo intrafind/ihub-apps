@@ -790,7 +790,7 @@ function InstallationPageContent({ instanceId }) {
                                 type="button"
                                 onClick={() => markReviewed([action.name])}
                                 disabled={busy}
-                                className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:text-indigo-300"
+                                className="inline-flex min-h-6 items-center rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:text-indigo-300"
                                 aria-label={t(
                                   'admin.integrations.actionReview.markOneLabel',
                                   'Mark {{action}} reviewed',
