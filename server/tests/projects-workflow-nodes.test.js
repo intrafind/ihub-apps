@@ -210,7 +210,9 @@ after(async () => {
   evictItemKeys();
   evictProjectIndex();
   await shutdownStorageBootstrap();
-  await fs.rm(scratch, { recursive: true, force: true });
+  // A storage lock released just after the last test can still land in
+  // data/locks while the directory is removed (ENOTEMPTY); rm retries then.
+  await fs.rm(scratch, { recursive: true, force: true, maxRetries: 3 });
 });
 
 describe('workflow inputs of type project', () => {
