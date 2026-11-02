@@ -28,7 +28,7 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Web search engines** are one integration per engine, all of `type: "web-search"`: **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`), each a singleton installed only when wanted (a fresh install ships none). Brave and Staan hold their API key as a credential reference (`apiKeyRef`, falling back to `BRAVE_SEARCH_API_KEY` / `STAAN_API_KEY`); Qwant has no settings. Each has one action, `search`, under its historical tool id (`braveSearch`, `staanSearch`, `qwantSearch`). Apps do not bind engines: they switch web search on in their own `websearch` settings and name an engine (`websearch.provider`: an installation id, or `auto` for the first engine the user may use, Brave, Staan, Qwant, then any other). Native search on Google, OpenAI and Anthropic models needs no engine; the page reader `read_url` belongs to the web search feature (a platform tool). A third party ships its own engine as a `script` or `openapi` definition of type `web-search` (see [Building an Integration → Web search engines](integration-development.md#web-search-engines)). Migration V204 replaced the former single installation `websearch` (`com.intrafind/web-search`) with the engines that worked. See [Web Tools](web-tools.md).
 
-**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through `/api/integrations/jira/auth` (from the chat prompt or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
+**Atlassian Jira** (`com.intrafind/jira`, installation `jira`) is the first built-in that signs every user in (`auth.modes: ["oauth-user"]`): the installation holds the OAuth app's client id, client secret (credential reference) and redirect URI; each user connects their Atlassian account once through the one connect flow (`POST /api/integrations/jira/connect`, from the chat's Connect card or **Settings → Integrations**), and the six actions (`jira_searchTickets`, `jira_getTicket`, `jira_addComment`, `jira_getTransitions`, `jira_transitionTicket`, `jira_getAttachment`, ids unchanged) run as that user. **Connections** on the installed list shows who connected and disconnects a user. See [Jira Integration](JIRA_INTEGRATION.md).
 
 **Microsoft Entra ID directory** (`com.intrafind/entra-directory`, installation `entra`) runs with an app registration's client credentials: tenant id, client id and the client secret as a credential reference, each falling back to the `AZURE_*` environment variables when empty (its editor says per field whether the server has the variable). Its six actions are the former `entraPeopleSearch_*` tools under the same ids. It is a people directory (`type: "people-directory"`): the shipped People search app uses it next to the LDAP directories. See [Tool Calling → entraPeopleSearch](tool-calling.md#entrapeoplesearch).
 
@@ -36,10 +36,10 @@ The iAssistant installation has no base URL of its own: its `connection` field n
 
 **Microsoft Office 365**, **Google Drive** and **Nextcloud** (`com.intrafind/office365`, `com.intrafind/google-drive`, `com.intrafind/nextcloud`) are the storage providers (`type: storage`) of the chat's file picker and the project cloud documents. Each can be installed **several times** — one installation per Azure app registration or tenant, per Google OAuth client, per Nextcloud server. An installation holds the provider's OAuth app (client id, client secret as a credential reference, optional redirect URI, the tenant, sources or server URL) and signs every user in (`auth.modes: ["oauth-user"]`); they have no model-facing actions.
 
-- **The installation id is the provider id.** It names the provider in the routes (`/api/integrations/<service>/auth?providerId=<installation id>`, every browse and download route requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
+- **The installation id is the provider id.** It names the provider in the connect flow (`POST /api/integrations/<installation id>/connect`), in the browse and download routes (`?providerId=<installation id>`, every one requires it), in the callback URL `/api/integrations/<service>/<installation id>/callback`, in the users' stored connections (`<userId>__<installation id>.json`), in project cloud documents and in the Nextcloud embed plugin. It never changes after the installation is created. Migration V206 renamed every upgraded installation to the provider id it had before (the retired **Provider id** value), so nothing an admin registered or a user connected changed.
 - **Redirect URI**: empty means derived from each request like Jira's — scheme and host as the browser sees them (`X-Forwarded-Proto` / `X-Forwarded-Host` of a trusted proxy), the base path (`X-Forwarded-Prefix`), then the callback path. The installation's **Settings** tab shows the URI to register with a **Copy** button.
 - **Apps bind them** like integrations: one installation, a provider's definition id (all its installations) or `type:storage` (all storage providers); the chat's file picker offers the bound providers the user's groups grant. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
-- Users connect under **Settings → Integrations** or from the picker; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
+- Users connect under **Settings → Integrations** or from the picker, which shows the Connect card when the provider is not connected; **Connected users** on the installation shows who connected. The client reads the providers the user's groups grant from `/api/auth/status` (`cloudStorage.providers`, each with its installation `id` and `definition`).
 
 See [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md), [Nextcloud](nextcloud-integration.md).
 
@@ -261,7 +261,7 @@ The tokens themselves stay where they always were, encrypted per user and servic
 
 ### Signing in: one callback
 
-Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. The browser is always sent back to a same-origin path with stable result codes (`<provider>_connected`, `<provider>_error=<code>`, `mcp_connected`, `mcp_error`), never the authorization server's text.
+Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. The browser is always sent back to a same-origin path with one result shape for every integration — `integration_connected=<installation id>`, or `integration_error=<code>&integration=<installation id>` — and never with the authorization server's text. `code` is one of `access_denied`, `oauth_failed`, `missing_code`, `invalid_state`, `state_expired`, `user_mismatch`, `integration_not_found`, `exchange_failed`, `discovery_failed`, `registration_failed`, `issuer_mismatch`, `public_url_mismatch`, `invalid_client`, `callback_failed`.
 
 The callback is `GET /api/integrations/oauth/callback`. The callback URLs registered in the vendors' OAuth apps keep working as aliases of it, with the same handler:
 
@@ -273,6 +273,24 @@ The callback is `GET /api/integrations/oauth/callback`. The callback URLs regist
 
 The redirect URI sent to the authorization server does not change with this release: the configured **Redirect URI** of the installation, else the alias derived from the request (`<scheme>://<host><base path>` + the alias path). An admin can register `…/api/integrations/oauth/callback` instead and enter it as the installation's Redirect URI.
 
+### The connect flow for users
+
+Every integration that signs users in is connected the same way, whatever its protocol (#2917):
+
+```
+POST /api/integrations/<installation id>/connect      { "returnUrl": "/apps/assistant/c/<chat>" }
+  → 200 { "url": "https://auth.atlassian.com/authorize?…&state=…" }
+browser → vendor consent → GET /api/integrations/oauth/callback (or its alias)
+  → 302 /apps/assistant/c/<chat>?integration_connected=<installation id>
+```
+
+- **Connect** starts the sign-in and answers the vendor's authorization URL; the client sends the browser there. **Reconnect** (`POST …/reconnect`, `{ "returnUrl", "scopes"? }`) is the same for a connection that expired, was revoked or lacks a permission: `scopes` are added to what the user already granted (step-up), and the connection keeps its id. **Disconnect** (`POST …/disconnect`) revokes at the vendor where it supports revocation and deletes the caller's tokens.
+- The installation id is checked against the installed integrations and the user's groups (`permissions.integrations`): an installation the user may not use answers `404` like one that does not exist. Admins pass the group check (they configure and test integrations); the installation's own rule (an MCP server's app bindings, a storage provider's grant) still applies. Disconnect only needs the installation to exist: it removes the caller's own tokens.
+- `returnUrl` must be a path or an http(s) URL on this host; anything else is refused with `400 INVALID_RETURN_URL` before a flow starts. The callback returns to it, so the user lands back in the same chat.
+- The POST routes need a JSON body (`415` otherwise), so a cross-site form cannot start or end a connection; delegated callers (OAuth clients, agents) are refused with `403`. Starting a sign-in is limited to 20 per user and minute.
+
+**In the chat.** A tool whose caller has no usable connection returns `INTEGRATION_AUTH_REQUIRED` before it calls the vendor. The chat draws one **Connect card** for it — the same for Jira, a cloud storage provider and a per-user MCP server: the integration, why iHub needs to act as the user for this request, the permissions (its enabled actions grouped as read / write), where the user will sign in, **Connect** and **Not now**. For a connection that expired or lacks a permission, the card says why and what changes, and offers **Reconnect**. After a successful connect the browser comes back to the same chat and the request that needed the connection is retried **once**: the chat sends one follow-up message ("I connected Jira. Please try again."), only when that answer is still the last one and has not been retried before. A call that failed inside the adapter or on the transport never produced a card and is never retried automatically, because a write may already have happened. The file browsers of the storage providers show the same card when they are not connected.
+
 ### Headless runs
 
 Scheduled tasks (and workflows) run as their owner. Before a scheduled run spends a model call, it resolves the owner's own connection of every installation whose tools it may call and that signs users in. When one is missing, the run fails with `INTEGRATION_AUTH_REQUIRED` and the reason names the installation and why:
@@ -282,11 +300,11 @@ Scheduled tasks (and workflows) run as their owner. Before a scheduled run spend
   "integration": "jira", "reason": "expired", "connectUrl": "/settings/integrations" }
 ```
 
-`reason` is `not_connected`, `expired` or `insufficient_scope`. A tool call that finds no usable connection returns the same structured result instead of throwing (`{ "error": "INTEGRATION_AUTH_REQUIRED", "integration", "reason", "message", "connectUrl" }`); the chat shows its Connect card, and a scheduled run that meets one fails with the same code.
+`reason` is `not_connected`, `expired` or `insufficient_scope`. A tool call that finds no usable connection returns the same structured result instead of throwing (`{ "error": "INTEGRATION_AUTH_REQUIRED", "integration", "reason", "message", "connectUrl", "scopes"? }`, where `connectUrl` is the connect route `/api/integrations/<id>/connect`, or `/reconnect` for `insufficient_scope`); the chat shows its Connect card, and a scheduled run that meets one fails with the same code and points the owner at Settings → Integrations.
 
 ### Scope step-up
 
-When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, the tool result asks the user to re-authorize with the union of the scopes they granted and the ones the server named (`reason: "insufficient_scope"`, the Connect URL carries `scope=`). That happens once: a refusal for scopes the user already granted is reported as an ordinary error.
+When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, the tool result asks the user to re-authorize with the union of the scopes they granted and the ones the server named (`reason: "insufficient_scope"`, `scopes`, `connectUrl` = the reconnect route); the Connect card shows the new permission and its **Reconnect** sends those scopes. That happens once: a refusal for scopes the user already granted is reported as an ordinary error.
 
 ## Writing a definition
 
@@ -493,11 +511,46 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `GET /api/admin/integrations/installed/:id/example-apps`                                                              | the example apps it offers (`templates[]`: `key`, `source` `definition` or `generated`, `name`, `description`, `suggestedId`), `grantedToYou` (the calling admin's groups grant it), `enabled` |
 | `POST /api/admin/integrations/installed/:id/example-apps`                                                             | create one, body `{ "template"?: "<key>", "appId"?: "…", "enabled"?: true }` → `201 { app }`; `409` when the id is taken, `400` for an invalid id or an unknown template; audited as `create app` |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
+| `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
+| `GET /api/integrations/:id` | one of them, `{ integration }`; `404` for an installation the user may not use |
+| `POST /api/integrations/:id/connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
+| `POST /api/integrations/:id/reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
+| `POST /api/integrations/:id/disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ success, removed, revoked }` |
 | `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it, `409 INTEGRATION_AUTH_REQUIRED` (with `integration`, `reason`, `connectUrl`) when the user has no usable connection |
 
 Every write is audited with resource `integration`; connects and disconnects with resource `connection` (`create`, `revoke`).
+
+**`GET /api/integrations`** answers `{ "integrations": [ … ] }`, sorted by name, one entry per installation:
+
+```jsonc
+{
+  "id": "jira",                              // installation id
+  "definition": "com.intrafind/jira",
+  "type": null,                              // the definition's type: "storage", "web-search", "people-directory", or null
+  "protocol": "native",                      // native | mcp | openapi | a2a | script
+  "name": "Atlassian Jira",                  // the installation's label, else the definition's name (localized)
+  "description": "…",
+  "icon": null,                              // an http(s) icon URL of the definition, else null
+  "capabilities": ["tools"],                 // from the definition: tools, files, scopes, sources, search, views, model
+  "actions": [                               // the enabled actions the models are offered
+    { "name": "searchTickets", "title": "Search issues", "description": "…", "sideEffect": "read" }
+  ],
+  "effects": ["read", "write"],              // the distinct side effects of the actions (read, write, destructive, unknown)
+  "connection": {
+    "mode": "personal",                      // personal | sso | service_account | shared_key | none
+    "status": "connected",                   // connected | not_connected | needs_reconnect (personal), else = mode
+    "reason": null,                          // needs_reconnect / not_connected: not_connected | expired | insufficient_scope
+    "account": "daniel@example.com",         // "connected as …", once known (read once from the vendor, then kept)
+    "scopes": ["read:jira-work"],            // granted scopes
+    "connectedAt": "…", "expiresAt": "…", "lastUsedAt": "…",
+    "signInHost": "auth.atlassian.com",      // where the user signs in
+    "connectable": true                      // personal and configured: Connect / Reconnect can start
+  }
+}
+```
+
+`mode` says who the integration acts as: `personal` (the user's own account, OAuth), `sso` (the user's iHub sign-in on every request: iFinder, iAssistant), `service_account` (an account the admin configured: `auth.mode` `service-account` or `oauth-client`, or a password-type secret), `shared_key` (an API key the admin configured), `none` (no sign-in). The listing reads the connection index only; it never sends a token anywhere. Disabled installations, ones whose definition cannot run or whose migration withholds them, and ones the user's groups do not grant are left out.
 
 **Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
 
@@ -559,7 +612,9 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/auth/IntegrationConnectionService.js`, `connectionProviders.js`, `tokenSecrets.js`, `oauthFlowStore.js`, `integrationAuthRequired.js` | the connection index, connect / callback / refresh / disconnect / resolve, what each installation's connection is, where the secrets live, the server-side sign-in flows, `INTEGRATION_AUTH_REQUIRED` |
 | `server/services/integrations/auth/connectionReindex.js` | the one-time re-index of the token tree into the connection index |
 | `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
-| `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and its aliases; the providers' `/auth`, `/status`, `/disconnect` |
+| `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and the vendor-registered aliases of Jira and the storage providers |
+| `server/routes/integrations/userIntegrations.js`, `server/services/integrations/userIntegrations.js` | `GET /api/integrations`, `POST /api/integrations/:id/connect`, `…/reconnect`, `…/disconnect`: the user's integrations and the one connect flow |
+| `client/src/features/integrations/connect/` | the chat's Connect card (`ConnectCard.jsx`), the sign-in result (`connectResult.js`), the retry once after connecting (`connectRetry.js`, `useConnectRetry.js`); `client/src/api/userIntegrationsApi.js` |
 | `server/validators/integrationConnectionSchema.js` | the connection record |
 | `server/routes/admin/integrationExampleApps.js`, `server/services/integrations/exampleApps.js` | example apps of an installation: the templates (shipped or generated), the binding moved to the installation, the free app id |
 | `client/src/features/admin/components/integrations/IntegrationTestPanel.jsx` | **Test in chat** on the installation page: app picker, example app form, the chat of `AppTestPanel` |

@@ -263,25 +263,22 @@ call:
   "error": "INTEGRATION_AUTH_REQUIRED",
   "integration": "okta",
   "reason": "not_connected",
-  "message": "Connect Okta directory to use this tool: /api/mcp/oauth/authorize?serverId=okta",
-  "connectUrl": "/api/mcp/oauth/authorize?serverId=okta",
-  "authRequired": {
-    "serverId": "okta",
-    "serverName": "Okta directory",
-    "connectUrl": "/api/mcp/oauth/authorize?serverId=okta"
-  }
+  "message": "Connect Okta directory to use this tool. Ask the user to connect Okta directory with the Connect card in the chat.",
+  "connectUrl": "/api/integrations/okta/connect"
 }
 ```
 
 `reason` is `not_connected`, `expired` (the authorization server refused the
 refresh token) or `insufficient_scope` (see step-up below). The code is the one
 every integration uses (`INTEGRATION_AUTH_REQUIRED`, formerly
-`MCP_AUTH_REQUIRED`). The model sees the message; the chat shows a **Connect** card under the
-answer. Connect opens the server's sign-in and returns to the chat, where the
-card shows the server as connected; the user then sends the request again.
-The card is stored with the answer, so it is still there after the redirect;
-when the chat is opened again later, the card asks the server whether the
-user is connected now and shows that. A tool with an MCP App view shows no
+`MCP_AUTH_REQUIRED`). The model sees the message; the chat shows the one
+**Connect** card of every integration under the answer (see
+[Integrations → The connect flow for users](integrations.md#the-connect-flow-for-users)).
+Connect starts the sign-in (`POST /api/integrations/<server id>/connect`),
+returns to the same chat and retries the request once. The card is stored with
+the answer, so it is still there after the redirect; when the chat is opened
+again later, the card asks `GET /api/integrations/<server id>` whether the user
+is connected now and shows that. A tool with an MCP App view shows no
 view for such a call. The MCP App routes answer an unconnected server with
 **409** `{ "error": "auth_required", "code": "INTEGRATION_AUTH_REQUIRED", "integration": …, "connectUrl": … }`
 (never 401, which would read as an expired iHub session).
@@ -336,8 +333,10 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
 - The PKCE (S256) verifier stays on the server, encrypted with the
   installation key; the browser never sees it.
 - Scope step-up: a call refused with `403` and `error="insufficient_scope"`
-  returns `reason: "insufficient_scope"` with a Connect URL that asks for the
-  union of the granted and the challenged scopes (`…&scope=`). The user
+  returns `reason: "insufficient_scope"` with `scopes` (the union of the
+  granted and the challenged scopes) and `connectUrl` =
+  `/api/integrations/<server id>/reconnect`; the Connect card shows the new
+  permission and its **Reconnect** asks for those scopes. The user
   re-authorizes once; a refusal for scopes already granted is an ordinary
   error.
 - Every connection has a record in the connection index (status, issuer,
@@ -351,16 +350,20 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
   error, so an authorization server cannot steer iHub to an internal address
   through a `Location` header.
 - The return URL is checked like every other OAuth return URL (same host or
-  a relative path); errors come back as fixed codes
-  (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed|issuer_mismatch|public_url_mismatch`),
+  a relative path; anything else is refused before a sign-in starts); the
+  result comes back as `?integration_connected=<server id>` or as a fixed
+  code (`?integration_error=access_denied|oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|integration_not_found|exchange_failed|discovery_failed|registration_failed|issuer_mismatch|public_url_mismatch&integration=<server id>`),
   never as text from the authorization server.
 
 Routes (`serverId` is the installation id):
 
-- `GET /api/mcp/oauth/authorize?serverId=&returnUrl=` — start a sign-in (302).
-- `GET /api/mcp/oauth/callback/:serverId` — the server's redirect URI.
-- `GET /api/mcp/oauth/connections` — the caller's per-user servers and their state.
-- `POST /api/mcp/oauth/disconnect` `{ "serverId": "…" }`.
+- `POST /api/integrations/:serverId/connect` `{ "returnUrl" }` → `{ "url" }`,
+  `POST …/reconnect` `{ "returnUrl", "scopes"? }`, `POST …/disconnect` — the one
+  connect flow of every integration.
+- `GET /api/integrations` — the caller's integrations with their connection
+  status (per-user servers have `connection.mode: "personal"`).
+- `GET /api/mcp/oauth/callback/:serverId` — the server's redirect URI (an
+  alias of `/api/integrations/oauth/callback`).
 - `GET /api/mcp/oauth/client-metadata/:serverId` — iHub's Client ID Metadata
   Document for that server.
 - `GET /api/admin/integrations/installed/:id/connections` and

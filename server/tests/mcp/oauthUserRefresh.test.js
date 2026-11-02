@@ -430,7 +430,7 @@ describe('chat projection of an MCP App tool that needs a sign-in', () => {
       buildLogData: () => ({}),
       logInteraction: async () => {},
       mcpAppViews: views,
-      mcpAuthPrompts: []
+      authPrompts: []
     });
     const ctx = { iteration: 1, meta: { stream: { emit: (type, data) => frames.push(data) } } };
     const info = {
@@ -445,13 +445,15 @@ describe('chat projection of an MCP App tool that needs a sign-in', () => {
     await seam.postTool(ctx, info, {
       rawResult: {
         error: 'INTEGRATION_AUTH_REQUIRED',
-        authRequired: { serverId: 'okta', serverName: 'Okta', connectUrl: '/api/mcp/x' }
+        integration: 'okta',
+        reason: 'not_connected',
+        connectUrl: '/api/integrations/okta/connect'
       },
       message: { content: '' },
       durationMs: 1
     });
     expect(views).toEqual([]);
     expect(frames[0].mcpApp).toBeUndefined();
-    expect(frames[0].authRequired).toMatchObject({ serverId: 'okta' });
+    expect(frames[0].authRequired).toMatchObject({ integration: 'okta', reason: 'not_connected' });
   });
 });

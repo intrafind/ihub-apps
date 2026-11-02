@@ -169,7 +169,7 @@ Download ticket attachments.
 ### OAuth 2.0 Flow Details
 
 1. **Initial Request**: User attempts to use a Jira tool without a connection (the app binds the `jira` installation)
-2. **Auth Prompt**: System shows connection prompt with "Connect to JIRA" button (also under **Settings → Integrations**)
+2. **Connect card**: the tool answers `INTEGRATION_AUTH_REQUIRED` before calling Atlassian, and the chat shows the one Connect card of every integration: why iHub needs to act as the user in Jira, the permissions (the enabled actions as read / write), that the sign-in is at `auth.atlassian.com`, **Connect** and **Not now** (also under **Settings → Integrations**). Connect calls `POST /api/integrations/jira/connect` with the current chat as return URL.
 3. **OAuth Initiation**: 
    - Generates PKCE code verifier and challenge for enhanced security
    - Redirects to: `https://auth.atlassian.com/authorize`
@@ -192,14 +192,15 @@ Download ticket attachments.
 7. **API Access**: 
    - Discovers user's cloudId from accessible resources
    - Makes API calls to `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/`
-8. **Tool Execution**: Original JIRA request executes seamlessly
+8. **Back in the chat**: the callback returns to the same chat (`?integration_connected=jira`) and the chat retries the request that needed the connection once. See [Integrations → The connect flow for users](integrations.md#the-connect-flow-for-users).
 
 ## Error Handling
 
 The JIRA connector provides comprehensive error handling:
 
 - **INTEGRATION_AUTH_REQUIRED** (`integration: "jira"`, `reason: not_connected | expired`): the
-  user needs to connect (or reconnect) their JIRA account; the result carries the `connectUrl`.
+  user needs to connect (or reconnect) their JIRA account; the result carries the `connectUrl`
+  (`/api/integrations/jira/connect`) and is returned before any call to Atlassian.
   It replaces the former `JIRA_AUTH_REQUIRED`. A scheduled task whose owner has no Jira
   connection fails before it starts with the same code.
 - **Authentication Expired**: Automatic token refresh or re-authentication prompt; the tokens are
@@ -240,8 +241,9 @@ The JIRA connector provides comprehensive error handling:
 server/
 ├── services/integrations/JiraService.js    # Core JIRA service
 ├── tools/jira.js                           # Tool wrapper
-├── routes/integrations/jira.js             # Jira-specific routes + provider config for the shared OAuth routes
-├── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /status, /disconnect routes; /callback alias
+├── routes/integrations/jira.js             # The attachment proxy, the connection test, the /callback alias
+├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered callback aliases
+├── routes/integrations/userIntegrations.js # GET /api/integrations, POST /api/integrations/:id/connect|reconnect|disconnect
 ├── routes/integrations/oauthCallback.js    # The one integration OAuth callback
 └── services/integrations/auth/             # Shared OAuth client and connection service
 

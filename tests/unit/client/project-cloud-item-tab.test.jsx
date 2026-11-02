@@ -106,6 +106,12 @@ jest.mock('../../../client/src/features/upload/hooks/useNextcloudBrowser', () =>
   __esModule: true,
   useNextcloudBrowser: () => mockBrowserState
 }));
+// The Connect card of a provider that is not connected (connect-card.test.jsx).
+jest.mock('../../../client/src/api/userIntegrationsApi', () => ({
+  __esModule: true,
+  fetchUserIntegration: async () => null,
+  requestConnectUrl: async () => 'https://auth.example.com/'
+}));
 
 const CloudItemTab =
   require('../../../client/src/features/projects/components/item-dialog/CloudItemTab').default;
