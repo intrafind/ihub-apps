@@ -29,7 +29,12 @@ import {
   currentCitationHighlight,
   useSourcesState
 } from '../../../client/src/features/chat/sources/sourcesStore';
-import { sourcesLabel } from '../../../client/src/features/chat/sources/sourcesView';
+import {
+  answerScopeLabel,
+  scopeLabelOf,
+  sourceScopesOf,
+  sourcesLabel
+} from '../../../client/src/features/chat/sources/sourcesView';
 import { modelSupportsWebSearch } from '../../../client/src/features/chat/webSearch';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 
@@ -505,6 +510,135 @@ describe('AnswerSources', () => {
     expect(sourcesLabel(t, { queries: [], items: [contract, minutes] })).toBe(
       'sources.sourcesCount:2'
     );
+  });
+});
+
+describe('where each source was found (#3056)', () => {
+  const inContracts = {
+    ...contract,
+    ref: { id: 'sp-7f3a9c11', scope: 'contracts' },
+    scopeName: 'Contracts'
+  };
+  const inHr = {
+    ...minutes,
+    ref: { id: 'fs-1234abcd', scope: 'hr' },
+    scopeName: 'HR policies'
+  };
+  const nda = {
+    id: 'ifinder:nda-1',
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'NDA template',
+    ref: { id: 'nda-1', scope: 'contracts' },
+    scopeName: 'Contracts',
+    private: true
+  };
+  const allProfiles = {
+    integrationId: 'iassistant',
+    id: 'all',
+    name: { en: 'All my search profiles', de: 'Alle meine Suchprofile' },
+    action: 'ask'
+  };
+  const scoped = { queries: [], items: [inContracts, inHr, nda], scopes: [allProfiles] };
+  const scopedAnswer = 'Notice <cite type="r">1</cite>, minutes <cite type="r">2</cite>.';
+
+  const openPanel = set => {
+    render(
+      <AnswerSources
+        messageKey="msg-1"
+        sources={set}
+        citations={resolveCitations(scopedAnswer, set)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /sources.sourcesCount/ }));
+    return screen.getByRole('dialog', { name: 'Sources' });
+  };
+
+  test('every card names the profile its document was found in', () => {
+    const dialog = openPanel(scoped);
+    const card = within(dialog).getByText('Supplier contract ACME').closest('li');
+    expect(within(card).getByText('Contracts')).toBeInTheDocument();
+    expect(within(card).getByText('Found in Contracts')).toBeInTheDocument();
+    expect(within(card).getByTitle('Found in Contracts')).toBeInTheDocument();
+    const minutesCard = within(dialog).getByText('Board minutes').closest('li');
+    expect(within(minutesCard).getByText('HR policies')).toBeInTheDocument();
+  });
+
+  test('the panel says whom the answer asked', () => {
+    const dialog = openPanel(scoped);
+    expect(within(dialog).getByText('Asked All my search profiles')).toBeInTheDocument();
+  });
+
+  test('sources found in several profiles can be narrowed to one', () => {
+    const dialog = openPanel(scoped);
+    const filter = within(dialog).getByRole('group', {
+      name: 'Filter by where the sources were found'
+    });
+    const all = within(filter).getByRole('button', { name: /All/ });
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    expect(within(filter).getByRole('button', { name: /Contracts/ })).toHaveTextContent('2');
+
+    fireEvent.click(within(filter).getByRole('button', { name: /HR policies/ }));
+    expect(within(filter).getByRole('button', { name: /HR policies/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(within(dialog).getByText('Board minutes')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Supplier contract ACME')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('NDA template')).not.toBeInTheDocument();
+
+    fireEvent.click(within(filter).getByRole('button', { name: /Contracts/ }));
+    expect(within(dialog).getByText('Supplier contract ACME')).toBeInTheDocument();
+    expect(within(dialog).getByText('NDA template')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Board minutes')).not.toBeInTheDocument();
+
+    fireEvent.click(all);
+    expect(within(dialog).getByText('Board minutes')).toBeInTheDocument();
+  });
+
+  test('one profile only: labels on the cards, no filter', () => {
+    const dialog = openPanel({
+      queries: [],
+      items: [inContracts, nda],
+      scopes: [{ integrationId: 'ifinder', id: 'contracts', name: 'Contracts', action: 'search' }]
+    });
+    expect(within(dialog).queryByRole('group')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Searched in Contracts')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('Found in Contracts')).toHaveLength(2);
+  });
+
+  test('sources without a named scope show no label', () => {
+    const dialog = openPanel({ queries: [], items: [contract, minutes] });
+    expect(within(dialog).queryByText(/Found in/)).not.toBeInTheDocument();
+    // A project document's scope is its project, not a place the user picked.
+    expect(scopeLabelOf({ provider: 'project', ref: { id: 'itm_1', scope: 'prj_1' } })).toBe('');
+  });
+
+  test('the view helpers group by scope id and label the answer scopes', () => {
+    const t = (key, fallback, options) => fallback.replace('{{scope}}', options.scope);
+    expect(sourceScopesOf([inContracts, inHr, nda, langdock])).toEqual([
+      { id: 'contracts', label: 'Contracts', count: 2 },
+      { id: 'hr', label: 'HR policies', count: 1 }
+    ]);
+    expect(answerScopeLabel(t, allProfiles, 'de')).toBe('Asked Alle meine Suchprofile');
+    expect(answerScopeLabel(t, { integrationId: 'ifinder', id: 'hr' }, 'en')).toBe(
+      'Searched in hr'
+    );
+  });
+
+  test('a reopened chat shows the same labels', () => {
+    const message = transformStoredMessage({
+      id: 'm3',
+      role: 'assistant',
+      content: scopedAnswer,
+      sources: scoped
+    });
+    expect(message.sources.scopes).toEqual([allProfiles]);
+    expect(message.sources.items.map(item => item.scopeName)).toEqual([
+      'Contracts',
+      'HR policies',
+      'Contracts'
+    ]);
   });
 });
 

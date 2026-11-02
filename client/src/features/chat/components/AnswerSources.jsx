@@ -30,7 +30,15 @@ import {
   releaseCitation,
   useSourcesState
 } from '../sources/sourcesStore';
-import { fileTypeOf, siteOf, sourcesLabel } from '../sources/sourcesView';
+import {
+  answerScopeLabel,
+  fileTypeOf,
+  matchesScope,
+  scopeLabelOf,
+  siteOf,
+  sourceScopesOf,
+  sourcesLabel
+} from '../sources/sourcesView';
 import ItemProvenance from '../../projects/components/ItemProvenance';
 
 // Loaded on demand: the preview pulls in pdf.js, which is a deliberately
@@ -58,6 +66,11 @@ const CITED_LIST_LIMIT = 5;
  * source allows (`sources/sourceActions.js`). Hovering or focusing a card
  * highlights the passages that cite it; hovering a badge in the answer
  * highlights its card (see `sourcesStore`).
+ *
+ * Where the answer's integrations searched or whom they asked ("Searched in
+ * Contracts", "Asked HR assistant") heads the panel, every card names the
+ * scope its source was found in, and sources found in more than one scope can
+ * be narrowed to one (#3056).
  *
  * @param {Object} props
  * @param {string} props.messageKey - The answer's id
@@ -325,10 +338,12 @@ function SourcesPanel({
   returnFocusRef,
   onOpenInApp
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const titleId = useId();
   const panelRef = useRef(null);
   const closeRef = useRef(null);
+  // The scope the lists are narrowed to (`ref.scope`), or null for all of them.
+  const [scopeFilter, setScopeFilter] = useState(null);
   // { type: 'preview'|'details'|'app', source, passages?, initialPassageIndex? }
   const [dialog, setDialog] = useState(null);
   const dialogRef = useRef(null);
@@ -418,7 +433,14 @@ function SourcesPanel({
 
   const closeDialog = useCallback(() => setDialog(null), []);
   const queries = sources.queries || [];
+  const answerScopes = sources.scopes || [];
   const cardProps = { messageKey, highlight, host, attachEnabled, onAction: runAction };
+  // The scopes the sources were found in; with more than one, the lists can
+  // show one at a time. A filter whose scope is gone shows everything.
+  const foundIn = useMemo(() => sourceScopesOf([...cited, ...considered]), [cited, considered]);
+  const shownScope = foundIn.some(scope => scope.id === scopeFilter) ? scopeFilter : null;
+  const shownCited = cited.filter(source => matchesScope(source, shownScope));
+  const shownConsidered = considered.filter(source => matchesScope(source, shownScope));
 
   return createPortal(
     <>
@@ -455,6 +477,25 @@ function SourcesPanel({
                 ))}
               </ul>
             )}
+            {answerScopes.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
+                {answerScopes.map(scope => (
+                  <li
+                    key={`${scope.integrationId}:${scope.id}`}
+                    className="flex items-center gap-1"
+                  >
+                    <Icon
+                      name={scope.action === 'ask' ? 'chat-bubble-left-right' : 'folder'}
+                      size="xs"
+                      className="shrink-0 text-gray-500 dark:text-gray-400"
+                    />
+                    <span className="break-words">
+                      {answerScopeLabel(t, scope, i18n?.language)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <button
             ref={closeRef}
@@ -477,16 +518,23 @@ function SourcesPanel({
               {notice}
             </Banner>
           )}
+          {foundIn.length > 1 && (
+            <ScopeFilter scopes={foundIn} selected={shownScope} onSelect={setScopeFilter} />
+          )}
           <SourceSection
             title={t('sources.cited', 'Cited in this answer')}
-            empty={t('sources.noneCited', 'The answer cites none of the sources directly.')}
-            sources={cited}
+            empty={
+              shownScope
+                ? t('sources.noneCitedInScope', 'The answer cites none of the sources found here.')
+                : t('sources.noneCited', 'The answer cites none of the sources directly.')
+            }
+            sources={shownCited}
             {...cardProps}
           />
-          {considered.length > 0 && (
+          {shownConsidered.length > 0 && (
             <SourceSection
               title={t('sources.considered', 'Also considered')}
-              sources={considered}
+              sources={shownConsidered}
               {...cardProps}
             />
           )}
@@ -545,6 +593,51 @@ function Banner({ tone, onDismiss, children }) {
   );
 }
 
+/**
+ * Narrows the panel to the sources found in one scope ("All", "Contracts 4",
+ * "HR policies 2"), for an answer whose sources come from several (#3056).
+ *
+ * @param {Object} props
+ * @param {Array<{id: string, label: string, count: number}>} props.scopes - `sourceScopesOf`
+ * @param {string|null} props.selected - the scope shown, null for all
+ * @param {(scopeId: string|null) => void} props.onSelect
+ */
+function ScopeFilter({ scopes, selected, onSelect }) {
+  const { t } = useTranslation();
+  const total = scopes.reduce((sum, scope) => sum + scope.count, 0);
+  const options = [
+    { id: null, label: t('sources.scopeFilterAll', 'All'), count: total },
+    ...scopes
+  ];
+  return (
+    <div
+      role="group"
+      aria-label={t('sources.scopeFilter', 'Filter by where the sources were found')}
+      className="mb-3 flex flex-wrap gap-1"
+    >
+      {options.map(option => {
+        const active = option.id === selected;
+        return (
+          <button
+            key={option.id ?? ''}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onSelect(option.id)}
+            className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+              active
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-200'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+            }`}
+          >
+            <span className="truncate">{option.label}</span>
+            <span className="shrink-0 text-gray-500 dark:text-gray-400">{option.count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** A titled list of source cards ("Cited in this answer", "Also considered"). */
 function SourceSection({ title, empty, sources, highlight, ...cardProps }) {
   return (
@@ -591,6 +684,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
   const [showPassages, setShowPassages] = useState(false);
   const actions = sourceActionsOf(source, host);
   const site = siteOf(source);
+  const scopeLabel = scopeLabelOf(source);
   const date = source.publishedDate ? formatDate(source.publishedDate, i18n.language) : null;
   const passages = source.passages || [];
   const canPreview = actions.includes('preview');
@@ -635,6 +729,22 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
                   {date}
                 </time>
               </>
+            )}
+            {/* Where it was found: the search profile, or another integration
+                scope, by its display name (#3056). */}
+            {scopeLabel && (
+              <span
+                className="inline-flex min-w-0 items-center gap-1 rounded-sm bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                title={t('sources.foundIn', 'Found in {{scope}}', { scope: scopeLabel })}
+              >
+                <Icon name="folder" size="xs" className="shrink-0" />
+                <span className="truncate" aria-hidden="true">
+                  {scopeLabel}
+                </span>
+                <span className="sr-only">
+                  {t('sources.foundIn', 'Found in {{scope}}', { scope: scopeLabel })}
+                </span>
+              </span>
             )}
           </div>
           {actions.includes('open') ? (

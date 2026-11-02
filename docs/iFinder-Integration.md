@@ -518,6 +518,8 @@ The choice is saved with the chat and restored when the chat is reopened. It bin
 
 The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With the installation's **Users may change the search profile** off (`allowUserSearchProfileChange: false`), or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
 
+The **Sources** panel under an answer says where each document was found: every card names the search profile by its display name (the id when the name is unknown), and the panel header says where the answer searched (**Searched in Contracts**) or which iAssistant it asked (**Asked HR assistant**). An iAssistant over all of the user's search profiles names, per document, the profile iFinder reports on it; when the documents come from several profiles, the panel can show one profile at a time. The labels are stored with the answer, so a reopened chat shows the same ones. See [Answer Sources → Integration scopes](answer-sources.md#integration-scopes).
+
 ### Example User Interactions
 
 1. **"Show my latest tickets"**

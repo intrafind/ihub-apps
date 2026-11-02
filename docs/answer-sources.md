@@ -26,6 +26,12 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   document's deep link) and iAssistant's `<cite>` markers alike. Hover or focus highlights the
   paragraph and its card. A click opens the panel on that card.
 - Each card offers the actions its data allows. A click on the title opens the link.
+- A document found in an integration scope names it on its card: the iFinder search profile it
+  was found in ("Contracts"), by its display name, or by its id when the name is unknown. The
+  panel header says where the answer searched and whom it asked (**Searched in Contracts**,
+  **Asked HR assistant**). When the sources come from more than one scope (an iAssistant over
+  all of the user's search profiles, or several searches), the panel can show one scope at a
+  time. See [Integration scopes](#integration-scopes).
 
 | Action | Offered when the source has | Runs |
 |---|---|---|
@@ -49,15 +55,39 @@ A source (`shared/sources/source.js`):
 | `title`, `url`, `site`, `favicon`, `snippet`, `publishedDate`, `fileName`, `type` | display fields; `url` and `favicon` are http(s) only, `snippet` loses any markup |
 | `passages[]` | `{ text, marker? }`: cited or retrieved passages |
 | `ref` | `{ id, scope? }`: the handle the provider's content actions use (iFinder: document id and search profile) |
+| `scopeName` | display name of `ref.scope` where users pick it ("Contracts" for an iFinder search profile), set by the producer, falling back to the id; kept only beside a `ref.scope`, and always names that scope |
 | `read` | `{ ok, words?, truncated? }`: a read of the page or document |
 | `cited` | the provider reports that the answer relies on it |
 | `markers[]` | provider inline markers pointing at it (iAssistant `r:3`; passages carry `s:7`) |
 | `private` | found with the user's own permissions or network; a share never carries it |
 
-An answer's sources are `{ items, queries }`: the sources, merged by `id`, in the order they were
-first found, plus what was searched for. The same `mergeSources` folds them on the server, for the
-stored answer, and on the client, for the live panel. `resolveCitations(markdown, sources)` numbers
-the sources in the order the answer first cites them.
+An answer's sources are `{ items, queries, scopes? }`: the sources, merged by `id`, in the order
+they were first found, plus what was searched for and the integration scopes the answer was
+produced with. The same `mergeSources` folds them on the server, for the stored answer, and on the
+client, for the live panel. `resolveCitations(markdown, sources)` numbers the sources in the order
+the answer first cites them.
+
+### Integration scopes
+
+Where a user picks where an integration searches or whom it asks (see
+[iFinder → Choosing the search profile per chat](iFinder-Integration.md#choosing-the-search-profile-per-chat)),
+the answer records it:
+
+- **On each source**: `ref.scope` stays the handle the content actions need; `scopeName` is its
+  display name. The iFinder tools add `searchProfileName` to their result from the user's cached
+  profile list (the same list as the scope picker, so no iFinder request per hit), and the
+  producer copies it onto every document. iAssistant documents take the profile iFinder names on
+  their ACCESS link, else the conversation's profile; over all of the user's profiles, the link is
+  the only way to tell.
+- **On the set**: `scopes: [{ integrationId, id, name?, action? }]`. An iFinder search records the
+  profile it ran in (`action: "search"`), even when it found nothing; an iAssistant answer records
+  the iAssistant scope it asked (`action: "ask"`, e.g. `assistant:<id>` or `all`). `name` is a
+  string or `{ en, de }`. The key is there only when the set holds a scope.
+
+Both are stored with the answer, so a reopened chat shows the same labels. A share drops
+`scopes`, as it drops the private sources they describe. Another store that declares scopes
+through the scope registry (`server/services/integrations/scopes/`) sets the same two fields from
+its own producer.
 
 ## How an integration returns results
 
@@ -191,10 +221,10 @@ serves would offer actions that cannot work. A source with a `ref` is always pri
   `{ items, queries, supports }` for every loop caller: chat, workflows, agents, app-as-tool and
   MCP `tools/call`. See [Agent Loop](agent-loop.md).
 - **SSE and ledger**: one event, `sources/added { step?, callId?, toolId?, items, queries?,
-  supports? }`. It is written to the run ledger, so a re-sync replays it. See [SSE v2](sse-v2.md).
+  supports?, scopes? }`. It is written to the run ledger, so a re-sync replays it. See [SSE v2](sse-v2.md).
   A tool call's frame carries its `callId`, and the tool activity rows list each call's own
   sources from it.
-- **Stored answer**: `sources: { items, queries }`, bounded to 256 KB (passages go first, then
+- **Stored answer**: `sources: { items, queries, scopes? }`, bounded to 256 KB (passages go first, then
   sources). Google's grounding supports are written into the stored text as citation markers. See
   [Chat Persistence](chat-persistence.md).
 - **Share**: only sources that are not private and carry no `ref`. See

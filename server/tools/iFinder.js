@@ -5,7 +5,8 @@
 
 import iFinderService from '../services/integrations/iFinderService.js';
 import iFinderScopes, {
-  resolveToolSearchProfile
+  resolveToolSearchProfile,
+  searchProfileNames
 } from '../services/integrations/scopes/iFinderScopes.js';
 
 /**
@@ -20,34 +21,56 @@ async function withSearchProfile(params = {}) {
 }
 
 /**
+ * Run a call that reports documents, and add the display name of the search
+ * profile it ran in (`searchProfileName`), which the sources panel shows on
+ * every document it found (#3056). The name comes from the user's cached
+ * profile list and is read beside the call, so it adds no wait; when it is
+ * unknown the result stays as it was and the panel shows the id.
+ *
+ * @param {Object} params - the tool call's params
+ * @param {(params: Object) => Promise<Object>} run - the service call
+ * @returns {Promise<Object>} the call's result
+ */
+async function withSearchProfileName(params, run) {
+  const scoped = await withSearchProfile(params);
+  const [result, names] = await Promise.all([
+    run(scoped),
+    searchProfileNames({ user: scoped.user, signal: scoped.signal })
+  ]);
+  const searchProfile = result && typeof result === 'object' ? result.searchProfile : undefined;
+  const name = typeof searchProfile === 'string' ? names.get(searchProfile) : undefined;
+  return name && !result.error ? { ...result, searchProfileName: name } : result;
+}
+
+/**
  * Search for documents in iFinder
  * @param {Object} params - The search parameters
  * @param {string} params.query - The search query
  * @param {number} [params.limit] - Maximum number of results to return
- * @returns {Promise<Object>} The search results
+ * @returns {Promise<Object>} The search results, with `searchProfileName` when known
  */
 export async function search(params) {
-  return iFinderService.search(await withSearchProfile(params));
+  return withSearchProfileName(params, scoped => iFinderService.search(scoped));
 }
 
 /**
  * Get document content by ID
  * @param {Object} params - The parameters
  * @param {string} params.documentId - The document ID
- * @returns {Promise<Object>} The document content
+ * @returns {Promise<Object>} The document content, with `searchProfileName` when known
  */
 export async function getContent(params) {
-  return iFinderService.getContent(await withSearchProfile(params));
+  return withSearchProfileName(params, scoped => iFinderService.getContent(scoped));
 }
 
 /**
  * Get document metadata by ID
  * @param {Object} params - The parameters
  * @param {string} params.documentId - The document ID
- * @returns {Promise<Object>} The document metadata
+ * @returns {Promise<Object>} The document metadata, with `searchProfileName` when known
  */
 export async function getMetadata(params) {
-  return iFinderService.getMetadata(await withSearchProfile(params));
+  return withSearchProfileName(params, scoped => iFinderService.getMetadata(scoped));
 }
 
 /**

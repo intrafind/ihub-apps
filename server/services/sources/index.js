@@ -119,7 +119,8 @@ function defaultProviderOf(toolId, toolDef) {
  *
  * @param {{items?: Array, queries?: string[], supports?: Array}|null} frame
  * @param {Object} [defaults] - `provider`, `kind`, `private` where a source names none
- * @returns {{items: Array, queries: string[], supports?: Array}|null} null when it reports nothing
+ * @returns {{items: Array, queries: string[], supports?: Array, scopes?: Array}|null} null
+ *   when it reports nothing
  */
 export function finalizeSourceFrame(frame, defaults = {}) {
   if (!frame || typeof frame !== 'object') return null;
@@ -137,9 +138,16 @@ export function finalizeSourceFrame(frame, defaults = {}) {
     return { ...source, private: true };
   });
   const queries = merged.queries.slice(0, MAX_FRAME_QUERIES);
-  const { supports } = merged;
+  const { supports, scopes } = merged;
+  // The integration scopes say where the rest was found; on their own they
+  // are nothing to report.
   if (!items.length && !queries.length && !supports.length) return null;
-  return boundFrame({ items, queries, ...(supports.length ? { supports } : {}) });
+  return boundFrame({
+    items,
+    queries,
+    ...(supports.length ? { supports } : {}),
+    ...(scopes ? { scopes } : {})
+  });
 }
 
 /**
