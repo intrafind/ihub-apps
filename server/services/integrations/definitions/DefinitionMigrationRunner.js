@@ -26,6 +26,7 @@ import {
   appBindsInstallation,
   bindingKeysOf,
   canonicalJson,
+  compareCodeUnits,
   describeCollisions,
   installationMigrationState,
   migrationsBetween,
@@ -226,7 +227,7 @@ export class DefinitionMigrationRunner {
 
   /** Run `fn(leases)` holding the locks of several installations (taken in id order). */
   async _withInstanceLocks(instanceIds, fn, options = LOCK_OPTIONS) {
-    const ids = [...new Set(instanceIds)].sort();
+    const ids = [...new Set(instanceIds)].sort(compareCodeUnits);
     const leases = new Map();
     const take = async index => {
       if (index >= ids.length) return fn(leases);
