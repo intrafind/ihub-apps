@@ -136,7 +136,7 @@ category on the Providers page.
 - **Tools keep their ids:** `braveSearch`, `staanSearch`, `qwantSearch` and the page reader
   `read_url`; a workflow node's generic `webSearch` uses the first engine the user may use on
   models without native search.
-- **Migrated for you:** migrations V195 and V203 move the provider keys into credentials and
+- **Migrated for you:** migrations V195 and V204 move the provider keys into credentials and
   install one engine per key, and Qwant where it was reachable. `BRAVE_SEARCH_API_KEY` and
   `STAAN_API_KEY` still apply when no credential is referenced.
 

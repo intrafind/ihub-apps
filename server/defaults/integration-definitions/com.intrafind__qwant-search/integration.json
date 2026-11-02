@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: Qwant is its own web search engine integration, installed as qwant (migration V203).",
-        "de": "Erste Version: Qwant ist eine eigene Websuchmaschinen-Integration, installiert als qwant (Migration V203)."
+        "en": "First version: Qwant is its own web search engine integration, installed as qwant (migration V204).",
+        "de": "Erste Version: Qwant ist eine eigene Websuchmaschinen-Integration, installiert als qwant (Migration V204)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",
