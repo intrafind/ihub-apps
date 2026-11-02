@@ -4,7 +4,9 @@
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../../../../shared/components/Icon';
-import { InstallationStatusPills } from './IntegrationPills';
+import { InstallationStatusPills, MigrationStatusReason } from './IntegrationPills';
+import { MigrationActionButtons } from './MigrationParts';
+import { MIGRATION_ACTION, migrationActionsFor } from './migrationState';
 import IntegrationFactList from './IntegrationFactList';
 import { installationFacts } from './integrationFacts';
 import { integrationGroup, integrationGroupOf } from './integrationGroups';
@@ -24,6 +26,9 @@ const QUICK_BUTTON_BASE =
   'relative z-10 inline-flex items-center justify-center min-h-[32px] min-w-[32px] p-1.5 border shadow-xs rounded-md bg-white dark:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
 const QUICK_BUTTON = `${QUICK_BUTTON_BASE} border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus-visible:ring-blue-500`;
 const QUICK_DANGER_BUTTON = `${QUICK_BUTTON_BASE} border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 focus-visible:ring-red-500`;
+/** The migration actions of a tile: small text buttons, above the stretched link too. */
+const MIGRATION_BUTTON =
+  'relative z-10 inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 border border-gray-300 dark:border-gray-600 shadow-xs rounded-md bg-white dark:bg-gray-700 text-xs font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
 
 /**
  * One installation on the Installed tab: a card with everything an admin
@@ -35,6 +40,12 @@ const QUICK_DANGER_BUTTON = `${QUICK_BUTTON_BASE} border-red-300 dark:border-red
  * quick actions are separate buttons above it, each with an `aria-label`
  * naming the installation.
  *
+ * An installation with a migration state shows its pill (red for a failed
+ * migration, amber for pending and needs review), the reason as text and the
+ * actions the state offers (Migrate now; Re-run migration, Restore backup;
+ * Restore backup, Adopt current version). Uninstall is the Remove quick
+ * action.
+ *
  * @param {Object} props
  * @param {Object} props.item - an installation as `GET /api/admin/integrations/installed` lists it
  * @param {Object[]} props.installations - all installations (to name an `instance` value)
@@ -44,6 +55,8 @@ const QUICK_DANGER_BUTTON = `${QUICK_BUTTON_BASE} border-red-300 dark:border-red
  * @param {(item: Object) => void} props.onToggle - enable / disable (asks first when apps bind it)
  * @param {(item: Object) => void} props.onRemove
  * @param {(item: Object) => void} props.onConnections - the connected users dialog
+ * @param {(action: string, item: Object) => void} [props.onMigrationAction] - a migration
+ *   action (`useMigrationActions().request`); without it the tile offers none
  */
 function InstallationTile({
   item,
@@ -53,7 +66,8 @@ function InstallationTile({
   onTest,
   onToggle,
   onRemove,
-  onConnections
+  onConnections,
+  onMigrationAction
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -61,6 +75,10 @@ function InstallationTile({
   const facts = installationFacts(item, { installations });
   const enabled = item.enabled !== false;
   const unusable = item.definitionMissing || item.incompatible;
+  // Uninstall is the Remove quick action below.
+  const migrationActions = onMigrationAction
+    ? migrationActionsFor(item).filter(action => action !== MIGRATION_ACTION.UNINSTALL)
+    : [];
 
   return (
     <li
@@ -110,6 +128,20 @@ function InstallationTile({
             { reason: item.incompatibleReason }
           )}
         </p>
+      )}
+
+      <MigrationStatusReason item={item} className="mt-2 break-words" />
+      {migrationActions.length > 0 && (
+        <div className="mt-2">
+          <MigrationActionButtons
+            actions={migrationActions}
+            instance={item}
+            onRequest={onMigrationAction}
+            busy={busy}
+            labelWithName
+            buttonClassName={MIGRATION_BUTTON}
+          />
+        </div>
       )}
 
       {facts.length > 0 && (

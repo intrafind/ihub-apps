@@ -17,6 +17,11 @@ import IntegrationGroupSection from '../components/integrations/IntegrationGroup
 import InstallationTile from '../components/integrations/InstallationTile';
 import CatalogTile from '../components/integrations/CatalogTile';
 import InboundIntegrations from '../components/integrations/InboundIntegrations';
+import {
+  MigrationConfirmDialog,
+  MigrationOutcome
+} from '../components/integrations/MigrationParts';
+import useMigrationActions from '../components/integrations/useMigrationActions';
 import { groupIntegrations } from '../components/integrations/integrationGroups';
 import { appsBindingInstallation } from '../components/integrations/integrationBindings';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
@@ -99,7 +104,10 @@ export function matchesIntegrationQuery(entry, query) {
  *   built-in, from the catalog). A tile opens the installation's page
  *   (`/admin/integrations/:instanceId`); its quick actions test, enable /
  *   disable (asking first when apps bind it), remove and list the connected
- *   users.
+ *   users. An installation with a migration state also offers the actions
+ *   of that state (Migrate now, Re-run migration, Restore backup, Adopt
+ *   current version); their outcome shows above the groups with a link to
+ *   the installation's page.
  * - **Catalog**: the definitions to install from, in the same groups.
  *   Install opens the install dialog; so does the deep link
  *   `?install=<folder name>` with `v.<key>=` and `label` prefills (the
@@ -134,6 +142,8 @@ function AdminIntegrationsPage() {
   const [confirm, setConfirm] = useState(null); // { kind: 'remove' | 'disable', item }
   const [busy, setBusy] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  // The outcome of the last migration action (log entry or error), until dismissed.
+  const [migrationOutcome, setMigrationOutcome] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -234,6 +244,13 @@ function AdminIntegrationsPage() {
   );
 
   const flash = (type, text) => setMessage({ type, text });
+
+  const migration = useMigrationActions({
+    onDone: async outcome => {
+      setMigrationOutcome(outcome);
+      await load();
+    }
+  });
 
   const onInstalled = instance => {
     setDialog(null);
@@ -428,6 +445,15 @@ function AdminIntegrationsPage() {
               />
             </div>
           )}
+          {migrationOutcome && (
+            <div className="mb-6">
+              <MigrationOutcome
+                outcome={migrationOutcome}
+                onDismiss={() => setMigrationOutcome(null)}
+                linkToInstallation
+              />
+            </div>
+          )}
           {installed.length === 0 ? (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
               <Icon name="link" size="lg" className="mx-auto text-gray-400" />
@@ -463,11 +489,12 @@ function AdminIntegrationsPage() {
                           item={item}
                           installations={installed}
                           grantedTo={groups ? groupsGranting(item, groups) : null}
-                          busy={busy === item.id}
+                          busy={busy === item.id || migration.running === item.id}
                           onTest={runTest}
                           onToggle={requestToggle}
                           onRemove={target => setConfirm({ kind: 'remove', item: target })}
                           onConnections={setConnectionsFor}
+                          onMigrationAction={migration.request}
                         />
                       ))}
                     </IntegrationGroupSection>
@@ -527,6 +554,12 @@ function AdminIntegrationsPage() {
           onSaved={onInstalled}
         />
       )}
+
+      <MigrationConfirmDialog
+        pending={migration.pending}
+        onConfirm={migration.confirm}
+        onCancel={migration.cancel}
+      />
 
       <ConfirmDialog
         isOpen={Boolean(confirm)}

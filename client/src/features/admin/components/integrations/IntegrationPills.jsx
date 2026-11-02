@@ -3,10 +3,12 @@
 
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { MIGRATION_STATUS, migrationStatusTone } from './migrationState';
 
 const TONES = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
   yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+  amber: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
   red: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
   blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
   orange: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
@@ -17,7 +19,7 @@ const TONES = {
  * A small status pill of the integrations admin.
  *
  * @param {Object} props
- * @param {'green'|'yellow'|'red'|'blue'|'orange'|'gray'} [props.tone='gray']
+ * @param {'green'|'yellow'|'amber'|'red'|'blue'|'orange'|'gray'} [props.tone='gray']
  * @param {string} [props.title] - tooltip
  * @param {React.ReactNode} props.children
  */
@@ -35,6 +37,66 @@ export function Pill({ tone = 'gray', title, children }) {
 /** Where the marketplace shows the item of a definition, for the update badge. */
 export function marketplaceLinkFor(definitionId) {
   return `/admin/marketplace?type=integration&q=${encodeURIComponent(String(definitionId).replace('/', '__'))}`;
+}
+
+/**
+ * The name of a migration state, as its pill and the installation page show it.
+ *
+ * @param {string} status - `migrationPending`, `migrationFailed` or `needsReview`
+ * @param {Function} t - the translation function
+ * @returns {string}
+ */
+export function migrationStatusLabel(status, t) {
+  switch (status) {
+    case MIGRATION_STATUS.PENDING:
+      return t('admin.integrations.migration.status.migrationPending', 'Migration pending');
+    case MIGRATION_STATUS.FAILED:
+      return t('admin.integrations.migration.status.migrationFailed', 'Migration failed');
+    case MIGRATION_STATUS.REVIEW:
+      return t('admin.integrations.migration.status.needsReview', 'Needs review');
+    default:
+      return status;
+  }
+}
+
+/**
+ * The pill of an installation's migration state: red for a failed migration,
+ * amber for a pending one and one that needs a review. The reason is not a
+ * tooltip here: the tile and the page show it as text next to the pill
+ * ({@link MigrationStatusReason}).
+ *
+ * @param {Object} props
+ * @param {string|null|undefined} props.status - `instance.status`
+ */
+export function MigrationStatusPill({ status }) {
+  const { t } = useTranslation();
+  const tone = migrationStatusTone(status);
+  if (!tone) return null;
+  return (
+    <Pill tone={tone}>
+      <span data-testid="migration-status">{migrationStatusLabel(status, t)}</span>
+    </Pill>
+  );
+}
+
+/**
+ * The reason of an installation's migration state as visible text (the
+ * server's `statusReason`), next to its pill.
+ *
+ * @param {Object} props
+ * @param {Object} props.item - an installation of the admin API
+ * @param {string} [props.className]
+ */
+export function MigrationStatusReason({ item, className = '' }) {
+  const tone = migrationStatusTone(item?.status);
+  if (!tone || !item.statusReason) return null;
+  const color =
+    tone === 'red' ? 'text-red-700 dark:text-red-400' : 'text-amber-800 dark:text-amber-300';
+  return (
+    <p className={`text-xs ${color} ${className}`} data-testid="migration-reason">
+      {item.statusReason}
+    </p>
+  );
 }
 
 /** The tone of the live status pill: unreachable red, connected green, else gray. */
@@ -73,7 +135,8 @@ function transportTone(transport) {
 /**
  * Every pill of an installation, as on its tile and in its page header:
  * enabled / disabled, always installed, definition missing, version (with
- * the version on disk as tooltip when it differs), incompatible, update
+ * the version on disk as tooltip when it differs), the migration state
+ * (pending, failed, needs review), incompatible, update
  * available (a link to the marketplace), the sign-in mode, the live status
  * (connected, unreachable, N connected users, tool count), the transport of
  * a directory and "External".
@@ -121,6 +184,7 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
           </span>
         </Pill>
       )}
+      <MigrationStatusPill status={item.status} />
       {item.incompatible && (
         <Pill tone="red" title={item.incompatibleReason || undefined}>
           {t('admin.integrationCatalog.status.incompatible', 'Incompatible')}

@@ -206,15 +206,29 @@ brings your installations along by itself.
   updated — and rewrites the installation's settings, its action selection and the apps that bind
   it. A backup is made first under `contents/backups/integrations/`; a step that would overwrite
   something stops the migration instead, before anything is written.
-- **Update preview:** the marketplace update of an integration says per installation how many
-  install values, actions and app bindings the update changes, which apps lose an action, and
-  whether a migration would collide.
+- **Update preview:** the marketplace update dialog of an integration says per installation how
+  many install values, actions and app bindings the update changes ("This update changes 2 install
+  values and 1 action of GovData; a backup is made first."), which apps lose an action, which
+  installation's migration will fail and stay on its version until you act, and which one is
+  planned only once the update is downloaded. After the update it reports every installation as
+  migrated or failed with the reason, each with a link to its page.
 - **Nothing half-migrated:** an installation whose migration fails keeps its settings, offers no
   actions and says why; an admin re-runs the migration, restores the backup (for a marketplace
   update, together with the previous package) or uninstalls it. One that waits for a migration
   offers no actions until it ran, and one without a known version (written by hand) waits for an
   admin to restore a backup or adopt the current version. Each installation keeps a log of its
   last ten migrations.
+- **Migrations in the admin UI:** the installation's tile carries an amber **Migration pending** /
+  **Needs review** or a red **Migration failed** pill with the reason as text and the buttons of
+  that state. The installation's page shows what a pending migration changes before you click
+  **Migrate now**, and offers **Re-run migration**, **Restore backup**, **Adopt current version**
+  and **Uninstall** where they apply — restoring, adopting and uninstalling ask first. Each action
+  shows the log entry it wrote or the reason it failed. While an installation waits for a
+  migration, failed or needs a review, its settings are shown read-only; the **Migration log** on
+  the Overview tab lists every run with versions, date, admin, result, warnings and steps.
+- **Apps warnings:** **Admin → Apps** and the app editor's Integrations section warn on an app
+  whose bound action a migration removed, or whose type binding still names a renamed action or
+  scope, next to the binding concerned.
 
 See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes),
 [Integrations → Migrations](../../integrations.md#migrations) and [Marketplace](../../marketplace.md).

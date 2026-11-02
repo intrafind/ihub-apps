@@ -2614,7 +2614,27 @@
       "incompatibleShort": "Not compatible with this iHub version",
       "compatibilityLine": "Compatibility: iHub {{requires}}",
       "confirmUpdate": "The installed files are replaced with the catalog version; local edits are lost.",
-      "noReleasesBetween": "The catalog lists no release notes between these versions."
+      "noReleasesBetween": "The catalog lists no release notes between these versions.",
+      "migration": {
+        "locked": "A migration of an installation of this integration is running. Nothing was changed; try again in a moment.",
+        "preview": {
+          "title": "Installations",
+          "changes": "This update changes {{changes}} of {{label}}; a backup is made first.",
+          "noChanges": "This update’s migrations change nothing {{label}} stores; a backup is made first.",
+          "fails": "The migration of {{label}} will fail. The update still goes in, but {{label}} stays on v{{from}} and offers no actions until you act on its page: re-run the migration, restore the backup or uninstall it.",
+          "notPlanned": "The migration of {{label}} (v{{from}}) is planned when the update is downloaded: the catalog does not list every release since that version.",
+          "review": "{{label}} needs a review (it records no valid version), so the update does not migrate it.",
+          "current": "{{label}} is already at v{{from}}.",
+          "wholeNotPlanned": "The migrations cannot be planned from the catalog; they are planned when the update is downloaded, and an installation whose migration fails stays on its version until you act."
+        },
+        "report": {
+          "title": "Migrations of the installations",
+          "migrated": "{{label}} was migrated from v{{from}} to v{{to}}.",
+          "stamped": "{{label}} now records v{{to}}; nothing it stores had to change.",
+          "failed": "The migration of {{label}} failed: it stays on v{{from}} and offers no actions until you act on its page. Reason: {{reason}}",
+          "skipped": "{{label}} was not migrated: {{reason}}"
+        }
+      }
     },
     "apps": {
       "edit": {
@@ -2869,6 +2889,12 @@
         "peopleDirectories": "People directories (any installation)",
         "ldapDirectory": "People directory (LDAP) (any installation)",
         "ldapBrowser": "LDAP browser (any installation)"
+      },
+      "migrationWarnings": {
+        "actionRemoved": "The update of {{installation}} to v{{version}} removed the action “{{action}}”, which this app was bound to; the app no longer offers it.",
+        "typeBindingAction": "The update of {{installation}} to v{{version}} renamed or removed the action “{{action}}”, which this app still names in its binding {{key}}: edit the binding.",
+        "typeBindingScope": "The update of {{installation}} to v{{version}} renamed the scope “{{scope}}”, which this app still sets in its binding {{key}}: edit the binding.",
+        "openLog": "Migration log of {{installation}}"
       }
     },
     "features": {
@@ -3627,6 +3653,111 @@
         "noGroup": "No group grants it yet: nobody can use it.",
         "help": "Groups decide which integrations their members may use (inherited like apps).",
         "editOnGroups": "Edit on Admin → Groups"
+      },
+      "migration": {
+        "status": {
+          "migrationPending": "Migration pending",
+          "migrationFailed": "Migration failed",
+          "needsReview": "Needs review"
+        },
+        "changes": {
+          "values_one": "{{count}} install value",
+          "values_other": "{{count}} install values",
+          "actions_one": "{{count}} action",
+          "actions_other": "{{count}} actions",
+          "apps_one": "{{count}} app binding",
+          "apps_other": "{{count}} app bindings"
+        },
+        "warnings": {
+          "actionRemoved": "The action “{{action}}” is removed from the app “{{app}}” (binding {{key}}); the app no longer offers it.",
+          "typeBindingAction": "The app “{{app}}” names the action “{{action}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
+          "typeBindingScope": "The app “{{app}}” sets the scope “{{scope}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
+          "openApp": "Open the app"
+        },
+        "log": {
+          "title": "Migration log",
+          "empty": "No migration has run for this installation.",
+          "fromTo": "{{from}} → {{to}}",
+          "noVersion": "no version",
+          "by": "by {{by}}",
+          "changes": "Changed {{changes}}.",
+          "migrations": "Migrations: {{list}}",
+          "reason": "Reason: {{reason}}",
+          "steps_one": "{{count}} step",
+          "steps_other": "{{count}} steps",
+          "backup": "Backup: {{backup}}",
+          "results": {
+            "migrated": "Migrated",
+            "stamped": "Version recorded",
+            "failed": "Failed",
+            "rolledBack": "Rolled back",
+            "restored": "Backup restored",
+            "adopted": "Version adopted",
+            "skipped": "Skipped"
+          },
+          "triggers": {
+            "manual": "run by hand",
+            "marketplace": "marketplace update",
+            "startup": "server start",
+            "recovery": "recovery at start",
+            "restore": "restore",
+            "downgrade": "downgrade",
+            "adopt": "adopt"
+          }
+        },
+        "actions": {
+          "migrate": "Migrate now",
+          "rerun": "Re-run migration",
+          "restore": "Restore backup",
+          "adopt": "Adopt current version",
+          "uninstall": "Uninstall",
+          "forInstallation": "{{action}}: {{label}}"
+        },
+        "confirm": {
+          "restore": {
+            "title": "Restore a backup of {{label}}?",
+            "message": "The installation’s values, its action policy and the bindings of its apps go back to the backup {{backup}} (v{{version}}, taken {{date}}). What changed since then is replaced; iHub backs up the current state first.",
+            "definition": "The backup also holds the definition of v{{version}}; when the loaded definition is another version, it is put back too."
+          },
+          "adopt": {
+            "title": "Adopt v{{version}} for {{label}}?",
+            "message": "You confirm that the stored values already fit {{definition}} v{{version}}. iHub checks them like the result of a migration and only then records the version; no value is changed. Values that do not fit are listed and nothing is recorded.",
+            "confirm": "Adopt version"
+          }
+        },
+        "outcome": {
+          "migrated": "{{label}} was migrated from v{{from}} to v{{to}}.",
+          "stamped": "{{label}} now records v{{to}}; no migration had to run.",
+          "current": "{{label}} is already at v{{to}}; nothing had to run.",
+          "restored": "The backup {{backup}} of {{label}} was restored; it is at v{{to}} again.",
+          "adopted": "{{label}} now records v{{to}}.",
+          "restoreFailed": "The backup of {{label}} could not be restored.",
+          "adoptFailed": "The current version could not be adopted for {{label}}.",
+          "migrateFailed": "The migration of {{label}} failed.",
+          "retry": "Nothing was written. Try again in a moment.",
+          "open": "Open {{label}}",
+          "dismiss": "Dismiss"
+        },
+        "panel": {
+          "title": "Definition migration",
+          "pending": "{{definition}} v{{to}} is loaded; this installation records v{{from}}. Until it is migrated it offers no actions and its settings cannot be saved.",
+          "pendingStamp": "{{definition}} v{{to}} is loaded; this installation records v{{from}}. No migration lies between the versions, so it keeps working: Migrate now (or the next save) records v{{to}}.",
+          "failed": "The migration to v{{to}} failed and changed nothing: the values are still those of v{{from}}. The installation offers no actions until you re-run the migration, restore the backup or uninstall it.",
+          "downgrade": "The loaded definition v{{to}} is older than this installation’s v{{from}} (a downgrade). Migrations only run forward, so the installation offers no actions until you restore the backup of v{{to}}, adopt v{{to}} or uninstall it.",
+          "review": "iHub cannot tell which definition version the values of this installation were written for. It offers no actions until you restore a backup, adopt the loaded version v{{to}} or uninstall it.",
+          "changes": "The migrations {{migrations}} change {{changes}}; a backup is made first.",
+          "noChanges": "The migrations {{migrations}} change nothing this installation stores; a backup is made first.",
+          "notPlanned": "The migrations {{migrations}} run; what they change could not be planned in advance. A backup is made first.",
+          "warningsTitle": "Check after the migration",
+          "collisionsTitle": "Collisions: the migration will fail",
+          "collisionsHelp": "A step would overwrite something that already exists. Remove the destination first (for example in the app), or the migration fails and changes nothing.",
+          "errorsTitle": "The result would not fit v{{to}}: the migration will fail",
+          "backup": "Restore backup puts back {{backup}} (v{{version}}, taken {{date}}).",
+          "noBackup": "No backup of this installation matches its state, so there is nothing to restore."
+        },
+        "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
+        "settingsReadOnlyLegend": "Settings (read-only)",
+        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
       }
     },
     "sidebar": {

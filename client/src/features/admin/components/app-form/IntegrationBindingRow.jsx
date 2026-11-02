@@ -34,8 +34,10 @@ function withoutKey(object, key) {
  * @param {Object|undefined} props.binding - `app.integrations[item.id]`, undefined when unbound
  * @param {Object|undefined} props.detail - the installation as `GET …/installed/:id` returns it (actions, definition)
  * @param {(binding: Object|null) => void} props.onBindingChange - null unbinds
+ * @param {React.ReactNode} [props.notice] - shown under the row's name, e.g. the
+ *   warnings a definition migration left on this binding
  */
-function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
+function IntegrationBindingRow({ item, binding, detail, onBindingChange, notice = null }) {
   const { t } = useTranslation();
   const bound = Boolean(binding);
   const current = binding || {};
@@ -110,6 +112,7 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
           )}
         </span>
       </label>
+      {notice && <div className="mt-2 pl-7">{notice}</div>}
       {bound && (
         <div className="mt-3 pl-7 space-y-3">
           {!withoutActions && (

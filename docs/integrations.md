@@ -92,7 +92,7 @@ A remote agent (Agent-to-Agent protocol) is an installed integration of the `a2a
 
 A search box above the groups filters by label, name, id and description.
 
-**Tiles.** An installation's tile shows its label, definition and id; the pills of its state (enabled or disabled, version with the version on disk as tooltip, _Incompatible_ with the reason, _Update to vX available_ linking to the marketplace, _Always installed_, _Definition missing_); its sign-in mode; the live status (connected, unreachable, the tool count of an MCP server, the number of connected users of a per-user installation, how a directory's LDAP connection is protected); its groups; and two to four **key facts** from its values, chosen per definition:
+**Tiles.** An installation's tile shows its label, definition and id; the pills of its state (enabled or disabled, version with the version on disk as tooltip, the migration state — _Migration pending_ and _Needs review_ amber, _Migration failed_ red — with its reason as text below the pills and the buttons of that state (see [Migrations → In the admin](#in-the-admin)), _Incompatible_ with the reason, _Update to vX available_ linking to the marketplace, _Always installed_, _Definition missing_); its sign-in mode; the live status (connected, unreachable, the tool count of an MCP server, the number of connected users of a per-user installation, how a directory's LDAP connection is protected); its groups; and two to four **key facts** from its values, chosen per definition:
 
 | Definition                 | Facts                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------ |
@@ -119,11 +119,11 @@ The tile opens the installation's page. Its quick actions are separate buttons: 
 
 `/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
 
-- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive) and whether they are off or unavailable, and the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor.
-- **Settings** (`settings`): the installation's editor (below).
+- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive) and whether they are off or unavailable, the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, and the **Migration log** (the last 10 runs, newest first).
+- **Settings** (`settings`): the installation's editor (below); read-only while a migration state refuses the save.
 - **Releases** (`releases`): the release history of its definition, when it has one.
 
-An installation whose definition is missing or incompatible cannot be edited or tested; its page says why.
+An installation whose definition is missing or incompatible cannot be edited or tested; its page says why. An installation with a migration state shows the migration panel above the tabs (see [Migrations → In the admin](#in-the-admin)).
 
 ### Editors
 
@@ -384,6 +384,22 @@ A stored `definitionVersion` that is not a semantic version does not make `integ
 
 To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document, the icon and the release-note files are fetched even when not listed). The catalog item copies `version`, `compatibility` and `releases`, so the marketplace decides compatibility and shows the history without a download. See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
 
+#### In the admin
+
+**Admin → Integrations → Installed** marks an installation with a migration state on its tile: a red _Migration failed_ or an amber _Migration pending_ / _Needs review_ pill, the reason as text, and the actions of that state as buttons (**Uninstall** is the tile's Remove button). The installation's page shows the **migration panel** above the tabs:
+
+| State | The panel says | Buttons |
+| --- | --- | --- |
+| `migrationPending` | which version is loaded and which one the installation records; what the migrations change (install values, actions, app bindings), the apps that lose an action, collisions and validation problems that will make it fail — all planned on the server, nothing written | **Migrate now** |
+| `migrationFailed` | the reason, the backup **Restore backup** takes | **Re-run migration**, **Restore backup**, **Uninstall** |
+| `needsReview` | the reason (no version, or a downgrade), the backup of the loaded version if one exists | **Restore backup** (only with that backup), **Adopt current version**, **Uninstall** |
+
+**Restore backup**, **Adopt current version** and **Uninstall** ask first: the restore dialog names the backup, its version and date (and whether it holds a definition folder); adopt says that the values are checked like a migration result and nothing else changes; uninstall is the ordinary remove dialog with the apps that bind the installation. After each action the page shows the log entry the server wrote (from → to, result, changes, warnings, steps) or the error with its reason and the problems it lists (collisions, values that do not fit), and reloads. While the installation is pending with a migration between the versions, failed or needs a review, **Settings** shows the editor read-only (a disabled fieldset around every editor, dedicated or generic) with the reason, since the server refuses the save. The **Migration log** on Overview lists each run with from → to, when, by whom, how it started, the result, the changes, the reason, the warnings, the backup and the steps.
+
+**Admin → Apps** shows, in an app's status, the warnings a migration left on it: an action it was bound to was removed (`ACTION_REMOVED_FROM_APP`), or a type binding still names a renamed or removed action or scope (`TYPE_BINDING_NOT_REWRITTEN`). The app editor's Integrations section shows the same warning next to the binding it concerns, with a link to the installation's migration log. A warning counts from the installation's `migrated` runs since its last restore, and goes away once the app no longer has what it is about (the binding is removed, or the type binding no longer names the action or scope).
+
+The marketplace's update dialog shows the same plan per installation before the update and each installation's result after it ([Marketplace](marketplace.md#installing-updating-and-removing)).
+
 ## API
 
 | Route                                                                                                                 | Purpose                                                               |
@@ -464,6 +480,7 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |
 | `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`)                |
+| `client/src/features/admin/components/integrations/migrationState.js`, `useMigrationActions.js`, `MigrationParts.jsx`, `InstallationMigrationPanel.jsx`, `appMigrationWarningRules.js`, `AppMigrationWarnings.jsx`; `components/marketplace/updateMigrationRows.js`, `IntegrationUpdateMigrations.jsx` | the admin UI of definition migrations: which actions a state offers and when Settings is read-only (pure), the actions with their confirmations, the panel, the log, the outcome; the Apps warnings; the marketplace update preview and report |
 | `client/src/features/admin/components/integrations/editors/` | the dedicated editors and their registry (iFinder, iAssistant, the storage providers: `StorageProviderEditor.jsx`, `storageEditorModel.js`; the web search engines: `WebSearchEngineEditor.jsx`) |
 | `client/src/features/admin/components/app-form/IntegrationsConfigSection.jsx`, `storageBindingRows.js`, `WebSearchSection.jsx`, `webSearchEngines.js` | app editor binding: the Storage providers card; the web search panel with its engine list (Auto and the installed engines) |
 | `shared/storageBindings.js`, `client/src/shared/hooks/useFileUploadHandler.js` | which storage providers an app binds; the chat's picker offers those among the granted ones |

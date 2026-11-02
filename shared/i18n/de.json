@@ -2905,7 +2905,27 @@
       "incompatibleShort": "Nicht kompatibel mit dieser iHub-Version",
       "compatibilityLine": "Kompatibilität: iHub {{requires}}",
       "confirmUpdate": "Die installierten Dateien werden durch die Katalogversion ersetzt; lokale Änderungen gehen verloren.",
-      "noReleasesBetween": "Der Katalog führt keine Release-Notes zwischen diesen Versionen."
+      "noReleasesBetween": "Der Katalog führt keine Release-Notes zwischen diesen Versionen.",
+      "migration": {
+        "locked": "Gerade läuft eine Migration einer Installation dieser Integration. Es wurde nichts geändert; versuchen Sie es gleich noch einmal.",
+        "preview": {
+          "title": "Installationen",
+          "changes": "Dieses Update ändert {{changes}} von {{label}}; vorher wird eine Sicherung erstellt.",
+          "noChanges": "Die Migrationen dieses Updates ändern nichts, was {{label}} speichert; vorher wird eine Sicherung erstellt.",
+          "fails": "Die Migration von {{label}} wird fehlschlagen. Das Update wird trotzdem eingespielt, aber {{label}} bleibt auf v{{from}} und bietet keine Aktionen an, bis Sie auf der Seite der Installation handeln: die Migration erneut ausführen, die Sicherung wiederherstellen oder deinstallieren.",
+          "notPlanned": "Die Migration von {{label}} (v{{from}}) wird geplant, wenn das Update heruntergeladen wird: Der Katalog listet nicht jedes Release seit dieser Version.",
+          "review": "{{label}} muss geprüft werden (vermerkt keine gültige Version), daher migriert das Update die Installation nicht.",
+          "current": "{{label}} ist bereits auf v{{from}}.",
+          "wholeNotPlanned": "Die Migrationen lassen sich nicht aus dem Katalog planen; sie werden geplant, wenn das Update heruntergeladen wird. Eine Installation, deren Migration fehlschlägt, bleibt auf ihrer Version, bis Sie handeln."
+        },
+        "report": {
+          "title": "Migrationen der Installationen",
+          "migrated": "{{label}} wurde von v{{from}} auf v{{to}} migriert.",
+          "stamped": "{{label}} vermerkt jetzt v{{to}}; an den gespeicherten Daten musste sich nichts ändern.",
+          "failed": "Die Migration von {{label}} ist fehlgeschlagen: Die Installation bleibt auf v{{from}} und bietet keine Aktionen an, bis Sie auf ihrer Seite handeln. Grund: {{reason}}",
+          "skipped": "{{label}} wurde nicht migriert: {{reason}}"
+        }
+      }
     },
     "apps": {
       "edit": {
@@ -3160,6 +3180,12 @@
         "peopleDirectories": "Personenverzeichnisse (jede Installation)",
         "ldapDirectory": "Personenverzeichnis (LDAP) (jede Installation)",
         "ldapBrowser": "LDAP-Browser (jede Installation)"
+      },
+      "migrationWarnings": {
+        "actionRemoved": "Das Update von {{installation}} auf v{{version}} hat die Aktion „{{action}}“ entfernt, an die diese App gebunden war; die App bietet sie nicht mehr an.",
+        "typeBindingAction": "Das Update von {{installation}} auf v{{version}} hat die Aktion „{{action}}“ umbenannt oder entfernt, die diese App noch in ihrer Einbindung {{key}} nennt: Bearbeiten Sie die Einbindung.",
+        "typeBindingScope": "Das Update von {{installation}} auf v{{version}} hat den Bereich „{{scope}}“ umbenannt, den diese App noch in ihrer Einbindung {{key}} setzt: Bearbeiten Sie die Einbindung.",
+        "openLog": "Migrationsprotokoll von {{installation}}"
       }
     },
     "features": {
@@ -3918,6 +3944,111 @@
         "noGroup": "Noch keine Gruppe gibt sie frei: niemand kann sie nutzen.",
         "help": "Gruppen legen fest, welche Integrationen ihre Mitglieder nutzen dürfen (vererbt wie Apps).",
         "editOnGroups": "Unter Admin → Gruppen bearbeiten"
+      },
+      "migration": {
+        "status": {
+          "migrationPending": "Migration ausstehend",
+          "migrationFailed": "Migration fehlgeschlagen",
+          "needsReview": "Prüfung nötig"
+        },
+        "changes": {
+          "values_one": "{{count}} Installationswert",
+          "values_other": "{{count}} Installationswerte",
+          "actions_one": "{{count}} Aktion",
+          "actions_other": "{{count}} Aktionen",
+          "apps_one": "{{count}} App-Einbindung",
+          "apps_other": "{{count}} App-Einbindungen"
+        },
+        "warnings": {
+          "actionRemoved": "Die Aktion „{{action}}“ wird aus der App „{{app}}“ entfernt (Einbindung {{key}}); die App bietet sie nicht mehr an.",
+          "typeBindingAction": "Die App „{{app}}“ nennt die Aktion „{{action}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
+          "typeBindingScope": "Die App „{{app}}“ setzt den Bereich „{{scope}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
+          "openApp": "App öffnen"
+        },
+        "log": {
+          "title": "Migrationsprotokoll",
+          "empty": "Für diese Installation ist noch keine Migration gelaufen.",
+          "fromTo": "{{from}} → {{to}}",
+          "noVersion": "keine Version",
+          "by": "von {{by}}",
+          "changes": "Geändert: {{changes}}.",
+          "migrations": "Migrationen: {{list}}",
+          "reason": "Grund: {{reason}}",
+          "steps_one": "{{count}} Schritt",
+          "steps_other": "{{count}} Schritte",
+          "backup": "Sicherung: {{backup}}",
+          "results": {
+            "migrated": "Migriert",
+            "stamped": "Version vermerkt",
+            "failed": "Fehlgeschlagen",
+            "rolledBack": "Zurückgerollt",
+            "restored": "Sicherung wiederhergestellt",
+            "adopted": "Version übernommen",
+            "skipped": "Übersprungen"
+          },
+          "triggers": {
+            "manual": "von Hand gestartet",
+            "marketplace": "Marktplatz-Update",
+            "startup": "Serverstart",
+            "recovery": "Wiederherstellung beim Start",
+            "restore": "Wiederherstellung",
+            "downgrade": "Downgrade",
+            "adopt": "Übernahme"
+          }
+        },
+        "actions": {
+          "migrate": "Jetzt migrieren",
+          "rerun": "Migration erneut ausführen",
+          "restore": "Sicherung wiederherstellen",
+          "adopt": "Aktuelle Version übernehmen",
+          "uninstall": "Deinstallieren",
+          "forInstallation": "{{action}}: {{label}}"
+        },
+        "confirm": {
+          "restore": {
+            "title": "Sicherung von {{label}} wiederherstellen?",
+            "message": "Die Werte der Installation, ihre Aktionsauswahl und die Einbindungen ihrer Apps werden auf die Sicherung {{backup}} zurückgesetzt (v{{version}}, erstellt {{date}}). Was sich seitdem geändert hat, wird ersetzt; iHub sichert vorher den aktuellen Stand.",
+            "definition": "Die Sicherung enthält auch die Definition in v{{version}}; ist eine andere Version der Definition geladen, wird sie ebenfalls zurückgespielt."
+          },
+          "adopt": {
+            "title": "v{{version}} für {{label}} übernehmen?",
+            "message": "Sie bestätigen, dass die gespeicherten Werte bereits zu {{definition}} v{{version}} passen. iHub prüft sie wie das Ergebnis einer Migration und vermerkt die Version erst dann; kein Wert wird geändert. Passen Werte nicht, werden sie aufgelistet und nichts wird vermerkt.",
+            "confirm": "Version übernehmen"
+          }
+        },
+        "outcome": {
+          "migrated": "{{label}} wurde von v{{from}} auf v{{to}} migriert.",
+          "stamped": "{{label}} vermerkt jetzt v{{to}}; es musste keine Migration laufen.",
+          "current": "{{label}} ist bereits auf v{{to}}; es musste nichts laufen.",
+          "restored": "Die Sicherung {{backup}} von {{label}} wurde wiederhergestellt; die Installation ist wieder auf v{{to}}.",
+          "adopted": "{{label}} vermerkt jetzt v{{to}}.",
+          "restoreFailed": "Die Sicherung von {{label}} konnte nicht wiederhergestellt werden.",
+          "adoptFailed": "Die aktuelle Version konnte für {{label}} nicht übernommen werden.",
+          "migrateFailed": "Die Migration von {{label}} ist fehlgeschlagen.",
+          "retry": "Es wurde nichts geschrieben. Versuchen Sie es gleich noch einmal.",
+          "open": "{{label}} öffnen",
+          "dismiss": "Schließen"
+        },
+        "panel": {
+          "title": "Definitionsmigration",
+          "pending": "{{definition}} v{{to}} ist geladen; diese Installation vermerkt v{{from}}. Bis sie migriert ist, bietet sie keine Aktionen an, und ihre Einstellungen lassen sich nicht speichern.",
+          "pendingStamp": "{{definition}} v{{to}} ist geladen; diese Installation vermerkt v{{from}}. Zwischen den Versionen liegt keine Migration, sie arbeitet also weiter: „Jetzt migrieren“ (oder das nächste Speichern) vermerkt v{{to}}.",
+          "failed": "Die Migration auf v{{to}} ist fehlgeschlagen und hat nichts geändert: Die Werte sind weiterhin die von v{{from}}. Die Installation bietet keine Aktionen an, bis Sie die Migration erneut ausführen, die Sicherung wiederherstellen oder sie deinstallieren.",
+          "downgrade": "Die geladene Definition v{{to}} ist älter als v{{from}} dieser Installation (ein Downgrade). Migrationen laufen nur vorwärts; die Installation bietet daher keine Aktionen an, bis Sie die Sicherung von v{{to}} wiederherstellen, v{{to}} übernehmen oder sie deinstallieren.",
+          "review": "iHub kann nicht erkennen, für welche Definitionsversion die Werte dieser Installation geschrieben wurden. Sie bietet keine Aktionen an, bis Sie eine Sicherung wiederherstellen, die geladene Version v{{to}} übernehmen oder sie deinstallieren.",
+          "changes": "Die Migrationen {{migrations}} ändern {{changes}}; vorher wird eine Sicherung erstellt.",
+          "noChanges": "Die Migrationen {{migrations}} ändern nichts, was diese Installation speichert; vorher wird eine Sicherung erstellt.",
+          "notPlanned": "Die Migrationen {{migrations}} laufen; was sie ändern, ließ sich nicht im Voraus planen. Vorher wird eine Sicherung erstellt.",
+          "warningsTitle": "Nach der Migration prüfen",
+          "collisionsTitle": "Kollisionen: Die Migration wird fehlschlagen",
+          "collisionsHelp": "Ein Schritt würde etwas überschreiben, das bereits existiert. Entfernen Sie zuerst das Ziel (zum Beispiel in der App), sonst schlägt die Migration fehl und ändert nichts.",
+          "errorsTitle": "Das Ergebnis würde nicht zu v{{to}} passen: Die Migration wird fehlschlagen",
+          "backup": "„Sicherung wiederherstellen“ spielt {{backup}} zurück (v{{version}}, erstellt {{date}}).",
+          "noBackup": "Keine Sicherung dieser Installation passt zu ihrem Zustand; es gibt nichts wiederherzustellen."
+        },
+        "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
+        "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
+        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
       }
     },
     "sidebar": {

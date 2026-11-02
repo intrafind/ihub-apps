@@ -61,6 +61,8 @@ function previewInstallation({ instance, entry, definition, apps, oldest }) {
   const from = isStrictSemver(instance.definitionVersion) ? instance.definitionVersion : null;
   const row = {
     id: instance.id,
+    /** The stored label (`{ en, de }`, a string, or null), so the dialog names the installation. */
+    label: instance.label ?? null,
     from,
     to,
     planFromCatalog: true,
