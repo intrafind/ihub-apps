@@ -383,6 +383,21 @@ directories.
 
 See [People Directory Search](../../people-directory-search.md).
 
+## Scheduled Tasks and Workflows Keep Their Search Profile
+
+A scheduled task now searches where it was set up to search. It keeps the iFinder search profile
+and the iAssistant of the chat it was scheduled from, or the ones picked on its form, and every
+run uses them, even after the chat moved to another profile.
+
+- **Task form:** **Where to search** shows the same choices as the chat's **+** menu and lets the
+  owner change them. A profile the owner may not use is refused on save.
+- **Every run** checks the profile again. One the owner lost fails the run with an error naming
+  it, instead of quietly searching somewhere else.
+- **Workflows:** an agent or tool step can bind its iFinder tools to a profile with
+  `integrationScopes`, fixed or from a workflow input; the model cannot pick another one.
+- Tasks saved before keep running as they did: without a stored profile, they search the
+  default.
+
 ## LDAP Browser Is an Integration of Its Own
 
 The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the
@@ -423,21 +438,6 @@ The **Settings** tab of these installations is a dedicated editor instead of the
   directory type.
 
 See [Integrations → Editors](../../integrations.md#editors).
-
-## Scheduled Tasks and Workflows Keep Their Search Profile
-
-A scheduled task now searches where it was set up to search. It keeps the iFinder search profile
-and the iAssistant of the chat it was scheduled from, or the ones picked on its form, and every
-run uses them, even after the chat moved to another profile.
-
-- **Task form:** **Where to search** shows the same choices as the chat's **+** menu and lets the
-  owner change them. A profile the owner may not use is refused on save.
-- **Every run** checks the profile again. One the owner lost fails the run with an error naming
-  it, instead of quietly searching somewhere else.
-- **Workflows:** an agent or tool step can bind its iFinder tools to a profile with
-  `integrationScopes`, fixed or from a workflow input; the model cannot pick another one.
-- Tasks saved before keep running as they did: without a stored profile, they search the
-  default.
 
 ## Sources Panel: Where Each Document Was Found
 
