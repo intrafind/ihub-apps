@@ -26,7 +26,8 @@ function buildSpec(apis) {
 }
 
 test('every @swagger block under server/routes parses', () => {
-  const spec = buildSpec([path.join(routesDir, '**/*.js')]);
+  // glob takes `/` only: a Windows `\` would read as an escape and match nothing.
+  const spec = buildSpec([`${routesDir.split(path.sep).join('/')}/**/*.js`]);
   assert.ok(Object.keys(spec.paths).length > 0, 'no documented paths found');
   assert.ok(spec.paths['/api/admin/apps/integration-status'], 'integration-status is documented');
 });
