@@ -3429,7 +3429,39 @@
       "projectSharing": "Projekte teilen",
       "projectSharingHint": "Mitglieder dürfen andere Benutzer, Gruppen oder alle zu Projekten hinzufügen, die sie besitzen oder bearbeiten.",
       "contentAdmin": "Inhalts-Admin (Apps, Prompts, Projekte)",
-      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten"
+      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten",
+      "integrations": {
+        "title": "Integrationen",
+        "help": "Welche installierten Integrationen Mitglieder nutzen dürfen. Eine App, die eine Integration einbindet, bietet sie nur Mitgliedern einer Gruppe an, die sie gewährt. Gruppen, die diese Gruppe erben, erhalten dasselbe.",
+        "inheritedHelp": "Angehakt und ausgegraut: von einer geerbten Gruppe gewährt. Dort ändern.",
+        "all": "Alle Integrationen",
+        "allHelp": "Jede installierte Integration, auch später installierte.",
+        "none": "Mitglieder dieser Gruppe dürfen keine Integration nutzen.",
+        "loading": "Integrationen werden geladen…",
+        "loadError": "Die installierten Integrationen konnten nicht geladen werden: {{error}}",
+        "sections": {
+          "peopleDirectories": "Personenverzeichnisse",
+          "webSearch": "Websuche",
+          "storage": "Speicheranbieter",
+          "mcp": "MCP-Server",
+          "a2a": "Agenten",
+          "builtIn": "Integriert",
+          "catalog": "Aus dem Katalog"
+        },
+        "allPeopleDirectories": "Alle Personenverzeichnisse",
+        "allWebSearch": "Alle Websuchmaschinen",
+        "allStorage": "Alle Speicheranbieter",
+        "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
+        "allInstallations": "Alle Installationen von {{name}}",
+        "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
+        "noneInstalled": "Noch nichts installiert.",
+        "disabled": "deaktiviert",
+        "via": "über {{groups}}",
+        "with": "mit {{name}}",
+        "other": "Weitere Einträge",
+        "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
+        "remove": "{{key}} entfernen"
+      }
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
