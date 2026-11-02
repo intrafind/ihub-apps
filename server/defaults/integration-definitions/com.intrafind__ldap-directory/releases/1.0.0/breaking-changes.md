@@ -7,7 +7,7 @@ Config migration V198 moved the directories into installations:
 - Apps that listed `peopleDirectories` or a directory in `tools` or `requiredIntegrations` bind
   the installations under `integrations` instead.
 
-Config migration V204 moved the admin LDAP browser out of the directory:
+Config migration V205 moved the admin LDAP browser out of the directory:
 
 - The install fields `browse`, `browseGroups`, `browseBase`, `browseMaxResults`,
   `browseBindMode`, `browseBindDn`, `browseBindPasswordRef` and `browseDenyAttributes` and the

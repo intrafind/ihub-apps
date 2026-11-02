@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: the admin LDAP browser is its own integration that reuses a people directory's connection; migration V204 created one for every directory that had the browser switched on.",
-        "de": "Erste Version: der LDAP-Browser für Administratoren ist eine eigene Integration, die die Verbindung eines Personenverzeichnisses nutzt; Migration V204 hat für jedes Verzeichnis mit eingeschaltetem Browser eine angelegt."
+        "en": "First version: the admin LDAP browser is its own integration that reuses a people directory's connection; migration V205 created one for every directory that had the browser switched on.",
+        "de": "Erste Version: der LDAP-Browser für Administratoren ist eine eigene Integration, die die Verbindung eines Personenverzeichnisses nutzt; Migration V205 hat für jedes Verzeichnis mit eingeschaltetem Browser eine angelegt."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",
