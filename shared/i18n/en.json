@@ -7142,6 +7142,8 @@
       "appDefaultModel": "App's default",
       "appDefaultTools": "Use the app's defaults",
       "alwaysIncluded": "always included",
+      "scopes": "Where to search",
+      "scopesHelp": "Every run searches here, even when the chat the task came from moves elsewhere later.",
       "notify": "Notify me",
       "variables": "App variables"
     },
@@ -7164,6 +7166,8 @@
     "variablesHelp": "Variables you can use",
     "variablesHelpText": "Without \"Remember between runs\", runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
     "needsApproval": "Asks for approval",
+    "scopeFixed": "Set by the app; it cannot be changed.",
+    "scopeUnavailable": "“{{scope}}” is no longer available to you, so runs fail. Saving uses the one picked here.",
     "notify": {
       "always": "After every run",
       "failure": "Only when a run fails",

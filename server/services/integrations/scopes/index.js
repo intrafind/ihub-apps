@@ -138,5 +138,62 @@ export async function resolveChatScopes({ requested, user, app, model, language,
   return { ok: true, scopes };
 }
 
+/**
+ * The scopes a workflow node binds its tool calls to (#3057), checked against
+ * what each integration offers the user running it.
+ *
+ * Unlike a chat turn ({@link resolveChatScopes}), a node names its
+ * integrations itself rather than inheriting them from an app, so every scope
+ * it names must hold: an integration that offers no scopes (not installed,
+ * or disabled) refuses the run as a scope the user may not use does, and the
+ * run never quietly searches somewhere else. A scope the integration pins
+ * replaces the one named, as in a chat.
+ *
+ * @param {Object} params
+ * @param {unknown} params.requested - `{ [integrationId]: scopeId }`
+ * @param {Object} params.user
+ * @param {Object} [params.app] - the app (or workflow) settings the run uses
+ * @param {Object} [params.model]
+ * @param {string} [params.language]
+ * @param {AbortSignal} [params.signal]
+ * @returns {Promise<{ ok: true, scopes: Object<string, string> } |
+ *   { ok: false, integrationId: string, code: string, message: string }>}
+ */
+export async function resolveNamedScopes({ requested, user, app, model, language, signal }) {
+  if (requested === null || requested === undefined) return { ok: true, scopes: {} };
+  if (typeof requested !== 'object' || Array.isArray(requested)) {
+    return {
+      ok: false,
+      integrationId: '',
+      code: 'INVALID_INTEGRATION_SCOPE',
+      message: 'Integration scopes must map an integration id to a scope id'
+    };
+  }
+  const scopes = {};
+  for (const [integrationId, scopeId] of Object.entries(requested)) {
+    if (!isScopeIdShape(scopeId)) {
+      return {
+        ok: false,
+        integrationId,
+        code: 'INVALID_INTEGRATION_SCOPE',
+        message: `Invalid scope for ${integrationId}`
+      };
+    }
+    const provider = getScopeProvider(integrationId);
+    if (!provider) {
+      return {
+        ok: false,
+        integrationId,
+        code: 'INTEGRATION_SCOPE_NOT_ALLOWED',
+        message: `The scope "${scopeId}" cannot be used: the integration ${integrationId} is not available`
+      };
+    }
+    const result = await provider.validateScope({ scopeId, user, app, model, language, signal });
+    if (!result.ok) return { ...result, integrationId };
+    scopes[integrationId] = result.scopeId || scopeId;
+  }
+  return { ok: true, scopes };
+}
+
 // The built-in iFinder and iAssistant providers are registered with their
 // installations by `integrationTools.syncIntegrationScopeProviders`.

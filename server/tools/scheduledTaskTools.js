@@ -134,7 +134,7 @@ function withinScheduledRun(user) {
  * @returns {Promise<Object>}
  */
 export async function scheduleTask(params = {}) {
-  const { user, appConfig, chatId, clientTimezone } = params;
+  const { user, appConfig, chatId, clientTimezone, integrationScopes } = params;
   const language = languageOf(params.language);
   if (withinScheduledRun(user)) {
     return refuse('NOT_AVAILABLE', 'A scheduled run cannot create further scheduled tasks');
@@ -142,13 +142,26 @@ export async function scheduleTask(params = {}) {
   try {
     const { settings } = tasks.assertAvailable();
     tasks.assertPrincipal(user);
+    const appId = params.appId || appConfig?.id;
+    // A task for this chat's own app keeps the chat's integration scopes
+    // (#3057): it searches where the chat searched when it was proposed. Set
+    // by iHub, never by the model (`integrationScopes` is reserved).
+    const sameApp =
+      typeof appId === 'string' &&
+      typeof appConfig?.id === 'string' &&
+      appId.toLowerCase() === appConfig.id.toLowerCase();
+    const chatScopes =
+      sameApp && integrationScopes && Object.keys(integrationScopes).length > 0
+        ? { integrationScopes }
+        : {};
     const draft = {
       name: params.name,
       description: params.description,
       instructions: params.instructions,
-      appId: params.appId || appConfig?.id,
+      appId,
       modelId: params.modelId || null,
       enabledTools: Array.isArray(params.tools) ? params.tools : null,
+      ...chatScopes,
       notify: params.notify || 'always',
       ...(typeof params.memory === 'boolean' ? { memory: params.memory } : {}),
       schedule: params.schedule || { type: 'manual' }

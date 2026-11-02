@@ -15,6 +15,8 @@ import {
 } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import ScheduleBuilder from '../components/ScheduleBuilder';
+import TaskScopesSection from '../components/TaskScopesSection';
+import useIntegrationScopes from '../../chat/hooks/useIntegrationScopes';
 import { useScheduledTaskLimits } from '../hooks/useScheduledTasksConfig';
 import { errorMessage, fieldErrors, formToSchedule, scheduleToForm } from '../utils/taskFormat';
 
@@ -42,6 +44,8 @@ function emptyDraft(defaultAppId) {
     modelId: '',
     variables: {},
     enabledTools: null,
+    // `{ [integrationId]: scopeId }`: where the task's integrations search (#3057).
+    integrationScopes: {},
     notify: 'always',
     memory: { enabled: false },
     retention: { maxRuns: '', maxAgeDays: '' },
@@ -90,6 +94,7 @@ export default function TaskEditorPage() {
           modelId: task.modelId || '',
           variables: task.variables || {},
           enabledTools: task.enabledTools ?? null,
+          integrationScopes: task.integrationScopes || {},
           notify: task.notify || 'always',
           memory: { enabled: task.memory?.enabled === true },
           retention: {
@@ -147,6 +152,21 @@ export default function TaskEditorPage() {
   const memoryOn = draft.memory?.enabled === true;
 
   const set = patch => setDraft(prev => ({ ...prev, ...patch }));
+
+  // The scopes the app's integrations offer for the task's app and model, as
+  // the chat lists them (`GET /api/integrations/scopes`); `pickedScopes` is
+  // what the task saves.
+  const {
+    integrations: scopeIntegrations,
+    scopes: pickedScopes,
+    setScope
+  } = useIntegrationScopes({
+    app,
+    modelId: draft.modelId || undefined,
+    language,
+    selected: draft.integrationScopes,
+    onChange: integrationScopes => set({ integrationScopes })
+  });
   // "Only when something changed" needs the notes, so notify falls back to "After
   // every run" when they are switched off.
   const setMemory = enabled =>
@@ -171,6 +191,9 @@ export default function TaskEditorPage() {
       modelId: draft.modelId || null,
       variables: draft.variables || {},
       enabledTools: customTools ? draft.enabledTools : null,
+      // Without a list (it could not be loaded) the scopes go as they are,
+      // for the server to check, rather than being dropped.
+      integrationScopes: scopeIntegrations.length > 0 ? pickedScopes : draft.integrationScopes,
       notify: draft.notify,
       memory: { enabled: memoryOn },
       retention: {
@@ -278,7 +301,13 @@ export default function TaskEditorPage() {
                 className={input}
                 value={draft.appId}
                 onChange={e =>
-                  set({ appId: e.target.value, enabledTools: null, modelId: '', variables: {} })
+                  set({
+                    appId: e.target.value,
+                    enabledTools: null,
+                    integrationScopes: {},
+                    modelId: '',
+                    variables: {}
+                  })
                 }
               >
                 {!app && draft.appId && <option value={draft.appId}>{draft.appId}</option>}
@@ -489,6 +518,16 @@ export default function TaskEditorPage() {
             {errors.enabledTools && <p className="text-xs text-red-600">{errors.enabledTools}</p>}
           </section>
         )}
+
+        <TaskScopesSection
+          integrations={scopeIntegrations}
+          saved={draft.integrationScopes}
+          onChange={setScope}
+          error={errors.integrationScopes}
+          className={section}
+          labelClassName={label}
+          inputClassName={input}
+        />
 
         <section className={section}>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">

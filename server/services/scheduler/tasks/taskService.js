@@ -72,6 +72,7 @@ import {
 import { announceTaskChanged } from './taskEvents.js';
 import { effectiveRetention, parseRetention, selectRunsToPrune } from './runRetention.js';
 import { SCHEDULING_TOOLS } from './toolGate.js';
+import { validateTaskScopes } from './taskScopes.js';
 
 const COMPONENT = 'ScheduledTaskService';
 
@@ -361,6 +362,18 @@ export async function validateTaskFields(
     }
     out.enabledTools = ids;
   }
+
+  // Integration scopes (#3057): the snapshot of where the task's
+  // integrations search and whom they ask, checked as the owner. An edit that
+  // does not name them keeps (and re-checks) the task's own.
+  const scopeCheck = await validateTaskScopes(
+    has('integrationScopes') ? body.integrationScopes : previous?.integrationScopes,
+    { user, app, modelId: out.modelId, language }
+  );
+  if (scopeCheck.error) {
+    errors.push(fieldError('integrationScopes', scopeCheck.error.code, scopeCheck.error.message));
+  }
+  out.integrationScopes = scopeCheck.scopes;
 
   out.websearchEnabled = has('websearchEnabled')
     ? typeof body.websearchEnabled === 'boolean'
@@ -701,6 +714,7 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
       modelId: task.modelId,
       variables: task.variables,
       enabledTools: task.enabledTools,
+      integrationScopes: task.integrationScopes ?? null,
       websearchEnabled: task.websearchEnabled,
       // The setting, not the notes: the copy starts with its own first run.
       memory: task.memory,
