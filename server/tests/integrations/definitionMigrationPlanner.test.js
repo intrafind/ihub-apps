@@ -605,6 +605,247 @@ describe('planner: collisions', () => {
   });
 });
 
+/**
+ * The less travelled branches of each step, pinned down exactly (whole
+ * warning and collision records), so the step handlers can be restructured
+ * without changing what a plan reports.
+ */
+describe('planner: step edge cases', () => {
+  const plan = (inst, steps, apps = []) =>
+    planMigration({
+      instance: inst,
+      apps,
+      definition: { id: 'org.ckan/portal', version: '2.0.0', type: 'people-directory' },
+      from: inst.definitionVersion,
+      migrations: [{ id: '2.0.0', steps }]
+    });
+
+  it('renameValue of an empty value drops the source and sets nothing', () => {
+    const result = plan(instance({ values: { fq: '', defaultFilter: 'kept' } }), [
+      { renameValue: { from: 'fq', to: 'defaultFilter' } }
+    ]);
+    assert.ok(result.ok, 'an empty source never collides');
+    assert.deepEqual(result.instance.values, { defaultFilter: 'kept' });
+    assert.equal(result.summary.values, 0);
+  });
+
+  it('setValue without when means missing, and an unchanged value is not counted', () => {
+    const result = plan(instance({ values: { rows: 5, other: 7 } }), [
+      { setValue: { key: 'rows', value: 20 } },
+      { setValue: { key: 'region', value: 'eu' } },
+      { setValue: { key: 'other', value: 7, when: 'always' } }
+    ]);
+    assert.deepEqual(result.instance.values, { rows: 5, other: 7, region: 'eu' });
+    assert.equal(result.summary.values, 1, 'only region changed');
+  });
+
+  it('removeValue of a key that is not there changes nothing', () => {
+    const result = plan(instance(), [{ removeValue: { key: 'absent' } }]);
+    assert.deepEqual(result.instance.values, instance().values);
+    assert.equal(result.summary.values, 0);
+  });
+
+  it('mapValue leaves unmapped, object and missing values alone and deletes on null', () => {
+    const result = plan(
+      instance({
+        values: { region: 'XX', nested: { a: 1 }, gone: 'old', same: 'x', list: ['a', 'a', 'b'] }
+      }),
+      [
+        { mapValue: { key: 'region', map: { EU: 'eu' } } },
+        { mapValue: { key: 'nested', map: { '[object Object]': 'flat' } } },
+        { mapValue: { key: 'absent', map: { undefined: 'set' } } },
+        { mapValue: { key: 'gone', map: { old: null } } },
+        { mapValue: { key: 'same', map: { x: 'x' } } },
+        { mapValue: { key: 'list', map: { b: 'c' } } }
+      ]
+    );
+    assert.ok(result.ok, 'a duplicate that was already in the list is no collision');
+    assert.deepEqual(result.instance.values, {
+      region: 'XX',
+      nested: { a: 1 },
+      same: 'x',
+      list: ['a', 'a', 'c']
+    });
+    assert.equal(result.summary.values, 2, 'gone and list changed');
+    const unchanged = plan(instance({ values: { list: ['a', 'b'] } }), [
+      { mapValue: { key: 'list', map: { z: 'y' } } }
+    ]);
+    assert.equal(unchanged.summary.values, 0, 'a list mapped onto itself is not counted');
+  });
+
+  it('mapValue reports every entry that several entries land on', () => {
+    const result = plan(instance({ values: { list: ['a', 'b', 'c', 'd'] } }), [
+      { mapValue: { key: 'list', map: { a: 'x', b: 'x', c: 'y', d: 'y' } } }
+    ]);
+    assert.deepEqual(result.collisions, [
+      {
+        migration: '2.0.0',
+        step: 'mapValue',
+        kind: 'value',
+        key: 'list',
+        message: 'mapValue list: several entries map to "x", "y"'
+      }
+    ]);
+    assert.deepEqual(result.instance.values.list, ['a', 'b', 'c', 'd']);
+  });
+
+  it('renameAction records the policy and the app collisions in that order', () => {
+    const result = plan(
+      instance({ actions: { enabled: ['search', 'dataset_search'], disabled: [], overrides: {} } }),
+      [{ renameAction: { from: 'search', to: 'dataset_search' } }],
+      [
+        app('both', { govdata: { actions: ['search', 'dataset_search'] } }),
+        app('fine', { 'org.ckan/portal': { actions: ['search'] } }),
+        app('none', { govdata: { actions: 'search' } })
+      ]
+    );
+    assert.deepEqual(result.collisions, [
+      {
+        migration: '2.0.0',
+        step: 'renameAction',
+        kind: 'action',
+        key: 'dataset_search',
+        message:
+          'renameAction search → dataset_search: the action policy already names "dataset_search"'
+      },
+      {
+        migration: '2.0.0',
+        step: 'renameAction',
+        kind: 'action',
+        key: 'dataset_search',
+        message:
+          'renameAction search → dataset_search: app "both" already binds "dataset_search" (govdata)',
+        appId: 'both',
+        binding: 'govdata'
+      }
+    ]);
+    assert.deepEqual(result.instance.actions.enabled, ['search', 'dataset_search']);
+    assert.deepEqual(result.apps[1].app.integrations['org.ckan/portal'].actions, [
+      'dataset_search'
+    ]);
+    assert.deepEqual(
+      result.apps.map(a => a.changed),
+      [false, true, false]
+    );
+    assert.deepEqual(result.summary, { values: 0, actions: 0, apps: 1 });
+  });
+
+  it('removeAction clears every policy list, warns per binding and for a type binding', () => {
+    const result = plan(
+      instance({
+        actions: { enabled: ['*'], disabled: ['search'], overrides: { search: {}, get: {} } }
+      }),
+      [{ removeAction: { name: 'search' } }],
+      [
+        app('mixed', {
+          govdata: { actions: ['search'] },
+          'org.ckan/portal': { actions: ['search', 'get'] },
+          'type:people-directory': { actions: ['search'] }
+        }),
+        app('typed-only', { 'type:people-directory': { actions: ['get'] } })
+      ]
+    );
+    assert.ok(result.ok);
+    assert.deepEqual(result.instance.actions, {
+      enabled: ['*'],
+      disabled: [],
+      overrides: { get: {} }
+    });
+    assert.deepEqual(result.warnings, [
+      {
+        code: MIGRATION_WARNINGS.ACTION_REMOVED_FROM_APP,
+        message:
+          '2.0.0: the action "search" was removed; app "mixed" bound it (govdata) and no longer offers it',
+        appId: 'mixed',
+        action: 'search',
+        key: 'govdata'
+      },
+      {
+        code: MIGRATION_WARNINGS.ACTION_REMOVED_FROM_APP,
+        message:
+          '2.0.0: the action "search" was removed; app "mixed" bound it (org.ckan/portal) and no longer offers it',
+        appId: 'mixed',
+        action: 'search',
+        key: 'org.ckan/portal'
+      },
+      {
+        code: MIGRATION_WARNINGS.TYPE_BINDING_NOT_REWRITTEN,
+        message:
+          '2.0.0: removeAction search — app "mixed" names it in its type binding type:people-directory, which is shared with other definitions and not rewritten; edit the app',
+        appId: 'mixed',
+        key: 'type:people-directory',
+        action: 'search'
+      }
+    ]);
+    assert.deepEqual(result.summary, { values: 0, actions: 1, apps: 2 });
+    const untouched = plan(instance(), [{ removeAction: { name: 'not-in-policy' } }]);
+    assert.equal(untouched.summary.actions, 0);
+  });
+
+  it('renameScope skips bindings that are no object and warns for a pinned type scope', () => {
+    const result = plan(
+      instance(),
+      [{ renameScope: { from: 'org:env', to: 'org:environment' } }],
+      [
+        app('flag', { govdata: true, 'type:people-directory': { pinnedScope: 'org:env' } }),
+        app('shared', { 'org.ckan/portal': { defaultScope: 'org:env' } })
+      ]
+    );
+    assert.deepEqual(result.apps[0].app.integrations.govdata, true);
+    assert.deepEqual(result.apps[1].app.integrations['org.ckan/portal'], {
+      defaultScope: 'org:environment'
+    });
+    assert.deepEqual(result.warnings, [
+      {
+        code: MIGRATION_WARNINGS.TYPE_BINDING_NOT_REWRITTEN,
+        message:
+          '2.0.0: renameScope org:env → org:environment — app "flag" names it in its type binding type:people-directory, which is shared with other definitions and not rewritten; edit the app',
+        appId: 'flag',
+        key: 'type:people-directory',
+        scope: 'org:env'
+      }
+    ]);
+    assert.deepEqual(result.summary, { values: 0, actions: 0, apps: 1 });
+  });
+
+  it('refuses a step it does not know (an unvalidated source) and runs the others', () => {
+    const result = plan(instance(), [
+      { module: { file: 'x.js' } },
+      {},
+      { removeValue: { key: 'fq' } }
+    ]);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.collisions, [
+      {
+        migration: '2.0.0',
+        step: 'module',
+        kind: 'step',
+        key: 'module',
+        message: 'unknown migration step "module"'
+      },
+      {
+        migration: '2.0.0',
+        step: 'undefined',
+        kind: 'step',
+        key: 'undefined',
+        message: 'unknown migration step "undefined"'
+      }
+    ]);
+    assert.equal(Object.hasOwn(result.instance.values, 'fq'), false);
+  });
+
+  it('a definition without a type has no type binding to warn about', () => {
+    const result = planMigration({
+      instance: instance(),
+      apps: [app('typed', { 'type:people-directory': { actions: ['search'] } })],
+      definition: { id: 'org.ckan/portal', version: '2.0.0' },
+      from: '1.2.0',
+      migrations: [{ id: '2.0.0', steps: [{ removeAction: { name: 'search' } }] }]
+    });
+    assert.deepEqual(result.warnings, []);
+  });
+});
+
 describe('planner: a span over several migrations', () => {
   it('runs 1.3.0 and 1.4.0 from 1.2.0, keeps the 1.3.0 boundary and sums the changes', () => {
     const def = parsedDefinition();
@@ -703,6 +944,45 @@ describe('final validation', () => {
       'value:fq',
       'value:rows'
     ]);
+  });
+
+  it('lists the problems in a fixed order: auth, sign-in mode, values, policy, apps, scopes', () => {
+    const noScopes = parsedDefinition({ scopes: undefined, auth: { modes: ['none'] } });
+    const after = {
+      ...valid,
+      auth: { mode: 'service-account', credentialRef: 'x' },
+      values: { baseUrl: 'https://x', fq: 'left over' },
+      actions: { enabled: ['*', 'search'], disabled: ['search', 'gone'], overrides: { gone: {} } }
+    };
+    const apps = [
+      app('own', {
+        govdata: { actions: ['nope'], defaultScope: 'org:a', pinnedScope: 'org:b' },
+        'org.ckan/portal': { actions: ['dataset_search', 'also'] }
+      })
+    ];
+    const errors = validateMigrationResult({ before: valid, after, apps, definition: noScopes });
+    assert.deepEqual(
+      errors.map(e => [e.kind, e.key, e.appId ?? null]),
+      [
+        ['auth', 'auth', null],
+        ['auth', 'auth.mode', null],
+        ['value', 'fq', null],
+        ['action', 'search', null],
+        ['action', 'gone', null],
+        ['action', 'nope', 'own'],
+        ['action', 'also', 'own'],
+        ['scope', 'org:a', 'own'],
+        ['scope', 'org:b', 'own']
+      ]
+    );
+    assert.equal(
+      errors[5].message,
+      'app "own" binds the action "nope" (govdata), which org.ckan/portal 1.4.0 does not declare'
+    );
+    assert.equal(
+      errors[8].message,
+      'app "own" sets pinnedScope "org:b" (govdata), but org.ckan/portal 1.4.0 declares no scopes'
+    );
   });
 
   it('does not check action names of protocols that list them at run time', () => {
@@ -863,6 +1143,56 @@ describe('marketplace update preview', () => {
     assert.equal(preview.planFromCatalog, false);
     assert.equal(preview.installations[0].planFromCatalog, false);
     assert.match(preview.installations[0].reason, /older than the oldest release/);
+  });
+
+  it('cannot plan without a version, and never plans an installation that needs a review', () => {
+    const noVersion = previewDefinitionUpdate({
+      definitionId: 'org.ckan/portal',
+      item: { ...item, version: 'latest' },
+      instances: [instance()],
+      entry
+    });
+    assert.deepEqual(noVersion, {
+      definitionId: 'org.ckan/portal',
+      to: null,
+      planFromCatalog: false,
+      reason: 'the catalog item has no version',
+      errors: [],
+      installations: []
+    });
+    const review = previewDefinitionUpdate({
+      definitionId: 'org.ckan/portal',
+      item,
+      instances: [instance({ definitionVersion: undefined })],
+      entry
+    });
+    assert.equal(review.planFromCatalog, true, 'only a windowed installation turns it off');
+    assert.deepEqual(review.installations, [
+      {
+        id: 'govdata',
+        from: null,
+        to: '1.4.0',
+        planFromCatalog: false,
+        reason: 'needs a review (no valid definitionVersion); the update does not migrate it',
+        migrations: [],
+        summary: null,
+        warnings: [],
+        collisions: [],
+        ok: false
+      }
+    ]);
+  });
+
+  it('cannot plan anything when the catalog lists no releases', () => {
+    const preview = previewDefinitionUpdate({
+      definitionId: 'org.ckan/portal',
+      item: { version: '1.4.0', releases: [], migrations: [] },
+      instances: [instance()],
+      entry
+    });
+    assert.equal(preview.planFromCatalog, false);
+    assert.match(preview.reason, /older than the releases the catalog lists/);
+    assert.match(preview.installations[0].reason, /^the catalog lists no releases/);
   });
 
   it('reports migrations it cannot read', () => {

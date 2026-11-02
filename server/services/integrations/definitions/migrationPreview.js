@@ -41,6 +41,87 @@ function oldestListedRelease(releases) {
 }
 
 /**
+ * The preview row of one installation: not planned (no valid version, or
+ * older than the catalog's window), already current, or planned from the
+ * catalog item's migrations.
+ *
+ * @param {object} input
+ * @param {object} input.instance - a stored installation of the definition
+ * @param {{ definition: object, status?: string }|null} input.entry - the loaded definition entry
+ * @param {{ id: string, version: string, type?: string, migrations: Array }} input.definition
+ *   - the definition as the catalog item describes it
+ * @param {Array<{ path: string, data: object }>} input.apps - every app document
+ * @param {string|null} input.oldest - the oldest release the catalog lists
+ * @returns {{ row: object, windowed: boolean }} `windowed` when the
+ *   installation is older than the catalog's window
+ */
+function previewInstallation({ instance, entry, definition, apps, oldest }) {
+  const state = installationMigrationState(instance, entry);
+  const to = definition.version;
+  const from = isStrictSemver(instance.definitionVersion) ? instance.definitionVersion : null;
+  const row = {
+    id: instance.id,
+    from,
+    to,
+    planFromCatalog: true,
+    reason: null,
+    migrations: [],
+    summary: null,
+    warnings: [],
+    collisions: [],
+    ok: true
+  };
+  if (!from) {
+    return {
+      row: {
+        ...row,
+        planFromCatalog: false,
+        ok: false,
+        reason: 'needs a review (no valid definitionVersion); the update does not migrate it'
+      },
+      windowed: false
+    };
+  }
+  if (!semver.gt(to, from)) {
+    return { row: { ...row, reason: `already at ${from}` }, windowed: false };
+  }
+  if (!oldest || semver.lt(from, oldest)) {
+    return {
+      row: {
+        ...row,
+        planFromCatalog: false,
+        reason: oldest
+          ? `${from} is older than the oldest release the catalog lists (${oldest}); the migration is planned against the downloaded definition when the update runs`
+          : 'the catalog lists no releases; the migration is planned against the downloaded definition when the update runs'
+      },
+      windowed: true
+    };
+  }
+  const keys = bindingKeysOf(instance, definition);
+  const bound = apps.filter(app => appBindsInstallation(app.data, keys));
+  const plan = planMigration({
+    instance,
+    apps: bound.map(app => ({ path: app.path, app: app.data })),
+    definition,
+    from,
+    to,
+    migrations: definition.migrations
+  });
+  return {
+    row: {
+      ...row,
+      status: state.status,
+      migrations: plan.migrations,
+      summary: plan.summary,
+      warnings: plan.warnings,
+      collisions: plan.collisions,
+      ok: plan.ok
+    },
+    windowed: false
+  };
+}
+
+/**
  * @param {object} input
  * @param {string} input.definitionId
  * @param {{ version?: string, releases?: Array, migrations?: Array }} input.item - the catalog item
@@ -80,73 +161,18 @@ export function previewDefinitionUpdate({
       errors: validation.errors
     };
   }
-  const migrations = validation.data;
-  const oldest = oldestListedRelease(item.releases);
   const definition = {
     id: definitionId,
     version: to,
     type: entry?.definition?.type,
-    migrations
+    migrations: validation.data
   };
+  const oldest = oldestListedRelease(item.releases);
   let windowed = false;
   for (const instance of instances) {
-    const state = installationMigrationState(instance, entry);
-    const from = isStrictSemver(instance.definitionVersion) ? instance.definitionVersion : null;
-    const row = {
-      id: instance.id,
-      from,
-      to,
-      planFromCatalog: true,
-      reason: null,
-      migrations: [],
-      summary: null,
-      warnings: [],
-      collisions: [],
-      ok: true
-    };
-    if (!from) {
-      result.installations.push({
-        ...row,
-        planFromCatalog: false,
-        ok: false,
-        reason: 'needs a review (no valid definitionVersion); the update does not migrate it'
-      });
-      continue;
-    }
-    if (!semver.gt(to, from)) {
-      result.installations.push({ ...row, reason: `already at ${from}` });
-      continue;
-    }
-    if (!oldest || semver.lt(from, oldest)) {
-      windowed = true;
-      result.installations.push({
-        ...row,
-        planFromCatalog: false,
-        reason: oldest
-          ? `${from} is older than the oldest release the catalog lists (${oldest}); the migration is planned against the downloaded definition when the update runs`
-          : 'the catalog lists no releases; the migration is planned against the downloaded definition when the update runs'
-      });
-      continue;
-    }
-    const keys = bindingKeysOf(instance, definition);
-    const bound = apps.filter(app => appBindsInstallation(app.data, keys));
-    const plan = planMigration({
-      instance,
-      apps: bound.map(app => ({ path: app.path, app: app.data })),
-      definition,
-      from,
-      to,
-      migrations
-    });
-    result.installations.push({
-      ...row,
-      status: state.status,
-      migrations: plan.migrations,
-      summary: plan.summary,
-      warnings: plan.warnings,
-      collisions: plan.collisions,
-      ok: plan.ok
-    });
+    const preview = previewInstallation({ instance, entry, definition, apps, oldest });
+    result.installations.push(preview.row);
+    windowed ||= preview.windowed;
   }
   if (windowed) {
     result.planFromCatalog = false;
