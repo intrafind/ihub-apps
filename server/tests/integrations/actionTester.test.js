@@ -20,8 +20,14 @@ const { REDACTED, isSecretName, redactBody, redactDeep, redactHeaders, redactUrl
   await import('../../utils/secretRedaction.js');
 const { recordOutbound, withOutboundRecording, MAX_RECORDED_REQUESTS } =
   await import('../../utils/outboundRecorder.js');
-const { argumentProblems, auditArgs } =
-  await import('../../services/integrations/tester/ActionTester.js');
+const {
+  argumentProblems,
+  auditArgs,
+  testTimeoutMs,
+  DEFAULT_TEST_TIMEOUT_MS,
+  MIN_TEST_TIMEOUT_MS,
+  MAX_TEST_TIMEOUT_MS
+} = await import('../../services/integrations/tester/ActionTester.js');
 const usage = await import('../../services/integrations/actionUsage.js');
 const { testNeedsConfirmation, testConnectionsOf, sideEffectOfMethod } =
   await import('../../services/integrations/actionDetail.js');
@@ -49,15 +55,15 @@ describe('secret redaction', () => {
 
   it('redacts credential headers and scrubs their values elsewhere', () => {
     const { headers, found } = redactHeaders({
-      Authorization: 'Bearer abcdef123456',
+      Authorization: 'Bearer abc123def456',
       Accept: 'application/json',
-      'X-Trace': 'abcdef123456'
+      'X-Trace': 'abc123def456'
     });
     assert.equal(headers.Authorization, REDACTED);
     assert.equal(headers.Accept, 'application/json');
     assert.equal(headers['X-Trace'], REDACTED);
-    assert.ok(found.includes('abcdef123456'));
-    assert.equal(scrubSecrets('token=abcdef123456;', found), `token=${REDACTED};`);
+    assert.ok(found.includes('abc123def456'));
+    assert.equal(scrubSecrets('token=abc123def456;', found), `token=${REDACTED};`);
   });
 
   it('redacts URLs, JSON and form bodies and nested secret keys', () => {
@@ -66,7 +72,7 @@ describe('secret redaction', () => {
       `https://${REDACTED}@api.example/x?apiKey=${REDACTED}&q=ok`
     );
     assert.match(
-      redactUrl('https://api.example/x?sig=abcdef123456', ['abcdef123456']),
+      redactUrl('https://api.example/x?sig=abc123def456', ['abc123def456']),
       /sig=\[redacted\]/
     );
     const json = redactBody(JSON.stringify({ q: 'a', auth: { password: 'pw-123456' } })).text;
@@ -129,6 +135,9 @@ describe('test arguments and confirmation', () => {
     assert.deepEqual(argumentProblems({}, schema), ['q is required']);
     assert.deepEqual(argumentProblems({ q: 'a', rows: 1.5 }, schema), ['rows must be integer']);
     assert.deepEqual(argumentProblems([], schema), ['args must be an object']);
+    // An optional property left null is not type-checked (it is not set).
+    assert.deepEqual(argumentProblems({ q: 'a', rows: null }, schema), []);
+    assert.deepEqual(argumentProblems({ q: 'a', rows: [1] }, schema), ['rows must be integer']);
     assert.match(argumentProblems({ q: 'x'.repeat(70_000) }, schema)[0], /at most/);
   });
 
@@ -163,6 +172,19 @@ describe('test arguments and confirmation', () => {
     assert.equal(sideEffectOfMethod('PATCH'), 'write');
     assert.equal(sideEffectOfMethod('DELETE'), 'destructive');
     assert.equal(sideEffectOfMethod(null), null);
+  });
+
+  it('bounds the test timeout whatever the action or installation sets (CodeQL 1363)', () => {
+    assert.equal(testTimeoutMs(5_000, 90_000), 5_000, 'the action first');
+    assert.equal(testTimeoutMs(undefined, 90_000), 90_000, 'then the installation');
+    assert.equal(testTimeoutMs(), DEFAULT_TEST_TIMEOUT_MS);
+    assert.equal(testTimeoutMs(0, null), DEFAULT_TEST_TIMEOUT_MS, 'unset values are skipped');
+    assert.equal(testTimeoutMs(Number.MAX_SAFE_INTEGER), MAX_TEST_TIMEOUT_MS);
+    assert.equal(testTimeoutMs(2 ** 31, 5_000), MAX_TEST_TIMEOUT_MS);
+    assert.equal(testTimeoutMs(1), MIN_TEST_TIMEOUT_MS);
+    for (const odd of ['600000', 1.5e3 + 0.5, Number.NaN, Infinity, -5, {}]) {
+      assert.equal(testTimeoutMs(odd), DEFAULT_TEST_TIMEOUT_MS, String(odd));
+    }
   });
 
   it('records arguments for the audit log without secrets, bounded', () => {

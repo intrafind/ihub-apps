@@ -55,6 +55,30 @@ export const MAX_TEST_ARGS_CHARS = 64 * 1024;
 export const MAX_RESPONSE_CHARS = 100_000;
 /** Time a test may take when the installation sets none. */
 export const DEFAULT_TEST_TIMEOUT_MS = 60_000;
+/** Shortest and longest time a test may take, whatever the configuration says. */
+export const MIN_TEST_TIMEOUT_MS = 1_000;
+export const MAX_TEST_TIMEOUT_MS = 120_000;
+
+/**
+ * The time a test may take: the first integer of `candidates` (the action's
+ * `timeoutMs`, then the installation's), clamped to
+ * [{@link MIN_TEST_TIMEOUT_MS}, {@link MAX_TEST_TIMEOUT_MS}];
+ * {@link DEFAULT_TEST_TIMEOUT_MS} when none is set. The schemas bound both
+ * values already; the clamp keeps the timer bounded for any definition that
+ * reaches the tester.
+ *
+ * @param {...unknown} candidates
+ * @returns {number}
+ */
+export function testTimeoutMs(...candidates) {
+  for (const value of candidates) {
+    if (!Number.isInteger(value) || value <= 0) continue;
+    if (value < MIN_TEST_TIMEOUT_MS) return MIN_TEST_TIMEOUT_MS;
+    if (value > MAX_TEST_TIMEOUT_MS) return MAX_TEST_TIMEOUT_MS;
+    return value;
+  }
+  return DEFAULT_TEST_TIMEOUT_MS;
+}
 
 /** A refusal with an HTTP status and a code the route answers with. */
 export class ActionTestError extends Error {
@@ -73,9 +97,11 @@ export class ActionTestError extends Error {
   }
 }
 
-/** JSON-schema type of a value, as the schema would name it. */
+/**
+ * JSON-schema type of a value, as the schema would name it. Only called for
+ * a value that is set: `argumentProblems` skips null and undefined.
+ */
 function jsonTypeOf(value) {
-  if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
   if (Number.isInteger(value)) return 'integer';
   return typeof value;
@@ -281,8 +307,7 @@ export async function testAction({
   const controller = new AbortController();
   const params = { ...args, user, language };
   const reported = [];
-  const timeoutMs =
-    definitionAction.timeoutMs || resolved.instance.timeoutMs || DEFAULT_TEST_TIMEOUT_MS;
+  const timeoutMs = testTimeoutMs(definitionAction.timeoutMs, resolved.instance.timeoutMs);
   const started = Date.now();
 
   const outcome = await recordOutbound(() =>
