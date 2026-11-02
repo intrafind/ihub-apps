@@ -222,7 +222,7 @@ function AdminNextcloudEmbedPage() {
       <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link
-            to="/admin/integrations"
+            to="/admin/integrations?tab=inbound"
             className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
           >
             ← {t('admin.integrations.backToIntegrations', 'Back to Integrations')}

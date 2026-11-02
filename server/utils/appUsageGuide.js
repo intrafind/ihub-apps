@@ -10,6 +10,14 @@
  */
 import { getLocalizedContent } from '../../shared/localize.js';
 import { appUsesProjects } from '../../shared/appProjects.js';
+import { appBindsStorage } from '../../shared/storageBindings.js';
+
+/** The shipped storage provider definitions an app can bind (`app.integrations`). */
+const STORAGE_DEFINITION_IDS = Object.freeze([
+  'com.intrafind/office365',
+  'com.intrafind/google-drive',
+  'com.intrafind/nextcloud'
+]);
 
 /** Upper bound of the app's own instructions quoted to the generating model. */
 const MAX_INSTRUCTIONS_CHARS = 8000;
@@ -65,15 +73,27 @@ function describeVariables(app, text) {
   return lines;
 }
 
-/** What the user can attach, or an empty string. */
-function describeAttachments(upload) {
+/**
+ * What the user can attach, or an empty string. Files from a storage provider
+ * count while one is enabled and the app binds it (`type:storage`, a
+ * provider's definition, or one of `storageInstallationIds`).
+ * @param {object} app
+ * @param {string[]} storageInstallationIds - the enabled storage installations
+ */
+function describeAttachments(app, storageInstallationIds) {
+  const upload = app?.upload;
   if (!upload?.enabled) return '';
   return [
     upload.imageUpload?.enabled && 'images',
     upload.fileUpload?.enabled && 'documents (PDF, Word, text and similar)',
     upload.audioUpload?.enabled && 'audio files',
     upload.videoUpload?.enabled && 'videos',
-    upload.cloudStorageUpload?.enabled && 'files from cloud storage'
+    storageInstallationIds.length > 0 &&
+      appBindsStorage(app, {
+        definitionIds: STORAGE_DEFINITION_IDS,
+        installationIds: storageInstallationIds
+      }) &&
+      'files from cloud storage'
   ]
     .filter(Boolean)
     .join(', ');
@@ -108,11 +128,17 @@ function describeChatFeatures(app) {
  *
  * @param {object} app - App configuration (may be an unsaved draft).
  * @param {string} language - Language code the descriptions are taken in.
- * @param {{tools?: Array<object>, projects?: Array<object>}} [catalog] - Configured
- *   tools and projects, to name the ones the app uses.
+ * @param {{tools?: Array<object>, projects?: Array<object>, storageInstallationIds?: string[]}} [catalog] -
+ *   Configured tools and projects, to name the ones the app uses, and the ids
+ *   of the enabled storage provider installations, to tell whether the app
+ *   offers files from cloud storage.
  * @returns {string} Plain-text description.
  */
-export function describeAppForGuide(app, language, { tools = [], projects = [] } = {}) {
+export function describeAppForGuide(
+  app,
+  language,
+  { tools = [], projects = [], storageInstallationIds = [] } = {}
+) {
   const text = value => getLocalizedContent(value, language, 'en').trim();
   const lines = [];
   const add = (label, value) => {
@@ -140,7 +166,7 @@ export function describeAppForGuide(app, language, { tools = [], projects = [] }
     }
   }
 
-  add('The user can attach', describeAttachments(app.upload));
+  add('The user can attach', describeAttachments(app, storageInstallationIds));
   lines.push(...describeTools(app, tools, text));
 
   // An app with projects switched off answers from none of its links.

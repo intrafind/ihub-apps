@@ -15,8 +15,6 @@ import RedirectConfigSection from './app-form/RedirectConfigSection';
 import Icon from '../../../shared/components/Icon';
 import UploadConfigSection from './app-form/UploadConfigSection';
 import VariablesSection from './app-form/VariablesSection';
-import WebSearchSection from './app-form/WebSearchSection';
-import IAssistantSection from './app-form/IAssistantSection';
 import MagicPromptSection from './app-form/MagicPromptSection';
 import ExportConfigSection from './app-form/ExportConfigSection';
 import DocumentTemplateSection from './app-form/DocumentTemplateSection';
@@ -219,11 +217,9 @@ function AppFormEditor({
         {/* Chat-specific sections - Only show for chat apps */}
         {(app.type === 'chat' || !app.type) && (
           <>
-            {/* Web Search Configuration */}
-            <WebSearchSection app={app} onChange={onChange} />
-
-            {/* iAssistant Configuration */}
-            <IAssistantSection app={app} onChange={onChange} />
+            {/* Integrations: web search, iAssistant, people directories and every
+                other installed integration, each in one place (#3061) */}
+            <IntegrationsConfigSection app={app} onChange={onChange} />
 
             {/* Tools Configuration */}
             <ToolsConfigSection
@@ -231,12 +227,6 @@ function AppFormEditor({
               onToolsChange={tools => handleInputChange('tools', tools)}
               toolChoice={app.toolChoice}
               onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
-            />
-
-            {/* Installed integrations (#3061) */}
-            <IntegrationsConfigSection
-              integrations={app.integrations}
-              onChange={value => handleInputChange('integrations', value)}
             />
 
             {/* Workflows Configuration */}

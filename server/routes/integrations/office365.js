@@ -18,6 +18,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
+import { requireCloudStorageGrant } from './cloudStorageAccess.js';
 import { isValidGraphId } from '../../services/integrations/graphIds.js';
 
 const router = express.Router();
@@ -27,6 +28,9 @@ const SOURCE_SETTINGS = { personal: 'personalDrive', sharepoint: 'followedSites'
 
 // Gate all Office 365 routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
+// A provider the user's groups do not grant (`permissions.integrations`) can
+// be neither connected nor browsed.
+router.use(requireCloudStorageGrant('office365'));
 
 // Rate limiter for Office 365 OAuth initiation to prevent abuse/DoS
 const office365AuthLimiter = rateLimit({

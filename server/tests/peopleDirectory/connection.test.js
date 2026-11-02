@@ -46,9 +46,10 @@ const skip = !hasOpenssl() && 'openssl CLI not available to generate test certif
 const state = {
   platform: {},
   directories: [],
+  // Who may use the test directory (`permissions.integrations`, #3093).
   groups: {
     admins: { inherits: ['users'] },
-    users: { inherits: ['authenticated'] },
+    users: { inherits: ['authenticated'], permissions: { integrations: ['testdir'] } },
     authenticated: {}
   }
 };
@@ -725,7 +726,6 @@ describe('people directory connections', { skip }, () => {
           bind: { mode: 'anonymous' },
           allowedHosts: ['ldap.test'],
           tlsCa: ['test-root'],
-          groups: ['users'],
           ...overrides
         }
       ];
@@ -837,7 +837,7 @@ describe('people directory connections', { skip }, () => {
       assert.match(bad.error.message, /maxResults/);
     });
 
-    it('refuse a user outside the directory groups, and a disabled directory', async () => {
+    it('refuse a user whose groups do not grant the directory, and a disabled directory', async () => {
       configure();
       await assert.rejects(
         runPeopleDirectoryTool(tool('search_people'), {

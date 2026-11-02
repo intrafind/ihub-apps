@@ -224,9 +224,9 @@ Today's shipped tools regroup into a handful of built-in integrations. They are 
 | **Web** | search (Brave, Staan, Qwant or the model's native search, chosen per installation), read page (`read_url`) | — | external |
 | **Microsoft 365** | people search (`entraPeopleSearch_*`); later mail, calendar, files as actions | `files` picker for chat and projects (OneDrive, SharePoint, Teams files) | external (Microsoft cloud) |
 | **Jira** | search, get issue, comment, transition, attachment (`jira_*`) | — | external or internal (Data Center) |
-| **iHub** | ask the user, evidence, scheduled tasks, agent workspace (tasks, memory, inbox, artifacts) | — | internal |
+| **iHub** | ask the user, scheduled tasks | — | internal |
 
-Google Drive and Nextcloud become built-in integrations with the `files` capability on the same pattern. Tools that belong to another feature stay with it: skill tools with skills, `app__` tools with the app, `workflow_` tools with the workflow, `knowledge_*` tools with projects. The model still sees them; they are not configured on the Integrations page.
+Google Drive and Nextcloud become built-in integrations with the `files` capability on the same pattern. Tools that belong to another feature stay with it: skill tools with skills, `app__` tools with the app, `workflow_` tools with the workflow, `knowledge_*` tools with projects, and the agent workspace (tasks, memory, inbox, artifacts) and evidence tools with workflows and agents. The model still sees them; they are not configured on the Integrations page. **Decided 2026-11-01 (product owner):** the iHub integration owns only the tools users call in chats, `ask_user` and the scheduled-task tools; see [iHub integration: chat tools only](2026-11-01%20iHub%20integration%20chat%20tools%20only.md).
 
 An action can need a different identity than its siblings, for example Microsoft 365 people search as the app (application permission) while files run as the user. The action declares the connection it needs; section 1.1 of [04 · Architecture](04-architecture.md) has the field.
 

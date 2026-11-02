@@ -43,7 +43,7 @@ class Office365Service extends OAuthIntegrationBase {
 
   /**
    * Get Office 365 provider configuration
-   * @param {string} providerId - The provider ID from cloud storage config
+   * @param {string} providerId - The installation id of the provider
    * @returns {Object} Provider configuration
    */
   _getProviderConfig(providerId) {
@@ -136,12 +136,7 @@ class Office365Service extends OAuthIntegrationBase {
   generateAuthUrl(providerId, state, codeVerifier, req = null) {
     const provider = this._getProviderConfig(providerId);
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    const redirectUri = this._resolveRedirectUri(
-      provider,
-      providerId,
-      'OFFICE365_OAUTH_REDIRECT_URI',
-      req
-    );
+    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
 
     const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
 
@@ -181,12 +176,7 @@ class Office365Service extends OAuthIntegrationBase {
     try {
       const provider = this._getProviderConfig(providerId);
       const tokenUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/token`;
-      const redirectUri = this._resolveRedirectUri(
-        provider,
-        providerId,
-        'OFFICE365_OAUTH_REDIRECT_URI',
-        req
-      );
+      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,

@@ -29,8 +29,11 @@ export async function mcpManagerConfig() {
   const resolved = [];
   for (const instance of installedIntegrationService.list()) {
     const entry = await installedIntegrationService.resolve(instance);
-    // An incompatible definition offers no tools, so its server is not connected.
-    if (entry?.definition?.protocol?.type === 'mcp' && !entry.incompatible) resolved.push(entry);
+    // An incompatible definition offers no tools, so its server is not connected;
+    // nor does an installation whose migration state withholds them (`blocked`).
+    if (entry?.definition?.protocol?.type === 'mcp' && !entry.incompatible && !entry.blocked) {
+      resolved.push(entry);
+    }
   }
   return mcpServersFromInstallations(resolved, installedIntegrationService.security());
 }

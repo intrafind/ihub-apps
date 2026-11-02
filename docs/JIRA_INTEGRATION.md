@@ -22,7 +22,7 @@ The JIRA Connector provides comprehensive integration with Atlassian JIRA, enabl
 ## Configuration
 
 Jira is the built-in installed integration **Atlassian Jira** (`com.intrafind/jira`), installed
-once as `jira` under **Admin → Integrations → Installed**. The installation holds the OAuth app's
+once as `jira` under **Admin → Integrations**. The installation holds the OAuth app's
 client id and secret and the redirect URI; every user then connects their own Atlassian account
 once (OAuth 2.0 with PKCE), and all calls run as that user. Nothing about Jira lives in
 `platform.json` any more (migration V196 moved it), and there is no separate Jira page under
@@ -50,7 +50,7 @@ The integration uses Atlassian's central OAuth endpoints (`https://auth.atlassia
 
 1. Store the client secret as a credential of type **secret** under **Admin → Integrations →
    Credentials**.
-2. Open **Admin → Integrations → Installed → Atlassian Jira** and fill in:
+2. Open **Admin → Integrations → Atlassian Jira** and fill in:
    - **OAuth client ID** (`clientId`)
    - **OAuth client secret** (`clientSecretRef`): the credential from step 1
    - **Redirect URI** (`redirectUri`): the callback URL registered in the Atlassian app. Empty

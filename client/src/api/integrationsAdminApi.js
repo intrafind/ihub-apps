@@ -81,6 +81,43 @@ export const testInstalledIntegration = async (id, draft = {}) =>
   (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data
     .result;
 
+/**
+ * Run (or re-run) the definition migration of an installation
+ * (`POST …/installed/:id/_migrate`).
+ *
+ * @param {string} id - the installation id
+ * @returns {Promise<{ success: boolean, result: 'migrated'|'stamped'|'current', logEntry: Object|null, instance: Object }>}
+ * @throws the request error; `response.data` carries `{ code, reason, details, logEntry?, instance? }`
+ */
+export const migrateInstalledIntegration = async id =>
+  (await makeAdminApiCall(`${instancePath(id)}/_migrate`, { method: 'POST', ...json({}) })).data;
+
+/**
+ * Restore a backup of an installation whose migration failed or that needs a
+ * review (`POST …/installed/:id/_restore`).
+ *
+ * @param {string} id - the installation id
+ * @param {string} [backup] - a backup id from `migration.backups`; the server's default without one
+ * @returns {Promise<{ success: boolean, backup: Object, logEntry: Object, instance: Object }>}
+ */
+export const restoreInstalledIntegration = async (id, backup) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/_restore`, {
+      method: 'POST',
+      ...json(backup ? { backup } : {})
+    })
+  ).data;
+
+/**
+ * Adopt the loaded definition version for an installation that needs a
+ * review (`POST …/installed/:id/_adopt`).
+ *
+ * @param {string} id - the installation id
+ * @returns {Promise<{ success: boolean, logEntry: Object, instance: Object }>}
+ */
+export const adoptInstalledIntegration = async id =>
+  (await makeAdminApiCall(`${instancePath(id)}/_adopt`, { method: 'POST', ...json({}) })).data;
+
 /** Users who connected their own account to an installation that signs every user in. */
 export const fetchIntegrationConnections = async id =>
   (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.connections || [];
@@ -101,3 +138,14 @@ export const resetIntegrationRegistration = async id =>
       ...json({})
     })
   ).data;
+
+/**
+ * What the dedicated People directory (LDAP), LDAP browser and Entra ID
+ * editors need besides the installation: the search presets with their
+ * mappings, the person fields, the defaults and upper bounds of the limits,
+ * the LDAP sign-in providers a directory can reuse (without secrets) and
+ * which `AZURE_*` environment variables the server has (set or not, never the
+ * value). Server: `server/routes/admin/peopleDirectoryEditor.js`.
+ */
+export const fetchPeopleDirectoryEditorContext = async () =>
+  (await makeAdminApiCall(`${BASE}/people-directories/editor-context`)).data;

@@ -1,25 +1,9 @@
 {
   "installed": [
     {
-      "id": "websearch",
-      "definition": "com.intrafind/web-search",
-      "enabled": true,
-      "values": {
-        "defaultProvider": "auto"
-      },
-      "auth": {
-        "mode": "none"
-      },
-      "actions": {
-        "enabled": ["*"],
-        "disabled": [],
-        "overrides": {}
-      },
-      "allowedGroups": []
-    },
-    {
       "id": "drawio",
       "definition": "mcp/drawio",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "values": {},
       "auth": {
@@ -29,12 +13,12 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": []
+      }
     },
     {
       "id": "excalidraw",
       "definition": "mcp/excalidraw",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "values": {},
       "auth": {
@@ -44,12 +28,12 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": []
+      }
     },
     {
       "id": "x500bund",
       "definition": "com.intrafind/ldap-directory",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "label": {
         "en": "Federal directory (IVBB)",
@@ -77,8 +61,7 @@
         "enabled": ["*"],
         "disabled": [],
         "overrides": {}
-      },
-      "allowedGroups": ["authenticated"]
+      }
     }
   ],
   "security": {

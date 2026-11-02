@@ -162,7 +162,6 @@ function instanceWith(values = {}, auth = { mode: 'none' }, extra = {}) {
     values: { baseUrl: `http://127.0.0.1:${port}`, ...values },
     auth,
     actions: { enabled: ['*'], disabled: [], overrides: {} },
-    allowedGroups: [],
     ...extra
   };
 }

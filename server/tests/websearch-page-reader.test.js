@@ -4,172 +4,157 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The page reader (`read_url`) offered next to the script-backed
- * search tool.
+ * The page reader (`read_url`) belongs to the web search feature, not to an
+ * engine: a platform tool read from `server/defaults/tools/read_url.json`.
  *
  * Without it the model can search but can't open a page: all it sees of a
  * result is the search tool's short automatic excerpt, and a URL the user
  * pastes can't be read at all. These tests pin down when the reader is offered
- * (alongside the search tool, and on the native-search fallback), when it
- * isn't (web search off, native search, reader disabled), and that the shipped
- * default definition matches the script it points at.
+ * (next to any engine's search tool, next to native search on Anthropic and
+ * OpenAI Responses — with no engine installed — and on the native-search
+ * fallback), when it isn't (web search off, Google native search, switched
+ * off by a tool file), and that the shipped definition matches the script it
+ * points at.
  *
  * Run: node --test server/tests/websearch-page-reader.test.js
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import configCache from '../configCache.js';
-import mcpClientManager from '../services/mcp/McpClientManager.js';
 import {
   getToolsForApp,
+  loadTools,
   resolveNativeWebSearchFallbackTools,
   READ_URL_TOOL_ID
 } from '../toolLoader.js';
 import * as extractorModule from '../tools/webContentExtractor.js';
-import websearchConnector from '../services/integrations/protocols/native/connectors/websearch/index.js';
+import { isPlatformTool } from '../services/tools/platformTools.js';
+import { RETIRED_IHUB_TOOL_FILES } from '../utils/setupUtils.js';
+import {
+  STAFF,
+  engine,
+  setUpWebSearch,
+  tearDownWebSearch,
+  useWebSearch
+} from './helpers/webSearchEngines.js';
 
-// The web search tools belong to the built-in `websearch` connector now.
-const PARAMETERS = JSON.parse(
-  await readFile(
-    new URL(
-      '../services/integrations/protocols/native/connectors/websearch/parameters.json',
-      import.meta.url
-    ),
-    'utf8'
-  )
+const READER = JSON.parse(
+  await readFile(new URL('../defaults/tools/read_url.json', import.meta.url), 'utf8')
 );
-function connectorTool(action) {
-  const spec = PARAMETERS[action];
-  return {
-    id: spec.toolId,
-    name: spec.name,
-    description: spec.description,
-    parameters: spec.parameters,
-    _integration: { instanceId: 'websearch', action, fixedToolId: true }
-  };
-}
-
-const qwant = connectorTool('qwant');
-const reader = connectorTool('readUrl');
-
-let tools = [];
-// The `websearch` installation owns the search tools and the page reader.
-let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
-configCache.getTools = () => ({ data: tools });
-configCache.getIntegrations = () => ({ data: { installed } });
-configCache.getPlatform = () => ({ defaultLanguage: 'en' });
-configCache.getSources = () => ({ data: [] });
-mcpClientManager.listAllTools = async () => [];
 
 const webApp = extra => ({
   id: 'research',
   websearch: { enabled: true, provider: 'qwant', useNativeSearch: false, enabledByDefault: true },
   ...extra
 });
+const nativeApp = () => webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
 
 const ids = list => list.map(t => t.id);
 
-describe('page reader alongside web search', () => {
-  beforeEach(() => {
-    tools = [qwant, reader];
-  });
+before(setUpWebSearch);
+after(tearDownWebSearch);
 
-  it('is offered next to the search tool when web search is on', async () => {
-    const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral' });
+describe('page reader alongside web search', () => {
+  beforeEach(() => useWebSearch({ installed: [engine('qwant')] }));
+
+  it('is offered next to the engine’s search tool when web search is on', async () => {
+    const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral', user: STAFF });
     assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
   });
 
   it('is not offered when the user turned web search off', async () => {
     const offered = await getToolsForApp(webApp(), 'en', {
       modelProvider: 'mistral',
+      user: STAFF,
       websearchEnabled: false
     });
     assert.deepEqual(ids(offered), []);
   });
 
-  it('is offered alone next to native search on Anthropic and OpenAI Responses', async () => {
-    const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
-    for (const modelProvider of ['anthropic', 'openai-responses']) {
-      const offered = await getToolsForApp(app, 'en', { modelProvider });
-      assert.deepEqual(ids(offered), [READ_URL_TOOL_ID], modelProvider);
+  it('is offered alone next to native search on Anthropic and OpenAI Responses, engine or not', async () => {
+    for (const installed of [[engine('qwant')], []]) {
+      useWebSearch({ installed });
+      for (const modelProvider of ['anthropic', 'openai-responses']) {
+        const offered = await getToolsForApp(nativeApp(), 'en', { modelProvider, user: STAFF });
+        assert.deepEqual(ids(offered), [READ_URL_TOOL_ID], `${modelProvider} ${installed.length}`);
+      }
     }
   });
 
   it('is not offered next to Google native search, which drops function tools', async () => {
-    const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
-    const offered = await getToolsForApp(app, 'en', { modelProvider: 'google' });
+    const offered = await getToolsForApp(nativeApp(), 'en', {
+      modelProvider: 'google',
+      user: STAFF
+    });
     assert.deepEqual(ids(offered), []);
   });
 
-  it('is not offered next to native search when the reader is disabled', async () => {
-    tools = [qwant];
-    const app = webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
-    const offered = await getToolsForApp(app, 'en', { modelProvider: 'anthropic' });
-    assert.deepEqual(ids(offered), []);
+  it('is not offered when a tool file switches it off', async () => {
+    useWebSearch({ installed: [engine('qwant')], tools: [{ ...READER, enabled: false }] });
+    assert.equal(
+      (await loadTools('en')).some(t => t.id === READ_URL_TOOL_ID),
+      false
+    );
+    const native = await getToolsForApp(nativeApp(), 'en', {
+      modelProvider: 'anthropic',
+      user: STAFF
+    });
+    assert.deepEqual(ids(native), []);
+    const engineOnly = await getToolsForApp(webApp(), 'en', {
+      modelProvider: 'mistral',
+      user: STAFF
+    });
+    assert.deepEqual(ids(engineOnly), ['qwantSearch']);
   });
 
   it('is offered once when the app also lists it in tools', async () => {
-    // A `read_url` reference in `tools` is served from the installation, and
-    // `app.websearch` offers the reader as well: it is offered exactly once.
     const offered = await getToolsForApp(webApp({ tools: [READ_URL_TOOL_ID] }), 'en', {
-      modelProvider: 'mistral'
+      modelProvider: 'mistral',
+      user: STAFF
     });
     assert.deepEqual(ids(offered).sort(), ['qwantSearch', READ_URL_TOOL_ID].sort());
   });
 
-  it('is left out, with the search tool, while the websearch installation is off', async () => {
-    installed = [{ id: 'websearch', enabled: false }];
-    try {
-      const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral' });
-      assert.deepEqual(ids(offered), []);
-    } finally {
-      installed = [{ id: 'websearch', enabled: true }];
-    }
+  it('is not offered with web search when no engine and no native search are available', async () => {
+    useWebSearch({ installed: [] });
+    const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral', user: STAFF });
+    assert.deepEqual(ids(offered), []);
   });
 
-  it('is left out for a user outside the installation’s groups', async () => {
-    installed = [{ id: 'websearch', enabled: true, allowedGroups: ['research'] }];
-    try {
-      const outside = await getToolsForApp(webApp(), 'en', {
-        modelProvider: 'mistral',
-        user: { id: 'u', groups: ['staff'] }
-      });
-      assert.deepEqual(ids(outside), []);
-      const inside = await getToolsForApp(webApp(), 'en', {
-        modelProvider: 'mistral',
-        user: { id: 'u', groups: ['research'] }
-      });
-      assert.deepEqual(ids(inside), ['qwantSearch', READ_URL_TOOL_ID]);
-    } finally {
-      installed = [{ id: 'websearch', enabled: true }];
-    }
-  });
-
-  it('is offered with the search tool when native search is turned down', async () => {
+  it('is offered with the engine’s search tool when native search is turned down', async () => {
     const offered = await resolveNativeWebSearchFallbackTools(
-      { provider: 'anthropic', fallback: 'braveSearch' },
-      { app: webApp(), language: 'en' }
+      { provider: 'anthropic', fallback: 'auto' },
+      { app: webApp(), language: 'en', user: STAFF }
     );
     assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
   });
 });
 
 describe('default read_url definition', () => {
-  it('is the web search connector’s readUrl action, run by the extractor', () => {
-    assert.equal(reader.id, READ_URL_TOOL_ID);
-    assert.equal(typeof websearchConnector.actions.readUrl.run, 'function');
+  it('is a platform tool, read in place and never seeded into contents/tools', async () => {
+    useWebSearch({ installed: [] });
+    assert.equal(isPlatformTool(READ_URL_TOOL_ID), true);
+    assert.ok(RETIRED_IHUB_TOOL_FILES.includes('tools/read_url.json'));
+    const reader = (await loadTools('en')).find(t => t.id === READ_URL_TOOL_ID);
+    assert.ok(reader, 'the page reader is in the tool list');
+    assert.equal(reader._integration, undefined, 'no engine owns it');
+    assert.equal(typeof reader.description, 'string', 'localized');
+  });
+
+  it('runs the extractor’s model-facing entry point', () => {
+    assert.equal(READER.script, 'webContentExtractor.js');
+    assert.equal(READER.method, 'extractForTool');
     assert.equal(typeof extractorModule.extractForTool, 'function');
   });
 
   it('asks only for a url, a length and an offset, never for ignoreSSL', () => {
-    assert.deepEqual(Object.keys(reader.parameters.properties).sort(), [
+    assert.deepEqual(Object.keys(READER.parameters.properties).sort(), [
       'maxLength',
       'offset',
       'url'
     ]);
-    assert.deepEqual(reader.parameters.required, ['url']);
+    assert.deepEqual(READER.parameters.required, ['url']);
   });
 
   it('rejects a non-http URL through the model-facing entry point', async () => {

@@ -40,7 +40,8 @@ jest.unstable_mockModule('../../toolLoader.js', () => ({
 const { default: configCache } = await import('../../configCache.js');
 
 // The listing drops an integration tool whose installation is missing,
-// disabled or closed to the user's groups; both agents are installed and open.
+// disabled or not granted to the user's groups; both agents are installed,
+// and the user's groups may use every integration.
 configCache.setCacheEntry('config/integrations.json', {
   installed: [
     { id: 'langdock', definition: 'com.intrafind/a2a-agent', enabled: true },
@@ -50,7 +51,11 @@ configCache.setCacheEntry('config/integrations.json', {
 });
 
 const listFor = async grants => {
-  const user = { id: 'u', groups: ['g'], permissions: { tools: new Set(grants) } };
+  const user = {
+    id: 'u',
+    groups: ['g'],
+    permissions: { tools: new Set(grants), integrations: new Set(['*']) }
+  };
   const { data } = await configCache.getToolsForUser(user, {}, 'en');
   return data.map(tool => tool.id).sort();
 };

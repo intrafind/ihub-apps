@@ -12,6 +12,26 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
   fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
 }));
 
+// The cloud file picker offers the storage providers the app binds among the granted ones.
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => ({
+    platformConfig: {
+      cloudStorage: {
+        enabled: true,
+        providers: [
+          {
+            id: 'nextcloud',
+            type: 'nextcloud',
+            definition: 'com.intrafind/nextcloud',
+            displayName: 'Nextcloud',
+            enabled: true
+          }
+        ]
+      }
+    }
+  })
+}));
+
 jest.mock('../../../shared/documentExtraction/pptx.js', () => {
   const actual = jest.requireActual('../../../shared/documentExtraction/pptx.js');
   return { ...actual, extractPptxText: jest.fn(actual.extractPptxText) };
@@ -459,9 +479,9 @@ describe('the speaker notes option reaches every way a deck gets in', () => {
     const cloudOnly = result.current.createUploadConfig(
       {
         upload: {
-          cloudStorageUpload: { enabled: true },
           fileUpload: { ...fileUpload, enabled: false }
-        }
+        },
+        integrations: { 'com.intrafind/nextcloud': {} }
       },
       null
     );

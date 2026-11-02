@@ -12,6 +12,26 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
   fetchPlatformConfig: jest.fn(async () => ({ features: [] }))
 }));
 
+// The cloud file picker offers the storage providers the app binds among the granted ones.
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  usePlatformConfig: () => ({
+    platformConfig: {
+      cloudStorage: {
+        enabled: true,
+        providers: [
+          {
+            id: 'nextcloud',
+            type: 'nextcloud',
+            definition: 'com.intrafind/nextcloud',
+            displayName: 'Nextcloud',
+            enabled: true
+          }
+        ]
+      }
+    }
+  })
+}));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key, fallback) => (typeof fallback === 'string' ? fallback : fallback?.defaultValue || key)
@@ -429,9 +449,9 @@ describe('per-app options reach every way a document gets in', () => {
     const cloudOnly = result.current.createUploadConfig(
       {
         upload: {
-          cloudStorageUpload: { enabled: true },
           fileUpload: { trackedChanges: 'markup', comments: 'inline' }
-        }
+        },
+        integrations: { 'type:storage': { required: false } }
       },
       null
     );

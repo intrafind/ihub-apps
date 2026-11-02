@@ -88,8 +88,12 @@ describe('definition schema: releases', () => {
     }
   ];
 
+  // The migration the 1.4.0 release names (versioning phase 2: a release's
+  // migration must be listed in `migrations`).
+  const migrations = [{ id: '1.4.0', steps: [{ setValue: { key: 'rows', value: 20 } }] }];
+
   test('accepts a history newest first whose head is the definition version', () => {
-    const result = validateIntegrationDefinition(definition({ releases }));
+    const result = validateIntegrationDefinition(definition({ releases, migrations }));
     assert.ok(result.success, result.success ? '' : messages(result));
     assert.equal(result.data.releases.length, 3);
     assert.equal(result.data.releases[0].migration, '1.4.0');

@@ -1,0 +1,69 @@
+{
+  "id": "com.intrafind/qwant-search",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: Qwant is its own web search engine integration, installed as qwant (migration V204).",
+        "de": "Erste Version: Qwant ist eine eigene Websuchmaschinen-Integration, installiert als qwant (Migration V204)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "Qwant",
+    "de": "Qwant"
+  },
+  "description": {
+    "en": "Search the web with Qwant, without an API key or an account. Qwant blocks many data-centre IP addresses: test it from this server before you rely on it.",
+    "de": "Das Web mit Qwant durchsuchen, ohne API-Schlüssel und ohne Konto. Qwant sperrt viele IP-Adressen von Rechenzentren: vor dem Einsatz von diesem Server aus testen."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["search", "web"],
+  "type": "web-search",
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "qwant"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "qwantSearch"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "search",
+      "toolId": "qwantSearch",
+      "title": {
+        "en": "Search the web",
+        "de": "Im Web suchen"
+      },
+      "description": {
+        "en": "Search the web with Qwant (no key).",
+        "de": "Das Web mit Qwant durchsuchen (ohne Schlüssel)."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  ],
+  "instructions": {
+    "en": "Web search is switched on per app under Apps → Edit → Integrations → Web search; the user turns it on or off in the chat. The app uses this engine when it names it, or on Auto when it is the first engine the user may use.",
+    "de": "Die Websuche wird pro App unter Apps → Bearbeiten → Integrationen → Websuche eingeschaltet; der Benutzer schaltet sie im Chat ein oder aus. Die App nutzt diese Suchmaschine, wenn sie sie nennt, oder bei Auto, wenn sie die erste Suchmaschine ist, die der Benutzer nutzen darf."
+  }
+}

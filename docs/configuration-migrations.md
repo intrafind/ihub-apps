@@ -15,6 +15,11 @@ Create a migration whenever you:
 
 - Adding brand-new config files (handled by `performInitialSetup` copying from `server/defaults/`)
 - Client-side changes or code-only changes with no config schema impact
+- A change to what the installations of one integration definition store (an install field renamed, an action renamed or removed, a value that needs a default): the definition ships a **definition migration** for that, run per installation with a backup when the definition changes (an iHub release that updates a built-in definition, a marketplace update). See [Integrations → Migrations](integrations.md#migrations).
+
+### What stays numbered
+
+Numbered migrations stay for everything that is not an installation's own data: `platform.json`, apps, groups, models, providers, and also changes that span integrations, such as creating installations from an older config file, moving a setting from `platform.json` into an installation, or grants on the groups. When a release changes both, the numbered migration runs first (at startup, before anything loads), the definition migrations of the built-in definitions right after it, still before the workers start.
 
 ## How to Create a Migration
 

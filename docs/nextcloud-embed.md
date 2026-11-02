@@ -19,7 +19,7 @@ grant — configuring one buys you most of the setup for the other.
 2. **Download the plugin tarball** from a GitHub release (or a CI artifact).
 3. **Install it on Nextcloud** by extracting into `custom_apps/` and
    enabling the app via `occ`.
-4. **Configure the plugin** with the iHub base URL and provider id.
+4. **Configure the plugin** with the iHub base URL and the id of iHub's Nextcloud installation.
 
 A Nextcloud admin only owns steps 3–4. An iHub admin owns steps 1 and 2's
 provisioning (releases happen in the iHub repo's CI). Both sides need to be
@@ -45,8 +45,11 @@ The Nextcloud admin can skip this section; ask the iHub admin to do it.
 ### 1a. Cloud storage provider
 
 Follow [docs/nextcloud-integration.md](nextcloud-integration.md) end to end.
-Take note of the **provider id** you configured (e.g. `nextcloud-main`) —
-the plugin needs to be told which provider it should announce to iHub.
+Take note of the **installation id** of the Nextcloud installation (e.g.
+`nextcloud-main`; it is shown on the installation's page and in its URL,
+`/admin/integrations/<id>`) — the plugin needs to be told which
+installation it should announce to iHub. With several Nextcloud
+installations, use the one for the server this plugin runs on.
 
 ### 1b. Nextcloud Embed
 
@@ -153,9 +156,10 @@ Two app config values control the plugin's behaviour. Set them via `occ`:
 sudo -u www-data php occ config:app:set ihub_chat ihub_base_url \
   --value=https://ihub.example.com
 
-# The provider id of iHub's Nextcloud installation (Admin → Integrations →
-# Installed → Nextcloud → Advanced → Provider id; the installation id
-# `nextcloud` when empty). Defaults to `nextcloud-main` if you omit this.
+# The id of iHub's Nextcloud installation for this server (Admin →
+# Integrations → the installation's page, /admin/integrations/<id>); an
+# upgrade kept the provider id it had before. Defaults to `nextcloud-main`
+# if you omit this.
 sudo -u www-data php occ config:app:set ihub_chat ihub_provider_id \
   --value=nextcloud-main
 ```
@@ -244,7 +248,7 @@ When a new iHub release is out:
 | Clicking the action shows _"iHub Chat could not open"_. | The configured base URL or provider id failed validation (non-HTTP scheme, illegal characters, opaque-host, …). | Re-check the values stored via `occ config:app:get`. |
 | Iframe shows a Content-Security-Policy error in the browser console. | The Nextcloud origin is not in iHub's **Allowed Nextcloud Origins**. | Open **iHub Admin → Integrations → Nextcloud Embed** and add the exact origin (including scheme, no trailing slash). |
 | Iframe loads, but the user is shown as **anonymous** without an OAuth prompt. | A stale iHub access token sits in the iframe's localStorage. The full-embed entry probes `/api/oauth/userinfo` to detect this — if the probe fails the gate is shown. | Should auto-recover. If it doesn't, clear `office_ihubtoken` from the iHub origin's localStorage in devtools and reload. |
-| Files don't auto-attach after the user picks an app. | iHub's Nextcloud installation has another provider id than the plugin announces, or the user has not OAuth-linked Nextcloud to iHub. | Check the provider id matches (`occ config:app:get ihub_chat ihub_provider_id` ↔ the `nextcloud` installation's **Provider id** value, `nextcloud` when emptyrs list). The user can OAuth-link from any iHub chat via the cloud-storage picker. |
+| Files don't auto-attach after the user picks an app. | iHub's Nextcloud installation has another provider id than the plugin announces, or the user has not OAuth-linked Nextcloud to iHub. | Check the ids match (`occ config:app:get ihub_chat ihub_provider_id` ↔ the id of the Nextcloud installation in iHub, e.g. `nextcloud-main`). The user can OAuth-link from **Settings → Integrations** or from the file picker of an app that binds the installation. |
 | Updated plugin files but old behaviour persists. | PHP opcache. | See **Updating the plugin** above. |
 
 ---
