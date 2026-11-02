@@ -151,9 +151,9 @@ function isAnonymous(user) {
 export function returnPathWith(returnUrl, params = {}) {
   let url;
   try {
-    url = new URL(String(returnUrl), 'http://ihub.invalid');
+    url = new URL(String(returnUrl), 'https://ihub.invalid');
   } catch {
-    url = new URL(buildServerPath(DEFAULT_RETURN_PATH), 'http://ihub.invalid');
+    url = new URL(buildServerPath(DEFAULT_RETURN_PATH), 'https://ihub.invalid');
   }
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
