@@ -456,6 +456,7 @@ export class DefinitionMigrationRunner {
     if (!unit.snapshot) {
       // Nothing stored changes (no migration between the versions): stamp
       // the version, clear a failed state, log it. One write, no backup.
+      await this._assertLeaseCurrent(lease, instanceId);
       await this._writeEntries([unit.after]);
       return {
         result: 'stamped',
@@ -466,6 +467,7 @@ export class DefinitionMigrationRunner {
       };
     }
     if (unit.failed) {
+      await this._assertLeaseCurrent(lease, instanceId);
       await this._writeEntries([unit.after]).catch(error =>
         logger.error('Could not record a failed integration migration', {
           component: COMPONENT,
@@ -502,6 +504,20 @@ export class DefinitionMigrationRunner {
       changed: true,
       unitResult: unit
     };
+  }
+
+  /**
+   * A write outside the staged commit (a stamp, a failed mark, an adopt) is
+   * fenced too: a holder whose lease was taken over writes nothing.
+   *
+   * @throws {IntegrationError} 409 `MIGRATION_LOCK_LOST`
+   */
+  async _assertLeaseCurrent(lease, instanceId) {
+    if (!lease || (await lease.isCurrent())) return;
+    throw new IntegrationError(
+      `The migration lock of "${instanceId}" was taken over; nothing was written`,
+      { status: 409, code: 'MIGRATION_LOCK_LOST' }
+    );
   }
 
   /**
@@ -1310,7 +1326,7 @@ export class DefinitionMigrationRunner {
    */
   async adopt(instanceId, { by = 'admin', notify = true } = {}) {
     await this.registry.ensureLoaded();
-    const unit = await this._withInstanceLock(instanceId, () =>
+    const unit = await this._withInstanceLock(instanceId, lease =>
       this.service._serialize(async () => {
         await this._recoverLocked(instanceId);
         const config = await this._readIntegrations();
@@ -1362,6 +1378,7 @@ export class DefinitionMigrationRunner {
           updatedAt: now,
           migrationLog: appendLog(instance.migrationLog, logEntry)
         };
+        await this._assertLeaseCurrent(lease, instanceId);
         await this._writeEntries([after]);
         return { instanceId, definitionId: definition.id, before: instance, after, logEntry };
       })

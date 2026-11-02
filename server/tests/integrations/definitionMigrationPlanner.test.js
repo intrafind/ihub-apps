@@ -876,3 +876,35 @@ describe('marketplace update preview', () => {
     assert.ok(preview.errors.length > 0);
   });
 });
+
+describe('shipped default installations', () => {
+  it('record a definition version, so a fresh install starts with a baseline', async () => {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const defaults = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      'defaults'
+    );
+    const config = JSON.parse(
+      await fs.readFile(path.join(defaults, 'config', 'integrations.json'), 'utf8')
+    );
+    for (const inst of config.installed) {
+      assert.ok(isStrictSemver(inst.definitionVersion), inst.id);
+      const folder = path.join(
+        defaults,
+        'integration-definitions',
+        inst.definition.replace('/', '__'),
+        'integration.json'
+      );
+      const shipped = JSON.parse(await fs.readFile(folder, 'utf8'));
+      assert.equal(
+        installationMigrationState(inst, { definition: shipped }).downgrade,
+        false,
+        `${inst.id} is not newer than its shipped definition`
+      );
+    }
+  });
+});

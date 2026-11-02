@@ -3,6 +3,7 @@
     {
       "id": "drawio",
       "definition": "mcp/drawio",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "values": {},
       "auth": {
@@ -17,6 +18,7 @@
     {
       "id": "excalidraw",
       "definition": "mcp/excalidraw",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "values": {},
       "auth": {
@@ -31,6 +33,7 @@
     {
       "id": "x500bund",
       "definition": "com.intrafind/ldap-directory",
+      "definitionVersion": "1.0.0",
       "enabled": false,
       "label": {
         "en": "Federal directory (IVBB)",
