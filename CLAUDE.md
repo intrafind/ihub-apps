@@ -60,6 +60,10 @@ Every new outbound connection — HTTP(S), WebSocket (`wss://`), a new SDK or cl
 - Anything else (undici dispatcher, `tls.connect`, a library with its own agent): spread `getTlsBypassOptions(url)` into its TLS options instead of writing `rejectUnauthorized: false` yourself. The bypass is host-whitelist-only; never a global switch.
 - Add a test with a whitelisted and a non-whitelisted host. Known gap: the MCP `websocket` transport (`WebSocketClientTransport` takes no TLS options).
 
+### Run Activity: the Server Decides, the Client Renders
+
+What a tool call was — a web search, a document search, a page read, a call to a connected system — and how it is labelled is decided on the server and sent with the event (`tool/started`: `title`, `integration`, `activityKind`, `activityScope`, from `server/utils/toolDisplay.js`; the answer badge from `run/ended.knowledgeSources`). The client and `shared/run/` never infer it from a tool id; a new distinction gets a new server-sent field.
+
 ### Breaking Changes
 
 **Always ask the user before implementing backward compatibility shims.** Describe what breaks (endpoints, fields, data shapes), let them choose compat vs clean break. Never silently add compat wrappers or deprecated re-exports.
