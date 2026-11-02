@@ -201,7 +201,24 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
     );
   }
 
-  const listId = field.suggestions?.length ? `${inputId}-list` : undefined;
+  if (field.suggestions?.length) {
+    return (
+      <div>
+        {label}
+        <SuggestionsInput
+          inputId={inputId}
+          field={field}
+          title={title}
+          value={value}
+          onChange={onChange}
+          describedBy={description ? helpId : undefined}
+          invalid={Boolean(error)}
+        />
+        {help}
+      </div>
+    );
+  }
+
   return (
     <div>
       {label}
@@ -210,22 +227,94 @@ function ConfigFieldInput({ field, value, onChange, language, error, secretStore
         type={field.type === 'url' ? 'url' : 'text'}
         className={INPUT_CLASS}
         value={value ?? ''}
-        list={listId}
         pattern={field.pattern || undefined}
         onChange={e => onChange(e.target.value)}
         placeholder={field.type === 'url' ? 'https://' : undefined}
         aria-describedby={description ? helpId : undefined}
         aria-invalid={error ? 'true' : undefined}
       />
-      {listId && (
-        <datalist id={listId}>
-          {field.suggestions.map(s => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      )}
       {help}
     </div>
+  );
+}
+
+const CUSTOM = '__custom__';
+
+/** A field value as text for the select and the custom box. */
+function textOf(value) {
+  if (typeof value === 'string') return value;
+  return value == null ? '' : String(value);
+}
+
+/**
+ * A free-text field with suggested values (`ConfigField.suggestions`): a
+ * select of every suggestion plus "Custom…", which opens a text box for any
+ * other value. A `<datalist>` filtered its suggestions by the current value,
+ * so a field holding `email` offered only `email` and hid the others.
+ *
+ * @param {Object} props
+ * @param {string} props.inputId - id of the select (the field label points at it)
+ * @param {Object} props.field - the ConfigField
+ * @param {string} props.title - the field's localized title
+ * @param {unknown} props.value
+ * @param {(value: string) => void} props.onChange
+ * @param {string} [props.describedBy]
+ * @param {boolean} [props.invalid]
+ */
+function SuggestionsInput({ inputId, field, title, value, onChange, describedBy, invalid }) {
+  const { t } = useTranslation();
+  const text = textOf(value);
+  const suggested = field.suggestions.includes(text);
+  // A stored value that is no suggestion opens in the custom box.
+  const [custom, setCustom] = useState(text !== '' && !suggested);
+  const customId = `${inputId}-custom`;
+  return (
+    <>
+      <select
+        id={inputId}
+        className={INPUT_CLASS}
+        value={custom ? CUSTOM : text}
+        onChange={e => {
+          if (e.target.value === CUSTOM) {
+            setCustom(true);
+            return;
+          }
+          setCustom(false);
+          onChange(e.target.value);
+        }}
+        aria-describedby={describedBy}
+        aria-invalid={invalid ? 'true' : undefined}
+      >
+        {!custom && text === '' && (
+          <option value="">{t('admin.integrationCatalog.field.choose', 'Choose…')}</option>
+        )}
+        {field.suggestions.map(suggestion => (
+          <option key={suggestion} value={suggestion}>
+            {suggestion}
+          </option>
+        ))}
+        <option value={CUSTOM}>{t('admin.integrationCatalog.field.custom', 'Custom…')}</option>
+      </select>
+      {custom && (
+        <input
+          id={customId}
+          type={field.type === 'url' ? 'url' : 'text'}
+          className={`${INPUT_CLASS} mt-2 font-mono`}
+          value={text}
+          pattern={field.pattern || undefined}
+          onChange={e => onChange(e.target.value)}
+          aria-label={t(
+            'admin.integrationCatalog.field.customValue',
+            'Custom value for {{field}}',
+            {
+              field: title
+            }
+          )}
+          aria-describedby={describedBy}
+          aria-invalid={invalid ? 'true' : undefined}
+        />
+      )}
+    </>
   );
 }
 

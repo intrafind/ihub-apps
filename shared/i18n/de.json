@@ -3214,6 +3214,11 @@
       }
     },
     "integrationCatalog": {
+      "field": {
+        "choose": "Auswählen…",
+        "custom": "Eigener Wert…",
+        "customValue": "Eigener Wert für {{field}}"
+      },
       "install": "Installieren",
       "reload": "Katalog neu laden",
       "reloaded": "Katalog neu geladen.",
