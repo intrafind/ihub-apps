@@ -259,8 +259,13 @@ function IntegrationsConfigSection({ app, onChange }) {
   // until they are unbound, so they are listed with a way to do that.
   const staleIds = useMemo(() => {
     if (loading || error) return [];
+    // The server also honours a binding by definition id or by `type:<type>`
+    // while a matching installation exists, including the ones shown in their
+    // own panels (web search, storage) rather than as rows here.
     const known = new Set([
       ...installed.map(i => i.id),
+      ...installed.map(i => i.definition).filter(Boolean),
+      ...installed.filter(i => i.type).map(i => `${TYPE_PREFIX}${i.type}`),
       ...definitionRows.map(row => row.id),
       ...directoryRows.map(row => row.id)
     ]);

@@ -367,7 +367,6 @@ function InstallationPageContent({ instanceId }) {
               className={SECONDARY_BUTTON_CLASS}
               onClick={requestToggle}
               disabled={busy}
-              aria-pressed={enabled}
             >
               <Icon name={enabled ? 'pause' : 'check'} size="sm" />
               {enabled
