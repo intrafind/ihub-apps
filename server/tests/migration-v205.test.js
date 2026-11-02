@@ -27,10 +27,13 @@ import {
   providerFromInstance
 } from '../services/integrations/cloudStorageConfig.js';
 
-/** Encryption stand-in: `ENC[<plain>]`. */
+/** Encryption stand-in: `ENC[<plain>]`; `ENC[broken]` cannot be decrypted. */
 const crypto = {
   encrypt: value => `ENC[${value}]`,
-  decrypt: value => value.slice(4, -1)
+  decrypt: value => {
+    if (value === 'ENC[broken]') throw new Error('bad tag');
+    return value.slice(4, -1);
+  }
 };
 
 function makeCtx(files) {
@@ -479,6 +482,47 @@ describe('V205 storage provider installations', () => {
       'tenant-other'
     ]);
     assert.match(ctx.warnings.join('\n'), /"cloudstorage_old_tenant_2".*still referenced; kept/);
+  });
+
+  it('restores a tenant id V200 could not decrypt, then removes its credential', async () => {
+    const files = {
+      'config/integrations.json': integrationsFile([
+        storage('office365', O365, { providerId: 'o365-corp' }),
+        storage('o365-eu', O365, {}),
+        storage('o365-x', O365, {})
+      ]),
+      'config/credentials.json': {
+        credentials: {
+          'cloudstorage_o365-corp_tenant': {
+            id: 'cloudstorage_o365-corp_tenant',
+            type: 'secret',
+            name: 'Office365 Tenant (o365-corp)',
+            value: 'ENC[tenant-corp]'
+          },
+          'cloudstorage_o365-eu_tenant_2': {
+            id: 'cloudstorage_o365-eu_tenant_2',
+            type: 'secret',
+            value: 'ENC[broken]'
+          }
+        }
+      }
+    };
+    const ctx = makeCtx(files);
+    await up(ctx, { crypto });
+    assert.equal(byId(files, 'o365-corp').values.tenantId, 'tenant-corp');
+    assert.equal(byId(files, 'o365-eu').values.tenantId, undefined);
+    assert.match(ctx.logs.join('\n'), /"o365-corp": tenant id restored from credential/);
+    const warnings = ctx.warnings.join('\n');
+    assert.match(
+      warnings,
+      /"o365-eu" has no tenant id and the credential "cloudstorage_o365-eu_tenant_2" could not be read/
+    );
+    assert.match(warnings, /"o365-x" has no tenant id; enter it/);
+    // The restored one is gone; the unreadable one may be the only copy and stays.
+    assert.deepEqual(Object.keys(files['config/credentials.json'].credentials), [
+      'cloudstorage_o365-eu_tenant_2'
+    ]);
+    assert.match(warnings, /"cloudstorage_o365-eu_tenant_2".*could not be read; kept/);
   });
 
   it('turns a parked provider into the installation the generic code reads', () => {

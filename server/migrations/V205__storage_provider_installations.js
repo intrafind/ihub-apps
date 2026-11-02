@@ -326,6 +326,9 @@ export async function up(ctx, deps = {}) {
   async function tools() {
     if (!cryptoTools) {
       const { default: tokenStorage } = await import('../services/TokenStorageService.js');
+      // Migrations run before the server loads the key; V200 did not, so its
+      // tenant id decryption could never succeed (see step 3).
+      if (!tokenStorage.encryptionKey) await tokenStorage.initializeEncryptionKey();
       cryptoTools = {
         encrypt: value => tokenStorage.encryptString(value),
         decrypt: value => tokenStorage.decryptString(value)
@@ -505,20 +508,80 @@ export async function up(ctx, deps = {}) {
     }
   }
 
-  // 3. The tenant id credentials nothing names any more.
+  // 3. Tenant ids V200 could not decrypt, then the credentials nothing names any more.
   if (await ctx.fileExists(CREDENTIALS_FILE)) {
-    await removeTenantIdLeftovers(ctx, {
-      store: await credentialStore(),
-      installed,
-      unmigratedTenantRefs,
-      plainOf
-    });
+    const state = { store: await credentialStore(), installed, unmigratedTenantRefs, plainOf };
+    if (await recoverTenantIds(ctx, state)) {
+      if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
+      await ctx.writeJson(INTEGRATIONS_FILE, config);
+    }
+    await removeTenantIdLeftovers(ctx, state);
   }
 }
 
+/** Snapshot of V061's `sanitizeId` (2026-11-02): how it named a provider's credentials. */
+function v061IdOf(raw) {
+  return (
+    String(raw || '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60) || 'default'
+  );
+}
+
 /**
- * Step 3: delete the Office 365 tenant id credentials (`tenantIdRef`) that
- * V061 created or V200 left behind, when no config file names them.
+ * Step 3a: an Office 365 installation without a tenant id gets it back from
+ * the credential V061 filed it under (`cloudstorage_<provider id>_tenant`).
+ * V200 meant to decrypt it, but migrations run before the server loads the
+ * encryption key, so V200 left the tenant id empty with a warning. The
+ * provider id is the installation id now (step 1). Mutates the installations.
+ * @param {object} ctx
+ * @param {{ store: object, installed: object[], plainOf: (v: string) => Promise<string|undefined> }} state
+ * @returns {Promise<boolean>} whether a tenant id was recovered
+ */
+async function recoverTenantIds(ctx, { store, installed, plainOf }) {
+  const credentials = store.credentials || {};
+  let recovered = false;
+  for (const instance of installed) {
+    if (instance?.definition !== STORAGE_DEFINITIONS.office365) continue;
+    if (text(instance.values?.tenantId)) continue;
+    const base = `cloudstorage_${v061IdOf(instance.id)}_tenant`;
+    const ref = Object.hasOwn(credentials, base)
+      ? base
+      : Object.keys(credentials).find(id => new RegExp(`^${escapeRegExp(base)}_\\d+$`).test(id));
+    if (!ref) {
+      ctx.warn(
+        `Office 365 installation "${instance.id}" has no tenant id; enter it on the installation`
+      );
+      continue;
+    }
+    const plain = await plainOf(storedValueOf(credentials[ref]));
+    if (!plain) {
+      ctx.warn(
+        `Office 365 installation "${instance.id}" has no tenant id and the credential "${ref}" could not be read; enter the tenant id on the installation`
+      );
+      continue;
+    }
+    if (!instance.values || typeof instance.values !== 'object') instance.values = {};
+    instance.values.tenantId = plain.trim();
+    instance.updatedAt = new Date().toISOString();
+    recovered = true;
+    ctx.log(
+      `Office 365 installation "${instance.id}": tenant id restored from credential "${ref}"`
+    );
+  }
+  return recovered;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Step 3b: delete the Office 365 tenant id credentials (`tenantIdRef`) that
+ * V061 created or V200 left behind, when no config file names them. A
+ * credential whose value cannot be read is kept: it may be the only copy of a
+ * tenant id.
  * @param {object} ctx
  * @param {{ store: object, installed: object[], unmigratedTenantRefs: Set<string>, plainOf: (v: string) => Promise<string|undefined> }} state
  */
@@ -562,6 +625,12 @@ async function removeTenantIdLeftovers(ctx, { store, installed, unmigratedTenant
     if (referenced.has(id)) {
       ctx.warn(
         `Credential "${id}" looks like a former Office 365 tenant id but is still referenced; kept`
+      );
+      continue;
+    }
+    if (!(await plainOf(storedValueOf(credentials[id])))) {
+      ctx.warn(
+        `Credential "${id}" looks like a former Office 365 tenant id but could not be read; kept`
       );
       continue;
     }
