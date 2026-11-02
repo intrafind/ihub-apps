@@ -475,13 +475,19 @@ export function grantToGroups(groupsConfig, instanceIds) {
   return changed;
 }
 
+/** Orders strings by UTF-16 code unit, independent of locale. */
+function byCodeUnit(a, b) {
+  if (a === b) return 0;
+  return String(a) < String(b) ? -1 : 1;
+}
+
 /** Whether the definition folder of `instanceId` keeps exactly these tool ids. */
 async function keepsToolIds(readText, instanceId, toolIds) {
   const text = await readText(`${DEFINITIONS_DIR}/custom__${instanceId}/integration.json`);
   if (!text) return false;
   try {
-    const kept = (JSON.parse(text).actions || []).map(action => action.toolId).sort();
-    const wanted = [...toolIds].sort();
+    const kept = (JSON.parse(text).actions || []).map(action => action.toolId).sort(byCodeUnit);
+    const wanted = [...toolIds].sort(byCodeUnit);
     return kept.length === wanted.length && kept.every((id, i) => id === wanted[i]);
   } catch {
     return false;
@@ -527,7 +533,7 @@ export async function up(ctx) {
   const toDelete = [];
   /** Installation ids this run gave out, so two tools never share one. */
   const claimed = new Set();
-  for (const file of (await ctx.listFiles('tools', '*.json')).sort()) {
+  for (const file of (await ctx.listFiles('tools', '*.json')).sort(byCodeUnit)) {
     const rel = `tools/${file}`;
     let tool;
     try {
