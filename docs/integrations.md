@@ -217,6 +217,65 @@ Five protocols have an adapter: `native`, for the built-in connectors (iFinder, 
 
 Outbound hosts follow `security` in `integrations.json` (`blockPrivateIps`, `allowedHosts`) and the platform's SSRF settings.
 
+## Connections
+
+A **connection** is how one principal signs in to one installation. Jira, the cloud storage providers (Office 365, Google Drive, Nextcloud) and MCP servers with per-user OAuth sign every user in with their own account; iFinder and iAssistant use the user's own iHub sign-in on every request (`sso`, nothing stored); an installation in _service account_ mode uses one shared credential from the credential store for everybody.
+
+All of them go through one connection service and one OAuth client (`server/services/integrations/auth/`), so connect, refresh, disconnect and the security checks are the same for every integration.
+
+### The connection index
+
+Every connection has a record in the storage namespace `integration-connections` (schema `server/validators/integrationConnectionSchema.js`), keyed by a hash of installation and principal:
+
+| Field | Meaning |
+| --- | --- |
+| `integration`, `principal` | the installation id; `{ type: "user", id }`, or `{ type: "shared" }` for a service account |
+| `kind` | `oauth-user`, `service-account`, `sso` (`api-key` is reserved) |
+| `status` | `active`, `expired` (the refresh token was refused), `revoked` (disconnected), `failed`, `needs-reconnect` (the installation was repointed) |
+| `issuer`, `scopesGranted`, `externalAccount` | the authorization server that issued the credentials, the scopes it granted, the upstream account where it is known |
+| `expiresAt`, `lastRefreshedAt`, `lastUsedAt`, `error` | access token expiry, last refresh and use, the stable code of the last failure (never upstream text) |
+| `secretRef` | where the secret lives: `tokenstore:<service>/<file>` (a `TokenStorageService` file under `contents/integrations/`), or `credential:<ref>` for a service account. The record never holds a token. |
+| `fingerprint` | a hash of the installation settings the credentials were issued under (endpoint, tenant, server URL, client) |
+
+The tokens themselves stay where they always were, encrypted per user and service: `contents/integrations/jira/<user>.json`, `contents/integrations/<office365|googledrive|nextcloud>/<user>__<installation>.json` and `contents/integrations/mcp/<user>__<server>.json`. User ids that are not file-name safe (`auth0|abc`) are filed under a stable hash.
+
+**Upgrade.** On the first start after the upgrade the token tree is re-indexed once: every existing token file gets its record, nobody reconnects and no file is moved or re-encrypted. A legacy cloud storage file without the installation in its name maps to the only installation of that service; with several installations it is skipped and logged (it keeps working for the user, as before). The re-index runs once (a marker in `runtime-imports`), under the storage lock so only one cluster worker does it, and never overwrites a record. The connection service also indexes a token file it meets without a record, so nothing waits on the re-index.
+
+**Resolve.** When a tool runs, the adapter asks the connection service for the caller's connection: the caller's **own** one, or the shared service account configured on the installation — never another user's token. A personal OAuth grant can never become a shared connection. A connection whose installation was repointed (another Nextcloud server, another Microsoft tenant, another OAuth client, another MCP endpoint or auth block) is invalidated: its tokens are deleted, its status becomes `needs-reconnect`, and the user connects again — a token issued for one endpoint is never sent to another.
+
+**Refresh.** An expired access token is refreshed once per connection and worker (concurrent calls share the refresh), at the issuer that issued it. The tokens are deleted only when the authorization server refuses the refresh token (`invalid_grant`); a network error, a 5xx, a 429 or a client problem an admin can fix (`invalid_client`) keeps them and the call reports the integration as temporarily unavailable.
+
+**Disconnect** revokes the tokens at the authorization server when it has a revocation endpoint (RFC 7009: Google, MCP servers that advertise one), deletes them and marks the record `revoked`. Connect and disconnect write the audit entries `connection.create` and `connection.revoke` (resource `connection`).
+
+### Signing in: one callback
+
+Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. The browser is always sent back to a same-origin path with stable result codes (`<provider>_connected`, `<provider>_error=<code>`, `mcp_connected`, `mcp_error`), never the authorization server's text.
+
+The callback is `GET /api/integrations/oauth/callback`. The callback URLs registered in the vendors' OAuth apps keep working as aliases of it, with the same handler:
+
+| Alias | Integration |
+| --- | --- |
+| `/api/integrations/jira/callback` | Jira |
+| `/api/integrations/<office365\|googledrive\|nextcloud>/<installation id>/callback` | the storage provider installation in the path |
+| `/api/mcp/oauth/callback/<server id>` | the per-user MCP server in the path |
+
+The redirect URI sent to the authorization server does not change with this release: the configured **Redirect URI** of the installation, else the alias derived from the request (`<scheme>://<host><base path>` + the alias path). An admin can register `…/api/integrations/oauth/callback` instead and enter it as the installation's Redirect URI.
+
+### Headless runs
+
+Scheduled tasks (and workflows) run as their owner. Before a scheduled run spends a model call, it resolves the owner's own connection of every installation whose tools it may call and that signs users in. When one is missing, the run fails with `INTEGRATION_AUTH_REQUIRED` and the reason names the installation and why:
+
+```json
+{ "code": "INTEGRATION_AUTH_REQUIRED", "message": "Reconnect JIRA: the connection has expired",
+  "integration": "jira", "reason": "expired", "connectUrl": "/settings/integrations" }
+```
+
+`reason` is `not_connected`, `expired` or `insufficient_scope`. A tool call that finds no usable connection returns the same structured result instead of throwing (`{ "error": "INTEGRATION_AUTH_REQUIRED", "integration", "reason", "message", "connectUrl" }`); the chat shows its Connect card, and a scheduled run that meets one fails with the same code.
+
+### Scope step-up
+
+When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`, the tool result asks the user to re-authorize with the union of the scopes they granted and the ones the server named (`reason: "insufficient_scope"`, the Connect URL carries `scope=`). That happens once: a refusal for scopes the user already granted is reported as an ordinary error.
+
 ## Writing a definition
 
 ```jsonc
@@ -416,11 +475,12 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/admin/integrations/installed/:id/_migrate`                                                                 | run (or re-run) the definition migration                              |
 | `POST /api/admin/integrations/installed/:id/_restore`                                                                 | restore a backup, body `{ "backup"?: "<id>" }`                        |
 | `POST /api/admin/integrations/installed/:id/_adopt`                                                                   | adopt the loaded definition version for an installation that needs a review |
-| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
+| `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
+| `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it |
 
-Every write is audited with resource `integration`.
+Every write is audited with resource `integration`; connects and disconnects with resource `connection` (`create`, `revoke`).
 
 **Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
 
@@ -478,6 +538,12 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/protocols/a2a/`                                                                                                                                                                                                                                                          | the `a2a` adapter; `agentConfig.js` and `manager.js` do the same for the A2A client manager                                                                                                         |
 | `server/services/integrations/integrationTools.js`                                                                                                                                                                                                                                                     | integration tools for `loadTools`, app binding, `runTool` dispatch, scope providers                                                                                                                 |
 | `server/routes/admin/integrations.js`                                                                                                                                                                                                                                                                  | the admin API                                                                                                                                                                                       |
+| `server/services/integrations/auth/OAuthUserClient.js`, `strategies/fixedEndpoint.js`, `strategies/mcpDiscovery.js` | the one per-user OAuth client (PKCE, code exchange, refresh, revocation, RFC 9207 `iss`, scope step-up); fixed endpoints (Jira, the storage providers) and MCP discovery (RFC 9728/8414, CIMD, DCR, pre-registered client) as strategies |
+| `server/services/integrations/auth/IntegrationConnectionService.js`, `connectionProviders.js`, `tokenSecrets.js`, `oauthFlowStore.js`, `integrationAuthRequired.js` | the connection index, connect / callback / refresh / disconnect / resolve, what each installation's connection is, where the secrets live, the server-side sign-in flows, `INTEGRATION_AUTH_REQUIRED` |
+| `server/services/integrations/auth/connectionReindex.js` | the one-time re-index of the token tree into the connection index |
+| `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
+| `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and its aliases; the providers' `/auth`, `/status`, `/disconnect` |
+| `server/validators/integrationConnectionSchema.js` | the connection record |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |
 | `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`)                |
 | `client/src/features/admin/components/integrations/migrationState.js`, `useMigrationActions.js`, `MigrationParts.jsx`, `InstallationMigrationPanel.jsx`, `appMigrationWarningRules.js`, `AppMigrationWarnings.jsx`; `components/marketplace/updateMigrationRows.js`, `IntegrationUpdateMigrations.jsx` | the admin UI of definition migrations: which actions a state offers and when Settings is read-only (pure), the actions with their confirmations, the panel, the log, the outcome; the Apps warnings; the marketplace update preview and report |

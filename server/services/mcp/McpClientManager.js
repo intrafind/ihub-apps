@@ -31,6 +31,8 @@ import {
 } from './mcpOAuthService.js';
 import { isAdminUser, isAnonymousUser } from '../loop/runIdentity.js';
 import logger from '../../utils/logger.js';
+import { stepUpScopes } from '../integrations/auth/OAuthUserClient.js';
+import { getIntegrationConnectionService } from '../integrations/auth/IntegrationConnectionService.js';
 
 /** A per-user connection nobody used for this long is closed. */
 export const USER_CONNECTION_IDLE_MS = 30 * 60 * 1000;
@@ -121,7 +123,7 @@ function summarizeTools(tools) {
  * serves the server's shared tool catalog, while tool calls, MCP App views and
  * admin tests run on the calling user's own connection from `userConnections`
  * (`<serverId>::<userId>`, closed after USER_CONNECTION_IDLE_MS idle). A
- * caller without a token gets the structured `MCP_AUTH_REQUIRED` result —
+ * caller without a token gets the structured `INTEGRATION_AUTH_REQUIRED` result —
  * never another user's connection. The caller is always `params.user`, which
  * every entry point sets from the authenticated request (never from caller
  * input, see `utils/toolCallContext.js`).
@@ -287,6 +289,9 @@ class McpClientManager {
         .catch(() => {});
     }
     if (tokensInvalid) {
+      await getIntegrationConnectionService()
+        .invalidateInstallation(id, { status: next ? 'needs-reconnect' : 'revoked' })
+        .catch(() => 0);
       const removed = await deleteServerTokens(id).catch(() => 0);
       if (removed > 0) {
         logger.info('MCP user tokens removed after the server was removed or repointed', {
@@ -513,6 +518,10 @@ class McpClientManager {
       return await operation(conn);
     } catch (error) {
       if (!isAuthRequiredError(error)) throw error;
+      // 403 insufficient_scope: a refresh cannot add scopes; the user
+      // re-authorizes once with the union of granted and needed scopes.
+      const stepUp = this._stepUpError(serverConfig, conn, stored);
+      if (stepUp) throw stepUp;
     }
     // The server rejected the token: refresh (or learn that another call
     // already did) and retry once.
@@ -538,6 +547,38 @@ class McpClientManager {
       });
       throw new McpAuthRequiredError(serverId);
     }
+  }
+
+  /**
+   * The error for a call the server refused with `insufficient_scope`, or
+   * null when the refusal was not about scopes. The first refusal asks the
+   * user to re-authorize with the union of what they granted and what the
+   * challenge names (`reason: insufficient_scope`, `scopes`); once those are
+   * granted, a further refusal is final and reads as an ordinary error.
+   *
+   * @param {Object} serverConfig
+   * @param {McpServerConnection} conn
+   * @param {Object} stored - The user's token payload
+   * @returns {Error|null}
+   */
+  _stepUpError(serverConfig, conn, stored) {
+    const provider = conn?.authProvider;
+    const challenge = provider?.scopeChallenge;
+    if (!challenge) return null;
+    provider.scopeChallenge = null;
+    const next = stepUpScopes({ granted: stored?.scope, challenge });
+    if (!next) {
+      return new Error(
+        `${serverDisplayName(serverConfig)} refused the call: the account lacks a permission it needs, even after re-authorization (insufficient_scope).`
+      );
+    }
+    const error = new McpAuthRequiredError(
+      serverConfig.id,
+      'Additional scopes are required',
+      'insufficient_scope'
+    );
+    error.scopes = next.scopes;
+    return error;
   }
 
   /**
@@ -575,7 +616,7 @@ class McpClientManager {
       throw new McpAuthRequiredError(serverId);
     }
     try {
-      return await refreshUserTokens({
+      const refreshed = await refreshUserTokens({
         serverConfig,
         userId,
         current,
@@ -583,6 +624,13 @@ class McpClientManager {
         clientStore: this._clients(),
         ...(this.refreshAuthorization ? { refresh: this.refreshAuthorization } : {})
       });
+      await getIntegrationConnectionService().recordMcpEvent({
+        installationId: serverId,
+        userId,
+        event: 'refreshed',
+        payload: refreshed
+      });
+      return refreshed;
     } catch (error) {
       if (isTokenRefreshError(error)) {
         logger.warn('MCP token refresh failed; keeping the tokens', {
@@ -599,6 +647,13 @@ class McpClientManager {
       const latest = await this._tokensChangedSince(serverConfig, userId, current.access_token);
       if (latest) return latest;
       await this._dropUserTokens(serverConfig, userId, current.access_token);
+      error.reason = 'expired';
+      await getIntegrationConnectionService().recordMcpEvent({
+        installationId: serverId,
+        userId,
+        event: 'dropped',
+        reason: error.rejection
+      });
       if (error.rejection === 'invalid_client' && error.source !== 'config') {
         await this._clients()
           .clear(serverId)
@@ -942,7 +997,12 @@ class McpClientManager {
         conn.callTool(tool._mcp.originalName, args, callOptions)
       );
     } catch (error) {
-      if (isAuthRequiredError(error)) return buildAuthRequiredResult(serverConfig, language);
+      if (isAuthRequiredError(error)) {
+        return buildAuthRequiredResult(serverConfig, language, {
+          reason: error.reason,
+          scopes: error.scopes
+        });
+      }
       if (isTokenRefreshError(error)) {
         throw new Error(
           `The sign-in to ${serverDisplayName(serverConfig, language)} could not be renewed right now (its authorization server did not answer). Try again in a moment.`

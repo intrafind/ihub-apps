@@ -207,7 +207,7 @@ describe('token refresh owned by iHub', () => {
         errorCode: 'invalid_grant'
       });
     });
-    expect(await call()).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(await call()).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(await readUserTokens('alice', 'okta')).toBeNull();
     expect(mcpClientManager.userConnections.has(userConnectionKey('okta', 'alice'))).toBe(false);
     // invalid_grant says nothing about the client: the registration stays.
@@ -220,7 +220,7 @@ describe('token refresh owned by iHub', () => {
     mcpClientManager.refreshAuthorization = jest.fn(async () => {
       throw Object.assign(new Error('unknown client'), { errorCode: 'invalid_client' });
     });
-    expect(await call()).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(await call()).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(await clientStore.get('okta')).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe('token refresh owned by iHub', () => {
       token_type: 'bearer',
       refresh_token: 'r2'
     }));
-    expect(await call()).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(await call()).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(await readUserTokens('alice', 'okta')).toBeNull();
   });
 
@@ -289,7 +289,7 @@ describe('token refresh owned by iHub', () => {
     );
     await fakeUpstream();
     mcpClientManager.refreshAuthorization = jest.fn();
-    expect(await call()).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(await call()).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(mcpClientManager.refreshAuthorization).not.toHaveBeenCalled();
     expect(await readUserTokens('alice', 'okta')).toBeNull();
   });
@@ -349,10 +349,10 @@ describe('tokens bound to the server endpoint', () => {
     await mcpClientManager.initialize({ servers: [repointed] });
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
     await expect(mcpClientManager.connectionForUser('okta', ALICE)).rejects.toMatchObject({
-      code: 'MCP_AUTH_REQUIRED'
+      code: 'INTEGRATION_AUTH_REQUIRED'
     });
     await mcpClientManager.saveCatalog(repointed, [TOOL], { authoritative: true });
-    expect(await call()).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(await call()).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
   });
 });
 
@@ -444,7 +444,7 @@ describe('chat projection of an MCP App tool that needs a sign-in', () => {
     };
     await seam.postTool(ctx, info, {
       rawResult: {
-        error: 'MCP_AUTH_REQUIRED',
+        error: 'INTEGRATION_AUTH_REQUIRED',
         authRequired: { serverId: 'okta', serverName: 'Okta', connectUrl: '/api/mcp/x' }
       },
       message: { content: '' },

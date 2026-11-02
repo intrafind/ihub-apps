@@ -95,6 +95,7 @@ The redirect URI is the URL Microsoft redirects to after the user grants access.
    - **Production**: `https://your-ihub-domain.com/api/integrations/office365/{installationId}/callback`
    - **Under a base path**: `https://your-ihub-domain.com/ihub/api/integrations/office365/{installationId}/callback`
    - **Development**: `http://localhost:3000/api/integrations/office365/{installationId}/callback`
+   - These per-installation callbacks are aliases of iHub's one integration callback `…/api/integrations/oauth/callback`; registering that one instead (and entering it as the installation's **Redirect URI**) works as well.
 
    > **Important**: `{installationId}` is the id of the installation in iHub Apps (e.g., `office365` or `o365-emea`). The URI must match exactly, including the base path and the installation id. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
 
@@ -284,15 +285,15 @@ When connecting fails, the user is sent back to the page they started from with 
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `invalid_state` | The sign-in ticket is missing, altered, or was issued for another integration or provider. It is also refused when the callback comes from a different user, or from a browser where nobody is signed in to iHub Apps. With several instances, it appears when an instance cannot verify a ticket issued by another (see below). | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
-| `session_expired` | The sign-in ticket is older than 15 minutes. | Start again and finish the Microsoft consent within 15 minutes. |
+| `invalid_state` | The sign-in is unknown or was already used (the `state` is single use), or was started for another installation. It is also refused when the callback comes from a different user, or from a browser where nobody is signed in to iHub Apps. | Have the user sign in to iHub Apps and start again from **Settings → Integrations** in the same browser. Check that no proxy strips the iHub sign-in cookie. |
+| `session_expired` | The sign-in is older than 15 minutes. | Start again and finish the Microsoft consent within 15 minutes. |
 | `access_denied` | The user declined the Microsoft consent screen. | Start again and approve the access. |
 | `oauth_failed` | Microsoft returned another error on the redirect back. Missing admin consent (see `AADSTS65001` above) is a common reason. | Check the server logs. |
 | `missing_code` | The callback arrived without an authorization code, for example when the URL was opened by hand. | Start again from **Settings → Integrations**. |
 | `invalid_client` | Microsoft rejected the client secret: it is expired or wrong. | Create a new secret in the app registration and update the provider. Users do not need to reconnect. |
 | `callback_failed` | Exchanging the code for tokens failed, for example because of a redirect URI mismatch. | Check the server logs and the redirect URI in the app registration. |
 
-No server-side session, shared session store or sticky routing is involved, so the callback can land on any worker or instance. With several instances, every instance must be able to verify a ticket another one issued: configure the same `JWT_SECRET` (or `auth.jwtSecret`) and the same `TOKEN_ENCRYPTION_KEY` on all of them, or let them share the `contents/` directory. See [Scaling](scaling.md#sign-in-tickets-across-instances).
+The sign-in is kept in the storage provider every worker shares (`integration-oauth-flows`), so the callback can land on any worker, and no sticky routing is needed. With several instances they share the `contents/` volume (as every multi-server deployment does) and the same `TOKEN_ENCRYPTION_KEY`, which encrypts the PKCE verifier. See [Integrations → Connections](integrations.md#connections).
 
 ---
 
@@ -303,8 +304,9 @@ No server-side session, shared session store or sticky routing is involved, so t
 - **Per-user tokens**: Each user connects their own Microsoft account; no shared service account is used
 - **Encrypted storage**: Tokens are encrypted at rest using AES-256-GCM via `TokenStorageService`
 - **PKCE**: OAuth flow uses Proof Key for Code Exchange (S256 method) to prevent authorization code interception attacks
-- **State validation**: The OAuth `state` parameter is a signed ticket (HMAC) that names the integration and provider and the signed-in user who started the flow. The callback requires the same user, so a ticket from one browser cannot complete a flow in another. No server-side session is kept.
-- **PKCE verifier protection**: The PKCE code verifier travels inside the ticket, encrypted with AES-256-GCM, never in clear text
+- **State validation**: The OAuth `state` is an opaque handle of a sign-in kept server-side, bound to the installation and the signed-in user who started it, valid once and for 15 minutes. The callback requires the same user and the same installation, so a sign-in from one browser cannot complete in another and a code for one installation cannot complete another's.
+- **PKCE verifier protection**: The PKCE code verifier stays on the server, encrypted with AES-256-GCM; the browser never sees it
+- **Shared OAuth client**: the sign-in, refresh and disconnect run through iHub's one OAuth client and connection service, like every other integration (see [Integrations → Connections](integrations.md#connections)); a refresh token is only ever sent to the authorization server and client that issued it
 - **Sign-in ticket lifetime**: The ticket expires after 15 minutes. A user who does not finish the Microsoft consent in that time has to start again (`office365_error=session_expired`).
 - **Rate limiting**: OAuth initiation is rate-limited to 10 requests per minute per IP address
 - **Input validation**: Drive IDs and file IDs passed to the Microsoft Graph API are validated against a strict character allowlist
@@ -320,7 +322,9 @@ server/
 ├── services/integrations/OAuthIntegrationBase.js # Shared token lifecycle (store/refresh/expiry/401 retry)
 ├── routes/integrations/office365.js            # Browsing API routes + provider config for the shared OAuth routes
 ├── routes/integrations/cloudStorageAccess.js   # ?providerId= required, unknown → 404, not granted → 403
-└── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /callback, /status, /disconnect routes
+├── routes/integrations/oauthIntegrationFactory.js # Shared /auth, /status, /disconnect routes; the /callback alias
+├── routes/integrations/oauthCallback.js        # The one integration OAuth callback
+└── services/integrations/auth/                 # Shared OAuth client and connection service
 
 client/src/features/upload/
 ├── components/CloudFileBrowserShell.jsx        # Shared file-browser UI (all providers)

@@ -86,7 +86,7 @@ const toolFrames = (seq, callId) => [
     callId,
     toolId: 'okta__get-current-user',
     name: 'okta__get-current-user',
-    resultPreview: { error: 'MCP_AUTH_REQUIRED' },
+    resultPreview: { error: 'INTEGRATION_AUTH_REQUIRED' },
     authRequired: AUTH
   })
 ];

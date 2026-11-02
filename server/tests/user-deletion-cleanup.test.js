@@ -60,7 +60,7 @@ const { revokeConnectionsForUser } = await import('../services/oauth/ConnectionS
 const { deletePersonalClientsByOwner, loadOAuthClients } =
   await import('../utils/oauthClientManager.js');
 const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
-const { tokenStorageIdFor } = await import('../services/mcp/mcpUserTokens.js');
+const { tokenStorageIdFor } = await import('../services/integrations/auth/tokenSecrets.js');
 const { deleteChatsOfOwner } = await import('../services/chat/chatDeletion.js');
 const { USER_CLEANUP_STEPS, cleanUpDeletedUser, startUserCleanup, waitForUserCleanups } =
   await import('../services/userDeletion.js');
@@ -306,6 +306,7 @@ describe('the cleanup', () => {
       'personalApiKeys',
       'oauthConnections',
       'integrationTokens',
+      'integrationConnections',
       'mcpConnections',
       'scheduledTasks',
       'chats',
@@ -324,6 +325,7 @@ describe('the cleanup', () => {
       'personalApiKeys',
       'oauthConnections',
       'integrationTokens',
+      'integrationConnections',
       'mcpConnections',
       'scheduledTasks'
     ]) {

@@ -25,7 +25,10 @@ export const auditActions = [
   // (project item text, spec 1 §11).
   'read',
   // Changing who may reach something: project members.
-  'share'
+  'share',
+  // Withdrawing a grant: an integration connection disconnected by its user or
+  // an admin (`connection.revoke`), revoked upstream when the server supports it.
+  'revoke'
 ];
 
 export const auditResults = ['success', 'failure'];

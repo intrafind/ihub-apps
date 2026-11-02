@@ -235,7 +235,7 @@ const AUTH_REQUIRED_FIELD_CHARS = 512;
 
 /**
  * The "connect first" marker of a per-user OAuth MCP tool result
- * (`{ error: 'MCP_AUTH_REQUIRED', authRequired: { serverId, serverName,
+ * (`{ error: 'INTEGRATION_AUTH_REQUIRED', authRequired: { serverId, serverName,
  * connectUrl } }`, see services/mcp/mcpOAuthService.js), or null.
  *
  * @param {*} rawResult - The tool's result as the loop saw it

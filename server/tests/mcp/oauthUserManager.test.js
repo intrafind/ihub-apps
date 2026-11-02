@@ -118,7 +118,7 @@ describe('tool catalog of a per-user server', () => {
     const shared = mcpClientManager.getConnection('okta');
     expect(shared.catalogOnly).toBe(true);
     expect(shared.client).toBeNull();
-    await expect(shared.connect()).rejects.toMatchObject({ code: 'MCP_AUTH_REQUIRED' });
+    await expect(shared.connect()).rejects.toMatchObject({ code: 'INTEGRATION_AUTH_REQUIRED' });
   });
 
   it('answers from the catalog a user connection listed, persisted for other workers', async () => {
@@ -172,7 +172,7 @@ describe('tool calls on a per-user server', () => {
 
   it('returns auth_required (not an error) for callers without a user or a token', async () => {
     const expected = {
-      error: 'MCP_AUTH_REQUIRED',
+      error: 'INTEGRATION_AUTH_REQUIRED',
       authRequired: {
         serverId: 'okta',
         serverName: 'Okta MCP',
@@ -211,7 +211,7 @@ describe('tool calls on a per-user server', () => {
     });
 
     const bob = await mcpClientManager.callTool('okta__get-current-user', { user: { id: 'bob' } });
-    expect(bob).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(bob).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(alice.conn.client.callTool).toHaveBeenCalledTimes(1);
     expect(mcpClientManager.userConnections.has(userConnectionKey('okta', 'bob'))).toBe(false);
   });
@@ -242,7 +242,7 @@ describe('tool calls on a per-user server', () => {
     const result = await mcpClientManager.callTool('okta__get-current-user', {
       user: { id: 'alice' }
     });
-    expect(result).toMatchObject({ error: 'MCP_AUTH_REQUIRED' });
+    expect(result).toMatchObject({ error: 'INTEGRATION_AUTH_REQUIRED' });
     expect(await readUserTokens('alice', 'okta')).toBeNull();
     expect(mcpClientManager.userConnections.has(userConnectionKey('okta', 'alice'))).toBe(false);
   });
@@ -265,7 +265,7 @@ describe('tool calls on a per-user server', () => {
     const alice = await fakeUserClient('alice', async () => ({ content: [] }));
     expect(await mcpClientManager.connectionForUser('okta', { id: 'alice' })).toBe(alice.conn);
     await expect(mcpClientManager.connectionForUser('okta', { id: 'bob' })).rejects.toMatchObject({
-      code: 'MCP_AUTH_REQUIRED',
+      code: 'INTEGRATION_AUTH_REQUIRED',
       serverId: 'okta'
     });
   });
@@ -292,7 +292,7 @@ describe('admin tests of a per-user server', () => {
 
 describe('chat projection of auth_required', () => {
   const marker = {
-    error: 'MCP_AUTH_REQUIRED',
+    error: 'INTEGRATION_AUTH_REQUIRED',
     message: 'Connect Okta MCP to use this tool: /api/mcp/oauth/authorize?serverId=okta',
     authRequired: {
       serverId: 'okta',

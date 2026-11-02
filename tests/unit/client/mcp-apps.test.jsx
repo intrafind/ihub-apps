@@ -267,7 +267,7 @@ describe('message.mcpApps', () => {
       callId: 'c1',
       toolId: 'drawio__create_diagram',
       name: 'drawio__create_diagram',
-      resultPreview: { error: 'MCP_AUTH_REQUIRED' },
+      resultPreview: { error: 'INTEGRATION_AUTH_REQUIRED' },
       authRequired: {
         serverId: 'drawio',
         serverName: 'draw.io',
@@ -351,7 +351,7 @@ describe('McpAppViews', () => {
       Object.assign(new Error('Request failed with status code 409'), {
         response: {
           status: 409,
-          data: { error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl: '/x' }
+          data: { error: 'auth_required', code: 'INTEGRATION_AUTH_REQUIRED', connectUrl: '/x' }
         }
       })
     );

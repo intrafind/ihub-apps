@@ -318,6 +318,40 @@ Integrations**, and no longer three pages of their own with a shared provider ed
 See [Integrations → Built-in integrations](../../integrations.md#built-in-integrations) and
 [Apps → Files from storage providers](../../apps.md#files-from-storage-providers).
 
+## One Connection Service for Jira, Storage Providers and MCP Sign-ins
+
+Jira, Office 365, Google Drive, Nextcloud and MCP servers with per-user sign-in now connect,
+refresh and disconnect through one connection service and one OAuth client, so every integration
+gets the same security checks. Nothing changes for users who are connected: their connections are
+kept through the upgrade, nobody has to sign in again, and the callback URLs registered in the
+vendors' OAuth apps keep working.
+
+- **Connection index:** every connection has a record (status `active`, `expired`, `revoked`,
+  `failed` or `needs-reconnect`, the issuer, the granted scopes, expiry, last refresh and use).
+  The tokens stay where they always were; on the first start after the upgrade the existing token
+  files are indexed once, without moving or re-encrypting any of them. The **Connections** dialog
+  of an installation reads the index and shows each user's status.
+- **One callback:** `/api/integrations/oauth/callback` handles every sign-in. The callback URLs
+  admins registered (`/api/integrations/jira/callback`,
+  `/api/integrations/<provider>/<installation id>/callback`, `/api/mcp/oauth/callback/<server id>`)
+  are aliases of it and stay valid; nothing has to be re-registered.
+- **Same protection everywhere:** every sign-in uses PKCE — Nextcloud included — and a single-use
+  state kept on the server and bound to the user and the installation; the return URL must be on
+  the same origin. A refresh token goes back only to the authorization server and client that
+  issued it. Changing an installation's server URL, tenant or OAuth client ends its users'
+  connections, so a token is never sent to another endpoint.
+- **Disconnect revokes upstream** where the provider supports it (Google Drive, MCP servers that
+  advertise a revocation endpoint). Connect and disconnect are in the audit log as
+  `connection.create` and `connection.revoke`.
+- **Scheduled tasks use the owner's connection:** a run whose owner has no usable connection to an
+  integration it may call fails before it starts with `INTEGRATION_AUTH_REQUIRED`, naming the
+  integration and the reason (`not_connected`, `expired`, `insufficient_scope`), with a
+  **Reconnect** link.
+- **More scopes when a server asks:** an MCP server that refuses a call for a missing scope gets a
+  Connect card that asks the user to re-authorize once with the additional scopes.
+
+See [Integrations → Connections](../../integrations.md#connections).
+
 ## Groups Decide Which Integrations Their Members May Use
 
 Admins grant installed integrations per group, like apps: **Admin → Groups → a group →

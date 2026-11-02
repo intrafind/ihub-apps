@@ -253,6 +253,21 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * read. The chat's own `projectId` is the authority.
    */
   projectChats: 'project-chats',
+  /**
+   * The connection index of the unified integrations (04-architecture §1.4):
+   * one record per (installation, principal) — who is connected to which
+   * installed integration, its status, issuer, granted scopes and a
+   * `secretRef` pointing at the token file `TokenStorageService` keeps. The
+   * secret itself never lands here. Keyed `conn_<hash>`, owned by the user.
+   */
+  integrationConnections: 'integration-connections',
+  /**
+   * Pending OAuth sign-ins of the integrations, keyed by a hash of the `state`
+   * parameter: the user and installation the flow is bound to, the validated
+   * return URL and the encrypted PKCE verifier. Single use (deleted by the
+   * callback that consumes it) and short-lived (15 minutes).
+   */
+  integrationOAuthFlows: 'integration-oauth-flows',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

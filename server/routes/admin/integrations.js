@@ -909,7 +909,9 @@ export default function registerAdminIntegrationsRoutes(app) {
         if (!found.adapter?.disconnectUser) {
           return sendBadRequest(res, 'This integration has no per-user connections');
         }
-        const result = await found.adapter.disconnectUser(found.resolved.instance, userId);
+        const result = await found.adapter.disconnectUser(found.resolved.instance, userId, {
+          req
+        });
         if (!result?.removed) return sendNotFound(res, 'Connection');
         logAudit({
           req,

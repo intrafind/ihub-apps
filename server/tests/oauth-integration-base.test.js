@@ -4,13 +4,15 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 /**
- * Characterization tests for the shared OAuth token lifecycle and API request
- * wrapper in OAuthIntegrationBase (`getUserTokens` and
- * `_makeApiRequestWithRetry`, the one method every Google Drive and Office 365
- * call goes through).
+ * Characterization tests for the API request wrapper in OAuthIntegrationBase
+ * (`_makeApiRequestWithRetry`, the one method every Google Drive and Office 365
+ * call goes through) and the token lifecycle it delegates to the connection
+ * service (`getUserTokens`).
  *
- * The network (`httpFetch`) and the token store are faked, so the real request,
- * retry and refresh logic runs. A small subclass stands in for a provider.
+ * The network (`httpFetch`), the token store and the provider's token
+ * endpoint are faked, so the real request, retry, refresh (shared OAuth
+ * client) and connection-service logic runs. A small subclass stands in for a
+ * provider.
  */
 
 const httpFetch = jest.fn();
@@ -48,6 +50,12 @@ const { OAuthRefreshError, REFRESH_ERROR_CODES, isUnavailableError } =
   await import('../services/integrations/oauthRefreshError.js');
 const { default: OAuthIntegrationBase } =
   await import('../services/integrations/OAuthIntegrationBase.js');
+const { IntegrationConnectionService, setIntegrationConnectionServiceForTests } =
+  await import('../services/integrations/auth/IntegrationConnectionService.js');
+const { tokenStoreSecret } = await import('../services/integrations/auth/connectionProviders.js');
+const { createFixedEndpointStrategy } =
+  await import('../services/integrations/auth/strategies/fixedEndpoint.js');
+const { OAuthFlowStore } = await import('../services/integrations/auth/oauthFlowStore.js');
 
 const BASE_URL = 'https://api.example.com/v1';
 const USER = 'user-1';
@@ -77,6 +85,73 @@ class TestService extends OAuthIntegrationBase {
       retryCount
     );
   }
+}
+
+/**
+ * The provider's token endpoint, driven by `service.refreshAccessToken` (a
+ * jest mock standing in for the authorization server): a resolved value is the
+ * refreshed token set, a rejection is answered the way a real server answers
+ * it — `invalid_grant` as a 400, `invalid_client` as a 401, anything typed as
+ * temporary as a 503 — and an untyped error as a network failure.
+ */
+function tokenEndpointFor(getService) {
+  return async (_url, init) => {
+    const params = new URLSearchParams(String(init.body));
+    const answer = (status, body) => ({
+      ok: status < 400,
+      status,
+      json: async () => body,
+      text: async () => JSON.stringify(body)
+    });
+    try {
+      const tokens = await getService().refreshAccessToken(PROVIDER, params.get('refresh_token'));
+      return answer(200, {
+        access_token: tokens.accessToken,
+        token_type: 'Bearer',
+        ...(tokens.refreshToken ? { refresh_token: tokens.refreshToken } : {}),
+        expires_in: tokens.expiresIn
+      });
+    } catch (error) {
+      if (error?.code === REFRESH_ERROR_CODES.INVALID_GRANT) {
+        return answer(400, { error: 'invalid_grant' });
+      }
+      if (error?.code === 'invalid_client') return answer(401, { error: 'invalid_client' });
+      if (error?.code === REFRESH_ERROR_CODES.TEMPORARY) return answer(503, {});
+      throw error;
+    }
+  };
+}
+
+/** The connection service, with the test provider as its only installation. */
+function connectionServiceFor(getService) {
+  const descriptor = {
+    installationId: PROVIDER,
+    stack: 'cloud-storage',
+    kind: 'oauth-user',
+    displayName: 'Test Drive',
+    enabled: true,
+    configured: true,
+    issuer: 'https://idp.example.com',
+    fingerprint: null,
+    service: 'testdrive',
+    secret: tokenStoreSecret({ service: 'testdrive', providerId: PROVIDER }),
+    strategy: async () =>
+      createFixedEndpointStrategy({
+        id: 'fixed:testdrive',
+        issuer: 'https://idp.example.com',
+        authorizationEndpoint: 'https://idp.example.com/authorize',
+        tokenEndpoint: 'https://idp.example.com/token',
+        clientId: 'client',
+        clientSecret: 'secret',
+        fetchFn: tokenEndpointFor(getService)
+      }),
+    mayConnect: async () => true
+  };
+  return new IntegrationConnectionService({
+    documents: null,
+    flowStore: new OAuthFlowStore({ documents: null }),
+    describe: async id => (id === PROVIDER ? descriptor : null)
+  });
 }
 
 /** A provider that, like Office 365, always sends Content-Type. */
@@ -151,6 +226,7 @@ beforeEach(() => {
   store.expired = false;
   store.failure = null;
   service = new TestService();
+  setIntegrationConnectionServiceForTests(connectionServiceFor(() => service));
 });
 
 describe('_makeApiRequestWithRetry: building the request', () => {
@@ -323,7 +399,6 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(httpFetch).toHaveBeenCalledTimes(1);
     expect(service.refreshAccessToken).not.toHaveBeenCalled();
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
-    expect(logged('error')).toContain('Forced token refresh failed');
   });
 
   it('deletes the tokens and reports an expired session when the refresh token is rejected', async () => {
@@ -336,7 +411,6 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(httpFetch).toHaveBeenCalledTimes(1);
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
     expect(tokenStorage.storeUserTokens).not.toHaveBeenCalled();
-    expect(logged('error')).toContain('Forced token refresh failed');
   });
 
   it.each(temporaryRefreshFailures)(
@@ -351,7 +425,6 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
       expect(httpFetch).toHaveBeenCalledTimes(1);
       expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
       expect(store.tokens.refreshToken).toBe('refresh-1');
-      expect(logged('error')).toContain('Forced token refresh failed');
     }
   );
 
@@ -479,12 +552,14 @@ describe('_makeApiRequestWithRetry: wrapping thrown errors', () => {
     expect(httpFetch).not.toHaveBeenCalled();
   });
 
-  it('wraps "not authenticated" too, since it names neither the service nor "authentication"', async () => {
+  it('passes "not authenticated" through as the structured connect-first error', async () => {
     store.tokens = null;
 
     const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
 
-    expect(error.message).toBe('Test Drive API error: User not authenticated with testdrive');
+    expect(error.message).toBe('User not authenticated with Test Drive');
+    expect(error.code).toBe('INTEGRATION_AUTH_REQUIRED');
+    expect(error.reason).toBe('not_connected');
     expect(httpFetch).not.toHaveBeenCalled();
   });
 });
@@ -531,7 +606,6 @@ describe('getUserTokens', () => {
 
     expect(error.message).toBe('Test Drive authentication expired. Please reconnect your account.');
     expect(tokenStorage.deleteUserTokens).toHaveBeenCalledWith(USER, 'testdrive', PROVIDER);
-    expect(logged('error')).toContain('Failed to refresh tokens for user');
   });
 
   it.each(temporaryRefreshFailures)(
@@ -545,7 +619,6 @@ describe('getUserTokens', () => {
       expectUnavailable(error);
       expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
       expect(store.tokens.refreshToken).toBe('refresh-1');
-      expect(logged('error')).toContain('Failed to refresh tokens for user');
     }
   );
 
@@ -572,6 +645,7 @@ describe('getUserTokens', () => {
 
     const error = await rejection(service.getUserTokens(USER, PROVIDER));
 
-    expect(error.message).toBe('User not authenticated with testdrive');
+    expect(error.message).toBe('User not authenticated with Test Drive');
+    expect(error.reason).toBe('not_connected');
   });
 });

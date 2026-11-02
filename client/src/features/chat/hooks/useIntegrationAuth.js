@@ -24,7 +24,11 @@ export function useIntegrationAuth() {
       statusUrl: buildApiUrl('integrations/jira/status'),
       disconnectUrl: buildApiUrl('integrations/jira/disconnect'),
       refreshUrl: buildApiUrl('integrations/jira/refresh'),
-      authErrorPatterns: ['JIRA_AUTH_REQUIRED', 'JIRA authentication', 'connect your JIRA account'],
+      authErrorPatterns: [
+        'INTEGRATION_AUTH_REQUIRED',
+        'JIRA authentication',
+        'connect your JIRA account'
+      ],
       toolPrefix: 'jira_',
       description: {
         en: 'Link your JIRA account to search, view, and manage tickets directly from the chat.',

@@ -28,6 +28,12 @@
  *
  * @module services/scheduler/tasks/taskExecution
  */
+import { getIntegrationConnectionService } from '../../integrations/auth/IntegrationConnectionService.js';
+import {
+  INTEGRATION_AUTH_REASONS,
+  INTEGRATION_AUTH_REQUIRED
+} from '../../integrations/auth/integrationAuthRequired.js';
+import { SETTINGS_INTEGRATIONS_PATH } from '../../integrations/auth/connectionProviders.js';
 import crypto from 'node:crypto';
 import configCache from '../../../configCache.js';
 import { canUserAccessResource } from '../../../utils/authorization.js';
@@ -90,21 +96,6 @@ function defaultChatService() {
   if (!chatService) chatService = new ChatService();
   return chatService;
 }
-
-/**
- * Tools that belong to an integration the owner has to be connected to,
- * checked before the run starts. Keyed by the tool's script.
- */
-const INTEGRATION_CHECKS = {
-  'jira.js': {
-    label: 'Jira',
-    connectPath: '/settings/integrations',
-    async check(userId) {
-      const { default: JiraService } = await import('../../integrations/JiraService.js');
-      await JiraService.getUserTokens(userId);
-    }
-  }
-};
 
 /** The failure a run ends with. */
 class RunFailure extends Error {
@@ -188,27 +179,52 @@ async function authorizeRun(task, user, language) {
 
 /**
  * Check the integrations the run's tools need, before spending a model call.
+ * A run is headless: it resolves the **owner's** own connection of every
+ * installation whose tools it may call and that signs users in (Jira, cloud
+ * storage, per-user MCP), and fails with `INTEGRATION_AUTH_REQUIRED`
+ * (`integration`, `reason`: `not_connected` | `expired` | `insufficient_scope`)
+ * when one is missing. Never anybody else's connection.
  *
+ * @param {Object[]} tools - The tools the run offers
+ * @param {Object} user - The task owner
  * @throws {RunFailure}
  */
-async function checkIntegrations(tools, user) {
+export async function checkIntegrations(tools, user) {
+  const connections = getIntegrationConnectionService();
   const seen = new Set();
   for (const tool of tools) {
-    const check = INTEGRATION_CHECKS[tool?.script];
-    if (!check || seen.has(tool.script)) continue;
-    seen.add(tool.script);
-    try {
-      await check.check(user.id);
-    } catch {
-      throw new RunFailure(
-        'failed',
-        'INTEGRATION_RECONNECT_REQUIRED',
-        `Reconnect ${check.label}: the connection is missing or has expired`,
-        { extra: { integration: check.label, connectUrl: check.connectPath } }
-      );
-    }
+    const installationId = tool?._integration?.instanceId;
+    if (!installationId || seen.has(installationId)) continue;
+    seen.add(installationId);
+    const descriptor = await connections.describe(installationId);
+    if (descriptor?.kind !== 'oauth-user') continue;
+    const resolved = await connections.resolve(
+      { type: 'user', id: String(user.id) },
+      installationId
+    );
+    if (resolved.ok) continue;
+    const reason = resolved.error?.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED;
+    throw new RunFailure(
+      'failed',
+      INTEGRATION_AUTH_REQUIRED,
+      `Reconnect ${descriptor.displayName}: ${REASON_TEXT[reason] || REASON_TEXT.not_connected}`,
+      {
+        extra: {
+          integration: installationId,
+          reason,
+          connectUrl: SETTINGS_INTEGRATIONS_PATH
+        }
+      }
+    );
   }
 }
+
+/** How a run's failure names a missing connection. */
+const REASON_TEXT = Object.freeze({
+  not_connected: 'the connection is missing',
+  expired: 'the connection has expired',
+  insufficient_scope: 'the connection lacks a permission the task needs'
+});
 
 /**
  * Execute one queued run to its end (or to an approval pause).
@@ -689,8 +705,10 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       const issue = integrationIssues[0];
       return finish(
         'failed',
-        reasonOf('INTEGRATION_RECONNECT_REQUIRED', issue.message, now(), {
+        reasonOf(INTEGRATION_AUTH_REQUIRED, issue.message, now(), {
           toolId: issue.toolId,
+          ...(issue.integration ? { integration: issue.integration } : {}),
+          reason: issue.reason || INTEGRATION_AUTH_REASONS.EXPIRED,
           ...(issue.connectUrl ? { connectUrl: issue.connectUrl } : {})
         }),
         { ledgerRunIds, usage: addUsage(run.usage), watched }

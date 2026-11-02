@@ -35,7 +35,7 @@
  */
 import { revokeConnectionsForUser } from './oauth/ConnectionService.js';
 import { deletePersonalClientsByOwner } from '../utils/oauthClientManager.js';
-import { tokenStorageIdFor } from './mcp/mcpUserTokens.js';
+import { tokenStorageIdFor } from './integrations/auth/tokenSecrets.js';
 import tokenStorageService from './TokenStorageService.js';
 import { oauthClientsFile } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
@@ -99,6 +99,16 @@ export const USER_CLEANUP_STEPS = [
         tokenStorageIdFor(userId)
       ])
     })
+  },
+  {
+    // The connection index records who connected what; the tokens went above.
+    name: 'integrationConnections',
+    kind: 'access',
+    run: async userId => {
+      const { getIntegrationConnectionService } =
+        await import('./integrations/auth/IntegrationConnectionService.js');
+      return { removed: await getIntegrationConnectionService().forgetUser(userId) };
+    }
   },
   {
     // The pool holds the user's tokens in memory; only this worker's is reached.

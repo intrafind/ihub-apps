@@ -260,8 +260,11 @@ call:
 
 ```json
 {
-  "error": "MCP_AUTH_REQUIRED",
+  "error": "INTEGRATION_AUTH_REQUIRED",
+  "integration": "okta",
+  "reason": "not_connected",
   "message": "Connect Okta directory to use this tool: /api/mcp/oauth/authorize?serverId=okta",
+  "connectUrl": "/api/mcp/oauth/authorize?serverId=okta",
   "authRequired": {
     "serverId": "okta",
     "serverName": "Okta directory",
@@ -270,14 +273,17 @@ call:
 }
 ```
 
-The model sees the message; the chat shows a **Connect** card under the
+`reason` is `not_connected`, `expired` (the authorization server refused the
+refresh token) or `insufficient_scope` (see step-up below). The code is the one
+every integration uses (`INTEGRATION_AUTH_REQUIRED`, formerly
+`MCP_AUTH_REQUIRED`). The model sees the message; the chat shows a **Connect** card under the
 answer. Connect opens the server's sign-in and returns to the chat, where the
 card shows the server as connected; the user then sends the request again.
 The card is stored with the answer, so it is still there after the redirect;
 when the chat is opened again later, the card asks the server whether the
 user is connected now and shows that. A tool with an MCP App view shows no
 view for such a call. The MCP App routes answer an unconnected server with
-**409** `{ "error": "auth_required", "code": "MCP_AUTH_REQUIRED", "connectUrl": … }`
+**409** `{ "error": "auth_required", "code": "INTEGRATION_AUTH_REQUIRED", "integration": …, "connectUrl": … }`
 (never 401, which would read as an expired iHub session).
 
 The calling user is always the authenticated one. Every entry point that
@@ -307,12 +313,18 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
 
 **Security notes.**
 
-- The OAuth `state` is a signed ticket (HMAC-SHA256 with the platform's JWT
-  secret, 15 minutes) that names the user who started the sign-in; the
-  callback refuses it in anyone else's session.
-- OAuth mix-up defence (RFC 9700 §4.4): the ticket also names the server,
+- The sign-in runs through iHub's one OAuth client and connection service
+  (see [Integrations → Connections](integrations.md#connections)); the MCP
+  discovery and client registration are its MCP strategy. The OAuth `state`
+  is an opaque handle of a sign-in kept server-side (storage namespace
+  `integration-oauth-flows`, 15 minutes, single use) that names the user who
+  started it; the callback refuses it in anyone else's session.
+  `/api/mcp/oauth/callback/<server id>` is an alias of
+  `/api/integrations/oauth/callback`, kept because it is registered at the
+  authorization servers.
+- OAuth mix-up defence (RFC 9700 §4.4): the sign-in also names the server,
   its authorization server's issuer and the client the request went to. The
-  callback refuses a ticket that arrives at another server's callback, an
+  callback refuses a sign-in that arrives at another server's callback, an
   RFC 9207 `iss` that names another issuer, and a missing `iss` when the
   authorization server advertises
   `authorization_response_iss_parameter_supported`; the code is exchanged
@@ -321,8 +333,16 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
   requires a per-server registration (a CIMD server without RFC 9207
   support), the per-server redirect URI cannot rule out a mix-up on its own —
   prefer authorization servers that support RFC 9207.
-- The PKCE (S256) verifier travels inside that ticket encrypted with the
-  installation key; it never leaves iHub in clear text.
+- The PKCE (S256) verifier stays on the server, encrypted with the
+  installation key; the browser never sees it.
+- Scope step-up: a call refused with `403` and `error="insufficient_scope"`
+  returns `reason: "insufficient_scope"` with a Connect URL that asks for the
+  union of the granted and the challenged scopes (`…&scope=`). The user
+  re-authorizes once; a refusal for scopes already granted is an ordinary
+  error.
+- Every connection has a record in the connection index (status, issuer,
+  scopes, expiry; never the token). Connecting and disconnecting write the
+  audit entries `connection.create` and `connection.revoke`.
 - The authorization request carries the RFC 8707 `resource` indicator (the
   MCP server's URL, or the resource its metadata names).
 - Discovery, registration, token and revocation requests use the same

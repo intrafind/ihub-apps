@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 // JIRA OAuth Integration Routes
-// Handles OAuth2 PKCE flow for JIRA authentication
+// The JIRA connection (OAuth 2.0 with PKCE through the connection service) and the attachment proxy
 
 import express from 'express';
 import JiraService from '../../services/integrations/JiraService.js';
-import { resolveJiraRedirectUri } from '../../services/integrations/jiraConfig.js';
+import { JIRA_INSTANCE_ID } from '../../services/integrations/jiraConfig.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
@@ -33,42 +33,26 @@ const jiraAuthLimiter = rateLimit({
 
 // Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
 // Jira has a single connection per user, so there is no providerId in any route.
-// The redirect URI is the configured one or derived from the request; the
-// callback request arrives at that very URL, so deriving it again there yields
-// the value the authorize step sent (see resolveJiraRedirectUri).
+// The redirect URI sent to Atlassian is the configured one or derived from the
+// request (resolveJiraRedirectUri); `/callback` is an alias of the one
+// integration callback, kept because it is registered in the Atlassian app.
 createOAuthIntegrationRouter(router, {
   providerKey: 'jira',
   displayName: 'JIRA',
   requiresProviderId: false,
-  usesPkce: true,
+  installationId: JIRA_INSTANCE_ID,
+  stack: 'jira',
   authLimiter: jiraAuthLimiter,
-  buildAuthUrl: ({ state, codeVerifier, req }) =>
-    JiraService.generateAuthUrl(state, codeVerifier, resolveJiraRedirectUri(req)),
-  exchangeCodeForTokens: ({ code, codeVerifier, req }) =>
-    JiraService.exchangeCodeForTokens(code, codeVerifier, resolveJiraRedirectUri(req)),
-  storeUserTokens: (userId, tokens) => JiraService.storeUserTokens(userId, tokens),
   isUserAuthenticated: userId => JiraService.isUserAuthenticated(userId),
   getUserInfo: userId => JiraService.getUserInfo(userId),
   getTokenExpirationInfo: userId => JiraService.getTokenExpirationInfo(userId),
-  deleteUserTokens: userId => JiraService.deleteUserTokens(userId),
+  deleteUserTokens: (userId, _providerId, req) => JiraService.deleteUserTokens(userId, req),
   formatUserInfo: userInfo => ({
     displayName: userInfo.displayName,
     emailAddress: userInfo.emailAddress,
     accountType: userInfo.accountType,
     active: userInfo.active
-  }),
-  logMissingRefreshToken: () =>
-    logger.error(
-      'CRITICAL: No refresh token received from JIRA OAuth - user will need to re-authenticate when access token expires',
-      {
-        component: 'Jira',
-        causes: [
-          'JIRA app does not support offline access',
-          'User denied offline_access scope',
-          'Atlassian OAuth server configuration issue'
-        ]
-      }
-    )
+  })
 });
 
 /**

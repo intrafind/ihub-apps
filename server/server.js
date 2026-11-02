@@ -42,6 +42,7 @@ import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
 import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from './routes/mcpOAuth.js';
+import registerIntegrationOAuthCallback from './routes/integrations/oauthCallback.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
 import registerUserSkillRoutes from './routes/userSkillRoutes.js';
 import registerExportRoutes from './routes/exports.js';
@@ -742,6 +743,22 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }
 
+  // One-time re-index of the per-user integration tokens (Jira, cloud
+  // storage, per-user MCP) into the connection index, after the MCP manager
+  // knows its servers. Idempotent, marker-guarded and run under a storage
+  // lock, so every worker may call it; the connection service also indexes a
+  // token file it meets without a record, so nothing waits on this.
+  try {
+    const { reindexIntegrationConnections } =
+      await import('./services/integrations/auth/connectionReindex.js');
+    await reindexIntegrationConnections();
+  } catch (error) {
+    logger.warn('Integration connection re-index failed; connections are indexed as used', {
+      component: 'Server',
+      error: error.message
+    });
+  }
+
   // Initialise the A2A client manager (remote A2A agents as tools) from the
   // installed A2A integrations, on every worker; the singleton worker fetches
   // the Agent Cards in the background, the others lazily on first use. Failure
@@ -836,6 +853,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerToolRoutes(app);
   registerMcpAppRoutes(app);
   registerMcpOAuthRoutes(app);
+  registerIntegrationOAuthCallback(app);
   registerSkillRoutes(app);
   registerUserSkillRoutes(app);
   registerExportRoutes(app);

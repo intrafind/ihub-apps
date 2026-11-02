@@ -15,7 +15,7 @@
  * `X-Forwarded-Proto` / `X-Forwarded-Host` only when `trust proxy` trusts the
  * connecting peer — plus iHub's base path. A base derived from a request is
  * never trusted to replace an existing client registration (see
- * `mcpOAuthService.resolveClientRegistration`).
+ * `resolveClientRegistration` in `integrations/auth/strategies/mcpDiscovery.js`).
  *
  * Every server gets its own redirect URI (`…/api/mcp/oauth/callback/<id>`)
  * and its own CIMD (`…/api/mcp/oauth/client-metadata/<id>`): a code delivered

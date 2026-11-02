@@ -19,43 +19,24 @@
  *
  * The token store's file-name allowlist (`/^[A-Za-z0-9._@+-]+$/`) rejects some
  * OIDC subjects (`auth0|abc`, `urn:...`). Such ids are mapped to a stable
- * `u_<sha256 hex, 32 chars>` storage id; the real id stays inside the
- * encrypted payload so admin views can still show who is connected.
+ * `u_<sha256 hex, 32 chars>` storage id (`tokenStorageIdFor` in
+ * `integrations/auth/tokenSecrets.js`, shared by every integration); the real
+ * id stays inside the encrypted payload so admin views can still show who is
+ * connected.
  *
  * @module services/mcp/mcpUserTokens
  */
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import tokenStorageService from '../TokenStorageService.js';
 import { registrationFingerprint } from './mcpOAuthClientStore.js';
+import { SAFE_STORAGE_ID, tokenStorageIdFor } from '../integrations/auth/tokenSecrets.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'McpUserTokens';
 
 /** `serviceName` under `contents/integrations/` that holds every MCP token file. */
 export const MCP_TOKEN_SERVICE = 'mcp';
-
-/** The token store's file-name allowlist (kept in sync with TokenStorageService). */
-const SAFE_STORAGE_ID = /^[A-Za-z0-9._@+-]+$/;
-const MAX_STORAGE_ID_LENGTH = 256;
-
-/**
- * The id a user's tokens are filed under. Ids the token store accepts are
- * used as they are; every other id (OIDC subjects with `|`, `/`, `:`, …) is
- * hashed so the file name stays inside the allowlist.
- *
- * @param {string} userId - The real user id
- * @returns {string} Storage id
- * @throws {Error} When `userId` is not a non-empty string
- */
-export function tokenStorageIdFor(userId) {
-  if (typeof userId !== 'string' || !userId) {
-    throw new Error('A user id is required to store MCP tokens');
-  }
-  if (SAFE_STORAGE_ID.test(userId) && userId.length <= MAX_STORAGE_ID_LENGTH) return userId;
-  return `u_${crypto.createHash('sha256').update(userId, 'utf8').digest('hex').slice(0, 32)}`;
-}
 
 /**
  * The stored token payload of one user for one server, or null when the user

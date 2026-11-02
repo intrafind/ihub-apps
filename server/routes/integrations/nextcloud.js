@@ -51,26 +51,21 @@ const nextcloudAuthLimiter = rateLimit({
 });
 
 // Shared auth -> callback -> status -> disconnect flow (see oauthIntegrationFactory.js).
-// Nextcloud's OAuth2 flow does not use PKCE.
+// The sign-in runs through the connection service (PKCE, server-side state).
 createOAuthIntegrationRouter(router, {
   providerKey: 'nextcloud',
   displayName: 'Nextcloud',
   requiresProviderId: true,
-  usesPkce: false,
+  stack: 'cloud-storage',
   authLimiter: nextcloudAuthLimiter,
-  buildAuthUrl: ({ providerId, state, req }) =>
-    NextcloudService.generateAuthUrl(providerId, state, req),
-  exchangeCodeForTokens: ({ providerId, code, req }) =>
-    NextcloudService.exchangeCodeForTokens(providerId, code, req),
-  storeUserTokens: (userId, tokens) => NextcloudService.storeUserTokens(userId, tokens),
+  tolerateUserInfoFailure: true,
   isUserAuthenticated: (userId, providerId) =>
     NextcloudService.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => NextcloudService.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     NextcloudService.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId) => NextcloudService.deleteUserTokens(userId, providerId),
-  // A connected account whose profile lookup fails is still connected.
-  tolerateUserInfoFailure: true,
+  deleteUserTokens: (userId, providerId, req) =>
+    NextcloudService.deleteUserTokens(userId, providerId, req),
   formatUserInfo: userInfo => ({
     displayName: userInfo.displayName,
     email: userInfo.email,

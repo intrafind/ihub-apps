@@ -3,17 +3,14 @@
 
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
+import { getIntegrationConnectionService } from './auth/IntegrationConnectionService.js';
+import { isIntegrationAuthRequired } from './auth/integrationAuthRequired.js';
+import { tokenStorageIdFor } from './auth/tokenSecrets.js';
 import { getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import credentialService from '../CredentialService.js';
 import { findCloudStorageProvider, resolveCloudStorageRedirectUri } from './cloudStorageConfig.js';
-import {
-  OAuthRefreshError,
-  REFRESH_ERROR_CODES,
-  createUnavailableError,
-  isTerminalRefreshError,
-  isUnavailableError
-} from './oauthRefreshError.js';
+import { isUnavailableError } from './oauthRefreshError.js';
 
 // A request answered with 401 is retried once, after refreshing the tokens.
 const MAX_API_RETRIES = 1;
@@ -29,13 +26,15 @@ function readResponseBody(response) {
 }
 
 /**
- * Shared OAuth 2.0 token-lifecycle implementation for cloud storage
- * integrations (Google Drive, Office 365, Nextcloud, ...).
+ * Shared base of the cloud storage integrations (Google Drive, Office 365,
+ * Nextcloud): provider-config loading, callback-URL resolution and the
+ * 401-retry-once API request wrapper.
  *
- * Subclasses supply provider-specific pieces (auth URL, token exchange,
- * refresh endpoint/params, API base URL) and get callback-URL resolution,
- * provider-config loading, token store/refresh/expiry handling, and the
- * 401-retry-once API request wrapper for free.
+ * The token lifecycle is not here: sign-in, code exchange, storage, refresh
+ * and disconnect run through the shared OAuth client and the connection
+ * service (`auth/OAuthUserClient.js`, `auth/IntegrationConnectionService.js`).
+ * A subclass only declares its authorization server and scopes through
+ * `oauthStrategy(providerId)`.
  */
 class OAuthIntegrationBase {
   constructor({ serviceName, displayName, componentName }) {
@@ -59,32 +58,6 @@ class OAuthIntegrationBase {
       throw new Error('Unable to determine host for callback URL');
     }
     return resolveCloudStorageRedirectUri(req, { id: providerId, type: this.serviceName });
-  }
-
-  /**
-   * Resolve the OAuth redirect URI of one flow, the way Jira does (#3079):
-   * the installation's configured `redirectUri`, else derived from the
-   * request including the base path ({@link _buildCallbackUrl}). There is no
-   * fallback: without a configured value and without a request host the
-   * flow cannot start, and the error says so.
-   * @param {Object} provider - Resolved provider configuration
-   * @param {string} providerId - The installation id
-   * @param {Object} [req] - Express request object (for the derivation)
-   * @returns {string} Redirect URI
-   */
-  _resolveRedirectUri(provider, providerId, req = null) {
-    const redirectUri = resolveCloudStorageRedirectUri(req, {
-      id: providerId,
-      type: this.serviceName,
-      redirectUri: provider?.redirectUri
-    });
-    if (!provider?.redirectUri) {
-      logger.debug(`Derived ${this.displayName} callback URL from the request`, {
-        component: this.componentName,
-        redirectUri
-      });
-    }
-    return redirectUri;
   }
 
   /**
@@ -127,183 +100,63 @@ class OAuthIntegrationBase {
   }
 
   /**
-   * Store encrypted user tokens.
+   * The user's tokens for one installation, refreshed when they expired.
+   * Delegates to the connection service, which owns the token lifecycle of
+   * every integration (refresh single-flight, terminal vs temporary
+   * failures, endpoint changes); the stored payload keeps the shape the
+   * service reads (`{ accessToken, refreshToken, providerId, … }`).
    * @param {string} userId - User ID
-   * @param {Object} tokens - Tokens to store
+   * @param {string} providerId - Provider ID (the installation id)
+   * @param {Object} [options]
+   * @param {boolean} [options.forceRefresh] - The API answered 401
+   * @param {string} [options.usedAccessToken] - The token that answer was for
+   * @returns {Promise<Object>} Decrypted tokens
    */
-  async storeUserTokens(userId, tokens) {
+  async getUserTokens(userId, providerId, options = {}) {
     try {
-      if (!tokens.refreshToken) {
-        logger.warn('No refresh token - user will need to reconnect when access token expires', {
-          component: this.componentName
-        });
-      }
-
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
-      logger.info(`${this.displayName} tokens stored for user`, {
-        component: this.componentName,
+      return await getIntegrationConnectionService().getUserTokens({
+        installationId: providerId,
         userId,
-        providerId: tokens.providerId
+        ...options
       });
-      return true;
     } catch (error) {
-      logger.error('Error storing user tokens', {
-        component: this.componentName,
-        error
-      });
-      throw new Error('Failed to store user tokens');
+      throw this._toTokenError(error);
     }
   }
 
   /**
-   * Hook for subclasses to adjust freshly refreshed tokens before they're
-   * stored (e.g. carrying forward a cached value the refresh response
-   * omitted). Default is a no-op.
-   * @param {Object} refreshedTokens
-   * @param {Object} _previousTokens
-   * @returns {Object} refreshedTokens (mutated or replaced)
-   */
-  _afterTokenRefresh(refreshedTokens, _previousTokens) {
-    return refreshedTokens;
-  }
-
-  /**
-   * Hook determining whether an error from the outer getUserTokens() try
-   * block should be re-thrown as-is rather than wrapped as a generic
-   * 'Failed to retrieve user tokens'. Subclasses may extend this.
+   * Errors the caller acts on pass through unchanged — "connect first"
+   * (`IntegrationAuthRequiredError`: not authenticated, authentication
+   * expired) and "temporarily unavailable" — anything else is logged and
+   * reported as a generic failure.
    * @param {Error} error
-   * @returns {boolean}
+   * @returns {Error}
    */
-  _isPassthroughTokenError(error) {
-    return (
-      error.message.includes('not authenticated') ||
-      error.message.includes('authentication expired') ||
-      isUnavailableError(error)
-    );
-  }
-
-  /**
-   * Normalize anything thrown while refreshing into an OAuthRefreshError.
-   * Errors already typed pass through; anything else (network failure, a
-   * provider config problem) is logged and becomes a temporary failure.
-   * @param {Error} error
-   * @returns {OAuthRefreshError}
-   */
-  _toRefreshError(error) {
-    if (error instanceof OAuthRefreshError) {
-      return error;
-    }
-    logger.error(`Error refreshing ${this.displayName} access token`, {
+  _toTokenError(error) {
+    if (isIntegrationAuthRequired(error) || isUnavailableError(error)) return error;
+    logger.error('Error retrieving user tokens', {
       component: this.componentName,
       error
     });
-    return new OAuthRefreshError(
-      `Failed to refresh access token: ${error.message}`,
-      REFRESH_ERROR_CODES.TEMPORARY,
-      { cause: error }
-    );
+    return new Error('Failed to retrieve user tokens');
   }
 
   /**
-   * Decide what a failed refresh means for the user's stored tokens and return
-   * the error to throw. The tokens are deleted only when the refresh token is
-   * rejected or missing; the user then has to reconnect. Any other failure
-   * (network error, 5xx, 429, an expired client secret, a provider config
-   * problem) keeps the tokens, so access returns on its own once it clears.
-   * @param {Error} refreshError - What the refresh threw
+   * Disconnect: revoke upstream when the provider supports it, delete the
+   * tokens, mark the connection revoked (audit `connection.revoke`).
    * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @returns {Promise<Error>} The error to throw to the caller
+   * @param {string} providerId - Provider ID (the installation id)
+   * @param {import('express').Request} [req] - For the audit entry
+   * @returns {Promise<boolean>} Whether tokens were removed
    */
-  async _refreshFailureError(refreshError, userId, providerId) {
-    if (isTerminalRefreshError(refreshError)) {
-      await this.deleteUserTokens(userId, providerId);
-      return new Error(
-        `${this.displayName} authentication expired. Please reconnect your account.`
-      );
-    }
-    return createUnavailableError(this.displayName, refreshError);
-  }
-
-  /**
-   * Retrieve and decrypt user tokens with automatic refresh if expired.
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @returns {Promise<Object>} Decrypted tokens
-   */
-  async getUserTokens(userId, providerId) {
+  async deleteUserTokens(userId, providerId, req) {
     try {
-      const tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
-
-      if (!expired) {
-        return tokens;
-      }
-
-      logger.info('Tokens expired for user, attempting refresh', {
-        component: this.componentName,
-        userId
+      const { removed } = await getIntegrationConnectionService().disconnect({
+        installationId: providerId,
+        userId,
+        req
       });
-
-      try {
-        if (!tokens.refreshToken) {
-          logger.error('No refresh token available for user', {
-            component: this.componentName,
-            userId
-          });
-          throw new OAuthRefreshError(
-            `No refresh token available - user needs to reconnect ${this.displayName} account`,
-            REFRESH_ERROR_CODES.MISSING
-          );
-        }
-
-        let refreshedTokens = await this.refreshAccessToken(tokens.providerId, tokens.refreshToken);
-        refreshedTokens = this._afterTokenRefresh(refreshedTokens, tokens);
-
-        await this.storeUserTokens(userId, refreshedTokens);
-        logger.info(`Successfully refreshed and stored ${this.displayName} tokens for user`, {
-          component: this.componentName,
-          userId
-        });
-        return refreshedTokens;
-      } catch (refreshError) {
-        logger.error('Failed to refresh tokens for user', {
-          component: this.componentName,
-          userId,
-          error: refreshError
-        });
-
-        throw await this._refreshFailureError(refreshError, userId, providerId);
-      }
-    } catch (error) {
-      if (this._isPassthroughTokenError(error)) {
-        throw error;
-      }
-      logger.error('Error retrieving user tokens', {
-        component: this.componentName,
-        error
-      });
-      throw new Error('Failed to retrieve user tokens');
-    }
-  }
-
-  /**
-   * Delete user tokens (disconnect).
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @returns {Promise<boolean>} Success status
-   */
-  async deleteUserTokens(userId, providerId) {
-    try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
-      if (result) {
-        logger.info(`${this.displayName} tokens deleted for user`, {
-          component: this.componentName,
-          userId,
-          providerId
-        });
-      }
-      return result;
+      return removed;
     } catch (error) {
       logger.error('Error deleting user tokens', {
         component: this.componentName,
@@ -321,7 +174,11 @@ class OAuthIntegrationBase {
    */
   async getTokenExpirationInfo(userId, providerId) {
     try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
+      const metadata = await tokenStorage.getTokenMetadata(
+        tokenStorageIdFor(userId),
+        this.serviceName,
+        providerId
+      );
       const now = new Date();
       const expiresAt = new Date(metadata.expiresAt);
       const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
@@ -457,45 +314,6 @@ class OAuthIntegrationBase {
   }
 
   /**
-   * Refresh the user's access token after the API answered 401 and store the
-   * new tokens. A rejected or missing refresh token deletes the stored tokens;
-   * any other failure keeps them (see _refreshFailureError). Either way it
-   * throws.
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @param {number} retryCount - Retries used so far, before this one
-   */
-  async _refreshAfterUnauthorized(userId, providerId, retryCount) {
-    logger.info('Received 401, attempting token refresh and retry', {
-      component: this.componentName,
-      attempt: retryCount + 1,
-      maxAttempts: MAX_API_RETRIES + 1
-    });
-
-    try {
-      const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-
-      if (!expiredTokens.refreshToken) {
-        throw new OAuthRefreshError('No refresh token available', REFRESH_ERROR_CODES.MISSING);
-      }
-
-      const refreshedTokens = await this.refreshAccessToken(
-        expiredTokens.providerId,
-        expiredTokens.refreshToken
-      );
-
-      await this.storeUserTokens(userId, refreshedTokens);
-    } catch (refreshError) {
-      logger.error('Forced token refresh failed', {
-        component: this.componentName,
-        error: refreshError
-      });
-
-      throw await this._refreshFailureError(refreshError, userId, providerId);
-    }
-  }
-
-  /**
    * Decide what to throw for an error that escaped an API request: errors
    * that already name the service or concern authentication pass through,
    * everything else is logged and wrapped as an API error.
@@ -548,7 +366,15 @@ class OAuthIntegrationBase {
       }
 
       if (response.status === 401 && retryCount < MAX_API_RETRIES) {
-        await this._refreshAfterUnauthorized(userId, providerId, retryCount);
+        logger.info('Received 401, attempting token refresh and retry', {
+          component: this.componentName,
+          attempt: retryCount + 1,
+          maxAttempts: MAX_API_RETRIES + 1
+        });
+        await this.getUserTokens(userId, providerId, {
+          forceRefresh: true,
+          usedAccessToken: tokens.accessToken
+        });
         return await this._makeApiRequestWithRetry(
           apiBaseUrl,
           endpoint,

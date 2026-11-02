@@ -45,28 +45,21 @@ createOAuthIntegrationRouter(router, {
   providerKey: 'office365',
   displayName: 'Office 365',
   requiresProviderId: true,
-  usesPkce: true,
+  stack: 'cloud-storage',
   authLimiter: office365AuthLimiter,
-  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
-    Office365Service.generateAuthUrl(providerId, state, codeVerifier, req),
-  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
-    Office365Service.exchangeCodeForTokens(providerId, code, codeVerifier, req),
-  storeUserTokens: (userId, tokens) => Office365Service.storeUserTokens(userId, tokens),
   isUserAuthenticated: (userId, providerId) =>
     Office365Service.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => Office365Service.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     Office365Service.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId) => Office365Service.deleteUserTokens(userId, providerId),
+  deleteUserTokens: (userId, providerId, req) =>
+    Office365Service.deleteUserTokens(userId, providerId, req),
   formatUserInfo: userInfo => ({
     displayName: userInfo.displayName,
     mail: userInfo.mail,
     userPrincipalName: userInfo.userPrincipalName,
     jobTitle: userInfo.jobTitle
-  }),
-  // invalid_client = expired/wrong client secret
-  mapCallbackError: error =>
-    error.code === 'invalid_client' ? 'invalid_client' : 'callback_failed'
+  })
 });
 
 /**

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import 'dotenv/config';
-import crypto from 'node:crypto';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import { isValidGraphId } from './graphIds.js';
@@ -10,7 +9,8 @@ import logger from '../../utils/logger.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 import OAuthIntegrationBase from './OAuthIntegrationBase.js';
 import { findCloudStorageProvider } from './cloudStorageConfig.js';
-import { isUnavailableError, refreshFailureFromResponse } from './oauthRefreshError.js';
+import { isUnavailableError } from './oauthRefreshError.js';
+import { createFixedEndpointStrategy } from './auth/strategies/fixedEndpoint.js';
 
 /**
  * Office 365 Service for Microsoft 365 file access integration
@@ -126,174 +126,35 @@ class Office365Service extends OAuthIntegrationBase {
   }
 
   /**
-   * Generate OAuth 2.0 authorization URL with PKCE
-   * @param {string} providerId - The provider ID
-   * @param {string} state - CSRF protection state
-   * @param {string} codeVerifier - PKCE code verifier
-   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
-   * @returns {string} Authorization URL
+   * The provider's authorization server for the shared OAuth client: the
+   * Microsoft identity platform of the configured tenant, the minimal Graph
+   * scopes for the enabled sources (also sent on refresh, so a refreshed
+   * token never carries more than the admin enabled), and a consent prompt so
+   * a refresh token is issued.
+   * @param {string} providerId - The installation id
+   * @returns {import('./auth/OAuthUserClient.js').OAuthStrategy}
    */
-  generateAuthUrl(providerId, state, codeVerifier, req = null) {
+  oauthStrategy(providerId) {
     const provider = this._getProviderConfig(providerId);
-    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-
-    const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
-
     const scopes = this._buildScopes(provider);
-
     logger.info('Office 365 OAuth scopes selected from enabled sources', {
       component: 'Office365Service',
       providerId,
       scopes,
       sources: provider.sources
     });
-
-    const params = new URLSearchParams({
-      client_id: provider.clientId,
-      response_type: 'code',
-      redirect_uri: redirectUri,
-      response_mode: 'query',
-      scope: scopes,
-      state: state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      prompt: 'consent' // Force consent to ensure refresh token
+    const base = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0`;
+    return createFixedEndpointStrategy({
+      id: `fixed:office365:${providerId}`,
+      issuer: `${this.authBaseUrl}/${provider.tenantId}/v2.0`,
+      authorizationEndpoint: `${base}/authorize`,
+      tokenEndpoint: `${base}/token`,
+      clientId: provider.clientId,
+      clientSecret: provider.clientSecret,
+      scopes: scopes.split(' '),
+      extraAuthorizationParams: { response_mode: 'query', prompt: 'consent' },
+      extraRefreshParams: { scope: scopes }
     });
-
-    return `${authUrl}?${params.toString()}`;
-  }
-
-  /**
-   * Exchange authorization code for tokens
-   * @param {string} providerId - The provider ID
-   * @param {string} authCode - Authorization code from OAuth callback
-   * @param {string} codeVerifier - PKCE code verifier
-   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
-   * @returns {Promise<Object>} Tokens object
-   */
-  async exchangeCodeForTokens(providerId, authCode, codeVerifier, req = null) {
-    try {
-      const provider = this._getProviderConfig(providerId);
-      const tokenUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/token`;
-      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
-
-      const tokenData = new URLSearchParams({
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret,
-        code: authCode,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-        code_verifier: codeVerifier
-      });
-
-      const response = await httpFetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error exchanging authorization code', {
-          component: 'Office365Service',
-          error: errorData
-        });
-        const exchangeError = new Error('Failed to exchange authorization code for tokens');
-        exchangeError.code = errorData.error;
-        throw exchangeError;
-      }
-
-      const tokens = await response.json();
-
-      if (!tokens.refresh_token) {
-        logger.warn('No refresh token received from Microsoft OAuth', {
-          component: 'Office365Service'
-        });
-      }
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        providerId: providerId // Store which provider these tokens are for
-      };
-    } catch (error) {
-      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('Error exchanging authorization code', {
-        component: 'Office365Service',
-        error
-      });
-      throw new Error('Failed to exchange authorization code for tokens');
-    }
-  }
-
-  /**
-   * Refresh access token using refresh token
-   * @param {string} providerId - The provider ID
-   * @param {string} refreshToken - Refresh token
-   * @returns {Promise<Object>} New tokens
-   */
-  async refreshAccessToken(providerId, refreshToken) {
-    try {
-      logger.info('Attempting to refresh Office 365 access token', {
-        component: 'Office365Service'
-      });
-
-      const provider = this._getProviderConfig(providerId);
-      const tokenUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/token`;
-
-      const tokenData = new URLSearchParams({
-        client_id: provider.clientId,
-        client_secret: provider.clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-        scope: this._buildScopes(provider)
-      });
-
-      const response = await httpFetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Error refreshing Office 365 access token', {
-          component: 'Office365Service',
-          error: errorData
-        });
-
-        throw refreshFailureFromResponse(response, errorData);
-      }
-
-      const tokens = await response.json();
-      logger.info('Office 365 token refresh successful', { component: 'Office365Service' });
-
-      return {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || refreshToken, // Use new or keep existing
-        expiresIn: tokens.expires_in,
-        scope: tokens.scope,
-        providerId: providerId
-      };
-    } catch (error) {
-      throw this._toRefreshError(error);
-    }
-  }
-
-  /**
-   * Office 365 also treats a 'permissions have been updated' error as a
-   * pass-through condition (surfaced by the outer getUserTokens() catch).
-   * @param {Error} error
-   * @returns {boolean}
-   */
-  _isPassthroughTokenError(error) {
-    return (
-      super._isPassthroughTokenError(error) ||
-      error.message.includes('permissions have been updated')
-    );
   }
 
   /**

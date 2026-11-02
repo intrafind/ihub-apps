@@ -60,20 +60,16 @@ createOAuthIntegrationRouter(router, {
   providerKey: 'googledrive',
   displayName: 'Google Drive',
   requiresProviderId: true,
-  usesPkce: true,
+  stack: 'cloud-storage',
   authLimiter: googleDriveAuthLimiter,
   statusLimiter: googleDriveApiLimiter,
-  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
-    GoogleDriveService.generateAuthUrl(providerId, state, codeVerifier, req),
-  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
-    GoogleDriveService.exchangeCodeForTokens(providerId, code, codeVerifier, req),
-  storeUserTokens: (userId, tokens) => GoogleDriveService.storeUserTokens(userId, tokens),
   isUserAuthenticated: (userId, providerId) =>
     GoogleDriveService.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => GoogleDriveService.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     GoogleDriveService.getTokenExpirationInfo(userId, providerId),
-  deleteUserTokens: (userId, providerId) => GoogleDriveService.deleteUserTokens(userId, providerId),
+  deleteUserTokens: (userId, providerId, req) =>
+    GoogleDriveService.deleteUserTokens(userId, providerId, req),
   formatUserInfo: userInfo => ({
     displayName: userInfo.displayName,
     mail: userInfo.mail,

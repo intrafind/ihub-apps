@@ -7,6 +7,7 @@ import {
   invalidateToolsWithPrefix
 } from '../../../tools/OpenApiToolRunner.js';
 import credentialService from '../../../CredentialService.js';
+import { serviceAccountHeaders } from '../../auth/ServiceAccountAuth.js';
 import logger from '../../../../utils/logger.js';
 import { effectiveValues, localized } from '../../definitions/installedValues.js';
 import { toolIdFor, actionEnabled } from '../common.js';
@@ -71,18 +72,14 @@ function resolveRequestSettings(definition, instance, values, resolveSecret = st
   if (mode === 'service-account') {
     const ref = instance.auth?.credentialRef;
     if (!ref) throw new Error(`Integration ${instance.id}: service account without credential`);
-    const secret = resolveSecret(ref);
-    const account = definition.auth.serviceAccount || {};
-    const kind = account.kind || 'header';
-    const prefix = account.valuePrefix || '';
-    if (kind === 'bearer') {
-      headers.Authorization = `Bearer ${secret}`;
-    } else if (kind === 'basic') {
-      headers.Authorization = `Basic ${Buffer.from(String(secret)).toString('base64')}`;
-    } else {
-      const headerName = fillTemplate(account.header || 'Authorization', values) || 'Authorization';
-      headers[headerName] = `${prefix}${secret}`;
-    }
+    Object.assign(
+      headers,
+      serviceAccountHeaders({
+        secret: resolveSecret(ref),
+        serviceAccount: definition.auth.serviceAccount || {},
+        fillTemplate: template => fillTemplate(template, values)
+      })
+    );
   }
 
   return { baseUrl, headers };

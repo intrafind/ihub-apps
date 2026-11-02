@@ -14,7 +14,10 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
  * (getUserTokens) and the 401-retry path (the shared API request wrapper;
  * Nextcloud has none).
  *
- * Only the network, the token store and the platform config are faked.
+ * The refresh itself runs through the shared OAuth client and the connection
+ * service (`services/integrations/auth/`), exactly as in production; only the
+ * network, the token store and the platform config are faked. The token
+ * endpoint's answers are classified by the client (`OAuthUserClient.test`).
  */
 
 const httpFetch = jest.fn();
@@ -77,8 +80,7 @@ const { default: GoogleDriveService } =
   await import('../services/integrations/GoogleDriveService.js');
 const { default: Office365Service } = await import('../services/integrations/Office365Service.js');
 const { default: NextcloudService } = await import('../services/integrations/NextcloudService.js');
-const { OAuthRefreshError, REFRESH_ERROR_CODES, isUnavailableError } =
-  await import('../services/integrations/oauthRefreshError.js');
+const { isUnavailableError } = await import('../services/integrations/oauthRefreshError.js');
 
 const USER = 'user-1';
 
@@ -186,82 +188,6 @@ describe.each(providers)('$name', ({ name, service, providerId, hasRetryWrapper,
 
   beforeEach(() => seedTokens());
 
-  describe('refreshAccessToken', () => {
-    it('returns the new tokens, keeping the old refresh token when none is issued', async () => {
-      fakeNetwork({ tokenAnswer: response(200, { access_token: 'a2', expires_in: 60 }) });
-
-      const tokens = await service.refreshAccessToken(providerId, 'old-refresh');
-
-      expect(tokens).toMatchObject({ accessToken: 'a2', refreshToken: 'old-refresh', providerId });
-    });
-
-    it('types a rejected refresh token as invalid_grant', async () => {
-      fakeNetwork({ tokenAnswer: response(400, { error: 'invalid_grant' }) });
-
-      const error = await rejection(service.refreshAccessToken(providerId, 'old-refresh'));
-
-      expect(error).toBeInstanceOf(OAuthRefreshError);
-      expect(error.code).toBe(REFRESH_ERROR_CODES.INVALID_GRANT);
-      expect(error.message).toBe('Refresh token expired or invalid - user needs to reconnect');
-    });
-
-    it('keeps the provider error code of other failed responses', async () => {
-      fakeNetwork({
-        tokenAnswer: response(401, { error: 'invalid_client' }, { statusText: 'Unauthorized' })
-      });
-
-      const error = await rejection(service.refreshAccessToken(providerId, 'old-refresh'));
-
-      expect(error.code).toBe('invalid_client');
-      expect(error.message).toBe('Failed to refresh access token: Unauthorized');
-    });
-
-    it('keeps the description of a 400 that is not invalid_grant', async () => {
-      fakeNetwork({
-        tokenAnswer: response(400, {
-          error: 'invalid_scope',
-          error_description: 'Scope not allowed'
-        })
-      });
-
-      const error = await rejection(service.refreshAccessToken(providerId, 'old-refresh'));
-
-      expect(error.code).toBe('invalid_scope');
-      expect(error.message).toBe('Token refresh failed: Scope not allowed');
-    });
-
-    it.each([
-      ['a 5xx', () => response(502, {}, { statusText: 'Bad Gateway', jsonThrows: true })],
-      ['a 429', () => response(429, {}, { statusText: 'Too Many Requests', jsonThrows: true })]
-    ])('types %s without a provider error as temporary', async (_label, failed) => {
-      fakeNetwork({ tokenAnswer: failed });
-
-      const error = await rejection(service.refreshAccessToken(providerId, 'old-refresh'));
-
-      expect(error.code).toBe(REFRESH_ERROR_CODES.TEMPORARY);
-      expect(error.message).toMatch(/^Failed to refresh access token: /);
-    });
-
-    it('types a network error as temporary and keeps it as the cause', async () => {
-      const networkError = new Error('socket hang up');
-      fakeNetwork({ tokenAnswer: () => Promise.reject(networkError) });
-
-      const error = await rejection(service.refreshAccessToken(providerId, 'old-refresh'));
-
-      expect(error.code).toBe(REFRESH_ERROR_CODES.TEMPORARY);
-      expect(error.message).toBe('Failed to refresh access token: socket hang up');
-      expect(error.cause).toBe(networkError);
-    });
-
-    it('types a provider config problem as temporary', async () => {
-      const error = await rejection(service.refreshAccessToken('removed-provider', 'old-refresh'));
-
-      expect(error.code).toBe(REFRESH_ERROR_CODES.TEMPORARY);
-      expect(error.message).toContain("provider 'removed-provider' not found or not enabled");
-      expect(httpFetch).not.toHaveBeenCalled();
-    });
-  });
-
   describe('expiry path (getUserTokens)', () => {
     beforeEach(() => {
       store.expired = true;
@@ -314,12 +240,13 @@ describe.each(providers)('$name', ({ name, service, providerId, hasRetryWrapper,
       }
     );
 
-    it('keeps the tokens when the provider is no longer configured', async () => {
+    it('keeps the tokens of an installation that is gone, reporting it as not connected', async () => {
       seedTokens({ providerId: 'removed-provider' });
 
       const error = await rejection(service.getUserTokens(USER, 'removed-provider'));
 
-      expectUnavailable(error, name);
+      expect(error.code).toBe('INTEGRATION_AUTH_REQUIRED');
+      expect(error.reason).toBe('not_connected');
       expect(tokenStorage.deleteUserTokens).not.toHaveBeenCalled();
     });
 

@@ -51,6 +51,9 @@ const state = {
 
 class FakeUnauthorizedError extends Error {}
 
+/** What a token endpoint answers: `(url, params) => {status, body}`. */
+const tokenAnswer = jest.fn();
+
 const AS_METADATA = {
   issuer: 'https://okta-mcp.example.com/',
   authorization_endpoint: 'https://okta-mcp.example.com/authorize',
@@ -103,15 +106,18 @@ jest.unstable_mockModule('../../configCache.js', () => ({
   }
 }));
 
+function testUser(req, _res, next) {
+  const id = req.headers['x-test-user'];
+  const groups = req.headers['x-test-admin'] ? ['admins'] : ['users'];
+  req.user = id
+    ? { id, groups, permissions: {} }
+    : { id: 'anonymous', groups: ['anonymous'], permissions: {} };
+  next();
+}
+
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
-  authRequired: (req, _res, next) => {
-    const id = req.headers['x-test-user'];
-    const groups = req.headers['x-test-admin'] ? ['admins'] : ['users'];
-    req.user = id
-      ? { id, groups, permissions: {} }
-      : { id: 'anonymous', groups: ['anonymous'], permissions: {} };
-    next();
-  }
+  authRequired: testUser,
+  authOptional: testUser
 }));
 
 const { default: tokenStorage } = await import('../../services/TokenStorageService.js');
@@ -120,10 +126,13 @@ const { McpOAuthClientStore } = await import('../../services/mcp/mcpOAuthClientS
 const { McpToolCatalogStore } = await import('../../services/mcp/mcpToolCatalogStore.js');
 const { readUserTokens, writeUserTokens, tokenBindingFor } =
   await import('../../services/mcp/mcpUserTokens.js');
-const { issueMcpOAuthTicket } = await import('../../services/mcp/mcpOAuthTicket.js');
 const { buildMcpOAuthFetch } = await import('../../services/mcp/McpUserOAuthProvider.js');
 const { validateClientMetadata } = await import('../../utils/clientIdMetadata.js');
-const { default: registerMcpOAuthRoutes, withQuery } = await import('../../routes/mcpOAuth.js');
+const { default: registerMcpOAuthRoutes } = await import('../../routes/mcpOAuth.js');
+const { returnPathWith } =
+  await import('../../services/integrations/auth/IntegrationConnectionService.js');
+const { getOAuthFlowStore } = await import('../../services/integrations/auth/oauthFlowStore.js');
+const { default: cryptoModule } = await import('node:crypto');
 
 const SERVER = {
   id: 'okta',
@@ -197,20 +206,59 @@ beforeEach(async () => {
     refresh_token: 'refresh-1',
     scope: 'openid profile'
   });
+  // The token endpoints answer through the SSRF-guarded fetch (the shared
+  // OAuth client sends every token request through the strategy's fetch).
+  tokenAnswer.mockImplementation(() => ({
+    status: 200,
+    body: {
+      access_token: 'access-1',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'refresh-1',
+      scope: 'openid profile'
+    }
+  }));
   // The MCP server itself is unreachable here: the catalog refresh after a
   // sign-in fails quietly. Revocation answers 200.
-  safeFetch.mockImplementation(async url => {
+  safeFetch.mockImplementation(async (url, init = {}) => {
     if (String(url).includes('/revoke')) return { ok: true, status: 200 };
+    if (String(url).endsWith('/token')) {
+      const { status, body } = tokenAnswer(String(url), new URLSearchParams(String(init.body)));
+      return {
+        ok: status < 400,
+        status,
+        headers: new Map(),
+        json: async () => body,
+        text: async () => JSON.stringify(body)
+      };
+    }
     throw new Error('offline in tests');
   });
 });
 
+/** The token requests the shared OAuth client sent: `[url, params]`. */
+function tokenRequests() {
+  return tokenAnswer.mock.calls;
+}
+
+/**
+ * The `state` of an authorization redirect and the server-side flow it names
+ * (the flow store runs memory-only here; it is keyed by a hash of the state).
+ */
 function decodeState(location) {
-  const stateParam = new URL(location).searchParams.get('state');
+  const url = new URL(location);
+  const stateParam = url.searchParams.get('state');
+  const key = `flow_${cryptoModule.createHash('sha256').update(stateParam, 'utf8').digest('hex').slice(0, 48)}`;
   return {
     stateParam,
-    payload: JSON.parse(Buffer.from(stateParam.split('.')[0], 'base64url').toString('utf8'))
+    challenge: url.searchParams.get('code_challenge'),
+    payload: getOAuthFlowStore().memory.get(key) || null
   };
+}
+
+/** Whether a verifier is the one behind a PKCE S256 challenge. */
+function matchesChallenge(verifier, challenge) {
+  return cryptoModule.createHash('sha256').update(verifier).digest('base64url') === challenge;
 }
 
 async function startFlow(user = 'alice', returnUrl = '/chat/abc') {
@@ -222,7 +270,7 @@ async function startFlow(user = 'alice', returnUrl = '/chat/abc') {
 }
 
 describe('GET /api/mcp/oauth/authorize', () => {
-  it('redirects to the authorization server with PKCE, resource and a signed state', async () => {
+  it('redirects to the authorization server with PKCE, resource and a server-side state', async () => {
     const res = await startFlow();
     expect(res.status).toBe(302);
     const location = new URL(res.headers.location);
@@ -237,9 +285,12 @@ describe('GET /api/mcp/oauth/authorize', () => {
       /^http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/oauth\/callback\/okta$/
     );
 
-    const { payload } = decodeState(res.headers.location);
+    const { payload, stateParam } = decodeState(res.headers.location);
+    // The state is an opaque handle; the flow stays on the server.
+    expect(stateParam).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(payload).toMatchObject({
-      serverId: 'okta',
+      installationId: 'okta',
+      stack: 'mcp',
       userId: 'alice',
       returnUrl: '/chat/abc',
       // Bound to the authorization server and client the request went to.
@@ -248,9 +299,8 @@ describe('GET /api/mcp/oauth/authorize', () => {
       clientId: 'dcr-client',
       issRequired: false
     });
-    // The verifier travels encrypted only.
-    expect(JSON.stringify(payload)).not.toContain('pkce-verifier-123');
-    expect(payload.cv).toMatch(/^ENC\[/);
+    // The verifier is kept encrypted.
+    expect(payload.codeVerifier).toMatch(/^ENC\[/);
 
     // Discovery and DCR ran through the SSRF-guarded fetch.
     expect(sdk.discoverOAuthServerInfo).toHaveBeenCalledWith('https://okta-mcp.example.com/mcp', {
@@ -374,21 +424,18 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   }
 
   it('exchanges the code with the verifier, stores the tokens and returns', async () => {
-    const { stateParam } = decodeState((await startFlow()).headers.location);
+    const { stateParam, challenge } = decodeState((await startFlow()).headers.location);
     const res = await callback({ code: 'auth-code-1', state: stateParam });
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/chat/abc?mcp_connected=okta');
-    expect(sdk.exchangeAuthorization).toHaveBeenCalledWith(
-      'https://okta-mcp.example.com/',
-      expect.objectContaining({
-        authorizationCode: 'auth-code-1',
-        codeVerifier: 'pkce-verifier-123',
-        clientInformation: { client_id: 'dcr-client' },
-        redirectUri: expect.stringMatching(/\/api\/mcp\/oauth\/callback\/okta$/),
-        resource: new URL('https://okta-mcp.example.com/mcp'),
-        fetchFn: expect.any(Function)
-      })
-    );
+    const [[tokenUrl, params]] = tokenRequests();
+    expect(tokenUrl).toBe('https://okta-mcp.example.com/token');
+    expect(params.get('grant_type')).toBe('authorization_code');
+    expect(params.get('code')).toBe('auth-code-1');
+    expect(params.get('client_id')).toBe('dcr-client');
+    expect(params.get('redirect_uri')).toMatch(/\/api\/mcp\/oauth\/callback\/okta$/);
+    expect(params.get('resource')).toBe('https://okta-mcp.example.com/mcp');
+    expect(matchesChallenge(params.get('code_verifier'), challenge)).toBe(true);
     expect(await readUserTokens('alice', 'okta')).toMatchObject({
       access_token: 'access-1',
       refresh_token: 'refresh-1',
@@ -403,42 +450,41 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
     expect(await readUserTokens('bob', 'okta')).toBeNull();
   });
 
-  it('refuses a ticket started by another user', async () => {
+  it('refuses a flow started by another user', async () => {
     const { stateParam } = decodeState((await startFlow('alice')).headers.location);
     const res = await callback({ code: 'c', state: stateParam }, 'mallory');
-    expect(res.headers.location).toBe('/chat/abc?mcp_error=user_mismatch&mcp_server=okta');
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    // The flow's return URL is only used for its owner.
+    expect(res.headers.location).toBe(
+      '/settings/integrations?mcp_error=user_mismatch&mcp_server=okta'
+    );
+    expect(tokenRequests()).toHaveLength(0);
     expect(await readUserTokens('mallory', 'okta')).toBeNull();
   });
 
-  it('refuses invalid, tampered and expired state', async () => {
-    const invalid = await callback({ code: 'c', state: 'not-a-ticket' });
-    expect(invalid.headers.location).toBe('/settings/integrations?mcp_error=invalid_state');
+  it('refuses unknown, replayed and expired state', async () => {
+    // A stable public URL: supertest listens on a new port per request.
+    state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
+    const invalid = await callback({ code: 'c', state: 'not-a-state' });
+    expect(invalid.headers.location).toBe(
+      '/settings/integrations?mcp_error=invalid_state&mcp_server=okta'
+    );
 
+    // Single use: a second callback with the same state finds nothing.
     const { stateParam } = decodeState((await startFlow()).headers.location);
-    const [payload, signature] = stateParam.split('.');
-    const forged = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    forged.returnUrl = 'https://evil.example.com/';
-    const tampered = await callback({
-      code: 'c',
-      state: `${Buffer.from(JSON.stringify(forged)).toString('base64url')}.${signature}`
-    });
-    expect(tampered.headers.location).toBe('/settings/integrations?mcp_error=invalid_state');
+    expect((await callback({ code: 'c', state: stateParam })).headers.location).toBe(
+      '/chat/abc?mcp_connected=okta'
+    );
+    const replayed = await callback({ code: 'c', state: stateParam });
+    expect(replayed.headers.location).toBe(
+      '/settings/integrations?mcp_error=invalid_state&mcp_server=okta'
+    );
+    expect(tokenRequests()).toHaveLength(1);
 
-    const expired = issueMcpOAuthTicket({
-      serverId: 'okta',
-      userId: 'alice',
-      returnUrl: '/chat/abc',
-      codeVerifier: 'v',
-      redirectUri: 'http://127.0.0.1/api/mcp/oauth/callback/okta',
-      issuer: 'https://okta-mcp.example.com/',
-      authorizationServerUrl: 'https://okta-mcp.example.com/',
-      clientId: 'dcr-client',
-      now: Date.now() - 16 * 60 * 1000
-    });
-    const late = await callback({ code: 'c', state: expired });
-    expect(late.headers.location).toBe('/settings/integrations?mcp_error=state_expired');
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    const started = decodeState((await startFlow()).headers.location);
+    started.payload.exp = Date.now() - 1000;
+    const late = await callback({ code: 'c', state: started.stateParam });
+    expect(late.headers.location).toBe('/chat/abc?mcp_error=state_expired&mcp_server=okta');
+    expect(tokenRequests()).toHaveLength(1);
   });
 
   it('turns an AS error into oauth_failed without echoing its text', async () => {
@@ -453,12 +499,14 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   });
 
   it('reports a missing code and a failed exchange', async () => {
+    state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
     const { stateParam } = decodeState((await startFlow()).headers.location);
     const missing = await callback({ state: stateParam });
     expect(missing.headers.location).toBe('/chat/abc?mcp_error=missing_code&mcp_server=okta');
 
-    sdk.exchangeAuthorization.mockRejectedValueOnce(new Error('invalid_grant'));
-    const failed = await callback({ code: 'c', state: stateParam });
+    tokenAnswer.mockImplementationOnce(() => ({ status: 400, body: { error: 'invalid_grant' } }));
+    const again = decodeState((await startFlow()).headers.location);
+    const failed = await callback({ code: 'c', state: again.stateParam });
     expect(failed.headers.location).toBe('/chat/abc?mcp_error=exchange_failed&mcp_server=okta');
     expect(await readUserTokens('alice', 'okta')).toBeNull();
   });
@@ -493,10 +541,11 @@ describe('connections and disconnect', () => {
 
   it('revokes at the authorization server and deletes the tokens', async () => {
     const { stateParam } = decodeState((await startFlow()).headers.location);
-    await request(app)
+    const connected = await request(app)
       .get('/api/mcp/oauth/callback/okta')
       .query({ code: 'c', state: stateParam })
       .set('x-test-user', 'alice');
+    expect(connected.headers.location).toBe('/chat/abc?mcp_connected=okta');
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
 
     const res = await request(app)
@@ -619,7 +668,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
     return decodeState(res.headers.location);
   }
 
-  it("gives every server its own redirect URI and binds the ticket to that server's AS", async () => {
+  it("gives every server its own redirect URI and binds the flow to that server's AS", async () => {
     const evil = await start('evil');
     const corp = await start('corp');
     expect(evil.payload.redirectUri).toBe('https://ihub.example.com/api/mcp/oauth/callback/evil');
@@ -645,7 +694,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .set('x-test-user', 'alice');
     expect(res.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=evil');
     // The code and the verifier never reach the evil token endpoint.
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    expect(tokenRequests()).toHaveLength(0);
     expect(await readUserTokens('alice', 'evil')).toBeNull();
   });
 
@@ -656,27 +705,27 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .query({ code: 'honest-code', state: stateParam })
       .set('x-test-user', 'alice');
     expect(res.headers.location).toBe('/chat/abc?mcp_error=invalid_state&mcp_server=evil');
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    expect(tokenRequests()).toHaveLength(0);
   });
 
   it('requires iss when the AS advertises RFC 9207 support, and accepts the right one', async () => {
-    const { stateParam } = await start('corp');
+    const first = await start('corp');
     const missing = await request(app)
       .get('/api/mcp/oauth/callback/corp')
-      .query({ code: 'c1', state: stateParam })
+      .query({ code: 'c1', state: first.stateParam })
       .set('x-test-user', 'alice');
     expect(missing.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=corp');
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    expect(tokenRequests()).toHaveLength(0);
 
+    const second = await start('corp');
     const ok = await request(app)
       .get('/api/mcp/oauth/callback/corp')
-      .query({ code: 'c1', state: stateParam, iss: 'https://login.corp.example.com' })
+      .query({ code: 'c1', state: second.stateParam, iss: 'https://login.corp.example.com' })
       .set('x-test-user', 'alice');
     expect(ok.headers.location).toBe('/chat/abc?mcp_connected=corp');
-    expect(sdk.exchangeAuthorization).toHaveBeenCalledWith(
-      'https://login.corp.example.com/',
-      expect.objectContaining({ clientInformation: { client_id: 'client-at-corp' } })
-    );
+    const [[tokenUrl, params]] = tokenRequests();
+    expect(tokenUrl).toBe('https://login.corp.example.com/token');
+    expect(params.get('client_id')).toBe('client-at-corp');
   });
 
   it('refuses to exchange when the registration changed since the sign-in started', async () => {
@@ -692,7 +741,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .query({ code: 'c', state: stateParam, iss: 'https://as.evil.example.net' })
       .set('x-test-user', 'alice');
     expect(res.headers.location).toBe('/chat/abc?mcp_error=exchange_failed&mcp_server=evil');
-    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    expect(tokenRequests()).toHaveLength(0);
   });
 });
 
@@ -800,17 +849,17 @@ describe('OAuth requests refuse redirects', () => {
   });
 });
 
-describe('withQuery', () => {
+describe('returnPathWith (the redirect back after a sign-in)', () => {
   it('appends parameters and keeps the path, query and fragment', () => {
-    expect(withQuery('/chat/1', { a: 'b' })).toBe('/chat/1?a=b');
-    expect(withQuery('/chat/1?x=1#top', { a: 'b' })).toBe('/chat/1?x=1&a=b#top');
+    expect(returnPathWith('/chat/1', { a: 'b' })).toBe('/chat/1?a=b');
+    expect(returnPathWith('/chat/1?x=1#top', { a: 'b' })).toBe('/chat/1?x=1&a=b#top');
     // A same-host absolute URL becomes a path on this origin.
-    expect(withQuery('https://ihub.example.com/c', { a: 'b c' })).toBe('/c?a=b+c');
+    expect(returnPathWith('https://ihub.example.com/c', { a: 'b c' })).toBe('/c?a=b+c');
   });
 
   it('never produces a redirect that leaves this origin', () => {
     for (const hostile of ['/\\evil.example', '//evil.example/x', '/\\/evil.example', '\\evil']) {
-      const out = withQuery(hostile, { a: 'b' });
+      const out = returnPathWith(hostile, { a: 'b' });
       expect(out.startsWith('/')).toBe(true);
       expect(out.startsWith('//')).toBe(false);
       expect(out.startsWith('/\\')).toBe(false);

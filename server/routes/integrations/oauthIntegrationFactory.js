@@ -3,19 +3,20 @@
 
 // Shared OAuth2 integration route factory.
 //
-// office365.js, googledrive.js, nextcloud.js and jira.js each implement the
-// same auth -> callback -> status -> disconnect OAuth2 (+PKCE) flow with
-// only the provider service, PKCE usage, and multi- vs single-provider
-// routing as real differences. This factory registers those four routes
-// directly on the router passed in; each provider file supplies the small
-// adapter functions below and keeps its own provider-specific routes
+// office365.js, googledrive.js, nextcloud.js and jira.js each expose the same
+// auth -> callback -> status -> disconnect routes. This factory registers them
+// on the router passed in; each provider file supplies the few adapter
+// functions below and keeps its own provider-specific routes
 // (sources/drives/items/download/etc.) on the same router.
 //
-// The flow's state travels in a signed `state` ticket rather than a session
-// (see utils/integrationOAuthState.js), so the callback works on any cluster
-// worker.
+// The sign-in itself is not here: `/auth` asks the connection service
+// (services/integrations/auth/IntegrationConnectionService.js) for the
+// authorization URL — PKCE, a server-side state bound to the user and the
+// installation, the validated return URL — and the callback route is an alias
+// of the one integration callback (`/api/integrations/oauth/callback`, see
+// routes/integrations/oauthCallback.js), kept because admins registered it in
+// the vendors' OAuth apps.
 
-import crypto from 'node:crypto';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import logger from '../../utils/logger.js';
 import {
@@ -23,14 +24,17 @@ import {
   sendAuthRequired,
   sendBadRequest
 } from '../../utils/responseHelpers.js';
-import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
 import { isUnavailableError } from '../../services/integrations/oauthRefreshError.js';
 import {
-  DEFAULT_INTEGRATION_RETURN_URL,
-  issueIntegrationOAuthState,
-  verifyIntegrationOAuthState,
-  withQueryParam
-} from '../../utils/integrationOAuthState.js';
+  getIntegrationConnectionService,
+  resultParams,
+  returnPathWith,
+  DEFAULT_RETURN_PATH
+} from '../../services/integrations/auth/IntegrationConnectionService.js';
+import { OAuthFlowError } from '../../services/integrations/auth/OAuthUserClient.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { buildServerPath } from '../../utils/basePath.js';
+import { integrationOAuthCallbackHandler } from './oauthCallback.js';
 
 /**
  * authRequired lets the anonymous principal through when anonymous access is
@@ -51,24 +55,20 @@ function isAnonymous(user) {
  *
  * @param {import('express').Router} router - router to register the shared OAuth routes on
  * @param {object} config
- * @param {string} config.providerKey - route/state/query-param slug, e.g. 'office365'
+ * @param {string} config.providerKey - route/result-param slug, e.g. 'office365'
  * @param {string} config.displayName - human-readable name used in logs/messages, e.g. 'Office 365'
  * @param {boolean} config.requiresProviderId - true for the storage providers (office365/googledrive/nextcloud), whose
  *   `providerId` is the id of one installation (there may be several per provider); false for single-installation ones (jira)
- * @param {boolean} config.usesPkce - whether to generate/forward a PKCE code verifier
- * @param {(ctx: {providerId, state, codeVerifier, req}) => string} config.buildAuthUrl
- * @param {(ctx: {providerId, code, codeVerifier, req}) => Promise<{refreshToken?: string}>} config.exchangeCodeForTokens
- * @param {(userId, tokens) => Promise<void>} config.storeUserTokens
+ * @param {string} [config.installationId] - The installation of a single-installation provider (jira)
+ * @param {'jira'|'cloud-storage'} config.stack - Which connection stack the callback alias belongs to
  * @param {(userId, providerId) => Promise<boolean>} config.isUserAuthenticated
  * @param {(userId, providerId) => Promise<object>} config.getUserInfo
  * @param {(userId, providerId) => Promise<object>} config.getTokenExpirationInfo
- * @param {(userId, providerId) => Promise<boolean>} config.deleteUserTokens
+ * @param {(userId, providerId, req) => Promise<boolean>} config.deleteUserTokens
  * @param {(userInfo: object) => object} config.formatUserInfo - shapes the `/status` userInfo payload
  * @param {boolean} [config.tolerateUserInfoFailure] - if true, a failed getUserInfo on `/status` is logged and reported as `userInfo: null` instead of failing the request (Nextcloud)
  * @param {import('express').RequestHandler} [config.authLimiter] - rate limiter applied to `/auth`
  * @param {import('express').RequestHandler} [config.statusLimiter] - optional extra rate limiter applied to `/status`
- * @param {(providerId: string|undefined) => void} [config.logMissingRefreshToken] - custom log when no refresh token is returned
- * @param {(error: Error) => string} [config.mapCallbackError] - stable `<providerKey>_error` code for a failed token exchange; defaults to `callback_failed`
  * @returns {import('express').Router} the router passed in
  */
 export function createOAuthIntegrationRouter(
@@ -77,10 +77,8 @@ export function createOAuthIntegrationRouter(
     providerKey,
     displayName,
     requiresProviderId,
-    usesPkce,
-    buildAuthUrl,
-    exchangeCodeForTokens,
-    storeUserTokens,
+    installationId: fixedInstallationId,
+    stack,
     isUserAuthenticated,
     getUserInfo,
     getTokenExpirationInfo,
@@ -88,156 +86,76 @@ export function createOAuthIntegrationRouter(
     formatUserInfo,
     tolerateUserInfoFailure = false,
     authLimiter,
-    statusLimiter,
-    logMissingRefreshToken,
-    mapCallbackError = _error => 'callback_failed'
+    statusLimiter
   }
 ) {
-  const errorParam = `${providerKey}_error`;
-
   /**
    * Initiate the OAuth2 flow.
-   * GET /api/integrations/<providerKey>/auth?providerId=<installation id>
+   * GET /api/integrations/<providerKey>/auth?providerId=<installation id>&returnUrl=<same-origin URL>
    */
-  router.get('/auth', authRequired, ...(authLimiter ? [authLimiter] : []), (req, res) => {
+  router.get('/auth', authRequired, ...(authLimiter ? [authLimiter] : []), async (req, res) => {
+    const providerId = requiresProviderId ? req.query.providerId : undefined;
+    if (requiresProviderId && (typeof providerId !== 'string' || !providerId)) {
+      return sendBadRequest(res, 'providerId query parameter is required');
+    }
+    // authRequired lets the anonymous principal through when anonymous
+    // access is allowed, and does not guarantee req.user.id is truthy.
+    // Refuse to start an OAuth flow without a signed-in user id — otherwise
+    // tokens would land under a shared key and could be read by another caller.
+    if (isAnonymous(req.user)) return sendAuthRequired(res);
+
+    const returnUrl = isValidReturnUrl(req.query.returnUrl, req)
+      ? String(req.query.returnUrl)
+      : buildServerPath(DEFAULT_RETURN_PATH);
+    const installationId = requiresProviderId ? providerId : fixedInstallationId;
     try {
-      const { returnUrl } = req.query;
-      const providerId = requiresProviderId ? req.query.providerId : undefined;
-
-      if (requiresProviderId && !providerId) {
-        return sendBadRequest(res, 'providerId query parameter is required');
-      }
-
-      // authRequired lets the anonymous principal through when anonymous
-      // access is allowed, and does not guarantee req.user.id is truthy.
-      // Refuse to start an OAuth flow without a signed-in user id — otherwise
-      // tokens would land under a shared key and could be read by another caller.
-      if (!req.user?.id || req.user.id === 'anonymous') {
-        return sendAuthRequired(res);
-      }
-
-      const codeVerifier = usesPkce ? crypto.randomBytes(32).toString('base64url') : undefined;
-
-      // Validate returnUrl to reject `javascript:`, `data:`, off-host and
-      // protocol-relative URLs that would leak the flow off-site afterwards.
-      const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
-        ? returnUrl
-        : DEFAULT_INTEGRATION_RETURN_URL;
-
-      // Signed, self-contained state instead of a session: the callback may
-      // land on another cluster worker (see utils/integrationOAuthState.js).
-      const state = issueIntegrationOAuthState({
-        service: providerKey,
-        providerId,
-        userId: req.user.id,
-        returnUrl: validatedReturnUrl,
-        codeVerifier
+      const { authorizationUrl } = await getIntegrationConnectionService().beginConnect({
+        installationId,
+        user: req.user,
+        req,
+        returnUrl
       });
-
-      const authUrl = buildAuthUrl({ providerId, state, codeVerifier, req });
-
       logger.info(`Initiating ${displayName} OAuth`, {
         component: displayName,
         userId: req.user.id,
         providerId
       });
-
-      res.redirect(authUrl);
+      return res.redirect(authorizationUrl.href);
     } catch (error) {
+      if (error instanceof OAuthFlowError) {
+        logger.warn(`${displayName} OAuth could not start`, {
+          component: displayName,
+          providerId,
+          code: error.code,
+          error: error.message
+        });
+        return res.redirect(
+          returnPathWith(
+            returnUrl,
+            resultParams(
+              { stack, resultKey: providerKey, installationId },
+              { ok: false, code: error.code }
+            )
+          )
+        );
+      }
       return sendInternalError(res, error, `initiate ${displayName} OAuth`);
     }
   });
 
   /**
-   * Handle the OAuth2 callback.
+   * The OAuth2 callback: an alias of `/api/integrations/oauth/callback`.
    * GET /api/integrations/<providerKey>/:providerId/callback (storage providers: the installation id)
    * GET /api/integrations/<providerKey>/callback (single-provider)
    */
   router.get(
     requiresProviderId ? '/:providerId/callback' : '/callback',
     authOptional,
-    async (req, res) => {
-      const providerId = requiresProviderId ? req.params.providerId : undefined;
-      // `returnUrl` is always set, so every outcome can send the user back to a safe page.
-      const verified = verifyIntegrationOAuthState(req, { service: providerKey, providerId });
-      const { returnUrl } = verified;
-      try {
-        const { code, error: oauthError } = req.query;
-
-        // Only stable codes go into the URL — never the raw IdP error text.
-        if (oauthError) {
-          logger.error(`${displayName} OAuth error`, {
-            component: displayName,
-            error: oauthError,
-            providerId
-          });
-          const errorCode = oauthError === 'access_denied' ? 'access_denied' : 'oauth_failed';
-          return res.redirect(withQueryParam(returnUrl, errorParam, errorCode));
-        }
-
-        if (!verified.ok) {
-          logger.error(`Invalid ${displayName} OAuth state parameter`, {
-            component: displayName,
-            providerId,
-            reason: verified.error
-          });
-          return res.redirect(withQueryParam(returnUrl, errorParam, verified.error));
-        }
-
-        // Some IdP edge cases (consent denied without `error`, or a manual
-        // hit on the callback URL) can land here with no `code`. Surface a
-        // stable error code instead of throwing inside `exchangeCodeForTokens`.
-        if (!code) {
-          logger.error(`${displayName} OAuth callback missing code`, {
-            component: displayName,
-            providerId
-          });
-          return res.redirect(withQueryParam(returnUrl, errorParam, 'missing_code'));
-        }
-
-        const tokens = await exchangeCodeForTokens({
-          providerId,
-          code,
-          codeVerifier: verified.codeVerifier,
-          req
-        });
-
-        // Verify we received a refresh token
-        if (!tokens.refreshToken) {
-          if (logMissingRefreshToken) {
-            logMissingRefreshToken(providerId);
-          } else {
-            logger.error(`No refresh token received from ${displayName} OAuth.`, {
-              component: displayName,
-              providerId
-            });
-          }
-          logger.warn(
-            'Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
-            { component: displayName, providerId }
-          );
-        }
-
-        await storeUserTokens(verified.userId, tokens);
-
-        logger.info(`${displayName} OAuth completed`, {
-          component: displayName,
-          userId: verified.userId,
-          providerId
-        });
-
-        res.redirect(withQueryParam(returnUrl, `${providerKey}_connected`, 'true'));
-      } catch (error) {
-        logger.error(`Error handling ${displayName} OAuth callback`, {
-          component: displayName,
-          error: error.message,
-          providerId
-        });
-        // Stable error codes only — some upstream errors interpolate
-        // user-influenced strings that must not land in the redirect URL.
-        res.redirect(withQueryParam(returnUrl, errorParam, mapCallbackError(error)));
-      }
-    }
+    integrationOAuthCallbackHandler(req => ({
+      stack,
+      resultKey: providerKey,
+      installationId: requiresProviderId ? req.params.providerId : fixedInstallationId
+    }))
   );
 
   /** The provider the `/status` request asks about, for multi-provider integrations. */
@@ -351,12 +269,13 @@ export function createOAuthIntegrationRouter(
   );
 
   /**
-   * Disconnect the integration for the current user.
+   * Disconnect the integration for the current user: revoke upstream when the
+   * provider supports it, delete the tokens (audit `connection.revoke`).
    * POST /api/integrations/<providerKey>/disconnect
    */
   router.post('/disconnect', authRequired, async (req, res) => {
     try {
-      if (!req.user?.id || req.user.id === 'anonymous') {
+      if (isAnonymous(req.user)) {
         return sendAuthRequired(res);
       }
 
@@ -367,7 +286,7 @@ export function createOAuthIntegrationRouter(
           undefined
         : undefined;
 
-      const success = await deleteUserTokens(req.user.id, providerId);
+      const success = await deleteUserTokens(req.user.id, providerId, req);
 
       if (success) {
         logger.info(`${displayName} disconnected`, {

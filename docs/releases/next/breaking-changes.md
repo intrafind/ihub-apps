@@ -259,6 +259,32 @@ restored from a backup after the upgrade fails validation until the block is rem
   overrides in use by the shipped configuration; an override of that path no longer applies.
 - **Validator:** `server/validators/cloudStorageSchema.js` is removed.
 
+## One Error Code When an Integration Needs Connecting
+
+Tools, the MCP App routes and scheduled runs report a missing or unusable integration connection
+with one code, `INTEGRATION_AUTH_REQUIRED`, instead of one per integration.
+
+- **Tool results:** Jira tools returned `{ "error": "JIRA_AUTH_REQUIRED", "authUrl": … }` and
+  per-user MCP tools `{ "error": "MCP_AUTH_REQUIRED", "authRequired": … }`. Both now return
+  `{ "error": "INTEGRATION_AUTH_REQUIRED", "integration": "<installation id>", "reason":
+  "not_connected" | "expired" | "insufficient_scope", "message": …, "connectUrl": … }`; MCP results
+  keep their `authRequired` marker for the chat's Connect card. `authUrl` is gone.
+- **MCP App routes:** the 409 answer's `code` is `INTEGRATION_AUTH_REQUIRED` (was
+  `MCP_AUTH_REQUIRED`) and carries `integration`.
+- **Scheduled runs:** a run that fails for a missing connection ends with the reason code
+  `INTEGRATION_AUTH_REQUIRED` (was `INTEGRATION_RECONNECT_REQUIRED`), with `integration` and
+  `reason`; it now fails before the model call when the owner is not connected to an integration
+  whose tools the run may call.
+- **Sign-in state:** the `state` of an integration sign-in is an opaque handle of a single-use
+  record kept server-side (storage namespace `integration-oauth-flows`), no longer a signed ticket.
+  A sign-in started before the upgrade and finished after it fails with `invalid_state`; the user
+  starts it again. Installations that run several instances already share `contents/`, where
+  these records live.
+
+**Before upgrading:** scripts, workflows or clients that match on `JIRA_AUTH_REQUIRED`,
+`MCP_AUTH_REQUIRED`, `INTEGRATION_RECONNECT_REQUIRED` or the `authUrl` field have to match on
+`INTEGRATION_AUTH_REQUIRED` and read `connectUrl` instead.
+
 ## Installed Integrations No Longer Carry Groups
 
 Who may use an installed integration is now granted on the groups (`groups.json` →
