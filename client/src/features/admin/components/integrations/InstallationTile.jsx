@@ -168,7 +168,6 @@ function InstallationTile({
             className={QUICK_BUTTON}
             onClick={() => onToggle(item)}
             disabled={busy}
-            aria-pressed={enabled}
             aria-label={
               enabled
                 ? t('admin.integrationCatalog.actions.disable', 'Disable {{id}}', { id: item.id })
