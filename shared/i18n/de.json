@@ -4043,7 +4043,8 @@
           "noBackup": "Keine Sicherung dieser Installation passt zu ihrem Zustand; es gibt nichts wiederherzustellen."
         },
         "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
-        "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)"
+        "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
+        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
       }
     },
     "sidebar": {

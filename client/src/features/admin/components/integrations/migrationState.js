@@ -140,6 +140,29 @@ export function needsConfirmation(action) {
 }
 
 /**
+ * Whether the installation offers no tools because of its migration state:
+ * a failed migration, one that needs a review, and a pending one with a
+ * migration between the versions (its values are not for the loaded
+ * definition). A pending installation with no migration between keeps
+ * working; while the server could not describe the pending migration
+ * (`migration` null) it counts as blocked, the safe side.
+ *
+ * @param {Object} instance - an installation of the admin API
+ * @returns {boolean}
+ */
+export function isMigrationBlocked(instance) {
+  switch (instance?.status) {
+    case MIGRATION_STATUS.FAILED:
+    case MIGRATION_STATUS.REVIEW:
+      return true;
+    case MIGRATION_STATUS.PENDING:
+      return instance.migration?.blocked !== false;
+    default:
+      return false;
+  }
+}
+
+/**
  * Whether the installation's settings are read-only because `PUT
  * …/installed/:id` refuses them: a failed migration (`409 MIGRATION_FAILED`),
  * one that needs a review (`409 NEEDS_REVIEW`), and a pending one with a
@@ -152,15 +175,8 @@ export function needsConfirmation(action) {
  * @returns {boolean}
  */
 export function isSettingsReadOnly(instance) {
-  switch (instance?.status) {
-    case MIGRATION_STATUS.FAILED:
-    case MIGRATION_STATUS.REVIEW:
-      return true;
-    case MIGRATION_STATUS.PENDING:
-      return instance.migration?.blocked !== false;
-    default:
-      return false;
-  }
+  // The server refuses the save exactly where it withholds the tools.
+  return isMigrationBlocked(instance);
 }
 
 /**

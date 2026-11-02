@@ -3752,7 +3752,8 @@
           "noBackup": "No backup of this installation matches its state, so there is nothing to restore."
         },
         "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
-        "settingsReadOnlyLegend": "Settings (read-only)"
+        "settingsReadOnlyLegend": "Settings (read-only)",
+        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
       }
     },
     "sidebar": {

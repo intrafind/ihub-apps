@@ -23,7 +23,7 @@ import {
   MigrationOutcome
 } from '../components/integrations/MigrationParts';
 import useMigrationActions from '../components/integrations/useMigrationActions';
-import { isSettingsReadOnly } from '../components/integrations/migrationState';
+import { isMigrationBlocked, isSettingsReadOnly } from '../components/integrations/migrationState';
 import { SideEffectBadge } from '../components/integrations/ActionToggleList';
 import { pickText } from '../components/integrations/ConfigFieldInput';
 import { installationFacts } from '../components/integrations/integrationFacts';
@@ -530,15 +530,20 @@ function InstallationPageContent({ instanceId }) {
               </h2>
               {(detail.actions || []).length === 0 ? (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {definition?.dynamicActions
+                  {isMigrationBlocked(instance)
                     ? t(
-                        'admin.integrations.page.noLiveActions',
-                        'The system lists its actions when iHub connects. Test the connection to see them.'
+                        'admin.integrations.migration.noActionsWhileBlocked',
+                        'No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version.'
                       )
-                    : t(
-                        'admin.integrations.page.noActions',
-                        'This integration offers no actions to the model; apps use it through their own settings.'
-                      )}
+                    : definition?.dynamicActions
+                      ? t(
+                          'admin.integrations.page.noLiveActions',
+                          'The system lists its actions when iHub connects. Test the connection to see them.'
+                        )
+                      : t(
+                          'admin.integrations.page.noActions',
+                          'This integration offers no actions to the model; apps use it through their own settings.'
+                        )}
                 </p>
               ) : (
                 <ul

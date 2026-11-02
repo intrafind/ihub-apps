@@ -417,6 +417,10 @@ describe('installation page: migration failed', () => {
     const panel = await screen.findByTestId('migration-panel');
     expect(within(panel).getByTestId('migration-status')).toHaveTextContent('Migration failed');
     expect(panelActions(panel)).toEqual(['Re-run migration', 'Restore backup', 'Uninstall']);
+    // The Actions card says why it lists nothing.
+    expect(
+      screen.getByText(/No actions while the migration state is unresolved/)
+    ).toBeInTheDocument();
     expect(within(panel).getByTestId('migration-backup')).toHaveTextContent(
       `Restore backup puts back ${BACKUP_ID} (v1.2.0, taken`
     );
