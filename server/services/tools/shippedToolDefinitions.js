@@ -118,7 +118,8 @@ export function readShippedToolDefinitions(fileIds, { dir = shippedToolsDir() } 
  *
  * @param {Object} tool - Definition from {@link readShippedToolDefinitions}
  * @returns {Promise<Function>}
- * @throws {Error} When the script name is not a plain file name or the export is missing
+ * @throws {Error} When the script name is not a plain file name
+ * @throws {TypeError} When the export is missing or not a function
  */
 export async function shippedToolImplementation(tool) {
   const script = tool.script || `${tool.id}.js`;
@@ -128,7 +129,7 @@ export async function shippedToolImplementation(tool) {
   const mod = await import(`../../tools/${script}`);
   const fn = tool.method ? mod[tool.method] : mod.default;
   if (typeof fn !== 'function') {
-    throw new Error(`Tool ${tool.id} does not export function ${tool.method || 'default'}`);
+    throw new TypeError(`Tool ${tool.id} does not export function ${tool.method || 'default'}`);
   }
   return fn;
 }

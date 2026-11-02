@@ -68,18 +68,22 @@ function action(tool) {
   };
 }
 
-/** The installation test: every tool's implementation module loads and exports its function. */
+/**
+ * The installation test: every tool's implementation module loads and exports
+ * its function. The modules load in parallel; the steps keep the tools' order.
+ * @returns {Promise<Array<{id: string, label: string, status: 'ok'|'fail', message: string}>>}
+ */
 async function test() {
-  const steps = [];
-  for (const tool of TOOLS.values()) {
-    try {
-      await shippedToolImplementation(tool);
-      steps.push({ id: tool.id, label: tool.id, status: 'ok', message: tool.script });
-    } catch (error) {
-      steps.push({ id: tool.id, label: tool.id, status: 'fail', message: error.message });
-    }
-  }
-  return steps;
+  return Promise.all(
+    [...TOOLS.values()].map(async tool => {
+      try {
+        await shippedToolImplementation(tool);
+        return { id: tool.id, label: tool.id, status: 'ok', message: tool.script };
+      } catch (error) {
+        return { id: tool.id, label: tool.id, status: 'fail', message: error.message };
+      }
+    })
+  );
 }
 
 const connector = {
