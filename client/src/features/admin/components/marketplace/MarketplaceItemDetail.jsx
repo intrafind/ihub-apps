@@ -224,9 +224,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 <button
                   onClick={() => {
                     onClose();
-                    navigate(
-                      `/admin/integrations/installed?install=${encodeURIComponent(item.name)}`
-                    );
+                    navigate(`/admin/integrations?install=${encodeURIComponent(item.name)}`);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >
@@ -300,9 +298,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 <button
                   onClick={() => {
                     onClose();
-                    navigate(
-                      `/admin/integrations/installed?install=${encodeURIComponent(item.name)}`
-                    );
+                    navigate(`/admin/integrations?install=${encodeURIComponent(item.name)}`);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
                 >

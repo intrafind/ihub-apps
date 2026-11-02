@@ -96,7 +96,7 @@ variable first, then falls back to the credential reference:
 1. Open **Admin > Credentials** and create a new credential of type
    **Secret**, pasting the full contents of `ifinder_private.pem` (including
    the `-----BEGIN`/`-----END` lines) as its value. It is encrypted at rest.
-2. Open **Admin → Integrations → Installed**, **Install** iFinder (or **Edit**
+2. Open **Admin → Integrations**, **Install** iFinder (or **Edit**
    the installation), leave **Sign with iHub's OIDC key pair** unticked, and
    select that credential in the **Private key** field.
 3. Save. No environment variable or server restart is needed — the key is
@@ -374,8 +374,7 @@ Manually verify JWT tokens using online tools (development only):
 ### Token Claims
 
 The claims of the token are fixed; what you can tune are the advanced token
-fields of the iFinder installation (**Admin → Integrations → Installed →
-iFinder → Edit**): **JWT issuer** (`issuer`), **JWT audience** (`audience`),
+fields of the iFinder installation (**Admin → Integrations → iFinder → Settings**): **JWT issuer** (`issuer`), **JWT audience** (`audience`),
 **Token scope** (`defaultScope`), **Token lifetime** (`tokenExpirationSeconds`),
 **Signing algorithm** (`algorithm`) and **User identity sent to iFinder**
 (`jwtSubjectField`, the `sub` claim). Custom claims are not supported.

@@ -78,7 +78,7 @@ fetched from the registry and rendered when you open them, without installing an
   overwritten — **Detach** it first if you want to keep them. For an integration, the dialog
   lists the releases between the installed and the catalog version (newest first) with their
   summaries, the compatibility line, and opens each release's notes on request. **Admin →
-  Integrations → Installed** shows an **Update to vX available** badge on every installation of a
+  Integrations** shows an **Update to vX available** badge on every installation of a
   definition with a newer compatible catalog version, and the admin dashboard counts them.
 - **Compatibility** is enforced on install and update: an item whose `compatibility.ihub` (or the
   short form `minVersion`, read as `>=minVersion`) this server does not satisfy is refused with
@@ -87,11 +87,10 @@ fetched from the registry and rendered when you open them, without installing an
   `UNSUPPORTED_DEFINITION_SCHEMA`. See [Integrations → Version, compatibility and release
   notes](integrations.md#version-compatibility-and-release-notes).
 - **Uninstall** deletes the item's files and the installation record. An integration definition
-  cannot be uninstalled while an installed instance of it exists (**Admin → Integrations →
-  Installed**); remove the instance first.
+  cannot be uninstalled while an installed instance of it exists (**Admin → Integrations**); remove the instance first.
 - **Integrations** are definition folders (an `integration.json` with its OpenAPI document, icon
   and README as companions). Installing one makes it available in the catalog under **Admin →
-  Integrations → Installed**, where **Set up integration** opens the install wizard; the
+  Integrations**, where **Set up integration** opens the install wizard; the
   installation itself (URL, sign-in, groups, actions) is created there, so one definition can be
   installed several times. See [Integrations](integrations.md).
 - **Detach** keeps the files but removes the installation record. The item is then maintained by

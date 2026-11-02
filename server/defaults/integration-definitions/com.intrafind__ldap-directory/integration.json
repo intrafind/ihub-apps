@@ -14,6 +14,7 @@
     "verification": "intrafind"
   },
   "categories": ["directory", "ldap", "people"],
+  "type": "people-directory",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/people-directory-search.md",
   "builtIn": true,
   "protocol": {

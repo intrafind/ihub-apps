@@ -7,8 +7,10 @@ import { useTranslation } from 'react-i18next';
  * WebSearchSection - Web search configuration card for the App form.
  * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
  * only ever reads/writes `app.websearch` via the passed-in onChange.
+ * Rendered by IntegrationsConfigSection, which passes a `notice` when the
+ * web search integration is not installed.
  */
-function WebSearchSection({ app, onChange }) {
+function WebSearchSection({ app, onChange, notice = null }) {
   const { t } = useTranslation();
 
   const handleWebSearchChange = updates => {
@@ -38,6 +40,7 @@ function WebSearchSection({ app, onChange }) {
           </p>
         </div>
         <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+          {notice}
           {/* Enable Web Search toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">

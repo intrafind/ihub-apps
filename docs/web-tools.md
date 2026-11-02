@@ -6,7 +6,7 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-The search engines and the page reader are the built-in installed integration **Web search** (`com.intrafind/web-search`), installed once as `websearch` under **Admin → Integrations → Installed** (see [Integrations](integrations.md)). The installation holds the engines' API keys and the default engine; a fresh install ships it enabled, and migration V195 creates it on an existing one. Apps only switch web search on in their own settings.
+The search engines and the page reader are the built-in installed integration **Web search** (`com.intrafind/web-search`), installed once as `websearch` under **Admin → Integrations** (see [Integrations](integrations.md)). The installation holds the engines' API keys and the default engine; a fresh install ships it enabled, and migration V195 creates it on an existing one. Apps only switch web search on in their own settings.
 
 ### Search Providers
 
@@ -133,7 +133,7 @@ declaration next to `google_search`; combining the two is a preview feature for
 Gemini 3 models only and requires the server-side tool calls to be circulated
 back through the conversation, which the adapter does not do yet. An admin can
 switch the reader off by switching the installation's **Web page reader**
-action off under **Admin → Integrations → Installed → Web search**.
+action off under **Admin → Integrations → Web search**.
 
 `"auto"` exists so an install without a Brave subscription still gets working
 web search. It asks the installation for its **Default search engine** first,
@@ -157,7 +157,7 @@ Web search settings can be configured through the admin panel:
 
 The app only switches web search on. The engines themselves — their API keys,
 the default engine and who may use them — are set on the `websearch`
-installation under **Admin → Integrations → Installed → Web search** (see
+installation under **Admin → Integrations → Web search** (see
 [API Key Setup](#api-key-setup)). An app with web search on requires that
 installation: when it is missing or disabled, **Admin → Apps** names it as
 missing for the app, and the app offers no search.
@@ -363,7 +363,7 @@ more, and the keys are not in `providers.json`.
 
 1. Store each key as a credential of type **secret** under **Admin →
    Integrations → Credentials** (one for Brave, one for Staan)
-2. Open **Admin → Integrations → Installed → Web search** (the installation
+2. Open **Admin → Integrations → Web search** (the installation
    `websearch`, definition `com.intrafind/web-search`) and fill in its fields:
    - **Brave Search API key** (`braveCredentialRef`): the Brave credential
    - **Staan API key** (`staanCredentialRef`): the Staan credential
@@ -431,7 +431,7 @@ A model can still override the language for one search by passing the tool's
 Whether a search provider *can be reached from this server* is a separate
 question from whether it is configured correctly, and for Qwant it is the one
 that usually decides the outcome. The **Test** button of the `websearch`
-installation — on its row under **Admin → Integrations → Installed**, and in
+installation — on its tile under **Admin → Integrations**, and in
 the installation wizard — answers it directly. It reports two steps:
 
 - **API keys**: which engines have a key (Brave, Staan; Qwant needs none),
@@ -504,7 +504,7 @@ The three search tools and the page reader are the **actions** of the
 `contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`,
 `read_url.json`) any more, and they are not listed under **Admin → Tools**.
 They are switched on and off, and restricted to groups, on the installation
-under **Admin → Integrations → Installed → Web search**. Their throttling is
+under **Admin → Integrations → Web search**. Their throttling is
 unchanged (Brave: one request at a time, 1100 ms apart).
 
 ### Brave Search (`braveSearch`)
@@ -745,7 +745,7 @@ The web content extractor includes protection against Server-Side Request Forger
 1. **"BRAVE_SEARCH_API_KEY is not set"**
    - Store the key as a **secret** credential under Admin → Integrations → Credentials and
      reference it in the **Brave Search API key** field of the `websearch` installation
-     (Admin → Integrations → Installed → Web search) (recommended)
+     (Admin → Integrations → Web search) (recommended)
    - Or set the `BRAVE_SEARCH_API_KEY` environment variable and restart the server
    - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key, or set
      the installation's **Default search engine** to Qwant. `"auto"` already does this on an
@@ -756,7 +756,7 @@ The web content extractor includes protection against Server-Side Request Forger
      so this is about where the server sends its traffic from, not how it is
      configured, and no retry or setting will clear it
    - Confirm it for the host with **Test** on the `websearch` installation
-     (Admin → Integrations → Installed) while Qwant is its default engine,
+     (Admin → Integrations) while Qwant is its default engine,
      or `node tests/manual/manual-test-qwant-search.js`
    - Route outbound search traffic through an egress IP Qwant accepts, or
      configure Brave or Staan Search for that install
@@ -774,8 +774,7 @@ The web content extractor includes protection against Server-Side Request Forger
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Migration V195 moves the Brave and Staan keys from **Admin → Providers** into the
      credentials `integration-websearch-brave` / `integration-websearch-staan` and creates the
-     `websearch` installation; check that it exists and is enabled under **Admin → Integrations
-     → Installed** (**Admin → Apps** names it as missing otherwise) and that its groups include
+     `websearch` installation; check that it exists and is enabled under **Admin → Integrations** (**Admin → Apps** names it as missing otherwise) and that its groups include
      the user
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration

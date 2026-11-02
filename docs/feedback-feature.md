@@ -321,7 +321,7 @@ When using iAssistant (RAG-powered chat via iFinder), feedback automatically rou
 For iAssistant feedback to work:
 
 - **User must be authenticated** (anonymous users skip iFinder routing)
-- **iAssistant must be installed** and enabled under Admin → Integrations → Installed (with the iFinder installation it runs on)
+- **iAssistant must be installed** and enabled under Admin → Integrations (with the iFinder installation it runs on)
 - **Conversation metadata must exist** (conversationId and ifinderMessageId)
 - **Network connectivity** to iFinder API endpoint
 

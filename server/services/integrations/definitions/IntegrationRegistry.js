@@ -19,6 +19,7 @@ import {
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { checkScriptCodeFiles } from './scriptModule.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
+import { publishDefinitionTypes } from '../integrationTypes.js';
 
 /**
  * Loads integration definitions (the catalog) from two trees:
@@ -68,6 +69,8 @@ export class IntegrationRegistry {
    */
   constructor(options = {}) {
     this.shippedDir = options.shippedDir || defaultShippedDir;
+    /** Whether loads publish the definitions' types (the shared instance only). */
+    this.publishesTypes = options.publishTypes === true;
     this.contentsDirOverride = options.contentsDir;
     /** @type {Map<string, object>} id → entry */
     this.entries = new Map();
@@ -102,6 +105,7 @@ export class IntegrationRegistry {
       }
       this.entries = entries;
       this.loaded = true;
+      if (this.publishesTypes) publishDefinitionTypes(entries.values());
       logger.info('Integration definitions loaded', {
         component: COMPONENT,
         count: entries.size,
@@ -502,5 +506,5 @@ export class IntegrationRegistry {
 
 export { dirNameToDefinitionId };
 
-const integrationRegistry = new IntegrationRegistry();
+const integrationRegistry = new IntegrationRegistry({ publishTypes: true });
 export default integrationRegistry;

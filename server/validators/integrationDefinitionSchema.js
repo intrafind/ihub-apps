@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import semver from 'semver';
 import { sourceDeclarationSchema } from '../services/sources/producers/declared.js';
+import { INTEGRATION_TYPES } from '../services/integrations/integrationTypes.js';
 
 /**
  * Integration definition: the catalog entry of an integration (see
@@ -627,6 +628,8 @@ export const integrationDefinitionSchema = z
     publisher: integrationPublisherSchema.optional(),
     icon: httpOrCompanionSchema.optional(),
     categories: z.array(z.string().min(1).max(64)).prefault([]),
+    /** The contract the integration fulfils (`services/integrations/integrationTypes.js`). */
+    type: z.enum(INTEGRATION_TYPES).optional(),
     docsUrl: z.string().url().optional(),
     privacyPolicyUrl: z.string().url().optional(),
     license: z.string().max(128).optional(),

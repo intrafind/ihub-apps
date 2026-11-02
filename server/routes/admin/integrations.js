@@ -88,6 +88,10 @@ function catalogEntryView(entry, language, instances, updates) {
     description: localized(def.description, language),
     publisher: def.publisher,
     categories: def.categories,
+    /** The type the definition fulfils (`people-directory`, `web-search`, `storage`), or null. */
+    type: def.type || null,
+    /** Ships with iHub (iFinder, web search, the directories, …). */
+    builtIn: def.builtIn === true,
     docsUrl: def.docsUrl,
     icon: def.icon,
     runs: def.runs,
@@ -174,9 +178,18 @@ function instanceView(instance, resolved, language, updates) {
   return {
     ...instance,
     label: resolved?.label || instance.id,
+    /**
+     * The stored label (`{ en, de }`, or null when the installation has none):
+     * `label` is the one language the request asked for, so an editor sends
+     * this one back with its own language changed and keeps the others.
+     */
+    labelLocalized: instance.label ?? null,
     definitionName: resolved?.definition ? localized(resolved.definition.name, language) : null,
     definitionMissing: !resolved?.definition,
     protocol: resolved?.definition?.protocol?.type || null,
+    /** The type of the definition (`people-directory`, `web-search`, `storage`), or null. */
+    type: resolved?.definition?.type || null,
+    builtIn: resolved?.definition?.builtIn === true,
     /** Live connection health, for adapters that keep connections (MCP). */
     status,
     /** Whether the installation signs every user in (per-user connections to manage). */

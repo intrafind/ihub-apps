@@ -661,7 +661,7 @@ drawn from an attached private project.
 
 With `platform.projects.tierPolicy` set to `both` or `ifinder` (**Admin → Projects → Project
 settings**, a change applies at once), **iFinder** installed and
-enabled (**Admin → Integrations → Installed**) and **User Projects** switched on, users can add their iFinder
+enabled (**Admin → Integrations**) and **User Projects** switched on, users can add their iFinder
 smart collections to their projects. **Browse catalog** on the Projects page lists them under
 **Your iFinder smart collections**; **Add** makes one a project, marked **iFinder**. Collections
 nobody added are not listed under **Projects**.

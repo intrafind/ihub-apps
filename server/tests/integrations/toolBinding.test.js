@@ -21,6 +21,8 @@ const { loadTools, getToolsForApp, runTool } = await import('../../toolLoader.js
 const { isToolSelected } = await import('../../utils/toolSelection.js');
 const { syncIntegrationScopeProviders } =
   await import('../../services/integrations/integrationTools.js');
+const { publishDefinitionTypes, getDefinitionTypes } =
+  await import('../../services/integrations/integrationTypes.js');
 const { getScopeProvider, resolveChatScopes, applicableScopeProviders } =
   await import('../../services/integrations/scopes/index.js');
 
@@ -235,6 +237,92 @@ describe('integration tools', () => {
       unbound.some(t => t._integration),
       false
     );
+  });
+
+  it('keeps the tools of a definition binding in a chat that names the definition', async () => {
+    const app = { id: 'by-definition', tools: [], integrations: { 'test.portal': {} } };
+    const user = { id: 'u', groups: ['data-team'] };
+    const all = await getToolsForApp(app, 'en', { user });
+    const ids = all
+      .filter(t => t._integration)
+      .map(t => t.id)
+      .sort();
+    assert.deepEqual(ids, [
+      'portal__list_organizations',
+      'portal__search_datasets',
+      'restricted__search_datasets'
+    ]);
+    const chat = await getToolsForApp(app, 'en', { user, enabledTools: ['test.portal'] });
+    assert.deepEqual(
+      chat
+        .filter(t => t._integration)
+        .map(t => t.id)
+        .sort(),
+      ids
+    );
+    // The installation id still narrows to that installation.
+    const one = await getToolsForApp(app, 'en', { user, enabledTools: ['restricted'] });
+    assert.deepEqual(
+      one.filter(t => t._integration).map(t => t.id),
+      ['restricted__search_datasets']
+    );
+  });
+
+  it('binds every installation of a type through a type key', async () => {
+    // The test definition has no type; give it one for this test only.
+    const entry = registry.get('test.portal');
+    entry.definition.type = 'people-directory';
+    publishDefinitionTypes(registry.list());
+    assert.equal(getDefinitionTypes()['test.portal'], 'people-directory');
+    try {
+      const app = { id: 'typed', tools: [], integrations: { 'type:people-directory': {} } };
+      const tools = await getToolsForApp(app, 'en', { user: { id: 'u', groups: ['data-team'] } });
+      assert.deepEqual(
+        tools
+          .filter(t => t._integration)
+          .map(t => t.id)
+          .sort(),
+        ['portal__list_organizations', 'portal__search_datasets', 'restricted__search_datasets']
+      );
+      // A chat names the binding by its key: the type key keeps every
+      // installation it binds, another reference keeps none of them.
+      const chat = await getToolsForApp(app, 'en', {
+        user: { id: 'u', groups: ['data-team'] },
+        enabledTools: ['type:people-directory']
+      });
+      assert.equal(chat.filter(t => t._integration).length, 3);
+      const switchedOff = await getToolsForApp(app, 'en', {
+        user: { id: 'u', groups: ['data-team'] },
+        enabledTools: ['something-else']
+      });
+      assert.equal(
+        switchedOff.some(t => t._integration),
+        false
+      );
+      // An installation's own binding wins over the type's.
+      const narrowed = await getToolsForApp(
+        { ...app, integrations: { ...app.integrations, portal: { actions: [] } } },
+        'en',
+        { user: { id: 'u', groups: ['data-team'] } }
+      );
+      assert.deepEqual(
+        narrowed.filter(t => t._integration).map(t => t.id),
+        ['restricted__search_datasets']
+      );
+      // Another type binds nothing.
+      const other = await getToolsForApp(
+        { id: 'x', tools: [], integrations: { 'type:storage': {} } },
+        'en',
+        { user: { id: 'u', groups: ['data-team'] } }
+      );
+      assert.equal(
+        other.some(t => t._integration),
+        false
+      );
+    } finally {
+      delete entry.definition.type;
+      publishDefinitionTypes(registry.list());
+    }
   });
 
   it('dispatches runTool to the adapter with the picked scope and strips context keys', async () => {

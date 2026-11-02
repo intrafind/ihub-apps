@@ -503,7 +503,14 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
 
 const appIntegrationsSchema = z
   .record(
-    z.string().regex(/^[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?$/, 'Invalid integration id'),
+    // An installation id, a definition id (with its one `/`) or a type
+    // (`type:people-directory`, see services/integrations/integrationTypes.js).
+    z
+      .string()
+      .regex(
+        /^(?:[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?|type:[a-z][a-z-]{0,63})$/,
+        'Invalid integration id'
+      ),
     appIntegrationBindingSchema
   )
   .optional();

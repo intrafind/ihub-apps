@@ -125,6 +125,57 @@ describe('areAppIntegrationsEnabled', () => {
     assert.deepEqual(missingAppIntegrations(optional, {}), []);
   });
 
+  it('counts a type binding as on with one enabled installation of that type', () => {
+    const app = { id: 'people', integrations: { 'type:people-directory': {} } };
+    const definitionTypes = {
+      'com.intrafind/ldap-directory': 'people-directory',
+      'com.intrafind/entra-directory': 'people-directory',
+      'com.intrafind/office365': 'storage'
+    };
+    const entry = (id, definition, enabled = true) => ({ id, definition, enabled });
+    assert.deepEqual(missingAppIntegrations(app, { definitionTypes }), ['type:people-directory']);
+    // An installation of another type does not satisfy it.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        definitionTypes,
+        installedIntegrations: [
+          entry('corp', 'com.intrafind/ldap-directory', false),
+          entry('office365', 'com.intrafind/office365')
+        ]
+      }),
+      ['type:people-directory']
+    );
+    // Any definition of the type does: Entra is a people directory too.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        definitionTypes,
+        installedIntegrations: [
+          entry('corp', 'com.intrafind/ldap-directory', false),
+          entry('entra', 'com.intrafind/entra-directory')
+        ]
+      }),
+      []
+    );
+    // Without the definitions' types nothing is of a type.
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [entry('entra', 'com.intrafind/entra-directory')]
+      }),
+      ['type:people-directory']
+    );
+    // An unknown type is never satisfied.
+    assert.deepEqual(
+      missingAppIntegrations(
+        { id: 'x', integrations: { 'type:nope': {} } },
+        {
+          definitionTypes,
+          installedIntegrations: [entry('entra', 'com.intrafind/entra-directory')]
+        }
+      ),
+      ['type:nope']
+    );
+  });
+
   it('reports every installation and every installed definition', () => {
     const status = getIntegrationStatus({
       installedIntegrations: [
@@ -132,9 +183,11 @@ describe('areAppIntegrationsEnabled', () => {
         { id: 'iassistant', definition: 'com.intrafind/iassistant', enabled: false },
         { id: 'corp', definition: 'com.intrafind/ldap-directory', enabled: false },
         { id: 'x500bund', definition: 'com.intrafind/ldap-directory' }
-      ]
+      ],
+      definitionTypes: { 'com.intrafind/ldap-directory': 'people-directory' }
     });
     assert.deepEqual(status, {
+      'type:people-directory': true,
       'com.intrafind/ifinder': true,
       'com.intrafind/iassistant': false,
       'com.intrafind/ldap-directory': true,
@@ -310,6 +363,20 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(definitionBinding.success, true, JSON.stringify(definitionBinding.error?.issues));
     assert.equal(
       appConfigSchema.safeParse({ ...base, id: 'x', integrations: { 'a/b/c': {} } }).success,
+      false
+    );
+    // So is a type key.
+    assert.equal(
+      appConfigSchema.safeParse({
+        ...base,
+        id: 'x',
+        integrations: { 'type:people-directory': { required: false } }
+      }).success,
+      true
+    );
+    assert.equal(
+      appConfigSchema.safeParse({ ...base, id: 'x', integrations: { 'type:Bad Type': {} } })
+        .success,
       false
     );
   });
