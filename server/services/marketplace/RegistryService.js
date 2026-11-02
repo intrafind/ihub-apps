@@ -19,7 +19,10 @@
 
 import configStore from '../../services/config/ConfigStore.js';
 import { catalogItemVersionSchema, validateCatalog } from '../../validators/catalogSchema.js';
-import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
+import {
+  validateRegistryConfig,
+  validateRegistryVersionPolicy
+} from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
@@ -1115,8 +1118,9 @@ class RegistryService {
       updatedAt: new Date().toISOString()
     };
     // The version policy (channel, pins) is checked like on create; a pin
-    // that is not a semver range would otherwise hide every version.
-    const validation = validateRegistryConfig(updated);
+    // that is not a semver range would otherwise hide every version. Only
+    // these two fields: an edit has never re-validated the rest.
+    const validation = validateRegistryVersionPolicy(updated);
     if (!validation.success) {
       throw new Error(`Invalid registry config: ${validation.errors.join(', ')}`);
     }

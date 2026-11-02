@@ -115,3 +115,24 @@ export function validateRegistryConfig(data) {
     errors: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`)
   };
 }
+
+/**
+ * Validate only the version policy of a registry config (`channel`, `pins`),
+ * as an edit of an existing registry does: the rest of a stored registry is
+ * not re-validated on edit.
+ *
+ * @param {unknown} data - the registry config (other fields are ignored)
+ * @returns {{ success: true, data: { channel?: string, pins?: Record<string, string> } } | { success: false, errors: string[] }}
+ */
+export function validateRegistryVersionPolicy(data) {
+  const result = registryConfigSchema
+    .pick({ channel: true, pins: true })
+    .safeParse({ channel: data?.channel, pins: data?.pins });
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return {
+    success: false,
+    errors: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`)
+  };
+}
