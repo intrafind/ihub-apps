@@ -2,59 +2,65 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Built-in connectors of the cloud storage installations `office365`
- * (`com.intrafind/office365`), `googledrive` (`com.intrafind/google-drive`)
- * and `nextcloud` (`com.intrafind/nextcloud`). They have no model-facing
- * actions: the installations hold each provider's OAuth app, every user
- * connects their own account (`/api/integrations/<type>/auth`), and the file
- * browsers, the picker and the project cloud kinds read the providers through
- * `cloudStorageConfig.js`. The connectors supply the installation test, the
- * "n users connected" status and the Connections dialog.
+ * Built-in connectors of the storage providers `com.intrafind/office365`,
+ * `com.intrafind/google-drive` and `com.intrafind/nextcloud` (any number of
+ * installations each). They have no model-facing actions: an installation
+ * holds one OAuth app, every user connects their own account
+ * (`/api/integrations/<service>/auth?providerId=<installation id>`), and the
+ * file browsers, the picker and the project cloud kinds read the providers
+ * through `cloudStorageConfig.js`. The connectors supply the installation
+ * test, the "n users connected" status and the Connections dialog, each per
+ * installation.
  */
 import credentialService from '../../../../../CredentialService.js';
 import { httpFetch } from '../../../../../../utils/httpConfig.js';
 import {
   CLOUD_STORAGE_PROVIDERS,
+  cloudStorageCallbackPath,
   getCloudStorageInstallation,
   isCloudStorageProviderConfigured,
   listCloudStorageConnections,
   providerFromInstance,
-  providerIdOf
+  resolveCloudStorageRedirectUri
 } from '../../../../cloudStorageConfig.js';
 
 const TEST_TIMEOUT_MS = 10000;
 const CONNECTION_COUNT_REFRESH_MS = 30 * 1000;
 
-/** Per type: the connected-users count shown in the installed list, re-counted at most every 30 s. */
+/** Per installation id: the connected-users count shown in the installed list, re-counted at most every 30 s. */
 const counts = new Map();
 
-function countOf(type) {
-  return counts.get(type)?.value ?? 0;
+function countOf(instanceId) {
+  return counts.get(instanceId)?.value ?? 0;
 }
 
-function setCount(type, value) {
-  counts.set(type, { value: Math.max(0, Number(value) || 0), at: Date.now(), inFlight: null });
+function setCount(instanceId, value) {
+  counts.set(instanceId, {
+    value: Math.max(0, Number(value) || 0),
+    at: Date.now(),
+    inFlight: null
+  });
 }
 
-function refreshCount(type, { force = false } = {}) {
-  const entry = counts.get(type) || { value: 0, at: -Infinity, inFlight: null };
+function refreshCount(type, instanceId, { force = false } = {}) {
+  const entry = counts.get(instanceId) || { value: 0, at: -Infinity, inFlight: null };
   if (entry.inFlight) return entry.inFlight;
   if (!force && Date.now() - entry.at < CONNECTION_COUNT_REFRESH_MS) {
     return Promise.resolve(entry.value);
   }
-  entry.inFlight = listCloudStorageConnections(type)
+  entry.inFlight = listCloudStorageConnections(type, instanceId)
     .then(
       list => {
-        setCount(type, list.length);
+        setCount(instanceId, list.length);
         return list.length;
       },
       () => entry.value
     )
     .finally(() => {
-      const current = counts.get(type);
+      const current = counts.get(instanceId);
       if (current) current.inFlight = null;
     });
-  counts.set(type, entry);
+  counts.set(instanceId, entry);
   return entry.inFlight;
 }
 
@@ -92,17 +98,18 @@ function settingsStep(provider) {
       : provider.type === 'nextcloud'
         ? provider.serverUrl
         : 'Google OAuth 2.0';
-  return { ...step, status: 'ok', message: `${details}; provider id "${provider.id}"` };
+  return { ...step, status: 'ok', message: `${details}; installation "${provider.id}"` };
 }
 
 /**
  * The redirect URI step: a configured value must be an http(s) URL ending in
- * the provider's callback path; an empty one is derived from each request,
- * and the admin's own request shows what that comes to.
+ * the installation's callback path; an empty one is derived from each request
+ * (with the base path, like Jira), and the admin's own request shows what
+ * that comes to.
  */
-function redirectUriStep(provider, service, req) {
+function redirectUriStep(provider, req) {
   const step = { id: 'redirect', label: 'Redirect URI' };
-  const callbackPath = `/api/integrations/${service}/${provider.id}/callback`;
+  const callbackPath = cloudStorageCallbackPath(provider.type, provider.id);
   if (provider.redirectUri) {
     let ok = false;
     try {
@@ -121,7 +128,7 @@ function redirectUriStep(provider, service, req) {
   }
   let derived = null;
   try {
-    derived = req ? serviceFor(provider.type)._buildCallbackUrl(req, provider.id) : null;
+    derived = req ? resolveCloudStorageRedirectUri(req, { ...provider, redirectUri: '' }) : null;
   } catch {
     derived = null;
   }
@@ -130,7 +137,7 @@ function redirectUriStep(provider, service, req) {
     status: 'ok',
     message: derived
       ? `Empty: derived from the request, here ${derived}; register that URL with the provider`
-      : `Empty: derived from each request as <scheme>://<host>${callbackPath}; register that URL with the provider`
+      : `Empty: derived from each request as <scheme>://<host><base path>${callbackPath}; register that URL with the provider`
   };
 }
 
@@ -157,6 +164,11 @@ function serviceFor(type) {
   return services[type];
 }
 
+/** The installation's id, or empty when the connector got none. */
+function idOf(instance) {
+  return typeof instance?.id === 'string' ? instance.id : '';
+}
+
 /**
  * The installation test: client id and secret present, the provider's own
  * settings, the redirect URI well-formed or derivable, the authorization
@@ -164,9 +176,15 @@ function serviceFor(type) {
  * needs a browser, so it is not run.
  */
 async function test(type, { instance, values, user, req }) {
-  await loadServices();
-  const provider = providerFromInstance({ ...instance, values, enabled: true });
-  const spec = CLOUD_STORAGE_PROVIDERS[type];
+  // A draft from the install dialog may come without an id yet: the callback
+  // path then shows the definition's proposed one.
+  const provider = providerFromInstance({
+    ...instance,
+    id: idOf(instance) || type,
+    definition: CLOUD_STORAGE_PROVIDERS[type].definitionId,
+    values,
+    enabled: true
+  });
   const steps = [];
   const secret = provider.clientSecretRef
     ? credentialService.tryResolveSecret(provider.clientSecretRef)
@@ -184,7 +202,7 @@ async function test(type, { instance, values, user, req }) {
           : `Client ${provider.clientId.slice(0, 8)}… with secret`
   });
   steps.push(settingsStep(provider));
-  steps.push(redirectUriStep(provider, spec.service, req));
+  steps.push(redirectUriStep(provider, req));
   const url = steps.some(step => step.status === 'fail') ? null : probeUrl(provider);
   if (url) {
     const started = Date.now();
@@ -216,7 +234,7 @@ async function test(type, { instance, values, user, req }) {
     }
   }
   const connections = await listCloudStorageConnections(type, provider.id);
-  setCount(type, connections.length);
+  setCount(provider.id, connections.length);
   const mine = user?.id ? connections.some(c => c.userId === user.id) : false;
   steps.push({
     id: 'connections',
@@ -232,24 +250,27 @@ function connectorFor(type) {
     id: type,
     actions: {},
     test: context => test(type, context),
-    /** For the installed list: per-user sign-in, how many users connected. */
+    /** For the installed list: per-user sign-in, how many users connected this installation. */
     status(instance) {
-      refreshCount(type).catch(() => {});
+      const instanceId = idOf(instance);
+      if (instanceId) refreshCount(type, instanceId).catch(() => {});
       return {
-        connected: isCloudStorageProviderConfigured(type) && instance?.enabled !== false,
+        connected: isCloudStorageProviderConfigured(providerFromInstance(instance)),
         perUser: true,
-        userConnections: countOf(type)
+        userConnections: countOf(instanceId)
       };
     },
     async listConnections(instance) {
-      const connections = await listCloudStorageConnections(type, providerIdOf(instance));
-      setCount(type, connections.length);
+      const instanceId = idOf(instance);
+      const connections = await listCloudStorageConnections(type, instanceId);
+      setCount(instanceId, connections.length);
       return connections;
     },
     async disconnectUser(instance, userId) {
       await loadServices();
-      const removed = await serviceFor(type).deleteUserTokens(userId, providerIdOf(instance));
-      if (removed) refreshCount(type, { force: true }).catch(() => {});
+      const instanceId = idOf(instance);
+      const removed = await serviceFor(type).deleteUserTokens(userId, instanceId);
+      if (removed) refreshCount(type, instanceId, { force: true }).catch(() => {});
       return { removed: Boolean(removed) };
     },
     invalidate() {},
@@ -261,5 +282,5 @@ export const office365Connector = connectorFor('office365');
 export const googleDriveConnector = connectorFor('googledrive');
 export const nextcloudConnector = connectorFor('nextcloud');
 
-/** The installation of a type, for callers that have the connector only. */
+/** A storage installation by id, for callers that have the connector only. */
 export { getCloudStorageInstallation };

@@ -55,7 +55,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
 
   /**
    * Get Google Drive provider configuration
-   * @param {string} providerId - The provider ID from cloud storage config
+   * @param {string} providerId - The installation id of the provider
    * @returns {Object} Provider configuration
    */
   _getProviderConfig(providerId) {
@@ -77,12 +77,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
   generateAuthUrl(providerId, state, codeVerifier, req = null) {
     const provider = this._getProviderConfig(providerId);
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    const redirectUri = this._resolveRedirectUri(
-      provider,
-      providerId,
-      'GOOGLEDRIVE_OAUTH_REDIRECT_URI',
-      req
-    );
+    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
 
     // Google Drive API scopes
     const scopes = [
@@ -117,12 +112,7 @@ class GoogleDriveService extends OAuthIntegrationBase {
   async exchangeCodeForTokens(providerId, authCode, codeVerifier, req = null) {
     try {
       const provider = this._getProviderConfig(providerId);
-      const redirectUri = this._resolveRedirectUri(
-        provider,
-        providerId,
-        'GOOGLEDRIVE_OAUTH_REDIRECT_URI',
-        req
-      );
+      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,

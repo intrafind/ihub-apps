@@ -1,13 +1,30 @@
 {
   "id": "com.intrafind/office365",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: the Microsoft Office 365 providers of platform.cloudStorage become installations (migration V200); several installations per provider, the installation id is the provider id (migration V205).",
+        "de": "Erste Version: die Microsoft Office 365-Anbieter aus platform.cloudStorage werden Installationen (Migration V200); mehrere Installationen je Anbieter, die Installations-ID ist die Anbieter-ID (Migration V205)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Microsoft Office 365 (OneDrive / SharePoint)",
     "de": "Microsoft Office 365 (OneDrive / SharePoint)"
   },
   "description": {
-    "en": "Let users browse and attach files from OneDrive, SharePoint and Teams through Microsoft Graph, each signed in with their own Microsoft account. Holds the Azure app registration; users connect under Settings → Integrations or from the file picker.",
-    "de": "Benutzer Dateien aus OneDrive, SharePoint und Teams über Microsoft Graph durchsuchen und anhängen lassen, jeder mit dem eigenen Microsoft-Konto angemeldet. Hält die Azure-App-Registrierung; Benutzer verbinden sich unter Einstellungen → Integrationen oder aus der Dateiauswahl."
+    "en": "Let users browse and attach files from OneDrive, SharePoint and Teams through Microsoft Graph, each signed in with their own Microsoft account. Holds the Azure app registration; users connect under Settings → Integrations or from the file picker. Install it once per app registration (for example one per tenant); apps offer it by binding it.",
+    "de": "Benutzer Dateien aus OneDrive, SharePoint und Teams über Microsoft Graph durchsuchen und anhängen lassen, jeder mit dem eigenen Microsoft-Konto angemeldet. Hält die Azure-App-Registrierung; Benutzer verbinden sich unter Einstellungen → Integrationen oder aus der Dateiauswahl. Einmal je App-Registrierung installieren (zum Beispiel je Mandant); Apps bieten sie an, indem sie sie binden."
   },
   "publisher": {
     "name": "IntraFind Software AG",
@@ -17,9 +34,6 @@
   "type": "storage",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/office365-integration.md",
   "builtIn": true,
-  "singleton": {
-    "instanceId": "office365"
-  },
   "protocol": {
     "type": "native",
     "module": "office365"
@@ -76,8 +90,8 @@
         "de": "Redirect-URI"
       },
       "description": {
-        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/office365/<provider id>/callback); the test shows the resulting URL.",
-        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/office365/<provider id>/callback); der Test zeigt die resultierende URL."
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request the way the browser sees it: scheme and host (X-Forwarded-Proto / X-Forwarded-Host of a trusted proxy), the base path (X-Forwarded-Prefix), then /api/integrations/office365/<installation id>/callback. The Settings tab shows the URL to register.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage so abgeleitet, wie der Browser sie sieht: Schema und Host (X-Forwarded-Proto / X-Forwarded-Host eines vertrauenswürdigen Proxys), der Basispfad (X-Forwarded-Prefix), dann /api/integrations/office365/<Installations-ID>/callback. Der Reiter Einstellungen zeigt die zu registrierende URL."
       }
     },
     {
@@ -131,20 +145,6 @@
       "description": {
         "en": "Restrict access to one drive.",
         "de": "Zugriff auf ein Laufwerk beschränken."
-      }
-    },
-    {
-      "key": "providerId",
-      "type": "string",
-      "advanced": true,
-      "pattern": "^[A-Za-z0-9._-]{1,100}$",
-      "title": {
-        "en": "Provider id",
-        "de": "Anbieter-ID"
-      },
-      "description": {
-        "en": "The id in the callback URL (/api/integrations/office365/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
-        "de": "Die ID in der Callback-URL (/api/integrations/office365/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
       }
     }
   ],

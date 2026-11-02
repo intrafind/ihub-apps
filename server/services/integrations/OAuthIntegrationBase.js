@@ -3,10 +3,10 @@
 
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
+import { getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import credentialService from '../CredentialService.js';
-import { findCloudStorageProvider } from './cloudStorageConfig.js';
+import { findCloudStorageProvider, resolveCloudStorageRedirectUri } from './cloudStorageConfig.js';
 import {
   OAuthRefreshError,
   REFRESH_ERROR_CODES,
@@ -45,60 +45,54 @@ class OAuthIntegrationBase {
   }
 
   /**
-   * Build callback URL from request, honoring X-Forwarded-* proxy chains.
+   * The callback URL derived from the request, as the browser sees it: scheme
+   * and host from the `X-Forwarded-Proto` / `X-Forwarded-Host` headers of a
+   * trusted proxy (else the request's own), the deployment's base path
+   * (`X-Forwarded-Prefix`), then `/api/integrations/<service>/<providerId>/callback`.
    * @param {Object} req - Express request object
-   * @param {string} providerId - Provider ID to include in callback URL
+   * @param {string} providerId - The installation id
    * @returns {string} Full callback URL
+   * @throws {Error} when the request names no host
    */
   _buildCallbackUrl(req, providerId) {
-    const protocol = getForwardedProto(req);
-    const host = getForwardedHost(req);
-
-    if (!host) {
+    if (!getForwardedHost(req)) {
       throw new Error('Unable to determine host for callback URL');
     }
-
-    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
+    return resolveCloudStorageRedirectUri(req, { id: providerId, type: this.serviceName });
   }
 
   /**
-   * Resolve the OAuth redirect URI: explicit provider config, then an
-   * env var, then auto-detection from the request, then a localhost
-   * fallback (development).
+   * Resolve the OAuth redirect URI of one flow, the way Jira does (#3079):
+   * the installation's configured `redirectUri`, else derived from the
+   * request including the base path ({@link _buildCallbackUrl}). There is no
+   * fallback: without a configured value and without a request host the
+   * flow cannot start, and the error says so.
    * @param {Object} provider - Resolved provider configuration
-   * @param {string} providerId - Provider ID
-   * @param {string} envVarName - Environment variable holding a fixed redirect URI
-   * @param {Object} [req] - Express request object (optional, for auto-detection)
+   * @param {string} providerId - The installation id
+   * @param {Object} [req] - Express request object (for the derivation)
    * @returns {string} Redirect URI
    */
-  _resolveRedirectUri(provider, providerId, envVarName, req = null) {
-    let redirectUri = provider.redirectUri || process.env[envVarName];
-
-    if (!redirectUri && req) {
-      redirectUri = this._buildCallbackUrl(req, providerId);
-      logger.info(`Auto-detected ${this.displayName} callback URL from request`, {
+  _resolveRedirectUri(provider, providerId, req = null) {
+    const redirectUri = resolveCloudStorageRedirectUri(req, {
+      id: providerId,
+      type: this.serviceName,
+      redirectUri: provider?.redirectUri
+    });
+    if (!provider?.redirectUri) {
+      logger.debug(`Derived ${this.displayName} callback URL from the request`, {
         component: this.componentName,
         redirectUri
       });
     }
-
-    if (!redirectUri) {
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-      logger.warn(`Using fallback localhost URL for ${this.displayName} callback`, {
-        component: this.componentName,
-        redirectUri
-      });
-    }
-
     return redirectUri;
   }
 
   /**
    * Load and validate a provider's configuration from its installation
-   * (`cloudStorageConfig.js`: the `office365`, `googledrive` or `nextcloud`
-   * installation, read in the provider shape), resolving secret-reference
-   * fields through the credential service.
-   * @param {string} providerId - The provider ID (the installation's `providerId` value, else its id)
+   * (`cloudStorageConfig.js`: an installation of the Office 365, Google Drive
+   * or Nextcloud definition, read in the provider shape), resolving
+   * secret-reference fields through the credential service.
+   * @param {string} providerId - The provider ID: the installation id
    * @param {Object} options
    * @param {string} options.type - Provider type discriminator (e.g. 'googledrive')
    * @param {string[]} [options.requiredFields] - Fields that must be present on the provider

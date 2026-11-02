@@ -10,9 +10,11 @@
  * the text is a snapshot taken at pick time (spec 3 §4). A later refresh
  * downloads again with the same user's token.
  *
- * Each kind is available when the `integrations` feature is on and the
- * provider's installation (`office365`, `googledrive`, `nextcloud`; see
- * `services/integrations/cloudStorageConfig.js`) is enabled.
+ * Each kind is available when the `integrations` feature is on and an
+ * installation of the provider (`com.intrafind/office365`,
+ * `com.intrafind/google-drive`, `com.intrafind/nextcloud`; see
+ * `services/integrations/cloudStorageConfig.js`) is enabled. A document's
+ * `ref.providerId` is the installation id it was picked from.
  * The feature is checked again when a document is downloaded, for a pick and
  * a refresh alike: a refresh skips the availability check (an item of a kind
  * the admin switched off may still be saved), but it must not reach a cloud

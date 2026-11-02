@@ -13,6 +13,7 @@
  * @module services/appUsageGuide
  */
 import configCache from '../configCache.js';
+import { listCloudStorageProviders } from './integrations/cloudStorageConfig.js';
 import { canUserAccessResource } from '../utils/authorization.js';
 import llmClient from './loop/LLMClient.js';
 import { buildUsageGuideMessages, selectGuideModel, unwrapFence } from '../utils/appUsageGuide.js';
@@ -43,7 +44,10 @@ export async function generateUsageGuide({ app, language, user }) {
     model,
     messages: buildUsageGuideMessages(app, language, {
       tools: configCache.getTools().data || [],
-      projects: configCache.getProjects(true).data || []
+      projects: configCache.getProjects(true).data || [],
+      storageInstallationIds: listCloudStorageProviders()
+        .filter(provider => provider.enabled !== false)
+        .map(provider => provider.id)
     }),
     retries: 0,
     telemetry: {

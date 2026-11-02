@@ -292,9 +292,14 @@ const uploadSchema = z
           ])
       })
       .optional(),
+    // Retired in V205: an app offers storage providers by binding them under
+    // `integrations` (`"type:storage"`, a provider's definition id or an
+    // installation id; see shared/storageBindings.js). Any value is refused
+    // so a hand-written app learns where the setting went.
     cloudStorageUpload: z
-      .object({
-        enabled: z.boolean().optional().prefault(false)
+      .never({
+        error:
+          'upload.cloudStorageUpload is retired; bind storage providers under "integrations" (e.g. "type:storage": { "required": false })'
       })
       .optional()
   })
