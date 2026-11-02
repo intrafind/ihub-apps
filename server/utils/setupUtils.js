@@ -28,10 +28,11 @@ import { getContentsPath } from './contentsPath.js';
 
 /**
  * The tool files of iHub's own features, retired from `contents/tools/` by
- * migrations V199 and V201. They are read in place
+ * migrations V195 (`read_url`), V199 and V201. They are read in place
  * (`services/tools/shippedToolDefinitions.js`): by the iHub integration
- * (`ask_user`, the scheduled-task tools), by the platform tools of workflows
- * and agents, and by the project knowledge tools. A copy seeded into
+ * (`ask_user`, the scheduled-task tools), by the platform tools of workflows,
+ * agents and the web search feature (the page reader `read_url`), and by the
+ * project knowledge tools. A copy seeded into
  * `contents/tools/` would take the place of the shipped definition again on
  * every start after the migration removed it. Paths relative to
  * server/defaults.
@@ -50,6 +51,7 @@ export const RETIRED_IHUB_TOOL_FILES = Object.freeze(
     'mark_task_done',
     'read_inbox',
     'read_memory',
+    'read_url',
     'run_scheduled_task_now',
     'schedule_task',
     'update_scheduled_task',

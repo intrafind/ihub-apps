@@ -34,6 +34,9 @@ import {
   SHIPPED_HASHES as V199_SHIPPED_HASHES
 } from '../migrations/V199__ihub_tools_installed_integration.js';
 import { PLATFORM_TOOL_FILE_IDS, PLATFORM_TOOL_IDS } from '../services/tools/platformTools.js';
+
+/** The page reader: a platform tool since V203, retired by V195, not by V199/V201. */
+const PAGE_READER = 'read_url';
 import { KNOWLEDGE_TOOL_IDS } from '../services/knowledge/knowledgeTools.js';
 import { IHUB_TOOL_FILE_IDS } from '../services/integrations/protocols/native/connectors/ihub/index.js';
 import { RETIRED_IHUB_TOOL_FILES } from '../utils/setupUtils.js';
@@ -84,8 +87,15 @@ describe('V201 iHub integration keeps only the chat tools', () => {
 
   it('moves exactly the knowledge tools and the platform tools', () => {
     assert.deepEqual([...KNOWLEDGE_ACTIONS].sort(), [...KNOWLEDGE_TOOL_IDS].sort());
-    assert.deepEqual([...WORKFLOW_ACTIONS].sort(), [...PLATFORM_TOOL_IDS].sort());
-    assert.deepEqual(Object.keys(WORKFLOW_TOOL_FILES).sort(), [...PLATFORM_TOOL_FILE_IDS].sort());
+    // The page reader joined the platform tools with V203; V195 had retired its file.
+    assert.deepEqual(
+      [...WORKFLOW_ACTIONS].sort(),
+      PLATFORM_TOOL_IDS.filter(id => id !== PAGE_READER).sort()
+    );
+    assert.deepEqual(
+      Object.keys(WORKFLOW_TOOL_FILES).sort(),
+      PLATFORM_TOOL_FILE_IDS.filter(id => id !== PAGE_READER).sort()
+    );
     assert.deepEqual([...IHUB_TOOL_FILES].sort(), [...IHUB_TOOL_FILE_IDS].sort());
     const definition = JSON.parse(readFileSync(DEFINITION_FILE, 'utf8'));
     const kept = definition.actions.map(action => action.name);
@@ -100,11 +110,10 @@ describe('V201 iHub integration keeps only the chat tools', () => {
     for (const id of Object.keys(SHIPPED_HASHES)) {
       assert.equal(contentHash(shipped(id), sha256), SHIPPED_HASHES[id], id);
     }
+    // Plus the page reader, whose file V195 retired and V203 reads in place.
     assert.deepEqual(
       [...RETIRED_IHUB_TOOL_FILES].sort(),
-      Object.keys(SHIPPED_HASHES)
-        .map(id => `tools/${id}.json`)
-        .sort()
+      [...Object.keys(SHIPPED_HASHES), PAGE_READER].map(id => `tools/${id}.json`).sort()
     );
   });
 

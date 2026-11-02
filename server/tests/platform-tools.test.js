@@ -5,7 +5,8 @@
  * The platform tools of workflows and agents — the agent workspace
  * (`write_artifact`, `read_memory`, `write_memory`, `read_inbox`,
  * `write_inbox`, `create_task`, `list_tasks`, `mark_task_done`) and the
- * evidence tools (`evidence_*`) — are plain tools owned by those features,
+ * evidence tools (`evidence_*`) — and the web search feature's page reader
+ * (`read_url`) are plain tools owned by those features,
  * not actions of the iHub integration. Everything that resolves them by id
  * keeps working as it did with their tool files: workflow prompt nodes and
  * agent runs, apps, group grants, `runTool`, a scheduled run's memory tools;
@@ -44,6 +45,8 @@ const AGENT_WORKSPACE = [
   'write_memory'
 ];
 const EVIDENCE = ['evidence_collect', 'evidence_validateQuotesFastPath', 'evidence_composeReport'];
+/** The page reader of the web search feature (V203: a platform tool, no engine's action). */
+const PAGE_READER = 'read_url';
 
 const everything = { tools: new Set(['*']), apps: new Set(['*']) };
 const member = { id: 'member', groups: ['users'], permissions: everything };
@@ -87,9 +90,15 @@ after(() => {
 });
 
 describe('the platform tools', () => {
-  it('are the agent workspace and evidence tools of the shipped files', () => {
-    assert.deepEqual([...PLATFORM_TOOL_FILE_IDS].sort(), [...AGENT_WORKSPACE, 'evidence'].sort());
-    assert.deepEqual([...PLATFORM_TOOL_IDS].sort(), [...AGENT_WORKSPACE, ...EVIDENCE].sort());
+  it('are the agent workspace, evidence and page reader tools of the shipped files', () => {
+    assert.deepEqual(
+      [...PLATFORM_TOOL_FILE_IDS].sort(),
+      [...AGENT_WORKSPACE, 'evidence', PAGE_READER].sort()
+    );
+    assert.deepEqual(
+      [...PLATFORM_TOOL_IDS].sort(),
+      [...AGENT_WORKSPACE, ...EVIDENCE, PAGE_READER].sort()
+    );
     assert.equal(isPlatformTool('write_artifact'), true);
     assert.equal(isPlatformTool('ask_user'), false);
     // Fresh copies: a caller changing one does not change the next.

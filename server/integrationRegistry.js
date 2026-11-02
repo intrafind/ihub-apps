@@ -19,15 +19,18 @@
  * - keyed by a type (`type:people-directory`): every installation of every
  *   definition of that type (`services/integrations/integrationTypes.js`),
  *   the ones installed later included; satisfied while one is enabled.
- * - `app.websearch.enabled`: web search runs on the `websearch` installation;
- *   it counts as a requirement only with `websearch.required: true`.
+ * - `app.websearch.required: true` (with `websearch.enabled`): the app needs
+ *   a web search engine — for `provider: "auto"` one enabled installation of
+ *   type `web-search` (missing key `type:web-search`), for a named engine
+ *   that installation (missing key: its id). Without `required`, web search
+ *   never hides an app: native search needs no engine.
  *
  * An integration counts as on when it is set up and switched on; without it
  * the apps that require it are not offered to users, like an app whose
  * required feature is off. An optional binding (`required: false`) keeps the
  * app available: its actions, scopes and sources are simply not there while
  * the installation is off (`integrationTools.filterIntegrationToolsForApp`,
- * `toolLoader.isWebSearchAvailableTo`).
+ * `toolLoader.resolveWebSearchEngine`).
  *
  * Each check reads a context of the config files it depends on, so it stays a
  * pure function: `{ platform, installedIntegrations, definitionTypes }` as
@@ -41,6 +44,7 @@
  */
 
 import { typeOfBindingKey, bindingKeyOfType } from './services/integrations/integrationTypes.js';
+import { WEB_SEARCH_TYPE, isWebSearchDefinition } from './services/search/webSearchEngines.js';
 
 /** The built-in installations (`config/integrations.json`). */
 const IFINDER_INSTANCE_ID = 'ifinder';
@@ -180,11 +184,49 @@ export function isRequiredBinding(binding) {
 }
 
 /**
+ * The key of the web search engine an app requires, or null when it requires
+ * none: `type:web-search` for `provider: "auto"` (any engine will do), the
+ * engine's installation id for a named one. Only an app with web search on and
+ * `websearch.required: true` requires an engine; native search needs none.
+ *
+ * @param {Object} app - App config
+ * @returns {string|null}
+ */
+export function requiredWebSearchKey(app) {
+  const websearch = app?.websearch;
+  if (!websearch?.enabled || websearch.required !== true) return null;
+  const provider = websearch.provider;
+  return provider && provider !== 'auto' ? provider : bindingKeyOfType(WEB_SEARCH_TYPE);
+}
+
+/**
+ * Whether the web search engine an app requires is on: for `type:web-search`
+ * one enabled engine installation, for an engine id that installation, enabled
+ * and of type `web-search`.
+ *
+ * @param {string} key - from {@link requiredWebSearchKey}
+ * @param {Object} [context] - `{ installedIntegrations, definitionTypes }`
+ * @returns {boolean}
+ */
+function isWebSearchRequirementMet(key, context = {}) {
+  const installed = Array.isArray(context.installedIntegrations)
+    ? context.installedIntegrations
+    : [];
+  const isEngine = entry =>
+    typeOfInstance(entry, context) === WEB_SEARCH_TYPE || isWebSearchDefinition(entry?.definition);
+  if (typeOfBindingKey(key) === WEB_SEARCH_TYPE) {
+    return installed.some(entry => entry?.enabled !== false && isEngine(entry));
+  }
+  return installed.some(entry => entry?.id === key && entry.enabled !== false && isEngine(entry));
+}
+
+/**
  * The integrations an app depends on that are off: the keys of
  * `app.integrations` whose installation is missing or disabled (for a
  * definition key: without one enabled installation; optional bindings
- * excepted), and `websearch` for an app that requires web search. Empty when
- * the app can be offered.
+ * excepted), and the web search engine of an app that requires web search
+ * (`type:web-search` or the engine id, see {@link requiredWebSearchKey}).
+ * Empty when the app can be offered.
  *
  * @param {Object} app - App config
  * @param {Object} [context] - `{ platform, installedIntegrations }`
@@ -210,16 +252,13 @@ export function missingAppIntegrations(app, context = {}) {
       }
     }
   }
-  // Web search is switched on in the app's own settings; its tools belong to
-  // the `websearch` installation. By default the app stays available without
-  // it (the search toggle and native search drop out); `required: true` hides
-  // the app like a required binding does.
-  if (
-    app?.websearch?.enabled &&
-    app.websearch.required === true &&
-    !isInstalledIntegrationEnabled('websearch', context)
-  ) {
-    if (!missing.includes('websearch')) missing.push('websearch');
+  // Web search is switched on in the app's own settings; native search needs
+  // no engine, so by default the app stays available without one.
+  // `required: true` hides the app while its engine is not available: any
+  // engine for `auto`, the named one otherwise.
+  const webSearchKey = requiredWebSearchKey(app);
+  if (webSearchKey && !isWebSearchRequirementMet(webSearchKey, context)) {
+    if (!missing.includes(webSearchKey)) missing.push(webSearchKey);
   }
   return missing;
 }

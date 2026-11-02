@@ -339,7 +339,7 @@ export class AgentLoop {
 
     // Native web search the provider turns down (a 400 naming web search:
     // disabled for the organisation, unsupported by the model or a gateway)
-    // degrades to the script-backed search tool instead of failing the turn.
+    // degrades to the app's web search engine instead of failing the turn.
     // The rejection is remembered per model so later calls skip the doomed
     // request.
     const applyNativeWebSearchFallback = async reason => {
@@ -350,9 +350,9 @@ export class AgentLoop {
         fallbackTools = await this.resolveNativeWebSearchFallbackTools(directive, {
           app: options.appConfig,
           language: request.language,
-          // The group grant of the `websearch` installation holds for the fallback tool
-          // too: a chat carries the user in the provider options, a workflow
-          // node on the request itself.
+          // The engine's group grant holds for the fallback tool too: a chat
+          // carries the user in the provider options, a workflow node on the
+          // request itself.
           user: request.user ?? options.user
         });
       } catch (err) {

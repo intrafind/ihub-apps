@@ -16,9 +16,11 @@
  *     (`read_url`)
  *
  * What the platform's own web search returned is public — it is on the open
- * web. "Own" is the shipped Brave, Qwant and Staan scripts, decided by the
- * script a definition runs. Any other tool named after a search engine (an MCP
- * server, a custom or OpenAPI tool) may search anything, intranet included:
+ * web. "Own" is the shipped Brave, Qwant and Staan engines, decided by the
+ * definition or script a tool runs. A third-party web search engine (an
+ * integration of type `web-search`) and any other tool named after a search
+ * engine (an MCP server, a custom or OpenAPI tool) may search anything,
+ * intranet included:
  * its hits are listed the same way but stay private, unless its definition declares them public (`"sources": {
  * …, "public": true }`, `producers/declared.js`). What the page reader read is
  * private unless a public search returned it too: hosts on the SSL whitelist
@@ -28,13 +30,19 @@
  * @module services/sources/producers/web
  */
 
+import {
+  isBuiltInWebSearchEngineTool,
+  isWebSearchEngineTool
+} from '../../search/webSearchEngines.js';
+
 /** Tool id of the page reader. */
 export const PAGE_READER_TOOL_ID = 'read_url';
 
 /**
- * Web search tools: the script-backed ones (`braveSearch`, `staanSearch`,
- * `qwantSearch`), the generic `webSearch` id, and MCP or custom tools named
- * after a web search engine. Other tools that search something (Jira, people,
+ * Web search tools: the shipped engines' search tools (`braveSearch`,
+ * `staanSearch`, `qwantSearch`), the generic `webSearch` id, and MCP or custom
+ * tools named after a web search engine. (The search tool of a third-party
+ * engine is recognised by its definition's type instead, see `matches`.) Other tools that search something (Jira, people,
  * documents) are not web search, even though their results carry URLs; they
  * report sources through the envelope or a declaration.
  */
@@ -69,20 +77,14 @@ export function isWebSearchTool(toolId) {
  */
 const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
-/** The installed integration that owns those scripts as its actions. */
-const WEB_SEARCH_INSTANCE_ID = 'websearch';
-
-/** Its search actions (the page reader, `readUrl`, reads one page and is not one). */
-const WEB_SEARCH_ACTIONS = new Set(['brave', 'qwant', 'staan']);
-
 /** Tool ids `toolLoader.runTool` dispatches by id, before it looks at a script. */
 const DISPATCHED_BY_ID =
   /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource|find_skill)$/;
 
 /**
- * Whether the call ran one of the platform's own web search scripts: a search
- * action of the built-in `websearch` installation (the way they ship), or a
- * tool file that still runs one of the scripts. Decided by what the
+ * Whether the call ran one of the platform's own web search scripts: the
+ * `search` action of a shipped engine (`com.intrafind/brave-search`, … — the
+ * way they ship), or a tool file that still runs one of the scripts. Decided by what the
  * definition runs, the way `toolLoader.runTool` dispatches it, and never by
  * the tool's id or name: a custom, OpenAPI, MCP or A2A tool called
  * `braveSearch` runs something else.
@@ -96,13 +98,7 @@ function isBuiltInWebSearch(toolId, toolDef) {
   if (toolDef._mcp || toolDef._a2a || toolDef.type === 'openapi' || toolDef.isSpecialTool) {
     return false;
   }
-  const integration = toolDef._integration;
-  if (integration) {
-    return (
-      integration.instanceId === WEB_SEARCH_INSTANCE_ID &&
-      WEB_SEARCH_ACTIONS.has(integration.action)
-    );
-  }
+  if (toolDef._integration) return isBuiltInWebSearchEngineTool(toolDef);
   return BUILT_IN_WEB_SEARCH_SCRIPTS.has(toolDef.script);
 }
 
@@ -147,9 +143,9 @@ function asSource(item, fields = {}) {
 export const webSourceProducer = {
   id: 'web',
 
-  /** @param {{toolId: string}} call */
-  matches({ toolId }) {
-    return isPageReader(toolId) || isWebSearchTool(toolId);
+  /** @param {{toolId: string, toolDef?: Object}} call */
+  matches({ toolId, toolDef }) {
+    return isPageReader(toolId) || isWebSearchTool(toolId) || isWebSearchEngineTool(toolDef);
   },
 
   /**
