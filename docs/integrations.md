@@ -117,13 +117,25 @@ The tile opens the installation's page. Its quick actions are separate buttons: 
 
 ### The installation page
 
-`/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
+`/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test in chat** (see [Example apps and the chat test](#example-apps-and-the-chat-test)), **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
 
 - **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive) and whether they are off or unavailable, the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, and the **Migration log** (the last 10 runs, newest first).
 - **Settings** (`settings`): the installation's editor (below); read-only while a migration state refuses the save.
 - **Releases** (`releases`): the release history of its definition, when it has one.
 
 An installation whose definition is missing or incompatible cannot be edited or tested; its page says why. An installation with a migration state shows the migration panel above the tabs (see [Migrations → In the admin](#in-the-admin)).
+
+### Example apps and the chat test
+
+**Test connection** checks that iHub reaches the system. **Test in chat** shows what users get: a model that picks the installation's actions, reads the results and answers. It opens a panel beside the page — the same chat as the [app editor's test mode](apps.md) — that runs an app using the installation. `?test=chat` opens the page with the panel open.
+
+- **An app already uses the installation** (by its id, its definition id or its type): the panel runs the first enabled one; the **App** picker offers the others, **Edit app** opens the app editor.
+- **No app uses it yet**: the panel (and **Create example app** under _Apps that use it_) offers the **example app**. Pick the app id and whether it is **Available to users now**, then **Create and test**. The app is written to `contents/apps/<id>.json` like any other app, bound to this installation, and the chat starts. Change it in the app editor afterwards.
+  - The example comes from the definition when it ships one (the **LDAP browser** app for an LDAP browser, the **Open Data Assistant** for a CKAN portal; see `exampleApps` under [Writing a definition](#writing-a-definition)).
+  - Any other integration gets a **generated** assistant: the installation's label as name, the definition's description and instructions in the system prompt, and the first examples of its actions as starter prompts. **New example app** in the panel creates another one at any time.
+  - The binding the template has for its integration (by definition id or type) moves to the installation id and keeps its settings; other bindings stay. When the template's id is taken (a second installation, or the shipped app of the same name), the id gets the installation id appended and the name the installation's label, e.g. _Open Data Assistant (GovData)_.
+
+The chat runs the **saved** installation and app and restarts after every save of the settings, so a changed setting is tested with the next message. The chat only serves enabled apps: an example app created without **Available to users now** cannot be tested until it is enabled in the app editor, and an enabled one is visible to every group whose `apps` permission holds `*`. The panel also says when the installation is disabled (an app that requires it is hidden) and when your own groups do not grant it (the chat runs without its actions).
 
 ### Editors
 
@@ -359,9 +371,12 @@ When an MCP server refuses a call with `403` and `WWW-Authenticate: Bearer error
       "urlTemplate": "{baseUrl}/items/{id}"
     }
   },
-  "health": { "action": "search", "args": { "rows": 0 } }
+  "health": { "action": "search", "args": { "rows": 0 } },
+  "exampleApps": [{ "file": "apps/service-assistant.json" }] // companion app configs, at most 5
 }
 ```
+
+`exampleApps` lists **example apps**: companion JSON files in the definition folder (`.json`, at most 512 KB each), each an ordinary app configuration (`server/validators/appConfigSchema.js`) that binds the integration by its **definition id** or **type**, e.g. `"integrations": { "org.example/service": {} }`. The installation page creates one for an installation with a click and binds it there (see [Example apps and the chat test](#example-apps-and-the-chat-test)); `id` and `enabled` of the file are replaced. The marketplace fetches the files with the definition, like its OpenAPI document and release notes.
 
 An `mcp` definition has no actions and no document; its `protocol` fixes what the definition knows and leaves the rest to install fields of the same name: `{ "type": "mcp", "transport": { "type": "streamableHttp", "url": "https://mcp.example.com/mcp", "headers": { "X-Scope": "read" } }, "toolPrefix": "ex_", "timeoutMs": 60000, "apps": { "enabled": true } }`. A registry may publish MCP definitions with a fixed remote transport only; a local process (`stdio`) is installed from the shipped generic definition. The sign-in modes are `none`, `service-account`, `oauth-client` (`auth.oauthClient.field` names the client-secret field) and `oauth-user` (`auth.oauthUser.field` optionally names the secret of a pre-registered client); the adapter decides which of the declared modes it can run.
 
@@ -475,6 +490,8 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `POST /api/admin/integrations/installed/:id/_migrate`                                                                 | run (or re-run) the definition migration                              |
 | `POST /api/admin/integrations/installed/:id/_restore`                                                                 | restore a backup, body `{ "backup"?: "<id>" }`                        |
 | `POST /api/admin/integrations/installed/:id/_adopt`                                                                   | adopt the loaded definition version for an installation that needs a review |
+| `GET /api/admin/integrations/installed/:id/example-apps`                                                              | the example apps it offers (`templates[]`: `key`, `source` `definition` or `generated`, `name`, `description`, `suggestedId`), `grantedToYou` (the calling admin's groups grant it), `enabled` |
+| `POST /api/admin/integrations/installed/:id/example-apps`                                                             | create one, body `{ "template"?: "<key>", "appId"?: "…", "enabled"?: true }` → `201 { app }`; `409` when the id is taken, `400` for an invalid id or an unknown template; audited as `create app` |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in (from the connection index, with `status`); a disconnect revokes upstream where supported |
 | `GET /api/integrations/oauth/callback` | the one OAuth callback of every integration; `/api/integrations/jira/callback`, `/api/integrations/<provider>/<installation id>/callback` and `/api/mcp/oauth/callback/<server id>` are aliases (see [Connections](#connections)) |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
@@ -544,6 +561,8 @@ The three actions answer `{ success, logEntry, instance }` (the installation as 
 | `server/services/integrations/auth/ServiceAccountAuth.js` | `credentialRef` resolution for service accounts (bearer, basic, header, API key, client credentials) |
 | `server/routes/integrations/oauthCallback.js`, `oauthIntegrationFactory.js` | the one OAuth callback and its aliases; the providers' `/auth`, `/status`, `/disconnect` |
 | `server/validators/integrationConnectionSchema.js` | the connection record |
+| `server/routes/admin/integrationExampleApps.js`, `server/services/integrations/exampleApps.js` | example apps of an installation: the templates (shipped or generated), the binding moved to the installation, the free app id |
+| `client/src/features/admin/components/integrations/IntegrationTestPanel.jsx` | **Test in chat** on the installation page: app picker, example app form, the chat of `AppTestPanel` |
 | `server/services/marketplace/ContentInstaller.js`                                                                                                                                                                                                                                                      | marketplace type `integration`                                                                                                                                                                      |
 | `client/src/features/admin/pages/AdminIntegrationsPage.jsx`, `AdminInstallationPage.jsx`, `components/integrations/*`                                                                                                                                                                                  | the Installed, Catalog and Inbound tabs (`integrationGroups.js`, `integrationFacts.js`, `InstallationTile.jsx`), the installation page, the install form (`IntegrationInstallForm.jsx`)                |
 | `client/src/features/admin/components/integrations/migrationState.js`, `useMigrationActions.js`, `MigrationParts.jsx`, `InstallationMigrationPanel.jsx`, `appMigrationWarningRules.js`, `AppMigrationWarnings.jsx`; `components/marketplace/updateMigrationRows.js`, `IntegrationUpdateMigrations.jsx` | the admin UI of definition migrations: which actions a state offers and when Settings is read-only (pure), the actions with their confirmations, the panel, the log, the outcome; the Apps warnings; the marketplace update preview and report |

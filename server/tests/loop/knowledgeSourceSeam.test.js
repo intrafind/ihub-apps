@@ -28,3 +28,77 @@ test('configured sources and unrelated tools keep their classification', () => {
   assert.equal(classifyKnowledgeSource('jira'), null);
   assert.equal(classifyKnowledgeSource(''), null);
 });
+
+test('an integration, MCP server or remote agent is a connected system', async () => {
+  const { classifyToolKnowledgeSource } =
+    await import('../../services/loop/seams/knowledgeSourceSeam.js');
+  const { publishDefinitionTypes } =
+    await import('../../services/integrations/integrationTypes.js');
+  publishDefinitionTypes([
+    { definition: { id: 'com.intrafind/ldap-directory', type: 'people-directory' } },
+    { definition: { id: 'com.intrafind/brave-search', type: 'web-search' } }
+  ]);
+  const integration = (definition, instanceId = 'x') => ({
+    _integration: { definition, instanceId }
+  });
+  // A directory lookup is not "AI knowledge" — the answer came from the directory.
+  assert.equal(
+    classifyToolKnowledgeSource(
+      'muc-ad__search_people',
+      integration('com.intrafind/ldap-directory')
+    ),
+    'integration'
+  );
+  // A Jira search is not a web search, whatever its id says.
+  assert.equal(
+    classifyToolKnowledgeSource('jira_searchTickets', integration('com.intrafind/jira')),
+    'integration'
+  );
+  // A web-search integration stays a web search; iFinder keeps its badge.
+  assert.equal(
+    classifyToolKnowledgeSource('braveSearch', integration('com.intrafind/brave-search')),
+    'websearch'
+  );
+  assert.equal(
+    classifyToolKnowledgeSource('iFinder_search', integration('com.intrafind/ifinder')),
+    'ifinder'
+  );
+  // iHub's own tools are not a connected system.
+  assert.equal(
+    classifyToolKnowledgeSource('schedule_task', integration('com.intrafind/ihub')),
+    null
+  );
+  assert.equal(
+    classifyToolKnowledgeSource('github__search_code', { _mcp: { serverId: 'github' } }),
+    'integration'
+  );
+  assert.equal(
+    classifyToolKnowledgeSource('a2a__agent__skill', { _a2a: { agentId: 'agent' } }),
+    'integration'
+  );
+  // Without a definition the id decides, as before.
+  assert.equal(classifyToolKnowledgeSource('webSearch', { id: 'webSearch' }), 'websearch');
+  publishDefinitionTypes([]);
+});
+
+test('a connected system counts only when the call returned data', async () => {
+  const { knowledgeSourceSeam } = await import('../../services/loop/seams/knowledgeSourceSeam.js');
+  const run = message => {
+    const added = [];
+    const outcome = { message, error: null };
+    knowledgeSourceSeam.postTool(
+      { addKnowledgeSource: source => added.push(source) },
+      { toolId: 'muc-ad__get_person', toolDef: { _integration: { definition: 'd' } } },
+      outcome
+    );
+    return { added, source: outcome.knowledgeSource };
+  };
+  assert.deepEqual(run({ role: 'tool', content: '{"name":"Daniel"}' }), {
+    added: ['integration'],
+    source: 'integration'
+  });
+  assert.deepEqual(run({ role: 'tool', content: '{"error":true,"message":"down"}' }), {
+    added: [],
+    source: undefined
+  });
+});

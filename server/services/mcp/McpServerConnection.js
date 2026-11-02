@@ -507,6 +507,10 @@ export class McpServerConnection {
         _mcp: {
           serverId: this.config.id,
           originalName: t.name,
+          // The tool's human-readable title, when the server declares one.
+          ...(typeof (t.title || t.annotations?.title) === 'string'
+            ? { title: t.title || t.annotations.title }
+            : {}),
           ...(this.config.name ? { serverName: this.config.name } : {}),
           ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
         }

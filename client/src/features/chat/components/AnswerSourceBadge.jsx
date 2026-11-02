@@ -106,6 +106,13 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
         colorClasses =
           'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
         break;
+      case 'integration':
+        // An installed integration, MCP server or remote agent answered the tool calls.
+        displayText = t('chatMessage.answerSource.integration');
+        iconName = 'link';
+        colorClasses =
+          'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300 border-sky-200 dark:border-sky-800';
+        break;
       case 'grounding':
         displayText = t('chatMessage.answerSource.grounding');
         iconName = 'search';
