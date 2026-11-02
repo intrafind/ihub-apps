@@ -22,8 +22,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   listCredentials: jest.fn(async () => [
     { id: 'cred_proxy', name: 'Proxy secret', type: 'secret' },
     { id: 'cred_oauth', name: 'OAuth client', type: 'oauth2' }
-  ]),
-  parseOpenApiSpec: jest.fn()
+  ])
 }));
 
 // runtimeBasePath uses `import.meta`, which the Jest transform cannot parse.

@@ -63,8 +63,6 @@ const AdminPromptsPage = lazyWithRetry(() => import('./features/admin/pages/Admi
 const AdminPromptEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminPromptEditPage')
 );
-const AdminToolsPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolsPage'));
-const AdminToolEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolEditPage'));
 const AdminSkillsPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillsPage'));
 const AdminSkillEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillEditPage'));
 const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/AdminWorkflowsPage'));
@@ -570,15 +568,6 @@ function App() {
               <Route
                 path="prompts/:promptId"
                 element={<LazyAdminRoute component={AdminPromptEditPage} />}
-              />
-            )}
-            {showAdminPage('tools') && (
-              <Route path="tools" element={<LazyAdminRoute component={AdminToolsPage} />} />
-            )}
-            {showAdminPage('tools') && (
-              <Route
-                path="tools/:toolId"
-                element={<LazyAdminRoute component={AdminToolEditPage} />}
               />
             )}
             {showAdminPage('skills') && (

@@ -32,8 +32,11 @@ jest.mock('../../../client/src/api/agentsAdminApi', () => ({
 }));
 
 jest.mock('../../../client/src/api/adminApi', () => ({
-  fetchAdminTools: jest.fn().mockResolvedValue([]),
   getAdminApiErrorMessage: err => `API error: ${err.message}`
+}));
+
+jest.mock('../../../client/src/api/endpoints/misc', () => ({
+  fetchToolsBasic: jest.fn().mockResolvedValue([])
 }));
 
 jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () => ({

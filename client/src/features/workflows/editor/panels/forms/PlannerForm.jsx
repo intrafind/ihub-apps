@@ -6,7 +6,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchTools } from '../../../../../api/endpoints/admin';
+import { fetchToolsBasic } from '../../../../../api/endpoints/misc';
 
 function PlannerForm({ config, onChange }) {
   const tt = config.taskTemplate || {};
@@ -15,7 +15,7 @@ function PlannerForm({ config, onChange }) {
     onChange({ ...config, taskTemplate: { ...tt, [field]: value } });
   };
 
-  const fetchToolsFn = useCallback(() => fetchTools(), []);
+  const fetchToolsFn = useCallback(() => fetchToolsBasic(), []);
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   return (

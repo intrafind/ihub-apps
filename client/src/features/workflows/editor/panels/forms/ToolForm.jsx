@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import FormField from './FormField';
 import JsonField from './JsonField';
 import ResourcePicker from './ResourcePicker';
-import { fetchTools } from '../../../../../api/endpoints/admin';
+import { fetchToolsBasic } from '../../../../../api/endpoints/misc';
 
 /**
  * Resolves the localized-or-plain `name`/`description` shapes the tools API
@@ -18,12 +18,14 @@ function text(value, fallback = '') {
 }
 
 /**
- * The tools API lists multi-function tools as one entry with a `functions`
- * map, but a workflow calls one function by its expanded id — `iFinder` holds
- * `getContent`, which `runTool` reaches as `iFinder_getContent`. Offer the
- * expanded ids so the picker's value is something the engine can actually run.
+ * A workflow calls one function of a multi-function tool by its expanded id
+ * — `iFinder` holds `getContent`, which `runTool` reaches as
+ * `iFinder_getContent`. The tool listing (`GET /api/tools`) already has one
+ * entry per function (carrying `method`); an entry that still holds a
+ * `functions` map is expanded here, so the picker's value is something the
+ * engine can actually run.
  *
- * @param {Array<object>} tools - Raw tool list from the admin API
+ * @param {Array<object>} tools - Tool list from `GET /api/tools`
  * @returns {Array<{id: string, name: string, description: string}>}
  */
 export function expandToolFunctions(tools) {
@@ -31,7 +33,13 @@ export function expandToolFunctions(tools) {
   for (const tool of Array.isArray(tools) ? tools : []) {
     const toolName = text(tool.name, tool.id);
     const fns = tool.functions;
-    if (fns && typeof fns === 'object' && !Array.isArray(fns) && Object.keys(fns).length > 0) {
+    if (
+      !tool.method &&
+      fns &&
+      typeof fns === 'object' &&
+      !Array.isArray(fns) &&
+      Object.keys(fns).length > 0
+    ) {
       for (const [fn, cfg] of Object.entries(fns)) {
         out.push({
           id: `${tool.id}_${fn}`,
@@ -48,7 +56,7 @@ export function expandToolFunctions(tools) {
 
 function ToolForm({ config, onChange, variables }) {
   const fetchToolsFn = useCallback(async () => {
-    const tools = await fetchTools();
+    const tools = await fetchToolsBasic();
     return expandToolFunctions(Array.isArray(tools) ? tools : tools?.tools);
   }, []);
 

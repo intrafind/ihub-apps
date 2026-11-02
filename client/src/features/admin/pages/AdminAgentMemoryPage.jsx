@@ -10,7 +10,8 @@ import {
   fetchMemoryShaperPrompt,
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
-import { fetchAdminTools, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import { fetchToolsBasic } from '../../../api/endpoints/misc';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import MemoryEditor from '../../../shared/components/MemoryEditor';
 
@@ -37,15 +38,15 @@ export default function AdminAgentMemoryPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const list = await fetchAdminTools();
-        // The admin tools endpoint returns the raw catalog (parents have a
-        // `functions` block). The dispatcher exposes each function as a
-        // separate tool id (e.g. `iFinder_discover`), so expand the same way
-        // here for the picker.
+        const list = await fetchToolsBasic();
+        // The tool listing (`GET /api/tools`) has every function of a
+        // function-style tool as its own entry already (`iFinder_discover`,
+        // carrying `method`); an entry that still holds `functions` and no
+        // `method` is expanded the same way here for the picker.
         const expanded = [];
         for (const tool of list || []) {
           const baseName = typeof tool.name === 'string' ? tool.name : tool.name?.en || tool.id;
-          if (tool.functions && typeof tool.functions === 'object') {
+          if (!tool.method && tool.functions && typeof tool.functions === 'object') {
             for (const fn of Object.keys(tool.functions)) {
               const fnId = `${tool.id}_${fn}`;
               expanded.push({ id: fnId, label: `${baseName} · ${fn} (${fnId})` });
