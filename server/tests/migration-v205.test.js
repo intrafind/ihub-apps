@@ -52,7 +52,7 @@ function makeCtx(files) {
   };
 }
 
-/** Shipped-like groups (after V202) plus two custom ones. */
+/** Shipped-like groups (after V203) plus two custom ones. */
 function groupsFile() {
   return {
     groups: {
