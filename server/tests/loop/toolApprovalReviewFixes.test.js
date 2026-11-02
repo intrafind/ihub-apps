@@ -21,8 +21,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { InstalledIntegrationService } from '../../services/integrations/InstalledIntegrationService.js';
 import {
+  answerLogEntry,
   executionActingUser,
-  CheckpointResumeError
+  CheckpointResumeError,
+  EXECUTION_PRINCIPAL_UNKNOWN
 } from '../../services/workflow/checkpointResume.js';
 import { actorSnapshot } from '../../services/workflow/executionActor.js';
 import {
@@ -84,9 +86,8 @@ test('#1 an installation save that does not name approval keeps the stored one; 
 
 // ── 2 ────────────────────────────────────────────────────────────────────────
 
-test('#2 a resumed execution acts as its recorded principal, never as the approver', () => {
+test('#2 a resumed execution acts as its recorded principal, never as whoever answered', () => {
   const owner = { id: 'ada', name: 'Ada', groups: ['users', 'sales'], authMode: 'oidc' };
-  const approver = { id: 'boss', groups: ['admins', 'legal'] };
   const pending = { id: 'ckpt-1', nodeId: 'n1', type: TOOL_APPROVAL_CHECKPOINT };
   const state = {
     data: {
@@ -94,24 +95,36 @@ test('#2 a resumed execution acts as its recorded principal, never as the approv
       _pausedLoops: { n1: { kind: 'approval', approval: { actor: actorSnapshot(owner) } } }
     }
   };
-  const acting = executionActingUser(state, pending, { answeringUser: approver });
+  // Rebuilds the snapshot without the groups config: the test stays self-contained.
+  const resolveActor = snapshot => ({
+    ok: true,
+    user: { id: snapshot.userId, groups: snapshot.groups }
+  });
+  const acting = executionActingUser(state, pending, { resolveActor });
   assert.equal(acting.id, 'ada');
-  assert.deepEqual(acting.groups.includes('legal'), false);
+  assert.deepEqual(acting.groups, ['users', 'sales']);
   // A human checkpoint and a question continue as the execution's principal too.
   for (const type of ['approval', 'question']) {
-    const user = executionActingUser(state, { ...pending, type }, { answeringUser: approver });
-    assert.equal(user.id, 'ada');
+    assert.equal(executionActingUser(state, { ...pending, type }, { resolveActor }).id, 'ada');
   }
-  // A tool approval without a recorded principal refuses to run the call.
+  // No recorded principal (started before this version): every kind of answer
+  // refuses to resume, instead of continuing as the person who answered.
+  for (const type of [TOOL_APPROVAL_CHECKPOINT, 'approval', 'question']) {
+    assert.throws(
+      () => executionActingUser({ data: {} }, { ...pending, type }, { resolveActor }),
+      error =>
+        error instanceof CheckpointResumeError &&
+        error.code === EXECUTION_PRINCIPAL_UNKNOWN &&
+        /start it again/.test(error.message)
+    );
+  }
+  // A principal that cannot act any more is refused with its reason.
   assert.throws(
-    () => executionActingUser({ data: {} }, pending, { answeringUser: approver }),
-    error => error instanceof CheckpointResumeError && error.code === 'ACTOR_UNKNOWN'
-  );
-  // An execution started before the actor was recorded: a question goes on as before.
-  assert.equal(
-    executionActingUser({ data: {} }, { ...pending, type: 'question' }, { answeringUser: approver })
-      .id,
-    'boss'
+    () =>
+      executionActingUser(state, pending, {
+        resolveActor: () => ({ ok: false, code: 'OWNER_DELETED', message: 'gone' })
+      }),
+    error => error.code === 'OWNER_DELETED'
   );
   // Agent runs keep their agent principal kind.
   assert.deepEqual(actorSnapshot({ id: 'agent:p1', isAgent: true, profileId: 'p1' }), {
@@ -119,6 +132,67 @@ test('#2 a resumed execution acts as its recorded principal, never as the approv
     profileId: 'p1',
     triggeredBy: null
   });
+});
+
+test('#2 the recorded principal is rebuilt from the snapshot with the configured groups (no contents needed)', async t => {
+  const configCache = (await import('../../configCache.js')).default;
+  const { resolveExecutionActor } = await import('../../services/workflow/executionActor.js');
+  const before = {
+    groups: configCache.get?.('config/groups.json'),
+    platform: configCache.get?.('config/platform.json')
+  };
+  configCache.setCacheEntry('config/groups.json', {
+    groups: { users: { id: 'users', permissions: { apps: ['*'], models: ['*'] } } }
+  });
+  configCache.setCacheEntry('config/platform.json', { auth: {} });
+  t.after(() => {
+    if (before.groups) configCache.setCacheEntry('config/groups.json', before.groups);
+    if (before.platform) configCache.setCacheEntry('config/platform.json', before.platform);
+  });
+  const resolved = resolveExecutionActor(
+    actorSnapshot({ id: 'ada', name: 'Ada', groups: ['users'], authMode: 'oidc' })
+  );
+  assert.equal(resolved.ok, true, resolved.message);
+  assert.equal(resolved.user.id, 'ada');
+  assert.ok(resolved.user.groups.includes('users'));
+});
+
+test('#2 who answered is documented: the answer carries the approver, the execution logs it', async t => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-approver-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  t.after(async () => {
+    await svc.stop?.();
+    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  });
+  const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'owner-1' } });
+  const raised = await svc.raise({
+    runId,
+    kind: 'approval',
+    origin: 'tool',
+    prompt: { message: 'Run?', inputType: 'confirm' },
+    policy: { approverGroups: ['legal'] },
+    source: { checkpointId: 'ckpt-1', executionId: runId, nodeId: 'n1', principalId: 'owner-1' }
+  });
+  const answered = await svc.answer(
+    raised.id,
+    { decision: 'approve' },
+    { user: { id: 'boss', name: 'The Boss', groups: ['legal', 'users'] }, channel: 'queue' }
+  );
+  assert.deepEqual(answered.answer.approver, {
+    id: 'boss',
+    name: 'The Boss',
+    via: 'approverGroups',
+    groups: ['legal']
+  });
+  const entry = answerLogEntry(
+    { id: 'ckpt-1', nodeId: 'n1', type: 'toolApproval' },
+    answered.answer
+  );
+  assert.equal(entry.approver.id, 'boss');
+  assert.equal(entry.decision, 'approve');
+  assert.equal(entry.checkpointId, 'ckpt-1');
+  assert.ok(entry.at);
 });
 
 // ── 3 ────────────────────────────────────────────────────────────────────────

@@ -104,6 +104,14 @@ describe('ApprovalCard', () => {
     expect(screen.getByTestId('tool-approval-card')).toHaveAttribute('aria-labelledby');
   });
 
+  it('for an MCP App view call offers no chat-wide grant (allowChatGrant=false)', () => {
+    const onDecide = jest.fn();
+    render(<ApprovalCard approval={APPROVAL} onDecide={onDecide} allowChatGrant={false} />);
+    expect(screen.queryByRole('button', { name: 'Approve & allow for this chat' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onDecide).toHaveBeenCalledWith({ interactionId: 'approve-1', decision: 'approve' });
+  });
+
   it('shows the decision instead of the buttons once answered, and is read-only without a handler', () => {
     const { rerender } = render(
       <ApprovalCard approval={{ ...APPROVAL, decision: 'rejected' }} onDecide={() => {}} />
