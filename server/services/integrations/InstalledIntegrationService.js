@@ -99,6 +99,30 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** A copy of a string record with its keys sorted (stable diffs of integrations.json). */
+function sortedRecord(record) {
+  const out = {};
+  for (const key of Object.keys(record || {}).sort()) out[key] = record[key];
+  return out;
+}
+
+/**
+ * Carry the accepted action fingerprints and the last review time (#2916)
+ * from the stored installation over to a saved one: they are written by the
+ * server only, never by a save.
+ * @param {object} instance - the installation about to be stored
+ * @param {object|undefined} stored - the installation as stored
+ */
+function keepActionReview(instance, stored) {
+  const { fingerprints, reviewedAt } = stored?.actions || {};
+  if (!fingerprints && !reviewedAt) return;
+  instance.actions = {
+    ...instance.actions,
+    ...(fingerprints ? { fingerprints } : {}),
+    ...(reviewedAt ? { reviewedAt } : {})
+  };
+}
+
 export class InstalledIntegrationService {
   constructor({ registry = integrationRegistry } = {}) {
     this.registry = registry;
@@ -278,6 +302,12 @@ export class InstalledIntegrationService {
     delete rest.status;
     delete rest.statusReason;
     delete rest.migrationLog;
+    // The accepted action fingerprints (#2916) are the server's: a baseline
+    // or "Mark reviewed" writes them, a save keeps the stored ones (`update`).
+    if (rest.actions && typeof rest.actions === 'object') {
+      const { fingerprints: _fingerprints, reviewedAt: _reviewedAt, ...actions } = rest.actions;
+      rest.actions = actions;
+    }
     const parsed = validateInstalledIntegration({
       ...rest,
       installedAt: existing?.installedAt,
@@ -542,6 +572,7 @@ export class InstalledIntegrationService {
       const index = config.installed.findIndex(inst => inst.id === id);
       if (index < 0)
         throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      keepActionReview(instance, config.installed[index]);
       config.installed[index] = instance;
       await this.writeConfig(config);
       // Only once the file points elsewhere: a failed write must leave the
@@ -563,7 +594,7 @@ export class InstalledIntegrationService {
    * controls cannot touch the values or the secret.
    *
    * @param {string} id
-   * @param {{default?: string, actions?: Object<string,string>}|null} approval
+   * @param {{default?: string, actions?: Object<string,string>, newOrChanged?: string}|null} approval
    * @returns {Promise<Object>} the stored installation
    */
   setApproval(id, approval) {
@@ -579,7 +610,7 @@ export class InstalledIntegrationService {
         }
         cleaned = parsed.data;
         if (cleaned.actions && Object.keys(cleaned.actions).length === 0) delete cleaned.actions;
-        if (!cleaned.default && !cleaned.actions) cleaned = null;
+        if (!cleaned.default && !cleaned.actions && !cleaned.newOrChanged) cleaned = null;
       }
       const config = this._readConfigForWrite();
       const instance = config.installed.find(inst => inst.id === id);
@@ -592,6 +623,71 @@ export class InstalledIntegrationService {
       await this.writeConfig(config);
       await this._afterChange(instance.id, { before, after: instance });
       return instance;
+    });
+  }
+
+  /**
+   * Take the action fingerprint baseline of an installation (#2916): the
+   * current fingerprints become the accepted ones, but only while the
+   * installation has none (a baseline is never overwritten; "Mark reviewed"
+   * is {@link markActionsReviewed}). Nothing else changes, `updatedAt`
+   * included: the baseline is the server's, not an admin edit.
+   *
+   * @param {string} id
+   * @param {Object<string,string>} fingerprints - current fingerprints by action name
+   * @returns {Promise<Object|null>} the stored installation, or null when nothing was written
+   */
+  recordActionBaseline(id, fingerprints) {
+    return this._serialize(async () => {
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance || instance.actions?.fingerprints) return null;
+      instance.actions = { ...instance.actions, fingerprints: sortedRecord(fingerprints) };
+      await this.writeConfig(config);
+      return instance;
+    });
+  }
+
+  /**
+   * Mark actions of an installation as reviewed (#2916): their current
+   * fingerprints become the accepted ones, so they are no longer new or
+   * changed. `names` null marks every current action; accepted fingerprints of
+   * actions the system no longer lists are kept (an action that comes back
+   * unchanged is not new again).
+   *
+   * @param {string} id
+   * @param {Object<string,string>} fingerprints - current fingerprints by action name
+   * @param {string[]|null} [names] - the actions to mark; null for all
+   * @returns {Promise<{instance: Object, reviewed: string[]}>}
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `UNKNOWN_ACTION` when no named action is listed
+   */
+  markActionsReviewed(id, fingerprints, names = null) {
+    return this._serialize(async () => {
+      const current = fingerprints && typeof fingerprints === 'object' ? fingerprints : {};
+      const reviewed = Array.isArray(names)
+        ? [...new Set(names)].filter(name => Object.hasOwn(current, name))
+        : Object.keys(current);
+      if (Array.isArray(names) && reviewed.length === 0) {
+        throw new IntegrationError('None of these actions is listed by the integration', {
+          code: 'UNKNOWN_ACTION',
+          details: { actions: names }
+        });
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const accepted = { ...(instance.actions?.fingerprints || {}) };
+      for (const name of reviewed) accepted[name] = current[name];
+      const reviewedAt = nowIso();
+      instance.actions = {
+        ...instance.actions,
+        fingerprints: sortedRecord(accepted),
+        reviewedAt
+      };
+      instance.updatedAt = reviewedAt;
+      await this.writeConfig(config);
+      return { instance, reviewed: reviewed.sort() };
     });
   }
 

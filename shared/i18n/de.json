@@ -4110,6 +4110,17 @@
         "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
         "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
         "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
+      },
+      "actionReview": {
+        "new": "Neu",
+        "changed": "Geändert",
+        "newHint": "Seit der letzten Prüfung hinzugekommen. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "changedHint": "Wirkung oder Eingabe haben sich seit der letzten Prüfung geändert. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "pending": "{{count}} Aktionen sind seit der letzten Prüfung neu oder geändert.",
+        "markAll": "Alle als geprüft markieren",
+        "markOne": "Als geprüft markieren",
+        "markOneLabel": "{{action}} als geprüft markieren",
+        "marked": "Als geprüft markiert: {{actions}}"
       }
     },
     "sidebar": {
@@ -5304,7 +5315,12 @@
       "installationMode": "Vor einer Aktion fragen",
       "installationModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung, der Aktion und der App. Eine Wirkung, die nur der Server selbst angibt, zählt nicht als Lesen.",
       "saveApproval": "Freigabe speichern",
-      "installationSaved": "Freigabe-Einstellungen gespeichert."
+      "installationSaved": "Freigabe-Einstellungen gespeichert.",
+      "newOrChangedMode": "Neue oder geänderte Aktionen",
+      "newOrChangedDefault": "Immer fragen (Standard)",
+      "newOrChangedHelp": "Eine Aktion, die seit der letzten Prüfung hinzugekommen ist oder deren Wirkung oder Eingabe sich geändert hat, fragt mindestens so, bis Sie sie als geprüft markieren. Gilt, sobald an dieser Integration eine Freigabe eingestellt ist.",
+      "presetAlwaysHelp": "Vorausgewählt: immer fragen. Diese Integration sendet Daten nach außen und gibt nicht verlässlich an, welche ihrer Aktionen nur lesen. Sie können das jetzt oder später auf der Seite der Integration ändern.",
+      "presetWritesHelp": "Vorausgewählt: fragen, außer eine Aktion liest nur. Sie können das jetzt oder später auf der Seite der Integration ändern."
     }
   },
   "cloudStorage": {

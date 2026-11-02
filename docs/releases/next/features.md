@@ -363,6 +363,15 @@ a mode.
   issue it again. A rejected or expired approval is reported to the assistant, which carries on.
 - **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
   under "ask unless it only reads" until an admin confirms the tool as a read.
+- **New and changed actions ask until reviewed:** iHub fingerprints every action of an
+  integration (name, what it does, its input). When a vendor adds an action or changes one, it
+  is badged **New** or **Changed** on the integration page and asks every time (configurable) until
+  you choose **Mark reviewed** or **Mark all reviewed**. This applies to integrations you have set
+  approval for.
+- **Sensible start for new integrations:** installing an integration preselects "ask unless it
+  only reads", and "always ask" for MCP servers, A2A agents and other external integrations that
+  do not declare what their actions do. You can change it before saving; existing integrations
+  are left as they are.
 - **Where nobody can approve** (OpenAI-compatible API, apps as tools, the MCP and A2A gateways,
   workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
   step that names approver groups parks the approval for them instead. Scheduled tasks keep

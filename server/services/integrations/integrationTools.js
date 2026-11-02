@@ -13,6 +13,7 @@ import {
 } from './integrationAccess.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
+import { fingerprintOfTool, fingerprintsOfActions, observeInBackground } from './actionReview.js';
 import {
   registerScopeProvider,
   unregisterScopeProvider,
@@ -60,7 +61,7 @@ export function isIntegrationTool(tool) {
   return Boolean(tool && tool._integration);
 }
 
-function toolFromAction(resolved, action, language) {
+function toolFromAction(resolved, action, language, fingerprint = null) {
   const { instance, definition, label } = resolved;
   const title = action.title || action.name;
   const guidance = action.guidance ? `\n\n${action.guidance}` : '';
@@ -80,7 +81,10 @@ function toolFromAction(resolved, action, language) {
       // A built-in that kept the tool id it had before (`iFinder_search`).
       fixedToolId: action.toolId !== `${instance.id}__${action.name}`,
       // Bound only when a binding names the action (`bindExplicitly` in the definition).
-      ...(action.bindExplicitly ? { bindExplicitly: true } : {})
+      ...(action.bindExplicitly ? { bindExplicitly: true } : {}),
+      // Name, declared side effect and input schema (#2916): compared by the
+      // approval resolver with the fingerprint an admin accepted.
+      ...(fingerprint ? { fingerprint } : {})
     },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
@@ -168,19 +172,35 @@ export async function discoverIntegrationTools(language = null) {
       // An adapter over a system that already shapes tools (MCP) hands them
       // over as they are, with the integration marker added.
       if (typeof adapter.discoverTools === 'function') {
-        tools.push(...(await adapter.discoverTools(resolved, lang)));
+        const fingerprints = {};
+        for (const tool of await adapter.discoverTools(resolved, lang)) {
+          const fingerprint = fingerprintOfTool(tool);
+          if (fingerprint && tool._integration?.action) {
+            fingerprints[tool._integration.action] = fingerprint;
+          }
+          tools.push(
+            fingerprint ? { ...tool, _integration: { ...tool._integration, fingerprint } } : tool
+          );
+        }
+        // Only the actions switched on are listed here: compared, never a baseline.
+        observeInBackground(resolved.instance.id, fingerprints, { complete: false });
         continue;
       }
+      // Every action, the unavailable ones included, so the fingerprints are
+      // complete; only the available ones become tools.
       const actions = await adapter.discoverActions({
         definition: resolved.definition,
         instance: resolved.instance,
         document: resolved.document,
         security: resolved.security,
-        language: lang
+        language: lang,
+        includeUnavailable: true
       });
+      const fingerprints = fingerprintsOfActions(actions, resolved.definition);
+      observeInBackground(resolved.instance.id, fingerprints, { complete: true });
       for (const action of actions) {
         if (!action.available) continue;
-        tools.push(toolFromAction(resolved, action, lang));
+        tools.push(toolFromAction(resolved, action, lang, fingerprints[action.name] || null));
       }
     } catch (error) {
       logger.error('Could not discover the actions of an installed integration', {

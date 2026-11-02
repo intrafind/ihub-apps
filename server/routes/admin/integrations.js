@@ -21,6 +21,12 @@ import { serverVersion } from '../../services/integrations/definitions/compatibi
 import definitionMigrationRunner from '../../services/integrations/definitions/DefinitionMigrationRunner.js';
 import { describeStep } from '../../services/integrations/definitions/migrationPlanner.js';
 import logger from '../../utils/logger.js';
+import {
+  currentActionsOf,
+  observeActionFingerprints,
+  reviewStatesOf
+} from '../../services/integrations/actionReview.js';
+import { installApprovalPreset } from '../../../shared/toolApproval.js';
 
 /**
  * Admin API of the integrations platform (#3061):
@@ -51,6 +57,25 @@ function languageOf(req) {
   const raw =
     req.query.lang || req.headers['accept-language']?.split(',')[0]?.split(';')[0] || 'en';
   return /^[a-z]{2}(-[A-Z]{2})?$/.test(raw) ? raw : 'en';
+}
+
+/**
+ * Compare an installation's current action fingerprints with the accepted
+ * ones and take the baseline when there is none (#2916). A failure is logged
+ * and never fails the admin request it rides on.
+ * @param {string} instanceId
+ * @param {Object<string,string>} fingerprints - from a complete action list
+ */
+async function observeFingerprints(instanceId, fingerprints) {
+  try {
+    await observeActionFingerprints(instanceId, fingerprints, { complete: true });
+  } catch (error) {
+    logger.warn('Could not compare the action fingerprints of an installed integration', {
+      component: COMPONENT,
+      instanceId,
+      error: error.message
+    });
+  }
 }
 
 function definitionIdOf(req, res) {
@@ -156,6 +181,15 @@ function definitionDetailView(entry, language, instances, updates) {
         }
       : null,
     instructions: localized(def.instructions, language),
+    /**
+     * The approval default the install form preselects for a new installation
+     * (#2916): `always` for an external integration without trusted side
+     * effects (MCP, A2A, undeclared), else `writes`.
+     */
+    approvalPreset: installApprovalPreset({
+      dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
+      actions: def.actions
+    }),
     actions: def.actions.map(a => ({
       name: a.name,
       operationId: a.operationId,
@@ -543,36 +577,34 @@ export default function registerAdminIntegrationsRoutes(app) {
       const language = languageOf(req);
       const resolved = await installedIntegrationService.resolve(id, language);
       if (!resolved) return sendNotFound(res, 'Integration');
-      let actions = [];
       // An incompatible definition offers no tools; asking its adapter for
       // actions would run it. Neither does an installation whose migration
       // state withholds them: its values are not for the loaded definition.
-      if (resolved.definition && !resolved.incompatible && !resolved.blocked) {
-        const adapter = getProtocolAdapter(resolved.definition.protocol.type);
-        if (adapter) {
-          actions = await adapter.discoverActions({
-            definition: resolved.definition,
-            instance: resolved.instance,
-            document: resolved.document,
-            security: resolved.security,
-            language,
-            includeUnavailable: true
-          });
-        }
-      }
+      // (`currentActionsOf` lists nothing for those.)
+      const { actions, fingerprints } = await currentActionsOf(resolved, language);
+      // The complete list: takes the fingerprint baseline once (#2916).
+      await observeFingerprints(id, fingerprints);
+      const instance = installedIntegrationService.get(id) || resolved.instance;
+      const review = reviewStatesOf(instance, fingerprints);
       const updates = await definitionUpdates();
-      const migrations = await migrationViews([resolved.instance]);
+      const migrations = await migrationViews([instance]);
       res.json({
         success: true,
         instance: instanceView(
-          resolved.instance,
+          instance,
           resolved,
           language,
           updates,
-          migrations.get(resolved.instance.id) || null
+          migrations.get(instance.id) || null
         ),
         values: resolved.values,
-        actions: actions.map(a => ({ ...a, parameters: a.parameters, sources: undefined })),
+        actions: actions.map(a => ({
+          ...a,
+          parameters: a.parameters,
+          sources: undefined,
+          // `new` or `changed` since the last admin review, else null (#2916).
+          review: review[a.name] || null
+        })),
         definition: resolved.definition
           ? definitionDetailView(
               integrationRegistry.get(resolved.definition.id),
@@ -619,7 +651,18 @@ export default function registerAdminIntegrationsRoutes(app) {
       if (!validateIdForPath(id, 'integration', res)) return;
       try {
         const approval = req.body?.approval ?? null;
-        const instance = await installedIntegrationService.setApproval(id, approval);
+        let instance = await installedIntegrationService.setApproval(id, approval);
+        // Turning approval on takes the fingerprint baseline when there is none
+        // yet (#2916): the actions the admin sees now count as reviewed.
+        if (instance.approval && !instance.actions?.fingerprints) {
+          const language = languageOf(req);
+          const resolved = await installedIntegrationService.resolve(id, language);
+          const { fingerprints } = await currentActionsOf(resolved, language).catch(() => ({
+            fingerprints: {}
+          }));
+          await observeFingerprints(id, fingerprints);
+          instance = installedIntegrationService.get(id) || instance;
+        }
         logAudit({
           req,
           action: 'update',
@@ -630,6 +673,52 @@ export default function registerAdminIntegrationsRoutes(app) {
         res.json({ success: true, instance });
       } catch (error) {
         sendIntegrationError(res, error, 'update integration approval');
+      }
+    }
+  );
+
+  /**
+   * Mark actions as reviewed (#2916): `{ actions?: string[] }`, every current
+   * action when absent. Their current fingerprints become the accepted ones,
+   * so they are no longer new or changed and `approval.newOrChanged` stops
+   * applying to them.
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/review'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const names = req.body?.actions;
+      if (
+        names !== undefined &&
+        names !== null &&
+        (!Array.isArray(names) ||
+          names.length === 0 ||
+          names.some(n => typeof n !== 'string' || !n || n.length > 128))
+      ) {
+        return sendBadRequest(res, 'actions must be a non-empty list of action names');
+      }
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        const { fingerprints } = await currentActionsOf(resolved, language);
+        const { instance, reviewed } = await installedIntegrationService.markActionsReviewed(
+          id,
+          fingerprints,
+          Array.isArray(names) ? names : null
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Marked ${Array.isArray(names) ? 'actions' : 'all actions'} of integration "${id}" as reviewed: ${reviewed.join(', ') || '(none listed)'}`
+        });
+        res.json({ success: true, instance, reviewed });
+      } catch (error) {
+        sendIntegrationError(res, error, 'mark integration actions as reviewed');
       }
     }
   );

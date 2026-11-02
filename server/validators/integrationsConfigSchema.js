@@ -3,7 +3,8 @@
 
 import { z } from 'zod';
 import { zSafeId } from './common.js';
-import { APPROVAL_MODES } from '../../shared/toolApproval.js';
+import { APPROVAL_MODES, DATA_FLOWS } from '../../shared/toolApproval.js';
+import { FINGERPRINT_PATTERN } from '../utils/actionFingerprint.js';
 import {
   AUTH_MODES,
   integrationIdSchema,
@@ -33,16 +34,34 @@ const installedAuthSchema = z.object({
   credentialRef: z.string().min(1).max(128).optional()
 });
 
+/**
+ * The admin's override of one action. `sideEffect` and `dataFlow` are trusted
+ * (an admin confirmed them) and win over what the definition or a remote
+ * server declares (`utils/toolApproval.js`).
+ */
 const actionOverrideSchema = z.object({
   description: localizedStringSchema.optional(),
-  sideEffect: z.enum(SIDE_EFFECTS).optional()
+  sideEffect: z.enum(SIDE_EFFECTS).optional(),
+  dataFlow: z.enum(DATA_FLOWS).optional()
 });
 
 const installedActionsSchema = z.object({
   /** Action names, or `["*"]` for every action the definition enables by default. */
   enabled: z.array(z.string().min(1).max(64)).prefault(['*']),
   disabled: z.array(z.string().min(1).max(64)).prefault([]),
-  overrides: z.record(z.string(), actionOverrideSchema).prefault({})
+  overrides: z.record(z.string(), actionOverrideSchema).prefault({}),
+  /**
+   * The action fingerprints an admin accepted (#2916), by action name:
+   * `sha256:` over name, declared side effect and canonical input schema
+   * (`utils/actionFingerprint.js`). Written by the server only (a baseline
+   * once, then "Mark reviewed"); an action that is not here, or whose
+   * fingerprint differs, is new or changed. Absent: no baseline yet.
+   */
+  fingerprints: z
+    .record(z.string().min(1).max(128), z.string().regex(FINGERPRINT_PATTERN))
+    .optional(),
+  /** When an admin last marked actions as reviewed (ISO time). */
+  reviewedAt: z.string().max(64).optional()
 });
 
 /**
@@ -55,7 +74,12 @@ const installedActionsSchema = z.object({
  */
 export const installedApprovalSchema = z.object({
   default: z.enum(APPROVAL_MODES).optional(),
-  actions: z.record(z.string().min(1).max(128), z.enum(APPROVAL_MODES)).optional()
+  actions: z.record(z.string().min(1).max(128), z.enum(APPROVAL_MODES)).optional(),
+  /**
+   * The mode an action resolves to at least while it is new or changed since
+   * the last admin review (#2916). Absent means `always`.
+   */
+  newOrChanged: z.enum(APPROVAL_MODES).optional()
 });
 
 const healthSchema = z.object({
@@ -190,7 +214,7 @@ const installedIntegrationObjectSchema = z.object({
   values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
-  /** Tool approval: `{ default?, actions? }` (see {@link installedApprovalSchema}). */
+  /** Tool approval: `{ default?, actions?, newOrChanged? }` (see {@link installedApprovalSchema}). */
   approval: installedApprovalSchema.optional(),
   // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.

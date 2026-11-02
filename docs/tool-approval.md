@@ -34,7 +34,17 @@ Every tool has a side effect (`read`, `write`, `destructive`, `unknown`) and a d
 5. Otherwise `unknown`, which `writes` treats as a write.
 
 Remote MCP servers and A2A agents are `external`; integrations declare their data flow; every
-other tool is `internal` unless its tool file says otherwise.
+other tool is `internal` unless its tool file says otherwise. An admin can set an action's data
+flow on the installation (`actions.overrides[<action>].dataFlow`); it wins over the declared one
+and decides which platform default applies.
+
+```json
+// integrations.json: this MCP server runs in your network, and its "search" only reads
+{
+  "id": "wiki",
+  "actions": { "overrides": { "search": { "sideEffect": "read", "dataFlow": "internal" } } }
+}
+```
 
 ## Where it is configured and who wins
 
@@ -47,6 +57,7 @@ can only tighten them, never loosen them (a looser app value is ignored and logg
 | 2 | Tool file                | `contents/tools/<id>.json` → `approval` (per function, else the tool's). `requiresApproval: true` counts as `always`. **Admin → Tools → Edit → Approval** | Admin |
 | 2 | Installation default     | `integrations.json` → `installed[].approval.default`. **Admin → Integrations → an installation → Overview** | Admin |
 | 3 | Installation action      | `installed[].approval.actions[<action name>]`, keyed by the action's own name (an MCP tool's name, never the prefixed tool id) | Admin |
+| 3 | New or changed action    | `installed[].approval.newOrChanged` (default `always`) while the action is new or changed since the last review (see below) | Admin |
 | 4 | App override             | App → `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default`. **Admin → Apps → Edit → Tools** | App author |
 
 Because the strictest mode wins, an action can be made stricter than its installation default but
@@ -82,6 +93,64 @@ set the installation default to `never` and the stricter actions to `writes` or 
 // an app that asks for every tool call
 "toolApproval": { "default": "always" }
 ```
+
+## New and changed actions
+
+A vendor can add an action to an integration, or change what an existing one does, after you
+configured approval for it. iHub notices and asks for such an action until you have looked at it.
+
+Every action is **fingerprinted** over its name, the side effect its vendor declares (the
+definition, the OpenAPI operation, an MCP tool's annotations) and its input schema. The schema is
+compared in a canonical form: key order, descriptions, titles and examples do not count (so a
+translated description is not a change), the parameters, their types, limits, allowed values and
+required fields do.
+
+The installation keeps the fingerprints an admin accepted (`actions.fingerprints`, written by the
+server only). An action whose name is not among them is **new**; one whose fingerprint differs is
+**changed**. Until an admin reviews it, such an action resolves to at least
+`approval.newOrChanged` (default `always`). Like every layer, this only makes it stricter: an
+action already set to `always` stays there, and `newOrChanged: "never"` turns the reset off.
+
+- **Opt-in.** Only an installation with an approval setting is tracked. When you set one (or
+  install a new integration, which preselects one), the actions as they are then become the
+  accepted ones. Nothing is tracked or written for installations without an approval setting.
+- **Where you see it.** **Admin → Integrations → an installation → Overview** badges an action
+  **New** or **Changed**, says how many are waiting, and offers **Mark reviewed** per action and
+  **Mark all reviewed**. Marking accepts the current fingerprints and is recorded in the audit
+  log. The **New or changed actions** select next to the installation default sets
+  `approval.newOrChanged`.
+- **What counts as a change.** A new or removed parameter, a changed type, limit or allowed value,
+  or a changed declared side effect. A change of the installation's own settings that changes an
+  action's input (such as the maximum number of rows a CKAN search may ask for) counts too.
+- **Renamed actions.** An action a definition migration renames is new under its new name.
+- iHub logs a warning once per action and fingerprint when it first sees one that is new or
+  changed. Discovery never writes `integrations.json`; only setting approval for the first time
+  and **Mark reviewed** do.
+
+```json
+// integrations.json, as the server keeps it
+{
+  "id": "jira",
+  "approval": { "default": "writes", "newOrChanged": "always" },
+  "actions": {
+    "fingerprints": { "search": "sha256:…", "comment": "sha256:…" },
+    "reviewedAt": "2026-11-02T10:00:00.000Z"
+  }
+}
+```
+
+## Installing an integration
+
+The install form preselects an approval default for a new installation, which you can change
+before saving:
+
+- **Always ask** for an external integration whose actions carry no trusted side effect: an MCP
+  server or A2A agent (their own annotations are never trusted), or a definition with an external
+  action whose side effect is `unknown`.
+- **Ask unless it only reads** for every other integration.
+
+Choose **Platform default** to install without an approval setting. Installations that exist
+before the upgrade keep no approval setting until you set one.
 
 ## In the chat
 
@@ -138,4 +207,15 @@ memory from a tool.
   approval cannot be answered through `POST /api/runs/:runId/interactions/:id/answer` (409
   `ANSWER_IN_CHAT`): only the chat runs the approved call.
 - Admin API: `PUT /api/admin/integrations/installed/:id/approval` with
-  `{ approval: { default?, actions? } | null }` changes only an installation's approval.
+  `{ approval: { default?, actions?, newOrChanged? } | null }` changes only an installation's
+  approval (and takes the fingerprint baseline when there is none yet).
+  `POST /api/admin/integrations/installed/:id/actions/review` with `{ actions?: string[] }` marks
+  those actions (all when absent) as reviewed. `GET /api/admin/integrations/installed/:id`
+  returns `review: "new" | "changed" | null` per action.
+- Fingerprints: `server/utils/actionFingerprint.js` (canonical schema, `actionFingerprint`,
+  `actionReviewState`); compared where discovery results pass through,
+  `server/services/integrations/actionReview.js`. Integration tools carry their fingerprint as
+  `_integration.fingerprint`.
+- Upgrading: there is no approval configuration to carry over. Tool approval ships in the same
+  release as installed integrations, so an MCP server's or integration's approval has been stored
+  on its installation from the start, and a tool file keeps its own `approval`.

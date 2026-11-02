@@ -25,9 +25,12 @@
  * | 2 | Tool config               | tool file `approval` (per function, else the tool's), `requiresApproval: true` = `always` |
  * | 2 | Installation default      | `integrations.json` → `installed[].approval.default`         |
  * | 3 | Installation action       | `installed[].approval.actions[<action name>]`                |
+ * | 3 | New or changed action     | `installed[].approval.newOrChanged` (default `always`) while the action's fingerprint is not the one an admin accepted (#2916) |
  * | 4 | App override              | app `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default` |
  *
- * Nothing configured resolves to `never`: approval is opt-in.
+ * Nothing configured resolves to `never`: approval is opt-in. The new-or-changed
+ * layer applies only to an installation that has an `approval` setting and a
+ * fingerprint baseline (`actions.fingerprints`, see `actionFingerprint.js`).
  *
  * An app value looser than the admin floor is ignored and logged once.
  * Annotations a remote MCP server puts on its tools feed `sideEffect` only;
@@ -41,6 +44,7 @@
  * @module utils/toolApproval
  */
 import logger from './logger.js';
+import { actionReviewState } from './actionFingerprint.js';
 import {
   APPROVAL_MODES,
   DATA_FLOWS,
@@ -176,13 +180,19 @@ export function resolveSideEffect(toolDef, installation = null) {
 }
 
 /**
- * Where a tool's data goes. Declared values win; remote MCP servers and A2A
- * agents are external; everything else is iHub's own (`internal`).
+ * Where a tool's data goes. The installation's admin override
+ * (`actions.overrides[action].dataFlow`) wins; then declared values; remote
+ * MCP servers and A2A agents are external; everything else is iHub's own
+ * (`internal`).
  *
  * @param {Object} toolDef
+ * @param {Object|null} [installation] - the tool's installed integration
  * @returns {'internal'|'external'}
  */
-export function resolveDataFlow(toolDef) {
+export function resolveDataFlow(toolDef, installation = null) {
+  const action = actionNameOf(toolDef);
+  const override = action ? installation?.actions?.overrides?.[action]?.dataFlow : undefined;
+  if (DATA_FLOWS.includes(override)) return override;
   if (DATA_FLOWS.includes(toolDef?.dataFlow)) return toolDef.dataFlow;
   if (toolDef?._mcp || toolDef?._a2a) return 'external';
   return 'internal';
@@ -249,7 +259,7 @@ export function resolveToolApproval(toolDef, app, platform, options = {}) {
   const installation = options.installation || null;
   const log = options.log || logger;
   const { sideEffect, sideEffectSource } = resolveSideEffect(toolDef, installation);
-  const dataFlow = resolveDataFlow(toolDef);
+  const dataFlow = resolveDataFlow(toolDef, installation);
 
   let approval = 'never';
   let approvalSource = 'default';
@@ -274,6 +284,16 @@ export function resolveToolApproval(toolDef, app, platform, options = {}) {
     // 3. the action, by its original name
     const action = actionNameOf(toolDef);
     if (action) apply(installationApproval.actions?.[action], 'action');
+    // 3. new or changed since the last admin review (#2916): at least `newOrChanged`
+    const review = actionReviewState(installation, action, toolDef?._integration?.fingerprint);
+    if (review) {
+      apply(
+        isApprovalMode(installationApproval.newOrChanged)
+          ? installationApproval.newOrChanged
+          : 'always',
+        'newOrChanged'
+      );
+    }
   }
 
   // 4. the app: may only tighten

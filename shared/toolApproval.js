@@ -116,3 +116,31 @@ export function needsApproval(policy) {
   if (policy.approval !== 'writes') return false;
   return policy.sideEffect !== 'read' || policy.sideEffectSource === 'annotation';
 }
+
+/**
+ * The approval default the install form preselects for a new installation
+ * (intrafind/ihub-apps#2916). The admin can change it before saving; existing
+ * installations are never touched (approval stays opt-in at upgrade).
+ *
+ * - `always` for an external integration whose actions carry no trusted side
+ *   effect: actions a remote system lists itself (MCP tools, A2A skills, whose
+ *   annotations iHub never trusts), or an external action the definition
+ *   leaves `unknown`.
+ * - `writes` (ask unless it only reads) for every other integration.
+ *
+ * @param {Object} definition - an integration definition, or its admin view
+ * @param {boolean} [definition.dynamicActions] - the actions come from the system (MCP, A2A)
+ * @param {Array<{sideEffect?: string, dataFlow?: string}>} [definition.actions]
+ * @returns {'writes'|'always'}
+ * @example installApprovalPreset({ dynamicActions: true, actions: [] }) // 'always'
+ */
+export function installApprovalPreset(definition) {
+  if (definition?.dynamicActions === true) return 'always';
+  const actions = Array.isArray(definition?.actions) ? definition.actions : [];
+  const untrustedExternal = actions.some(
+    action =>
+      (action?.dataFlow || 'external') === 'external' &&
+      (!action?.sideEffect || action.sideEffect === 'unknown')
+  );
+  return untrustedExternal ? 'always' : 'writes';
+}

@@ -525,14 +525,21 @@ function materialize(instance, state, to) {
     actions: {
       enabled: [...state.policy.enabled],
       disabled: [...state.policy.disabled],
-      overrides: clone(state.policy.overrides)
+      overrides: clone(state.policy.overrides),
+      // The accepted fingerprints (#2916) stay as they are: a renamed action
+      // is new until an admin reviews it, like any action a vendor adds.
+      ...(instance.actions?.fingerprints
+        ? { fingerprints: clone(instance.actions.fingerprints) }
+        : {}),
+      ...(instance.actions?.reviewedAt ? { reviewedAt: instance.actions.reviewedAt } : {})
     }
   };
   if (instance.approval) {
     const approvalActions = clone(state.policy.approvalActions);
     const approval = {
       ...(instance.approval.default ? { default: instance.approval.default } : {}),
-      ...(Object.keys(approvalActions).length ? { actions: approvalActions } : {})
+      ...(Object.keys(approvalActions).length ? { actions: approvalActions } : {}),
+      ...(instance.approval.newOrChanged ? { newOrChanged: instance.approval.newOrChanged } : {})
     };
     if (Object.keys(approval).length) out.approval = approval;
     else delete out.approval;

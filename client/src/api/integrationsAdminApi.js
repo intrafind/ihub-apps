@@ -76,6 +76,19 @@ export const setInstalledIntegrationApproval = async (id, approval) =>
     })
   ).data.instance;
 
+/**
+ * Mark actions of an installation as reviewed (#2916): their current
+ * fingerprints become the accepted ones. `actions` null marks every action.
+ * Returns `{ instance, reviewed }`.
+ */
+export const markInstalledIntegrationActionsReviewed = async (id, actions = null) => {
+  const { data } = await makeAdminApiCall(`${instancePath(id)}/actions/review`, {
+    method: 'POST',
+    ...json(Array.isArray(actions) ? { actions } : {})
+  });
+  return { instance: data.instance, reviewed: data.reviewed || [] };
+};
+
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
 };

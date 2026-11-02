@@ -44,18 +44,22 @@ import {
   fetchInstalledIntegration,
   fetchInstalledIntegrations,
   fetchIntegrationDefinitionFile,
+  markInstalledIntegrationActionsReviewed,
   setInstalledIntegrationApproval,
   setInstalledIntegrationEnabled,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
 import { ApprovalModeSelect } from '../components/ToolApprovalFields';
 import {
+  actionsPendingReview,
   approvalChanged,
   approvalPayload,
   normalizeApproval,
   withActionMode,
-  withDefaultMode
+  withDefaultMode,
+  withNewOrChangedMode
 } from '../components/integrations/installationApproval';
+import ActionReviewBadge from '../components/integrations/ActionReviewBadge';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
@@ -285,6 +289,28 @@ function InstallationPageContent({ instanceId }) {
   const flash = (type, text) => {
     setMessage({ type, text });
     window.setTimeout(() => setMessage(null), 6000);
+  };
+
+  // Actions new or changed since the last review (#2916).
+  const pendingReview = useMemo(() => actionsPendingReview(detail?.actions), [detail]);
+
+  /** Accept the current fingerprints of these actions (null: all). */
+  const markReviewed = async names => {
+    setBusy(true);
+    try {
+      const { reviewed } = await markInstalledIntegrationActionsReviewed(instance.id, names);
+      await load();
+      flash(
+        'success',
+        t('admin.integrations.actionReview.marked', 'Marked as reviewed: {{actions}}', {
+          actions: reviewed.join(', ')
+        })
+      );
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveApproval = async () => {
@@ -602,6 +628,22 @@ function InstallationPageContent({ instanceId }) {
                     )}
                   />
                 </div>
+                <div className="min-w-[240px]">
+                  <ApprovalModeSelect
+                    label={t('admin.toolApproval.newOrChangedMode', 'New or changed actions')}
+                    value={approvalDraft.newOrChanged}
+                    inheritLabel={t(
+                      'admin.toolApproval.newOrChangedDefault',
+                      'Always ask (default)'
+                    )}
+                    disabled={busy}
+                    onChange={mode => setApprovalDraft(draft => withNewOrChangedMode(draft, mode))}
+                    help={t(
+                      'admin.toolApproval.newOrChangedHelp',
+                      'An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.'
+                    )}
+                  />
+                </div>
                 {approvalChanged(instance.approval, approvalDraft) && (
                   <div className="flex gap-2">
                     <button
@@ -623,6 +665,28 @@ function InstallationPageContent({ instanceId }) {
                   </div>
                 )}
               </div>
+              {pendingReview.length > 0 && (
+                <div
+                  className={`${CALLOUT_CLASS.warning} mb-3 flex flex-wrap items-center justify-between gap-2`}
+                  data-testid="installation-actions-review"
+                >
+                  <span>
+                    {t(
+                      'admin.integrations.actionReview.pending',
+                      '{{count}} actions are new or changed since the last review.',
+                      { count: pendingReview.length }
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => markReviewed(null)}
+                    disabled={busy}
+                    className={SECONDARY_BUTTON_CLASS}
+                  >
+                    {t('admin.integrations.actionReview.markAll', 'Mark all reviewed')}
+                  </button>
+                </div>
+              )}
               {(detail.actions || []).length === 0 ? (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {noActionsText(t, isMigrationBlocked(instance), definition?.dynamicActions)}
@@ -648,6 +712,7 @@ function InstallationPageContent({ instanceId }) {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-1">
+                        <ActionReviewBadge review={action.review} />
                         <SideEffectBadge sideEffect={action.sideEffect} />
                         <ApprovalModeSelect
                           compact
@@ -665,6 +730,21 @@ function InstallationPageContent({ instanceId }) {
                             setApprovalDraft(draft => withActionMode(draft, action.name, mode))
                           }
                         />
+                        {action.review && (
+                          <button
+                            type="button"
+                            onClick={() => markReviewed([action.name])}
+                            disabled={busy}
+                            className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:text-indigo-300"
+                            aria-label={t(
+                              'admin.integrations.actionReview.markOneLabel',
+                              'Mark {{action}} reviewed',
+                              { action: action.title || action.name }
+                            )}
+                          >
+                            {t('admin.integrations.actionReview.markOne', 'Mark reviewed')}
+                          </button>
+                        )}
                         {action.enabled === false ? (
                           <Pill tone="gray">{t('admin.integrations.page.actionOff', 'Off')}</Pill>
                         ) : (

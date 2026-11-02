@@ -3818,6 +3818,17 @@
         "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
         "settingsReadOnlyLegend": "Settings (read-only)",
         "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
+      },
+      "actionReview": {
+        "new": "New",
+        "changed": "Changed",
+        "newHint": "Added since the last review. It asks for approval until you mark it reviewed.",
+        "changedHint": "Its side effect or input changed since the last review. It asks for approval until you mark it reviewed.",
+        "pending": "{{count}} actions are new or changed since the last review.",
+        "markAll": "Mark all reviewed",
+        "markOne": "Mark reviewed",
+        "markOneLabel": "Mark {{action}} reviewed",
+        "marked": "Marked as reviewed: {{actions}}"
       }
     },
     "sidebar": {
@@ -5012,7 +5023,12 @@
       "installationMode": "Ask before an action runs",
       "installationModeHelp": "The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.",
       "saveApproval": "Save approval",
-      "installationSaved": "Approval settings saved."
+      "installationSaved": "Approval settings saved.",
+      "newOrChangedMode": "New or changed actions",
+      "newOrChangedDefault": "Always ask (default)",
+      "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
+      "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
+      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
     }
   },
   "cloudStorage": {
