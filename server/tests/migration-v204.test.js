@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * V203: the `websearch` installation becomes one installation per engine
+ * V204: the `websearch` installation becomes one installation per engine
  * ("keep what worked"), grants by `websearch` become `type:web-search`, stale
  * app references go, and a fresh install gets no engine.
  *
- * Run: node --test server/tests/migration-v203.test.js
+ * Run: node --test server/tests/migration-v204.test.js
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,7 +21,7 @@ import {
   isFreshInstall,
   oldActionEnabled,
   FRESH_RUN_WINDOW_MS
-} from '../migrations/V203__web_search_engines.js';
+} from '../migrations/V204__web_search_engines.js';
 
 const READER_DEFAULT = {
   id: 'read_url',
@@ -106,9 +106,9 @@ afterEach(() => {
   }
 });
 
-describe('V203 web_search_engines', () => {
+describe('V204 web_search_engines', () => {
   it('has the expected version and description', () => {
-    assert.equal(version, '203');
+    assert.equal(version, '204');
     assert.equal(description, 'web_search_engines');
   });
 

@@ -23,7 +23,7 @@ import {
 } from '../migrations/V157__rename_web_page_reader_tool_to_read_url.js';
 
 // The page reader ships as a platform tool of the web search feature
-// (`server/defaults/tools/read_url.json`, read in place since V203; V195 had
+// (`server/defaults/tools/read_url.json`, read in place since V204; V195 had
 // moved it into the web search connector for a while).
 const READER_DEFINITION = JSON.parse(
   await readFile(

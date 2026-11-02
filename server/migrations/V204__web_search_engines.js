@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V203 — web search: one integration per engine
+ * Migration V204 — web search: one integration per engine
  *
  * V195 made web search one installation, `websearch` (definition
  * `com.intrafind/web-search`), holding every engine. From now on each engine
@@ -58,7 +58,7 @@
  * application module is imported (see `server/migrations/README.md`).
  */
 
-export const version = '203';
+export const version = '204';
 export const description = 'web_search_engines';
 
 const INTEGRATIONS_FILE = 'config/integrations.json';

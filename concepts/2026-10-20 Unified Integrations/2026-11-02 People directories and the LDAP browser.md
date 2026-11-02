@@ -171,7 +171,7 @@ npx jest --config tests/config/jest.config.js tests/unit/client/admin-people-dir
   documented `AZURE_*` fallback can be used from the editor (the server always fell back).
 - The storage definitions (Office 365, Google Drive, Nextcloud) are on the allow-list of
   `integration-definition-releases.test.js`; the storage PR adds their release entries and empties
-  the list. `com.intrafind/ihub` (V201) and the web search engines (V203) have theirs since the
+  the list. `com.intrafind/ihub` (V201) and the web search engines (V204) have theirs since the
   web search branch was merged in (2026-11-02).
 - Workflow nodes or agent profiles that name a `<dirId>__browse_*` tool id are not rewritten (no
   shipped one does).

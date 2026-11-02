@@ -78,7 +78,7 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
 
 ## Web Search Engines Moved From `providers.json` to Installed Integrations
 
-Migrations V195 and V203 move the `websearch` entries of `contents/config/providers.json` (Brave,
+Migrations V195 and V204 move the `websearch` entries of `contents/config/providers.json` (Brave,
 Staan, Qwant) into one installed integration per engine that worked, of type `web-search`, and
 delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and
 `read_url.json` from `contents/tools/`.
@@ -86,7 +86,7 @@ delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json`
 - **What gets installed:** `brave` where a Brave key was configured (its key moves to the
   credential `integration-websearch-brave`, or `BRAVE_SEARCH_API_KEY` was set), `staan` likewise,
   and `qwant` where Qwant was reachable (no key at all, or an app or the default engine named
-  Qwant). A fresh install ships no engine. The server log names each engine V203 installed or
+  Qwant). A fresh install ships no engine. The server log names each engine V204 installed or
   left out, and why.
 - **Admin page and API:** the **Web Search Providers** category on **Admin → Providers** and
   `POST /api/admin/providers/{id}/websearch-test` are gone; use the engines under **Admin →
@@ -110,7 +110,7 @@ delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json`
 - **Groups:** who may use an engine is granted on the groups (`permissions.integrations`: the
   engine's id or `type:web-search`); native search on the model needs no grant.
 - **Installs that ran 5.6.5-RC1** have the single installation `websearch`
-  (`com.intrafind/web-search`); V203 replaces it with the engines that worked (credential
+  (`com.intrafind/web-search`); V204 replaces it with the engines that worked (credential
   references, the enabled state and switched-off actions carried over; apps on Auto set to its
   default engine when that was an explicit one), turns group grants of `websearch` into
   `type:web-search` and removes app bindings and `tools` entries of `websearch`. The definition
@@ -120,7 +120,7 @@ delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json`
   instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work for an installed engine.
 
 **Before upgrading:** nothing is required. After the upgrade, check **Admin → Integrations → Web
-search** for the engines V203 installed, and install one if apps should search on models without
+search** for the engines V204 installed, and install one if apps should search on models without
 native search.
 
 ## Jira Configuration Moved Out of `platform.json`
