@@ -259,12 +259,12 @@ function resolveItemUrl(itemSource, registrySource) {
  * (see `marketplaceFetch.js`).
  *
  * @param {string} url - URL to fetch
- * @param {Record<string, string>} [authHeaders={}] - The registry's credentials
+ * @param {Record<string, string>} [authHeaders] - The registry's credentials
  * @param {object} registry - Registry config (`source` names its own host)
  * @returns {Promise<object>} Parsed JSON response body
  * @throws {Error} When the target is refused or the HTTP response is not OK
  */
-async function fetchContent(url, authHeaders = {}, registry) {
+async function fetchContent(url, authHeaders, registry) {
   const response = await marketplaceFetch('marketplace-registry', url, {
     registry,
     headers: { Accept: 'application/json, text/plain, application/vnd.github.raw+json' },
@@ -330,12 +330,12 @@ function parseGitHubUrl(url) {
  * @param {string} owner - GitHub repository owner
  * @param {string} repo - GitHub repository name
  * @param {string} ref - Branch, tag, or commit SHA
- * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+ * @param {Record<string, string>} [authHeaders] - Optional auth headers (none when omitted)
  * @param {object} registry - Registry config the tree is read for
  * @returns {Promise<Array<{ path: string, type: string }>>} Tree entries
  * @throws {Error} When the target is refused or the API call fails
  */
-async function fetchGitHubTree(owner, repo, ref, authHeaders = {}, registry) {
+async function fetchGitHubTree(owner, repo, ref, authHeaders, registry) {
   const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
   const response = await marketplaceFetch('marketplace-registry', url, {
     registry,
@@ -1133,14 +1133,14 @@ class RegistryService {
    * Used as a fallback when the cached catalog item has no companions array (stale cache).
    *
    * @param {string} skillMdUrl - Raw GitHub URL of the SKILL.md file
-   * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+   * @param {Record<string, string>} [authHeaders] - Optional auth headers (none when omitted)
    * @param {object} [registry] - Registry the skill comes from; decides which
    *   hosts may be fetched (see `marketplaceFetch.js`)
    * @returns {Promise<string[]>} Relative paths of companion files, or [] when
    *   the URL is not a GitHub one
    * @throws {Error} When the tree fetch is refused or fails
    */
-  async discoverCompanions(skillMdUrl, authHeaders = {}, registry) {
+  async discoverCompanions(skillMdUrl, authHeaders, registry) {
     const ghInfo = parseGitHubUrl(skillMdUrl);
     if (!ghInfo) return [];
 
