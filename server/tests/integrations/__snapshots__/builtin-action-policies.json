@@ -1,0 +1,170 @@
+{
+  "com.intrafind/brave-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
+  "com.intrafind/entra-directory": {
+    "findUser": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getAllUserDetails": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getUserManager": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getUserGroups": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getTeamMembers": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getUserPhotoBase64": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
+  "com.intrafind/iassistant": {
+    "ask": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/ifinder": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "getContent": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "getMetadata": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "discover": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "getFields": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "getFacetValues": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "listProfiles": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/ihub": {
+    "ask_user": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "schedule_task": {
+      "sideEffect": "write",
+      "dataFlow": "internal"
+    },
+    "list_scheduled_tasks": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "update_scheduled_task": {
+      "sideEffect": "write",
+      "dataFlow": "internal"
+    },
+    "delete_scheduled_task": {
+      "sideEffect": "destructive",
+      "dataFlow": "internal"
+    },
+    "run_scheduled_task_now": {
+      "sideEffect": "write",
+      "dataFlow": "internal"
+    },
+    "list_task_runs": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "get_task_run": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/jira": {
+    "searchTickets": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "getTicket": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "addComment": {
+      "sideEffect": "write",
+      "dataFlow": "external"
+    },
+    "getTransitions": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "transitionTicket": {
+      "sideEffect": "write",
+      "dataFlow": "external"
+    },
+    "getAttachment": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
+  "com.intrafind/ldap-browser": {
+    "browse_search": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "browse_read": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "browse_children": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/ldap-directory": {
+    "search_people": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "get_person": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "list_units": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/qwant-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
+  "com.intrafind/staan-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  }
+}

@@ -29,12 +29,38 @@ keyboard and with a screen reader.
 - Workflow editor: for a workflow file without an `enabled` setting, the first click on the
   **Enabled** switch did nothing. It now turns the workflow off.
 
+## MCP Servers over WebSocket Honor the SSL Whitelist
+
+An MCP server reached over `wss://` with a certificate from a private CA failed with "unable to
+verify the first certificate", even when its host was listed in **SSL → Domain whitelist** with
+**Ignore invalid certificates** on. WebSocket MCP servers now follow the whitelist like every other
+outbound connection; hosts that are not whitelisted are still verified.
+
 ## OpenAPI Tools: Array Parameters
 
 Array query parameters of OpenAPI tools declared in `form` style are now sent as the document
 says (repeated by default, comma-joined for `explode: false`) instead of always comma-joined,
 which APIs such as CKAN rejected. `spaceDelimited` and `pipeDelimited` arrays are still sent
 comma-joined. A tool may also set `openapi.arrayStyle` to `json-list`.
+
+## Accessibility: Marketplace Details and the Remaining Switches
+
+The marketplace detail panel and the last checkbox-style switches now work like the other drawers
+and switches with the keyboard and with a screen reader.
+
+- **Marketplace:** the detail panel of an item takes keyboard focus when it opens, keeps Tab
+  inside, closes on Escape and returns focus to the item that opened it. Screen readers announce
+  it as a dialog named after the item.
+- The switches of the app editor's **Web Search** and **iAssistant** sections, the SSL and CORS
+  settings, the **Status** column of the user list and **Show technical details** of workflows
+  are announced as switches with their name and state. Most of the app editor switches had no
+  name before, and clicking their label text now toggles them. The SSL, CORS and user switches
+  now use the same indigo colour as the others.
+- **Chat + menu:** the message-context switches of the browser extension (**Include page**) are
+  menu entries now, reached with the arrow keys like the tools. A tool's switch is no longer an
+  extra, unnamed Tab stop inside its menu entry.
+- **Integrations:** the connection status badge of an installation shows a status dot next to
+  its text. "Disabled", "External" and "Update available" badges are amber.
 
 ## Scheduled Tasks: "Schedule this…" Keeps the Chat's Tools
 

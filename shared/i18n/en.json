@@ -2567,6 +2567,7 @@
       "update": "Update",
       "uninstall": "Uninstall",
       "detach": "Detach",
+      "byAuthor": "by {{author}}",
       "allRegistries": "All Registries",
       "filterRegistry": "Filter by registry",
       "filterStatus": "Filter by status",
@@ -2691,6 +2692,26 @@
           "failed": "The migration of {{label}} failed: it stays on v{{from}} and offers no actions until you act on its page. Reason: {{reason}}",
           "skipped": "{{label}} was not migrated: {{reason}}"
         }
+      },
+      "integrationFacts": {
+        "title": "Integration facts",
+        "effect": "Effect",
+        "runs": "Where it runs",
+        "effectValues": {
+          "read": "read",
+          "readWrite": "read · write",
+          "unknown": "not declared"
+        },
+        "runsValues": {
+          "cloud": "cloud",
+          "onPrem": "on-premises",
+          "local": "local",
+          "unknown": "not stated"
+        },
+        "actionsDynamic": "listed by the server",
+        "actionsDynamicHint": "The server lists its actions when iHub connects to it; install and test the integration to see them.",
+        "noActions": "This integration declares no actions.",
+        "unavailable": "The definition could not be read from the registry, so its facts are not shown."
       }
     },
     "apps": {

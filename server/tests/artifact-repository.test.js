@@ -178,6 +178,11 @@ describe('everything one scope produced can be listed and emptied', () => {
         name: 'a cat.png',
         runId: 'run-1'
       });
+      // createdAt has millisecond resolution: two puts in the same millisecond
+      // have no order, so let the clock move on before the second one.
+      while (Date.now() <= Date.parse(first.createdAt)) {
+        await new Promise(resolve => setTimeout(resolve, 1));
+      }
       const second = await repository.put(RUN, { mimeType: 'image/webp', data: payload(128) });
 
       const listed = await repository.list(RUN);

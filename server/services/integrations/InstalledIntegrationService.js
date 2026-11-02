@@ -99,6 +99,165 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/**
+ * The instance an admin payload (without its `secrets`) describes, validated.
+ * The migration state and log are the runner's (`DefinitionMigrationRunner`):
+ * a payload never sets them; a save keeps the log it had, its install date
+ * and its health.
+ *
+ * @param {object} fields - the payload without `secrets` (a copy; it is changed)
+ * @param {object|undefined} existing - the stored instance on an update
+ * @returns {object} the parsed instance, without `status` and `statusReason`
+ * @throws {IntegrationError} `INVALID_INSTANCE`
+ */
+function parseInstancePayload(fields, existing) {
+  delete fields.status;
+  delete fields.statusReason;
+  delete fields.migrationLog;
+  // The tool approval (#2945) is edited on its own (`setApproval`): a save
+  // that does not name it keeps the stored one, so an editor that knows
+  // nothing about approval cannot drop an admin's gate. `approval: null`
+  // removes it explicitly.
+  const keepsApproval = !Object.hasOwn(fields, 'approval') && existing?.approval;
+  if (fields.approval === null) delete fields.approval;
+  const parsed = validateInstalledIntegration({
+    ...fields,
+    installedAt: existing?.installedAt,
+    health: existing?.health,
+    ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
+    ...(keepsApproval ? { approval: existing.approval } : {})
+  });
+  if (!parsed.success) {
+    throw new IntegrationError('Invalid installed integration', {
+      code: 'INVALID_INSTANCE',
+      details: parsed.error ?? parsed.errors
+    });
+  }
+  const instance = parsed.data;
+  delete instance.status;
+  delete instance.statusReason;
+  return instance;
+}
+
+/**
+ * Refuse an instance id that would collide with tool routing: one with `__`
+ * (the separator of integration tool ids), a reserved id or a reserved prefix.
+ *
+ * @param {{ id: string }} instance
+ * @throws {IntegrationError} `INVALID_ID`
+ */
+function assertInstanceIdAllowed(instance) {
+  if (
+    instance.id.includes('__') ||
+    RESERVED_INSTANCE_IDS.has(instance.id.toLowerCase()) ||
+    RESERVED_INSTANCE_ID_PREFIX.test(instance.id)
+  ) {
+    throw new IntegrationError(
+      'Instance id must not contain "__", be a reserved id or start with workflow_, knowledge_ or source_',
+      { code: 'INVALID_ID' }
+    );
+  }
+}
+
+/**
+ * Refuse an instance its definition cannot run: a singleton under another
+ * id, a protocol without an adapter in this release, or a sign-in mode the
+ * definition or the adapter does not offer.
+ *
+ * @param {object} definition - the validated definition
+ * @param {object} instance - the parsed instance
+ * @throws {IntegrationError} `SINGLETON_ID`, `UNSUPPORTED_PROTOCOL`,
+ *   `INVALID_AUTH_MODE` or `UNSUPPORTED_AUTH_MODE`
+ */
+function assertDefinitionRunsInstance(definition, instance) {
+  if (definition.singleton && instance.id !== definition.singleton.instanceId) {
+    throw new IntegrationError(
+      `"${definition.id}" is installed once, as "${definition.singleton.instanceId}"`,
+      { code: 'SINGLETON_ID' }
+    );
+  }
+  const adapter = getProtocolAdapter(definition.protocol.type);
+  if (!adapter) {
+    throw new IntegrationError(
+      `Protocol "${definition.protocol.type}" has no adapter in this release`,
+      { code: 'UNSUPPORTED_PROTOCOL' }
+    );
+  }
+  if (!definition.auth.modes.includes(instance.auth.mode)) {
+    throw new IntegrationError(
+      `Auth mode "${instance.auth.mode}" is not offered by the definition`,
+      { code: 'INVALID_AUTH_MODE' }
+    );
+  }
+  if (
+    Array.isArray(adapter.supportedAuthModes) &&
+    !adapter.supportedAuthModes.includes(instance.auth.mode)
+  ) {
+    throw new IntegrationError(
+      `Auth mode "${instance.auth.mode}" is not available for "${definition.protocol.type}" integrations in this release`,
+      { code: 'UNSUPPORTED_AUTH_MODE' }
+    );
+  }
+}
+
+/**
+ * The secret the admin entered for the sign-in mode's secret field, trimmed;
+ * null when the mode has none or the admin left it empty (keep the stored one).
+ *
+ * @param {Record<string, unknown>|undefined} secrets - the payload's `secrets`
+ * @param {string|null} secretField - the mode's secret field key
+ * @returns {string|null}
+ */
+function providedSecretValue(secrets, secretField) {
+  if (!secrets || !secretField) return null;
+  const value = secrets[secretField];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Refuse install values the definition does not accept (`checkInstallValues`).
+ *
+ * @param {object} definition
+ * @param {object} instance - the parsed instance (its `values` and sign-in mode)
+ * @param {boolean} hasCredential - a secret was entered or one is stored
+ * @throws {IntegrationError} `INVALID_VALUES` with the errors as `details`
+ */
+function assertInstallValues(definition, instance, hasCredential) {
+  const valueErrors = checkInstallValues(definition, instance.values, {
+    authMode: instance.auth.mode,
+    hasCredential
+  });
+  if (valueErrors.length) {
+    throw new IntegrationError('Invalid install values', {
+      code: 'INVALID_VALUES',
+      details: valueErrors
+    });
+  }
+}
+
+/**
+ * Point the instance at its secret for a sign-in mode that keeps one: a newly
+ * entered secret gets the managed credential id (and is returned to be
+ * stored); otherwise the instance keeps the reference it had.
+ *
+ * @param {object} instance - the parsed instance; `auth.credentialRef` is set here
+ * @param {object|undefined} existing - the stored instance on an update
+ * @param {{ definition: object, secretField: string, providedSecret: string|null }} secret
+ * @returns {Array<{ id: string, value: string, instance: object, definition: object, secretField: string }>}
+ *   the secret to write to the credential store, or none
+ */
+function applySecret(instance, existing, { definition, secretField, providedSecret }) {
+  if (providedSecret) {
+    const credentialRef = credentialIdFor(instance.id, secretField);
+    instance.auth.credentialRef = credentialRef;
+    return [{ id: credentialRef, value: providedSecret, instance, definition, secretField }];
+  }
+  if (!instance.auth.credentialRef && existing?.auth?.credentialRef) {
+    instance.auth.credentialRef = existing.auth.credentialRef;
+  }
+  return [];
+}
+
 export class InstalledIntegrationService {
   constructor({ registry = integrationRegistry } = {}) {
     this.registry = registry;
@@ -252,17 +411,16 @@ export class InstalledIntegrationService {
    */
   async resolveAllEnabled(language = 'en') {
     await this.registry.ensureLoaded();
-    const out = [];
-    for (const instance of this.list()) {
-      if (instance.enabled === false) continue;
-      const resolved = await this.resolve(instance, language);
-      if (!resolved?.definition) continue;
-      if (resolved.incompatible) continue;
-      if (resolved.blocked) continue;
-      if (!getProtocolAdapter(resolved.definition.protocol.type)) continue;
-      out.push(resolved);
-    }
-    return out;
+    const enabled = this.list().filter(instance => instance.enabled !== false);
+    // `Promise.all` keeps the input order, so the list stays in file order.
+    const resolved = await Promise.all(enabled.map(instance => this.resolve(instance, language)));
+    return resolved.filter(
+      entry =>
+        entry?.definition &&
+        !entry.incompatible &&
+        !entry.blocked &&
+        getProtocolAdapter(entry.definition.protocol.type)
+    );
   }
 
   /**
@@ -272,44 +430,46 @@ export class InstalledIntegrationService {
   async _prepare(payload, { existing } = {}) {
     rejectAllowedGroups(payload);
     await this.registry.ensureLoaded();
-    // The migration state and log are the runner's (`DefinitionMigrationRunner`):
-    // a payload never sets them; a save keeps the log it had.
     const { secrets, ...rest } = payload || {};
-    delete rest.status;
-    delete rest.statusReason;
-    delete rest.migrationLog;
-    // The tool approval (#2945) is edited on its own (`setApproval`): a save
-    // that does not name it keeps the stored one, so an editor that knows
-    // nothing about approval cannot drop an admin's gate. `approval: null`
-    // removes it explicitly.
-    const keepsApproval = !Object.hasOwn(rest, 'approval') && existing?.approval;
-    if (rest.approval === null) delete rest.approval;
-    const parsed = validateInstalledIntegration({
-      ...rest,
-      installedAt: existing?.installedAt,
-      health: existing?.health,
-      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
-      ...(keepsApproval ? { approval: existing.approval } : {})
-    });
-    if (!parsed.success) {
-      throw new IntegrationError('Invalid installed integration', {
-        code: 'INVALID_INSTANCE',
-        details: parsed.error ?? parsed.errors
-      });
+    const instance = parseInstancePayload(rest, existing);
+    assertInstanceIdAllowed(instance);
+    const entry = this._definitionEntryFor(instance);
+    const definition = entry.definition;
+
+    // The secret a sign-in mode keeps in the credential store: the service
+    // account's token, the OAuth client's secret, or (optional) the secret of
+    // a pre-registered client for per-user OAuth.
+    const secretSpec = secretFieldForMode(definition, instance.auth.mode);
+    const secretField = secretSpec?.key || null;
+    const providedSecret = providedSecretValue(secrets, secretField);
+    const keepsCredential = Boolean(instance.auth.credentialRef || existing?.auth?.credentialRef);
+    assertInstallValues(definition, instance, Boolean(providedSecret) || keepsCredential);
+
+    let toStore = [];
+    if (secretSpec) {
+      toStore = applySecret(instance, existing, { definition, secretField, providedSecret });
+    } else {
+      delete instance.auth.credentialRef;
     }
-    const instance = parsed.data;
-    delete instance.status;
-    delete instance.statusReason;
-    if (
-      instance.id.includes('__') ||
-      RESERVED_INSTANCE_IDS.has(instance.id.toLowerCase()) ||
-      RESERVED_INSTANCE_ID_PREFIX.test(instance.id)
-    ) {
-      throw new IntegrationError(
-        'Instance id must not contain "__", be a reserved id or start with workflow_, knowledge_ or source_',
-        { code: 'INVALID_ID' }
-      );
-    }
+
+    if (definition.alwaysInstalled) instance.enabled = true;
+    instance.definitionVersion = definition.version;
+    instance.installedAt = existing?.installedAt || nowIso();
+    instance.updatedAt = nowIso();
+    return { instance, definition, document: entry.document, secretsToStore: toStore };
+  }
+
+  /**
+   * The registry entry an instance is saved against, once the definition
+   * accepts it: the id is not a built-in's fixed id, the definition exists,
+   * runs on this server, takes this id (a singleton's own), has an adapter,
+   * and offers the instance's sign-in mode.
+   *
+   * @param {object} instance - the parsed instance
+   * @returns {object} the registry entry (`{ definition, document, status, … }`)
+   * @throws {IntegrationError} with the code of the first check that fails
+   */
+  _definitionEntryFor(instance) {
     // A built-in's fixed id (`ifinder`, `iassistant`) belongs to that built-in:
     // its config is read by that id, so another definition installed under it
     // would receive the built-in's per-user tokens.
@@ -332,102 +492,25 @@ export class InstalledIntegrationService {
         code: 'UNKNOWN_DEFINITION'
       });
     }
-    const definition = entry.definition;
     if (entry.status === 'incompatible') {
       // Values are validated against a definition this server cannot run;
       // nothing saved against it would be served anyway.
       throw new IntegrationError(
-        `Integration definition "${definition.id}" ${entry.statusReason || 'is incompatible with this server version'}`,
+        `Integration definition "${entry.definition.id}" ${entry.statusReason || 'is incompatible with this server version'}`,
         { code: 'INCOMPATIBLE_DEFINITION', details: entry.compatibility }
       );
     }
-    if (definition.singleton && instance.id !== definition.singleton.instanceId) {
-      throw new IntegrationError(
-        `"${definition.id}" is installed once, as "${definition.singleton.instanceId}"`,
-        { code: 'SINGLETON_ID' }
-      );
-    }
-    if (!getProtocolAdapter(definition.protocol.type)) {
-      throw new IntegrationError(
-        `Protocol "${definition.protocol.type}" has no adapter in this release`,
-        { code: 'UNSUPPORTED_PROTOCOL' }
-      );
-    }
-    if (!definition.auth.modes.includes(instance.auth.mode)) {
-      throw new IntegrationError(
-        `Auth mode "${instance.auth.mode}" is not offered by the definition`,
-        {
-          code: 'INVALID_AUTH_MODE'
-        }
-      );
-    }
-    const adapter = getProtocolAdapter(definition.protocol.type);
-    if (
-      Array.isArray(adapter.supportedAuthModes) &&
-      !adapter.supportedAuthModes.includes(instance.auth.mode)
-    ) {
-      throw new IntegrationError(
-        `Auth mode "${instance.auth.mode}" is not available for "${definition.protocol.type}" integrations in this release`,
-        { code: 'UNSUPPORTED_AUTH_MODE' }
-      );
-    }
-
-    // The secret a sign-in mode keeps in the credential store: the service
-    // account's token, the OAuth client's secret, or (optional) the secret of
-    // a pre-registered client for per-user OAuth.
-    const secretSpec = secretFieldForMode(definition, instance.auth.mode);
-    const secretField = secretSpec?.key || null;
-    const providedSecret =
-      secrets &&
-      secretField &&
-      typeof secrets[secretField] === 'string' &&
-      secrets[secretField].trim()
-        ? secrets[secretField].trim()
-        : null;
-    const keepsCredential = Boolean(instance.auth.credentialRef || existing?.auth?.credentialRef);
-    const hasCredential = Boolean(providedSecret) || keepsCredential;
-
-    const valueErrors = checkInstallValues(definition, instance.values, {
-      authMode: instance.auth.mode,
-      hasCredential
-    });
-    if (valueErrors.length) {
-      throw new IntegrationError('Invalid install values', {
-        code: 'INVALID_VALUES',
-        details: valueErrors
-      });
-    }
-
-    const toStore = [];
-    if (secretSpec) {
-      if (providedSecret) {
-        const credentialRef = credentialIdFor(instance.id, secretField);
-        toStore.push({
-          id: credentialRef,
-          value: providedSecret,
-          instance,
-          definition,
-          secretField
-        });
-        instance.auth.credentialRef = credentialRef;
-      } else if (!instance.auth.credentialRef && existing?.auth?.credentialRef) {
-        instance.auth.credentialRef = existing.auth.credentialRef;
-      }
-    } else {
-      delete instance.auth.credentialRef;
-    }
-
-    if (definition.alwaysInstalled) instance.enabled = true;
-    instance.definitionVersion = definition.version;
-    instance.installedAt = existing?.installedAt || nowIso();
-    instance.updatedAt = nowIso();
-    return { instance, definition, document: entry.document, secretsToStore: toStore };
+    assertDefinitionRunsInstance(entry.definition, instance);
+    return entry;
   }
 
   async _storeSecrets(secretsToStore, language = 'en') {
+    if (!secretsToStore.length) return;
+    // One read-modify-write of the credential store for all of them: each
+    // secret lands in the same file.
+    const store = (await configStore.readJsonStrict(CREDENTIALS_FILE)) || { credentials: {} };
+    if (!store.credentials) store.credentials = {};
     for (const { id, value, instance, definition, secretField } of secretsToStore) {
-      const store = (await configStore.readJsonStrict(CREDENTIALS_FILE)) || { credentials: {} };
-      if (!store.credentials) store.credentials = {};
       const field = definition.install.find(f => f.key === secretField);
       store.credentials[id] = {
         id,
@@ -436,14 +519,14 @@ export class InstalledIntegrationService {
         description: `Managed by the installed integration "${instance.id}"`,
         value: tokenStorageService.encryptString(value)
       };
-      await configStore.writeJson(CREDENTIALS_FILE, store);
-      await configCache.refreshCredentialsCache?.();
     }
+    await configStore.writeJson(CREDENTIALS_FILE, store);
+    await configCache.refreshCredentialsCache?.();
   }
 
   async _removeManagedCredential(instance) {
     const ref = instance?.auth?.credentialRef;
-    if (!ref || !ref.startsWith(`integration-${instance.id}-`)) return;
+    if (!ref?.startsWith(`integration-${instance.id}-`)) return;
     try {
       const store = (await configStore.readJsonStrict(CREDENTIALS_FILE)) || { credentials: {} };
       if (store.credentials?.[ref]) {

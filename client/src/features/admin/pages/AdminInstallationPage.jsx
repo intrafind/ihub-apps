@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import Badge from '../../../shared/components/Badge';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import AdminTabs from '../components/AdminTabs';
 import AdminLoadError from '../components/AdminLoadError';
@@ -15,7 +16,7 @@ import IntegrationConnectionsDialog from '../components/integrations/Integration
 import IntegrationInstallForm from '../components/integrations/IntegrationInstallForm';
 import IntegrationReleaseNotes from '../components/integrations/IntegrationReleaseNotes';
 import IntegrationFactList from '../components/integrations/IntegrationFactList';
-import { InstallationStatusPills, Pill } from '../components/integrations/IntegrationPills';
+import { InstallationStatusPills } from '../components/integrations/IntegrationPills';
 import InstallationMigrationPanel from '../components/integrations/InstallationMigrationPanel';
 import {
   MigrationConfirmDialog,
@@ -719,14 +720,14 @@ function InstallationPageContent({ instanceId }) {
                               }
                             />
                             {action.enabled === false ? (
-                              <Pill tone="gray">
+                              <Badge tone="neutral">
                                 {t('admin.integrations.page.actionOff', 'Off')}
-                              </Pill>
+                              </Badge>
                             ) : (
                               action.available === false && (
-                                <Pill tone="yellow" title={action.error || undefined}>
+                                <Badge tone="warning" title={action.error || undefined}>
                                   {t('admin.integrations.page.actionUnavailable', 'Unavailable')}
-                                </Pill>
+                                </Badge>
                               )
                             )}
                           </div>

@@ -331,40 +331,77 @@ export async function listCloudStorageConnections(type, providerId) {
   }
   const out = [];
   for (const file of entries) {
-    if (!file.endsWith('.json')) continue;
-    const stem = file.slice(0, -'.json'.length);
-    const at = stem.indexOf('__');
-    const userId = at > 0 ? stem.slice(0, at) : stem;
-    const fileProviderId = at > 0 ? stem.slice(at + 2) : null;
+    const userId = tokenFileOwner(file, providerId);
     if (!userId) continue;
-    if (fileProviderId && fileProviderId !== providerId) continue;
-    let raw;
-    try {
-      raw = JSON.parse(await fs.readFile(path.join(dir, file), 'utf8'));
-    } catch (error) {
-      logger.warn('Unreadable cloud storage token file skipped', {
-        component: 'CloudStorageConfig',
-        service: spec.service,
-        file,
-        error: error.message
-      });
-      continue;
-    }
-    const expiresAt = raw?.expiresAt || null;
-    let hasRefreshToken = true;
-    try {
-      hasRefreshToken = Boolean(
-        tokenStorage.decryptTokens(raw, userId, spec.service)?.refreshToken
-      );
-    } catch {
-      /* unreadable payload: report the connection as the file describes it */
-    }
-    out.push({
-      userId,
-      createdAt: raw?.createdAt || null,
-      expiresAt,
-      expired: Boolean(expiresAt && new Date(expiresAt) <= new Date() && !hasRefreshToken)
-    });
+    // One file at a time on purpose: the directory holds a file per connected
+    // user, and opening all of them at once could run out of file handles on
+    // a large installation. The result is sorted below, so order is irrelevant.
+    const connection = await readConnectionFile(dir, file, userId, spec.service);
+    if (connection) out.push(connection);
   }
   return out.sort((a, b) => a.userId.localeCompare(b.userId));
+}
+
+/**
+ * The user a token file belongs to, when it counts for the installation:
+ * `<userId>__<providerId>.json` of that installation, or a `<userId>.json`
+ * from before provider ids were part of the name (counts for every
+ * installation of the type).
+ *
+ * @param {string} file - a directory entry's name
+ * @param {string} providerId - the installation id
+ * @returns {string|null} the user id, or null when the file does not count
+ *
+ * @example
+ *   tokenFileOwner('erin__nextcloud.json', 'nextcloud'); // → 'erin'
+ *   tokenFileOwner('erin.json', 'nextcloud'); // → 'erin'
+ *   tokenFileOwner('erin__nextcloud-eu.json', 'nextcloud'); // → null
+ */
+function tokenFileOwner(file, providerId) {
+  if (!file.endsWith('.json')) return null;
+  const stem = file.slice(0, -'.json'.length);
+  const at = stem.indexOf('__');
+  if (at <= 0) return stem || null;
+  const fileProviderId = stem.slice(at + 2);
+  return !fileProviderId || fileProviderId === providerId ? stem.slice(0, at) : null;
+}
+
+/**
+ * One connection as {@link listCloudStorageConnections} reports it, read from
+ * the user's token file. It counts as expired when its access token expired
+ * and no refresh token can renew it.
+ *
+ * @param {string} dir - the service's token directory
+ * @param {string} file - the token file's name
+ * @param {string} userId - the user the file belongs to
+ * @param {string} service - the token store's service name (`office365`, …)
+ * @returns {Promise<{ userId: string, createdAt: string|null, expiresAt: string|null, expired: boolean }|null>}
+ *   null when the file cannot be read or parsed (logged and skipped)
+ */
+async function readConnectionFile(dir, file, userId, service) {
+  let raw;
+  try {
+    raw = JSON.parse(await fs.readFile(path.join(dir, file), 'utf8'));
+  } catch (error) {
+    logger.warn('Unreadable cloud storage token file skipped', {
+      component: 'CloudStorageConfig',
+      service,
+      file,
+      error: error.message
+    });
+    return null;
+  }
+  const expiresAt = raw?.expiresAt || null;
+  let hasRefreshToken = true;
+  try {
+    hasRefreshToken = Boolean(tokenStorage.decryptTokens(raw, userId, service)?.refreshToken);
+  } catch {
+    /* unreadable payload: report the connection as the file describes it */
+  }
+  return {
+    userId,
+    createdAt: raw?.createdAt || null,
+    expiresAt,
+    expired: Boolean(expiresAt && new Date(expiresAt) <= new Date() && !hasRefreshToken)
+  };
 }
