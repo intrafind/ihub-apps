@@ -15,7 +15,7 @@ jest.mock('react-i18next', () => {
   const lookup = key => key.split('.').reduce((node, part) => node?.[part], en);
   return {
     useTranslation: () => ({
-      t: (key, fallback) => (typeof lookup(key) === 'string' ? lookup(key) : `MISSING:${key}`),
+      t: key => (typeof lookup(key) === 'string' ? lookup(key) : `MISSING:${key}`),
       i18n: { language: 'en' }
     })
   };

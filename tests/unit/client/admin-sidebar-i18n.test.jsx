@@ -30,9 +30,9 @@ const labels = collectLabels();
 describe('admin sidebar labels', () => {
   it('collects the labels of every section and page', () => {
     expect(labels.size).toBeGreaterThanOrEqual(40);
-    expect([...labels.keys()].filter(key => key.startsWith('admin.sidebar.sections.'))).toHaveLength(
-      7
-    );
+    expect(
+      [...labels.keys()].filter(key => key.startsWith('admin.sidebar.sections.'))
+    ).toHaveLength(7);
   });
 
   it.each([...labels.entries()])('%s is translated into English and German', (key, fallback) => {
