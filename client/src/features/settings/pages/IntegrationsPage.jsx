@@ -13,7 +13,7 @@ import ConnectedAppsCard from '../components/ConnectedAppsCard';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { disconnectUserIntegration, fetchUserIntegrations } from '../../../api/userIntegrationsApi';
-import { consumeConnectResult } from '../../integrations/connect/connectResult';
+import { useConnectResult } from '../../integrations/connect/useConnectResult';
 import { startIntegrationConnect } from '../../integrations/connect/integrationInfo';
 
 export default function IntegrationsPage() {
@@ -49,7 +49,7 @@ export default function IntegrationsPage() {
   // The result of a sign-in that came back to this page
   // (`integration_connected=<id>` / `integration_error=<code>&integration=<id>`),
   // read once; the text names the integration once the list has loaded.
-  const [connectResult] = useState(() => consumeConnectResult());
+  const connectResult = useConnectResult();
   useEffect(() => {
     if (connectResult.connected) {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
@@ -91,6 +91,7 @@ export default function IntegrationsPage() {
     for (const entry of userIntegrations || []) {
       const connection = entry.connection || {};
       byId[entry.id] = {
+        status: connection.status,
         connected: connection.status === 'connected',
         userInfo: connection.account ? { displayName: connection.account } : null
       };
@@ -198,11 +199,14 @@ export default function IntegrationsPage() {
   }, [user?.id]);
 
   // Connect: the one connect flow of every integration. The browser leaves for
-  // the vendor's consent and comes back to this page.
+  // the vendor's consent and comes back to this page. A connection that needs
+  // renewing (`needs_reconnect`) goes through the reconnect route, which keeps
+  // the connection and what it was granted.
   const handleConnect = async ({ id, displayName }) => {
     try {
       await startIntegrationConnect(id, {
-        returnUrl: window.location.origin + window.location.pathname
+        returnUrl: window.location.origin + window.location.pathname,
+        reconnect: integrations[id]?.status === 'needs_reconnect'
       });
     } catch (error) {
       setMessage({

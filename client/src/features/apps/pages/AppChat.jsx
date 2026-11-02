@@ -2306,25 +2306,30 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
    * `voiceText` is a turn from voice mode: it goes out like typed text (same
    * prompt, model, tools and variables), flagged as a voice turn, and leaves
    * the files staged in the composer alone. It is marked as spoken unless it
-   * was typed into the voice dock (`typedInVoiceMode`).
+   * was typed into the voice dock (`typedInVoiceMode`). `text` is a typed
+   * message the chat sends on the user's behalf (the retry after connecting
+   * an integration): an ordinary typed turn that, like a voice turn, leaves
+   * the composer alone. Resolves true when the message was sent.
    */
   const handleSubmit = async (
     e,
     startFormMessage = null,
-    { voiceText, typedInVoiceMode = false } = {}
+    { voiceText, typedInVoiceMode = false, text } = {}
   ) => {
     e.preventDefault();
     const isVoiceTurn = typeof voiceText === 'string';
-    // A spoken turn is its own message: a file staged in the composer belongs
-    // to the typed message it was added for, so it neither goes out with an
-    // unrelated sentence nor is cleared from the composer by it.
-    const selectedFile = isVoiceTurn ? null : fileUploadHandler.selectedFile;
+    const ownText = isVoiceTurn ? voiceText : text;
+    // A spoken or automatic turn is its own message: a file staged in the
+    // composer belongs to the typed message it was added for, so it neither
+    // goes out with an unrelated sentence nor is cleared from the composer by it.
+    const leavesComposer = typeof ownText === 'string';
+    const selectedFile = leavesComposer ? null : fileUploadHandler.selectedFile;
     // An attachment is still being processed (e.g. the audio of a video is
     // extracted), in whichever composer it was added: the message would go
     // without it. Each composer holds back its own Send; this is the backstop
     // for the one that was not told.
     if (fileUploadHandler.isAttachmentProcessing) return;
-    const typed = startFormMessage ?? (isVoiceTurn ? voiceText : input);
+    const typed = startFormMessage ?? (leavesComposer ? ownText : input);
 
     // While recording, "send" means: finish the recording — sent to the
     // selected model, with anything typed when that is a chat model.
@@ -2606,7 +2611,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       voiceTurnSentRef.current = true;
     }
 
-    if (!isVoiceTurn) {
+    if (!leavesComposer) {
       setInput('');
       magicPromptHandler.resetMagicPrompt();
       fileUploadHandler.clearSelectedFile();
@@ -2616,6 +2621,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     pendingVariablesRef.current = null;
     // Unpinned, the parameters make room for the conversation once sent.
     if (showVariablesPanel) variablesPanel.collapseAfterSend();
+    return true;
   };
 
   // The first message of a form-started chat: the app's prompt, rendered with
@@ -2655,14 +2661,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
   // After connecting an integration from a Connect card, the browser comes
   // back here; the answer that needed the connection is retried once (#2917).
+  // It is a typed turn (not a voice one), sent once the chat can take it.
   useConnectRetry({
     chatId,
     messages,
     ready: !hydrating,
-    busy: processing,
-    send: text => {
-      void handleSubmit({ preventDefault() {} }, null, { voiceText: text, typedInVoiceMode: true });
-    }
+    busy:
+      processing ||
+      compareIsProcessing ||
+      isTranscribing ||
+      isRecordingTranscription ||
+      fileUploadHandler.isAttachmentProcessing,
+    send: async text => (await handleSubmit({ preventDefault() {} }, null, { text })) === true
   });
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>
