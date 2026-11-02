@@ -1193,7 +1193,7 @@ Requirements and behavior:
 
 #### iAssistant Configuration
 
-The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the settings of the `iassistant` installation (**Admin → Integrations → iAssistant**, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The app also binds that installation under `integrations` (`"iassistant": { "actions": [] }`, see [Integrations](#integrations-binding-an-installed-integration)); the shipped `iassistant` app shows both.
+The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the settings of the `iassistant` installation (**Admin → Integrations → iAssistant**, see [Platform → iAssistant Integration](platform.md#iassistant-integration)). The app also binds that installation under `integrations` (`"iassistant": { "actions": [] }`, see [Integrations](#integrations-binding-an-installed-integration)); the shipped `iassistant` app shows both. An app on another model that should ask the iAssistant ticks its `ask` action instead (`"iassistant": { "actions": ["ask"] }`, tool `iassistant__ask`); these settings then shape each question the action asks (see [Integrations → The iAssistant `ask` action](integrations.md#built-in-integrations)).
 
 ```json
 "iassistant": {

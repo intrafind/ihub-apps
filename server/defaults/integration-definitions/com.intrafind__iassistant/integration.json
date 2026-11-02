@@ -1,11 +1,22 @@
 {
   "$schema": "https://ihub.intrafind.com/schemas/integration-definition.json",
   "id": "com.intrafind/iassistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "New action ask: any model asks the iAssistant one question and gets a grounded answer with its documents as sources. Apps opt in per binding.",
+        "de": "Neue Aktion ask: jedes Modell stellt dem iAssistant eine Frage und erhält eine belegte Antwort mit den Dokumenten als Quellen. Apps schalten sie je Bindung frei."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-10-31",
@@ -24,8 +35,8 @@
     "de": "iAssistant"
   },
   "description": {
-    "en": "IntraFind iAssistant: retrieval-augmented conversations over the iFinder index, with the user's own search profiles and iAssistants. Runs on the iFinder installation; chats use it through the iAssistant conversation model.",
-    "de": "IntraFind iAssistant: retrieval-gestützte Konversationen über den iFinder-Index mit den Suchprofilen und iAssistants des Benutzers. Läuft auf der iFinder-Installation; Chats nutzen ihn über das iAssistant-Konversationsmodell."
+    "en": "IntraFind iAssistant: retrieval-augmented conversations over the iFinder index, with the user's own search profiles and iAssistants. Runs on the iFinder installation; chats use it as the iAssistant conversation model, and other models ask it through the ask action.",
+    "de": "IntraFind iAssistant: retrieval-gestützte Konversationen über den iFinder-Index mit den Suchprofilen und iAssistants des Benutzers. Läuft auf der iFinder-Installation; Chats nutzen ihn als iAssistant-Konversationsmodell, andere Modelle fragen ihn über die Aktion ask."
   },
   "publisher": {
     "name": "IntraFind Software AG",
@@ -48,7 +59,7 @@
   "auth": {
     "modes": ["none"]
   },
-  "capabilities": ["scopes", "model"],
+  "capabilities": ["tools", "scopes", "model"],
   "install": [
     {
       "key": "connection",
@@ -135,5 +146,21 @@
       "de": "iAssistant"
     }
   },
-  "actions": []
+  "actions": [
+    {
+      "name": "ask",
+      "title": {
+        "en": "Ask the iAssistant",
+        "de": "iAssistant fragen"
+      },
+      "description": {
+        "en": "Ask the iAssistant a question and get an answer grounded in the documents in iFinder the user may see, with the documents it cites. Use it for questions about the organisation's own documents, policies and knowledge. Each call is one question on its own: include the context the question needs.",
+        "de": "Dem iAssistant eine Frage stellen und eine Antwort erhalten, die auf den Dokumenten in iFinder beruht, die der Benutzer sehen darf, mit den zitierten Dokumenten. Für Fragen zu den eigenen Dokumenten, Richtlinien und dem Wissen der Organisation. Jeder Aufruf ist eine eigenständige Frage: den nötigen Kontext mitgeben."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "connection": "user",
+      "bindExplicitly": true
+    }
+  ]
 }
