@@ -1039,8 +1039,22 @@ describe('Excel workbooks (xlsx)', () => {
               { header: 'Updated', format: 'date' }
             ],
             rows: [
-              ['EMEA', 120000, 144000, '=(C2-B2)/B2', '=IFS(D2>0.15,"High",TRUE,"Core")', '2026-10-15'],
-              ['APAC', 80000, 96000, '=(C3-B3)/B3', '=IFS(D3>0.15,"High",TRUE,"Core")', '2026-10-15'],
+              [
+                'EMEA',
+                120000,
+                144000,
+                '=(C2-B2)/B2',
+                '=IFS(D2>0.15,"High",TRUE,"Core")',
+                '2026-10-15'
+              ],
+              [
+                'APAC',
+                80000,
+                96000,
+                '=(C3-B3)/B3',
+                '=IFS(D3>0.15,"High",TRUE,"Core")',
+                '2026-10-15'
+              ],
               {
                 cells: ['Total', '=SUM(B2:B3)', '=SUM(C2:C3)', '=(C4-B4)/B4', '', ''],
                 total: true

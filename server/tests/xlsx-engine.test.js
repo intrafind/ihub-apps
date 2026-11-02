@@ -23,7 +23,10 @@ import {
 } from '../services/documents/xlsx/buildXlsx.js';
 import { renderXlsx } from '../services/documents/xlsx/renderXlsx.js';
 import { runCreateXlsx, xlsxSpecFromToolArgs } from '../services/documents/xlsx/xlsxTools.js';
-import { clearHeldGeneratedFiles, heldGeneratedFile } from '../services/documents/generatedFiles.js';
+import {
+  clearHeldGeneratedFiles,
+  heldGeneratedFile
+} from '../services/documents/generatedFiles.js';
 import { EMU_PER_INCH, metricCards } from '../services/documents/pptx/pptxXml.js';
 import {
   injectBrandTokens,

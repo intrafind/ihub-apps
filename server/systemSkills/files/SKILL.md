@@ -29,7 +29,7 @@ You hand the user files with two tools. The user gets a download card in the cha
 ## Names and folders
 
 - The **extension decides the file type**: `app.py`, `schema.json`, `data.csv`, `analysis.ipynb`, `architecture.drawio`, `board.excalidraw`, `invite.ics`, `contact.vcf`, `notes.md`, `query.sql`, `deploy.sh`. Use the conventional name for files without extension (`Dockerfile`, `Makefile`).
-- For **Jupyter notebooks (`.ipynb`)**, **editable diagrams (`.drawio`, `.excalidraw`, `.mmd`, `.dot`, `.puml`)**, **calendar invites (`.ics`)** and **contacts (`.vcf`)**, read `references/formats.md` with `read_skill_resource` for exact schemas. (For quick diagrams in your reply when no file download was requested, use an inline ```` ```mermaid ```` block in chat.)
+- For **Jupyter notebooks (`.ipynb`)**, **editable diagrams (`.drawio`, `.excalidraw`, `.mmd`, `.dot`, `.puml`)**, **calendar invites (`.ics`)** and **contacts (`.vcf`)**, read `references/formats.md` with `read_skill_resource` for exact schemas. (For quick diagrams in your reply when no file download was requested, use an inline ` ```mermaid ` block in chat.)
 - Use **folders** for projects: `src/index.ts`, `src/components/Button.tsx`, `tests/test_app.py`, `README.md`. They are kept in the ZIP.
 - Paths are relative. `..`, drive letters and leading slashes are removed.
 - A file with the same name as an earlier one is a new version; `includeAll` packs the newest one.

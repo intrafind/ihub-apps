@@ -15,7 +15,7 @@ You create live, interactive web artifacts and vector graphics with the `create_
 
 - **`.html` (`create_web_artifact`, `format: "html"`)**: interactive dashboards, calculators, financial/engineering simulators, sortable/filterable data explorers, clickable UI prototypes, games, and interactive HTML5 `<canvas>` / generative visualizations.
 - **`.svg` (`create_web_artifact`, `format: "svg"`)**: standalone scalable vector illustrations, architecture diagrams, custom infographics, and badges.
-- **Inline ```` ```mermaid ```` block in chat**: quick flowcharts, sequence diagrams, ER diagrams or state machines when the user has not asked for a downloadable file or custom visual styling.
+- **Inline ` ```mermaid ` block in chat**: quick flowcharts, sequence diagrams, ER diagrams or state machines when the user has not asked for a downloadable file or custom visual styling.
 - **Print-ready posters, flyers, certificates, or multi-page reports**: use the `pdf` skill (`create_pdf`).
 - **Source code files, config files, `.drawio`/`.excalidraw`, `.ipynb`, or multi-file `.zip` projects**: use the `files` skill (`create_file` / `create_zip`).
 
@@ -45,9 +45,9 @@ Use them in your stylesheet (`color: var(--brand-primary); font-family: var(--br
 
 - **Avoid generic "AI slop"**: never use generic purple-to-blue gradients on white cards, overused glassmorphism, or decorative buttons that do nothing.
 - **Commit to a clear visual direction**:
-  - *Swiss Editorial Grid*: crisp 1px borders (`#e2e8f0`), generous whitespace, bold typographic hierarchy, high-contrast accent indicators.
-  - *Financial / Engineering Workbench*: dense, scannable KPI strip, interactive sliders with live delta badges, tabular numerals, clean comparison tables.
-  - *Studio / Dark Canvas* (for generative art or media tools): deep slate background (`#0b0f19`), subtle hairline borders (`rgba(255,255,255,0.08)`), luminous data series.
+  - _Swiss Editorial Grid_: crisp 1px borders (`#e2e8f0`), generous whitespace, bold typographic hierarchy, high-contrast accent indicators.
+  - _Financial / Engineering Workbench_: dense, scannable KPI strip, interactive sliders with live delta badges, tabular numerals, clean comparison tables.
+  - _Studio / Dark Canvas_ (for generative art or media tools): deep slate background (`#0b0f19`), subtle hairline borders (`rgba(255,255,255,0.08)`), luminous data series.
 - **Numeric discipline**: always set `font-variant-numeric: tabular-nums` on KPI cards, tables, counters, and slider readouts so numbers never jitter when sliders move.
 - **Light & dark mode**: define semantic surface variables (`--bg`, `--surface`, `--border`, `--text`, `--muted`) with `@media (prefers-color-scheme: dark)` support.
 

@@ -98,9 +98,7 @@ function parseNotebookPreview(text) {
     const parsed = JSON.parse(text);
     if (!parsed || !Array.isArray(parsed.cells)) return null;
     const lang =
-      parsed.metadata?.kernelspec?.language ||
-      parsed.metadata?.language_info?.name ||
-      'python';
+      parsed.metadata?.kernelspec?.language || parsed.metadata?.language_info?.name || 'python';
     const cells = parsed.cells.slice(0, 100).map((cell, index) => {
       const source = Array.isArray(cell?.source)
         ? cell.source.join('')

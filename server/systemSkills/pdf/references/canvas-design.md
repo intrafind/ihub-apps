@@ -6,12 +6,12 @@ Use this workflow when the user asks for a **poster, event flyer, certificate, a
 
 Before writing `blocks`, commit to a single aesthetic direction and a disciplined 3-colour palette (background/surface, primary ink, and 1 focal accent):
 
-| Aesthetic Direction | Palette Example | Geometry & Typography |
-| --- | --- | --- |
-| **Swiss Grid Precision** | `#f8fafc` surface, `#0f172a` ink, `#dc2626` crimson accent | Asymmetric column grid, crisp `1pt` horizontal rules, oversized numeric callouts (`28–42pt`), sans-serif (`font: "sans"`). |
-| **Editorial Monochrome & Gold** | `#ffffff` surface, `#18181b` ink, `#b45309` warm gold | Centered ceremonial hierarchy (ideal for certificates & invitations), serif display headings (`font: "serif"`), double-ruled borders. |
-| **Dark Technical Blueprint** | `#0f172a` hero SVG canvas, `#38bdf8` cyan vector lines, `#f8fafc` text | Deep navy hero SVG banner (`width="539" height="280"`), monospace metadata badges (`font: "mono"`), high-contrast KPI cards. |
-| **Warm Architectural Geometry** | `#fafaf9` warm stone, `#1c1917` charcoal, `#0f766e` deep teal | Overlapping geometric circles/arcs in SVG, generous negative space, balanced 2-column bottom grid. |
+| Aesthetic Direction             | Palette Example                                                        | Geometry & Typography                                                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Swiss Grid Precision**        | `#f8fafc` surface, `#0f172a` ink, `#dc2626` crimson accent             | Asymmetric column grid, crisp `1pt` horizontal rules, oversized numeric callouts (`28–42pt`), sans-serif (`font: "sans"`).            |
+| **Editorial Monochrome & Gold** | `#ffffff` surface, `#18181b` ink, `#b45309` warm gold                  | Centered ceremonial hierarchy (ideal for certificates & invitations), serif display headings (`font: "serif"`), double-ruled borders. |
+| **Dark Technical Blueprint**    | `#0f172a` hero SVG canvas, `#38bdf8` cyan vector lines, `#f8fafc` text | Deep navy hero SVG banner (`width="539" height="280"`), monospace metadata badges (`font: "mono"`), high-contrast KPI cards.          |
+| **Warm Architectural Geometry** | `#fafaf9` warm stone, `#1c1917` charcoal, `#0f766e` deep teal          | Overlapping geometric circles/arcs in SVG, generous negative space, balanced 2-column bottom grid.                                    |
 
 ## 2. Document Settings for Visual Canvas Layout
 
@@ -47,5 +47,6 @@ Always configure `create_pdf` so the default report header does not collide with
 ## 4. Visual QA (`preview_pdf`)
 
 Always call `preview_pdf` on page `1` after generating a poster or certificate:
+
 - Verify the content did not spill onto a stray page 2 (if `pages > 1`, reduce the hero SVG height or vertical margins by `15–25 pt` and regenerate).
 - Verify no `<text>` inside the `<svg>` is clipped at the right edge (`x + textWidth < 515`).

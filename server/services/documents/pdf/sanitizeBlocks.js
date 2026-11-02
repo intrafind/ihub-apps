@@ -525,8 +525,7 @@ function renderFormField(field, ctx) {
   const type = typeof field.type === 'string' ? field.type.toLowerCase() : 'text';
   const rawValue =
     field.value !== undefined && field.value !== null ? String(field.value).slice(0, 2000) : '';
-  const placeholder =
-    typeof field.placeholder === 'string' ? field.placeholder.slice(0, 300) : '';
+  const placeholder = typeof field.placeholder === 'string' ? field.placeholder.slice(0, 300) : '';
   const border = ctx.theme.border || '#cbd5e1';
 
   if (type === 'checkbox') {
@@ -646,7 +645,8 @@ function sanitizeForm(source, ctx) {
     warn(ctx, 'Skipped a form block without fields.');
     return null;
   }
-  const cols = clampNumber(spec.columns, 1, 3) === 2 ? 2 : clampNumber(spec.columns, 1, 3) === 3 ? 3 : 1;
+  const cols =
+    clampNumber(spec.columns, 1, 3) === 2 ? 2 : clampNumber(spec.columns, 1, 3) === 3 ? 3 : 1;
   const stack = [];
   if (typeof spec.title === 'string' && spec.title.trim()) {
     stack.push({
