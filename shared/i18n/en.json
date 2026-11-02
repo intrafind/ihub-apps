@@ -2862,6 +2862,11 @@
       }
     },
     "integrationCatalog": {
+      "field": {
+        "choose": "Choose…",
+        "custom": "Custom…",
+        "customValue": "Custom value for {{field}}"
+      },
       "title": "Installed integrations",
       "subtitle": "Install an integration from the catalog, point it at your system and bind it to apps. Each installation brings its actions to the model.",
       "install": "Install",
