@@ -17,9 +17,14 @@
  *    `toolApproval.pending` ({@link pausedTurnTranscript}, bounded).
  * 3. The person answers with the next chat POST, whose single message carries
  *    `approvalResponse { interactionId, decision, grant? }`.
- *    {@link settleChatApprovals} answers the interaction (exactly once: a
- *    second answer is `NOT_PENDING` and refused), clears `pending` and, with
- *    `grant: 'chat'`, records the tool in `toolApproval.grants`.
+ *    {@link prepareChatApproval} checks it without changing anything; once the
+ *    turn is prepared, its `commit()` answers the interaction (exactly once: a
+ *    second answer is refused), takes `pending` off the chat (compare-and-set,
+ *    `ChatRepository.takeToolApproval`) and, with `grant: 'chat'`, records the
+ *    tool in `toolApproval.grants`. A turn refused before its loop starts puts
+ *    the approval back with its answer (`restore()`), so the same decision can
+ *    be sent again. An approval the sweeper expired or cancelled continues as
+ *    `APPROVAL_EXPIRED`.
  * 4. The continuation turn takes the stored transcript instead of the
  *    decision message ({@link continuationMessages}). On approve the loop
  *    runs the stored call with the approved arguments (`AgentLoop` `resume`)
@@ -64,7 +69,9 @@ export function isChatToolApproval(interaction) {
     typeof interaction.source?.chatId === 'string' &&
     interaction.source.chatId.length > 0 &&
     !interaction.source.checkpointId &&
-    !interaction.source.scheduledTaskId
+    !interaction.source.scheduledTaskId &&
+    // An MCP App view's own call is answered beside the view, not by the next message.
+    !interaction.source.viewCall
   );
 }
 
@@ -84,12 +91,28 @@ function slim(message, limit) {
       .map(part => cut(part.text, limit))
       .join('\n');
   }
-  if (Array.isArray(message.tool_calls)) out.tool_calls = message.tool_calls;
+  if (Array.isArray(message.tool_calls)) {
+    // Arguments stay valid JSON: an over-long one is replaced, not cut. The
+    // approved call never runs from these (its arguments come from the approval).
+    out.tool_calls = message.tool_calls.map(call => {
+      const args = call?.function?.arguments;
+      if (typeof args !== 'string' || args.length <= limit) return call;
+      return { ...call, function: { ...call.function, arguments: TRUNCATED_ARGUMENTS } };
+    });
+  }
   if (message.tool_call_id) out.tool_call_id = message.tool_call_id;
   if (message.name) out.name = message.name;
-  if (Array.isArray(message.thoughtSignatures)) out.thoughtSignatures = message.thoughtSignatures;
+  if (
+    Array.isArray(message.thoughtSignatures) &&
+    JSON.stringify(message.thoughtSignatures).length <= limit
+  ) {
+    out.thoughtSignatures = message.thoughtSignatures;
+  }
   return out;
 }
+
+/** What an over-long tool-call argument string is replaced with in a stored transcript. */
+const TRUNCATED_ARGUMENTS = JSON.stringify({ _truncated: 'arguments too long to keep' });
 
 /**
  * The part of a paused turn's loop transcript the continuation needs: every
@@ -128,7 +151,9 @@ export function pausedTurnTranscript(messages, { startMessage, toolCallId }) {
     // Only the step that made the call: its assistant message and the results after it.
     bounded = list.slice(callAt).map(m => slim(m, TIGHT_TRANSCRIPT_MESSAGE_CHARS));
   }
-  return bounded;
+  // Still too large (a step with very many calls): nothing is stored, and the
+  // approval is cancelled by the caller rather than kept unbounded.
+  return size(bounded) > MAX_TRANSCRIPT_CHARS ? null : bounded;
 }
 
 /**
@@ -244,13 +269,42 @@ export function publicChatView(chat) {
   };
 }
 
+const NOT_PENDING = Object.freeze({
+  status: 409,
+  code: 'APPROVAL_NOT_PENDING',
+  message: 'This approval is not pending in this chat (already answered, or superseded)'
+});
+const ALREADY_ANSWERED = Object.freeze({
+  status: 409,
+  code: 'APPROVAL_ALREADY_ANSWERED',
+  message: 'This approval was already answered'
+});
+
+/** Interaction states that mean "nobody will answer this any more". */
+const LAPSED = new Set(['expired', 'cancelled']);
+
 /**
- * Settle the chat's tool approvals for an incoming message.
+ * Take the pending approval off the chat (compare-and-set where the
+ * repository offers it).
+ */
+async function takePending(repository, chatId, interactionId, grants, stored) {
+  if (typeof repository?.takeToolApproval === 'function') {
+    return repository.takeToolApproval(chatId, interactionId, { grants });
+  }
+  await repository?.updateChat?.(chatId, { toolApproval: { grants, pending: null } });
+  return stored;
+}
+
+/**
+ * First half of settling the chat's tool approvals for an incoming message:
+ * everything that can refuse the request without changing anything.
  *
- * - A message with `approvalResponse` answers its interaction (once) and
- *   returns what the continuation needs (`resume`).
+ * - A message with `approvalResponse` is checked (shape, the chat's pending
+ *   approval, the interaction's owner). Nothing is answered yet: the route
+ *   calls `commit()` once the turn is prepared, so a request that fails
+ *   before the turn can run does not use the approval up.
  * - Any other message cancels pending approvals (`superseded`) and drops the
- *   stored transcript.
+ *   stored transcript right away.
  *
  * @param {Object} params
  * @param {string} params.chatId
@@ -260,11 +314,11 @@ export function publicChatView(chat) {
  * @param {Object} params.repository - ChatRepository
  * @param {Object} [params.interactionService]
  * @param {Function} [params.authorizeInteraction]
- * @returns {Promise<{grants: string[], resume: Object|null, refusal: Object|null}>}
- *   `refusal` is `{ status, code, message }` when the answer cannot be accepted
- *   (the request is then answered with it and no turn runs).
+ * @returns {Promise<{grants: string[], refusal: Object|null,
+ *   commit: (() => Promise<{grants: string[], resume: Object|null, refusal: Object|null}>)|null}>}
+ *   `refusal` is `{ status, code, message }`: answer the request with it, run no turn.
  */
-export async function settleChatApprovals({
+export async function prepareChatApproval({
   chatId,
   user,
   chat,
@@ -275,7 +329,7 @@ export async function settleChatApprovals({
 }) {
   const state = chatApprovalState(chat);
   const response = parseApprovalResponse(lastMessage?.approvalResponse);
-  const result = { grants: state.grants, resume: null, refusal: null };
+  const result = { grants: state.grants, refusal: null, commit: null };
 
   if (lastMessage?.approvalResponse !== undefined && !response) {
     result.refusal = {
@@ -319,11 +373,7 @@ export async function settleChatApprovals({
 
   const stored = state.pending;
   if (!stored || stored.interactionId !== response.interactionId) {
-    result.refusal = {
-      status: 409,
-      code: 'APPROVAL_NOT_PENDING',
-      message: 'This approval is not pending in this chat (already answered, or superseded)'
-    };
+    result.refusal = { ...NOT_PENDING };
     return result;
   }
 
@@ -337,12 +387,53 @@ export async function settleChatApprovals({
     return result;
   }
 
+  result.commit = async () =>
+    commitChatApproval({
+      chatId,
+      user,
+      response,
+      stored,
+      interaction,
+      grants: state.grants,
+      repository,
+      interactionService,
+      cancelOthers
+    });
+  return result;
+}
+
+/**
+ * Second half: answer the approval exactly once, take it off the chat, and
+ * hand over what the continuation needs. An approval the sweeper already
+ * expired or cancelled continues as `expired` (the model gets
+ * `APPROVAL_EXPIRED`). One that a refused turn put back (`settled`) is used
+ * with the answer it already has.
+ *
+ * @private
+ */
+async function commitChatApproval({
+  chatId,
+  user,
+  response,
+  stored,
+  interaction,
+  grants: currentGrants,
+  repository,
+  interactionService,
+  cancelOthers
+}) {
+  const out = { grants: currentGrants, resume: null, refusal: null, restore: null };
   let outcome;
-  try {
-    if (!interaction) {
-      // Settled and evicted, or lost: nothing can run it any more.
-      outcome = 'expired';
-    } else {
+  if (stored.settled?.outcome) {
+    outcome = stored.settled.outcome;
+  } else if (!interaction || LAPSED.has(interaction.status)) {
+    // Settled by the sweeper (expired, superseded) or evicted: it cannot run.
+    outcome = 'expired';
+  } else if (interaction.status === 'answered') {
+    out.refusal = { ...ALREADY_ANSWERED };
+    return out;
+  } else {
+    try {
       await interactionService.answer(
         response.interactionId,
         response.decision === 'approve'
@@ -351,30 +442,38 @@ export async function settleChatApprovals({
         { user, channel: 'chat' }
       );
       outcome = response.decision === 'approve' ? 'approved' : 'rejected';
-    }
-  } catch (err) {
-    if (err?.code === 'EXPIRED' || err?.code === 'NOT_FOUND') {
-      outcome = 'expired';
-    } else if (err?.code === 'NOT_PENDING' || err?.code === 'ANSWER_IN_PROGRESS') {
-      // A second answer (double click, a retried request): the first one runs the call.
-      result.refusal = {
-        status: 409,
-        code: 'APPROVAL_ALREADY_ANSWERED',
-        message: 'This approval was already answered'
-      };
-      return result;
-    } else {
-      throw err;
+    } catch (err) {
+      if (err?.code === 'EXPIRED' || err?.code === 'NOT_FOUND') {
+        outcome = 'expired';
+      } else if (err?.code === 'NOT_PENDING') {
+        const current = await interactionService.get(response.interactionId).catch(() => null);
+        if (current && LAPSED.has(current.status)) outcome = 'expired';
+        else {
+          out.refusal = { ...ALREADY_ANSWERED };
+          return out;
+        }
+      } else if (err?.code === 'ANSWER_IN_PROGRESS') {
+        // A second answer (double click, a retried request): the first one runs the call.
+        out.refusal = { ...ALREADY_ANSWERED };
+        return out;
+      } else {
+        throw err;
+      }
     }
   }
 
-  await cancelOthers(response.interactionId);
   const toolId = stored.call?.toolId || interaction?.source?.toolId || null;
   const grants =
-    outcome === 'approved' && response.grant === 'chat' && toolId && !state.grants.includes(toolId)
-      ? [...state.grants, toolId].slice(-MAX_CHAT_GRANTS)
-      : state.grants;
-  await repository?.updateChat?.(chatId, { toolApproval: { grants, pending: null } });
+    outcome === 'approved' && response.grant === 'chat' && toolId && !currentGrants.includes(toolId)
+      ? [...currentGrants, toolId].slice(-MAX_CHAT_GRANTS)
+      : currentGrants;
+  // Exactly one request takes the approval off the chat.
+  const taken = await takePending(repository, chatId, response.interactionId, grants, stored);
+  if (!taken) {
+    out.refusal = { ...ALREADY_ANSWERED };
+    return out;
+  }
+  await cancelOthers(response.interactionId);
 
   logger.info('Chat tool approval settled', {
     component: COMPONENT,
@@ -385,8 +484,8 @@ export async function settleChatApprovals({
     grant: outcome === 'approved' ? response.grant : null
   });
 
-  result.grants = grants;
-  result.resume = {
+  out.grants = grants;
+  out.resume = {
     interactionId: response.interactionId,
     outcome,
     call: stored.call,
@@ -396,5 +495,37 @@ export async function settleChatApprovals({
     transcript: Array.isArray(stored.transcript) ? stored.transcript : [],
     question: typeof stored.question === 'string' ? stored.question : null
   };
-  return result;
+  // A turn refused before its loop started puts the approval back, with its
+  // answer, so the same decision can be sent again.
+  out.restore = async () => {
+    const { settled: _previous, ...rest } = stored;
+    try {
+      return await repository?.restoreToolApproval?.(chatId, { ...rest, settled: { outcome } });
+    } catch (err) {
+      logger.warn('Tool approval could not be put back after a refused turn', {
+        component: COMPONENT,
+        chatId,
+        interactionId: response.interactionId,
+        error: err.message
+      });
+      return false;
+    }
+  };
+  return out;
+}
+
+/**
+ * Settle the chat's tool approvals for an incoming message in one step
+ * ({@link prepareChatApproval} then its `commit`).
+ *
+ * @param {Object} params - see {@link prepareChatApproval}
+ * @returns {Promise<{grants: string[], resume: Object|null, refusal: Object|null,
+ *   restore: (() => Promise<boolean>)|null}>}
+ */
+export async function settleChatApprovals(params) {
+  const prepared = await prepareChatApproval(params);
+  if (prepared.refusal || !prepared.commit) {
+    return { grants: prepared.grants, resume: null, refusal: prepared.refusal, restore: null };
+  }
+  return prepared.commit();
 }

@@ -19,6 +19,7 @@ import {
   withDefaultMode
 } from '../../../client/src/features/admin/components/integrations/installationApproval';
 import { toolApprovalFromForm } from '../../../client/src/features/admin/components/ToolApprovalConfig';
+import { toolApprovalAnswer } from '../../../client/src/features/chat/toolApprovalAnswer';
 
 /**
  * The chat's approval card for a tool call (#2945): it shows the exact
@@ -103,6 +104,14 @@ describe('ApprovalCard', () => {
     expect(screen.getByTestId('tool-approval-card')).toHaveAttribute('aria-labelledby');
   });
 
+  it('for an MCP App view call offers no chat-wide grant (allowChatGrant=false)', () => {
+    const onDecide = jest.fn();
+    render(<ApprovalCard approval={APPROVAL} onDecide={onDecide} allowChatGrant={false} />);
+    expect(screen.queryByRole('button', { name: 'Approve & allow for this chat' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onDecide).toHaveBeenCalledWith({ interactionId: 'approve-1', decision: 'approve' });
+  });
+
   it('shows the decision instead of the buttons once answered, and is read-only without a handler', () => {
     const { rerender } = render(
       <ApprovalCard approval={{ ...APPROVAL, decision: 'rejected' }} onDecide={() => {}} />
@@ -174,7 +183,42 @@ describe('run projection of a chat tool approval', () => {
   });
 });
 
+describe('what a decision on the card sends', () => {
+  it('carries "allow for this chat" with an approval, and only then', () => {
+    expect(
+      toolApprovalAnswer({ interactionId: 'a-1', decision: 'approve', grant: 'chat' })
+    ).toEqual({
+      outcome: 'approvedForChat',
+      approvalResponse: { interactionId: 'a-1', decision: 'approve', grant: 'chat' }
+    });
+    expect(toolApprovalAnswer({ interactionId: 'a-1', decision: 'approve' })).toEqual({
+      outcome: 'approved',
+      approvalResponse: { interactionId: 'a-1', decision: 'approve' }
+    });
+    expect(toolApprovalAnswer({ interactionId: 'a-1', decision: 'reject', grant: 'chat' })).toEqual(
+      {
+        outcome: 'rejected',
+        approvalResponse: { interactionId: 'a-1', decision: 'reject' }
+      }
+    );
+    expect(toolApprovalAnswer({ interactionId: 'a-1', decision: 'maybe' })).toBeNull();
+    expect(toolApprovalAnswer({ decision: 'approve' })).toBeNull();
+  });
+});
+
 describe('installation approval editing', () => {
+  it('orders actions by code unit, so a draft equals what is stored whatever the key order', () => {
+    expect(
+      Object.keys(normalizeApproval({ actions: { b: 'always', B: 'writes', a: 'always' } }).actions)
+    ).toEqual(['B', 'a', 'b']);
+    expect(
+      approvalChanged(
+        { actions: { b: 'always', a: 'always' } },
+        normalizeApproval({ actions: { a: 'always', b: 'always' } })
+      )
+    ).toBe(false);
+  });
+
   it('sets and clears the default and per-action modes, keyed by the action name', () => {
     let draft = normalizeApproval(null);
     expect(approvalPayload(draft)).toBeNull();

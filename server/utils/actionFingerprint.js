@@ -43,6 +43,7 @@
  * @module utils/actionFingerprint
  */
 import { createHash } from 'node:crypto';
+import { compareCodeUnits } from '../../shared/toolApproval.js';
 
 /** Prefix of every fingerprint (`sha256:<64 hex>`), as the architecture concept shows it. */
 export const FINGERPRINT_PREFIX = 'sha256:';
@@ -78,6 +79,9 @@ const LITERAL_KEYWORDS = new Set(['enum', 'const', 'default']);
 
 const SIDE_EFFECT_VALUES = new Set(['read', 'write', 'destructive', 'unknown']);
 
+// Keys are ordered by `compareCodeUnits` (UTF-16 code units), never by the
+// locale: the same schema must hash the same on every server.
+
 /**
  * A plain value with every object's keys sorted (arrays keep their order).
  *
@@ -88,7 +92,7 @@ function sortedValue(value) {
   if (Array.isArray(value)) return value.map(sortedValue);
   if (!value || typeof value !== 'object') return value;
   const out = {};
-  for (const key of Object.keys(value).sort()) out[key] = sortedValue(value[key]);
+  for (const key of Object.keys(value).sort(compareCodeUnits)) out[key] = sortedValue(value[key]);
   return out;
 }
 
@@ -107,17 +111,18 @@ export function canonicalSchema(schema) {
   if (Array.isArray(schema)) return schema.map(canonicalSchema);
   if (!schema || typeof schema !== 'object') return schema;
   const out = {};
-  for (const key of Object.keys(schema).sort()) {
+  for (const key of Object.keys(schema).sort(compareCodeUnits)) {
     if (DOCUMENTATION_KEYWORDS.has(key)) continue;
     const value = schema[key];
     if (value === undefined) continue;
     if (NAMED_SCHEMA_MAPS.has(key) && value && typeof value === 'object' && !Array.isArray(value)) {
       const named = {};
-      for (const name of Object.keys(value).sort()) named[name] = canonicalSchema(value[name]);
+      for (const name of Object.keys(value).sort(compareCodeUnits))
+        named[name] = canonicalSchema(value[name]);
       out[key] = named;
     } else if (key === 'required' && Array.isArray(value)) {
       if (value.length === 0) continue;
-      out[key] = [...new Set(value.map(String))].sort();
+      out[key] = [...new Set(value.map(String))].sort(compareCodeUnits);
     } else if (LITERAL_KEYWORDS.has(key)) {
       out[key] = sortedValue(value);
     } else {

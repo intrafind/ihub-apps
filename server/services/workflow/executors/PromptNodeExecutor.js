@@ -47,8 +47,10 @@ import {
 import {
   approvalSeam,
   approvalDisplayData,
-  justificationOf
+  justificationOf,
+  oneShotGrant
 } from '../../loop/seams/approvalSeam.js';
+import { actorSnapshot } from '../executionActor.js';
 import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { v4 as uuidv4 } from 'uuid';
 import { repairToolArguments, matchTool } from '../../loop/toolArgs.js';
@@ -666,6 +668,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // that call with the stored arguments (or hands the model the
       // rejection) and continues the same loop (#2945).
       const approvalPlan = resumedTranscript ? null : this._resumedApprovalPlan(node, state);
+      // Recorded before the call runs: a retry of this step (the model call
+      // after it fails) must not run the approved side effect a second time.
+      if (approvalPlan?.resume) await this._consumeApproval(node, context, state);
 
       // Execute LLM call (with tool loop if tools are available)
       const response = await this.executeLLMWithTools({
@@ -1684,8 +1689,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const platform = configCache.getPlatform?.() || null;
     return {
       resolvePolicy: toolDef => resolveToolApproval(toolDef, null, platform),
-      isGranted: info =>
-        Boolean(resume?.toolCall?.id) && String(info.call?.id) === String(resume.toolCall.id),
+      // The approved call runs once, with exactly the approved arguments.
+      isGranted: oneShotGrant(
+        resume?.toolCall?.id ? { callId: resume.toolCall.id, args: resume.args } : null
+      ),
       // Nobody to park it for: refuse instead (the seam's `park` fallback).
       raise:
         approverGroups.length > 0 && executionId
@@ -1734,6 +1741,28 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       }
     };
+  }
+
+  /**
+   * Mark this node's approved call as used, on the persisted state, before
+   * it runs. A step that is retried afterwards (a later model call failed)
+   * finds it used and hands the model `APPROVAL_ALREADY_USED` instead of
+   * running the side effect again. Throws when the mark cannot be stored:
+   * running the call unrecorded would make it repeatable.
+   * @private
+   */
+  async _consumeApproval(node, context, state) {
+    const paused = state?.data?._pausedLoops?.[node.id];
+    if (!paused?.approval) return;
+    const consumed = { ...paused, approval: { ...paused.approval, consumed: true } };
+    const executionId = context.executionId || context._workflowState?.executionId;
+    const stateManager = context.engine?.stateManager;
+    if (stateManager && executionId) {
+      await stateManager.update(executionId, { data: { _pausedLoops: { [node.id]: consumed } } });
+    }
+    for (const data of [state?.data, context._workflowState?.data]) {
+      if (data?._pausedLoops) data._pausedLoops[node.id] = consumed;
+    }
   }
 
   /** How this node continues after its parked tool approval was answered, or null. */
@@ -1789,7 +1818,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
                   toolCallId: interaction.source?.toolCallId || null,
                   toolId: interaction.source?.toolId || null,
                   name: this._pausedCallName(response.messages, interaction.source?.toolCallId),
-                  args: interaction.prompt?.displayData?.args || {}
+                  args: interaction.prompt?.displayData?.args || {},
+                  // The call runs as the execution's principal, never as the approver.
+                  actor: actorSnapshot(context.user)
                 }
               : null
           })

@@ -401,6 +401,8 @@ a mode.
   any text the assistant wrote, labelled as such. **Approve**, **Approve & allow for this chat**
   or **Reject**. On approve, iHub runs exactly the call that was shown; the assistant does not
   issue it again. A rejected or expired approval is reported to the assistant, which carries on.
+- **MCP App views ask too:** when an interactive view calls a tool that needs approval, the chat
+  shows the card below the view, and the view gets the result once you approve.
 - **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
   under "ask unless it only reads" until an admin confirms the tool as a read.
 - **New and changed actions ask until reviewed:** iHub fingerprints every action of an
@@ -416,6 +418,9 @@ a mode.
   workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
   step that names approver groups parks the approval for them instead. Scheduled tasks keep
   asking their owner, now for every tool the settings gate.
+- **Custom tools with `requiresApproval: true`** used to ask only in scheduled runs. They now ask
+  in the chat too, and are refused where nobody can approve (the API, other clients without the
+  approval card).
 
 See [Tool Approval](../../tool-approval.md).
 

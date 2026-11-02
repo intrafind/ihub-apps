@@ -698,8 +698,15 @@ export default function registerAdminIntegrationsRoutes(app) {
       const id = req.params.id;
       if (!validateIdForPath(id, 'integration', res)) return;
       try {
-        const approval = req.body?.approval ?? null;
-        let instance = await installedIntegrationService.setApproval(id, approval);
+        // A body without `approval` is a mistake, not "remove it": only an
+        // explicit `null` clears the gate.
+        if (!req.body || typeof req.body !== 'object' || !Object.hasOwn(req.body, 'approval')) {
+          return res.status(400).json({
+            error: 'The body needs "approval": { default?, actions?, newOrChanged? } or null',
+            code: 'APPROVAL_REQUIRED_FIELD'
+          });
+        }
+        let instance = await installedIntegrationService.setApproval(id, req.body.approval);
         // Turning approval on takes the fingerprint baseline when there is none
         // yet (#2916): the actions the admin sees now count as reviewed.
         if (instance.approval && !instance.actions?.fingerprints) {
