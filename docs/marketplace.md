@@ -80,6 +80,21 @@ fetched from the registry and rendered when you open them, without installing an
   summaries, the compatibility line, and opens each release's notes on request. **Admin →
   Integrations** shows an **Update to vX available** badge on every installation of a
   definition with a newer compatible catalog version, and the admin dashboard counts them.
+- **Updating an integration migrates its installations.** When a release between the installed
+  and the catalog version names a definition migration, the update runs it for every
+  installation of the definition: the new folder is staged, each installation is backed up and
+  brought to the new version (install values, action policy, the bindings of the apps that bind
+  it), and the folder moves in only in the same commit as the migrated installations, so no
+  installation ever runs the new definition with old values. The item detail carries
+  `migrationPreview`, planned from the catalog item's own copy of the migrations before anything
+  is downloaded: per installation what changes (install values, actions, app bindings), the
+  warnings and any collision. An installation older than the oldest release the catalog lists
+  is planned against the downloaded definition at update time instead (`planFromCatalog:
+  false`). An installation whose migration fails stays on its old values, is marked **Migration
+  failed** and offers no tools until an admin re-runs the migration, restores the backup (which
+  also brings the previous package back) or uninstalls it; the others are updated. When the
+  commit itself fails, the previous folder, every installation and the manifest stay as they
+  were. See [Integrations → Migrations](integrations.md#migrations).
 - **Compatibility** is enforced on install and update: an item whose `compatibility.ihub` (or the
   short form `minVersion`, read as `>=minVersion`) this server does not satisfy is refused with
   `INCOMPATIBLE_IHUB_VERSION`, also when the API is called directly; an integration definition
@@ -139,8 +154,9 @@ example, including a script that regenerates the catalog from its content folder
 `integration` and `skill` may list companion files in `source.companions`; for an integration the
 OpenAPI document, the icon and the release-note files named in the definition are fetched even
 when not listed. An integration item copies the definition's `version`, `compatibility` and
-`releases` (version, date, summary and note paths), so the marketplace greys an incompatible
-item and shows its release history without downloading the folder; any item may carry
+`releases` (version, date, summary, note paths and the `migration` a release names) and the
+`migrations` those releases name, so the marketplace greys an incompatible item, shows its
+release history and plans an update without downloading the folder; any item may carry
 `minVersion` as the short form of `compatibility.ihub: ">=minVersion"`. An
 integration that brings code (`script` protocol) must list a hash for every code file in
 `source.integrity` (`{ "connector.js": "sha256-<base64 of the SHA-256>" }`); iHub installs it only
@@ -163,16 +179,36 @@ add skills with are listed under [Skills → API](skills.md#api).
 | Method & path                                                                 | Purpose                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------- |
 | `GET /api/admin/marketplace`                                                  | Browse items (type, search, registry, status filters) |
-| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires` |
+| `GET /api/admin/marketplace/registries/:registryId/items/:type/:name`         | One item with its content preview, `compatible`, `requires`; an installed integration also `migrationPreview` (below) |
 | `GET …/items/integration/:name/_file?path=…`                                  | One Markdown companion file of an integration item (a release's notes), fetched from the registry |
 | `POST …/items/:type/:name/_install`                                            | Install (`{ "replaceLocal": true }` to replace a local copy) |
-| `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update, uninstall, detach                   |
+| `POST …/items/:type/:name/_update` · `_uninstall` · `_detach`                  | Update, uninstall, detach; an integration update answers with `integrationMigrations` (one result per installation: `migrated`, `stamped`, `failed`, `skipped`) and is `409 MIGRATION_LOCKED` while a migration of one of them runs |
 | `GET /api/admin/marketplace/installations`                                    | What the marketplace installed              |
 | `GET /api/admin/marketplace/updates`                                          | Installed items with a newer catalog version |
 | `GET` · `POST /api/admin/marketplace/registries`                              | List, create registries                     |
 | `GET` · `PUT` · `DELETE /api/admin/marketplace/registries/:registryId`        | Read, edit, delete a registry               |
 | `POST /api/admin/marketplace/registries/:registryId/_refresh`                 | Re-fetch a catalog                          |
 | `POST /api/admin/marketplace/registries/_test` · `/:registryId/_test`         | Test an unsaved or a saved registry         |
+
+`migrationPreview` (null when no installation of the definition exists):
+
+```jsonc
+{
+  "definitionId": "org.ckan/open-data-portal",
+  "to": "1.4.0",
+  "planFromCatalog": true,          // false: an installation is older than the releases listed
+  "reason": null,
+  "errors": [],                     // migrations in the catalog this server cannot read
+  "installations": [
+    {
+      "id": "govdata", "from": "1.2.0", "to": "1.4.0", "planFromCatalog": true,
+      "migrations": ["1.3.0", "1.4.0"],
+      "summary": { "values": 2, "actions": 1, "apps": 1 },
+      "warnings": [], "collisions": [], "ok": true, "reason": null
+    }
+  ]
+}
+```
 
 ## Code map
 

@@ -372,3 +372,29 @@ installation's **Settings** tab shows it) — or set the old, working URI as the
 **Redirect URI**. If you set one of the `*_OAUTH_REDIRECT_URI` variables, enter its value as the
 installation's **Redirect URI**. After the upgrade, check the server log for V205 warnings
 (installations that kept their id, tenant ids to enter).
+
+## Integrations: Migration State in the Admin API and Stricter Definition Versions
+
+Integration definitions now migrate their installations (see the feature entry on versions and
+migrations). Three things change for scripts and hand-written files:
+
+- **`status` of an installation is its migration state.** `GET /api/admin/integrations/installed`
+  and `GET …/installed/:id` return `status` as `migrationPending`, `migrationFailed`,
+  `needsReview` or `null`, with `statusReason`, `migrationLog` and `migration`. The live
+  connection status of MCP servers, directories and storage providers, which was `status`, is now
+  `liveStatus`.
+- **An installation needs a valid `definitionVersion`.** One without it (or with a value that is
+  not a version like `1.2.0`) needs a review and offers no actions until an admin adopts the
+  current version or restores a backup. Migration V206 stamps every existing installation with the
+  version of its definition, so only installations written by hand after the upgrade are
+  affected. Saving an installation (`PUT …/installed/:id`) is refused with `409` and
+  `MIGRATION_PENDING`, `MIGRATION_FAILED` or `NEEDS_REVIEW` while it is in one of these states.
+- **A release's `migration` must exist.** In `integration.json`, `releases[].migration` names the
+  release's own version and a migration of that id listed in `migrations`; a definition that
+  names a migration it does not list, or that uses a `module` step, is not loaded and is refused by
+  the marketplace.
+
+**Before upgrading:** scripts that read the live connection status from `status` read
+`liveStatus` instead. Hand-written entries in `contents/config/integrations.json` carry a
+`definitionVersion`; after the upgrade, check **Admin → Integrations** for installations that need
+a review (definitions that could not be found by V206 are named in the server log).

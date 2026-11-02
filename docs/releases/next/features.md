@@ -178,10 +178,11 @@ variables alone.
   were set), retires `tools/entraPeopleSearch.json` and rewrites `tools: ["entraPeopleSearch"]`
   into the binding.
 
-## Integrations Carry a Version, Compatibility and Release Notes
+## Integrations Carry a Version, Compatibility, Release Notes and Migrations
 
 An integration definition now says which iHub versions it runs on and what changed between its
-versions, so the marketplace can tell you before you install or update anything.
+versions, so the marketplace can tell you before you install or update anything, and a new version
+brings your installations along by itself.
 
 - **Compatibility:** a definition declares the iHub version range it needs. The marketplace greys
   an item this server cannot run and says why ("needs iHub >=6.0.0, this server runs 5.7.2");
@@ -199,9 +200,24 @@ versions, so the marketplace can tell you before you install or update anything.
 - **Shipped definitions** declare their compatibility and carry a 1.0.0 release whose notes
   describe what the config migrations of this release did (iFinder, iAssistant, web search, Jira,
   Entra ID directory, MCP servers, A2A agents, CKAN).
+- **Migrations:** a release that renames an install field or an action, removes one, or needs a
+  new value ships a migration. iHub runs it for every installation of the definition — on a
+  marketplace update, and at the server start for the built-in integrations an iHub release
+  updated — and rewrites the installation's settings, its action selection and the apps that bind
+  it. A backup is made first under `contents/backups/integrations/`; a step that would overwrite
+  something stops the migration instead, before anything is written.
+- **Update preview:** the marketplace update of an integration says per installation how many
+  install values, actions and app bindings the update changes, which apps lose an action, and
+  whether a migration would collide.
+- **Nothing half-migrated:** an installation whose migration fails keeps its settings, offers no
+  actions and says why; an admin re-runs the migration, restores the backup (for a marketplace
+  update, together with the previous package) or uninstalls it. One that waits for a migration
+  offers no actions until it ran, and one without a known version (written by hand) waits for an
+  admin to restore a backup or adopt the current version. Each installation keeps a log of its
+  last ten migrations.
 
-See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes)
-and [Marketplace](../../marketplace.md).
+See [Integrations → Version, compatibility and release notes](../../integrations.md#version-compatibility-and-release-notes),
+[Integrations → Migrations](../../integrations.md#migrations) and [Marketplace](../../marketplace.md).
 
 ## People Directories Are Installed Integrations
 
