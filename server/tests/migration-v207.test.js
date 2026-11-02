@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * V206: every installation without a valid `definitionVersion` gets the
+ * V207: every installation without a valid `definitionVersion` gets the
  * version of the definition shipped (or installed from the marketplace) at
  * that time as its baseline; installations whose definition is missing are
  * left alone; a second run changes nothing.
@@ -21,7 +21,7 @@ import {
   isStrictVersion,
   readDefinitionVersions,
   stampBaseline
-} from '../migrations/V206__integration_definition_version_baseline.js';
+} from '../migrations/V207__integration_definition_version_baseline.js';
 
 let root;
 let defaultsDir;
@@ -58,7 +58,7 @@ function makeCtx(files) {
 }
 
 before(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v206-'));
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v207-'));
   defaultsDir = path.join(root, 'defaults');
   contentsDir = path.join(root, 'contents');
   await writeDefinition(defaultsDir, 'com.intrafind__ifinder', {
@@ -90,9 +90,9 @@ after(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
 
-describe('V206 integration definition version baseline', () => {
+describe('V207 integration definition version baseline', () => {
   it('has the version and description of its file name', () => {
-    assert.equal(version, '206');
+    assert.equal(version, '207');
     assert.equal(description, 'integration_definition_version_baseline');
   });
 
@@ -161,7 +161,7 @@ describe('V206 integration definition version baseline', () => {
 
   it('matches the strict semver grammar over every short string and prerelease combination', () => {
     // Below Number.MAX_SAFE_INTEGER, a string semver parses back to itself is
-    // exactly the grammar V206 snapshots: no `v`, no `=`, no spaces, no build.
+    // exactly the grammar V207 snapshots: no `v`, no `=`, no spaces, no build.
     const oracle = value => semver.valid(value) === value;
     const checked = [];
     const alphabet = ['0', '1', '.', '-', 'a', '+'];

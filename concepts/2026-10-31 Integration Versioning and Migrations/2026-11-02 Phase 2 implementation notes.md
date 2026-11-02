@@ -20,11 +20,11 @@ the next pieces (the admin UI PR, phase 3) build on. User-facing documentation:
 | `server/services/integrations/definitions/IntegrationRegistry.js` | `stageInstalled` / `commitStaged` / `restorePrevious` / `stageCopy`: a definition folder can be staged and moved in later |
 | `server/storage/LockManager.js`, `providers/filesystem/FilesystemLockManager.js` | fencing token: `withLock(name, lease => …)`, `lease.isCurrent()`, `isTokenCurrent(name, token)`; counter in `locks/<digest>.fence` |
 | `server/server.js` → `prepareContents()` | the startup trigger, right after the numbered config migrations |
-| `server/migrations/V206__integration_definition_version_baseline.js` | stamps the version baseline on installations without a valid one |
+| `server/migrations/V207__integration_definition_version_baseline.js` | stamps the version baseline on installations without a valid one |
 
 Tests: `server/tests/integrations/definitionMigrationPlanner.test.js`, `definitionMigrationRunner.test.js`
 (node test runner, real temp contents folder), `migrationRoutes.test.js` (server Jest), the lock
-fencing cases in `server/storage/__tests__/providerConformance.js`, `server/tests/migration-v206.test.js`.
+fencing cases in `server/storage/__tests__/providerConformance.js`, `server/tests/migration-v207.test.js`.
 
 ## Decisions taken in this phase
 
