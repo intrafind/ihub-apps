@@ -344,7 +344,7 @@ test('non-checkpoint interactions are ignored by the registered handler', async 
 
 test('an execution id that is not a safe run id is rejected before the engine is touched', async () => {
   const { runLog, svc } = await setup();
-  const { resolveActor, engine, registry, executor, calls } = fakeEngine();
+  const { engine, registry, executor, calls } = fakeEngine();
   const it = checkpointToInteraction(fakeCheckpoint(), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
