@@ -18,6 +18,7 @@
 #   secret (create it with `claude setup-token` while logged in to the company
 #   Claude account). Comments are posted by the Claude GitHub App (claude[bot]),
 #   which must be installed on this repository: https://github.com/apps/claude
+#   Model and effort are pinned in `claude_args` (Opus, effort high).
 #
 # Security
 #   The PR head may come from a fork and is untrusted. It is checked out into
@@ -176,7 +177,11 @@ jobs:
           # server with the Claude App token, so the review is posted as
           # claude[bot]. Only read and pending-review tools are allowed: no
           # merge, no PR edits, no pushes, no git, no running code from the PR.
+          # Pinned so reviews don't change with the action's bundled Claude Code
+          # default or the subscription plan behind the OAuth token.
           claude_args: >-
+            --model claude-opus-5-5
+            --effort high
             --add-dir pr-head
             --max-turns 120
             --allowedTools "Skill,Agent,Task,Read,Glob,Grep,mcp__github__get_pull_request,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_review_comments,mcp__github__get_pull_request_status,mcp__github__create_pending_pull_request_review,mcp__github__add_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__delete_pending_pull_request_review,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*)"

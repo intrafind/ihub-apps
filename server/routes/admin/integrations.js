@@ -142,6 +142,8 @@ function catalogEntryView(entry, language, instances, updates) {
     defaultAuthMode: def.auth.default,
     capabilities: def.capabilities,
     actionCount: def.actions.length,
+    /** Example apps the definition ships (`exampleApps`), created from the installation page. */
+    exampleAppCount: def.exampleApps?.length || 0,
     source: entry.source,
     installedInstances: instances.filter(i => i.definition === def.id).map(i => i.id)
   };

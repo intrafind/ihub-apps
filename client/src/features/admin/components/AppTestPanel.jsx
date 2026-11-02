@@ -8,7 +8,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import { fetchAppDetails } from '../../../api';
 import AppChat from '../../apps/pages/AppChat';
 
-function PanelMessage({ icon, children }) {
+export function PanelMessage({ icon, children }) {
   return (
     <div className="flex-1 flex items-center justify-center p-8 text-center">
       <div className="max-w-sm">
@@ -22,9 +22,10 @@ function PanelMessage({ icon, children }) {
 /**
  * One run of the test: loads the saved app the way the chat page does and
  * renders the real chat for it. Keyed by the reload counter, so every reload
- * refetches the app and starts a new chat.
+ * refetches the app and starts a new chat. Also the chat of the integration
+ * test panel (`integrations/IntegrationTestPanel.jsx`).
  */
-function TestChat({ appId }) {
+export function TestChat({ appId }) {
   const { t } = useTranslation();
   const [state, setState] = useState({ status: 'loading', app: null });
 
