@@ -46,9 +46,30 @@ export function dirNameToDefinitionId(dirName) {
   return dirName.replace('__', '/');
 }
 
+/** A version as definitions and installations write it: `MAJOR.MINOR.PATCH`, optionally `-prerelease`. */
+const STRICT_SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+
+/**
+ * Whether a value is a version in the exact form a definition writes it
+ * (`1.4.0`, `2.0.0-rc.1`): no `v` prefix, no build metadata, nothing
+ * `semver` would only accept after coercing it. Installations record their
+ * `definitionVersion` in this form, and backup folder names embed it.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isStrictSemver(value) {
+  return (
+    typeof value === 'string' &&
+    value.length <= 64 &&
+    STRICT_SEMVER_PATTERN.test(value) &&
+    semver.valid(value) === value
+  );
+}
+
 const semverSchema = z
   .string()
-  .regex(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/, 'version must be semantic (MAJOR.MINOR.PATCH)');
+  .regex(STRICT_SEMVER_PATTERN, 'version must be semantic (MAJOR.MINOR.PATCH)');
 
 /** Key of an install field, an action name, or a parameter name. */
 const identifierSchema = z
@@ -155,8 +176,225 @@ export const releaseSchema = z.object({
     })
     .strict()
     .optional(),
-  migration: z.string().min(1).max(64).optional()
+  /** Id of the definition migration this release needs: its own version (see `migrations`). */
+  migration: semverSchema.optional()
 });
+
+/**
+ * A value a declarative migration step writes into an installation: what an
+ * install value can hold (a primitive, or a list of strings for a `list`
+ * field). Whether it fits the field is checked after the last step, against
+ * the definition's install fields.
+ */
+const migrationValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.string())
+]);
+
+/** A scope id as an app binding stores it (`defaultScope`, `pinnedScope`). */
+const migrationScopeSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(/^[^\u0000-\u001f\u007f]+$/, 'must not contain control characters');
+
+/** A rename whose source and destination differ. */
+function renameOf(nameSchema) {
+  return z
+    .object({ from: nameSchema, to: nameSchema })
+    .strict()
+    .refine(rename => rename.from !== rename.to, { message: 'from and to must differ' });
+}
+
+/**
+ * The declarative migration steps (versioning concept §1), each an object
+ * with exactly one of these keys. They reach an installation's `values`, its
+ * action policy (`actions.enabled`, `actions.disabled`, `actions.overrides`)
+ * and the app bindings of the installation (`actions`, `defaultScope`,
+ * `pinnedScope`); nothing else, and never `auth` or a credential.
+ */
+export const MIGRATION_STEP_SCHEMAS = Object.freeze({
+  /** Move an install value to another key; a destination that holds a value is a collision. */
+  renameValue: renameOf(identifierSchema),
+  /** Write an install value; `when: missing` (default) only where the key holds none. */
+  setValue: z
+    .object({
+      key: identifierSchema,
+      value: migrationValueSchema,
+      when: z.enum(['missing', 'always']).prefault('missing')
+    })
+    .strict(),
+  /** Drop an install value. */
+  removeValue: z.object({ key: identifierSchema }).strict(),
+  /** Rewrite an install value (or each entry of a list value) through `map` (old → new). */
+  mapValue: z
+    .object({
+      key: identifierSchema,
+      map: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    })
+    .strict()
+    .refine(step => Object.keys(step.map).length > 0, { message: 'map lists at least one value' }),
+  /** Rename an action in the policy and in the app bindings; an existing destination is a collision. */
+  renameAction: renameOf(identifierSchema),
+  /** Drop an action from the policy and from the app bindings (apps that named it get a warning). */
+  removeAction: z.object({ name: identifierSchema }).strict(),
+  /** Rewrite the default and pinned scope of the app bindings. */
+  renameScope: renameOf(migrationScopeSchema)
+});
+
+/** The step types, in the order the concept lists them. */
+export const MIGRATION_STEP_TYPES = Object.freeze(Object.keys(MIGRATION_STEP_SCHEMAS));
+
+/**
+ * The message for a `module` step: code migrations need a registry trusted
+ * for code and an integrity hash (versioning phase 3), so this server refuses
+ * them instead of dropping them silently.
+ */
+export const MODULE_STEP_MESSAGE =
+  'a "module" step (code migration) is not supported by this server: migrations are declarative only (renameValue, setValue, removeValue, mapValue, renameAction, removeAction, renameScope)';
+
+/**
+ * One declarative step: an object with exactly one key out of
+ * {@link MIGRATION_STEP_TYPES}. A `module` step is refused with
+ * {@link MODULE_STEP_MESSAGE}, an unknown key with the list of known ones.
+ */
+export const migrationStepSchema = z
+  .record(z.string(), z.unknown())
+  .superRefine((step, ctx) => {
+    const keys = Object.keys(step);
+    if (keys.includes('module')) {
+      ctx.addIssue({ code: 'custom', path: ['module'], message: MODULE_STEP_MESSAGE });
+      return;
+    }
+    const unknown = keys.filter(key => !MIGRATION_STEP_TYPES.includes(key));
+    if (unknown.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [unknown[0]],
+        message: `unknown migration step "${unknown[0]}" (known: ${MIGRATION_STEP_TYPES.join(', ')})`
+      });
+      return;
+    }
+    if (keys.length !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `a migration step has exactly one of ${MIGRATION_STEP_TYPES.join(', ')}`
+      });
+      return;
+    }
+    const [type] = keys;
+    const parsed = MIGRATION_STEP_SCHEMAS[type].safeParse(step[type]);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ code: 'custom', path: [type, ...issue.path], message: issue.message });
+      }
+    }
+  })
+  .transform(step => {
+    const [type] = Object.keys(step);
+    return { [type]: MIGRATION_STEP_SCHEMAS[type].parse(step[type]) };
+  });
+
+/**
+ * A definition migration: `id` is the version it brings an installation up
+ * to (the release that names it), `steps` run in order.
+ */
+export const definitionMigrationSchema = z
+  .object({
+    id: semverSchema,
+    steps: z.array(migrationStepSchema).min(1, 'a migration has at least one step').max(200)
+  })
+  .strict();
+
+/**
+ * Cross-checks between `releases` and `migrations`: a release names its own
+ * version as its migration, that migration exists, and every migration is
+ * named by the release of its version. Shared by the definition schema and
+ * the marketplace preview, which receives a catalog item's copies of both.
+ *
+ * @param {Array<{ version: string, migration?: string }>|undefined} releases
+ * @param {Array<{ id: string }>|undefined} migrations
+ * @returns {Array<{ path: Array<string|number>, message: string }>} empty when consistent
+ */
+export function checkReleaseMigrations(releases, migrations) {
+  const issues = [];
+  const migrationIds = new Set();
+  (migrations || []).forEach((migration, i) => {
+    if (migrationIds.has(migration.id)) {
+      issues.push({
+        path: ['migrations', i, 'id'],
+        message: `duplicate migration "${migration.id}"`
+      });
+    }
+    migrationIds.add(migration.id);
+  });
+  const referenced = new Set();
+  (releases || []).forEach((release, i) => {
+    if (!release.migration) return;
+    if (release.migration !== release.version) {
+      issues.push({
+        path: ['releases', i, 'migration'],
+        message: `a release names its own version as its migration ("${release.version}")`
+      });
+    }
+    if (!migrationIds.has(release.migration)) {
+      issues.push({
+        path: ['releases', i, 'migration'],
+        message: `migration "${release.migration}" is not listed in migrations`
+      });
+    }
+    referenced.add(release.migration);
+  });
+  (migrations || []).forEach((migration, i) => {
+    const release = (releases || []).find(r => r.version === migration.id);
+    if (!release || release.migration !== migration.id) {
+      issues.push({
+        path: ['migrations', i, 'id'],
+        message: `migration "${migration.id}" needs the release ${migration.id} to name it ("migration": "${migration.id}")`
+      });
+    }
+  });
+  return issues;
+}
+
+/**
+ * Validate a list of migrations on its own (a marketplace catalog item
+ * carries a copy of the definition's `releases` and `migrations`).
+ *
+ * @param {unknown} migrations
+ * @param {unknown} [releases]
+ * @returns {{ success: true, data: Array<object> } | { success: false, errors: Array<{ path: Array, message: string }> }}
+ */
+export function validateDefinitionMigrations(migrations, releases) {
+  const parsed = z.array(definitionMigrationSchema).safeParse(migrations ?? []);
+  if (!parsed.success) {
+    return {
+      success: false,
+      errors: parsed.error.issues.map(issue => ({
+        path: ['migrations', ...issue.path],
+        message: issue.message
+      }))
+    };
+  }
+  if (releases !== undefined) {
+    const releaseList = z.array(releaseSchema).safeParse(releases);
+    if (!releaseList.success) {
+      return {
+        success: false,
+        errors: releaseList.error.issues.map(issue => ({
+          path: ['releases', ...issue.path],
+          message: issue.message
+        }))
+      };
+    }
+    const issues = checkReleaseMigrations(releaseList.data, parsed.data);
+    if (issues.length > 0) return { success: false, errors: issues };
+  }
+  return { success: true, data: parsed.data };
+}
 
 const primitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
@@ -623,6 +861,12 @@ export const integrationDefinitionSchema = z
     compatibility: compatibilitySchema.prefault({}),
     /** Release history, newest first; `releases[0].version` is `version`. */
     releases: z.array(releaseSchema).optional(),
+    /**
+     * Declarative migrations that bring an installation (its values, action
+     * policy and app bindings) up to a release; each `id` is the version of
+     * the release that names it.
+     */
+    migrations: z.array(definitionMigrationSchema).optional(),
     name: localizedStringSchema,
     description: localizedStringSchema.optional(),
     publisher: integrationPublisherSchema.optional(),
@@ -806,6 +1050,10 @@ export const integrationDefinitionSchema = z
           });
         }
       }
+    }
+
+    for (const issue of checkReleaseMigrations(def.releases, def.migrations)) {
+      ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
     }
   });
 
