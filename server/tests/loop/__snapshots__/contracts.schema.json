@@ -953,6 +953,14 @@
               "integration": {
                 "type": "string"
               },
+              "activityKind": {
+                "type": "string",
+                "enum": ["search", "fetch", "tool"]
+              },
+              "activityScope": {
+                "type": "string",
+                "enum": ["web", "documents"]
+              },
               "args": {},
               "argsRepaired": {
                 "type": "boolean"
@@ -4571,6 +4579,14 @@
               },
               "integration": {
                 "type": "string"
+              },
+              "activityKind": {
+                "type": "string",
+                "enum": ["search", "fetch", "tool"]
+              },
+              "activityScope": {
+                "type": "string",
+                "enum": ["web", "documents"]
               },
               "args": {},
               "execution": {

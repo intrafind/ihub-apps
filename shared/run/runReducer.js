@@ -430,6 +430,9 @@ export function reduceRunEvent(state, envelope) {
         // What the user reads instead of the id (server `utils/toolDisplay`).
         title: data.title || null,
         integration: data.integration || null,
+        // The row the server decided on (search / fetch / tool) and where it looked.
+        activityKind: data.activityKind || null,
+        activityScope: data.activityScope || null,
         args: data.args,
         execution: data.execution || 'server',
         status: 'running',

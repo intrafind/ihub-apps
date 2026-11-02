@@ -464,3 +464,5 @@ the action ("Search people") and the integration, MCP server or remote agent it 
   shows the title its server declares, else its own name.
 - The internal id stays available as the tooltip of the action, for admins tracing a call.
 - Tools without a title (custom tools) keep showing their name as before.
+- A search in a connected system — a Jira ticket search, an MCP server's search — is listed as a
+  call to that system, with its query among the arguments, no longer as a web search with a globe.

@@ -139,6 +139,10 @@ export const toolStartedData = z.object({
   title: z.string().optional(),
   /** The integration, MCP server or remote agent the call ran against ("Munich AD"). */
   integration: z.string().optional(),
+  /** The row the chat draws (server `utils/toolDisplay`): a search, a page/document read or a plain call. */
+  activityKind: z.enum(['search', 'fetch', 'tool']).optional(),
+  /** For a search or fetch: the public web or the organisation's documents. */
+  activityScope: z.enum(['web', 'documents']).optional(),
   args: z.any(),
   execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
   mcpApp: mcpAppRefSchema.optional()
