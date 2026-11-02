@@ -188,7 +188,11 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={messageId}
-        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full mx-4 p-6"
+        // Focusable, so a click on the message keeps focus (and with it
+        // Escape and Tab) inside the confirmation instead of on <body>,
+        // where the drawer underneath would take the key.
+        tabIndex={-1}
+        className="relative focus:outline-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full mx-4 p-6"
       >
         <h3 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
           {t('admin.changeHistory.confirmRollbackTitle', 'Confirm Rollback')}

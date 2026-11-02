@@ -106,8 +106,9 @@ export function useFocusTrap(
       const lastElement = focusable[focusable.length - 1];
 
       if (event.shiftKey) {
-        // Shift+Tab: if on the first element, wrap to the last
-        if (document.activeElement === firstElement) {
+        // Shift+Tab: from the first element, or from the container itself
+        // (focused by a click on non-focusable content), wrap to the last
+        if (document.activeElement === firstElement || document.activeElement === container) {
           event.preventDefault();
           lastElement.focus();
         }

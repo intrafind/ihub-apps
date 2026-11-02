@@ -138,6 +138,25 @@ describe('Switch', () => {
     expect(small.firstChild).toHaveAttribute('aria-hidden', 'true');
   });
 
+  it('gives the small switch a pointer target of at least 24px without changing its track', () => {
+    render(
+      <>
+        <Switch checked={false} onChange={() => {}} aria-label="Medium" />
+        <Switch checked onChange={() => {}} aria-label="Small" size="sm" />
+      </>
+    );
+    // The 20px track gets an invisible ::before reaching 4px past its 16px
+    // padding box above and below (WCAG 2.5.8); the 24px medium needs none.
+    expect(screen.getByRole('switch', { name: 'Small' })).toHaveClass(
+      'relative',
+      'h-5',
+      'before:absolute',
+      'before:inset-x-0',
+      'before:-inset-y-1'
+    );
+    expect(screen.getByRole('switch', { name: 'Medium' })).not.toHaveClass('before:absolute');
+  });
+
   it('passes other props to the button but keeps its role and state', () => {
     render(
       <Switch

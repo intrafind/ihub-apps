@@ -6,10 +6,18 @@ import { useId } from 'react';
 /**
  * Track, thumb and "on" offset per size. The track carries a 2px transparent
  * border, so the thumb travels exactly the inner width minus its own width.
+ * `hit` widens the pointer target to at least 24px high without changing the
+ * look (WCAG 2.5.8): the small track is 20px, so an invisible `::before`
+ * reaches 4px beyond its 16px padding box on both sides.
  */
 const SIZES = {
-  sm: { track: 'h-5 w-9', thumb: 'h-4 w-4', on: 'translate-x-4' },
-  md: { track: 'h-6 w-11', thumb: 'h-5 w-5', on: 'translate-x-5' }
+  sm: {
+    track: 'h-5 w-9',
+    thumb: 'h-4 w-4',
+    on: 'translate-x-4',
+    hit: 'before:absolute before:inset-x-0 before:-inset-y-1'
+  },
+  md: { track: 'h-6 w-11', thumb: 'h-5 w-5', on: 'translate-x-5', hit: '' }
 };
 
 /**
@@ -107,7 +115,7 @@ function Switch({
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={event => onChange?.(!isOn, event)}
-      className={`relative inline-flex ${dimensions.track} shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out motion-reduce:transition-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-gray-800 disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`relative inline-flex ${dimensions.track} ${dimensions.hit} shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out motion-reduce:transition-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-gray-800 disabled:cursor-not-allowed disabled:opacity-50 ${
         isOn ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
       } ${hasRow ? '' : className}`}
     >
