@@ -2075,6 +2075,107 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
           await Promise.allSettled([holder]);
         }
       });
+
+      describe('fencing tokens', () => {
+        it('fn receives a lease whose token grows with every acquisition of a name', async () => {
+          const lock = nextId('lock');
+          const tokens = [];
+          for (let i = 0; i < 3; i += 1) {
+            await shared.locks.withLock(lock, async lease => {
+              assert.equal(lease.name, lock);
+              assert.ok(Number.isSafeInteger(lease.token) && lease.token > 0, 'a positive integer');
+              tokens.push(lease.token);
+            });
+          }
+          assert.ok(tokens[0] < tokens[1] && tokens[1] < tokens[2], `grows: ${tokens.join(', ')}`);
+        });
+
+        it('a section that takes no argument still runs (backward compatible)', async () => {
+          const value = await shared.locks.withLock(nextId('lock'), () => 'no lease needed');
+          assert.equal(value, 'no lease needed');
+        });
+
+        it('the holder is current while it holds the lease, and not after release', async () => {
+          const lock = nextId('lock');
+          let held = null;
+          await shared.locks.withLock(lock, async lease => {
+            held = lease;
+            assert.equal(await lease.isCurrent(), true);
+            assert.equal(await shared.locks.isTokenCurrent(lock, lease.token), true);
+            assert.equal(await shared.locks.isTokenCurrent(lock, lease.token + 1), false);
+          });
+          assert.equal(await held.isCurrent(), false, 'a released lease is not current');
+        });
+
+        it('a newer acquisition makes the older token stale', async () => {
+          const lock = nextId('lock');
+          const first = await shared.locks.withLock(lock, async lease => lease);
+          await shared.locks.withLock(lock, async lease => {
+            assert.ok(lease.token > first.token);
+            assert.equal(await shared.locks.isTokenCurrent(lock, first.token), false);
+            assert.equal(await lease.isCurrent(), true);
+          });
+        });
+
+        it('a holder whose lease was taken over learns it from its token', async () => {
+          const lock = nextId('lock');
+          const entered = deferred();
+          const release = deferred();
+          let holderLease = null;
+          // `renewMs: 0` produces the wedged holder: its lease ages out under it.
+          const holder = shared.locks.withLock(
+            lock,
+            async lease => {
+              holderLease = lease;
+              entered.resolve();
+              await release.promise;
+              return lease.isCurrent();
+            },
+            { ttlMs: 30, waitMs: 2000, renewMs: 0 }
+          );
+          await entered.promise;
+          try {
+            await delay(SHORT_WAIT_MS);
+            const takerToken = await shared.locks.withLock(lock, async lease => {
+              assert.ok(lease.token > holderLease.token, 'the takeover gets a newer token');
+              assert.equal(await lease.isCurrent(), true);
+              assert.equal(await holderLease.isCurrent(), false, 'the evicted holder is stale');
+              return lease.token;
+            });
+            assert.ok(takerToken > holderLease.token);
+            release.resolve();
+            assert.equal(await holder, false, 'still stale when it finally looks');
+          } finally {
+            release.resolve();
+            await Promise.allSettled([holder]);
+          }
+        });
+
+        it('tokens keep growing across a restart of the provider', async () => {
+          const lock = nextId('lock');
+          const first = await startProvider(createProvider);
+          try {
+            const before = await first.provider.locks.withLock(lock, async lease => lease.token);
+            await first.provider.shutdown();
+            const second = await startProvider(createProvider, { reuse: true });
+            try {
+              const after = await second.provider.locks.withLock(lock, async lease => lease.token);
+              assert.ok(after > before, `${after} > ${before}`);
+            } finally {
+              await second.dispose();
+            }
+          } finally {
+            await first.dispose();
+          }
+        });
+
+        it('different names count separately and a never-taken name has no current token', async () => {
+          const lock = nextId('lock');
+          assert.equal(await shared.locks.isTokenCurrent(lock, 1), false);
+          const token = await shared.locks.withLock(lock, async lease => lease.token);
+          assert.equal(await shared.locks.isTokenCurrent(nextId('lock'), token), false);
+        });
+      });
     });
 
     describe('notifications', { skip: skipWithoutEvents }, () => {

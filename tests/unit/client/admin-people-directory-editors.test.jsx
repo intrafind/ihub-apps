@@ -188,7 +188,7 @@ const CORP = {
     builtIn: true,
     auth: { mode: 'none' },
     actions: { enabled: ['*'], disabled: [], overrides: {} },
-    status: { connected: true, transport: 'ldaps', problems: [], warnings: [] }
+    liveStatus: { connected: true, transport: 'ldaps', problems: [], warnings: [] }
   },
   values: {
     authProvider: 'corp-ad',

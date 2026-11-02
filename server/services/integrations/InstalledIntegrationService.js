@@ -16,6 +16,7 @@ import {
   secretFieldForMode
 } from '../../validators/integrationDefinitionSchema.js';
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
+import { installationMigrationState } from './definitions/migrationPlanner.js';
 
 /**
  * Installed integrations (04-architecture §1.3): the admin's instances of
@@ -216,6 +217,7 @@ export class InstalledIntegrationService {
         missingDefinition: true
       };
     }
+    const migration = installationMigrationState(instance, entry);
     return {
       instance,
       definition: entry.definition,
@@ -226,14 +228,26 @@ export class InstalledIntegrationService {
       /** `ok`, or `incompatible` when the definition cannot run on this server version. */
       status: entry.status || 'ok',
       statusReason: entry.statusReason || null,
-      incompatible: entry.status === 'incompatible'
+      incompatible: entry.status === 'incompatible',
+      /**
+       * Where the installation stands with the definition's versions
+       * (`migrationPlanner.installationMigrationState`): `migrationPending`,
+       * `migrationFailed` or `needsReview`, and whether that withholds its
+       * tools (`blocked`).
+       */
+      migration,
+      /** Offers no tools and no scopes: a failed or pending migration, or one that needs a review. */
+      blocked: migration.blocked
     };
   }
 
   /**
    * Every enabled instance whose definition and adapter exist, resolved. An
    * installation of an incompatible definition is left out: it is listed to
-   * the admin with the reason, but offers no tools and no scopes.
+   * the admin with the reason, but offers no tools and no scopes. So is one
+   * whose migration state withholds them (`blocked`): a failed migration, a
+   * pending one with a migration between the versions, one that needs a
+   * review. The old values are never served against a newer definition.
    */
   async resolveAllEnabled(language = 'en') {
     await this.registry.ensureLoaded();
@@ -243,6 +257,7 @@ export class InstalledIntegrationService {
       const resolved = await this.resolve(instance, language);
       if (!resolved?.definition) continue;
       if (resolved.incompatible) continue;
+      if (resolved.blocked) continue;
       if (!getProtocolAdapter(resolved.definition.protocol.type)) continue;
       out.push(resolved);
     }
@@ -256,11 +271,17 @@ export class InstalledIntegrationService {
   async _prepare(payload, { existing } = {}) {
     rejectAllowedGroups(payload);
     await this.registry.ensureLoaded();
+    // The migration state and log are the runner's (`DefinitionMigrationRunner`):
+    // a payload never sets them; a save keeps the log it had.
     const { secrets, ...rest } = payload || {};
+    delete rest.status;
+    delete rest.statusReason;
+    delete rest.migrationLog;
     const parsed = validateInstalledIntegration({
       ...rest,
       installedAt: existing?.installedAt,
-      health: existing?.health
+      health: existing?.health,
+      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {})
     });
     if (!parsed.success) {
       throw new IntegrationError('Invalid installed integration', {
@@ -269,6 +290,8 @@ export class InstalledIntegrationService {
       });
     }
     const instance = parsed.data;
+    delete instance.status;
+    delete instance.statusReason;
     if (
       instance.id.includes('__') ||
       RESERVED_INSTANCE_IDS.has(instance.id.toLowerCase()) ||
@@ -468,6 +491,39 @@ export class InstalledIntegrationService {
     });
   }
 
+  /**
+   * Refuse an ordinary save of an installation whose migration state only
+   * the migration actions may change (versioning concept §3): a save stamps
+   * the loaded definition's version on the values, which must not happen to
+   * values a pending migration has not brought there, to a failed one, or to
+   * one that needs a review. A pending installation with no migration
+   * between the versions saves normally (nothing it stores changes).
+   *
+   * @param {object} existing - the stored installation
+   * @throws {IntegrationError} 409 `MIGRATION_PENDING`, `MIGRATION_FAILED` or `NEEDS_REVIEW`
+   */
+  _assertSavable(existing) {
+    const state = installationMigrationState(existing, this.registry.get(existing.definition));
+    if (state.status === 'migrationPending' && state.blocked) {
+      throw new IntegrationError(
+        `"${existing.id}" waits for the migrations ${state.migrations.join(', ')} (${state.from} → ${state.to}); run the migration before saving`,
+        { status: 409, code: 'MIGRATION_PENDING', details: { migration: state } }
+      );
+    }
+    if (state.status === 'migrationFailed') {
+      throw new IntegrationError(
+        `The migration of "${existing.id}" failed (${state.statusReason || 'no reason recorded'}); re-run it, restore a backup or uninstall the integration`,
+        { status: 409, code: 'MIGRATION_FAILED', details: { migration: state } }
+      );
+    }
+    if (state.status === 'needsReview') {
+      throw new IntegrationError(
+        `"${existing.id}" needs a review (${state.statusReason}); restore a backup, adopt the loaded version or uninstall it`,
+        { status: 409, code: 'NEEDS_REVIEW', details: { migration: state } }
+      );
+    }
+  }
+
   /** Replace an instance (the id cannot change). */
   update(id, payload, { language = 'en' } = {}) {
     return this._serialize(async () => {
@@ -477,6 +533,8 @@ export class InstalledIntegrationService {
       if (payload?.id && payload.id !== id) {
         throw new IntegrationError('The instance id cannot change', { code: 'ID_CHANGE' });
       }
+      await this.registry.ensureLoaded();
+      this._assertSavable(existing);
       const { instance, secretsToStore } = await this._prepare({ ...payload, id }, { existing });
       await this._storeSecrets(secretsToStore, language);
       const config = this._readConfigForWrite();

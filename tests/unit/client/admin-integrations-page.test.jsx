@@ -151,7 +151,7 @@ const INSTALLED = [
     perUser: false,
     values: { url: 'https://mcp.draw.io/mcp' },
     auth: { mode: 'none' },
-    status: { connected: true, toolCount: 3 }
+    liveStatus: { connected: true, toolCount: 3 }
   }
 ];
 

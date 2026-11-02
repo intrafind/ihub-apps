@@ -48,6 +48,9 @@ export function engine(id, extra = {}) {
   return {
     id,
     definition: ENGINE_DEFINITIONS[id] || THIRD_PARTY_DEFINITION,
+    // The version of the shipped engine definitions: an installation without
+    // one needs a review and offers no tools.
+    definitionVersion: '1.0.0',
     enabled: true,
     values: {},
     auth: { mode: 'none' },

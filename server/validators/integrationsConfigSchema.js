@@ -6,6 +6,7 @@ import { zSafeId } from './common.js';
 import {
   AUTH_MODES,
   integrationIdSchema,
+  isStrictSemver,
   localizedStringSchema,
   SIDE_EFFECTS
 } from './integrationDefinitionSchema.js';
@@ -50,10 +51,124 @@ const healthSchema = z.object({
   message: z.string().nullable().optional()
 });
 
-export const installedIntegrationSchema = z.object({
+/**
+ * Where an installation stands with its definition's versions (versioning
+ * concept §3). Absent is the normal state. `health.status` is a different
+ * field (the last health check) and unrelated.
+ *
+ * - `migrationPending`: the loaded definition is newer than `definitionVersion`
+ *   and a migration lies between them (derived at run time; never needs to
+ *   be stored, but a stored one is accepted and re-derived).
+ * - `migrationFailed`: a migration ran and failed; values and
+ *   `definitionVersion` are as before it, the installation offers no tools
+ *   until an admin re-runs the migration, restores a backup or uninstalls.
+ * - `needsReview`: `definitionVersion` is missing or not a version, or the
+ *   definition is older than it (a downgrade without a matching backup);
+ *   never migrated automatically.
+ */
+export const INSTALLATION_STATUSES = Object.freeze([
+  'migrationPending',
+  'migrationFailed',
+  'needsReview'
+]);
+
+/** What a migration log entry records as its outcome. */
+export const MIGRATION_LOG_RESULTS = Object.freeze([
+  'migrated',
+  'stamped',
+  'failed',
+  'rolledBack',
+  'restored',
+  'adopted'
+]);
+
+/** Entries kept in `migrationLog` (the newest last). */
+export const MIGRATION_LOG_LIMIT = 10;
+
+const migrationWarningSchema = z.object({
+  code: z.string().min(1).max(64),
+  message: z.string().max(2000),
+  appId: z.string().max(128).optional(),
+  key: z.string().max(256).optional(),
+  action: z.string().max(128).optional(),
+  scope: z.string().max(256).optional()
+});
+
+/** One run of the definition migration runner (or a restore or adopt) on an installation. */
+export const migrationLogEntrySchema = z.object({
+  from: z.string().max(64).nullable(),
+  to: z.string().max(64).nullable(),
+  at: z.string().max(64),
+  /** The admin (or `system` for the startup run). */
+  by: z.string().max(256),
+  /** What started it: `startup`, `marketplace`, `manual`, `restore`, `adopt`, `recovery`. */
+  trigger: z.string().max(32).optional(),
+  result: z.enum(MIGRATION_LOG_RESULTS),
+  /** The migrations that ran, by id (the version each brings the installation to). */
+  migrations: z.array(z.string().max(64)).max(200).prefault([]),
+  /** The steps that ran, one readable line each (`1.3.0: renameValue fq → defaultFilter`). */
+  steps: z.array(z.string().max(500)).max(500).prefault([]),
+  warnings: z.array(migrationWarningSchema).max(200).prefault([]),
+  /** What changed: install values, policy actions, app bindings. */
+  changes: z
+    .object({
+      values: z.number().int().min(0),
+      actions: z.number().int().min(0),
+      apps: z.number().int().min(0)
+    })
+    .optional(),
+  /** Why it failed (`failed`), or what was restored. */
+  reason: z.string().max(4000).optional(),
+  /** The backup the run made or restored (a folder of `contents/backups/integrations/`). */
+  backup: z.string().max(256).optional()
+});
+
+/**
+ * A stored `definitionVersion` that is not a strict version (hand-edited,
+ * or written before versioning) must not make the whole file fail to load:
+ * every installation would vanish with it. It is dropped here and the
+ * installation is marked `needsReview` with the value in the reason, so the
+ * admin sees what was there and decides (restore a backup, adopt the loaded
+ * definition's version, or uninstall). Applied to every read of the file.
+ *
+ * @param {unknown} raw - one entry of `installed[]`, unvalidated
+ * @returns {unknown}
+ */
+export function normalizeStoredInstallation(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const stored = raw.definitionVersion;
+  if (stored === undefined || stored === null || isStrictSemver(stored)) return raw;
+  const rest = { ...raw };
+  delete rest.definitionVersion;
+  const shown = typeof stored === 'string' ? stored.slice(0, 64) : JSON.stringify(stored);
+  return {
+    ...rest,
+    status: 'needsReview',
+    statusReason: `stored definitionVersion ${JSON.stringify(shown)} is not a semantic version (MAJOR.MINOR.PATCH)`
+  };
+}
+
+const installedIntegrationObjectSchema = z.object({
   id: instanceIdSchema,
   definition: integrationIdSchema,
-  definitionVersion: z.string().optional(),
+  /** The definition version the values were last written for (strict semver). */
+  definitionVersion: z
+    .string()
+    .refine(isStrictSemver, { message: 'definitionVersion must be a semantic version' })
+    .optional(),
+  /**
+   * Migration state (see {@link INSTALLATION_STATUSES}); written by the
+   * definition migration runner only. A value this server does not know is
+   * dropped rather than failing the file.
+   */
+  status: z.enum(INSTALLATION_STATUSES).optional().catch(undefined),
+  statusReason: z.string().max(4000).optional().catch(undefined),
+  /** The last {@link MIGRATION_LOG_LIMIT} runs, oldest first; a damaged log is dropped, not fatal. */
+  migrationLog: z
+    .array(migrationLogEntrySchema)
+    .max(MIGRATION_LOG_LIMIT)
+    .optional()
+    .catch(undefined),
   label: localizedStringSchema.optional(),
   description: localizedStringSchema.optional(),
   enabled: z.boolean().prefault(true),
@@ -69,6 +184,11 @@ export const installedIntegrationSchema = z.object({
   installedAt: z.string().optional(),
   updatedAt: z.string().optional()
 });
+
+export const installedIntegrationSchema = z.preprocess(
+  normalizeStoredInstallation,
+  installedIntegrationObjectSchema
+);
 
 export const integrationsConfigSchema = z
   .object({

@@ -316,7 +316,71 @@ A field may carry a `when` clause so it applies only in some cases: `{ "field": 
 
 `version` is the definition's semantic version; every installation records the `definitionVersion` it was written for, and **Admin → Integrations** shows it on the installation's tile and page. `compatibility.ihub` is a semver range (`">=5.7.0"`, `">=5.7.0 <7"`) the server version (the root `package.json`) must satisfy; prereleases compare with `includePrerelease`, so `5.7.0-rc.1` satisfies `>=5.7.0`. A definition without it runs on every version. A definition the server does not satisfy still loads, with status **incompatible**: its installations are listed with the reason, but they offer no tools and no scopes, cannot be edited or tested, and nothing is written for them; the catalog greys the definition and the marketplace refuses to install or update it (`INCOMPATIBLE_IHUB_VERSION`). `compatibility.schema` (integer, default 1) is the revision of the definition format the file is written in; it is read from the raw file before anything else, and a revision this server does not know is refused whole (the registry skips the folder with a warning, the marketplace rejects the item with `UNSUPPORTED_DEFINITION_SCHEMA`) instead of being loaded with its unknown fields dropped.
 
-`releases` is the release history, newest first, and `releases[0].version` must equal `version`. Each entry carries the `date` (`YYYY-MM-DD`), a one-line localized `summary` for lists and the update dialog, and under `notes` the Markdown files with the full notes per category, named like iHub's own `docs/releases/<version>/` files: `features` (`releases/<version>/features.md`), `fixes` (`fixes.md`), `breaking` (`breaking-changes.md`). A category without changes has no file. The files are companion files of the folder, fetched and served one by one (`GET …/catalog/:definitionId/_file?path=…`), so the marketplace renders a release's notes without downloading the package; a note file missing from the folder is logged and left out. `migration` names the definition migration a release needs (phase 2 of the versioning concept; not run yet). The shipped definitions (iFinder, iAssistant, the web search engines, Jira, Entra, iHub, the MCP server and A2A agent definitions, CKAN) carry a `1.0.0` release whose notes describe what the config migrations V192–V197, V199, V202 and V204 did.
+`releases` is the release history, newest first, and `releases[0].version` must equal `version`. Each entry carries the `date` (`YYYY-MM-DD`), a one-line localized `summary` for lists and the update dialog, and under `notes` the Markdown files with the full notes per category, named like iHub's own `docs/releases/<version>/` files: `features` (`releases/<version>/features.md`), `fixes` (`fixes.md`), `breaking` (`breaking-changes.md`). A category without changes has no file. The files are companion files of the folder, fetched and served one by one (`GET …/catalog/:definitionId/_file?path=…`), so the marketplace renders a release's notes without downloading the package; a note file missing from the folder is logged and left out. `migration` names the definition migration the release needs: its own version, listed in `migrations` (see [Migrations](#migrations)). The shipped definitions (iFinder, iAssistant, the web search engines, Jira, Entra, iHub, the MCP server and A2A agent definitions, CKAN) carry a `1.0.0` release whose notes describe what the config migrations V192–V197, V199, V202 and V204 did.
+
+### Migrations
+
+A release that changes what an installation stores — an install field renamed, an action renamed or removed, a new value that needs a default — ships a **definition migration**. iHub runs it for every installation of the definition, so an installation-only change needs no numbered config migration (`server/migrations/V*.js`).
+
+```jsonc
+"releases": [
+  { "version": "1.4.0", "date": "2026-11-12", "summary": { "en": "…" }, "migration": "1.4.0" },
+  { "version": "1.3.1", "date": "2026-11-02", "summary": { "en": "…" } },
+  { "version": "1.3.0", "date": "2026-10-28", "summary": { "en": "…" }, "migration": "1.3.0" }
+],
+"migrations": [
+  { "id": "1.3.0", "steps": [
+      { "renameValue": { "from": "fq", "to": "defaultFilter" } },
+      { "renameAction": { "from": "search", "to": "dataset_search" } } ] },
+  { "id": "1.4.0", "steps": [ { "setValue": { "key": "rows", "value": 20, "when": "missing" } } ] }
+]
+```
+
+A migration's `id` is the version it brings an installation **up to**; the release of that version names it (`"migration": "1.4.0"`), and every migration is named by its release. An installation at `from` runs every migration with `id > from` and `id ≤ version`, in version order, so 1.2.0 → 1.4.0 runs 1.3.0 and 1.4.0. A release without `migration` changes nothing an installation stores.
+
+Each step is an object with exactly one key:
+
+| Step | Shape | What it does |
+| --- | --- | --- |
+| `renameValue` | `{ "from": "<key>", "to": "<key>" }` | moves an install value; a destination that holds a value is a collision |
+| `setValue` | `{ "key": "<key>", "value": <value>, "when": "missing" \| "always" }` | writes an install value; `missing` (default) only where the key holds none |
+| `removeValue` | `{ "key": "<key>" }` | drops an install value |
+| `mapValue` | `{ "key": "<key>", "map": { "<old>": <new> } }` | rewrites a value, or each entry of a list value (`null` drops a list entry); two entries landing on one value is a collision |
+| `renameAction` | `{ "from": "<name>", "to": "<name>" }` | renames the action in `actions.enabled`, `actions.disabled`, `actions.overrides` and in the app bindings' `actions`; a destination already named there is a collision |
+| `removeAction` | `{ "name": "<name>" }` | drops the action from the policy and the app bindings; each app that named it gets a warning |
+| `renameScope` | `{ "from": "<scope>", "to": "<scope>" }` | rewrites `defaultScope` and `pinnedScope` of the app bindings |
+
+Nothing else is reachable: never `auth`, never a credential. A `module` step (a code migration) is refused by the schema in this release.
+
+**App bindings.** An app binds an installation by its id, by its definition id or by its type (`type:people-directory`). The installation's own binding is rewritten. The definition binding is shared by every installation of the definition and names the definition's actions, so it is rewritten too; every installation of the definition runs the same migrations, and a step is a no-op on a binding a sibling installation already rewrote. A type binding is shared by definitions that name their actions differently (the app editor offers no action list there): it is never rewritten, and a type binding that names a renamed or removed action or scope gets a warning.
+
+**Collisions and validation.** A step whose destination already holds something is a collision; the plan collects every one and fails with the colliding keys (and apps) in the reason, before anything is written. Nothing is ever overwritten or merged silently: an author who means to merge removes the destination first. After the last step the result is validated against the definition: the install values with the definition's defaults filled in as the runtime reads them (`checkInstallValues`; a field that became required but has a `default` passes, the default is not stored), every action name of the policy and of the own and definition bindings against the definition's actions (not for MCP and A2A, whose actions come from the server), a `defaultScope`/`pinnedScope` against a definition that declares no scopes at all, the sign-in mode against the offered modes, and `auth` against the one before. An unknown reference fails the migration.
+
+**When it runs.**
+
+1. **Server start**, for built-in definitions an iHub release updated: after the numbered config migrations, in the cluster primary (or the single process) before any worker loads the installations, so no worker serves unmigrated values. The same run rolls back an interrupted commit and restores the matching backup of an installation whose built-in definition went back (an iHub downgrade).
+2. **Marketplace update** of the definition (see [Marketplace](marketplace.md#installing-updating-and-removing)): the new folder moves in in the same commit as the migrated installations, their apps and the manifest entry.
+3. **Manually**, `POST /api/admin/integrations/installed/:id/_migrate`: an installation left behind (a definition copied in by hand, a failed run).
+
+Installations migrate independently; one failing never blocks the others. An incompatible definition never migrates.
+
+**States.** `status` on the installation, with `statusReason`:
+
+| State | When | Tools | Ordinary save (`PUT`) | Actions |
+| --- | --- | --- | --- | --- |
+| `migrationPending` | the loaded definition is newer than `definitionVersion` | none while a migration lies between the versions; the old values otherwise (only the version changes) | `409 MIGRATION_PENDING` while a migration lies between; otherwise saves and stamps the version | `_migrate` |
+| `migrationFailed` | a migration failed; values and `definitionVersion` are as before it | none | `409 MIGRATION_FAILED` | `_migrate` (re-run), `_restore`, uninstall |
+| `needsReview` | `definitionVersion` missing or not a version, or the definition is older (a downgrade without a matching backup) | none | `409 NEEDS_REVIEW` | `_restore` (when a backup of the loaded version exists), `_adopt`, uninstall |
+
+A stored `definitionVersion` that is not a semantic version does not make `integrations.json` fail to load: the installation loads as `needsReview` with the value in the reason. Config migration V207 stamped every existing installation without a valid version with the version of its definition at the time, the baseline for later migrations.
+
+**Backups.** Before a run the runner copies `config/integrations.json`, the app files that bind the installation, the marketplace manifest `config/installations.json` and, for a marketplace definition whose folder still is the installation's version, the definition folder to `contents/backups/integrations/<id>-<version>-<timestamp>/`, with `manifest.json` `{ representedVersion, instanceId, definitionId, createdAt, kind, createdBy, trigger, files }`. A run over several migrations also keeps the state at every boundary it passed (`kind: "boundary"`), so a later revert to that version has something to restore; a restore first backs up what it replaces (`pre-restore`). Backups are not removed automatically. A **restore** writes back what a migration may have changed, from the backup: the installation's entry (its migration log is kept and gets an entry), the binding keys of its apps (the rest of each app stays), the manifest entry, and the definition folder when the backup holds one of another version than the loaded one. Without a named backup it takes, for `needsReview`, the newest backup of the loaded definition's version and, for `migrationFailed`, the newest backup taken before a migration (for a marketplace update: the pre-update package and values).
+
+**Commit and lock.** A run holds the cluster-wide lock `integration-migration:<instanceId>` (`LockManager`; the lease is renewed while it works). The results are written to `staging/` in the backup, a commit marker `commit.json` with the lock's fencing token is written, the token is checked again (a holder whose lease was taken over gives up and discards its staging, `409 MIGRATION_LOCK_LOST`), the files move into place and the marker is finalised. A failure while moving rolls everything back from the backup and marks the installation `migrationFailed`; a crash leaves an unfinished marker, rolled back at the next start (and before the next run on the installation). Each run appends `{ from, to, at, by, trigger, result, migrations, steps, warnings, changes, reason, backup }` to `migrationLog` (the last 10; `result` is `migrated`, `stamped`, `failed`, `rolledBack`, `restored` or `adopted`).
+
+**Downgrade.** Migrations run forward only. When the loaded definition is older than an installation's version, the matching backup is restored (at the server start, and after a restore brought an older marketplace package back); without one the installation needs a review.
+
+**Uninstall** is the ordinary `DELETE /api/admin/integrations/installed/:id`: it removes the installation and its managed credential. App bindings stay in the apps (an app that requires the installation is hidden until it is installed again under the same id).
 
 To publish a definition, put the folder in a marketplace registry as an item of type `integration` whose `name` is the folder name and whose `source.companions` lists the other files (the OpenAPI document, the icon and the release-note files are fetched even when not listed). The catalog item copies `version`, `compatibility` and `releases`, so the marketplace decides compatibility and shows the history without a download. See [Marketplace → Publishing your own registry](marketplace.md#publishing-your-own-registry).
 
@@ -330,14 +394,55 @@ To publish a definition, put the folder in a marketplace registry as an item of 
 | `GET /api/admin/integrations/updates`                                                                                 | installations whose definition has a newer compatible version in the marketplace catalog it came from |
 | `POST /api/admin/integrations/catalog/:definitionId/_test`                                                            | test an unsaved instance (`values`, `auth`, `secrets`, `testInput`)   |
 | `POST /api/admin/integrations/catalog/_reload`                                                                        | re-read the definition folders                                        |
-| `GET` / `POST /api/admin/integrations/installed`                                                                      | list (with `definitionVersion`, `currentVersion`, `updateAvailable`, `incompatible`), install |
-| `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id`                                                        | read with live actions, update, uninstall                             |
+| `GET` / `POST /api/admin/integrations/installed`                                                                      | list (with `definitionVersion`, `currentVersion`, `updateAvailable`, `incompatible`, the migration fields below), install |
+| `GET` / `PUT` / `DELETE /api/admin/integrations/installed/:id`                                                        | read with live actions, update (`409 MIGRATION_PENDING`, `MIGRATION_FAILED`, `NEEDS_REVIEW`, see [Migrations](#migrations)), uninstall |
 | `POST /api/admin/integrations/installed/:id/_test`, `_enable`, `_disable`                                             | lifecycle                                                             |
+| `POST /api/admin/integrations/installed/:id/_migrate`                                                                 | run (or re-run) the definition migration                              |
+| `POST /api/admin/integrations/installed/:id/_restore`                                                                 | restore a backup, body `{ "backup"?: "<id>" }`                        |
+| `POST /api/admin/integrations/installed/:id/_adopt`                                                                   | adopt the loaded definition version for an installation that needs a review |
 | `GET /api/admin/integrations/installed/:id/connections`, `DELETE …/connections/:userId`, `POST …/registration/_reset` | per-user connections of an installation that signs every user in      |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<installation id>`, `GET …/<installation id>/callback`, `GET …/status?providerId=`, `POST …/disconnect` (`providerId` in query or body) | a user connects one storage provider installation, sees and removes the connection |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/sources`, `/drives/:source`, `/items`, `/download` (each `?providerId=<installation id>`) | browse and download; `400 STORAGE_PROVIDER_REQUIRED` without an installation, `404 STORAGE_PROVIDER_NOT_FOUND` for an unknown one, `403 INTEGRATION_NOT_GRANTED` when the groups do not grant it |
 
 Every write is audited with resource `integration`.
+
+**Migration fields** of every installation in `GET …/installed` and `GET …/installed/:id` (`instance`):
+
+```jsonc
+{
+  "definitionVersion": "1.2.0",          // null when missing
+  "status": "migrationPending",          // migrationPending | migrationFailed | needsReview | null
+  "statusReason": "…",                   // null when status is null
+  "migrationLog": [ /* last 10 runs, oldest first */ ],
+  "migration": {                         // null when there is no state and no backup
+    "pending": true,                     // the loaded definition is newer
+    "blocked": true,                     // offers no tools
+    "downgrade": false,
+    "from": "1.2.0", "to": "1.4.0",
+    "migrations": ["1.3.0", "1.4.0"],
+    "summary": { "values": 2, "actions": 1, "apps": 1 },   // planned, nothing written; null when nothing to plan
+    "warnings": [ { "code": "ACTION_REMOVED_FROM_APP", "message": "…", "appId": "…", "action": "…" } ],
+    "collisions": [ { "migration": "1.3.0", "step": "renameValue", "kind": "value", "key": "defaultFilter", "message": "…" } ],
+    "errors": [ { "kind": "action", "key": "…", "message": "…" } ],   // final validation of the plan
+    "backups": [ { "id": "govdata-1.2.0-20261102T100000000Z", "representedVersion": "1.2.0", "createdAt": "…", "kind": "pre-migration", "hasDefinition": false } ],
+    "defaultBackup": "govdata-1.2.0-20261102T100000000Z"   // what _restore takes without a body, or null
+  },
+  "liveStatus": { "connected": true, "toolCount": 3 }       // the adapter's live connection status (MCP, directories, storage), or null
+}
+```
+
+The three actions answer `{ success, logEntry, instance }` (the installation as above; `_migrate` adds `result`: `migrated`, `stamped` or `current`; `_restore` adds `backup`). Errors carry `code` and `reason`:
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 404 | `NOT_FOUND`, `BACKUP_NOT_FOUND` | unknown installation; no backup for the state, or the named one is not this installation's |
+| 409 | `MIGRATION_LOCKED` | another migration of the installation holds the lock |
+| 409 | `MIGRATION_NOT_APPLICABLE` | `_migrate` on an installation that needs a review, or whose definition is older |
+| 409 | `RESTORE_NOT_APPLICABLE`, `ADOPT_NOT_APPLICABLE` | the installation is not in a state the action repairs |
+| 409 | `MIGRATION_LOCK_LOST`, `MIGRATION_CONFLICT` | the lock was taken over, or the installation changed meanwhile; nothing was written, run it again |
+| 422 | `MIGRATION_FAILED` | the migration failed; the body adds `logEntry`, `details` (`collisions`, `errors`, `backup`) and the installation, now `migrationFailed` |
+| 422 | `ADOPT_INVALID` | the stored values do not fit the loaded definition; `details` lists the problems |
+| 422 | `DEFINITION_MISSING`, `INCOMPATIBLE_DEFINITION`, `BACKUP_INVALID` | no definition to migrate to; an incompatible definition never migrates; a damaged backup |
 
 ## Code map
 
@@ -346,6 +451,10 @@ Every write is audited with resource `integration`.
 | `server/validators/integrationDefinitionSchema.js`, `integrationsConfigSchema.js`                                                                                                                                                                                                                      | definition, `ConfigField`, installed-instance schemas; `checkInstallValues`                                                                                                                         |
 | `server/services/integrations/definitions/IntegrationRegistry.js`                                                                                                                                                                                                                                      | loads shipped and installed definition folders and their OpenAPI documents; the `incompatible` status, release-note checks, companion files                                                                                                                          |
 | `server/services/integrations/definitions/compatibility.js`, `definitionUpdates.js` | the compatibility check against the server version; newer catalog versions of installed definitions |
+| `server/services/integrations/definitions/migrationPlanner.js` | definition migrations, pure: which migrations run, the steps, collisions, the final validation, an installation's migration state |
+| `server/services/integrations/definitions/DefinitionMigrationRunner.js`, `migrationBackups.js` | runs migrations under the lock: backups, the staged commit with its marker and fencing token, recovery, restore, adopt, the startup run and the marketplace update |
+| `server/services/integrations/definitions/migrationPreview.js` | the update preview of a marketplace item, planned from the catalog |
+| `server/migrations/V207__integration_definition_version_baseline.js` | stamps the definition version baseline on installations without one |
 | `server/services/integrations/InstalledIntegrationService.js`                                                                                                                                                                                                                                          | `integrations.json` CRUD, managed secrets, tests                                                                                                                                                    |
 | `server/services/integrations/protocols/openapi/OpenApiAdapter.js`, `protocols/enforcement.js`                                                                                                                                                                                                         | the `openapi` adapter: actions, run, test, scopes                                                                                                                                                   |
 | `server/services/integrations/protocols/native/`, `server/services/integrations/ifinderConfig.js`                                                                                                                                                                                                      | the `native` adapter (also serving `script` definitions from their folder) and the iFinder and iAssistant connectors; the installations' values as the connectors read them                         |

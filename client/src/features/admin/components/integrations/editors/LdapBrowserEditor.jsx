@@ -159,7 +159,7 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
   const update = patch => setForm(prev => ({ ...prev, ...patch }));
   const directory = (directories || []).find(item => item.id === form.directory) || null;
   const directoryValues = directory?.values || {};
-  const transport = directory?.status?.transport || 'unknown';
+  const transport = directory?.liveStatus?.transport || 'unknown';
 
   const fieldErrors = useMemo(() => {
     const out = { ...editor.fieldErrors };
