@@ -18,6 +18,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
+import { requireCloudStorageGrant } from './cloudStorageAccess.js';
 
 const router = express.Router();
 
@@ -38,6 +39,9 @@ function isValidNextcloudPath(value) {
 }
 
 router.use(requireFeature('integrations'));
+// A provider the user's groups do not grant (`permissions.integrations`) can
+// be neither connected nor browsed.
+router.use(requireCloudStorageGrant('nextcloud'));
 
 const nextcloudAuthLimiter = rateLimit({
   windowMs: 60 * 1000,

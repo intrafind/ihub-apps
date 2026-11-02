@@ -16,6 +16,7 @@ import {
   directoryFromInstance,
   getDirectoryInstallations
 } from '../integrations/ldapDirectoryConfig.js';
+import { mayUseIntegration } from '../integrations/integrationAccess.js';
 import {
   DEFAULT_SEARCH_PRESET,
   SEARCH_PRESETS,
@@ -43,10 +44,12 @@ import { assertTransportAllowed, describeTransport, parseDirectoryUrl } from './
  * carry `_integration` like every installed integration's tools and
  * `_peopleDirectory` for the rules below.
  *
- * Who may use a directory (the installation's `allowedGroups`, read here as
- * `groups`) is ANDed with the ordinary tool grants and checked wherever tools
- * are narrowed to a user (`mayUseDirectory`): the tool listing, an app's
- * tools, a direct tool run, the MCP gateway, and the tool itself when it runs.
+ * Who may use a directory is decided by the groups: their
+ * `permissions.integrations` must grant the installation (`*`, its id, the
+ * definition id or `type:people-directory`; see `integrationAccess.js`). The
+ * grant is ANDed with the ordinary tool grants and checked wherever tools are
+ * narrowed to a user (`mayUseDirectory`): the tool listing, an app's tools, a
+ * direct tool run, the MCP gateway, and the tool itself when it runs.
  *
  * A directory with the LDAP browser on also offers the admin tools
  * `<id>__browse_search`, `<id>__browse_read` and `<id>__browse_children`. They
@@ -258,7 +261,6 @@ export function resolveDirectory(raw, platform = configCache.getPlatform() || {}
     timeoutMs: directory.timeoutMs ?? PEOPLE_DIRECTORY_DEFAULTS.timeoutMs,
     concurrency: directory.concurrency ?? PEOPLE_DIRECTORY_DEFAULTS.concurrency,
     requestDelayMs: directory.requestDelayMs ?? PEOPLE_DIRECTORY_DEFAULTS.requestDelayMs,
-    groups: Array.isArray(directory.groups) ? directory.groups : ['authenticated'],
     dataFlow: directory.dataFlow || 'internal'
   };
   resolved.transport = url ? describeTransport(resolved) : 'unknown';
@@ -324,26 +326,23 @@ function resolveBrowse(browse, resolved) {
   };
 }
 
+export { expandUserGroups };
+
 /**
- * Whether a user may use a directory: it exists, is enabled, and the user is
- * in one of its `groups` ("*" for every caller). Fails closed: no user, an
- * unknown directory or an error means no.
+ * Whether a user may use a directory: its installation exists and is
+ * enabled, and the user's groups grant it (`permissions.integrations`). Fails
+ * closed: an unknown directory or an error means no; a missing user is the
+ * anonymous principal, with the anonymous groups' grants.
  *
  * @param {Object|null} user - Enhanced user (`req.user`, the tool call's `user`)
  * @param {string} directoryId
  * @returns {boolean}
  */
-export { expandUserGroups };
-
 export function mayUseDirectory(user, directoryId) {
   try {
-    const directory = findDirectory(directoryId);
-    if (!directory || directory.enabled === false) return false;
-    const groups = Array.isArray(directory.groups) ? directory.groups : ['authenticated'];
-    if (groups.includes('*')) return true;
-    if (!user) return false;
-    const userGroups = expandUserGroups(user.groups);
-    return groups.some(group => userGroups.has(group));
+    const instance = getDirectoryInstallations().find(entry => entry?.id === directoryId);
+    if (!instance || instance.enabled === false) return false;
+    return mayUseIntegration(instance, user);
   } catch (error) {
     logger.warn('People directory access check failed; denying', {
       component: COMPONENT,
@@ -357,8 +356,8 @@ export function mayUseDirectory(user, directoryId) {
 /**
  * Whether a user may use a directory's admin LDAP browser: the directory is
  * enabled, `browse.enabled` is on, and a signed-in user is in one of
- * `browse.groups` (default `admins`). The directory's own `groups` neither
- * grant nor deny it. Fails closed.
+ * `browse.groups` (default `admins`). The group grant of the installation
+ * (`permissions.integrations`) neither grants nor denies it. Fails closed.
  *
  * Delegated and machine principals — personal API keys, OAuth clients and
  * tokens, agents — never browse, whatever their groups: they could otherwise
@@ -392,8 +391,9 @@ export function mayBrowseDirectory(user, directoryId) {
 
 /**
  * Whether a user may use one directory tool: the LDAP browser's against
- * `browse.groups`, every other against the directory's `groups`. The action
- * decides, not a flag, so a browse action is never checked against `groups`.
+ * `browse.groups`, every other against the group grant of the installation.
+ * The action decides, not a flag, so a browse action is never checked against
+ * the grant.
  *
  * @param {Object|null} user
  * @param {{id?: string, action?: string}|null} marker - A tool's `_peopleDirectory`

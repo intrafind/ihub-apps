@@ -1475,8 +1475,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const result = await this.agentLoop.run({
       runId,
       kind: context.user?.isAgent ? 'agent' : 'workflow',
-      // For the loop itself (the native web search fallback asks the
-      // installation's groups about this user); never a provider option.
+      // For the loop itself (the native web search fallback asks whether
+      // this user's groups grant the installation); never a provider option.
       user: context.user,
       model,
       messages,

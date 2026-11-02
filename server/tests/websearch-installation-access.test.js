@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The `websearch` installation's enabled state and groups decide who gets web
+ * The `websearch` installation's enabled state and the group grant
+ * (`groups.json` → `permissions.integrations`, #3093) decide who gets web
  * search, whichever way it is asked for:
  *
  * - a workflow node (or an app) that lists `braveSearch` / `read_url` in its
@@ -23,6 +24,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import configCache from '../configCache.js';
+import { publishDefinitionTypes } from '../services/integrations/integrationTypes.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
 import {
   getToolsForApp,
@@ -73,13 +75,26 @@ const portal = {
 const jira = { id: 'jira', name: 'Jira', script: 'jira.js', parameters: { type: 'object' } };
 
 const WEB_SEARCH = 'com.intrafind/web-search';
+const GROUP_IDS = ['research', 'staff', 'anonymous'];
 let installed;
+/** groups.json → `groups`, each group with the given `permissions.integrations`. */
+let groups;
+const grant = byGroup => {
+  groups = Object.fromEntries(
+    Object.entries(byGroup).map(([id, integrations]) => [id, { id, permissions: { integrations } }])
+  );
+};
+/** Installed, enabled, and every group may use every integration. */
 const open = () => {
   installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: true }];
+  grant(Object.fromEntries(GROUP_IDS.map(id => [id, ['*']])));
 };
-const closedTo = groups => {
-  installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: true, allowedGroups: groups }];
+/** Only the named groups are granted the installation (by its id). */
+const grantedOnlyTo = allowed => {
+  installed = [{ id: 'websearch', definition: WEB_SEARCH, enabled: true }];
+  grant(Object.fromEntries(GROUP_IDS.map(id => [id, allowed.includes(id) ? ['websearch'] : []])));
 };
+configCache.getGroups = () => ({ data: { groups } });
 configCache.getTools = () => ({ data: [brave, qwant, reader, portal, jira] });
 configCache.getIntegrations = () => ({ data: { installed } });
 // The installed-integration service reads the same file by its path.
@@ -98,7 +113,7 @@ const STAFF = { id: 'u', groups: ['staff'] };
 describe('isWebSearchAvailableTo', () => {
   beforeEach(open);
 
-  it('is true while the installation is on and has no groups', () => {
+  it('is true while the installation is on and every group is granted everything', () => {
     assert.equal(isWebSearchAvailableTo(undefined), true);
     assert.equal(isWebSearchAvailableTo(STAFF), true);
   });
@@ -110,11 +125,32 @@ describe('isWebSearchAvailableTo', () => {
     assert.equal(isWebSearchAvailableTo(RESEARCHER), false);
   });
 
-  it('asks the groups when the installation has any', () => {
-    closedTo(['research']);
+  it('asks the groups whether they grant the installation', () => {
+    grantedOnlyTo(['research']);
     assert.equal(isWebSearchAvailableTo(RESEARCHER), true);
     assert.equal(isWebSearchAvailableTo(STAFF), false);
     assert.equal(isWebSearchAvailableTo(undefined), false);
+  });
+
+  it('accepts the installation id, the definition id and the type key as a grant', () => {
+    publishDefinitionTypes([{ definition: { id: WEB_SEARCH, type: 'web-search' } }]);
+    try {
+      for (const key of ['websearch', WEB_SEARCH, 'type:web-search', '*']) {
+        grant({ research: [key], staff: ['type:people-directory'], anonymous: [] });
+        assert.equal(isWebSearchAvailableTo(RESEARCHER), true, key);
+        assert.equal(isWebSearchAvailableTo(STAFF), false, key);
+      }
+    } finally {
+      publishDefinitionTypes([]);
+    }
+  });
+
+  it('reads the resolved grant of an enhanced user before its groups', () => {
+    grantedOnlyTo([]);
+    const enhanced = { id: 'u', groups: ['staff'], permissions: { integrations: new Set(['*']) } };
+    assert.equal(isWebSearchAvailableTo(enhanced), true);
+    const restored = { id: 'u', groups: ['staff'], permissions: { integrations: {} } };
+    assert.equal(isWebSearchAvailableTo(restored), false);
   });
 });
 
@@ -152,8 +188,8 @@ describe('a workflow node that lists the web search tools', () => {
     ]);
   });
 
-  it('gets nothing for a user outside the installation’s groups', async () => {
-    closedTo(['research']);
+  it('gets nothing for a user whose groups do not grant the installation', async () => {
+    grantedOnlyTo(['research']);
     assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], STAFF)), []);
     assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], undefined)), []);
     assert.deepEqual(ids(await nodeTools(['braveSearch', 'read_url'], RESEARCHER)), [
@@ -212,8 +248,8 @@ describe('native web search and the installation', () => {
     websearch: { enabled: true, enabledByDefault: true, useNativeSearch: true }
   };
 
-  it('is resolved for a user in the installation’s groups and not for one outside', () => {
-    closedTo(['research']);
+  it('is resolved for a user whose groups grant the installation and not for another', () => {
+    grantedOnlyTo(['research']);
     for (const provider of ['google', 'openai-responses', 'anthropic']) {
       assert.equal(
         resolveAppNativeWebSearch(app, provider, undefined, undefined, RESEARCHER)?.provider,
@@ -228,8 +264,8 @@ describe('native web search and the installation', () => {
     assert.equal(resolveAppNativeWebSearch(app, 'anthropic', undefined, undefined, STAFF), null);
   });
 
-  it('offers no page reader next to it to a user outside the groups', async () => {
-    closedTo(['research']);
+  it('offers no page reader next to it to a user whose groups do not grant it', async () => {
+    grantedOnlyTo(['research']);
     const outside = await getToolsForApp(app, 'en', { modelProvider: 'anthropic', user: STAFF });
     assert.deepEqual(ids(outside), []);
     const inside = await getToolsForApp(app, 'en', {
@@ -245,8 +281,8 @@ describe('the fallback tool when a provider turns native search down', () => {
   const directive = { provider: 'anthropic', fallback: 'braveSearch' };
   const app = { id: 'web-chat', websearch: { enabled: true, provider: 'brave' } };
 
-  it('is offered, with the page reader, to a user in the groups', async () => {
-    closedTo(['research']);
+  it('is offered, with the page reader, to a user whose groups grant it', async () => {
+    grantedOnlyTo(['research']);
     const offered = await resolveNativeWebSearchFallbackTools(directive, {
       app,
       language: 'en',
@@ -255,8 +291,8 @@ describe('the fallback tool when a provider turns native search down', () => {
     assert.deepEqual(ids(offered), ['braveSearch', READ_URL_TOOL_ID]);
   });
 
-  it('is not offered to a user outside the groups, nor while the installation is off', async () => {
-    closedTo(['research']);
+  it('is not offered to a user whose groups do not grant it, nor while the installation is off', async () => {
+    grantedOnlyTo(['research']);
     assert.deepEqual(
       await resolveNativeWebSearchFallbackTools(directive, { app, language: 'en', user: STAFF }),
       []

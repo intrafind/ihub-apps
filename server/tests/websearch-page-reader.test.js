@@ -57,6 +57,14 @@ const reader = connectorTool('readUrl');
 let tools = [];
 // The `websearch` installation owns the search tools and the page reader.
 let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
+// Who may use it (#3093): every group by default; see the group test below.
+const OPEN_GROUPS = {
+  anonymous: { id: 'anonymous', permissions: { integrations: ['*'] } },
+  research: { id: 'research', permissions: { integrations: ['*'] } },
+  staff: { id: 'staff', permissions: { integrations: ['*'] } }
+};
+let groups = OPEN_GROUPS;
+configCache.getGroups = () => ({ data: { groups } });
 configCache.getTools = () => ({ data: tools });
 configCache.getIntegrations = () => ({ data: { installed } });
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
@@ -129,8 +137,12 @@ describe('page reader alongside web search', () => {
     }
   });
 
-  it('is left out for a user outside the installation’s groups', async () => {
-    installed = [{ id: 'websearch', enabled: true, allowedGroups: ['research'] }];
+  it('is left out for a user whose groups do not grant the installation', async () => {
+    groups = {
+      anonymous: { id: 'anonymous', permissions: { integrations: [] } },
+      research: { id: 'research', permissions: { integrations: ['websearch'] } },
+      staff: { id: 'staff', permissions: { integrations: [] } }
+    };
     try {
       const outside = await getToolsForApp(webApp(), 'en', {
         modelProvider: 'mistral',
@@ -143,7 +155,7 @@ describe('page reader alongside web search', () => {
       });
       assert.deepEqual(ids(inside), ['qwantSearch', READ_URL_TOOL_ID]);
     } finally {
-      installed = [{ id: 'websearch', enabled: true }];
+      groups = OPEN_GROUPS;
     }
   });
 

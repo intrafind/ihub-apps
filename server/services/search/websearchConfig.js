@@ -40,7 +40,9 @@ export function isWebSearchEnabled() {
 
 /**
  * The effective web search settings.
- * @returns {{ installed: boolean, enabled: boolean, defaultProvider: string, allowedGroups: string[] }}
+ * Who may use it is decided by the groups (`permissions.integrations`), not
+ * here: see `toolLoader.isWebSearchAvailableTo`.
+ * @returns {{ installed: boolean, enabled: boolean, defaultProvider: string }}
  */
 export function getWebSearchConfig() {
   const instance = getWebSearchInstallation();
@@ -51,8 +53,7 @@ export function getWebSearchConfig() {
   return {
     installed: Boolean(instance),
     enabled: Boolean(instance) && instance.enabled !== false,
-    defaultProvider,
-    allowedGroups: Array.isArray(instance?.allowedGroups) ? instance.allowedGroups : []
+    defaultProvider
   };
 }
 

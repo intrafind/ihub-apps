@@ -27,6 +27,14 @@ import {
 // to the user.
 let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
 configCache.getIntegrations = () => ({ data: { installed } });
+// Who may use it (#3093): every group, unless a test narrows it.
+const OPEN_GROUPS = {
+  anonymous: { id: 'anonymous', permissions: { integrations: ['*'] } },
+  research: { id: 'research', permissions: { integrations: ['*'] } },
+  staff: { id: 'staff', permissions: { integrations: ['*'] } }
+};
+let groups = OPEN_GROUPS;
+configCache.getGroups = () => ({ data: { groups } });
 import AnthropicAdapter, { buildAnthropicWebSearchTool } from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
@@ -150,10 +158,13 @@ describe('resolveAppNativeWebSearch', () => {
     }
   });
 
-  it('applies the installation’s groups: a user outside them gets no native search', () => {
-    const was = installed;
+  it('applies the group grant: a user whose groups do not grant the installation gets no native search', () => {
     try {
-      installed = [{ id: 'websearch', enabled: true, allowedGroups: ['research'] }];
+      groups = {
+        anonymous: { id: 'anonymous', permissions: { integrations: [] } },
+        research: { id: 'research', permissions: { integrations: ['websearch'] } },
+        staff: { id: 'staff', permissions: { integrations: [] } }
+      };
       const model = undefined;
       assert.strictEqual(
         resolveAppNativeWebSearch(baseApp, 'anthropic', undefined, model, {
@@ -171,7 +182,7 @@ describe('resolveAppNativeWebSearch', () => {
         directive('anthropic')
       );
     } finally {
-      installed = was;
+      groups = OPEN_GROUPS;
     }
   });
 });

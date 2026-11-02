@@ -29,7 +29,10 @@ before(async () => {
   await integrationRegistry.ensureLoaded();
   configCache.setCacheEntry('config/tools.json', []);
   configCache.setCacheEntry('config/platform.json', { defaultLanguage: 'en' });
-  configCache.setCacheEntry('config/groups.json', { groups: { users: {} } });
+  // Members of users may use iHub's own tools (`permissions.integrations`, #3093).
+  configCache.setCacheEntry('config/groups.json', {
+    groups: { users: { permissions: { integrations: ['ihub'] } } }
+  });
   configCache.getFeatures = () => ({ skills: false, appAsTool: false });
   configCache.setCacheEntry('config/integrations.json', {
     installed: [],
@@ -60,8 +63,7 @@ describe('the ihub installation', () => {
           enabled: false,
           values: {},
           auth: { mode: 'none' },
-          actions: { enabled: ['*'], disabled: ['ask_user'], overrides: {} },
-          allowedGroups: []
+          actions: { enabled: ['*'], disabled: ['ask_user'], overrides: {} }
         }
       ],
       security: { blockPrivateIps: true, allowedHosts: [] }
@@ -143,8 +145,7 @@ describe('iHub tools', () => {
           enabled: true,
           values: {},
           auth: { mode: 'none' },
-          actions: { enabled: ['*'], disabled: ['write_artifact'], overrides: {} },
-          allowedGroups: []
+          actions: { enabled: ['*'], disabled: ['write_artifact'], overrides: {} }
         }
       ],
       security: { blockPrivateIps: true, allowedHosts: [] }

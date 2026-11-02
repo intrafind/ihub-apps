@@ -25,7 +25,11 @@ import { z } from 'zod';
 import configCache from '../../../configCache.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
 import { isValidGraphId } from '../../integrations/graphIds.js';
-import { listCloudStorageProviders } from '../../integrations/cloudStorageConfig.js';
+import {
+  findCloudStorageProvider,
+  listCloudStorageProviders,
+  mayUseCloudStorage
+} from '../../integrations/cloudStorageConfig.js';
 import { OAuthRefreshError } from '../../integrations/oauthRefreshError.js';
 import { ProjectError } from '../projectErrors.js';
 import { registerItemKind } from './registry.js';
@@ -106,6 +110,22 @@ function requireUser(ctx, site) {
   return user;
 }
 
+/**
+ * Refuse a read from a provider the user's groups do not grant
+ * (`permissions.integrations`, #3093), as the file browser does. An unknown
+ * provider is left to the service, which reports it as gone.
+ * @param {Object} user
+ * @param {string} providerId
+ * @param {string} type - `office365` | `googledrive` | `nextcloud`
+ * @param {string} site
+ */
+function requireGrant(user, providerId, type, site) {
+  const provider = findCloudStorageProvider(providerId, type);
+  if (provider && !mayUseCloudStorage(user, provider)) {
+    throw new ProjectError('SOURCE_FORBIDDEN', `Your groups may not use ${site}`);
+  }
+}
+
 export const office365Kind = registerItemKind({
   id: 'office365',
   name: { en: 'OneDrive / SharePoint', de: 'OneDrive / SharePoint' },
@@ -133,6 +153,7 @@ export const office365Kind = registerItemKind({
     const site = 'OneDrive / SharePoint';
     requireIntegrations(site);
     const user = requireUser(ctx, site);
+    requireGrant(user, item.ref.providerId, 'office365', site);
     const { default: service } = await import('../../integrations/Office365Service.js');
     try {
       const file = await service.downloadFile(
@@ -169,6 +190,7 @@ export const googleDriveKind = registerItemKind({
     const site = 'Google Drive';
     requireIntegrations(site);
     const user = requireUser(ctx, site);
+    requireGrant(user, item.ref.providerId, 'googledrive', site);
     const { default: service } = await import('../../integrations/GoogleDriveService.js');
     try {
       const file = await service.downloadFile(user.id, item.ref.fileId, item.ref.providerId, {
@@ -205,6 +227,7 @@ export const nextcloudKind = registerItemKind({
     const site = 'Nextcloud';
     requireIntegrations(site);
     const user = requireUser(ctx, site);
+    requireGrant(user, item.ref.providerId, 'nextcloud', site);
     const { default: service } = await import('../../integrations/NextcloudService.js');
     try {
       const file = await service.downloadFile(user.id, item.ref.path, item.ref.providerId, {

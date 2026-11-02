@@ -350,7 +350,7 @@ export class AgentLoop {
         fallbackTools = await this.resolveNativeWebSearchFallbackTools(directive, {
           app: options.appConfig,
           language: request.language,
-          // The `websearch` installation's groups hold for the fallback tool
+          // The group grant of the `websearch` installation holds for the fallback tool
           // too: a chat carries the user in the provider options, a workflow
           // node on the request itself.
           user: request.user ?? options.user

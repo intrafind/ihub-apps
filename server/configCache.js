@@ -1846,8 +1846,8 @@ class ConfigCache {
       const appToolRefs = Array.isArray(app?.tools) ? app.tools : [];
       // An installed integration's tools are listed as the chat gets them
       // (`getIntegrationToolsForApp`): only when the app binds the
-      // installation, the user is in its groups and the binding allows the
-      // action — never through the instance id alone.
+      // installation, the user's groups grant it (`permissions.integrations`)
+      // and the binding allows the action — never through the instance id alone.
       let appIntegrationTools = new Set();
       if (app?.integrations && typeof app.integrations === 'object') {
         const { getIntegrationToolsForApp } =
@@ -1869,15 +1869,16 @@ class ConfigCache {
       });
     }
 
-    // An installation's own groups hold on top of every grant, `*` included:
-    // a tool the user could not run is not listed.
+    // The group grant of an installation (`permissions.integrations`) holds
+    // on top of every tool grant, `*` included: a tool the user could not run
+    // is not listed.
     if (tools.some(tool => tool._integration)) {
       const { filterIntegrationToolsForUser } =
         await import('./services/integrations/integrationTools.js');
       tools = filterIntegrationToolsForUser(tools, user);
     }
 
-    // A people directory's own `groups` hold on top of every grant, `*` included.
+    // A people directory's LDAP browser (`browse.groups`) holds on top of every grant, `*` included.
     tools = filterDirectoryToolsForUser(tools, user);
 
     // Generate user-specific ETag if tools were filtered

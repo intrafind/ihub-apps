@@ -762,9 +762,10 @@ export default function registerAuthRoutes(app) {
         }
       },
       // The cloud storage providers (no secrets): the `office365`,
-      // `googledrive` and `nextcloud` installations, in the shape the client
-      // always read (`cloudStorage.enabled`, `cloudStorage.providers[]`).
-      cloudStorage: cloudStorageStatus(),
+      // `googledrive` and `nextcloud` installations the user's groups grant
+      // (`permissions.integrations`), in the shape the client always read
+      // (`cloudStorage.enabled`, `cloudStorage.providers[]`).
+      cloudStorage: cloudStorageStatus(req.user),
       // Expose Jira integration status (no secrets)
       jira: {
         enabled: isJiraConfigured()

@@ -36,10 +36,17 @@ function oktaInstallation(extra = {}) {
   return installationsOf(['okta'], extra);
 }
 
+/** Every group may use every integration (`permissions.integrations`, #3093). */
+const OPEN_GROUPS = {
+  users: { id: 'users', permissions: { integrations: ['*'] } },
+  admins: { id: 'admins', permissions: { integrations: ['*'], adminAccess: true } }
+};
+
 const state = {
   platform: { anonymousAuth: { enabled: false }, auth: {} },
   apps: [{ id: 'assistant', tools: ['okta'] }],
-  integrations: oktaInstallation()
+  integrations: oktaInstallation(),
+  groups: OPEN_GROUPS
 };
 
 class FakeUnauthorizedError extends Error {}
@@ -91,6 +98,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getUI: () => ({ data: { title: { en: 'iHub Apps' } } }),
     getAppsForUser: jest.fn(async () => ({ data: state.apps })),
     getIntegrations: () => ({ data: state.integrations }),
+    getGroups: () => ({ data: { groups: state.groups } }),
     get: key => (key === 'config/integrations.json' ? { data: state.integrations } : null)
   }
 }));
@@ -154,6 +162,7 @@ beforeEach(async () => {
   state.platform = { anonymousAuth: { enabled: false }, auth: {} };
   state.apps = [{ id: 'assistant', tools: ['okta'] }];
   state.integrations = oktaInstallation();
+  state.groups = OPEN_GROUPS;
   fs.rmSync(path.join(tmpDir, 'mcp'), { recursive: true, force: true });
   mcpClientManager.clientStore = new McpOAuthClientStore({ documents: null });
   mcpClientManager.catalogStore = new McpToolCatalogStore({ documents: null });
@@ -317,9 +326,12 @@ describe('GET /api/mcp/oauth/authorize', () => {
     expect(listed.body.servers.map(s => s.serverId)).toEqual(['okta']);
   });
 
-  it("refuses a user the installation's allowedGroups exclude, whatever the apps grant", async () => {
+  it('refuses a user whose groups do not grant the installation, whatever the apps grant', async () => {
     state.apps = [{ id: 'assistant', tools: ['okta'], integrations: { okta: {} } }];
-    state.integrations = oktaInstallation({ allowedGroups: ['engineering'] });
+    state.groups = {
+      users: { id: 'users', permissions: { integrations: ['type:people-directory'] } },
+      admins: { id: 'admins', permissions: { integrations: [], adminAccess: true } }
+    };
     const hidden = await startFlow();
     expect(hidden.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=okta');
     const listed = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
@@ -332,8 +344,11 @@ describe('GET /api/mcp/oauth/authorize', () => {
       .set('x-test-admin', '1');
     expect(admin.status).toBe(302);
     expect(admin.headers.location).toContain('https://okta-mcp.example.com/authorize?');
-    // A member of the group connects as before.
-    state.integrations = oktaInstallation({ allowedGroups: ['users'] });
+    // Once the group grants it (by installation id), its members connect.
+    state.groups = {
+      ...state.groups,
+      users: { id: 'users', permissions: { integrations: ['okta'] } }
+    };
     const member = await startFlow();
     expect(member.status).toBe(302);
   });

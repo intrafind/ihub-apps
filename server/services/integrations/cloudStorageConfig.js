@@ -27,6 +27,7 @@ import { promises as fs } from 'node:fs';
 import configCache from '../../configCache.js';
 import tokenStorage from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { mayUseIntegration } from './integrationAccess.js';
 
 /** Provider type → the built-in definition and its fixed installation id. */
 export const CLOUD_STORAGE_PROVIDERS = Object.freeze({
@@ -183,12 +184,52 @@ export function findCloudStorageProvider(providerId, type) {
 }
 
 /**
+ * Whether the user's groups grant the installation behind a provider
+ * (`permissions.integrations`: `*`, the installation id, its definition id or
+ * `type:storage`; see `integrationAccess.js`). Fails closed: an unknown
+ * provider is not granted.
+ *
+ * @param {Object|null|undefined} user - Enhanced user; none is the anonymous principal
+ * @param {{ installationId?: string }|null} provider - from {@link listCloudStorageProviders}
+ * @returns {boolean}
+ */
+export function mayUseCloudStorage(user, provider) {
+  if (!provider?.installationId) return false;
+  const instance = installedList().find(entry => entry?.id === provider.installationId);
+  return Boolean(instance) && mayUseIntegration(instance, user);
+}
+
+/**
+ * Whether the user may use the provider a request names (by provider id and
+ * type). False for an unknown provider.
+ * @param {Object|null|undefined} user
+ * @param {string} providerId
+ * @param {string} [type]
+ * @returns {boolean}
+ */
+export function mayUseCloudStorageProvider(user, providerId, type) {
+  return mayUseCloudStorage(user, findCloudStorageProvider(providerId, type));
+}
+
+/**
+ * The providers a user may use: every configured provider, enabled or not,
+ * whose installation the user's groups grant.
+ * @param {Object|null|undefined} user
+ * @returns {object[]}
+ */
+export function listCloudStorageProvidersFor(user) {
+  return listCloudStorageProviders().filter(provider => mayUseCloudStorage(user, provider));
+}
+
+/**
  * The former `platform.cloudStorage` as `/api/auth/status` sends it to the
- * client (no secrets): enabled while one provider is, and the providers.
+ * client (no secrets): the providers the user's groups grant
+ * (`permissions.integrations`), and enabled while one of them is.
+ * @param {Object|null|undefined} user - The requesting user; none is the anonymous principal
  * @returns {{ enabled: boolean, providers: Array<{ id: string, name: string, displayName: string, type: string, enabled: boolean }> }}
  */
-export function cloudStorageStatus() {
-  const providers = listCloudStorageProviders().map(p => ({
+export function cloudStorageStatus(user) {
+  const providers = listCloudStorageProvidersFor(user).map(p => ({
     id: p.id,
     name: p.name,
     displayName: p.displayName,

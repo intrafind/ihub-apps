@@ -300,8 +300,8 @@ export async function buildMcpServer({ user, platform }) {
     const language = platform?.defaultLanguage || 'en';
     const configuredTools = await loadConfiguredTools(language);
     // People directory tools are iHub's own (its connection, not a proxied
-    // server's), offered to callers in the installation's and the directory's
-    // groups. They are actions of the `com.intrafind/ldap-directory`
+    // server's), offered to callers whose groups grant the installation
+    // (`permissions.integrations`; `browse.groups` for the LDAP browser). They are actions of the `com.intrafind/ldap-directory`
     // installations; the other installed integrations stay out, as before.
     const { discoverIntegrationTools, filterIntegrationToolsForUser } =
       await import('../integrations/integrationTools.js');
