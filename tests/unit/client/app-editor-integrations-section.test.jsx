@@ -246,7 +246,7 @@ describe('IntegrationsConfigSection', () => {
       integrations: {
         'com.intrafind/office365': {},
         'type:storage': {},
-        'com.intrafind/web-search': {},
+        'com.intrafind/qwant-search': {},
         'type:web-search': {},
         'gone-integration': {}
       }
@@ -255,7 +255,7 @@ describe('IntegrationsConfigSection', () => {
     for (const key of [
       'com.intrafind/office365',
       'type:storage',
-      'com.intrafind/web-search',
+      'com.intrafind/qwant-search',
       'type:web-search'
     ]) {
       expect(screen.queryByTestId(`stale-integration-${key}`)).not.toBeInTheDocument();
