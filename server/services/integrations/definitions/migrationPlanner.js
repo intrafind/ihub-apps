@@ -218,185 +218,280 @@ function workingState(instance, apps) {
 }
 
 /**
+ * A step being applied: the working state, the step's type and body, where
+ * its collisions and warnings go, and the installation's binding keys.
+ *
+ * @typedef {object} StepRun
+ * @property {{ values: object, policy: object, apps: Array<{ path: string, app: object }> }} state
+ * @property {string} type - the step's key (`renameValue`, …)
+ * @property {object} body - the step's body
+ * @property {string} migrationId
+ * @property {{ own: string, definition: string, type: string|null }} keys
+ * @property {{ collisions: Array, warnings: Array, policyActions: Set, changedBindings: Set, valueKeys: Set }} out
+ */
+
+/** Record a collision of the running step; its change is skipped by the caller. */
+function collide(run, kind, key, message, extra = {}) {
+  run.out.collisions.push({
+    migration: run.migrationId,
+    step: run.type,
+    kind,
+    key,
+    message,
+    ...extra
+  });
+}
+
+/** Note that a binding of an app file changed (counted once per file and key). */
+function markBindingChanged(run, entry, key) {
+  run.out.changedBindings.add(`${entry.path}\u0000${key}`);
+}
+
+/** `renameValue`: move a value; an empty source is dropped, a filled destination collides. */
+function applyRenameValue(run) {
+  const { state, body, out } = run;
+  if (!Object.hasOwn(state.values, body.from)) return;
+  const value = state.values[body.from];
+  if (!isEmptyValue(value) && !isEmptyValue(state.values[body.to])) {
+    collide(
+      run,
+      'value',
+      body.to,
+      `renameValue ${body.from} → ${body.to}: "${body.to}" already holds a value`
+    );
+    return;
+  }
+  delete state.values[body.from];
+  out.valueKeys.delete(body.from);
+  if (!isEmptyValue(value)) {
+    state.values[body.to] = value;
+    out.valueKeys.add(body.to);
+  }
+}
+
+/** `setValue`: set a value when it is missing (default) or always. */
+function applySetValue({ state, body, out }) {
+  if ((body.when || 'missing') !== 'always' && !isEmptyValue(state.values[body.key])) return;
+  if (canonicalJson(state.values[body.key]) !== canonicalJson(body.value)) {
+    out.valueKeys.add(body.key);
+  }
+  state.values[body.key] = clone(body.value);
+}
+
+/** `removeValue`: drop a value. */
+function applyRemoveValue({ state, body, out }) {
+  if (Object.hasOwn(state.values, body.key)) out.valueKeys.add(body.key);
+  delete state.values[body.key];
+}
+
+/** What `mapValue` turns one entry into: its mapping, or the entry itself when unmapped. */
+function mappedEntry(map, entry) {
+  return Object.hasOwn(map, String(entry)) ? map[String(entry)] : entry;
+}
+
+/** `mapValue` on a list: map each entry, drop the ones mapped to null; new duplicates collide. */
+function mapListValue(run, current) {
+  const { state, body, out } = run;
+  const mapped = [];
+  for (const entry of current) {
+    const next = mappedEntry(body.map, entry);
+    if (next !== null) mapped.push(next);
+  }
+  const duplicates = mapped.filter((entry, i) => mapped.indexOf(entry) !== i);
+  const before = new Set(current.filter((entry, i) => current.indexOf(entry) !== i));
+  const landed = [...new Set(duplicates)].filter(entry => !before.has(entry));
+  if (landed.length > 0) {
+    collide(
+      run,
+      'value',
+      body.key,
+      `mapValue ${body.key}: several entries map to ${landed.map(e => JSON.stringify(e)).join(', ')}`
+    );
+    return;
+  }
+  if (canonicalJson(mapped) !== canonicalJson(current)) out.valueKeys.add(body.key);
+  state.values[body.key] = mapped;
+}
+
+/** `mapValue` on a single value: replace a mapped scalar, delete it when mapped to null. */
+function mapScalarValue({ state, body, out }, current) {
+  if (current === undefined || current === null || typeof current === 'object') return;
+  if (!Object.hasOwn(body.map, String(current))) return;
+  const next = body.map[String(current)];
+  if (next !== current) out.valueKeys.add(body.key);
+  if (next === null) delete state.values[body.key];
+  else state.values[body.key] = next;
+}
+
+/** `mapValue`: rewrite a value, or each entry of a list value, by a map. */
+function applyMapValue(run) {
+  const current = run.state.values[run.body.key];
+  if (Array.isArray(current)) mapListValue(run, current);
+  else mapScalarValue(run, current);
+}
+
+/** Whether a binding's `actions` list names an action. */
+function bindsAction(binding, name) {
+  return Array.isArray(binding?.actions) && binding.actions.includes(name);
+}
+
+/** `renameAction` in the action policy; a policy that already names the new name collides. */
+function renamePolicyAction(run, from, to) {
+  const { policy } = run.state;
+  if (!policyHas(policy, from)) return;
+  if (policyHas(policy, to)) {
+    collide(
+      run,
+      'action',
+      to,
+      `renameAction ${from} → ${to}: the action policy already names "${to}"`
+    );
+    return;
+  }
+  policy.enabled = renameInList(policy.enabled, from, to);
+  policy.disabled = renameInList(policy.disabled, from, to);
+  policy.overrides = renameKey(policy.overrides, from, to);
+  run.out.policyActions.add(from);
+}
+
+/** `renameAction` in the own and definition bindings of one app. */
+function renameBoundAction(run, entry, from, to) {
+  for (const key of rewrittenKeys(entry.app, run.keys)) {
+    const binding = entry.app.integrations[key];
+    if (!bindsAction(binding, from)) continue;
+    if (binding.actions.includes(to)) {
+      collide(
+        run,
+        'action',
+        to,
+        `renameAction ${from} → ${to}: app "${appIdOf(entry)}" already binds "${to}" (${key})`,
+        { appId: appIdOf(entry), binding: key }
+      );
+      continue;
+    }
+    binding.actions = renameInList(binding.actions, from, to);
+    markBindingChanged(run, entry, key);
+  }
+}
+
+/** `renameAction`: the policy, then each app (its bindings, then a warning for its type binding). */
+function applyRenameAction(run) {
+  const { from, to } = run.body;
+  renamePolicyAction(run, from, to);
+  for (const entry of run.state.apps) {
+    renameBoundAction(run, entry, from, to);
+    warnTypeBinding(entry, run.keys, run.out, run.migrationId, binding =>
+      bindsAction(binding, from) ? { action: from, message: `renameAction ${from} → ${to}` } : null
+    );
+  }
+}
+
+/** `removeAction` from the action policy. */
+function removePolicyAction(run, name) {
+  const { policy } = run.state;
+  if (!policyHas(policy, name)) return;
+  policy.enabled = policy.enabled.filter(n => n !== name);
+  policy.disabled = policy.disabled.filter(n => n !== name);
+  delete policy.overrides[name];
+  run.out.policyActions.add(name);
+}
+
+/** `removeAction` from the own and definition bindings of one app, with a warning per binding. */
+function removeBoundAction(run, entry, name) {
+  for (const key of rewrittenKeys(entry.app, run.keys)) {
+    const binding = entry.app.integrations[key];
+    if (!bindsAction(binding, name)) continue;
+    binding.actions = binding.actions.filter(n => n !== name);
+    markBindingChanged(run, entry, key);
+    run.out.warnings.push({
+      code: MIGRATION_WARNINGS.ACTION_REMOVED_FROM_APP,
+      message: `${run.migrationId}: the action "${name}" was removed; app "${appIdOf(entry)}" bound it (${key}) and no longer offers it`,
+      appId: appIdOf(entry),
+      action: name,
+      key
+    });
+  }
+}
+
+/** `removeAction`: the policy, then each app (its bindings, then a warning for its type binding). */
+function applyRemoveAction(run) {
+  const { name } = run.body;
+  removePolicyAction(run, name);
+  for (const entry of run.state.apps) {
+    removeBoundAction(run, entry, name);
+    warnTypeBinding(entry, run.keys, run.out, run.migrationId, binding =>
+      bindsAction(binding, name) ? { action: name, message: `removeAction ${name}` } : null
+    );
+  }
+}
+
+/** `renameScope` in the `defaultScope` and `pinnedScope` of the own and definition bindings of one app. */
+function renameBoundScope(run, entry, from, to) {
+  for (const key of rewrittenKeys(entry.app, run.keys)) {
+    const binding = entry.app.integrations[key];
+    if (!binding || typeof binding !== 'object') continue;
+    let changed = false;
+    for (const field of ['defaultScope', 'pinnedScope']) {
+      if (binding[field] === from) {
+        binding[field] = to;
+        changed = true;
+      }
+    }
+    if (changed) markBindingChanged(run, entry, key);
+  }
+}
+
+/** `renameScope`: each app (its bindings, then a warning for its type binding). */
+function applyRenameScope(run) {
+  const { from, to } = run.body;
+  for (const entry of run.state.apps) {
+    renameBoundScope(run, entry, from, to);
+    warnTypeBinding(entry, run.keys, run.out, run.migrationId, binding =>
+      binding && (binding.defaultScope === from || binding.pinnedScope === from)
+        ? { scope: from, message: `renameScope ${from} → ${to}` }
+        : null
+    );
+  }
+}
+
+/** The handler of each declarative step the schema admits. */
+const STEP_HANDLERS = new Map([
+  ['renameValue', applyRenameValue],
+  ['setValue', applySetValue],
+  ['removeValue', applyRemoveValue],
+  ['mapValue', applyMapValue],
+  ['renameAction', applyRenameAction],
+  ['removeAction', applyRemoveAction],
+  ['renameScope', applyRenameScope]
+]);
+
+/**
  * Apply one step to the working state. Collisions and warnings are pushed
  * to `out`; a colliding change is skipped, the rest of the step still runs.
  */
 function applyStep(state, step, context, out) {
   const [type] = Object.keys(step);
-  const body = step[type];
-  const { migrationId, keys } = context;
-  const collision = (kind, key, message, extra = {}) =>
-    out.collisions.push({ migration: migrationId, step: type, kind, key, message, ...extra });
-
-  switch (type) {
-    case 'renameValue': {
-      if (!Object.hasOwn(state.values, body.from)) return;
-      const value = state.values[body.from];
-      if (!isEmptyValue(value) && !isEmptyValue(state.values[body.to])) {
-        collision(
-          'value',
-          body.to,
-          `renameValue ${body.from} → ${body.to}: "${body.to}" already holds a value`
-        );
-        return;
-      }
-      delete state.values[body.from];
-      out.valueKeys.delete(body.from);
-      if (!isEmptyValue(value)) {
-        state.values[body.to] = value;
-        out.valueKeys.add(body.to);
-      }
-      return;
-    }
-    case 'setValue': {
-      if ((body.when || 'missing') === 'always' || isEmptyValue(state.values[body.key])) {
-        if (canonicalJson(state.values[body.key]) !== canonicalJson(body.value)) {
-          out.valueKeys.add(body.key);
-        }
-        state.values[body.key] = clone(body.value);
-      }
-      return;
-    }
-    case 'removeValue':
-      if (Object.hasOwn(state.values, body.key)) out.valueKeys.add(body.key);
-      delete state.values[body.key];
-      return;
-    case 'mapValue': {
-      const current = state.values[body.key];
-      if (Array.isArray(current)) {
-        const mapped = [];
-        for (const entry of current) {
-          const next = Object.hasOwn(body.map, String(entry)) ? body.map[String(entry)] : entry;
-          if (next === null) continue;
-          mapped.push(next);
-        }
-        const duplicates = mapped.filter((entry, i) => mapped.indexOf(entry) !== i);
-        const before = current.filter((entry, i) => current.indexOf(entry) !== i);
-        const landed = [...new Set(duplicates)].filter(entry => !before.includes(entry));
-        if (landed.length > 0) {
-          collision(
-            'value',
-            body.key,
-            `mapValue ${body.key}: several entries map to ${landed.map(e => JSON.stringify(e)).join(', ')}`
-          );
-          return;
-        }
-        if (canonicalJson(mapped) !== canonicalJson(current)) out.valueKeys.add(body.key);
-        state.values[body.key] = mapped;
-        return;
-      }
-      if (current === undefined || current === null || typeof current === 'object') return;
-      if (!Object.hasOwn(body.map, String(current))) return;
-      const next = body.map[String(current)];
-      if (next !== current) out.valueKeys.add(body.key);
-      if (next === null) delete state.values[body.key];
-      else state.values[body.key] = next;
-      return;
-    }
-    case 'renameAction': {
-      const { from, to } = body;
-      if (policyHas(state.policy, from)) {
-        if (policyHas(state.policy, to)) {
-          collision(
-            'action',
-            to,
-            `renameAction ${from} → ${to}: the action policy already names "${to}"`
-          );
-        } else {
-          state.policy.enabled = renameInList(state.policy.enabled, from, to);
-          state.policy.disabled = renameInList(state.policy.disabled, from, to);
-          state.policy.overrides = renameKey(state.policy.overrides, from, to);
-          out.policyActions.add(from);
-        }
-      }
-      for (const entry of state.apps) {
-        for (const key of rewrittenKeys(entry.app, keys)) {
-          const binding = entry.app.integrations[key];
-          if (!Array.isArray(binding?.actions) || !binding.actions.includes(from)) continue;
-          if (binding.actions.includes(to)) {
-            collision(
-              'action',
-              to,
-              `renameAction ${from} → ${to}: app "${appIdOf(entry)}" already binds "${to}" (${key})`,
-              { appId: appIdOf(entry), binding: key }
-            );
-            continue;
-          }
-          binding.actions = renameInList(binding.actions, from, to);
-          out.changedBindings.add(`${entry.path}\u0000${key}`);
-        }
-        warnTypeBinding(entry, keys, out, migrationId, binding =>
-          Array.isArray(binding?.actions) && binding.actions.includes(from)
-            ? { action: from, message: `renameAction ${from} → ${to}` }
-            : null
-        );
-      }
-      return;
-    }
-    case 'removeAction': {
-      const { name } = body;
-      if (policyHas(state.policy, name)) {
-        state.policy.enabled = state.policy.enabled.filter(n => n !== name);
-        state.policy.disabled = state.policy.disabled.filter(n => n !== name);
-        delete state.policy.overrides[name];
-        out.policyActions.add(name);
-      }
-      for (const entry of state.apps) {
-        for (const key of rewrittenKeys(entry.app, keys)) {
-          const binding = entry.app.integrations[key];
-          if (!Array.isArray(binding?.actions) || !binding.actions.includes(name)) continue;
-          binding.actions = binding.actions.filter(n => n !== name);
-          out.changedBindings.add(`${entry.path}\u0000${key}`);
-          out.warnings.push({
-            code: MIGRATION_WARNINGS.ACTION_REMOVED_FROM_APP,
-            message: `${migrationId}: the action "${name}" was removed; app "${appIdOf(entry)}" bound it (${key}) and no longer offers it`,
-            appId: appIdOf(entry),
-            action: name,
-            key
-          });
-        }
-        warnTypeBinding(entry, keys, out, migrationId, binding =>
-          Array.isArray(binding?.actions) && binding.actions.includes(name)
-            ? { action: name, message: `removeAction ${name}` }
-            : null
-        );
-      }
-      return;
-    }
-    case 'renameScope': {
-      const { from, to } = body;
-      for (const entry of state.apps) {
-        for (const key of rewrittenKeys(entry.app, keys)) {
-          const binding = entry.app.integrations[key];
-          if (!binding || typeof binding !== 'object') continue;
-          let changed = false;
-          for (const field of ['defaultScope', 'pinnedScope']) {
-            if (binding[field] === from) {
-              binding[field] = to;
-              changed = true;
-            }
-          }
-          if (changed) out.changedBindings.add(`${entry.path}\u0000${key}`);
-        }
-        warnTypeBinding(entry, keys, out, migrationId, binding =>
-          binding && (binding.defaultScope === from || binding.pinnedScope === from)
-            ? { scope: from, message: `renameScope ${from} → ${to}` }
-            : null
-        );
-      }
-      return;
-    }
-    default:
-      // The schema admits only the seven declarative steps; anything else
-      // reaching here (a step from an unvalidated source) is refused.
-      out.collisions.push({
-        migration: migrationId,
-        step: String(type),
-        kind: 'step',
-        key: String(type),
-        message: `unknown migration step "${type}"`
-      });
+  const handler = STEP_HANDLERS.get(type);
+  if (handler) {
+    handler({
+      state,
+      type,
+      body: step[type],
+      migrationId: context.migrationId,
+      keys: context.keys,
+      out
+    });
+    return;
   }
+  // The schema admits only the seven declarative steps; anything else
+  // reaching here (a step from an unvalidated source) is refused.
+  out.collisions.push({
+    migration: context.migrationId,
+    step: String(type),
+    kind: 'step',
+    key: String(type),
+    message: `unknown migration step "${type}"`
+  });
 }
 
 /** A warning when the app's type binding names what a step renamed or removed. */
@@ -524,7 +619,7 @@ export function describeCollisions(collisions) {
  * @returns {Record<string, unknown>}
  */
 export function withDefaults(definition, values = {}) {
-  const out = { ...(values || {}) };
+  const out = { ...values };
   for (const field of definition.install || []) {
     if (field.sensitive || (field.scope && field.scope !== 'admin')) continue;
     if (field.default === undefined || !isEmptyValue(out[field.key])) continue;
@@ -560,6 +655,24 @@ export function validateMigrationResult({
   definition,
   dynamicActions = false
 }) {
+  const mode = after?.auth?.mode || 'none';
+  const errors = [
+    ...authErrors(before, after, definition, mode),
+    ...valueErrors(after, definition, mode)
+  ];
+  const keys = bindingKeysOf(after, definition);
+  const actions = dynamicActions ? [] : actionErrors(after, apps, definition, keys);
+  const scopes = definition.scopes ? [] : scopeErrors(apps, definition, keys);
+  return [...errors, ...actions, ...scopes];
+}
+
+/** `<definition id> <version>`, as the validation messages name the target. */
+function targetOf(definition) {
+  return `${definition.id} ${definition.version}`;
+}
+
+/** The auth block must be the one before the migration, its mode one the definition offers. */
+function authErrors(before, after, definition, mode) {
   const errors = [];
   if (canonicalJson(before?.auth ?? null) !== canonicalJson(after?.auth ?? null)) {
     errors.push({
@@ -568,68 +681,91 @@ export function validateMigrationResult({
       message: 'a migration must not change the sign-in block (auth) of an installation'
     });
   }
-  const mode = after?.auth?.mode || 'none';
   if (!(definition.auth?.modes || []).includes(mode)) {
     errors.push({
       kind: 'auth',
       key: 'auth.mode',
-      message: `sign-in mode "${mode}" is not offered by ${definition.id} ${definition.version}`
+      message: `sign-in mode "${mode}" is not offered by ${targetOf(definition)}`
     });
   }
-  // The runtime reads the values with the definition's defaults filled in
-  // (`effectiveValues`), so a field that became required but has a default
-  // is satisfied; the defaults are only used for the check, never stored.
+  return errors;
+}
+
+/**
+ * The values against the install fields. The runtime reads them with the
+ * definition's defaults filled in (`effectiveValues`), so a field that
+ * became required but has a default is satisfied; the defaults are only
+ * used for the check, never stored.
+ */
+function valueErrors(after, definition, mode) {
+  const errors = [];
   for (const issue of checkInstallValues(definition, withDefaults(definition, after?.values), {
     authMode: mode,
     hasCredential: Boolean(after?.auth?.credentialRef)
   })) {
     errors.push({ kind: 'value', key: issue.key, message: `${issue.key}: ${issue.message}` });
   }
-  const keys = bindingKeysOf(after, definition);
-  if (!dynamicActions) {
-    const known = new Set((definition.actions || []).map(action => action.name));
-    const policy = after?.actions || {};
-    const named = [
-      ...(policy.enabled || []).filter(name => name !== '*'),
-      ...(policy.disabled || []),
-      ...Object.keys(policy.overrides || {})
-    ];
-    for (const name of new Set(named)) {
-      if (!known.has(name)) {
+  return errors;
+}
+
+/** Every action name of the policy, then of the own and definition bindings, against the definition's actions. */
+function actionErrors(after, apps, definition, keys) {
+  const known = new Set((definition.actions || []).map(action => action.name));
+  return [
+    ...policyActionErrors(after?.actions || {}, known, definition),
+    ...boundActionErrors(apps, keys, known, definition)
+  ];
+}
+
+/** The action names the policy lists (each once, without `*`) that the definition does not declare. */
+function policyActionErrors(policy, known, definition) {
+  const named = new Set([
+    ...(policy.enabled || []).filter(name => name !== '*'),
+    ...(policy.disabled || []),
+    ...Object.keys(policy.overrides || {})
+  ]);
+  return [...named]
+    .filter(name => !known.has(name))
+    .map(name => ({
+      kind: 'action',
+      key: name,
+      message: `the action policy names "${name}", which ${targetOf(definition)} does not declare`
+    }));
+}
+
+/** The action names the own and definition bindings of the apps list that the definition does not declare. */
+function boundActionErrors(apps, keys, known, definition) {
+  const errors = [];
+  for (const entry of apps) {
+    for (const key of rewrittenKeys(entry.app, keys)) {
+      for (const name of entry.app.integrations[key]?.actions || []) {
+        if (known.has(name)) continue;
         errors.push({
           kind: 'action',
           key: name,
-          message: `the action policy names "${name}", which ${definition.id} ${definition.version} does not declare`
+          appId: appIdOf(entry),
+          message: `app "${appIdOf(entry)}" binds the action "${name}" (${key}), which ${targetOf(definition)} does not declare`
         });
       }
     }
-    for (const entry of apps) {
-      for (const key of rewrittenKeys(entry.app, keys)) {
-        for (const name of entry.app.integrations[key]?.actions || []) {
-          if (known.has(name)) continue;
-          errors.push({
-            kind: 'action',
-            key: name,
-            appId: appIdOf(entry),
-            message: `app "${appIdOf(entry)}" binds the action "${name}" (${key}), which ${definition.id} ${definition.version} does not declare`
-          });
-        }
-      }
-    }
   }
-  if (!definition.scopes) {
-    for (const entry of apps) {
-      for (const key of rewrittenKeys(entry.app, keys)) {
-        const binding = entry.app.integrations[key] || {};
-        for (const field of ['defaultScope', 'pinnedScope']) {
-          if (!binding[field]) continue;
-          errors.push({
-            kind: 'scope',
-            key: binding[field],
-            appId: appIdOf(entry),
-            message: `app "${appIdOf(entry)}" sets ${field} "${binding[field]}" (${key}), but ${definition.id} ${definition.version} declares no scopes`
-          });
-        }
+  return errors;
+}
+
+/** A static `defaultScope`/`pinnedScope` in an own or definition binding, against a definition without scopes. */
+function scopeErrors(apps, definition, keys) {
+  const errors = [];
+  for (const entry of apps) {
+    for (const key of rewrittenKeys(entry.app, keys)) {
+      const binding = entry.app.integrations[key] || {};
+      for (const field of ['defaultScope', 'pinnedScope']) {
+        if (!binding[field]) continue;
+        errors.push({
+          kind: 'scope',
+          key: binding[field],
+          appId: appIdOf(entry),
+          message: `app "${appIdOf(entry)}" sets ${field} "${binding[field]}" (${key}), but ${targetOf(definition)} declares no scopes`
+        });
       }
     }
   }
