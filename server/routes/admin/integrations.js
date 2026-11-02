@@ -19,6 +19,7 @@ import { localized } from '../../services/integrations/definitions/installedValu
 import { findDefinitionUpdates } from '../../services/integrations/definitions/definitionUpdates.js';
 import { serverVersion } from '../../services/integrations/definitions/compatibility.js';
 import definitionMigrationRunner from '../../services/integrations/definitions/DefinitionMigrationRunner.js';
+import { describeStep } from '../../services/integrations/definitions/migrationPlanner.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -129,6 +130,11 @@ function definitionDetailView(entry, language, instances, updates) {
     descriptionLocalized: def.description,
     license: def.license || null,
     releases: releasesView(def, language),
+    /** The definition migrations, each with its steps as one readable line each. */
+    migrations: (def.migrations || []).map(migration => ({
+      id: migration.id,
+      steps: migration.steps.map(step => describeStep(migration.id, step))
+    })),
     auth: def.auth,
     install: def.install,
     scopes: def.scopes
