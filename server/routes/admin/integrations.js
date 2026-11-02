@@ -855,7 +855,7 @@ export default function registerAdminIntegrationsRoutes(app) {
    *                 description: A backup id from `migration.backups`
    *     responses:
    *       200:
-   *         description: Reverted; `backup` names the backup, `logEntry` the log entry (`result: reverted`)
+   *         description: 'Reverted; `backup` names the backup, `logEntry` the log entry (`result: reverted`)'
    *       400:
    *         description: "Invalid id, or no backup named (`BACKUP_REQUIRED`)"
    *       404:
