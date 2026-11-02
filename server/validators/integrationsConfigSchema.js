@@ -9,7 +9,8 @@ import {
   integrationIdSchema,
   isStrictSemver,
   localizedStringSchema,
-  SIDE_EFFECTS
+  SIDE_EFFECTS,
+  DATA_FLOWS
 } from './integrationDefinitionSchema.js';
 
 /**
@@ -33,9 +34,16 @@ const installedAuthSchema = z.object({
   credentialRef: z.string().min(1).max(128).optional()
 });
 
+/**
+ * The admin's per-action overrides on an installation: the description the
+ * model reads, the side effect and where the data goes. They matter most for
+ * actions the definition does not describe itself (an MCP server's tools, an
+ * A2A agent's skills), whose own claims are untrusted.
+ */
 const actionOverrideSchema = z.object({
   description: localizedStringSchema.optional(),
-  sideEffect: z.enum(SIDE_EFFECTS).optional()
+  sideEffect: z.enum(SIDE_EFFECTS).optional(),
+  dataFlow: z.enum(DATA_FLOWS).optional()
 });
 
 const installedActionsSchema = z.object({

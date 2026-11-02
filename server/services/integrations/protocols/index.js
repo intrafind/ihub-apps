@@ -27,18 +27,19 @@
  * (definitions were reloaded: re-derive whatever the adapter keeps from them,
  * see {@link notifyDefinitionsChanged}).
  *
- * `openapi`, `native`, `script`, `mcp` and `a2a` have adapters; the other
- * protocol types validate but cannot be installed.
+ * `openapi`, `native`, `script`, `mcp`, `a2a` and `http` have adapters; the
+ * other protocol types validate but cannot be installed.
  */
 
 import * as openapi from './openapi/OpenApiAdapter.js';
 import * as native from './native/NativeAdapter.js';
 import * as mcp from './mcp/McpAdapter.js';
 import * as a2a from './a2a/A2aAdapter.js';
+import * as http from './http/HttpAdapter.js';
 import logger from '../../../utils/logger.js';
 
 // `script` is the native adapter with the connector loaded from the folder.
-const adapters = { openapi, native, mcp, a2a, script: native };
+const adapters = { openapi, native, mcp, a2a, http, script: native };
 
 /**
  * Tell every adapter that definitions changed: a definition was (re-)installed

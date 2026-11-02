@@ -180,9 +180,11 @@ export class IntegrationRegistry {
    *
    * @param {string} id - definition id (validated against the files' integration.json)
    * @param {Record<string, string|object>} files - relative path → content
+   * @param {{ local?: boolean }} [options] - `local`: written by an admin on
+   *   this server (the integration builder), not delivered by a registry
    */
-  async writeInstalled(id, files) {
-    const staged = await this.stageInstalled(id, files);
+  async writeInstalled(id, files, options = {}) {
+    const staged = await this.stageInstalled(id, files, options);
     await this.commitStaged(staged);
     await this.reload();
     this._announce();
@@ -198,13 +200,14 @@ export class IntegrationRegistry {
    *
    * @param {string} id - definition id
    * @param {Record<string, string|object>} files - relative path → content
+   * @param {{ local?: boolean }} [options] - see {@link IntegrationRegistry#writeInstalled}
    * @returns {Promise<{ id: string, dir: string, staging: string, definition: object }>}
    */
-  async stageInstalled(id, files) {
+  async stageInstalled(id, files, options = {}) {
     const definitionFile = files[DEFINITION_FILE];
     if (!definitionFile) throw new Error(`${DEFINITION_FILE} is missing`);
     const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
-    const definition = this._validateForInstall(id, raw, files);
+    const definition = this._validateForInstall(id, raw, files, options);
     const dir = await this._installedDir(id);
     const staging = this._helperFolder('staging');
     await fs.mkdir(staging, { recursive: true });
@@ -338,9 +341,10 @@ export class IntegrationRegistry {
    * @param {string} id
    * @param {object} raw - parsed integration.json
    * @param {Record<string, string|object>|null} files - the package files (null for a folder copy)
+   * @param {{ local?: boolean }} [options] - `local`: the admin's own (builder) definition
    * @returns {object} the validated definition
    */
-  _validateForInstall(id, raw, files) {
+  _validateForInstall(id, raw, files, options = {}) {
     const revision = definitionSchemaRevision(raw);
     if (!revision.supported) {
       const error = new Error(
@@ -367,9 +371,10 @@ export class IntegrationRegistry {
     if (validation.data.protocol.type === 'mcp') {
       // A registry may only publish remote servers with a fixed transport: a
       // local process (`stdio`) is the admin's own decision, taken in the
-      // generic "MCP server" definition that ships with iHub.
+      // generic "MCP server" definition that ships with iHub or in the
+      // integration builder (`local`).
       const transport = validation.data.protocol.transport?.type;
-      if (!transport || transport === 'stdio') {
+      if (!transport || (transport === 'stdio' && !options.local)) {
         throw new Error(
           'An MCP integration from a registry needs a fixed remote transport (stdio is not allowed)'
         );

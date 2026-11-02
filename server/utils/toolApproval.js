@@ -176,13 +176,20 @@ export function resolveSideEffect(toolDef, installation = null) {
 }
 
 /**
- * Where a tool's data goes. Declared values win; remote MCP servers and A2A
- * agents are external; everything else is iHub's own (`internal`).
+ * Where a tool's data goes. The installation's admin override
+ * (`actions.overrides[action].dataFlow`, set in the integration builder for
+ * an MCP tool or an A2A skill) wins, then the declared value; remote MCP
+ * servers and A2A agents are external; everything else is iHub's own
+ * (`internal`).
  *
  * @param {Object} toolDef
+ * @param {Object|null} [installation] - the tool's installed integration
  * @returns {'internal'|'external'}
  */
-export function resolveDataFlow(toolDef) {
+export function resolveDataFlow(toolDef, installation = null) {
+  const action = actionNameOf(toolDef);
+  const override = action ? installation?.actions?.overrides?.[action]?.dataFlow : undefined;
+  if (DATA_FLOWS.includes(override)) return override;
   if (DATA_FLOWS.includes(toolDef?.dataFlow)) return toolDef.dataFlow;
   if (toolDef?._mcp || toolDef?._a2a) return 'external';
   return 'internal';
@@ -249,7 +256,7 @@ export function resolveToolApproval(toolDef, app, platform, options = {}) {
   const installation = options.installation || null;
   const log = options.log || logger;
   const { sideEffect, sideEffectSource } = resolveSideEffect(toolDef, installation);
-  const dataFlow = resolveDataFlow(toolDef);
+  const dataFlow = resolveDataFlow(toolDef, installation);
 
   let approval = 'never';
   let approvalSource = 'default';
