@@ -10,7 +10,7 @@
  *     sign-in (the one `integration_connected` / `integration_error` result),
  *     not by its id.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import i18next from 'i18next';
@@ -51,11 +51,12 @@ jest.mock('react-i18next', () => ({
 }));
 
 const mockFetchUserIntegrations = jest.fn();
+const mockRequestConnectUrl = jest.fn();
 jest.mock('../../../client/src/api/userIntegrationsApi', () => ({
   fetchUserIntegrations: (...args) => mockFetchUserIntegrations(...args),
   disconnectUserIntegration: jest.fn(),
   fetchUserIntegration: jest.fn(async () => null),
-  requestConnectUrl: jest.fn(),
+  requestConnectUrl: (...args) => mockRequestConnectUrl(...args),
   fetchRequestableIntegrations: jest.fn(async () => []),
   requestIntegration: jest.fn()
 }));
@@ -131,5 +132,39 @@ describe('Settings → Integrations after an MCP sign-in', () => {
         'Connecting Okta Who Am I failed: The sign-in did not succeed.'
       )
     ).toBeInTheDocument();
+  });
+});
+
+describe('Settings → Integrations: a connection that needs renewing', () => {
+  beforeEach(() => {
+    resetConnectResultForTests();
+    mockRequestConnectUrl.mockReset();
+    // Refused, so the test page does not navigate away.
+    mockRequestConnectUrl.mockRejectedValue(new Error('stop here'));
+    global.fetch = jest.fn(async () => ({ ok: false, status: 404, json: async () => ({}) }));
+  });
+
+  test.each([
+    ['needs_reconnect', true],
+    ['not_connected', false]
+  ])('connects a %s server through reconnect: %s', async (status, reconnect) => {
+    mockFetchUserIntegrations.mockResolvedValue([
+      {
+        id: 'okta-whoami',
+        name: 'Okta Who Am I',
+        protocol: 'mcp',
+        actions: [],
+        connection: { mode: 'personal', status, reason: 'expired', account: null }
+      }
+    ]);
+    render(
+      <MemoryRouter initialEntries={['/settings/integrations']}>
+        <IntegrationsPage />
+      </MemoryRouter>
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /^(Re)?[Cc]onnect Okta Who Am I/ }));
+    await waitFor(() => expect(mockRequestConnectUrl).toHaveBeenCalled());
+    expect(mockRequestConnectUrl.mock.calls[0][0]).toBe('okta-whoami');
+    expect(mockRequestConnectUrl.mock.calls[0][1]).toMatchObject({ reconnect });
   });
 });

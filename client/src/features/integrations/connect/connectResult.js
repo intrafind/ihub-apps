@@ -10,11 +10,12 @@
  *   ?integration_connected=<installation id>
  *   ?integration_error=<code>&integration=<installation id>
  *
- * {@link consumeConnectResult} reads them once per page (path), removes them
- * from the URL (history entry replaced, the router told through a
- * `popstate`), and keeps the result for that path, so every reader — the
- * Connect cards, the chat's retry, Settings → Integrations — sees the same
- * answer and a reload does not show it again.
+ * {@link readConnectResult} reads them once per page (path) and keeps the
+ * result for that path, so every reader — the Connect cards, the chat's
+ * retry, Settings → Integrations — sees the same answer. Readers use it
+ * through `useConnectResult`, which reads during render and, in an effect,
+ * removes the parameters from the URL ({@link consumeConnectResult}), so a
+ * reload does not show the result again.
  *
  * @module features/integrations/connect/connectResult
  */
@@ -84,16 +85,31 @@ export function currentReturnUrl(href = window.location.href) {
 
 /**
  * The sign-in result of this page, read from the URL on the first call and
- * then removed from it. It applies to the path it was read on only.
+ * kept for that path. No side effect on the page (the URL is left alone), so
+ * it may run during render — a `useState` initializer, for instance.
  *
  * @returns {{connected: string|null, error: string|null, errorIntegration: string|null}}
  */
-export function consumeConnectResult() {
+export function readConnectResult() {
   if (typeof window === 'undefined' || !window.location) return EMPTY_RESULT;
   const path = window.location.pathname;
   if (consumed && consumed.path === path) return consumed.result;
   const result = parseConnectResult(window.location.href);
   consumed = { path, result };
+  return result;
+}
+
+/**
+ * The sign-in result of this page ({@link readConnectResult}), then the
+ * result parameters removed from the URL (history entry replaced, the router
+ * told through a `popstate`). Changes the history and dispatches an event:
+ * call it from an effect or an event handler, never during render.
+ *
+ * @returns {{connected: string|null, error: string|null, errorIntegration: string|null}}
+ */
+export function consumeConnectResult() {
+  const result = readConnectResult();
+  if (typeof window === 'undefined' || !window.location) return result;
   const url = new URL(window.location.href);
   if (CONNECT_RESULT_PARAMS.some(name => url.searchParams.has(name))) {
     for (const name of CONNECT_RESULT_PARAMS) url.searchParams.delete(name);

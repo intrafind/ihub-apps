@@ -30,7 +30,10 @@
  *   user and the installation (`oauthFlowStore`). The POST routes require a
  *   JSON body, so a cross-site form cannot start a flow (it would need a CORS
  *   preflight), and the session cookie is `SameSite=Lax`.
- * - Delegated callers (OAuth clients, agents) cannot connect or disconnect.
+ * - Delegated callers (OAuth clients, agents, API keys including personal
+ *   ones) cannot connect or disconnect, and never get the admin bypass.
+ * - `GET /:id` does not look an id up for an anonymous caller: it hands the
+ *   request on, so an installed id and an unknown one get the same answer.
  *
  * The routes are mounted on `/api/integrations` before the per-provider
  * routers. `GET /:id` hands requests for ids that are not installations on
@@ -50,6 +53,7 @@ import configCache from '../../configCache.js';
 import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from '../../services/integrations/integrationAccess.js';
 import { isAdminUser } from '../../services/loop/runIdentity.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
 import { describeInstallation } from '../../services/integrations/auth/connectionProviders.js';
 import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import {
@@ -113,9 +117,14 @@ function isAnonymous(user) {
   return !user?.id || user.id === 'anonymous';
 }
 
-/** Delegated callers act on behalf of someone; they may not change that person's connections. */
+/**
+ * Delegated callers act on behalf of someone; they may not change that
+ * person's connections. The same principals that can never be admins: OAuth
+ * clients, agents, and the bearer-token auth modes (client credentials, static
+ * and personal API keys, authorization-code delegation).
+ */
 function isDelegated(user) {
-  return Boolean(user?.isOAuthClient || user?.isAgent === true);
+  return !isAdminEligiblePrincipal(user);
 }
 
 /**
@@ -189,7 +198,9 @@ async function startConnect(req, res, { reconnect }) {
   // test the integrations). The installation's own rule (an MCP server's app
   // bindings, a storage provider's grant) is checked again when the flow starts.
   const allowed =
-    Boolean(instance) && (mayUseIntegration(instance, req.user) || isAdminUser(req.user));
+    Boolean(instance) &&
+    (mayUseIntegration(instance, req.user) ||
+      (isAdminUser(req.user) && isAdminEligiblePrincipal(req.user)));
   if (!instance || instance.enabled === false || !allowed) {
     return res.status(404).json({ error: 'Integration not found', code: 'INTEGRATION_NOT_FOUND' });
   }
@@ -287,12 +298,17 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
  *     responses:
  *       200:
  *         description: "{ integration: {...} }"
- *       401:
- *         description: Not signed in
  *       404:
- *         description: Not an installation the user may use
+ *         description: |
+ *           Not an installation the user may use. Anonymous callers are handed
+ *           on to the other `/api/integrations/*` routes without a lookup.
  */
 router.get('/:id', async (req, res, next) => {
+  // An anonymous caller may use none of them, and answering it 401 for an
+  // installed id but handing an unknown one on would tell which ids exist.
+  // Hand every anonymous request on, before the registry lookup: the routers
+  // after this one answer it by path alone.
+  if (isAnonymous(req.user)) return next();
   // Not an installation id at all: one of the other `/api/integrations/*` routes.
   if (!isInstallationId(req.params.id) || !installedIntegrationService.get(req.params.id)) {
     return next();

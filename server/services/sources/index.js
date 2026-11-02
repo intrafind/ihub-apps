@@ -10,8 +10,8 @@
  *     an admin maps any tool's result without code;
  *  2. a registered producer — {@link registerSourceProducer} for integrations
  *     with result shapes of their own, then the built-in ones for web search
- *     and the page reader (`producers/web.js`) and the iFinder tools
- *     (`producers/ifinder.js`);
+ *     and the page reader (`producers/web.js`), the iFinder tools and the
+ *     iAssistant `ask` action (`producers/ifinder.js`);
  *  3. the tool's own report (`producers/envelope.js`): a `sources` array in
  *     its result, MCP `resource_link` blocks, or what the call reported beside
  *     its result (`toolCallScope.js`: an MCP result's `structuredContent.sources`).
@@ -39,7 +39,7 @@
 import { emptySourceSet, mergeSources } from '../../../shared/sources/index.js';
 import { declarationOf, declaredSources } from './producers/declared.js';
 import { envelopeSources } from './producers/envelope.js';
-import { iFinderSourceProducer } from './producers/ifinder.js';
+import { iAssistantAskSourceProducer, iFinderSourceProducer } from './producers/ifinder.js';
 import { projectSourceProducer } from './producers/project.js';
 import { webSourceProducer } from './producers/web.js';
 import { hasSourceProvider } from './providers.js';
@@ -70,7 +70,12 @@ function boundFrame(frame) {
   return bounded;
 }
 
-const BUILT_IN_PRODUCERS = [webSourceProducer, iFinderSourceProducer, projectSourceProducer];
+const BUILT_IN_PRODUCERS = [
+  webSourceProducer,
+  iFinderSourceProducer,
+  iAssistantAskSourceProducer,
+  projectSourceProducer
+];
 const registered = [];
 
 /**

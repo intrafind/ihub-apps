@@ -15,7 +15,7 @@ import { SECONDARY_BUTTON, PRIMARY_BUTTON } from '../components/integrationButto
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { fetchUserIntegrations } from '../../../api/userIntegrationsApi';
-import { consumeConnectResult } from '../../integrations/connect/connectResult';
+import { useConnectResult } from '../../integrations/connect/useConnectResult';
 
 /**
  * Settings → Integrations (#2922).
@@ -58,7 +58,7 @@ export default function IntegrationsPage() {
   // The result of a sign-in that came back to this page
   // (`integration_connected=<id>` / `integration_error=<code>&integration=<id>`),
   // read once; the text names the integration once the list has loaded.
-  const [connectResult] = useState(() => consumeConnectResult());
+  const connectResult = useConnectResult();
   useEffect(() => {
     if (connectResult.connected) {
       // eslint-disable-next-line @eslint-react/set-state-in-effect

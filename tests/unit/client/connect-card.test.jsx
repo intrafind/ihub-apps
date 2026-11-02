@@ -28,13 +28,16 @@ import {
   consumeConnectResult,
   currentReturnUrl,
   parseConnectResult,
+  readConnectResult,
   resetConnectResultForTests
 } from '../../../client/src/features/integrations/connect/connectResult';
 import {
-  claimRetry,
   findRetryTarget,
+  markRetried,
+  pendingRetry,
   resetConnectRetryForTests,
-  retryKey
+  retryKey,
+  wasRetried
 } from '../../../client/src/features/integrations/connect/connectRetry';
 import { useConnectRetry } from '../../../client/src/features/integrations/connect/useConnectRetry';
 import {
@@ -211,6 +214,21 @@ describe('message.integrationAuthRequired', () => {
       ])
     ).toEqual([{ integration: 'okta', name: 'okta', reason: 'not_connected' }, JIRA_PROMPT]);
     expect(normalizeAuthPrompts('nope')).toEqual([]);
+    // Scopes are non-empty strings, and left out when none remain.
+    expect(
+      normalizeAuthPrompts([
+        { integration: 'okta', reason: 'insufficient_scope', scopes: ['', 3, 'tickets:write'] },
+        { integration: 'jira', scopes: [''] }
+      ])
+    ).toEqual([
+      {
+        integration: 'okta',
+        name: 'okta',
+        reason: 'insufficient_scope',
+        scopes: ['tickets:write']
+      },
+      { integration: 'jira', name: 'jira', reason: 'not_connected' }
+    ]);
   });
 });
 
@@ -236,6 +254,26 @@ describe('sign-in result', () => {
     expect(window.location.search).toBe('?keep=1');
     // Every later reader on this page sees the same answer.
     expect(consumeConnectResult().connected).toBe('jira');
+  });
+
+  test('reading it during render leaves the URL alone; a card removes it after mount', async () => {
+    window.history.replaceState(null, '', '/apps/a/c/1?integration_connected=jira&keep=1');
+    const replaceState = jest.spyOn(window.history, 'replaceState');
+    const popstate = jest.fn();
+    window.addEventListener('popstate', popstate);
+    try {
+      expect(readConnectResult().connected).toBe('jira');
+      expect(replaceState).not.toHaveBeenCalled();
+      expect(window.location.search).toBe('?integration_connected=jira&keep=1');
+      // The card reads it in render; the clean-up runs in an effect.
+      render(<ConnectCard prompt={JIRA_PROMPT} />);
+      await waitFor(() => expect(window.location.search).toBe('?keep=1'));
+      expect(popstate).toHaveBeenCalledTimes(1);
+      expect(readConnectResult().connected).toBe('jira');
+    } finally {
+      replaceState.mockRestore();
+      window.removeEventListener('popstate', popstate);
+    }
   });
 
   test('the return URL is the current page without the result parameters', () => {
@@ -344,6 +382,40 @@ describe('ConnectCard', () => {
     expect(screen.getByRole('region', { name: 'Connect Atlassian Jira' })).toBeInTheDocument();
   });
 
+  test('expired, while the status still says connected: offers Reconnect', async () => {
+    mockIntegrations.set('gdrive-main', {
+      ...DRIVE,
+      connection: { mode: 'personal', status: 'connected', account: 'erin@example.com' }
+    });
+    render(
+      <ConnectCard
+        prompt={{ integration: 'gdrive-main', name: 'Google Drive', reason: 'expired' }}
+        context="files"
+      />
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Reconnect Google Drive' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reconnect/ })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  test('expired, then connected from this page: says connected', async () => {
+    window.history.replaceState(null, '', '/apps/a/c/1?integration_connected=gdrive-main');
+    mockIntegrations.set('gdrive-main', {
+      ...DRIVE,
+      connection: { mode: 'personal', status: 'connected', account: 'erin@example.com' }
+    });
+    render(
+      <ConnectCard
+        prompt={{ integration: 'gdrive-main', name: 'Google Drive', reason: 'expired' }}
+      />
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Google Drive is connected as erin@example.com.'
+    );
+  });
+
   test('says so when the user is connected by now', async () => {
     mockIntegrations.set('jira', {
       ...JIRA,
@@ -418,17 +490,39 @@ describe('retry once after connecting', () => {
   test('a failure inside the adapter or on the transport is never retried', () => {
     const failed = { id: 'a2', role: 'assistant', content: 'Jira answered 500.', error: true };
     expect(findRetryTarget([user, failed], 'jira')).toBeNull();
-    expect(claimRetry({ connected: 'jira', chatId: 'c', messages: [user, failed] })).toBeNull();
+    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages: [user, failed] })).toBeNull();
   });
 
-  test('is claimed exactly once per answer, across reloads', () => {
+  test('is pending until marked, then never again, across reloads', () => {
     const messages = [user, answer];
-    expect(claimRetry({ connected: 'jira', chatId: 'c', messages })).not.toBeNull();
-    expect(claimRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
+    const target = pendingRetry({ connected: 'jira', chatId: 'c', messages });
+    expect(target).toMatchObject({ messageId: 'a1', key: retryKey('c', 'a1') });
+    // Deciding does not claim it.
+    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).not.toBeNull();
+    markRetried(target.key);
+    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
     expect(window.sessionStorage.getItem(retryKey('c', 'a1'))).toBe('1');
     // A new page load (in-memory record gone) still finds it in the session.
     resetConnectRetryForTests();
-    expect(claimRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
+    expect(pendingRetry({ connected: 'jira', chatId: 'c', messages })).toBeNull();
+  });
+
+  test('a browser that blocks session storage does not break the chat', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      }
+    });
+    try {
+      expect(wasRetried('k')).toBe(false);
+      expect(() => markRetried('k')).not.toThrow();
+      // The in-memory record still holds for this page.
+      expect(wasRetried('k')).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, 'sessionStorage', descriptor);
+    }
   });
 
   function Harness({ messages, ready, busy, send }) {
@@ -436,9 +530,9 @@ describe('retry once after connecting', () => {
     return null;
   }
 
-  test('the chat sends one follow-up once the transcript is loaded and idle', () => {
+  test('the chat sends one follow-up once the transcript is loaded and idle', async () => {
     window.history.replaceState(null, '', '/apps/a/c/chat-1?integration_connected=jira');
-    const send = jest.fn();
+    const send = jest.fn(async () => true);
     const { rerender } = render(<Harness messages={[]} ready={false} busy={false} send={send} />);
     expect(send).not.toHaveBeenCalled();
     rerender(<Harness messages={[user, answer]} ready busy send={send} />);
@@ -450,6 +544,18 @@ describe('retry once after connecting', () => {
       rerender(<Harness messages={[user, answer]} ready busy={false} send={send} />);
     });
     expect(send).toHaveBeenCalledTimes(1);
+    // Marked once the chat took it.
+    await waitFor(() => expect(window.sessionStorage.getItem(retryKey('chat-1', 'a1'))).toBe('1'));
+  });
+
+  test('a message the chat turned away is not counted as the retry', async () => {
+    window.history.replaceState(null, '', '/apps/a/c/chat-1?integration_connected=jira');
+    const send = jest.fn(async () => false);
+    render(<Harness messages={[user, answer]} ready busy={false} send={send} />);
+    expect(send).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(window.sessionStorage.getItem(retryKey('chat-1', 'a1'))).toBeNull();
+    expect(wasRetried(retryKey('chat-1', 'a1'))).toBe(false);
   });
 
   test('nothing is sent without a successful connect', () => {

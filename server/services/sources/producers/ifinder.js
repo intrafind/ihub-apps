@@ -273,6 +273,39 @@ function referenceSources(payload, context) {
     .filter(source => source && (source.title || source.passages.length));
 }
 
+/** The definition and action of the iAssistant `ask` tool (`iassistant__ask`). */
+const IASSISTANT_DEFINITION_ID = 'com.intrafind/iassistant';
+const ASK_ACTION = 'ask';
+
+/**
+ * Source producer for the iAssistant `ask` action (#2973): the documents the
+ * answer cites, as the tool reported them beside its result (renumbered to
+ * this call's passage numbers, see `services/integrations/iAssistantAsk.js`),
+ * and the iAssistant scope it asked, which the result names — the same frame
+ * an iAssistant chat answer carries.
+ */
+export const iAssistantAskSourceProducer = {
+  id: 'iassistant-ask',
+
+  /** @param {{toolDef?: Object}} call */
+  matches({ toolDef }) {
+    const marker = toolDef?._integration;
+    return marker?.definition === IASSISTANT_DEFINITION_ID && marker.action === ASK_ACTION;
+  },
+
+  /**
+   * @param {{result: unknown, reported?: Array, failed?: boolean}} call
+   * @returns {{items: Array, scopes?: Array}}
+   */
+  fromToolResult({ result, reported = [], failed }) {
+    if (failed) return { items: [] };
+    const parsed = parseResult(result);
+    const scope = parsed && typeof parsed === 'object' ? parsed.scope : null;
+    const scopes = scope && typeof scope === 'object' && scope.id ? [scope] : [];
+    return { items: reported, ...(scopes.length ? { scopes } : {}) };
+  }
+};
+
 /**
  * A page of iAssistant conversation history, as `GET /conversations/:id/messages`
  * returns it (`{ messages: [...] }` or a bare array, each message carrying

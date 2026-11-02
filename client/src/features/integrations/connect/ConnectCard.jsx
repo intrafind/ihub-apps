@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Badge from '../../../shared/components/Badge';
-import { consumeConnectResult } from './connectResult';
+import { useConnectResult } from './useConnectResult';
 import { normalizeAuthPrompts } from './authPrompts';
 import {
   invalidateIntegrationInfo,
@@ -80,8 +80,7 @@ function IntegrationLogo({ info }) {
 export function ConnectCard({ prompt, readOnly = false, context = 'chat', navigate }) {
   const { t } = useTranslation();
   const titleId = useId();
-  const [returned] = useState(() => {
-    const result = consumeConnectResult();
+  const returned = useConnectResult(result => {
     if (result.connected === prompt.integration) return 'connected';
     if (result.error && result.errorIntegration === prompt.integration) return result.error;
     return null;
@@ -105,9 +104,14 @@ export function ConnectCard({ prompt, readOnly = false, context = 'chat', naviga
   const name = info?.name || prompt.name || prompt.integration;
   const status = info?.connection?.status;
   const needsScope = prompt.reason === 'insufficient_scope';
+  // An `expired` prompt means the vendor just refused the connection the
+  // status may still call connected (a cached answer, or tokens that look
+  // valid here): only a sign-in that came back to this page fixes it.
+  const statusConnected =
+    status === 'connected' && (prompt.reason !== 'expired' || returned === 'connected');
   // A missing permission is not fixed by being connected; everything else is.
   const connectedNow =
-    !needsScope && (status === 'connected' || (status === undefined && returned === 'connected'));
+    !needsScope && (statusConnected || (status === undefined && returned === 'connected'));
   const reconnect = prompt.reason !== 'not_connected' || status === 'needs_reconnect';
   const host = info?.connection?.signInHost;
   const permissions = permissionsByEffect(info?.actions);
