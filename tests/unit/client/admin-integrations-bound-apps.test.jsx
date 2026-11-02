@@ -120,8 +120,12 @@ describe('AdminIntegrationsPage: bound apps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove ckan-demo' }));
 
     expect(screen.getByText('Remove integration?')).toBeInTheDocument();
-    expect(screen.getByText(/hidden from users until the binding is removed/)).toBeInTheDocument();
-    expect(screen.getByTestId('bound-apps')).toHaveTextContent('Bound by: Open Data, Research');
+    expect(
+      screen.getByText(
+        /An app that requires it is hidden from users until its configuration changes/
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('bound-apps')).toHaveTextContent('Used by: Open Data, Research');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() =>
@@ -137,7 +141,9 @@ describe('AdminIntegrationsPage: bound apps', () => {
 
     expect(mockApi.setInstalledIntegrationEnabled).not.toHaveBeenCalled();
     expect(screen.getByText('Disable integration?')).toBeInTheDocument();
-    expect(screen.getByText(/hidden from users while it is disabled/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/go without it while it is disabled. An app that requires it is hidden/)
+    ).toBeInTheDocument();
     expect(screen.getByTestId('bound-apps')).toHaveTextContent('Open Data, Research');
 
     fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
@@ -153,7 +159,7 @@ describe('AdminIntegrationsPage: bound apps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disable x500bund' }));
 
     expect(mockApi.setInstalledIntegrationEnabled).not.toHaveBeenCalled();
-    expect(screen.getByTestId('bound-apps')).toHaveTextContent('Bound by: People search');
+    expect(screen.getByTestId('bound-apps')).toHaveTextContent('Used by: People search');
   });
 
   test('disabling an installation no app binds asks nothing', async () => {

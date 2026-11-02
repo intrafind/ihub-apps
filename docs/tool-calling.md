@@ -1146,7 +1146,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, `"staan"` or `"qwant"` |
+| `provider` | String | `"auto"` | `"auto"` or the id of an installed engine: `"brave"`, `"staan"`, `"qwant"` or a third-party engine's id |
 | `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI/Anthropic models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
