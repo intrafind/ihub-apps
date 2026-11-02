@@ -6,6 +6,7 @@ import { JSONRPCMessageSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getWebSocketTlsOptions } from '../../utils/httpConfig.js';
 
 const SUBPROTOCOL = 'mcp';
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 30000;
 
 /**
  * MCP client transport over a WebSocket, dialed with `ws`.
@@ -27,17 +28,30 @@ export class McpWebSocketTransport {
    * @param {Object} [options]
    * @param {Function} [options.WebSocketImpl] - Constructor to dial with (tests)
    * @param {Object} [options.sslConfig] - SSL config override (tests); defaults to the platform's
+   * @param {number} [options.handshakeTimeoutMs] - Upper bound for the opening handshake, so
+   *   `start()` cannot stay pending when a server accepts the TCP connection but never upgrades
    */
-  constructor(url, { WebSocketImpl = WebSocket, sslConfig = null } = {}) {
+  constructor(
+    url,
+    {
+      WebSocketImpl = WebSocket,
+      sslConfig = null,
+      handshakeTimeoutMs = DEFAULT_HANDSHAKE_TIMEOUT_MS
+    } = {}
+  ) {
     this._url = typeof url === 'string' ? url : url.href;
     this._WebSocket = WebSocketImpl;
     this._sslConfig = sslConfig;
+    this._handshakeTimeoutMs = handshakeTimeoutMs;
     this._socket = null;
   }
 
   /** Options handed to the `ws` constructor; exposed for tests. */
   socketOptions() {
-    return { ...getWebSocketTlsOptions(this._url, this._sslConfig) };
+    return {
+      handshakeTimeout: this._handshakeTimeoutMs,
+      ...getWebSocketTlsOptions(this._url, this._sslConfig)
+    };
   }
 
   start() {

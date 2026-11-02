@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from '@jest/globals';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import https from 'node:https';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -21,6 +22,12 @@ let wss;
 let port;
 let certDir;
 let lastProtocol;
+const openTransports = new Set();
+
+function track(transport) {
+  openTransports.add(transport);
+  return transport;
+}
 
 beforeAll(async () => {
   certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-ws-tls-'));
@@ -60,6 +67,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await Promise.all([...openTransports].map(t => t.close().catch(() => {})));
+  for (const client of wss.clients) client.terminate();
   wss.close();
   await new Promise(resolve => httpsServer.close(resolve));
   fs.rmSync(certDir, { recursive: true, force: true });
@@ -69,27 +78,53 @@ const ssl = domainWhitelist => ({ ignoreInvalidCertificates: true, domainWhiteli
 
 describe('McpWebSocketTransport and the SSL whitelist', () => {
   test('reaches a whitelisted wss host with a self-signed certificate', async () => {
-    const transport = new McpWebSocketTransport(`wss://localhost:${port}/mcp`, {
-      sslConfig: ssl(['localhost'])
-    });
+    const transport = track(
+      new McpWebSocketTransport(`wss://localhost:${port}/mcp`, {
+        sslConfig: ssl(['localhost'])
+      })
+    );
     const received = new Promise(resolve => {
       transport.onmessage = resolve;
     });
-    await transport.start();
-    await transport.send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
-    await expect(received).resolves.toEqual({
-      jsonrpc: '2.0',
-      id: 1,
-      result: { echoed: 'tools/list' }
-    });
-    expect(lastProtocol).toBe('mcp');
-    await transport.close();
+    try {
+      await transport.start();
+      await transport.send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+      await expect(received).resolves.toEqual({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { echoed: 'tools/list' }
+      });
+      expect(lastProtocol).toBe('mcp');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  test('gives up when the server never completes the handshake', async () => {
+    // Accepts the TCP connection and then says nothing.
+    const silent = net.createServer(() => {});
+    await new Promise(resolve => silent.listen(0, '127.0.0.1', resolve));
+    const sockets = new Set();
+    silent.on('connection', socket => sockets.add(socket));
+    try {
+      const transport = track(
+        new McpWebSocketTransport(`ws://127.0.0.1:${silent.address().port}/mcp`, {
+          handshakeTimeoutMs: 200
+        })
+      );
+      await expect(transport.start()).rejects.toThrow(/timed out|timeout/i);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise(resolve => silent.close(resolve));
+    }
   });
 
   test('refuses a wss host that is not whitelisted', async () => {
-    const transport = new McpWebSocketTransport(`wss://localhost:${port}/mcp`, {
-      sslConfig: ssl(['other.example'])
-    });
+    const transport = track(
+      new McpWebSocketTransport(`wss://localhost:${port}/mcp`, {
+        sslConfig: ssl(['other.example'])
+      })
+    );
     const errors = [];
     transport.onerror = err => errors.push(err);
     await expect(transport.start()).rejects.toThrow(/self[- ]signed|certificate/i);
@@ -101,12 +136,23 @@ describe('McpWebSocketTransport and the SSL whitelist', () => {
       new McpWebSocketTransport('ws://localhost:1/mcp', {
         sslConfig: ssl(['localhost'])
       }).socketOptions()
-    ).toEqual({});
+    ).not.toHaveProperty('rejectUnauthorized');
     expect(
       new McpWebSocketTransport('wss://localhost:1/mcp', {
         sslConfig: { ignoreInvalidCertificates: false, domainWhitelist: ['localhost'] }
       }).socketOptions()
-    ).toEqual({});
+    ).not.toHaveProperty('rejectUnauthorized');
+  });
+
+  test('bounds the handshake by default and by the given timeout', () => {
+    expect(new McpWebSocketTransport('wss://localhost:1/mcp').socketOptions()).toMatchObject({
+      handshakeTimeout: 30000
+    });
+    expect(
+      new McpWebSocketTransport('wss://localhost:1/mcp', {
+        handshakeTimeoutMs: 5000
+      }).socketOptions()
+    ).toMatchObject({ handshakeTimeout: 5000 });
   });
 
   test('send before start is refused', async () => {

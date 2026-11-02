@@ -8,7 +8,6 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { URL } from 'node:url';
 import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
-import { McpWebSocketTransport } from './McpWebSocketTransport.js';
 import {
   appsEnabledFor,
   buildClientCapabilities,
@@ -286,7 +285,12 @@ export class McpServerConnection {
       await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
       // Our own transport: the SDK's takes no TLS options, so it could not honor
       // ssl.domainWhitelist for a wss:// server behind a private CA.
-      return new McpWebSocketTransport(url);
+      // Loaded on demand: only websocket servers need `ws`, and keeping it out of
+      // the static graph keeps this module light for everything that imports it.
+      const { McpWebSocketTransport } = await import('./McpWebSocketTransport.js');
+      return new McpWebSocketTransport(url, {
+        handshakeTimeoutMs: this.config.timeoutMs ?? 30000
+      });
     }
 
     if (t.type === 'stdio') {
