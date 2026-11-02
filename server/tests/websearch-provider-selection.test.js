@@ -117,7 +117,9 @@ describe('auto', () => {
 
   it('is nothing while no engine is installed', () => {
     useWebSearch({
-      installed: [{ id: 'jira', definition: 'com.intrafind/jira', enabled: true }]
+      installed: [
+        { id: 'jira', definition: 'com.intrafind/jira', definitionVersion: '1.0.0', enabled: true }
+      ]
     });
     assert.equal(idOf('auto', { user: STAFF }), null);
     assert.equal(isWebSearchAvailableTo(STAFF), false);
@@ -159,7 +161,10 @@ describe('a named engine', () => {
 
   it('is nothing when the id is an installation that is no engine', () => {
     useWebSearch({
-      installed: [{ id: 'jira', definition: 'com.intrafind/jira', enabled: true }, engine('qwant')]
+      installed: [
+        { id: 'jira', definition: 'com.intrafind/jira', definitionVersion: '1.0.0', enabled: true },
+        engine('qwant')
+      ]
     });
     assert.equal(idOf('jira', { user: STAFF }), null);
   });

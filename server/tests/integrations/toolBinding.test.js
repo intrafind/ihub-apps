@@ -147,6 +147,7 @@ before(async () => {
       {
         id: 'portal',
         definition: 'test.portal',
+        definitionVersion: '1.0.0',
         enabled: true,
         values: { baseUrl: `http://127.0.0.1:${port}`, maxRows: 3 },
         auth: { mode: 'none' },
@@ -155,6 +156,7 @@ before(async () => {
       {
         id: 'restricted',
         definition: 'test.portal',
+        definitionVersion: '1.0.0',
         enabled: true,
         values: { baseUrl: `http://127.0.0.1:${port}` },
         auth: { mode: 'none' }
@@ -162,6 +164,7 @@ before(async () => {
       {
         id: 'off',
         definition: 'test.portal',
+        definitionVersion: '1.0.0',
         enabled: false,
         values: { baseUrl: `http://127.0.0.1:${port}` },
         auth: { mode: 'none' }
