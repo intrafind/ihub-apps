@@ -385,7 +385,7 @@ export function verifyIntegrationCode(item, content, registry) {
 /**
  * Build the folder of an integration definition: `integration.json` plus the
  * companions the catalog lists and the files the definition itself names
- * (its OpenAPI document and icon, when they are relative paths).
+ * (its OpenAPI document, icon, release notes and example apps, when relative).
  *
  * @param {object} item - Catalog item
  * @param {object} definition - Parsed integration.json
@@ -399,7 +399,8 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders, r
   const referenced = [
     definition?.protocol?.document,
     definition?.icon,
-    ...releaseNotePaths(definition)
+    ...releaseNotePaths(definition),
+    ...exampleAppPaths(definition)
   ].filter(value => typeof value === 'string' && value && !/^https?:\/\//i.test(value));
   const companions = [...new Set([...listed, ...referenced])];
   const files = { 'integration.json': definition };
@@ -414,6 +415,13 @@ async function buildIntegrationContent(item, definition, itemUrl, authHeaders, r
     );
   }
   return { files };
+}
+
+/** The example app files a definition names (`exampleApps[].file`). */
+export function exampleAppPaths(definition) {
+  return (Array.isArray(definition?.exampleApps) ? definition.exampleApps : [])
+    .map(entry => entry?.file)
+    .filter(file => typeof file === 'string' && file);
 }
 
 /** The release-note files a definition names (`releases[].notes.*`). */

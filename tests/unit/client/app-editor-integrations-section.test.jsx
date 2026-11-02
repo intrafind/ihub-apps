@@ -9,10 +9,11 @@ import '@testing-library/jest-dom';
  * App editor → Integrations: each integration in one place. Web search keeps
  * its own panel for every chat app (native search needs no engine), whose
  * engine select lists Auto and the installed engines; iAssistant keeps its
- * panel while installed or in use; the people directories get a card with
- * "All people directories" (`type:people-directory`), the storage providers a
- * card with "All storage providers" (`type:storage`); and the generic list
- * never repeats a web search engine, iAssistant or a storage provider.
+ * panel while installed or in use, its switch being the `iassistant` binding;
+ * the people directories and the storage providers get a card each whose
+ * switch binds every installation of the type (`type:people-directory`,
+ * `type:storage`); and the generic list never repeats a web search engine,
+ * iAssistant or a storage provider.
  */
 
 jest.mock('react-i18next', () => {
@@ -136,7 +137,7 @@ describe('IntegrationsConfigSection', () => {
     );
   });
 
-  it('lists Auto and the installed engines in Auto’s order, disabled ones marked', async () => {
+  it('lists Auto and the enabled engines in Auto’s order, leaving disabled ones out', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a', websearch: { enabled: true } });
     const select = await screen.findByLabelText('Search engine');
@@ -144,7 +145,7 @@ describe('IntegrationsConfigSection', () => {
       within(select)
         .getAllByRole('option')
         .map(option => option.textContent)
-    ).toEqual(['Auto', 'Brave Search (brave) — disabled', 'Qwant (qwant)']);
+    ).toEqual(['Auto', 'Qwant (qwant)']);
     expect(select).toHaveValue('auto');
     expect(screen.queryByTestId('websearch-no-engine')).not.toBeInTheDocument();
     fireEvent.change(select, { target: { value: 'qwant' } });
@@ -172,9 +173,13 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.queryByTestId('websearch-engine-missing')).not.toBeInTheDocument();
   });
 
-  it('warns about a disabled engine the app names', async () => {
+  it('keeps and warns about a disabled engine the app names', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     renderSection({ id: 'a', websearch: { enabled: true, provider: 'brave' } });
+    const select = await screen.findByLabelText('Search engine');
+    expect(
+      within(select).getByRole('option', { name: 'Brave Search (brave) — disabled' })
+    ).toBeInTheDocument();
     expect(await screen.findByTestId('websearch-engine-disabled')).toHaveTextContent(
       'The engine "brave" is disabled'
     );
@@ -188,15 +193,91 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.getByRole('status')).toHaveTextContent('iAssistant is not installed');
   });
 
-  it('binds every people directory with the type key', async () => {
+  it('binds every people directory with the type key from the card switch', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a' });
     const card = await screen.findByTestId('app-integrations-people-directories');
-    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
-    expect(within(card).getByText('Entra ID')).toBeInTheDocument();
-    fireEvent.click(within(card).getByLabelText(/All people directories/));
+    // Off: no choice and no rows yet.
+    expect(within(card).queryByText('Corporate directory')).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable people directories' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ 'type:people-directory': {} });
+  });
+
+  it('shows the type binding once, with its Required setting, and the directories below', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = renderSection({
+      id: 'a',
+      integrations: { 'type:people-directory': {} }
+    });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('All people directories')).toBeChecked();
+    expect(within(card).getAllByText('All people directories')).toHaveLength(1);
+    expect(within(card).getByText('Corporate directory')).toBeInTheDocument();
+    expect(within(card).getByText('Entra ID')).toBeInTheDocument();
+    fireEvent.click(within(card).getByLabelText(/Required/));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      'type:people-directory': { required: false }
+    });
+  });
+
+  it('switches to selected directories and back, and off removes every directory binding', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const app = {
+      id: 'a',
+      integrations: { 'type:people-directory': {}, corp: { actions: [] }, drawio: {} }
+    };
+    const onChange = renderSection(app);
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    fireEvent.click(within(card).getByLabelText('Only selected directories'));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      corp: { actions: [] },
+      drawio: {}
+    });
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable people directories' }));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ drawio: {} });
+  });
+
+  it('keeps the card on when the last selected directory is unticked', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <IntegrationsConfigSection
+          app={{ id: 'a', integrations: { entra: {} } }}
+          onChange={onChange}
+        />
+      </MemoryRouter>
+    );
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    fireEvent.click(within(card).getByLabelText(/Entra ID/));
+    expect(onChange.mock.calls.at(-1)[0].integrations).toBeUndefined();
+    rerender(
+      <MemoryRouter>
+        <IntegrationsConfigSection app={{ id: 'a' }} onChange={onChange} />
+      </MemoryRouter>
+    );
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('Only selected directories')).toBeChecked();
+  });
+
+  it('keeps the switch on for an app that binds single directories only', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({ id: 'a', integrations: { entra: {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).getByRole('switch', { name: 'Enable people directories' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(card).getByLabelText('Only selected directories')).toBeChecked();
+    expect(within(card).getByLabelText(/Entra ID/)).toBeChecked();
   });
 
   it('lists LDAP browsers among the built-ins, never in the people directories card', async () => {
@@ -241,12 +322,36 @@ describe('IntegrationsConfigSection', () => {
     });
   });
 
-  it('binds the iAssistant installation from inside its panel', async () => {
+  it('binds the iAssistant installation with the Enable iAssistant switch', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a' });
-    fireEvent.click(await screen.findByLabelText(/Use in this app/));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable iAssistant' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
-    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ iassistant: {} });
+    const app = onChange.mock.calls.at(-1)[0];
+    expect(app.integrations).toEqual({ iassistant: {} });
+    expect(app.iassistant).toEqual({ enabled: true });
+    expect(screen.queryByText(/Use in this app/)).not.toBeInTheDocument();
+  });
+
+  it('shows the iAssistant binding settings inside the panel, and off unbinds', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    mockFetchOne.mockResolvedValue({
+      actions: [],
+      definition: { id: 'com.intrafind/iassistant', scopes: { label: 'iAssistant' } }
+    });
+    const onChange = renderSection({
+      id: 'a',
+      iassistant: { enabled: true },
+      integrations: { iassistant: { required: false } }
+    });
+    expect(await screen.findByLabelText('Default iAssistant')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Required/)).not.toBeChecked();
+    // No empty action list for an integration without actions.
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable iAssistant' }));
+    const app = onChange.mock.calls.at(-1)[0];
+    expect(app.integrations).toBeUndefined();
+    expect(app.iassistant).toEqual({ enabled: false });
   });
 
   it('does not list a definition or type binding of an installed integration as not installed', async () => {
@@ -295,6 +400,70 @@ describe('IntegrationsConfigSection', () => {
   });
 });
 
+describe('IntegrationsConfigSection: disabled installations', () => {
+  const DISABLED = [
+    { id: 'iassistant', definition: 'com.intrafind/iassistant', builtIn: true, enabled: false },
+    {
+      id: 'corp',
+      definition: 'com.intrafind/ldap-directory',
+      definitionName: 'People directory (LDAP)',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Corporate directory',
+      enabled: false
+    },
+    {
+      id: 'muc',
+      definition: 'com.intrafind/ldap-directory',
+      definitionName: 'People directory (LDAP)',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Munich directory'
+    },
+    {
+      id: 'entra',
+      definition: 'com.intrafind/entra-directory',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Entra ID'
+    },
+    { id: 'drawio', definition: 'mcp/drawio', protocol: 'mcp', label: 'draw.io', enabled: false },
+    { id: 'open-data-portal', definition: 'org.ckan/open-data-portal', label: 'GovData' }
+  ];
+
+  it('offers no disabled installation the app does not bind, and says how many are left out', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: DISABLED });
+    renderSection({ id: 'a', integrations: { 'type:people-directory': {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).queryByText('Corporate directory')).not.toBeInTheDocument();
+    expect(within(card).getByText('Munich directory')).toBeInTheDocument();
+    // One enabled LDAP directory left: no "All … installations" row, and the count is the enabled ones.
+    expect(
+      within(card).queryByText(/All People directory \(LDAP\) installations/)
+    ).not.toBeInTheDocument();
+    expect(within(card).getByText(/\(2 now\)/)).toBeInTheDocument();
+    const generic = screen.getByTestId('app-integrations');
+    expect(within(generic).queryByText('draw.io')).not.toBeInTheDocument();
+    expect(within(generic).getByText('GovData')).toBeInTheDocument();
+    expect(screen.getByTestId('app-integrations-hidden')).toHaveTextContent('(3)');
+    // A disabled iAssistant the app does not use gets no panel.
+    expect(screen.queryByText('Enable iAssistant')).not.toBeInTheDocument();
+  });
+
+  it('keeps a disabled installation the app binds, marked disabled', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: DISABLED });
+    renderSection({ id: 'a', integrations: { drawio: {}, corp: {}, iassistant: {} } });
+    const checkbox = await screen.findByLabelText(/draw.io/);
+    expect(screen.getByTestId('app-integrations')).toContainElement(checkbox);
+    const row = checkbox.closest('div');
+    expect(within(row).getByText('Disabled')).toBeInTheDocument();
+    const card = screen.getByTestId('app-integrations-people-directories');
+    expect(within(card).getByLabelText(/Corporate directory/)).toBeChecked();
+    expect(screen.getByText('Enable iAssistant')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-integrations-hidden')).not.toBeInTheDocument();
+  });
+});
+
 describe('IntegrationsConfigSection: storage providers', () => {
   const NEXTCLOUD = [
     {
@@ -321,17 +490,25 @@ describe('IntegrationsConfigSection: storage providers', () => {
     const onChange = renderSection({ id: 'a' });
     const card = await screen.findByTestId('app-integrations-storage-providers');
     expect(within(card).getByText('Storage providers')).toBeInTheDocument();
-    expect(within(card).getByLabelText(/All storage providers/)).toBeInTheDocument();
-    expect(within(card).getByText(/\(3 now\)/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/All Nextcloud installations/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/Branch office/)).toBeInTheDocument();
     // A new storage binding starts optional.
-    fireEvent.click(within(card).getByLabelText(/All storage providers/));
+    fireEvent.click(within(card).getByRole('switch', { name: 'Enable storage providers' }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
       'type:storage': { required: false }
     });
+  });
+
+  it('lists all storage providers, all of one provider and each installation once enabled', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: [...INSTALLED, ...NEXTCLOUD] });
+    renderSection({ id: 'a', integrations: { 'type:storage': { required: false } } });
+    const card = await screen.findByTestId('app-integrations-storage-providers');
+    expect(within(card).getByLabelText('All storage providers')).toBeChecked();
+    // Branch office is disabled: not counted, not listed.
+    expect(within(card).getByText(/\(2 now\)/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
+    expect(within(card).queryByLabelText(/Branch office/)).not.toBeInTheDocument();
+    // One enabled Nextcloud left: no "All Nextcloud installations" row.
+    expect(within(card).queryByLabelText(/All Nextcloud installations/)).not.toBeInTheDocument();
   });
 
   it('shows a bound storage provider with the Required switch and no action list', async () => {

@@ -48,7 +48,7 @@ import { projectSource, projectSourceProducer } from '../services/sources/produc
 import { extractToolSources } from '../services/sources/index.js';
 import { normalizeSource, mergeSources, emptySourceSet } from '../../shared/sources/index.js';
 import { classifyKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
-import { toolKind, searchScope } from '../../shared/run/toolActivity.js';
+import { activityKindOf, activityScopeOf } from '../utils/toolDisplay.js';
 import {
   content as providerContent,
   metadata as providerMetadata
@@ -1163,9 +1163,9 @@ describe('tools', () => {
 
   it('is classified as project knowledge, never as web search', () => {
     assert.equal(classifyKnowledgeSource('knowledge_search'), 'sources');
-    assert.equal(toolKind('knowledge_search'), 'search');
-    assert.equal(toolKind('knowledge_read'), 'fetch');
-    assert.equal(searchScope('knowledge_search'), 'documents');
+    assert.equal(activityKindOf('knowledge_search', 'sources'), 'search');
+    assert.equal(activityKindOf('knowledge_read', 'sources'), 'fetch');
+    assert.equal(activityScopeOf('knowledge_search', 'sources'), 'documents');
   });
 });
 
