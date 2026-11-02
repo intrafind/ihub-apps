@@ -110,11 +110,12 @@ class ConversationApiService {
    * @param {Object} params.user - Authenticated user
    * @param {string} params.baseUrl - iFinder base URL
    * @param {string} [params.fallbackLanguage] - BCP 47 tag for a turn without text
+   * @param {AbortSignal} [params.signal] - aborts the request (the `ask` tool's call)
    * @returns {Promise<Response>} Raw fetch Response for streaming
    */
   async sendMessage(
     conversationId,
-    { content, parentId, profileId, tools, user, baseUrl, fallbackLanguage }
+    { content, parentId, profileId, tools, user, baseUrl, fallbackLanguage, signal }
   ) {
     const url = this.buildUrl(baseUrl, `/conversations/${conversationId}/messages`);
     const headers = await this.buildHeaders(user, { accept: 'text/event-stream' });
@@ -137,7 +138,8 @@ class ConversationApiService {
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {})
     });
 
     if (!response.ok) {

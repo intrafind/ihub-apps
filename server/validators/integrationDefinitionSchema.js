@@ -853,7 +853,9 @@ export const integrationActionSchema = z.object({
    * An app binds this action only by naming it in the binding's `actions`; a
    * binding without `actions` ("every action") leaves it out. For an action
    * whose reach goes beyond the integration's purpose (e.g. raw access next
-   * to a curated search); no shipped definition uses it.
+   * to a curated search), or one an app binding the installation for
+   * something else should not get unasked (iAssistant's `ask`, next to its
+   * model).
    */
   bindExplicitly: z.boolean().prefault(false),
   /** Which identity the action needs; `token` means it refuses to run without a credential. */
@@ -1033,185 +1035,203 @@ export const integrationDefinitionSchema = z
     _meta: z.record(z.string(), z.any()).optional()
   })
   .superRefine((def, ctx) => {
-    const keys = new Set();
-    def.install.forEach((field, i) => {
-      if (keys.has(field.key)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['install', i, 'key'],
-          message: `duplicate install field "${field.key}"`
-        });
-      }
-      keys.add(field.key);
-    });
-
-    const actionNames = new Set();
-    def.actions.forEach((action, i) => {
-      if (actionNames.has(action.name)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, 'name'],
-          message: `duplicate action "${action.name}"`
-        });
-      }
-      actionNames.add(action.name);
-      if (def.protocol.type === 'openapi' && !action.operationId) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, 'operationId'],
-          message: 'an openapi action needs an operationId'
-        });
-      }
-      if (action.toolId && !def.builtIn && !isCustomDefinitionId(def.id)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, 'toolId'],
-          message: 'only a built-in or a custom (custom/<id>) definition may fix its tool ids'
-        });
-      }
-      if (def.protocol.type === 'http' && !action.request) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, 'request'],
-          message: 'an http action needs a request'
-        });
-      }
-      if (def.protocol.type !== 'http' && (action.request || action.response)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, action.request ? 'request' : 'response'],
-          message: 'request and response belong to http actions'
-        });
-      }
-      if (
-        def.protocol.type === 'http' &&
-        action.request &&
-        !/^https?:\/\//i.test(action.request.url) &&
-        !def.protocol.baseUrl
-      ) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['actions', i, 'request', 'url'],
-          message: 'a relative URL needs protocol.baseUrl'
-        });
-      }
-    });
-
-    // The web search engine contract: the web search feature calls the
-    // engine's action `search` (docs/integration-development.md). Protocols
-    // whose actions are listed at run time (MCP, A2A) cannot declare it.
-    if (
-      def.type === 'web-search' &&
-      !['mcp', 'a2a'].includes(def.protocol.type) &&
-      !actionNames.has('search')
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['actions'],
-        message: 'a web-search definition needs an action named "search"'
-      });
-    }
-
-    if (def.alwaysInstalled && !(def.builtIn && def.singleton)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['alwaysInstalled'],
-        message: 'only a built-in singleton can be always installed'
-      });
-    }
-
-    if (def.protocol.type === 'script' && def.builtIn) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['protocol', 'type'],
-        message: 'a built-in integration uses the native protocol, not a script module'
-      });
-    }
-
-    if (def.scopes) {
-      const declarative = def.protocol.type !== 'native' && def.protocol.type !== 'script';
-      if (declarative && (!def.scopes.action || !def.scopes.map || !def.scopes.applyAs)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['scopes'],
-          message: 'scopes need action, map and applyAs unless the protocol is native'
-        });
-      }
-      if (def.scopes.action && !actionNames.has(def.scopes.action)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['scopes', 'action'],
-          message: `scopes.action "${def.scopes.action}" is not a declared action`
-        });
-      }
-      for (const target of Object.keys(def.scopes.applyAs || {})) {
-        const [actionName] = target.split('.');
-        if (!actionNames.has(actionName)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['scopes', 'applyAs', target],
-            message: `"${actionName}" is not a declared action`
-          });
-        }
-      }
-    }
-
-    for (const actionName of Object.keys(def.sources || {})) {
-      if (!actionNames.has(actionName)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['sources', actionName],
-          message: `"${actionName}" is not a declared action`
-        });
-      }
-    }
-
-    if (def.health && !actionNames.has(def.health.action)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['health', 'action'],
-        message: `health.action "${def.health.action}" is not a declared action`
-      });
-    }
-
+    const addIssue = (path, message) => ctx.addIssue({ code: 'custom', path, message });
+    const keys = checkInstallFieldKeys(def, addIssue);
+    const actionNames = checkActions(def, addIssue);
+    checkWebSearchContract(def, actionNames, addIssue);
+    checkBuiltInFlags(def, addIssue);
+    checkScopes(def, actionNames, addIssue);
+    checkActionReferences(def, actionNames, addIssue);
     const serviceField = def.auth.serviceAccount?.field;
     if (serviceField && !keys.has(serviceField)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['auth', 'serviceAccount', 'field'],
-        message: `"${serviceField}" is not an install field`
-      });
+      addIssue(['auth', 'serviceAccount', 'field'], `"${serviceField}" is not an install field`);
     }
-
-    if (def.releases) {
-      if (def.releases.length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['releases'],
-          message: 'releases lists at least the current version, or is left out'
-        });
-      } else if (def.releases[0].version !== def.version) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['releases', 0, 'version'],
-          message: `the newest release must be the definition version ${def.version}`
-        });
-      }
-      for (let i = 1; i < def.releases.length; i += 1) {
-        if (!semver.gt(def.releases[i - 1].version, def.releases[i].version)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['releases', i, 'version'],
-            message: 'releases are listed newest first, each version once'
-          });
-        }
-      }
-    }
-
+    checkReleaseOrder(def, addIssue);
     for (const issue of checkReleaseMigrations(def.releases, def.migrations)) {
-      ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+      addIssue(issue.path, issue.message);
     }
   });
+
+/**
+ * The cross-field checks of {@link integrationDefinitionSchema}'s
+ * `superRefine`, one per concern, called in a fixed order so the issues come
+ * out in the order they always did. Each reports through `addIssue(path,
+ * message)`, which adds a `custom` Zod issue.
+ *
+ * @callback AddIssue
+ * @param {Array<string|number>} path
+ * @param {string} message
+ */
+
+/**
+ * Install field keys are unique.
+ * @param {object} def - the parsed definition
+ * @param {AddIssue} addIssue
+ * @returns {Set<string>} every install field key
+ */
+function checkInstallFieldKeys(def, addIssue) {
+  const keys = new Set();
+  def.install.forEach((field, i) => {
+    if (keys.has(field.key))
+      addIssue(['install', i, 'key'], `duplicate install field "${field.key}"`);
+    keys.add(field.key);
+  });
+  return keys;
+}
+
+/**
+ * Action names are unique, an openapi action names its operation, only a
+ * built-in or a custom (`custom/<id>`) definition fixes tool ids, and
+ * `request` / `response` are an http action's (see {@link checkHttpAction}).
+ * @param {object} def - the parsed definition
+ * @param {AddIssue} addIssue
+ * @returns {Set<string>} every declared action name
+ */
+function checkActions(def, addIssue) {
+  const actionNames = new Set();
+  def.actions.forEach((action, i) => {
+    if (actionNames.has(action.name)) {
+      addIssue(['actions', i, 'name'], `duplicate action "${action.name}"`);
+    }
+    actionNames.add(action.name);
+    if (def.protocol.type === 'openapi' && !action.operationId) {
+      addIssue(['actions', i, 'operationId'], 'an openapi action needs an operationId');
+    }
+    if (action.toolId && !def.builtIn && !isCustomDefinitionId(def.id)) {
+      addIssue(
+        ['actions', i, 'toolId'],
+        'only a built-in or a custom (custom/<id>) definition may fix its tool ids'
+      );
+    }
+    checkHttpAction(def, action, i, addIssue);
+  });
+  return actionNames;
+}
+
+/**
+ * An http action has a request, and a relative request URL needs
+ * `protocol.baseUrl`; no other protocol's action has a request or response.
+ * @param {object} def - the parsed definition
+ * @param {object} action - one of `def.actions`
+ * @param {number} i - the action's index
+ * @param {AddIssue} addIssue
+ */
+function checkHttpAction(def, action, i, addIssue) {
+  if (def.protocol.type !== 'http') {
+    if (action.request || action.response) {
+      addIssue(
+        ['actions', i, action.request ? 'request' : 'response'],
+        'request and response belong to http actions'
+      );
+    }
+    return;
+  }
+  if (!action.request) {
+    addIssue(['actions', i, 'request'], 'an http action needs a request');
+  } else if (!/^https?:\/\//i.test(action.request.url) && !def.protocol.baseUrl) {
+    addIssue(['actions', i, 'request', 'url'], 'a relative URL needs protocol.baseUrl');
+  }
+}
+
+/**
+ * The web search engine contract: the web search feature calls the engine's
+ * action `search` (docs/integration-development.md). Protocols whose actions
+ * are listed at run time (MCP, A2A) cannot declare it.
+ * @param {object} def - the parsed definition
+ * @param {Set<string>} actionNames
+ * @param {AddIssue} addIssue
+ */
+function checkWebSearchContract(def, actionNames, addIssue) {
+  if (
+    def.type === 'web-search' &&
+    !['mcp', 'a2a'].includes(def.protocol.type) &&
+    !actionNames.has('search')
+  ) {
+    addIssue(['actions'], 'a web-search definition needs an action named "search"');
+  }
+}
+
+/**
+ * Only a built-in singleton is always installed, and a built-in runs on the
+ * native protocol, not a script module.
+ * @param {object} def - the parsed definition
+ * @param {AddIssue} addIssue
+ */
+function checkBuiltInFlags(def, addIssue) {
+  if (def.alwaysInstalled && !(def.builtIn && def.singleton)) {
+    addIssue(['alwaysInstalled'], 'only a built-in singleton can be always installed');
+  }
+  if (def.protocol.type === 'script' && def.builtIn) {
+    addIssue(
+      ['protocol', 'type'],
+      'a built-in integration uses the native protocol, not a script module'
+    );
+  }
+}
+
+/**
+ * Declarative scopes (any protocol but native and script) name their action,
+ * map and applyAs; the actions they name are declared.
+ * @param {object} def - the parsed definition
+ * @param {Set<string>} actionNames
+ * @param {AddIssue} addIssue
+ */
+function checkScopes(def, actionNames, addIssue) {
+  if (!def.scopes) return;
+  const declarative = def.protocol.type !== 'native' && def.protocol.type !== 'script';
+  if (declarative && (!def.scopes.action || !def.scopes.map || !def.scopes.applyAs)) {
+    addIssue(['scopes'], 'scopes need action, map and applyAs unless the protocol is native');
+  }
+  if (def.scopes.action && !actionNames.has(def.scopes.action)) {
+    addIssue(['scopes', 'action'], `scopes.action "${def.scopes.action}" is not a declared action`);
+  }
+  for (const target of Object.keys(def.scopes.applyAs || {})) {
+    const [actionName] = target.split('.');
+    if (!actionNames.has(actionName)) {
+      addIssue(['scopes', 'applyAs', target], `"${actionName}" is not a declared action`);
+    }
+  }
+}
+
+/**
+ * The source mappings and the health check name declared actions.
+ * @param {object} def - the parsed definition
+ * @param {Set<string>} actionNames
+ * @param {AddIssue} addIssue
+ */
+function checkActionReferences(def, actionNames, addIssue) {
+  for (const actionName of Object.keys(def.sources || {})) {
+    if (!actionNames.has(actionName)) {
+      addIssue(['sources', actionName], `"${actionName}" is not a declared action`);
+    }
+  }
+  if (def.health && !actionNames.has(def.health.action)) {
+    addIssue(['health', 'action'], `health.action "${def.health.action}" is not a declared action`);
+  }
+}
+
+/**
+ * The release history, when given, starts with the definition's version and
+ * lists each version once, newest first.
+ * @param {object} def - the parsed definition
+ * @param {AddIssue} addIssue
+ */
+function checkReleaseOrder(def, addIssue) {
+  if (!def.releases) return;
+  if (def.releases.length === 0) {
+    addIssue(['releases'], 'releases lists at least the current version, or is left out');
+  } else if (def.releases[0].version !== def.version) {
+    addIssue(
+      ['releases', 0, 'version'],
+      `the newest release must be the definition version ${def.version}`
+    );
+  }
+  for (let i = 1; i < def.releases.length; i += 1) {
+    if (!semver.gt(def.releases[i - 1].version, def.releases[i].version)) {
+      addIssue(['releases', i, 'version'], 'releases are listed newest first, each version once');
+    }
+  }
+}
 
 /**
  * Validate a definition.

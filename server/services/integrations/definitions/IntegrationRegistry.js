@@ -19,6 +19,7 @@ import {
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { checkScriptCodeFiles } from './scriptModule.js';
+import { registryProtocolRefusal } from './registryItems.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
 import { publishDefinitionTypes } from '../integrationTypes.js';
 
@@ -402,18 +403,15 @@ export class IntegrationRegistry {
       }
       checkScriptCodeFiles(validation.data, files);
     }
-    if (validation.data.protocol.type === 'mcp') {
-      // A registry may only publish remote servers with a fixed transport: a
-      // local process (`stdio`) is the admin's own decision, taken in the
-      // generic "MCP server" definition that ships with iHub or in the
-      // integration builder (`local`).
-      const transport = validation.data.protocol.transport?.type;
-      if (!transport || (transport === 'stdio' && !options.local)) {
-        throw new Error(
-          'An MCP integration from a registry needs a fixed remote transport (stdio is not allowed)'
-        );
-      }
-    }
+    // A registry may only publish remote MCP servers with a fixed transport.
+    // The catalog already drops such items when it is loaded
+    // (RegistryService); this is the same check again for the files that
+    // are actually installed. A local process (`stdio`) is the admin's own
+    // decision, taken in the generic "MCP server" definition that ships with
+    // iHub or in the integration builder (`local`).
+    const localStdio = options.local && validation.data.protocol.transport?.type === 'stdio';
+    const refusal = localStdio ? null : registryProtocolRefusal(validation.data);
+    if (refusal) throw new Error(refusal);
     return validation.data;
   }
 

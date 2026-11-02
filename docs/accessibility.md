@@ -127,7 +127,8 @@ The application uses semantic HTML elements where possible:
 
 Four components in `client/src/shared/components/` carry the keyboard and screen-reader behaviour
 of common controls. Use them instead of building the markup again; `role="switch"` appears
-nowhere in `client/src` outside `Switch.jsx`.
+nowhere in `client/src` outside `Switch.jsx`, and there is no checkbox styled as a switch
+(`sr-only peer`) left.
 
 | Component | Use it for | What it guarantees |
 |---|---|---|
@@ -152,8 +153,28 @@ A switch needs a name. Give it one of `label` (rendered by the switch, with an o
 <Switch checked={pwa.enabled} onChange={toggle} aria-labelledby="pwa-enabled-label" />
 ```
 
+A `<label htmlFor>` the screen renders itself names the switch too, and a click on it toggles the
+switch; pass the same `id` to the `Switch`:
+
+```jsx
+<label htmlFor="websearch-enabled">{t('admin.apps.edit.websearchEnabled', 'Enable Web Search')}</label>
+<Switch id="websearch-enabled" checked={enabled} onChange={value => update({ enabled: value })} />
+```
+
+Inside an element that already is the control, such as a `role="menuitemcheckbox"` row of a
+menu, a real switch would be a nested interactive control. Draw `SwitchIndicator` (a named
+export of `Switch.jsx`) instead: the same look, hidden from assistive technology, not focusable.
+The row keeps `aria-checked`, the tab index and Space/Enter (the chat **+** menu does this).
+
 `StatusDot` without `showLabel` is only enough where other visible text already states the status;
-otherwise show the label (WCAG 1.4.1). Use `showLabel` in lists and tables.
+otherwise show the label (WCAG 1.4.1). Use `showLabel` in lists and tables. Inside a `Badge`, pass
+`labelClassName=""` so the text takes the badge's size and colour:
+
+```jsx
+<Badge tone="success">
+  <StatusDot status="ok" label={t('…connected', 'Connected')} showLabel labelClassName="" size="sm" />
+</Badge>
+```
 
 ## Testing
 

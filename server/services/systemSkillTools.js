@@ -121,6 +121,9 @@ function withTemplates(definition, templates, language) {
   };
 }
 
+/** The ids of the tools system skills bring (`create_pdf`, `create_docx`, …). */
+export const SYSTEM_SKILL_TOOL_IDS = Object.freeze([...REGISTRY.keys()]);
+
 /**
  * Whether a tool id is a registered system skill tool.
  *

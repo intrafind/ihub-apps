@@ -186,6 +186,26 @@ export async function loadConfiguredTools(language = null) {
 const reportedA2aIdConflicts = new Set();
 
 /**
+ * The tools the skills feature adds to an app with skills: load a skill's
+ * instructions, read one of its files, and search the catalog when the list
+ * in the prompt is shortened. They belong to skills, not to an integration.
+ */
+export const ACTIVATE_SKILL_TOOL_ID = 'activate_skill';
+export const READ_SKILL_RESOURCE_TOOL_ID = 'read_skill_resource';
+export const FIND_SKILL_TOOL_ID = 'find_skill';
+export const SKILL_TOOL_IDS = Object.freeze([
+  ACTIVATE_SKILL_TOOL_ID,
+  READ_SKILL_RESOURCE_TOOL_ID,
+  FIND_SKILL_TOOL_ID
+]);
+
+/**
+ * Prefix of the tool a workflow with chat integration becomes in an app
+ * (`workflow_<workflowId>`). Such tools belong to workflows.
+ */
+export const WORKFLOW_TOOL_ID_PREFIX = 'workflow_';
+
+/**
  * Most skill names the skill tools list as allowed values. A longer list costs
  * more tokens in every request than it saves; the call is checked anyway.
  */
@@ -854,7 +874,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
         }
 
         appTools.push({
-          id: `workflow_${wfId}`,
+          id: `${WORKFLOW_TOOL_ID_PREFIX}${wfId}`,
           name: toolName,
           description: toolDescription,
           script: 'workflowRunner.js',
@@ -931,7 +951,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
       };
 
       appTools.push({
-        id: 'activate_skill',
+        id: ACTIVATE_SKILL_TOOL_ID,
         name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
         description: getLocalizedString(activateDesc, lang),
         isInternalTool: true,
@@ -945,7 +965,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
       });
 
       appTools.push({
-        id: 'read_skill_resource',
+        id: READ_SKILL_RESOURCE_TOOL_ID,
         name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
         description: getLocalizedString(readDesc, lang),
         isInternalTool: true,
@@ -965,7 +985,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
       if (catalog.compact) {
         appTools.push({
-          id: 'find_skill',
+          id: FIND_SKILL_TOOL_ID,
           name: getLocalizedString({ en: 'Find Skill', de: 'Skill suchen' }, lang),
           description: getLocalizedString(
             {
@@ -1049,7 +1069,7 @@ export async function runTool(toolId, params = {}, options = {}) {
   }
 
   // Check if this is a skill activation tool
-  if (toolId === 'activate_skill') {
+  if (toolId === ACTIVATE_SKILL_TOOL_ID) {
     const skillName = params.skill_name;
     if (!skillName) {
       throw new Error('skill_name parameter is required');
@@ -1146,7 +1166,7 @@ export async function runTool(toolId, params = {}, options = {}) {
   }
 
   // Check if this is a skill resource read tool
-  if (toolId === 'read_skill_resource') {
+  if (toolId === READ_SKILL_RESOURCE_TOOL_ID) {
     const { skill_name: skillName, file_path: filePath } = params;
     if (!skillName || !filePath) {
       throw new Error('skill_name and file_path parameters are required');
@@ -1173,7 +1193,7 @@ export async function runTool(toolId, params = {}, options = {}) {
 
   // Search the skills the model is offered, when their list in the system
   // prompt is shortened: the same catalog, so the same access rules.
-  if (toolId === 'find_skill') {
+  if (toolId === FIND_SKILL_TOOL_ID) {
     const query = typeof params.query === 'string' ? params.query.trim() : '';
     if (!query) {
       return 'Give a few keywords that describe the task, e.g. "weekly newsletter draft".';
@@ -1226,9 +1246,12 @@ export async function runTool(toolId, params = {}, options = {}) {
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')
-  if (toolId.startsWith('workflow_')) {
+  if (toolId.startsWith(WORKFLOW_TOOL_ID_PREFIX)) {
     const mod = await import('./tools/workflowRunner.js');
-    return await mod.default({ ...params, workflowId: toolId.replace('workflow_', '') });
+    return await mod.default({
+      ...params,
+      workflowId: toolId.slice(WORKFLOW_TOOL_ID_PREFIX.length)
+    });
   }
 
   // The project knowledge tools belong to projects and are not in the tool

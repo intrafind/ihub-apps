@@ -30,7 +30,9 @@ import {
 } from '../../services/integrations/cloudStorageConfig.js';
 import {
   office365Connector,
+  googleDriveConnector,
   nextcloudConnector,
+  probeUrl,
   resetCloudStorageConnectionCounts
 } from '../../services/integrations/protocols/native/connectors/cloudStorage/index.js';
 import { platformConfigSchema } from '../../validators/platformConfigSchema.js';
@@ -306,5 +308,124 @@ describe('storage providers as installations', () => {
       false
     );
     assert.equal(platformConfigSchema.safeParse({}).success, true);
+  });
+});
+
+describe('the installation test, step by step', () => {
+  it('probes Nextcloud at the server URL without its trailing slashes', () => {
+    const nextcloud = url => probeUrl({ type: 'nextcloud', serverUrl: url });
+    assert.equal(nextcloud('https://cloud.example.com'), 'https://cloud.example.com/status.php');
+    assert.equal(nextcloud('https://cloud.example.com/'), 'https://cloud.example.com/status.php');
+    assert.equal(
+      nextcloud('https://cloud.example.com/sub///'),
+      'https://cloud.example.com/sub/status.php'
+    );
+    // Linear in the input: a long run of slashes (the backtracking case of
+    // `/\/+$/`) is trimmed at once.
+    const started = Date.now();
+    assert.equal(
+      nextcloud(`https://cloud.example.com${'/'.repeat(100000)}x`),
+      `https://cloud.example.com${'/'.repeat(100000)}x/status.php`
+    );
+    assert.equal(nextcloud(`https://cloud.example.com${'/'.repeat(100000)}`).length, 36);
+    assert.ok(Date.now() - started < 1000, 'trims in linear time');
+    assert.equal(
+      probeUrl({ type: 'office365', tenantId: 'a b' }),
+      'https://login.microsoftonline.com/a%20b/v2.0/.well-known/openid-configuration'
+    );
+    assert.equal(
+      probeUrl({ type: 'googledrive' }),
+      'https://accounts.google.com/.well-known/openid-configuration'
+    );
+    assert.equal(probeUrl({ type: 'dropbox' }), null);
+  });
+
+  it('names each provider’s own setting in the settings step', async () => {
+    const settingsOf = steps => steps.find(step => step.id === 'settings');
+    const o365 = await office365Connector.test({
+      instance: INSTALLED[0],
+      values: INSTALLED[0].values,
+      req: null
+    });
+    assert.deepEqual(
+      { status: settingsOf(o365).status, message: settingsOf(o365).message },
+      { status: 'ok', message: 'Tenant tenant-1; installation "office365-main"' }
+    );
+    const nextcloud = await nextcloudConnector.test({
+      instance: INSTALLED[3],
+      values: INSTALLED[3].values,
+      req: null
+    });
+    assert.equal(
+      settingsOf(nextcloud).message,
+      'https://branch.example.com; installation "nextcloud-branch"'
+    );
+    const google = await googleDriveConnector.test({
+      instance: INSTALLED[1],
+      values: INSTALLED[1].values,
+      req: null
+    });
+    assert.equal(settingsOf(google).message, 'Google OAuth 2.0; installation "googledrive"');
+  });
+
+  it('tells the admin whether their own account is among the connections', async () => {
+    const connectionsFor = async user =>
+      (
+        await office365Connector.test({
+          instance: INSTALLED[0],
+          values: INSTALLED[0].values,
+          user,
+          req: null
+        })
+      ).find(step => step.id === 'connections').message;
+    assert.equal(await connectionsFor({ id: 'erin' }), '2 user(s) connected, including you');
+    assert.equal(await connectionsFor({ id: 'zoe' }), '2 user(s) connected, not you yet');
+    assert.equal(await connectionsFor(undefined), '2 user(s) connected');
+  });
+});
+
+describe('which token files count as connections', () => {
+  let ownDir;
+  let sharedDir;
+
+  before(async () => {
+    sharedDir = tokenStorage.storageBasePath;
+    ownDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-cloud-token-names-'));
+    const dir = path.join(ownDir, 'nextcloud');
+    await fs.mkdir(dir, { recursive: true });
+    const token = JSON.stringify({ createdAt: '2026-02-01T00:00:00Z', expiresAt: null });
+    // This installation's own file, a file from before provider ids were part
+    // of the name (counts for every installation), another installation's
+    // file, an unreadable one, a file without a user, and a non-token file.
+    await fs.writeFile(path.join(dir, 'erin__nextcloud-hq.json'), token);
+    await fs.writeFile(path.join(dir, 'legacy.json'), token);
+    await fs.writeFile(path.join(dir, 'gus__nextcloud-eu.json'), token);
+    await fs.writeFile(path.join(dir, 'broken__nextcloud-hq.json'), '{ not json');
+    await fs.writeFile(path.join(dir, '.json'), token);
+    await fs.writeFile(path.join(dir, 'notes.txt'), 'x');
+    tokenStorage.storageBasePath = ownDir;
+  });
+
+  after(async () => {
+    tokenStorage.storageBasePath = sharedDir;
+    await fs.rm(ownDir, { recursive: true, force: true });
+  });
+
+  it('counts the installation’s own files and the legacy ones, skipping the rest', async () => {
+    const hq = await listCloudStorageConnections('nextcloud', 'nextcloud-hq');
+    assert.deepEqual(
+      hq.map(c => c.userId),
+      ['erin', 'legacy']
+    );
+    assert.deepEqual(hq[0], {
+      userId: 'erin',
+      createdAt: '2026-02-01T00:00:00Z',
+      expiresAt: null,
+      expired: false
+    });
+    assert.deepEqual(
+      (await listCloudStorageConnections('nextcloud', 'nextcloud-eu')).map(c => c.userId),
+      ['gus', 'legacy']
+    );
   });
 });

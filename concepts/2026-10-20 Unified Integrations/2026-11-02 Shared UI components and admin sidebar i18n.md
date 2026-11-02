@@ -68,7 +68,52 @@ for any label missing in either language, so new sidebar entries need both trans
 The drawer test gives elements a layout box (`offsetWidth`, `offsetHeight`, `offsetParent`),
 because jsdom has none and the focus trap skips elements without one.
 
-## Follow-ups (not done here)
+## Follow-ups done (second PR, branch `claude/modest-turing-had15v-ui-2925`)
+
+All three follow-ups below are done. What changed and why:
+
+- **Marketplace detail on `Drawer`.** `MarketplaceItemDetail.jsx` renders `<Drawer isOpen size="lg">`
+  (the parent still mounts it only while an item is selected). Title = display name, `description`
+  = author (`admin.marketplace.byAuthor`, new key in en/de), `subheader` = the type / version /
+  installed badges (`data-testid="marketplace-detail-badges"`). Only the outer container and the
+  header changed: the body (action bar, dialogs, tabs, tab content) sits unchanged inside a
+  `flex min-h-0 flex-1 flex-col` wrapper with `bodyClassName="flex flex-col"`, so the bars stay and
+  the tab content scrolls as before. This keeps the diff away from the body, which PR #2924 extends.
+- **No `sr-only peer` toggle left.** Converted to `Switch`: `SSLConfig`, `CorsConfig` (ids
+  unchanged, so their existing `<label htmlFor>` names them), `AdminUsersPage` (size `sm`, same
+  `aria-label`, `event.stopPropagation()` in `onChange` like the old label's `onClick`),
+  `IAssistantSection` and the six switches of `WebSearchSection` (their orphan `<label>`s got
+  `htmlFor`, the help texts an id for `aria-describedby`), `TechnicalDetailsToggle` (the visible
+  text is the `<label htmlFor>`, id from `useId`).
+- **Chat `+` menu (`ChatInputActionsMenu.jsx`).** Its on/off rows are `role="menuitemcheckbox"`
+  items of a `role="menu"`; a `Switch` inside would be a nested interactive control (invalid ARIA).
+  So the rows keep their semantics and draw the new `SwitchIndicator` (named export of
+  `Switch.jsx`, visual only, `aria-hidden`, `data-state="on|off"`). The tool and MCP-server rows
+  lost their focusable hidden checkbox (an extra unnamed Tab stop). The host-context rows
+  (browser extension "Include page") were a bare, unnamed checkbox inside the menu; they are now
+  `menuitemcheckbox` rows like web search, registered in `menuNavItems` as `host-<key>` so the
+  roving tab index and arrow keys reach them; Space and Enter toggle.
+- **Integration badges.** `Pill` is gone from `IntegrationPills.jsx`; `InstallationStatusPills`,
+  `MigrationStatusPill`, `CatalogTile`, `MigrationParts` and `AdminInstallationPage` use `Badge`.
+  Tone mapping: green → `success`, blue → `info`, red → `danger`, gray → `neutral`, yellow, amber
+  and orange → `warning` (orange "Update available" is a call to act, not information).
+  `migrationStatusTone` still returns `red`/`amber` because `InstallationMigrationPanel` uses it
+  for its frame colour; `IntegrationPills` maps it to the Badge tone. The live status is a Badge
+  with a `StatusDot` inside (`ok` connected / per-user, `error` unreachable, `off` otherwise);
+  `data-testid="live-status"` is on the `StatusDot`, whose text is the full label.
+- **`StatusDot` got `labelClassName`** (default unchanged); `''` makes the visible text inherit the
+  badge's style.
+
+Tests: `marketplace-item-detail-drawer.test.jsx`, `admin-toggles-shared-switch.test.jsx`,
+`chat-actions-menu-switch-rows.test.jsx`, `integration-status-badges.test.jsx`, new cases in
+`shared-switch.test.jsx` and `shared-badge-status-dot.test.jsx`; the web search keyboard test now
+asserts the `SwitchIndicator` instead of the hidden checkbox.
+
+Still open (not part of this issue): `AdminUsersPage` shows "Active"/"Inactive" and its empty
+states as hard-coded English, and its toggle sends `active: !user.active`, which for a user
+without an `active` field (shown as active) sends `true`, so the first click does nothing.
+
+## Follow-ups (as written for the first PR, now done)
 
 - `features/admin/components/marketplace/MarketplaceItemDetail.jsx` builds its own drawer. It is
   changed by the open integrations stack (#3098 → #3107), so it moves onto `Drawer` after the
