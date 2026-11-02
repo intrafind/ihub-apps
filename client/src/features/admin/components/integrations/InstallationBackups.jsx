@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { SECONDARY_BUTTON_CLASS } from '../formStyles';
-import { Pill } from './IntegrationPills';
+import Badge from '../../../../shared/components/Badge';
 import { backupKindLabel, formatMigrationDate } from './MigrationParts';
 import { MIGRATION_ACTION, backupsOf, revertability } from './migrationState';
 
@@ -65,16 +65,16 @@ function InstallationBackups({ instance, onRequest, busy = false, cardClassName,
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex flex-wrap items-center gap-2">
                   <span>v{backup.representedVersion}</span>
-                  <Pill tone="gray">{backupKindLabel(backup.kind, t)}</Pill>
+                  <Badge tone="neutral">{backupKindLabel(backup.kind, t)}</Badge>
                   {backup.hasDefinition && (
-                    <Pill tone="blue">
+                    <Badge tone="info">
                       {t('admin.integrations.migration.backups.withDefinition', 'with definition')}
-                    </Pill>
+                    </Badge>
                   )}
                   {isLoaded && (
-                    <Pill tone="green">
+                    <Badge tone="success">
                       {t('admin.integrations.migration.backups.loaded', 'loaded version')}
-                    </Pill>
+                    </Badge>
                   )}
                 </p>
                 <p className="text-xs text-gray-600 dark:text-gray-400 break-all">

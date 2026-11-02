@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import Drawer from '../../../../shared/components/Drawer';
 import StreamingMarkdown from '../../../chat/components/StreamingMarkdown';
 import {
   fetchMarketplaceItemDetail,
@@ -14,6 +15,7 @@ import {
   detachMarketplaceItem
 } from '../../../../api/adminApi';
 import MarketplaceModelReviewNotice from './MarketplaceModelReviewNotice';
+import MarketplaceIntegrationSection from './MarketplaceIntegrationFacts';
 import IntegrationReleaseNotes, { releasesBetween } from '../integrations/IntegrationReleaseNotes';
 import { IntegrationUpdatePreview, IntegrationUpdateReport } from './IntegrationUpdateMigrations';
 import { UPDATE_RETRY_CODES, previewLabels } from './updateMigrationRows';
@@ -57,7 +59,11 @@ const TYPE_COLORS = {
 /**
  * Slide-in detail panel for a single marketplace item.
  *
- * Opens as a right-side drawer over the browse grid. Fetches full item detail
+ * Opens as the shared right-side {@link Drawer} over the browse grid (a modal
+ * dialog named by the item's name: focus is trapped inside, Escape and a
+ * click on the backdrop close it, and focus returns to the card that opened
+ * it). The type, version and installation badges sit in the drawer's
+ * subheader, the author is its description. Fetches full item detail
  * from the server on mount. Supports install, update, uninstall, and detach
  * actions. Destructive actions (uninstall, detach) require a confirmation step.
  *
@@ -192,72 +198,69 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
     }
   };
 
+  // Type, version and installation state, under the drawer's title
+  const headerBadges = (
+    <div
+      className="flex flex-wrap items-center gap-2 px-5 py-2 border-b border-gray-200 dark:border-gray-700"
+      data-testid="marketplace-detail-badges"
+    >
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+          TYPE_COLORS[item?.type] || 'bg-gray-100 text-gray-800'
+        }`}
+      >
+        {t(`admin.marketplace.types.${item?.type}`, item?.type)}
+      </span>
+      {item?.version && (
+        <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
+      )}
+      {item?.pin && (
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+          data-testid="version-pin"
+        >
+          {t('admin.marketplace.versionPolicy.pinned', 'Pinned to {{pin}}', {
+            pin: item.pin
+          })}
+        </span>
+      )}
+      {item?.offeredVersion && item.offeredVersion !== item.version && (
+        <span className="text-xs text-gray-500 dark:text-gray-400" data-testid="offered-version">
+          {t('admin.marketplace.versionPolicy.offered', 'offered here: v{{version}}', {
+            version: item.offeredVersion
+          })}
+        </span>
+      )}
+      {isInstalled && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+          <span aria-hidden="true">&#x2713;</span> {t('admin.marketplace.installed', 'Installed')}
+        </span>
+      )}
+      {isLocal && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+          {t('admin.marketplace.localCopy', 'Local copy')}
+        </span>
+      )}
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Transparent backdrop - clicking it closes the panel */}
-      <div aria-hidden="true" className="flex-1 bg-black/40" onClick={onClose} />
-
-      {/* Detail panel */}
-      <div className="w-full max-w-2xl bg-white dark:bg-gray-800 shadow-xl flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex-1 min-w-0 mr-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                  TYPE_COLORS[item?.type] || 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                {t(`admin.marketplace.types.${item?.type}`, item?.type)}
-              </span>
-              {item?.version && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">v{item.version}</span>
-              )}
-              {item?.pin && (
-                <span
-                  className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
-                  data-testid="version-pin"
-                >
-                  {t('admin.marketplace.versionPolicy.pinned', 'Pinned to {{pin}}', {
-                    pin: item.pin
-                  })}
-                </span>
-              )}
-              {item?.offeredVersion && item.offeredVersion !== item.version && (
-                <span
-                  className="text-xs text-gray-500 dark:text-gray-400"
-                  data-testid="offered-version"
-                >
-                  {t('admin.marketplace.versionPolicy.offered', 'offered here: v{{version}}', {
-                    version: item.offeredVersion
-                  })}
-                </span>
-              )}
-              {isInstalled && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                  &#x2713; {t('admin.marketplace.installed', 'Installed')}
-                </span>
-              )}
-              {isLocal && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                  {t('admin.marketplace.localCopy', 'Local copy')}
-                </span>
-              )}
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{displayName}</h2>
-            {item?.author && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">by {item.author}</p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold"
-            aria-label={t('common.close', 'Close')}
-          >
-            &#x2715;
-          </button>
-        </div>
-
+    <Drawer
+      isOpen
+      onClose={onClose}
+      size="lg"
+      title={displayName}
+      description={
+        item?.author
+          ? t('admin.marketplace.byAuthor', 'by {{author}}', { author: item.author })
+          : undefined
+      }
+      subheader={headerBadges}
+      bodyClassName="flex flex-col"
+      data-testid="marketplace-item-detail"
+    >
+      {/* Fills the drawer body: the bars above the tabs stay, the tab content scrolls */}
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* Action buttons bar */}
         <div className="flex gap-2 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           {isLocal && (
@@ -588,6 +591,9 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 </div>
               )}
 
+              {/* Integrations: the four fixed facts and the declared actions */}
+              {item?.type === 'integration' && <MarketplaceIntegrationSection facts={item.facts} />}
+
               {/* Metadata table */}
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
                 {item?.source?.url && (
@@ -733,7 +739,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           )}
         </div>
       </div>
-    </div>
+    </Drawer>
   );
 }
 

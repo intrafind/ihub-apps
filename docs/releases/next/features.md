@@ -291,6 +291,22 @@ Integrations**, one installation per directory, and no longer a page of their ow
 
 See [People Directory Search](../../people-directory-search.md).
 
+## Any Model Can Ask the iAssistant
+
+Apps on a model other than the iAssistant can now ask it a question: the new action **Ask the
+iAssistant** (`ask`, tool `iassistant__ask`) runs one iAssistant turn and returns a grounded answer
+with the documents it cites. Those documents become the answer's sources, as in an iAssistant chat.
+
+- **Opt in per app:** tick **Ask the iAssistant** in the app's iAssistant binding (**Admin → Apps →
+  Integrations → iAssistant → Use in this app**, `"integrations": { "iassistant": { "actions":
+  ["ask"] } }`). Apps that bind the iAssistant for its model keep exactly the tools they had.
+- **The chat decides whom it asks:** the iAssistant picked in the chat, or pinned by the app,
+  always wins over the one the model names; an iAssistant the user cannot see is refused.
+- **Read-only, internal, as the user:** the action declares `sideEffect: read`, `dataFlow:
+  internal` and runs as the signed-in user. The iAssistant stays selectable as a model.
+
+See [Integrations → Built-in integrations](../../integrations.md#built-in-integrations).
+
 ## Asking the User and Scheduled Tasks Are the Always-Installed iHub Integration
 
 `ask_user` and the scheduled-task tools (`schedule_task`, `list_scheduled_tasks`,
@@ -315,6 +331,22 @@ See [People Directory Search](../../people-directory-search.md).
 - **Migrated for you:** migrations V199 and V202 remove the shipped tool files from
   `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
   **Admin → Tools** lists only custom tools from now on.
+
+## Marketplace: Integration Cards Show Sign-in, Effect, Where It Runs and Actions
+
+An integration in **Admin → Marketplace** now shows what it does before you install it: the card
+lists four fixed facts, and the details list every action the definition declares.
+
+- **Four facts on every integration card:** the sign-in modes, the effect (**read** or **read ·
+  write**), where it runs (cloud, on-premises, local) and the number of actions (**listed by the
+  server** for an MCP server or A2A agent).
+- **Actions in the details:** each declared action with its effect (read, write, destructive) as a
+  badge, under **Integration facts**.
+- **No local processes from a registry:** an integration item that would start a local MCP
+  process (`stdio`) is left out of the catalog when it is refreshed, and the server log names the
+  registry, the item and the reason. Install refuses it as before.
+
+See [Marketplace](../../marketplace.md).
 
 ## Storage Providers Are Installed Integrations, Several per Provider, Bound per App
 

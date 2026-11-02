@@ -33,8 +33,15 @@ import {
   checkCompatibility,
   describeIncompatibility
 } from '../integrations/definitions/compatibility.js';
+import {
+  definitionFacts,
+  registryProtocolRefusal
+} from '../integrations/definitions/registryItems.js';
 
 const COMPONENT = 'RegistryService';
+
+/** How many integration definitions a catalog load fetches at the same time. */
+const DEFINITION_FETCH_CONCURRENCY = 4;
 
 // ---------------------------------------------------------------------------
 // Helpers — auth encryption / decryption / redaction
@@ -324,6 +331,140 @@ async function fetchContent(url, authHeaders, registry) {
   } catch {
     return text;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — integration items of a catalog
+// ---------------------------------------------------------------------------
+
+/**
+ * Run `fn` over `items` with at most `limit` calls in flight, keeping the order.
+ *
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T) => Promise<R>} fn
+ * @returns {Promise<R[]>}
+ */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/**
+ * Screen one catalog item when the catalog is loaded. An integration item's
+ * definition (`integration.json`) is fetched from the registry:
+ *
+ * - a definition the registry may not deliver (an MCP server without a
+ *   fixed remote transport, i.e. a local `stdio` process) is rejected — the
+ *   item is left out of the catalog and the reason is logged with the
+ *   registry and the item;
+ * - any other gets `facts` (`definitionFacts`): sign-in modes, effect,
+ *   where it runs, action count and the actions, which the browse grid and
+ *   the detail show without installing anything;
+ * - a definition that cannot be fetched or is not JSON keeps the item with
+ *   `facts: null` (the install validates the files again and refuses a
+ *   stdio definition there).
+ *
+ * `facts` is derived here only; a `facts` field a registry writes into its
+ * catalog is dropped.
+ *
+ * @param {object} item - Catalog item
+ * @param {object} registry - Registry config (`id`, `name`, `source`)
+ * @param {Record<string, string>} authHeaders - The registry's credentials
+ * @returns {Promise<object|null>} The item to keep, or null when it is rejected
+ */
+async function screenCatalogItem(item, registry, authHeaders) {
+  if (!item || typeof item !== 'object') return item;
+  const kept = { ...item };
+  delete kept.facts;
+  if (item.type !== 'integration') return kept;
+
+  const registryId = registry.id || registry.name || 'unsaved registry';
+  let definition = null;
+  try {
+    const itemUrl = item.source ? resolveItemUrl(item.source, registry.source) : null;
+    if (itemUrl) definition = await fetchContent(itemUrl, authHeaders, registry);
+  } catch (error) {
+    logger.warn(
+      'Could not fetch the definition of a catalog integration; its facts are not shown',
+      { component: COMPONENT, registryId, itemName: item.name, error }
+    );
+  }
+  if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+    return { ...kept, facts: null };
+  }
+
+  const refusal = registryProtocolRefusal(definition);
+  if (refusal) {
+    logger.warn(
+      `Catalog item 'integration:${item.name}' of registry '${registryId}' rejected: ${refusal}`,
+      {
+        component: COMPONENT,
+        registryId,
+        itemType: 'integration',
+        itemName: item.name,
+        reason: refusal
+      }
+    );
+    return null;
+  }
+  return { ...kept, facts: definitionFacts(definition) };
+}
+
+/**
+ * Screen every item of a freshly fetched catalog (`screenCatalogItem`):
+ * rejected integration items are left out, the others carry their `facts`.
+ *
+ * @param {object} catalog - Catalog data (validated, or as mapped when validation failed)
+ * @param {object} registry - Registry config
+ * @param {Record<string, string>} authHeaders - The registry's credentials
+ * @returns {Promise<object>} The catalog with the screened items
+ */
+async function screenCatalogItems(catalog, registry, authHeaders) {
+  if (!catalog || !Array.isArray(catalog.items)) return catalog;
+  const screened = await mapWithConcurrency(
+    catalog.items,
+    DEFINITION_FETCH_CONCURRENCY,
+    async item => {
+      try {
+        return await screenCatalogItem(item, registry, authHeaders);
+      } catch (error) {
+        // One unexpected failure must not abort the whole refresh; install
+        // still refuses what the screen would have dropped.
+        logger.warn('Could not screen a catalog item; it is kept without facts', {
+          component: COMPONENT,
+          registryId: registry?.id,
+          itemName: item?.name,
+          error: error?.message
+        });
+        return item && typeof item === 'object' ? { ...item, facts: null } : item;
+      }
+    }
+  );
+  return { ...catalog, items: screened.filter(item => item !== null) };
+}
+
+/**
+ * The facts of an item for the browse grid: everything but the action list,
+ * which only the detail shows.
+ *
+ * @param {object|null|undefined} facts
+ * @returns {object|null|undefined}
+ */
+function listFacts(facts) {
+  if (!facts || typeof facts !== 'object') return facts;
+  const summary = { ...facts };
+  delete summary.actions;
+  return summary;
 }
 
 // ---------------------------------------------------------------------------
@@ -764,10 +905,11 @@ class RegistryService {
         errors: validation.errors
       });
       // Return the mapped data even if validation finds issues — be lenient with remote content
-      return mapped;
+      return screenCatalogItems(mapped, registry, authHeaders);
     }
 
-    return validation.data;
+    // Integration items: stdio definitions are rejected here, the others get their facts
+    return screenCatalogItems(validation.data, registry, authHeaders);
   }
 
   /**
@@ -892,6 +1034,7 @@ class RegistryService {
 
         allItems.push({
           ...item,
+          ...(item.facts !== undefined ? { facts: listFacts(item.facts) } : {}),
           registryId: registry.id,
           registryName: registry.name,
           installationStatus: installationStatusFor(
@@ -1030,8 +1173,23 @@ class RegistryService {
       contentPreview = rewriteRelativeLinks(contentPreview, item.source?.url);
     }
 
+    // A catalog cached before facts were derived: the preview is the definition
+    let facts = item.facts;
+    if (
+      // null: the refresh could not read the definition; the preview may have it now
+      (facts === undefined || facts === null) &&
+      type === 'integration' &&
+      contentPreview &&
+      typeof contentPreview === 'object' &&
+      !Array.isArray(contentPreview) &&
+      contentPreview.protocol
+    ) {
+      facts = definitionFacts(contentPreview);
+    }
+
     return {
       ...item,
+      ...(facts !== undefined ? { facts } : {}),
       registryId,
       registryName: registry?.name,
       installationStatus: installationStatusFor(
