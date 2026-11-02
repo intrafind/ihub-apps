@@ -512,7 +512,7 @@ function AdminAppsPage() {
       // Users (and so the chat UI) do not get an app whose features are off.
       disabled: app =>
         app.enabled === false ||
-        missingRequirements(app, platformConfig, integrationStatus, currentLanguage).length > 0
+        missingRequirements(app, platformConfig, integrationStatus, currentLanguage, t).length > 0
     },
     {
       id: 'edit',
