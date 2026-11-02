@@ -4109,6 +4109,45 @@
         "notGranted": "Ihre Gruppen geben diese Installation nicht frei, daher läuft der Chat ohne ihre Aktionen. Geben Sie sie unter Administration → Gruppen frei.",
         "openGroups": "Gruppen öffnen",
         "appDisabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren Sie sie im App-Editor, um sie zu testen."
+      },
+      "requests": {
+        "tab": "Anfragen",
+        "sidebarBadge": "{{count}} offene Integrationsanfragen",
+        "loadFailed": "Die Anfragen konnten nicht geladen werden.",
+        "openTitle": "Offene Anfragen ({{count}})",
+        "description": "Diese Katalog-Integrationen haben Benutzer angefragt. Genehmigen öffnet den Installationsassistenten; eine Anfrage schließt sich selbst, sobald die Integration installiert ist und die Gruppen der anfragenden Person sie nutzen dürfen.",
+        "none": "Keine offenen Anfragen.",
+        "requestedBy": "Angefragt von {{name}} am {{date}}",
+        "alreadyInstalled": "Bereits installiert, aber nicht für die Gruppen dieser Person. Sobald ihre Gruppen Zugriff erhalten, schließt sich die Anfrage:",
+        "definitionGone": "Diese Integration ist nicht mehr im Katalog.",
+        "approve": "Genehmigen",
+        "approveNamed": "Anfrage von {{user}} für {{name}} genehmigen",
+        "install": "Installieren",
+        "installNamed": "{{name}} installieren",
+        "decline": "Ablehnen",
+        "declineNamed": "Anfrage von {{user}} für {{name}} ablehnen",
+        "declineHide": "Ablehnen und ausblenden",
+        "declineHideNamed": "Anfrage von {{user}} für {{name}} ablehnen und ausblenden",
+        "declineTitle": "Anfrage für {{name}} ablehnen?",
+        "declineMessage": "{{user}} sieht die Anfrage als abgelehnt und kann erneut anfragen.",
+        "declineHideTitle": "{{name}} ablehnen und ausblenden?",
+        "declineHideMessage": "Niemand sieht {{name}} mehr unter „Noch nicht verfügbar“, und die anderen offenen Anfragen dafür werden ebenfalls abgelehnt. Sie können es später wieder einblenden.",
+        "noteLabel": "Hinweis an die anfragende Person (optional)",
+        "noteHelp": "Wird der Person neben der abgelehnten Anfrage angezeigt.",
+        "declined": "Anfrage für {{name}} abgelehnt.",
+        "declinedHidden": "Anfrage abgelehnt; {{name}} ist für Benutzer ausgeblendet.",
+        "closedTitle": "Geschlossene Anfragen ({{count}})",
+        "hiddenTitle": "Für Benutzer ausgeblendet ({{count}})",
+        "hiddenDescription": "Benutzer sehen diese nicht unter „Noch nicht verfügbar“ und können sie nicht anfragen.",
+        "hiddenBy": "Ausgeblendet von {{name}} am {{date}}",
+        "show": "Wieder einblenden",
+        "showNamed": "{{name}} wieder einblenden",
+        "status": {
+          "open": "Offen",
+          "approved": "Genehmigt, noch nicht installiert",
+          "declined": "Abgelehnt",
+          "fulfilled": "Installiert"
+        }
       }
     },
     "sidebar": {
@@ -5734,6 +5773,29 @@
         "public_url_mismatch": "Die öffentliche URL von iHub hat sich geändert; bitten Sie Ihre Administration, {{name}} zu prüfen.",
         "invalid_client": "{{name}} konnte nicht verbunden werden, da die Integration fehlerhaft konfiguriert ist (z. B. ein abgelaufenes Client-Secret). Bitte wenden Sie sich an Ihren Administrator.",
         "callback_failed": "Die Anmeldung bei {{name}} konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
+      }
+    },
+    "requests": {
+      "title": "Noch nicht verfügbar ({{count}})",
+      "description": "Integrationen aus dem Katalog, die Ihre Administration für Sie noch nicht freigegeben hat. Fragen Sie eine an; die Administration entscheidet.",
+      "search": "Katalog durchsuchen",
+      "noMatches": "Nichts im Katalog passt.",
+      "publisher": "von {{publisher}}",
+      "adminNote": "Administration: {{note}}",
+      "request": "Anfragen",
+      "requestNamed": "{{name}} anfragen",
+      "requestAgain": "Erneut anfragen",
+      "requestAgainNamed": "{{name}} erneut anfragen",
+      "reasonLabel": "Wofür brauchen Sie es? (optional)",
+      "reasonCount": "{{count}} von {{max}} Zeichen",
+      "send": "Anfrage senden",
+      "sent": "Anfrage für {{name}} gesendet. Die Administration entscheidet.",
+      "alreadyRequested": "Sie haben {{name}} bereits angefragt.",
+      "failed": "{{name}} konnte nicht angefragt werden: {{message}}",
+      "state": {
+        "requested": "Angefragt",
+        "approved": "Genehmigt, wird eingerichtet",
+        "declined": "Abgelehnt"
       }
     }
   },

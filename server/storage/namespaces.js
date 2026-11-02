@@ -268,6 +268,17 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * callback that consumes it) and short-lived (15 minutes).
    */
   integrationOAuthFlows: 'integration-oauth-flows',
+  /**
+   * Users' requests for catalog integrations (#2926), one document per
+   * (user, definition), keyed `ireq_<hash>` and owned by the requester, so
+   * "one open request per user and definition" is a create-only write.
+   */
+  integrationRequests: 'integration-requests',
+  /**
+   * Definitions an admin declined and hid from the users' catalog view, one
+   * marker per definition, keyed `ihid_<hash>`.
+   */
+  integrationRequestsHidden: 'integration-requests-hidden',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

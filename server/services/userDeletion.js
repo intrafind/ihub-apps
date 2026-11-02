@@ -197,6 +197,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // Requests for catalog integrations name the user and their groups.
+    name: 'integrationRequests',
+    kind: 'content',
+    run: async userId => {
+      const { getIntegrationRequestService } =
+        await import('./integrations/IntegrationRequestService.js');
+      return { removed: await getIntegrationRequestService().forgetUser(userId) };
+    }
+  },
+  {
     name: 'shortLinks',
     kind: 'content',
     run: async userId => {

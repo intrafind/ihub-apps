@@ -441,6 +441,27 @@ run uses them, even after the chat moved to another profile.
 - Tasks saved before keep running as they did: without a stored profile, they search the
   default.
 
+## Users Request Catalog Integrations, Admins Approve From a Queue
+
+Users can now ask for an integration their administrator has not made available to them, and
+administrators see what people ask for.
+
+- **Not available yet:** **Settings → Integrations** lists the catalog integrations the user's
+  groups cannot use yet, read-only, with **Request**. A request takes an optional reason (up to
+  500 characters); afterwards the row shows _Requested_, _Approved, being set up_ or _Declined_
+  with the administrator's note. One open request per user and integration.
+- **Requests tab:** **Admin → Integrations → Requests** lists who asked for what, when and why,
+  with the number of open requests on the tab and next to **Integrations** in the admin sidebar.
+  **Approve** opens the install wizard for the integration; **Decline** and **Decline and hide**
+  take an optional note to the requester. A hidden integration disappears from every user's list
+  (and its other open requests are declined) until an administrator shows it again.
+- **Closes by itself:** a request closes once the integration is installed and the requester's
+  groups may use it, also when the group access is granted later.
+- **Audited:** requests and decisions are written to the audit log (resource `integration`,
+  actions `request` and `requestDecision`).
+
+See [Integrations → Requests from users](../../integrations.md#requests-from-users).
+
 ## LDAP Browser Is an Integration of Its Own
 
 The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the

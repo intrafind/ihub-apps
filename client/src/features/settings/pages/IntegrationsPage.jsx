@@ -8,6 +8,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import AvailableIntegrations from '../components/AvailableIntegrations';
+import RequestableIntegrations from '../components/RequestableIntegrations';
 import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
 import ConnectedAppsCard from '../components/ConnectedAppsCard';
 import { SECONDARY_BUTTON, PRIMARY_BUTTON } from '../components/integrationButtons';
@@ -24,6 +25,8 @@ import { consumeConnectResult } from '../../integrations/connect/connectResult';
  *   signed in via SSO, service account, shared key, not connected, reconnect
  *   needed, unavailable) and Connect / Reconnect / Disconnect through the one
  *   connect flow.
+ * - **Not available yet**: the catalog integrations the user's groups cannot
+ *   use yet, read-only, with Request (#2926).
  * - **Sign-in for background tasks**: the stored sign-in iFinder calls are
  *   authorized with (OIDC token exchange only).
  * - **Access to iHub**: connected apps, personal API keys, the Outlook add-in.
@@ -439,6 +442,9 @@ export default function IntegrationsPage() {
                     onMessage={setMessage}
                   />
                 )}
+
+                {/* Catalog integrations the user's groups cannot use yet: Request */}
+                <RequestableIntegrations onMessage={setMessage} />
 
                 {/* iFinder: the stored sign-in its tokens are exchanged from */}
                 {iFinderAuthorization?.enabled && (
