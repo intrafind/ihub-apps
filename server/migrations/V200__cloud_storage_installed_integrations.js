@@ -58,6 +58,51 @@ function localizedOf(value) {
   return t ? { en: t } : undefined;
 }
 
+function put(target, key, value) {
+  if (value !== undefined) target[key] = value;
+}
+
+/** Office 365 sources (`provider.sources` key → install value), in value order. */
+const OFFICE365_SOURCES = [
+  ['personalDrive', 'sourcePersonalDrive'],
+  ['followedSites', 'sourceFollowedSites'],
+  ['teams', 'sourceTeams']
+];
+/** Google Drive sources (`provider.sources` key → install value), in value order. */
+const GOOGLE_DRIVE_SOURCES = [
+  ['myDrive', 'sourceMyDrive'],
+  ['sharedDrives', 'sourceSharedDrives'],
+  ['sharedWithMe', 'sourceSharedWithMe']
+];
+
+/**
+ * Put a `false` install value for each source the provider switched off
+ * (`false`); any other setting writes no value.
+ *
+ * @param {Record<string, unknown>} values - the install values being built
+ * @param {object} sources - `provider.sources`
+ * @param {Array<[string, string]>} fields - source key → install value name
+ */
+function putSwitchedOffSources(values, sources, fields) {
+  for (const [source, field] of fields) {
+    if (sources[source] === false) values[field] = false;
+  }
+}
+
+/** The install values only one provider type has. */
+function putTypeValues(values, provider) {
+  if (provider.type === 'office365') {
+    put(values, 'tenantId', text(provider.tenantId));
+    put(values, 'siteUrl', text(provider.siteUrl));
+    put(values, 'driveId', text(provider.driveId));
+    putSwitchedOffSources(values, provider.sources || {}, OFFICE365_SOURCES);
+  } else if (provider.type === 'googledrive') {
+    putSwitchedOffSources(values, provider.sources || {}, GOOGLE_DRIVE_SOURCES);
+  } else if (provider.type === 'nextcloud') {
+    put(values, 'serverUrl', text(provider.serverUrl));
+  }
+}
+
 /**
  * The installation a provider becomes, without the secrets (see
  * {@link secretsOf}).
@@ -68,28 +113,12 @@ export function instanceFrom(provider, cloudStorageEnabled = true) {
   const spec = PROVIDER_TYPES[provider.type];
   if (!spec) return null;
   const values = {};
-  if (text(provider.clientId)) values.clientId = text(provider.clientId);
-  if (text(provider.clientSecretRef)) values.clientSecretRef = text(provider.clientSecretRef);
-  if (text(provider.redirectUri)) values.redirectUri = text(provider.redirectUri);
-  if (text(provider.id) && text(provider.id) !== spec.instanceId) {
-    values.providerId = text(provider.id);
-  }
-  if (provider.type === 'office365') {
-    if (text(provider.tenantId)) values.tenantId = text(provider.tenantId);
-    if (text(provider.siteUrl)) values.siteUrl = text(provider.siteUrl);
-    if (text(provider.driveId)) values.driveId = text(provider.driveId);
-    const sources = provider.sources || {};
-    if (sources.personalDrive === false) values.sourcePersonalDrive = false;
-    if (sources.followedSites === false) values.sourceFollowedSites = false;
-    if (sources.teams === false) values.sourceTeams = false;
-  } else if (provider.type === 'googledrive') {
-    const sources = provider.sources || {};
-    if (sources.myDrive === false) values.sourceMyDrive = false;
-    if (sources.sharedDrives === false) values.sourceSharedDrives = false;
-    if (sources.sharedWithMe === false) values.sourceSharedWithMe = false;
-  } else if (provider.type === 'nextcloud') {
-    if (text(provider.serverUrl)) values.serverUrl = text(provider.serverUrl);
-  }
+  put(values, 'clientId', text(provider.clientId));
+  put(values, 'clientSecretRef', text(provider.clientSecretRef));
+  put(values, 'redirectUri', text(provider.redirectUri));
+  const providerId = text(provider.id);
+  if (providerId && providerId !== spec.instanceId) values.providerId = providerId;
+  putTypeValues(values, provider);
   const instance = {
     id: spec.instanceId,
     definition: spec.definition,
@@ -145,6 +174,143 @@ export function chooseProviders(providers) {
   return { chosen, skipped };
 }
 
+/** `config/integrations.json` (empty when absent), with an `installed` list and a `security` block. */
+async function readIntegrations(ctx) {
+  const config = (await ctx.fileExists(INTEGRATIONS_FILE))
+    ? (await ctx.readJson(INTEGRATIONS_FILE)) || {}
+    : {};
+  if (!Array.isArray(config.installed)) config.installed = [];
+  if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
+  return config;
+}
+
+/**
+ * The credential store and its encryption, each loaded on first use: most
+ * providers need neither. `changed` tells whether the store must be written.
+ *
+ * @param {object} ctx - migration context
+ * @param {{ crypto?: { encrypt: (v: string) => string, decrypt: (v: string) => string } }} deps - see {@link up}
+ */
+function lazySecrets(ctx, deps) {
+  let cryptoTools = deps.crypto;
+  let store = null;
+  return {
+    changed: false,
+    /** The store as loaded so far (null before the first {@link credentialStore} call). */
+    get store() {
+      return store;
+    },
+    async tools() {
+      if (!cryptoTools) {
+        const { default: tokenStorage } = await import('../services/TokenStorageService.js');
+        cryptoTools = {
+          encrypt: value => tokenStorage.encryptString(value),
+          decrypt: value => tokenStorage.decryptString(value)
+        };
+      }
+      return cryptoTools;
+    },
+    async credentialStore() {
+      if (!store) {
+        store = (await ctx.fileExists(CREDENTIALS_FILE))
+          ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
+          : {};
+        if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
+      }
+      return store;
+    }
+  };
+}
+
+/**
+ * Office 365: the tenant id was filed as a credential (V061); it is an
+ * identifier, so it goes back into the values in the clear. A credential that
+ * is missing or cannot be decrypted is reported, not fatal.
+ */
+async function restoreTenantId(ctx, provider, instance, secrets) {
+  if (instance.values.tenantId || !text(provider.tenantIdRef)) return;
+  const credentials = (await secrets.credentialStore()).credentials;
+  const entry = credentials[text(provider.tenantIdRef)];
+  const stored = typeof entry === 'string' ? entry : entry?.value;
+  if (typeof stored !== 'string' || !stored) {
+    ctx.warn(
+      `Office 365 provider "${provider.id}": the tenant id credential "${provider.tenantIdRef}" was not found; enter the tenant id on the installation`
+    );
+    return;
+  }
+  try {
+    instance.values.tenantId = (await secrets.tools()).decrypt(stored);
+  } catch {
+    ctx.warn(
+      `Office 365 provider "${provider.id}": the tenant id credential "${provider.tenantIdRef}" could not be decrypted; enter the tenant id on the installation`
+    );
+  }
+}
+
+/** Move the provider's plain-text secrets (see {@link secretsOf}) into the credential store. */
+async function moveSecrets(ctx, provider, instance, spec, secrets) {
+  const plain = secretsOf(provider);
+  if (!plain.length) return;
+  const { credentials } = await secrets.credentialStore();
+  const cryptoTools = await secrets.tools();
+  for (const { field, value } of plain) {
+    const id = `integration-${spec.instanceId}-${field}`;
+    credentials[id] = {
+      id,
+      type: 'secret',
+      name: `${instance.label?.en || spec.instanceId}: client secret`,
+      description: `Managed by the installed integration "${spec.instanceId}"`,
+      value: cryptoTools.encrypt(value)
+    };
+    secrets.changed = true;
+    instance.values[field] = id;
+    ctx.log(`Cloud storage provider "${provider.id}": client secret moved to credential "${id}"`);
+  }
+}
+
+/**
+ * Install the provider chosen for a type, unless an installation of that type
+ * exists: then the provider joins `skipped`.
+ *
+ * @param {object} ctx - migration context
+ * @param {object} job
+ * @param {string} job.type - the provider type
+ * @param {object} job.provider - the provider chosen for it (see {@link chooseProviders})
+ * @param {object} job.block - `platform.cloudStorage`
+ * @param {{ installed: object[] }} job.config - `config/integrations.json`, appended to
+ * @param {ReturnType<typeof lazySecrets>} job.secrets
+ * @param {object[]} job.skipped - the providers that are not migrated
+ */
+async function migrateProvider(ctx, { type, provider, block, config, secrets, skipped }) {
+  const spec = PROVIDER_TYPES[type];
+  if (config.installed.some(inst => inst?.id === spec.instanceId)) {
+    ctx.log(
+      `Installed integration "${spec.instanceId}" exists; provider "${provider.id}" left as it is`
+    );
+    skipped.push(provider);
+    return;
+  }
+  const instance = instanceFrom(provider, block.enabled);
+  if (type === 'office365') await restoreTenantId(ctx, provider, instance, secrets);
+  await moveSecrets(ctx, provider, instance, spec, secrets);
+  const now = new Date().toISOString();
+  instance.installedAt = now;
+  instance.updatedAt = now;
+  config.installed.push(instance);
+  ctx.log(
+    `Cloud storage provider "${provider.id}" (${type}) → installed integration "${spec.instanceId}" (${instance.enabled ? 'enabled' : 'disabled'})`
+  );
+}
+
+/** Keep the providers that could not be moved in a side file, and say so. */
+async function keepUnmigrated(ctx, block, skipped) {
+  await ctx.writeJson(UNMIGRATED_FILE, { enabled: block.enabled, providers: skipped });
+  const names = skipped.map(p => `"${p.id}" (${p.type})`).join(', ');
+  ctx.warn(
+    `${skipped.length} cloud storage provider(s) not migrated (one installation per provider type): ${names}. Kept in ${UNMIGRATED_FILE}; the installed integration of each type holds the first enabled provider.`
+  );
+}
+
 /**
  * @param {object} ctx - migration context
  * @param {{ crypto?: { encrypt: (v: string) => string, decrypt: (v: string) => string } }} [deps]
@@ -153,107 +319,22 @@ export function chooseProviders(providers) {
 export async function up(ctx, deps = {}) {
   if (!(await ctx.fileExists(PLATFORM_FILE))) return;
   const platform = (await ctx.readJson(PLATFORM_FILE)) || {};
-  if (!Object.prototype.hasOwnProperty.call(platform, 'cloudStorage')) return;
+  if (!Object.hasOwn(platform, 'cloudStorage')) return;
   const block = platform.cloudStorage || {};
   const providers = Array.isArray(block.providers) ? block.providers.filter(Boolean) : [];
-
-  let cryptoTools = deps.crypto;
-  async function tools() {
-    if (!cryptoTools) {
-      const { default: tokenStorage } = await import('../services/TokenStorageService.js');
-      cryptoTools = {
-        encrypt: value => tokenStorage.encryptString(value),
-        decrypt: value => tokenStorage.decryptString(value)
-      };
-    }
-    return cryptoTools;
-  }
-
-  const config = (await ctx.fileExists(INTEGRATIONS_FILE))
-    ? (await ctx.readJson(INTEGRATIONS_FILE)) || {}
-    : {};
-  if (!Array.isArray(config.installed)) config.installed = [];
-  if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
-
-  let store = null;
-  async function credentialStore() {
-    if (!store) {
-      store = (await ctx.fileExists(CREDENTIALS_FILE))
-        ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
-        : {};
-      if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
-    }
-    return store;
-  }
-  let credentialsChanged = false;
+  const secrets = lazySecrets(ctx, deps);
+  const config = await readIntegrations(ctx);
 
   const { chosen, skipped } = chooseProviders(providers);
+  // Sequential on purpose: the installations, log lines and warnings follow the
+  // provider order, and the credential store is read only once a provider needs it.
   for (const [type, provider] of chosen) {
-    const spec = PROVIDER_TYPES[type];
-    if (config.installed.some(inst => inst?.id === spec.instanceId)) {
-      ctx.log(
-        `Installed integration "${spec.instanceId}" exists; provider "${provider.id}" left as it is`
-      );
-      skipped.push(provider);
-      continue;
-    }
-    const instance = instanceFrom(provider, block.enabled);
-    // Office 365: the tenant id was filed as a credential (V061); it is an
-    // identifier, so it goes back into the values in the clear.
-    if (type === 'office365' && !instance.values.tenantId && text(provider.tenantIdRef)) {
-      const credentials = (await credentialStore()).credentials;
-      const entry = credentials[text(provider.tenantIdRef)];
-      const stored = typeof entry === 'string' ? entry : entry?.value;
-      if (typeof stored === 'string' && stored) {
-        try {
-          instance.values.tenantId = (await tools()).decrypt(stored);
-        } catch {
-          ctx.warn(
-            `Office 365 provider "${provider.id}": the tenant id credential "${provider.tenantIdRef}" could not be decrypted; enter the tenant id on the installation`
-          );
-        }
-      } else {
-        ctx.warn(
-          `Office 365 provider "${provider.id}": the tenant id credential "${provider.tenantIdRef}" was not found; enter the tenant id on the installation`
-        );
-      }
-    }
-    for (const { field, value } of secretsOf(provider)) {
-      const id = `integration-${spec.instanceId}-${field}`;
-      const credentials = (await credentialStore()).credentials;
-      credentials[id] = {
-        id,
-        type: 'secret',
-        name: `${instance.label?.en || spec.instanceId}: client secret`,
-        description: `Managed by the installed integration "${spec.instanceId}"`,
-        value: (await tools()).encrypt(value)
-      };
-      credentialsChanged = true;
-      instance.values[field] = id;
-      ctx.log(`Cloud storage provider "${provider.id}": client secret moved to credential "${id}"`);
-    }
-    const now = new Date().toISOString();
-    instance.installedAt = now;
-    instance.updatedAt = now;
-    config.installed.push(instance);
-    ctx.log(
-      `Cloud storage provider "${provider.id}" (${type}) → installed integration "${spec.instanceId}" (${instance.enabled ? 'enabled' : 'disabled'})`
-    );
+    await migrateProvider(ctx, { type, provider, block, config, secrets, skipped });
   }
 
   await ctx.writeJson(INTEGRATIONS_FILE, config);
-  if (credentialsChanged) await ctx.writeJson(CREDENTIALS_FILE, store);
-
-  if (skipped.length) {
-    await ctx.writeJson(UNMIGRATED_FILE, { enabled: block.enabled, providers: skipped });
-    ctx.warn(
-      `${skipped.length} cloud storage provider(s) not migrated (one installation per provider type): ${skipped
-        .map(p => `"${p.id}" (${p.type})`)
-        .join(
-          ', '
-        )}. Kept in ${UNMIGRATED_FILE}; the installed integration of each type holds the first enabled provider.`
-    );
-  }
+  if (secrets.changed) await ctx.writeJson(CREDENTIALS_FILE, secrets.store);
+  if (skipped.length) await keepUnmigrated(ctx, block, skipped);
 
   delete platform.cloudStorage;
   await ctx.writeJson(PLATFORM_FILE, platform);

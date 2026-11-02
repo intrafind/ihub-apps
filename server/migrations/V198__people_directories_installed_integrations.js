@@ -66,6 +66,9 @@ const MAPPED_PERSON_FIELDS = [
   'managerId'
 ];
 
+/** The numeric limits of a directory, taken over as they are. */
+const LIMIT_KEYS = ['maxResults', 'timeoutMs', 'concurrency', 'requestDelayMs'];
+
 const text = value => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 const list = value =>
   Array.isArray(value) ? value.map(item => String(item).trim()).filter(Boolean) : [];
@@ -73,6 +76,71 @@ const number = value => (typeof value === 'number' && !Number.isNaN(value) ? val
 
 function put(target, key, value) {
   if (value !== undefined) target[key] = value;
+}
+
+/** Put a {@link list} value, unless it is empty. */
+function putList(target, key, value) {
+  const items = list(value);
+  if (items.length) target[key] = items;
+}
+
+/**
+ * The sources of one attribute mapping, which names one attribute or a list of them.
+ * @param {unknown} raw - `attributeMapping[field]`
+ * @returns {unknown[]}
+ */
+function sourcesOf(raw) {
+  if (Array.isArray(raw)) return raw;
+  return raw ? [raw] : [];
+}
+
+/**
+ * Put a bind block as `<prefix>Mode`, `<prefix>Dn` and `<prefix>PasswordRef`
+ * (`bind…` for the directory, `browseBind…` for the LDAP browser). Only the
+ * modes `anonymous` and `service` are taken over; DN and password reference
+ * belong to `service` only.
+ *
+ * @param {Record<string, unknown>} values - the install values being built
+ * @param {string} prefix - `bind` or `browseBind`
+ * @param {unknown} bind - the entry's `bind` or `browse.bind`
+ */
+function putBind(values, prefix, bind) {
+  const mode = bind?.mode;
+  if (mode !== 'anonymous' && mode !== 'service') return;
+  values[`${prefix}Mode`] = mode;
+  if (mode === 'service') {
+    put(values, `${prefix}Dn`, text(bind.dn));
+    put(values, `${prefix}PasswordRef`, text(bind.passwordRef));
+  }
+}
+
+/** The connection values: auth provider, URL, StartTLS, base DN, preset and TLS options. */
+function putConnectionValues(values, directory) {
+  put(values, 'authProvider', text(directory.authProvider));
+  put(values, 'url', text(directory.url));
+  if (typeof directory.starttls === 'boolean') values.starttls = directory.starttls;
+  put(values, 'baseDn', text(directory.baseDn));
+  put(values, 'preset', text(directory.preset));
+  put(values, 'tlsMinVersion', text(directory.tlsOptions?.minVersion));
+  put(values, 'tlsMaxVersion', text(directory.tlsOptions?.maxVersion));
+  put(values, 'tlsCiphers', text(directory.tlsOptions?.ciphers));
+}
+
+/** The attribute mapping as `mapping_<field>` values, in {@link MAPPED_PERSON_FIELDS} order. */
+function putMappingValues(values, attributeMapping) {
+  for (const field of MAPPED_PERSON_FIELDS) {
+    putList(values, `mapping_${field}`, sourcesOf(attributeMapping?.[field]));
+  }
+}
+
+/** The LDAP browser values of an entry whose `browse.enabled` is true. */
+function putBrowseValues(values, browse) {
+  values.browse = true;
+  putList(values, 'browseGroups', browse.groups);
+  put(values, 'browseMaxResults', number(browse.maxResults));
+  put(values, 'browseBase', text(browse.base));
+  putBind(values, 'browseBind', browse.bind);
+  putList(values, 'browseDenyAttributes', browse.denyAttributes);
 }
 
 /**
@@ -85,57 +153,19 @@ function put(target, key, value) {
  */
 export function valuesFromDirectory(directory) {
   const values = {};
-  put(values, 'authProvider', text(directory.authProvider));
-  put(values, 'url', text(directory.url));
-  if (typeof directory.starttls === 'boolean') values.starttls = directory.starttls;
-  put(values, 'baseDn', text(directory.baseDn));
-  put(values, 'preset', text(directory.preset));
-  put(values, 'tlsMinVersion', text(directory.tlsOptions?.minVersion));
-  put(values, 'tlsMaxVersion', text(directory.tlsOptions?.maxVersion));
-  put(values, 'tlsCiphers', text(directory.tlsOptions?.ciphers));
-  if (directory.bind?.mode === 'anonymous' || directory.bind?.mode === 'service') {
-    values.bindMode = directory.bind.mode;
-    if (directory.bind.mode === 'service') {
-      put(values, 'bindDn', text(directory.bind.dn));
-      put(values, 'bindPasswordRef', text(directory.bind.passwordRef));
-    }
-  }
+  putConnectionValues(values, directory);
+  putBind(values, 'bind', directory.bind);
   put(values, 'searchBase', text(directory.searchBase));
   put(values, 'personFilter', text(directory.personFilter));
-  const searchAttributes = list(directory.searchAttributes);
-  if (searchAttributes.length) values.searchAttributes = searchAttributes;
-  for (const field of MAPPED_PERSON_FIELDS) {
-    const raw = directory.attributeMapping?.[field];
-    const sources = list(Array.isArray(raw) ? raw : raw ? [raw] : []);
-    if (sources.length) values[`mapping_${field}`] = sources;
-  }
+  putList(values, 'searchAttributes', directory.searchAttributes);
+  putMappingValues(values, directory.attributeMapping);
   if (directory.units === true) values.units = true;
   if (directory.allowPlaintext === true) values.allowPlaintext = true;
-  const tlsCa = list(directory.tlsCa);
-  if (tlsCa.length) values.tlsCa = tlsCa;
-  const allowedHosts = list(directory.allowedHosts);
-  if (allowedHosts.length) values.allowedHosts = allowedHosts;
-  for (const key of ['maxResults', 'timeoutMs', 'concurrency', 'requestDelayMs']) {
-    put(values, key, number(directory[key]));
-  }
+  putList(values, 'tlsCa', directory.tlsCa);
+  putList(values, 'allowedHosts', directory.allowedHosts);
+  for (const key of LIMIT_KEYS) put(values, key, number(directory[key]));
   if (directory.dataFlow === 'external') values.dataFlow = 'external';
-  const browse = directory.browse;
-  if (browse?.enabled === true) {
-    values.browse = true;
-    const groups = list(browse.groups);
-    if (groups.length) values.browseGroups = groups;
-    put(values, 'browseMaxResults', number(browse.maxResults));
-    put(values, 'browseBase', text(browse.base));
-    if (browse.bind?.mode === 'anonymous' || browse.bind?.mode === 'service') {
-      values.browseBindMode = browse.bind.mode;
-      if (browse.bind.mode === 'service') {
-        put(values, 'browseBindDn', text(browse.bind.dn));
-        put(values, 'browseBindPasswordRef', text(browse.bind.passwordRef));
-      }
-    }
-    const deny = list(browse.denyAttributes);
-    if (deny.length) values.browseDenyAttributes = deny;
-  }
+  if (directory.browse?.enabled === true) putBrowseValues(values, directory.browse);
   return values;
 }
 
@@ -205,79 +235,93 @@ export function plainPasswordsOf(directory) {
 }
 
 /**
- * Rewrite an app's directory references to bindings. Returns the app and
- * whether it changed.
- * @param {object} app
- * @param {string[]} directoryIds - Ids of the directories (installed or not)
+ * The people search a tool reference names: every directory
+ * (`peopleDirectories`), one directory (`<dirId>`), or one search action of a
+ * directory (`<dirId>__search_people`).
+ *
+ * @param {unknown} ref - an entry of `app.tools`
+ * @param {Set<string>} ids - the directory ids
+ * @returns {{ all: true } | { id: string, action: string | null } | null} null
+ *   for any other reference (`ldapBrowse`, `<dirId>__browse_*`, other tools)
  */
-export function migrateApp(app, directoryIds) {
-  if (!app || typeof app !== 'object') return { app, changed: false };
-  const ids = new Set(directoryIds);
-  const bindings = { ...(app.integrations || {}) };
-  let changed = false;
-  let bindAll = false;
-  let bindAllFromRequirement = false;
-
-  const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : null;
-  if (required && required.includes(ALL_DIRECTORIES_REFERENCE)) {
-    bindAll = true;
-    bindAllFromRequirement = true;
+function searchTargetOf(ref, ids) {
+  if (typeof ref !== 'string') return null;
+  if (ref === ALL_DIRECTORIES_REFERENCE) return { all: true };
+  if (ids.has(ref)) return { id: ref, action: null };
+  const at = ref.indexOf('__');
+  if (at > 0 && ids.has(ref.slice(0, at)) && SEARCH_ACTIONS.includes(ref.slice(at + 2))) {
+    return { id: ref.slice(0, at), action: ref.slice(at + 2) };
   }
+  return null;
+}
 
-  const kept = [];
-  const perDirectory = new Map(); // id → Set of actions, or null for every action
-  let selectsSearch = false;
-  if (Array.isArray(app.tools)) {
-    for (const ref of app.tools) {
-      if (typeof ref !== 'string') {
-        kept.push(ref);
-        continue;
-      }
-      if (ref === ALL_DIRECTORIES_REFERENCE) {
-        bindAll = true;
-        selectsSearch = true;
-        changed = true;
-        continue;
-      }
-      if (ids.has(ref)) {
-        perDirectory.set(ref, null);
-        selectsSearch = true;
-        changed = true;
-        continue;
-      }
-      const at = ref.indexOf('__');
-      if (at > 0 && ids.has(ref.slice(0, at)) && SEARCH_ACTIONS.includes(ref.slice(at + 2))) {
-        const id = ref.slice(0, at);
-        const action = ref.slice(at + 2);
-        if (!perDirectory.has(id)) perDirectory.set(id, new Set());
-        perDirectory.get(id)?.add(action);
-        selectsSearch = true;
-        changed = true;
-        continue;
-      }
+/**
+ * Record a directory in `perDirectory`: `null` once the whole directory is
+ * named (every action, whatever else is named), else the Set of its named actions.
+ */
+function addSearchTarget(perDirectory, { id, action }) {
+  if (action === null) {
+    perDirectory.set(id, null);
+    return;
+  }
+  if (!perDirectory.has(id)) perDirectory.set(id, new Set());
+  perDirectory.get(id)?.add(action);
+}
+
+/**
+ * Sort an app's `tools` into the people search references and the rest.
+ *
+ * @param {unknown} tools - `app.tools`
+ * @param {Set<string>} ids - the directory ids
+ * @returns {{ kept: unknown[], perDirectory: Map<string, Set<string> | null>, all: boolean, search: boolean }}
+ *   `kept`: the references that stay; `perDirectory`: id → Set of actions, or
+ *   null for every action; `all`: `peopleDirectories` was named; `search`: any
+ *   people search reference was named
+ */
+function searchSelectionOf(tools, ids) {
+  const selection = { kept: [], perDirectory: new Map(), all: false, search: false };
+  if (!Array.isArray(tools)) return selection;
+  for (const ref of tools) {
+    const target = searchTargetOf(ref, ids);
+    if (!target) {
       // `ldapBrowse` and `<id>__browse_*` keep selecting the browser tools.
-      kept.push(ref);
+      selection.kept.push(ref);
+      continue;
     }
+    selection.search = true;
+    if (target.all) selection.all = true;
+    else addSearchTarget(selection.perDirectory, target);
   }
+  return selection;
+}
 
-  if (bindAll) {
-    const existing = bindings[DEFINITION] || {};
-    const binding = { ...existing };
-    if (selectsSearch) {
-      delete binding.actions;
-    } else if (
-      bindAllFromRequirement &&
-      kept.includes(LDAP_BROWSE_REFERENCE) &&
-      !Array.isArray(existing.actions)
-    ) {
-      // The app reached the directories through the LDAP browser only: the
-      // binding keeps it visible while a directory is installed, the browse
-      // tools still come through `ldapBrowse`.
-      binding.actions = [];
-    }
-    bindings[DEFINITION] = binding;
-    changed = true;
+/**
+ * Bind the definition, i.e. every directory, including later ones.
+ *
+ * @param {Record<string, object>} bindings - the app's bindings being built
+ * @param {{ kept: unknown[], search: boolean }} selection - see {@link searchSelectionOf}
+ * @param {boolean} fromRequirement - `requiredIntegrations` named `peopleDirectories`
+ */
+function bindEveryDirectory(bindings, selection, fromRequirement) {
+  const existing = bindings[DEFINITION] || {};
+  const binding = { ...existing };
+  if (selection.search) {
+    delete binding.actions;
+  } else if (
+    fromRequirement &&
+    selection.kept.includes(LDAP_BROWSE_REFERENCE) &&
+    !Array.isArray(existing.actions)
+  ) {
+    // The app reached the directories through the LDAP browser only: the
+    // binding keeps it visible while a directory is installed, the browse
+    // tools still come through `ldapBrowse`.
+    binding.actions = [];
   }
+  bindings[DEFINITION] = binding;
+}
+
+/** Bind each named directory, narrowed to the named actions unless all of them are named. */
+function bindNamedDirectories(bindings, perDirectory) {
   for (const [id, actions] of perDirectory) {
     const existing = bindings[id] || {};
     const binding = { ...existing };
@@ -285,10 +329,10 @@ export function migrateApp(app, directoryIds) {
     else binding.actions = Array.from(new Set([...(existing.actions || []), ...actions]));
     bindings[id] = binding;
   }
+}
 
-  if (required) changed = true;
-  if (!changed) return { app, changed: false };
-
+/** The app with the retired references removed and the bindings set. */
+function rewrittenApp(app, required, kept, bindings) {
   const next = { ...app };
   if (required) {
     const rest = required.filter(id => id !== ALL_DIRECTORIES_REFERENCE);
@@ -300,7 +344,28 @@ export function migrateApp(app, directoryIds) {
     else delete next.tools;
   }
   if (Object.keys(bindings).length) next.integrations = bindings;
-  return { app: next, changed: true };
+  return next;
+}
+
+/**
+ * Rewrite an app's directory references to bindings. Returns the app and
+ * whether it changed.
+ * @param {object} app
+ * @param {string[]} directoryIds - Ids of the directories (installed or not)
+ */
+export function migrateApp(app, directoryIds) {
+  if (!app || typeof app !== 'object') return { app, changed: false };
+  const ids = new Set(directoryIds);
+  const bindings = { ...app.integrations };
+  const required = Array.isArray(app.requiredIntegrations) ? app.requiredIntegrations : null;
+  const bindAllFromRequirement = required?.includes(ALL_DIRECTORIES_REFERENCE) === true;
+  const selection = searchSelectionOf(app.tools, ids);
+  const bindAll = bindAllFromRequirement || selection.all;
+  if (bindAll) bindEveryDirectory(bindings, selection, bindAllFromRequirement);
+  bindNamedDirectories(bindings, selection.perDirectory);
+  // A `requiredIntegrations` list is rewritten even without a directory in it.
+  if (!bindAll && !selection.search && !required) return { app, changed: false };
+  return { app: rewrittenApp(app, required, selection.kept, bindings), changed: true };
 }
 
 /** The credential-store entry of a plain-text password the migration moves. */
@@ -315,18 +380,15 @@ function credentialOf(instance, field, encryptedValue) {
   };
 }
 
-/**
- * @param {object} ctx - migration context
- * @param {{ encrypt?: (value: string) => string }} [deps] - the credential
- *   store's encryption (the token storage service when absent; injectable for tests)
- */
-export async function up(ctx, deps = {}) {
-  const hadFile = await ctx.fileExists(DIRECTORIES_FILE);
-  const file = hadFile ? (await ctx.readJson(DIRECTORIES_FILE)) || {} : {};
-  const directories = Array.isArray(file.directories)
+/** The entries of `peopleDirectories.json` the migration handles: those with an id. */
+function directoriesIn(file) {
+  return Array.isArray(file.directories)
     ? file.directories.filter(d => d && typeof d.id === 'string' && d.id)
     : [];
+}
 
+/** `config/integrations.json` (empty when absent), with an `installed` list and a `security` block. */
+async function readIntegrations(ctx) {
   const integrations = (await ctx.fileExists(INTEGRATIONS_FILE))
     ? (await ctx.readJson(INTEGRATIONS_FILE)) || {}
     : {};
@@ -334,34 +396,61 @@ export async function up(ctx, deps = {}) {
   if (!integrations.security) {
     integrations.security = { blockPrivateIps: true, allowedHosts: [] };
   }
+  return integrations;
+}
 
-  let migrated = 0;
-  const skipped = [];
-  const credentials = [];
+/**
+ * Whether a directory cannot become an installation, recording its id as seen:
+ * a hand-edited file may repeat an id (the first entry was the one in use), or
+ * another installation (an MCP server, an agent, a catalog integration) holds
+ * the id.
+ *
+ * @param {{ id: string }} directory
+ * @param {Set<string>} seen - the ids of the entries before this one
+ * @param {object[]} installed - `integrations.installed`
+ */
+function isTaken(directory, seen, installed) {
+  if (seen.has(directory.id)) return true;
+  seen.add(directory.id);
+  return installed.some(inst => inst.id === directory.id);
+}
+
+/** The credential store's encryption: the injected one, else the token storage service's. */
+async function encryptorOf(deps) {
+  if (deps.encrypt) return deps.encrypt;
+  const { default: tokenStorage } = await import('../services/TokenStorageService.js');
+  return v => tokenStorage.encryptString(v);
+}
+
+/**
+ * Append an installation to `installed` for each directory whose id is free.
+ * A plain-text password becomes a credential (returned for the credential
+ * store) and the installation keeps a reference to it.
+ *
+ * @param {object} ctx - migration context
+ * @param {object[]} directories - see {@link directoriesIn}
+ * @param {object[]} installed - `integrations.installed`, appended to
+ * @param {{ encrypt?: (value: string) => string }} deps - see {@link up}
+ * @returns {Promise<{ migrated: number, skipped: object[], credentials: object[] }>}
+ *   `skipped`: the directories whose id is taken (see {@link isTaken})
+ */
+async function installDirectories(ctx, directories, installed, deps) {
+  const outcome = { migrated: 0, skipped: [], credentials: [] };
   const seen = new Set();
+  // Sequential on purpose: the installations and their log lines follow the file
+  // order, and the token storage is loaded only once a plain-text password needs it.
   for (const directory of directories) {
-    if (seen.has(directory.id)) {
-      // A hand-edited file may repeat an id; the first entry was the one in use.
-      skipped.push(directory);
-      continue;
-    }
-    seen.add(directory.id);
-    if (integrations.installed.some(inst => inst.id === directory.id)) {
-      // Another installation (an MCP server, an agent, a catalog integration)
-      // holds the id. The directory cannot take it; it is kept in a side file
-      // below instead of being lost with peopleDirectories.json.
-      skipped.push(directory);
+    if (isTaken(directory, seen, installed)) {
+      // Kept in a side file instead of being lost with peopleDirectories.json.
+      outcome.skipped.push(directory);
       continue;
     }
     const instance = instanceFrom(directory);
-    for (const { field, value } of plainPasswordsOf(directory)) {
-      let encrypt = deps.encrypt;
-      if (!encrypt) {
-        const { default: tokenStorage } = await import('../services/TokenStorageService.js');
-        encrypt = v => tokenStorage.encryptString(v);
-      }
+    const passwords = plainPasswordsOf(directory);
+    const encrypt = passwords.length ? await encryptorOf(deps) : undefined;
+    for (const { field, value } of passwords) {
       const credential = credentialOf(instance, field, encrypt(value));
-      credentials.push(credential);
+      outcome.credentials.push(credential);
       instance.values[field] = credential.id;
       ctx.log(
         `People directory "${directory.id}": plain-text password moved to credential "${credential.id}"`
@@ -370,30 +459,42 @@ export async function up(ctx, deps = {}) {
     const now = new Date().toISOString();
     instance.installedAt = now;
     instance.updatedAt = now;
-    integrations.installed.push(instance);
-    migrated += 1;
+    installed.push(instance);
+    outcome.migrated += 1;
     ctx.log(`People directory "${directory.id}" → installed integration (${DEFINITION})`);
   }
-  if (hadFile || migrated > 0) await ctx.writeJson(INTEGRATIONS_FILE, integrations);
+  return outcome;
+}
 
-  if (credentials.length) {
-    const store = (await ctx.fileExists(CREDENTIALS_FILE))
-      ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
-      : {};
-    if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
-    for (const credential of credentials) store.credentials[credential.id] = credential;
-    await ctx.writeJson(CREDENTIALS_FILE, store);
-  }
+/** Add the credentials of the moved passwords to `config/credentials.json`. */
+async function storeCredentials(ctx, credentials) {
+  const store = (await ctx.fileExists(CREDENTIALS_FILE))
+    ? (await ctx.readJson(CREDENTIALS_FILE)) || {}
+    : {};
+  if (!store.credentials || typeof store.credentials !== 'object') store.credentials = {};
+  for (const credential of credentials) store.credentials[credential.id] = credential;
+  await ctx.writeJson(CREDENTIALS_FILE, store);
+}
 
-  // Apps: every directory id, moved or not, so a reference to a skipped
-  // directory still becomes the binding the admin completes by installing it.
-  const directoryIds = [
-    ...directories.map(d => d.id),
-    ...integrations.installed.filter(inst => inst.definition === DEFINITION).map(inst => inst.id)
-  ];
-  for (const file of await ctx.listFiles('apps', '*.json')) {
-    const rel = `apps/${file}`;
-    const app = await ctx.readJson(rel);
+/** An app file with its path relative to the contents directory. */
+async function readApp(ctx, file) {
+  const rel = `apps/${file}`;
+  return { rel, app: await ctx.readJson(rel) };
+}
+
+/**
+ * Rewrite the directory references of every app (see {@link migrateApp}).
+ * @param {object} ctx - migration context
+ * @param {string[]} directoryIds - every directory id, moved or not
+ */
+async function migrateApps(ctx, directoryIds) {
+  const files = await ctx.listFiles('apps', '*.json');
+  const reads = await Promise.allSettled(files.map(file => readApp(ctx, file)));
+  // Sequential on purpose: the apps are written and logged in listing order, and a
+  // failed read or write stops the migration at that app with the ones before it written.
+  for (const read of reads) {
+    if (read.status === 'rejected') throw read.reason;
+    const { rel, app } = read.value;
     if (!app) continue;
     const { app: next, changed } = migrateApp(app, directoryIds);
     if (changed) {
@@ -401,17 +502,45 @@ export async function up(ctx, deps = {}) {
       ctx.log(`${rel}: people directory references → integrations binding`);
     }
   }
+}
 
-  if (skipped.length) {
-    await ctx.writeJson(UNMIGRATED_FILE, { directories: skipped });
-    ctx.warn(
-      `${skipped.length} people director${skipped.length === 1 ? 'y' : 'ies'} not migrated because an installed integration already has the id: ${skipped
-        .map(d => `"${d.id}"`)
-        .join(
-          ', '
-        )}. Kept in ${UNMIGRATED_FILE}; install each as "LDAP people directory" under a free id and bind it to its apps.`
-    );
-  }
+/** Keep the directories that could not be moved in a side file, and say so. */
+async function keepUnmigrated(ctx, skipped) {
+  await ctx.writeJson(UNMIGRATED_FILE, { directories: skipped });
+  const ids = skipped.map(d => `"${d.id}"`).join(', ');
+  ctx.warn(
+    `${skipped.length} people director${skipped.length === 1 ? 'y' : 'ies'} not migrated because an installed integration already has the id: ${ids}. Kept in ${UNMIGRATED_FILE}; install each as "LDAP people directory" under a free id and bind it to its apps.`
+  );
+}
+
+/**
+ * @param {object} ctx - migration context
+ * @param {{ encrypt?: (value: string) => string }} [deps] - the credential
+ *   store's encryption (the token storage service when absent; injectable for tests)
+ */
+export async function up(ctx, deps = {}) {
+  const hadFile = await ctx.fileExists(DIRECTORIES_FILE);
+  const directories = directoriesIn(hadFile ? (await ctx.readJson(DIRECTORIES_FILE)) || {} : {});
+  const integrations = await readIntegrations(ctx);
+
+  const { migrated, skipped, credentials } = await installDirectories(
+    ctx,
+    directories,
+    integrations.installed,
+    deps
+  );
+  if (hadFile || migrated > 0) await ctx.writeJson(INTEGRATIONS_FILE, integrations);
+  if (credentials.length) await storeCredentials(ctx, credentials);
+
+  // Apps: every directory id, moved or not, so a reference to a skipped
+  // directory still becomes the binding the admin completes by installing it.
+  const directoryIds = [
+    ...directories.map(d => d.id),
+    ...integrations.installed.filter(inst => inst.definition === DEFINITION).map(inst => inst.id)
+  ];
+  await migrateApps(ctx, directoryIds);
+
+  if (skipped.length) await keepUnmigrated(ctx, skipped);
   if (hadFile) {
     await ctx.deleteFile(DIRECTORIES_FILE);
     ctx.log(`${DIRECTORIES_FILE} removed: people directories are installed integrations now`);

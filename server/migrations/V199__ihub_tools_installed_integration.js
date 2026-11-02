@@ -110,7 +110,7 @@ function sortKeys(value) {
  * @param {(text: string) => string} sha256 - hex digest
  */
 export function contentHash(tool, sha256) {
-  const rest = { ...(tool || {}) };
+  const rest = { ...tool };
   delete rest.enabled;
   return sha256(JSON.stringify(sortKeys(rest)));
 }
@@ -129,53 +129,107 @@ export function ihubInstance(disabledActions = []) {
   };
 }
 
-/**
- * @param {object} ctx - migration context
- * @param {{ sha256?: (text: string) => string }} [deps] - hashing (node:crypto when absent)
- */
-export async function up(ctx, deps = {}) {
-  let sha256 = deps.sha256;
-  if (!sha256) {
-    const { createHash } = await import('node:crypto');
-    sha256 = text => createHash('sha256').update(text).digest('hex');
-  }
+/** The hash: the injected one, else node:crypto's SHA-256 as a hex digest. */
+async function sha256Of(deps) {
+  if (deps.sha256) return deps.sha256;
+  const { createHash } = await import('node:crypto');
+  return text => createHash('sha256').update(text).digest('hex');
+}
 
+/** `config/integrations.json` (empty when absent), with an `installed` list and a `security` block. */
+async function readIntegrations(ctx) {
   const config = (await ctx.fileExists(INTEGRATIONS_FILE))
     ? (await ctx.readJson(INTEGRATIONS_FILE)) || {}
     : {};
   if (!Array.isArray(config.installed)) config.installed = [];
   if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
+  return config;
+}
 
+/**
+ * A shipped tool file as it is on disk.
+ * @returns {Promise<{ id: string, rel: string, tool: unknown } | null>} null when absent
+ */
+async function readShippedToolFile(ctx, id) {
+  const rel = `tools/${id}.json`;
+  if (!(await ctx.fileExists(rel))) return null;
+  return { id, rel, tool: await ctx.readJson(rel) };
+}
+
+/** Whether a tool file is the shipped file as shipped (`enabled` aside, see {@link contentHash}). */
+function isAsShipped({ id, tool }, sha256) {
+  return Boolean(tool) && contentHash(tool, sha256) === SHIPPED_HASHES[id];
+}
+
+function addAll(target, items) {
+  for (const item of items) target.add(item);
+}
+
+/**
+ * Delete the shipped tool files that are as shipped; keep the ones an admin edited.
+ *
+ * @param {object} ctx - migration context
+ * @param {(text: string) => string} sha256 - hex digest
+ * @returns {Promise<{ disabled: Set<string>, kept: string[] }>} `disabled`: the
+ *   actions of the deleted files an admin had switched off; `kept`: the paths
+ *   of the edited files
+ */
+async function retireShippedToolFiles(ctx, sha256) {
+  const reads = await Promise.allSettled(
+    Object.keys(SHIPPED_HASHES).map(id => readShippedToolFile(ctx, id))
+  );
   const disabled = new Set();
   const kept = [];
-  for (const [id, shipped] of Object.entries(SHIPPED_HASHES)) {
-    const rel = `tools/${id}.json`;
-    if (!(await ctx.fileExists(rel))) continue;
-    const tool = await ctx.readJson(rel);
-    if (tool && contentHash(tool, sha256) === shipped) {
-      if (tool.enabled === false) {
-        for (const action of ACTIONS_BY_FILE[id]) disabled.add(action);
-      }
-      await ctx.deleteFile(rel);
-      ctx.log(
-        `${rel} removed: the ihub installation owns the tool${tool.enabled === false ? ' (switched off there, as it was here)' : ''}`
-      );
-    } else {
-      kept.push(rel);
+  // Sequential on purpose: the files are hashed, deleted and logged one after the
+  // other in SHIPPED_HASHES order, and a failure stops the migration at that file.
+  for (const read of reads) {
+    if (read.status === 'rejected') throw read.reason;
+    const file = read.value;
+    if (!file) continue;
+    if (!isAsShipped(file, sha256)) {
+      kept.push(file.rel);
+      continue;
     }
+    const switchedOff = file.tool.enabled === false;
+    if (switchedOff) addAll(disabled, ACTIONS_BY_FILE[file.id]);
+    await ctx.deleteFile(file.rel);
+    ctx.log(
+      `${file.rel} removed: the ihub installation owns the tool${switchedOff ? ' (switched off there, as it was here)' : ''}`
+    );
   }
+  return { disabled, kept };
+}
 
-  let instance = config.installed.find(inst => inst?.id === INSTANCE_ID);
+/**
+ * Create the `ihub` installation with the switched-off actions disabled, or add
+ * them to the `actions.disabled` of the existing one.
+ *
+ * @param {object} ctx - migration context
+ * @param {object[]} installed - `config.installed`
+ * @param {Set<string>} disabled - see {@link retireShippedToolFiles}
+ */
+function installIhub(ctx, installed, disabled) {
+  const instance = installed.find(inst => inst?.id === INSTANCE_ID);
   if (!instance) {
     const now = new Date().toISOString();
-    instance = { ...ihubInstance([...disabled]), installedAt: now, updatedAt: now };
-    config.installed.push(instance);
+    installed.push({ ...ihubInstance([...disabled]), installedAt: now, updatedAt: now });
     ctx.log(`Installed integration "${INSTANCE_ID}" created (${DEFINITION})`);
   } else if (disabled.size) {
     if (!instance.actions) instance.actions = { enabled: ['*'], disabled: [], overrides: {} };
     instance.actions.disabled = [...new Set([...(instance.actions.disabled || []), ...disabled])];
     instance.updatedAt = new Date().toISOString();
   }
+}
+
+/**
+ * @param {object} ctx - migration context
+ * @param {{ sha256?: (text: string) => string }} [deps] - hashing (node:crypto when absent)
+ */
+export async function up(ctx, deps = {}) {
+  const sha256 = await sha256Of(deps);
+  const config = await readIntegrations(ctx);
+  const { disabled, kept } = await retireShippedToolFiles(ctx, sha256);
+  installIhub(ctx, config.installed, disabled);
   await ctx.writeJson(INTEGRATIONS_FILE, config);
 
   if (kept.length) {
