@@ -2,14 +2,34 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import { CALLOUT_CLASS } from '../formStyles';
+import { AUTO_ENGINE, webSearchEngineStatus } from './webSearchEngines';
 
 /**
  * WebSearchSection - Web search configuration card for the App form.
  * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
  * only ever reads/writes `app.websearch` via the passed-in onChange.
+ *
+ * Rendered by IntegrationsConfigSection for every chat app: native search
+ * needs no engine, so web search is always possible. The engine select lists
+ * **Auto** and the installed engines (installations of type `web-search`),
+ * disabled ones marked; an engine the app names that is not installed is
+ * kept in the list and warned about.
+ *
+ * @param {Object} props
+ * @param {Object} props.app - the app being edited
+ * @param {(app: Object) => void} props.onChange - receives the whole changed app
+ * @param {Array<Object>|null} [props.engines] - the engine installations in
+ *   Auto's order (`webSearchEnginesOf`); null while unknown (not loaded)
  */
-function WebSearchSection({ app, onChange }) {
+function WebSearchSection({ app, onChange, engines = null }) {
   const { t } = useTranslation();
+  const provider = app.websearch?.provider || AUTO_ENGINE;
+  const engineStatus = webSearchEngineStatus(provider, engines);
+  const engineList = Array.isArray(engines) ? engines : [];
+  const engineLabel = engine =>
+    engine.label && engine.label !== engine.id ? `${engine.label} (${engine.id})` : engine.id;
 
   const handleWebSearchChange = updates => {
     onChange({
@@ -57,33 +77,100 @@ function WebSearchSection({ app, onChange }) {
           {/* Web Search settings - only shown when enabled */}
           {app.websearch?.enabled && (
             <div className="space-y-4 pl-1">
-              {/* Provider */}
+              {/* Engine */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.websearchProvider', 'Provider')}
+                <label
+                  htmlFor="websearch-engine"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('admin.apps.edit.websearchProvider', 'Search engine')}
                 </label>
                 <select
-                  value={app.websearch?.provider ?? 'auto'}
+                  id="websearch-engine"
+                  value={provider}
                   onChange={e => handleWebSearchChange({ provider: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  aria-describedby="websearch-engine-desc"
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 >
-                  <option value="auto">{t('admin.apps.edit.websearchProviderAuto', 'Auto')}</option>
-                  <option value="brave">
-                    {t('admin.apps.edit.websearchProviderBrave', 'Brave')}
+                  <option value={AUTO_ENGINE}>
+                    {t('admin.apps.edit.websearchProviderAuto', 'Auto')}
                   </option>
-                  <option value="staan">
-                    {t('admin.apps.edit.websearchProviderStaan', 'Staan')}
-                  </option>
-                  <option value="qwant">
-                    {t('admin.apps.edit.websearchProviderQwant', 'Qwant (no API key)')}
-                  </option>
+                  {engineList.map(engine => (
+                    <option key={engine.id} value={engine.id}>
+                      {engine.enabled === false
+                        ? t(
+                            'admin.apps.edit.websearchEngineDisabledOption',
+                            '{{name}} — disabled',
+                            {
+                              name: engineLabel(engine)
+                            }
+                          )
+                        : engineLabel(engine)}
+                    </option>
+                  ))}
+                  {/* The named engine, when the list does not have it: not
+                      installed, or the list failed to load (`unknown`). Without
+                      it the select would show Auto for a stored engine. */}
+                  {(engineStatus === 'missing' || engineStatus === 'unknown') && (
+                    <option value={provider}>
+                      {engineStatus === 'missing'
+                        ? t(
+                            'admin.apps.edit.websearchEngineMissingOption',
+                            '{{name}} — not installed',
+                            { name: provider }
+                          )
+                        : provider}
+                    </option>
+                  )}
                 </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p
+                  id="websearch-engine-desc"
+                  className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
                   {t(
                     'admin.apps.edit.websearchProviderDesc',
-                    'Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.'
+                    'Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, then any other engine.'
                   )}
                 </p>
+                {engineStatus === 'missing' && (
+                  <p
+                    className={`mt-2 ${CALLOUT_CLASS.warning}`}
+                    role="alert"
+                    data-testid="websearch-engine-missing"
+                  >
+                    {t(
+                      'admin.apps.edit.websearchEngineMissing',
+                      'The engine "{{engine}}" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.',
+                      { engine: provider }
+                    )}
+                  </p>
+                )}
+                {engineStatus === 'disabled' && (
+                  <p
+                    className={`mt-2 ${CALLOUT_CLASS.warning}`}
+                    data-testid="websearch-engine-disabled"
+                  >
+                    {t(
+                      'admin.apps.edit.websearchEngineDisabled',
+                      'The engine "{{engine}}" is disabled. Until it is enabled, the app searches natively where the model can and not at all on other models.',
+                      { engine: provider }
+                    )}
+                  </p>
+                )}
+                {Array.isArray(engines) && engines.length === 0 && (
+                  <p className={`mt-2 ${CALLOUT_CLASS.info}`} data-testid="websearch-no-engine">
+                    {t(
+                      'admin.apps.edit.websearchNoEngine',
+                      'No search engine is installed: the app searches only on models with native search.'
+                    )}{' '}
+                    <Link
+                      to="/admin/integrations?tab=catalog"
+                      className="underline hover:no-underline"
+                    >
+                      {t('admin.apps.edit.websearchInstallEngine', 'Install an engine')}
+                    </Link>
+                  </p>
+                )}
               </div>
 
               {/* Use Native Search */}
@@ -253,7 +340,7 @@ function WebSearchSection({ app, onChange }) {
                 </label>
               </div>
 
-              {/* Required: hide the app while the websearch installation is off */}
+              {/* Required: hide the app while its web search engine is not available */}
               <div className="flex items-center justify-between">
                 <div>
                   <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -265,7 +352,7 @@ function WebSearchSection({ app, onChange }) {
                   >
                     {t(
                       'admin.apps.edit.websearchRequiredDesc',
-                      'Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.'
+                      'Hide the app while its search engine is not available (Auto: no engine is installed and enabled; a named engine: that one is missing or disabled). Off: the app stays available and searches natively where the model can.'
                     )}
                   </p>
                 </div>

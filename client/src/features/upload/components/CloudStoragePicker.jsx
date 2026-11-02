@@ -4,30 +4,37 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Office365FileBrowser from './Office365FileBrowser';
 import GoogleDriveFileBrowser from './GoogleDriveFileBrowser';
 import NextcloudFileBrowser from './NextcloudFileBrowser';
 
 /**
- * Cloud Storage Picker component
- * Modal for selecting files from cloud storage providers (Office 365, Google Drive, Nextcloud)
+ * Cloud Storage Picker: a modal for picking files from the storage providers
+ * (Office 365, Google Drive, Nextcloud) an app offers. Several installations
+ * of one provider are separate entries, told apart by their label.
+ *
+ * @param {Object} props
+ * @param {(files: Object[]) => void} props.onFileSelect - receives the processed files
+ * @param {() => void} props.onClose
+ * @param {Object|null} [props.preSelectedProvider] - open this provider's browser directly
+ * @param {Array<{ id: string, type: string, displayName?: string, enabled?: boolean }>} [props.providers] -
+ *   the providers to offer: the ones the app binds and the user's groups grant
+ *   (`useFileUploadHandler().createUploadConfig(...).cloudStorage.providers`)
+ * @param {Object} [props.uploadConfig] - the app's upload config, for the extraction options
  */
 const CloudStoragePicker = ({
   onFileSelect,
   onClose,
   preSelectedProvider = null,
+  providers = [],
   uploadConfig = {}
 }) => {
   const { t } = useTranslation();
-  const { platformConfig } = usePlatformConfig();
   const [selectedProvider, setSelectedProvider] = useState(preSelectedProvider);
 
-  // Get cloud storage configuration
-  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
   const enabledProviders = useMemo(
-    () => (cloudStorage.enabled ? cloudStorage.providers.filter(p => p.enabled) : []),
-    [cloudStorage.enabled, cloudStorage.providers]
+    () => (Array.isArray(providers) ? providers.filter(p => p && p.enabled !== false) : []),
+    [providers]
   );
 
   useEffect(() => {
@@ -51,8 +58,8 @@ const CloudStoragePicker = ({
     }
   };
 
-  // No cloud storage enabled
-  if (!cloudStorage.enabled || enabledProviders.length === 0) {
+  // No storage provider to offer
+  if (enabledProviders.length === 0 && !preSelectedProvider) {
     return (
       <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 p-6">

@@ -10,7 +10,7 @@ import {
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
 import { VOICE_LISTENING_STYLES } from '../../shared/voiceMode.js';
-import { zHttpUrl } from './common.js';
+import { zHttpUrl, zSafeId } from './common.js';
 import { projectLinksSchema } from './projectSchema.js';
 import { FEATURE_IDS } from '../featureRegistry.js';
 
@@ -102,10 +102,17 @@ const variablesPanelSchema = z
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    // Whether the app is hidden while the `websearch` installation is missing
-    // or disabled. Off by default: the app stays available without web search.
+    // Whether the app is hidden while its web search engine is not available
+    // (`auto`: no engine installation is enabled; a named engine: that one is
+    // missing or disabled). Off by default: the app stays available, with
+    // native search where the model runs it.
     required: z.boolean().optional().prefault(false),
-    provider: z.enum(['auto', 'brave', 'staan', 'qwant']).optional().prefault('auto'),
+    // The engine: `auto` (the first engine the user may use: Brave, Staan,
+    // Qwant, then any other installation of type `web-search` by id) or the
+    // id of an engine installation (`brave`, `staan`, `qwant`, a third-party
+    // engine's id). A named engine that is not available means no tool-based
+    // search; it never falls back to another one.
+    provider: zSafeId.min(1).max(64).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
     extractContent: z.boolean().optional().prefault(true),
@@ -292,9 +299,14 @@ const uploadSchema = z
           ])
       })
       .optional(),
+    // Retired in V206: an app offers storage providers by binding them under
+    // `integrations` (`"type:storage"`, a provider's definition id or an
+    // installation id; see shared/storageBindings.js). Any value is refused
+    // so a hand-written app learns where the setting went.
     cloudStorageUpload: z
-      .object({
-        enabled: z.boolean().optional().prefault(false)
+      .never({
+        error:
+          'upload.cloudStorageUpload is retired; bind storage providers under "integrations" (e.g. "type:storage": { "required": false })'
       })
       .optional()
   })
@@ -503,7 +515,14 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
 
 const appIntegrationsSchema = z
   .record(
-    z.string().regex(/^[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?$/, 'Invalid integration id'),
+    // An installation id, a definition id (with its one `/`) or a type
+    // (`type:people-directory`, see services/integrations/integrationTypes.js).
+    z
+      .string()
+      .regex(
+        /^(?:[a-zA-Z0-9._-]{1,64}(\/[a-zA-Z0-9._-]{1,64})?|type:[a-z][a-z-]{0,63})$/,
+        'Invalid integration id'
+      ),
     appIntegrationBindingSchema
   )
   .optional();

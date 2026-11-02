@@ -761,10 +761,12 @@ export default function registerAuthRoutes(app) {
           type: ntlmAuthConfig.type || 'ntlm'
         }
       },
-      // The cloud storage providers (no secrets): the `office365`,
-      // `googledrive` and `nextcloud` installations, in the shape the client
-      // always read (`cloudStorage.enabled`, `cloudStorage.providers[]`).
-      cloudStorage: cloudStorageStatus(),
+      // The storage providers (no secrets): every installation of Office 365,
+      // Google Drive and Nextcloud the user's groups grant
+      // (`permissions.integrations`), with its installation id and definition
+      // id so the chat can match an app's bindings (`cloudStorage.enabled`,
+      // `cloudStorage.providers[]`).
+      cloudStorage: cloudStorageStatus(req.user),
       // Expose Jira integration status (no secrets)
       jira: {
         enabled: isJiraConfigured()

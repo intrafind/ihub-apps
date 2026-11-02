@@ -1,24 +1,39 @@
 {
   "id": "com.intrafind/google-drive",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: the Google Drive providers of platform.cloudStorage become installations (migration V200); several installations per provider, the installation id is the provider id (migration V206).",
+        "de": "Erste Version: die Google Drive-Anbieter aus platform.cloudStorage werden Installationen (Migration V200); mehrere Installationen je Anbieter, die Installations-ID ist die Anbieter-ID (Migration V206)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
     "en": "Google Drive",
     "de": "Google Drive"
   },
   "description": {
-    "en": "Let users browse and attach files from Google Drive — My Drive, shared drives and files shared with them — each signed in with their own Google account. Holds the OAuth 2.0 client of your Google Cloud project.",
-    "de": "Benutzer Dateien aus Google Drive durchsuchen und anhängen lassen – Meine Ablage, geteilte Ablagen und für sie freigegebene Dateien –, jeder mit dem eigenen Google-Konto angemeldet. Hält den OAuth-2.0-Client Ihres Google-Cloud-Projekts."
+    "en": "Let users browse and attach files from Google Drive — My Drive, shared drives and files shared with them — each signed in with their own Google account. Holds the OAuth 2.0 client of your Google Cloud project. Install it once per OAuth client; apps offer it by binding it.",
+    "de": "Benutzer Dateien aus Google Drive durchsuchen und anhängen lassen – Meine Ablage, geteilte Ablagen und für sie freigegebene Dateien –, jeder mit dem eigenen Google-Konto angemeldet. Hält den OAuth-2.0-Client Ihres Google-Cloud-Projekts. Einmal je OAuth-Client installieren; Apps bieten sie an, indem sie sie binden."
   },
   "publisher": {
     "name": "IntraFind Software AG",
     "verification": "intrafind"
   },
   "categories": ["storage", "google", "files"],
+  "type": "storage",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/google-drive-integration.md",
   "builtIn": true,
-  "singleton": {
-    "instanceId": "googledrive"
-  },
   "protocol": {
     "type": "native",
     "module": "googledrive"
@@ -62,8 +77,8 @@
         "de": "Redirect-URI"
       },
       "description": {
-        "en": "The callback URL registered with the provider. Leave empty to derive it from each request (scheme and host as the browser sees them, then /api/integrations/googledrive/<provider id>/callback); the test shows the resulting URL.",
-        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage abgeleitet (Schema und Host, wie der Browser sie sieht, dann /api/integrations/googledrive/<provider id>/callback); der Test zeigt die resultierende URL."
+        "en": "The callback URL registered with the provider. Leave empty to derive it from each request the way the browser sees it: scheme and host (X-Forwarded-Proto / X-Forwarded-Host of a trusted proxy), the base path (X-Forwarded-Prefix), then /api/integrations/googledrive/<installation id>/callback. The Settings tab shows the URL to register.",
+        "de": "Die beim Anbieter registrierte Callback-URL. Leer: wird aus jeder Anfrage so abgeleitet, wie der Browser sie sieht: Schema und Host (X-Forwarded-Proto / X-Forwarded-Host eines vertrauenswürdigen Proxys), der Basispfad (X-Forwarded-Prefix), dann /api/integrations/googledrive/<Installations-ID>/callback. Der Reiter Einstellungen zeigt die zu registrierende URL."
       }
     },
     {
@@ -91,20 +106,6 @@
       "title": {
         "en": "Source: shared with me",
         "de": "Quelle: für mich freigegeben"
-      }
-    },
-    {
-      "key": "providerId",
-      "type": "string",
-      "advanced": true,
-      "pattern": "^[A-Za-z0-9._-]{1,100}$",
-      "title": {
-        "en": "Provider id",
-        "de": "Anbieter-ID"
-      },
-      "description": {
-        "en": "The id in the callback URL (/api/integrations/googledrive/<id>/callback) and in the users' stored connections. Empty: the installation id. An upgrade keeps the id the provider had before, so registered redirect URIs and existing connections stay valid; change it only when you re-register the app.",
-        "de": "Die ID in der Callback-URL (/api/integrations/googledrive/<id>/callback) und in den gespeicherten Verbindungen der Benutzer. Leer: die Installations-ID. Ein Upgrade behält die bisherige Anbieter-ID, damit registrierte Redirect-URIs und bestehende Verbindungen gültig bleiben; nur ändern, wenn die App neu registriert wird."
       }
     }
   ],

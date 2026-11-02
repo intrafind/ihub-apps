@@ -71,12 +71,7 @@ class NextcloudService extends OAuthIntegrationBase {
    */
   generateAuthUrl(providerId, state, req = null) {
     const provider = this._getProviderConfig(providerId);
-    const redirectUri = this._resolveRedirectUri(
-      provider,
-      providerId,
-      'NEXTCLOUD_OAUTH_REDIRECT_URI',
-      req
-    );
+    const redirectUri = this._resolveRedirectUri(provider, providerId, req);
 
     const params = new URLSearchParams({
       client_id: provider.clientId,
@@ -91,12 +86,7 @@ class NextcloudService extends OAuthIntegrationBase {
   async exchangeCodeForTokens(providerId, authCode, req = null) {
     try {
       const provider = this._getProviderConfig(providerId);
-      const redirectUri = this._resolveRedirectUri(
-        provider,
-        providerId,
-        'NEXTCLOUD_OAUTH_REDIRECT_URI',
-        req
-      );
+      const redirectUri = this._resolveRedirectUri(provider, providerId, req);
       const tokenUrl = `${provider.serverUrl}/apps/oauth2/api/v1/token`;
 
       const tokenData = new URLSearchParams({

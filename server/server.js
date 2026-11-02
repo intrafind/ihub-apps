@@ -244,6 +244,27 @@ async function prepareContents() {
       message: 'Server will continue, but configuration may be outdated'
     });
   }
+
+  // Installed integrations (versioning concept §3, trigger 2): roll back a
+  // definition migration a crash interrupted, then migrate the installations
+  // of built-in definitions this release updated (and restore the backup of
+  // a downgraded one). Here, after the numbered config migrations and before
+  // any worker exists, so no worker serves a built-in definition with
+  // unmigrated values and the run happens once per cluster (the primary, or
+  // the single process). Never throws: an installation that cannot be
+  // migrated stays pending or failed and says why under Admin → Integrations.
+  try {
+    const { runIntegrationStartupMigrations } =
+      await import('./services/integrations/definitions/DefinitionMigrationRunner.js');
+    await runIntegrationStartupMigrations();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Integration definition migrations could not run at startup',
+      error: error.message,
+      stack: error.stack
+    });
+  }
 }
 
 if (cluster.isPrimary && workerCount > 1) {

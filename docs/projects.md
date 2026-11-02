@@ -331,9 +331,11 @@ The budget depends on the model's `contextWindow` (see [Models](models.md)).
 
 ### The knowledge tools
 
-Every request that reaches a project gets three tools automatically. They are not listed in an
-app's `tools` array; the tool definition lives in `contents/tools/knowledge.json`, where an admin
-can localize or disable it.
+Every request that reaches a project gets three tools automatically while the projects feature is
+on. They belong to projects: they are not listed in an app's `tools` array, are no action of an
+integration and cannot be switched off. The definition ships with iHub
+(`server/defaults/tools/knowledge.json`, read in place, in the request's language); a
+`contents/tools/knowledge.json` is not read.
 
 | Tool               | What it does                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
@@ -661,7 +663,7 @@ drawn from an attached private project.
 
 With `platform.projects.tierPolicy` set to `both` or `ifinder` (**Admin → Projects → Project
 settings**, a change applies at once), **iFinder** installed and
-enabled (**Admin → Integrations → Installed**) and **User Projects** switched on, users can add their iFinder
+enabled (**Admin → Integrations**) and **User Projects** switched on, users can add their iFinder
 smart collections to their projects. **Browse catalog** on the Projects page lists them under
 **Your iFinder smart collections**; **Add** makes one a project, marked **iFinder**. Collections
 nobody added are not listed under **Projects**.

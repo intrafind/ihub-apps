@@ -119,7 +119,8 @@
     "selectLanguage": "Select language",
     "export": "Export",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "saving": "Saving…"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2287,7 +2288,6 @@
       "logging": "Logging",
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
-      "installedIntegrations": "Installed integrations",
       "telemetry": "Telemetry",
       "systemResources": "System Resources",
       "voiceInput": "Voice Input",
@@ -2614,7 +2614,27 @@
       "incompatibleShort": "Not compatible with this iHub version",
       "compatibilityLine": "Compatibility: iHub {{requires}}",
       "confirmUpdate": "The installed files are replaced with the catalog version; local edits are lost.",
-      "noReleasesBetween": "The catalog lists no release notes between these versions."
+      "noReleasesBetween": "The catalog lists no release notes between these versions.",
+      "migration": {
+        "locked": "A migration of an installation of this integration is running. Nothing was changed; try again in a moment.",
+        "preview": {
+          "title": "Installations",
+          "changes": "This update changes {{changes}} of {{label}}; a backup is made first.",
+          "noChanges": "This update’s migrations change nothing {{label}} stores; a backup is made first.",
+          "fails": "The migration of {{label}} will fail. The update still goes in, but {{label}} stays on v{{from}} and offers no actions until you act on its page: re-run the migration, restore the backup or uninstall it.",
+          "notPlanned": "The migration of {{label}} (v{{from}}) is planned when the update is downloaded: the catalog does not list every release since that version.",
+          "review": "{{label}} needs a review (it records no valid version), so the update does not migrate it.",
+          "current": "{{label}} is already at v{{from}}.",
+          "wholeNotPlanned": "The migrations cannot be planned from the catalog; they are planned when the update is downloaded, and an installation whose migration fails stays on its version until you act."
+        },
+        "report": {
+          "title": "Migrations of the installations",
+          "migrated": "{{label}} was migrated from v{{from}} to v{{to}}.",
+          "stamped": "{{label}} now records v{{to}}; nothing it stores had to change.",
+          "failed": "The migration of {{label}} failed: it stays on v{{from}} and offers no actions until you act on its page. Reason: {{reason}}",
+          "skipped": "{{label}} was not migrated: {{reason}}"
+        }
+      }
     },
     "apps": {
       "edit": {
@@ -2639,8 +2659,8 @@
         "created": "App created",
         "idRequired": "App ID is required",
         "integrations": {
-          "title": "Installed integrations",
-          "desc": "Bind integrations installed under Integrations → Installed. Narrow them to some actions, and set the scope users start with.",
+          "title": "Integrations",
+          "desc": "Bind installed integrations. Narrow them to some actions, and set the scope users start with.",
           "none": "No integration is installed yet.",
           "openCatalog": "Open the catalog",
           "actions": "Actions",
@@ -2662,17 +2682,36 @@
           },
           "allInstallations": "All {{name}} installations",
           "allInstallationsHelp": "Every installation of this integration, including ones installed later ({{count}} now).",
-          "explicitAction": "Only when ticked here; never part of \"every action\"."
+          "explicitAction": "Only when ticked here; never part of \"every action\".",
+          "allPeopleDirectories": "All people directories",
+          "allOfTypeHelp": "Every installation of this kind, including ones installed later ({{count}} now).",
+          "panelNotInstalled": "{{name}} is not installed. Install it under Integrations to use these settings.",
+          "iassistantBinding": "Use in this app",
+          "peopleDirectoriesTitle": "People directories",
+          "peopleDirectoriesDesc": "Let the model look people up in the directories: all of them, or single ones.",
+          "groups": {
+            "mcp": "MCP servers",
+            "a2a": "Agents",
+            "builtIn": "Built-in",
+            "catalog": "From the catalog"
+          },
+          "allStorageProviders": "All storage providers",
+          "storageRequiredHelp": "Hide the app while this storage provider is disabled or missing. Off: the app stays available and the file picker offers the providers that are there.",
+          "storageProvidersTitle": "Storage providers",
+          "storageProvidersDesc": "Let users pick files for the chat from the storage providers: all of them, or single ones. Users see the ones their groups grant; picked files follow the upload settings."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
         "websearchEnabled": "Enable Web Search",
-        "websearchProvider": "Provider",
+        "websearchProvider": "Search engine",
         "websearchProviderAuto": "Auto",
-        "websearchProviderBrave": "Brave",
-        "websearchProviderStaan": "Staan",
-        "websearchProviderQwant": "Qwant (no API key)",
-        "websearchProviderDesc": "Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.",
+        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, then any other engine.",
+        "websearchEngineDisabledOption": "{{name}} — disabled",
+        "websearchEngineMissingOption": "{{name}} — not installed",
+        "websearchEngineMissing": "The engine \"{{engine}}\" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.",
+        "websearchEngineDisabled": "The engine \"{{engine}}\" is disabled. Until it is enabled, the app searches natively where the model can and not at all on other models.",
+        "websearchNoEngine": "No search engine is installed: the app searches only on models with native search.",
+        "websearchInstallEngine": "Install an engine",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -2689,7 +2728,7 @@
         "websearchResearchGuidanceCustomDesc": "Optional. Replaces the built-in guidance that is added to the system prompt when web search is on. Leave empty to use the built-in guidance.",
         "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users",
         "websearchRequired": "Required",
-        "websearchRequiredDesc": "Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.",
+        "websearchRequiredDesc": "Hide the app while its search engine is not available (Auto: no engine is installed and enabled; a named engine: that one is missing or disabled). Off: the app stays available and searches natively where the model can.",
         "toolChoice": "Tool use",
         "toolChoiceDesc": "Whether the model decides for itself to use this app's tools",
         "toolChoiceAuto": "Model decides (default)",
@@ -2809,7 +2848,14 @@
         "documentTemplatePinned": "Every document of this app uses this template; the model cannot choose another one.",
         "documentTemplateFree": "The default template applies; the model may use another template when the user asks for it.",
         "documentTemplatesLink": "Manage document templates",
-        "documentTemplateMissing": "The template \"{{id}}\" does not exist; the default template applies."
+        "documentTemplateMissing": "The template \"{{id}}\" does not exist; the default template applies.",
+        "addLanguage": "Add Language",
+        "selectLanguage": "Select...",
+        "languageCode": "Language code (e.g., en, de, es)",
+        "add": "Add",
+        "removeLanguage": "Remove language {{lang}}",
+        "noLanguages": "No languages configured. Add a language to get started.",
+        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -2820,6 +2866,7 @@
       "openDisabledHint": "Enable the app to open it",
       "openMissingFeaturesHint": "Turn on {{features}} to open it",
       "missingInstalledIntegration": "Installed integration \"{{id}}\"",
+      "missingWebSearchEngine": "A web search engine",
       "test": {
         "title": "Test app",
         "subtitle": "Runs the saved version, as users see it",
@@ -2834,6 +2881,20 @@
       "status": {
         "disabled": "Disabled",
         "hiddenUntilFeature": "Hidden from users until {{features}} is on"
+      },
+      "integrationNames": {
+        "jira": "Jira integration",
+        "ifinder": "iFinder integration",
+        "iassistant": "iAssistant integration",
+        "peopleDirectories": "People directories (any installation)",
+        "ldapDirectory": "People directory (LDAP) (any installation)",
+        "ldapBrowser": "LDAP browser (any installation)"
+      },
+      "migrationWarnings": {
+        "actionRemoved": "The update of {{installation}} to v{{version}} removed the action “{{action}}”, which this app was bound to; the app no longer offers it.",
+        "typeBindingAction": "The update of {{installation}} to v{{version}} renamed or removed the action “{{action}}”, which this app still names in its binding {{key}}: edit the binding.",
+        "typeBindingScope": "The update of {{installation}} to v{{version}} renamed the scope “{{scope}}”, which this app still sets in its binding {{key}}: edit the binding.",
+        "openLog": "Migration log of {{installation}}"
       }
     },
     "features": {
@@ -2862,14 +2923,16 @@
       }
     },
     "integrationCatalog": {
-      "title": "Installed integrations",
-      "subtitle": "Install an integration from the catalog, point it at your system and bind it to apps. Each installation brings its actions to the model.",
+      "field": {
+        "choose": "Choose…",
+        "custom": "Custom…",
+        "customValue": "Custom value for {{field}}"
+      },
       "install": "Install",
       "reload": "Reload catalog",
       "reloaded": "Catalog reloaded.",
       "saved": "Integration \"{{id}}\" saved.",
       "removed": "Integration \"{{id}}\" removed.",
-      "searchPlaceholder": "Search the catalog",
       "catalogEmpty": "No definitions match. Integrations can also be installed from the Marketplace.",
       "installedCount": "{{count}} installed",
       "notInstalled": "Not installed",
@@ -2927,13 +2990,13 @@
       },
       "confirmRemove": {
         "title": "Remove integration?",
-        "message": "Apps that bind \"{{id}}\" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it."
+        "message": "Apps that use \"{{id}}\" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it."
       },
       "confirmDisable": {
         "title": "Disable integration?",
-        "message": "Apps that bind \"{{id}}\" are hidden from users while it is disabled."
+        "message": "Apps that use \"{{id}}\" go without it while it is disabled. An app that requires it is hidden from users."
       },
-      "boundApps": "Bound by: {{apps}}",
+      "boundApps": "Used by: {{apps}}",
       "sideEffect": {
         "read": "read",
         "write": "write",
@@ -2970,8 +3033,6 @@
         "laterRelease": "(later release)",
         "secretStored": "Stored. Leave empty to keep it.",
         "who": "4 · Who may use it",
-        "groups": "Groups",
-        "groupsHelp": "Leave empty for everyone who may use an app that binds this integration.",
         "enabled": "Enabled",
         "actions": "5 · Actions the model may call",
         "requires": "Requires {{requirement}}",
@@ -2986,7 +3047,8 @@
         "runsCode": "This integration runs its own connector module in the iHub server process. Install it only from a publisher you trust.",
         "description": "Description",
         "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.",
-        "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead."
+        "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead.",
+        "onePerLine": "One entry per line"
       },
       "connections": {
         "title": "Connected users",
@@ -3012,14 +3074,6 @@
     "integrations": {
       "backToIntegrations": "Back to Integrations",
       "cards": {
-        "installed": {
-          "title": "Installed integrations",
-          "description": "Install integrations from the catalog or the marketplace (e.g. a CKAN open data portal), point them at your systems and bind their actions to apps."
-        },
-        "nextcloud": {
-          "title": "Nextcloud",
-          "description": "Let users browse and attach files from any Nextcloud instance during a chat. Installed as the integration \"nextcloud\"."
-        },
         "nextcloudEmbed": {
           "title": "Nextcloud Embed",
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
@@ -3028,14 +3082,682 @@
           "title": "Microsoft 365 Copilot",
           "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
         },
-        "peopleDirectories": {
-          "description": "Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de. Each directory is an installation of the LDAP people directory integration.",
-          "title": "People directories"
+        "outlook": {
+          "title": "Outlook Add-in",
+          "description": "Embed iHub apps inside the Outlook task pane. Users sign in with their iHub account and run prompts against the currently selected email."
+        },
+        "browserExtension": {
+          "title": "Browser Extension",
+          "description": "Side-panel extension for Chrome / Edge / Firefox. Run any iHub app against the page the user is reading."
+        },
+        "mcpGateway": {
+          "title": "MCP gateway",
+          "description": "Let external MCP clients use iHub's apps as tools, signed in through iHub's own OAuth server."
         }
       },
-      "categories": {
-        "data": "Data & APIs",
-        "directories": "Directories"
+      "tabs": {
+        "inbound": "Inbound"
+      },
+      "searchPlaceholder": "Search integrations…",
+      "noMatch": "Nothing matches \"{{query}}\".",
+      "featureFlagOff": "The \"integrations\" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.",
+      "title": "Integrations",
+      "subtitle": "The systems iHub works with: install an integration from the catalog, point it at your system and bind it to apps. Inbound lists what connects to iHub.",
+      "closeTestResults": "Close test results",
+      "page": {
+        "loadError": "Could not load the installation",
+        "tabs": {
+          "overview": "Overview",
+          "settings": "Settings",
+          "releases": "Releases"
+        },
+        "remove": "Remove",
+        "definitionMissing": "The definition \"{{definition}}\" of this installation is not loaded: it offers no actions and cannot be edited. Install the definition again from the marketplace, or remove the installation.",
+        "tabsLabel": "Installation",
+        "facts": "Configuration",
+        "noFacts": "Nothing configured beyond the defaults.",
+        "editSettings": "Edit settings",
+        "actions": "Actions",
+        "noLiveActions": "The system lists its actions when iHub connects. Test the connection to see them.",
+        "noActions": "This integration offers no actions to the model; apps use it through their own settings.",
+        "actionOff": "Off",
+        "actionUnavailable": "Unavailable",
+        "about": "About",
+        "groups": "Groups",
+        "docs": "Documentation",
+        "opensInNewTab": "(opens in a new tab)",
+        "apps": "Apps that use it",
+        "noApps": "No app binds this installation yet. Bind it in an app’s Integrations section.",
+        "via": {
+          "installation": "by this installation",
+          "definition": "every {{name}} installation",
+          "type": "every installation of its type",
+          "webSearch": "its web search engine",
+          "webSearchAuto": "web search on Auto (the first engine a user may use)"
+        },
+        "notEditable": "This installation cannot be edited while its definition is missing or incompatible."
+      },
+      "catalog": {
+        "installAria": "Install {{name}}"
+      },
+      "inbound": {
+        "status": {
+          "on": "On",
+          "available": "Available"
+        },
+        "description": "What connects to iHub: other applications that embed iHub or call its apps. Each one is configured on its own page."
+      },
+      "tile": {
+        "noGroup": "No group grants it yet"
+      },
+      "facts": {
+        "credential": "Credential",
+        "sources": "Sources",
+        "baseUrl": "Base URL",
+        "authentication": "Authentication",
+        "oidcProvider": "OIDC provider",
+        "signingKey": "Signing key",
+        "privateKey": "Private key",
+        "defaultSearchProfile": "Default search profile",
+        "runsOn": "Runs on",
+        "defaultProfile": "Default profile",
+        "groundedOnly": "Answers from documents only",
+        "signInProvider": "Sign-in provider",
+        "directoryUrl": "Directory URL",
+        "baseDn": "Base DN",
+        "bindPassword": "Bind password",
+        "browse": "LDAP browser",
+        "tenantId": "Tenant ID",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "apiKey": "API key",
+        "keyFallback": "Without a key",
+        "serverUrl": "Server URL",
+        "siteUrl": "Site URL",
+        "portalUrl": "Portal URL",
+        "defaultFilter": "Filter",
+        "maxRows": "Results per search",
+        "command": "Command",
+        "transport": "Transport",
+        "agentCard": "Agent Card",
+        "endpoint": "Endpoint",
+        "choices": {
+          "ihubSigned": "JWT signed by iHub",
+          "oidcTokenExchange": "OIDC token exchange",
+          "streamableHttp": "Streamable HTTP",
+          "sse": "SSE",
+          "websocket": "WebSocket",
+          "stdio": "Local process (stdio)",
+          "oidcKeyPair": "iHub OIDC key pair",
+          "openldap": "OpenLDAP",
+          "activeDirectory": "Active Directory",
+          "ivbb": "IVBB directory (x500.bund.de)",
+          "directoryAccount": "the directory's account",
+          "anonymous": "anonymous",
+          "directoryBase": "the directory's base DN"
+        },
+        "secretSet": "set",
+        "secretNotSet": "not set",
+        "noKeyNeeded": "no key needed",
+        "yes": "yes",
+        "no": "no",
+        "directoryType": "Directory type",
+        "directory": "Directory",
+        "browseBase": "Browse base",
+        "account": "Account",
+        "noSources": "none"
+      },
+      "groups": {
+        "peopleDirectories": {
+          "title": "People directories",
+          "description": "LDAP and Entra ID directories the model looks people up in."
+        },
+        "webSearch": {
+          "title": "Web search",
+          "description": "Search engines apps with web search on use; without one, models search natively where they can."
+        },
+        "storage": {
+          "title": "Storage providers",
+          "description": "Cloud storage users browse and attach files from in the chat and in projects."
+        },
+        "mcp": {
+          "title": "MCP servers",
+          "description": "Model Context Protocol servers; their tools are the actions."
+        },
+        "agents": {
+          "title": "Agents",
+          "description": "Remote agents (A2A) the model hands tasks to; their skills are the actions."
+        },
+        "builtIn": {
+          "title": "Built-in",
+          "description": "Integrations that ship with iHub, such as iFinder, iAssistant and Jira."
+        },
+        "catalog": {
+          "title": "From the catalog",
+          "description": "Integrations from the catalog or a marketplace registry."
+        }
+      },
+      "editors": {
+        "iassistant": {
+          "connectionRequired": "Pick the iFinder installation iAssistant runs on.",
+          "connectionSection": "Connection",
+          "connectionSectionHelp": "iAssistant uses the base URL and the sign-in of an iFinder installation; configure those there.",
+          "settingsSection": "iAssistant settings",
+          "defaultProfileId": "Default profile ID",
+          "defaultProfileIdHelp": "The iAssistant profile used when an app names none (plain text or base64 encoded).",
+          "defaultSearchProfile": "Default search profile",
+          "defaultSearchProfileHelp": "The search profile iAssistant conversations search when neither the app nor the model names one.",
+          "testResults": "iAssistant connection test",
+          "testHelp": "The test reaches iAssistant through the selected iFinder installation as your own admin account, with the values above (unsaved)."
+        },
+        "webSearch": {
+          "engineSection": "Search engine",
+          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, then any other engine). Models with native search do not need an engine.",
+          "apiKey": "API key",
+          "apiKeyHelp": "A credential of type secret holding the {{engine}} API key. Add one under Admin → Integrations → Credentials.",
+          "envFallback": "Without a credential, the server uses the environment variable {{env}} when it is set. A picked credential always wins.",
+          "noKeyNeeded": "{{engine}} needs no API key.",
+          "egressHint": "Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.",
+          "testResults": "Search engine test",
+          "testHelp": "The test checks the API key of the values above (unsaved) and runs one live search from this server."
+        },
+        "ifinder": {
+          "privateKey": "Private key",
+          "privateKeyHelp": "The stored credential holding the RSA or EC private key (PEM) that signs the iFinder JWT. Alternatively set the IFINDER_PRIVATE_KEY environment variable on the server.",
+          "algorithm": "JWT algorithm",
+          "issuer": "JWT issuer",
+          "audience": "JWT audience",
+          "tokenExpiration": "Token lifetime (seconds)",
+          "effectiveIssuer": "Effective OAuth issuer URL",
+          "issuerNotAvailable": "Not available",
+          "autoDetected": "Auto-detected",
+          "effectiveIssuerConfiguredHelp": "Configured under Admin → OAuth Server.",
+          "effectiveIssuerAutoHelp": "Detected from your server URL. Set a custom issuer under Admin → OAuth Server if needed.",
+          "oidcKeyPairReady": "OIDC key pair ready",
+          "oidcKeyPairReadyHelp": "Configure iFinder with:",
+          "oidcKeyPairMissingIssuer": "OAuth issuer URL required",
+          "oidcKeyPairMissingIssuerHelp": "Set the OAuth issuer URL under Admin → Authentication → OAuth Server before saving.",
+          "info": {
+            "title": "iFinder JWT authentication",
+            "description": "Every call runs as the signed-in user: iHub signs a JWT for the user, or exchanges the user’s sign-in token at a shared OIDC provider. iAssistant runs on this connection."
+          },
+          "connectionSection": "iFinder connection",
+          "baseUrl": "iFinder base URL",
+          "baseUrlHelp": "Your iFinder / iAssistant server; the API paths are appended.",
+          "authMode": {
+            "label": "Token issuer",
+            "ihubSigned": "iHub signs the token",
+            "oidcTokenExchange": "Shared OIDC provider (token exchange)",
+            "oidcTokenExchangeHelp": "iHub and iFinder share one OIDC provider. iHub keeps the sign-in token of each user and exchanges it at the provider for a token for iFinder. Users must sign in to iHub through that provider; background runs use the stored refresh token.",
+            "ihubSignedHelp": "iHub signs the iFinder token itself, with a private key or the iHub OIDC key pair. iFinder trusts iHub as the issuer."
+          },
+          "useOidcKeyPair": "Sign with the iHub OIDC key pair",
+          "useOidcKeyPairHelp": "Tokens are signed with the RSA key of the iHub OIDC server. iFinder validates them through JWKS discovery (/.well-known/jwks.json); no key has to be distributed.",
+          "defaultScope": "Token scope",
+          "jwtSubjectField": "User identity sent to iFinder",
+          "jwtSubject": {
+            "custom": "Custom template",
+            "email": "Email address",
+            "username": "Username",
+            "id": "User ID",
+            "name": "Display name",
+            "domainUsername": "Domain\\Username (NTLM-style)"
+          },
+          "jwtSubjectFieldHelp": "The \"sub\" claim of the iFinder JWT: which user attribute identifies the user, as iFinder knows them.",
+          "jwtSubjectTemplate": "Custom subject template",
+          "jwtSubjectTemplateHelp": "Placeholders: ${user.email}, ${user.username}, ${user.domain}, ${user.id}, ${user.name}.",
+          "searchSection": "Search profiles",
+          "searchSectionHelp": "Which iFinder search profile a chat searches, and which ones users may pick.",
+          "defaultSearchProfile": "Default search profile",
+          "defaultSearchProfileHelp": "The search profile a chat searches until the user picks another one.",
+          "allowedSearchProfiles": "Search profiles users may pick",
+          "allowedSearchProfilesPlaceholder": "All of the user's profiles",
+          "allowedSearchProfilesHelp": "One search profile id per line. Empty offers every profile the user has in iFinder.",
+          "allowUserSearchProfileChange": "Users may change the search profile",
+          "allowUserSearchProfileChangeHelp": "Off: every chat searches the default search profile, and neither the user nor the model can pick another.",
+          "advancedSection": "Advanced",
+          "advancedToggle": "Request timeout, download directory and API paths",
+          "testResults": "iFinder connection test",
+          "diagnostics": {
+            "exchangeDescription": "The test exchanges your own stored sign-in token at the OIDC provider and calls the endpoints the integration uses, with the values above (unsaved). It always runs as you: the exchange needs your sign-in.",
+            "description": "The test signs a JWT for your own admin account and calls the endpoints the integration uses, with the values above (unsaved)."
+          },
+          "tokenExchange": {
+            "provider": "OIDC provider",
+            "selectProvider": "Select a provider…",
+            "providerDisabled": "disabled",
+            "noProviders": "No OIDC provider is configured. Add the provider iFinder uses under Admin → Authentication first.",
+            "providerHelp": "The provider iHub and iFinder share. Its sign-in tokens are kept (encrypted) and exchanged for iFinder tokens with the client ID and secret configured for it under Admin → Authentication. Add \"offline_access\" to its scopes so background runs keep working.",
+            "grantType": "Grant type",
+            "grantEntraObo": "On-Behalf-Of (Microsoft Entra ID)",
+            "grantTokenExchange": "Token exchange (RFC 8693: Zitadel, Keycloak)",
+            "audience": "Audience",
+            "audienceObo": "Not used by On-Behalf-Of: Entra takes the audience from the scope (api://<ifinder-app-id>/.default).",
+            "audienceHelp": "The client or project id of iFinder at the provider. The issued token carries it as \"aud\".",
+            "scopeMap": "Scope map",
+            "scopeMapHelp": "Translates the scopes iHub asks for into the scopes of the provider (Zitadel role scopes, Entra api://…/.default). An empty value sends the iHub scope unchanged.",
+            "providerScopeFor": "Provider scope for {{scope}}",
+            "unchanged": "(unchanged)",
+            "extraScopes": "Additional scopes",
+            "extraScopesHelp": "Space-separated scopes sent with every exchange.",
+            "ifinderSetupTitle": "Configure iFinder with:",
+            "providerIssuer": "issuer URL of the provider",
+            "ifinderSetupHelp": "The token iHub sends must also carry the fa_* claims iFinder reads, either as requested scopes or added by a claim mapper on the provider. The connection test shows which ones are present.",
+            "providerRequired": "Select the OIDC provider iHub shares with iFinder."
+          },
+          "baseUrlRequired": "Enter the iFinder base URL.",
+          "oidcKeyPairNeedsIssuer": "Signing with the OIDC key pair needs an OAuth issuer URL. It is detected from your server URL, or set it under Admin → Authentication → OAuth Server."
+        },
+        "nameSection": "Name",
+        "nameSectionHelp": "How users see this integration in the chat. The id stays fixed.",
+        "accessSection": "Who may use it",
+        "actionsSection": "Actions the model may call",
+        "actionsSectionHelp": "An app that binds this integration offers the checked actions; it can narrow them further.",
+        "peopleDirectory": {
+          "source": {
+            "baseDn": "Base DN",
+            "bindAccount": "Bind account",
+            "bindAccountNone": "None",
+            "bindAccountSet": "Configured",
+            "description": "Where the directory lives and how iHub reaches it.",
+            "direct": "Connect directly",
+            "directHelp": "For directories without a sign-in provider, such as the external x500.bund.de.",
+            "missingProvider": "The sign-in provider \"{{name}}\" is not configured. Save it in the authentication settings first, or choose another one.",
+            "noProviders": "No LDAP sign-in provider is configured.",
+            "openAuth": "Open the authentication settings",
+            "overrides": "Override provider settings",
+            "overridesHelp": "Leave a field empty to use the value of the sign-in provider.",
+            "preset": "Directory type",
+            "presetHelp": "Sets which entries are people and where each field is read from. See Search and mapping below.",
+            "presetInherit": "As the provider ({{preset}})",
+            "provider": "Sign-in provider",
+            "providerNotConfigured": "{{name}} (not configured)",
+            "providerPlaceholder": "Choose a provider…",
+            "reuse": "Reuse a sign-in provider",
+            "reuseHelp": "URL, base DN, directory type and bind account come from an LDAP sign-in provider of the authentication settings.",
+            "starttls": "StartTLS",
+            "starttlsHelp": "Upgrades an ldap:// connection to TLS before anything is searched. Not needed for ldaps://.",
+            "starttlsInheritOff": "As the provider (off)",
+            "starttlsInheritOn": "As the provider (on)",
+            "starttlsLabel": "Use StartTLS (encrypt ldap:// connections)",
+            "starttlsOff": "Off",
+            "starttlsOn": "On",
+            "title": "Source",
+            "url": "URL",
+            "urlHelp": "ldaps://host:636 for TLS. ldap://host:389 needs StartTLS — or plain text allowed under Network, which is not recommended."
+          },
+          "access": {
+            "anonymous": "Anonymous",
+            "anonymousHelp": "Only for directories that allow anonymous search, such as x500.bund.de. Active Directory normally does not.",
+            "bindDn": "Bind DN",
+            "description": "How iHub signs in to the directory. Searches never run with a user's own password, because iHub does not keep it.",
+            "noBindAccount": "This sign-in provider has no bind account. Choose anonymous access if the directory allows it, or a service account.",
+            "password": "Password",
+            "passwordHelp": "Choose the stored credential that holds the password.",
+            "providerAccount": "The sign-in provider's bind account",
+            "providerAccountHelp": "The service account the provider already uses to look up users.",
+            "service": "Service account",
+            "serviceHelp": "A read-only account of its own for the people search.",
+            "servicePlaintext": "A service account never binds over plain text. Use ldaps:// or StartTLS, or this directory cannot connect.",
+            "title": "Access"
+          },
+          "network": {
+            "allowPlaintext": "Allow plain-text connections (ldap:// without StartTLS)",
+            "allowedHosts": "Hosts allowed on private addresses",
+            "allowedHostsHelp": "One host per line. iHub refuses a directory host that resolves to a private, loopback or link-local address unless it is listed here or in the platform-wide SSRF allow-list. The host of a reused sign-in provider is always allowed.",
+            "description": "How the connection is secured and which servers iHub may reach.",
+            "plaintextRefused": "This directory uses ldap:// without StartTLS. iHub refuses the connection until plain text is allowed here — better switch to ldaps:// or StartTLS.",
+            "plaintextWarning": "Without TLS, the search terms and the records the directory returns — names, phone numbers, e-mail addresses — cross the network in plain text. Use ldaps://host:636, or ldap://host:389 with StartTLS, whenever the server supports it. A service account password is never sent in plain text.",
+            "title": "Network",
+            "tlsCa": "Trusted certificates",
+            "tlsCaHelp": "Only for a CA that the iHub server does not trust already. One name per line: the file contents/config/certs/<name>.pem on the server. When set, only these certificates verify the server's certificate. Leave empty to use the public roots and the server's operating system certificate store. Verification stays on unless the host is on the platform's SSL whitelist.",
+            "transport": "Transport",
+            "tlsSettings": "TLS versions and cipher suites",
+            "tlsDefault": "Node's default",
+            "tlsMinVersion": "Minimum TLS version",
+            "tlsMaxVersion": "Maximum TLS version",
+            "tlsCiphers": "Cipher suites",
+            "tlsCiphersHelp": "An OpenSSL cipher list. Empty: Node's defaults. These are the only TLS settings a directory may change; a reused sign-in provider's values for them apply unless set here."
+          },
+          "visibility": {
+            "title": "Visibility",
+            "description": "Who may search this directory, and where the search terms go.",
+            "groups": "Groups",
+            "dataFlow": "Data flow",
+            "internal": "Internal",
+            "internalHelp": "The directory is run by your organisation.",
+            "external": "External",
+            "externalHelp": "A third party runs the directory, so the names users search for leave your organisation. Say so in the description, too.",
+            "groupsHelp": "A group grants this directory by its id, by \"People directory (LDAP)\", by \"All people directories\" or by \"*\". Apps and tool permissions cannot widen this."
+          },
+          "model": {
+            "description": "The model chooses a directory by these texts. Say whose staff it lists, which fields it has, and whether it is an external service.",
+            "descriptionLabel": "Description",
+            "name": "Name",
+            "noDescription": "Without a description the model knows nothing but the name and id, and may pick the wrong directory.",
+            "previewTitle": "What the model sees",
+            "title": "Model-facing name and description",
+            "toolIds": "Tools apps can bind:"
+          },
+          "limits": {
+            "concurrency": "Parallel requests",
+            "description": "Upper bounds for each search. A tool call can ask for fewer results, never more. All tools of this directory, its test and the LDAP browsers that reuse it share one request queue.",
+            "maxResults": "Maximum results per search",
+            "range": "Default {{fallback}}, {{min}} to {{max}}.",
+            "requestDelayMs": "Delay between requests (ms)",
+            "timeoutMs": "Timeout (ms)",
+            "title": "Limits",
+            "units": "Offer organisational units (list_units)",
+            "unitsHelp": "Lists the units directly below the search base (for x500.bund.de: the authorities), so the model can narrow a search to one of them."
+          },
+          "mapping": {
+            "description": "Defaults come from the directory type \"{{preset}}\". Leave a field empty to keep the preset value shown next to it.",
+            "field": "Field",
+            "fieldsHelp": "Comma-separated candidates; the first one with a value wins. A candidate is an attribute (mail), a component of the entry’s DN (dn:l), or attributes joined by a space (givenName sn). Only mapped attributes are read from the directory.",
+            "fieldsTitle": "Person fields",
+            "overrideColumn": "Override",
+            "personFilter": "Person filter",
+            "presetColumn": "Preset",
+            "presetValue": "Preset: {{value}}",
+            "searchAttributes": "Free-text attributes",
+            "searchAttributesHelp": "Comma-separated, at most 12. Each word of a search is matched against these attributes.",
+            "searchBase": "Search base",
+            "searchBaseHelp": "Where people are searched. Defaults to the base DN.",
+            "title": "Search and mapping",
+            "unmapped": "not mapped"
+          },
+          "fields": {
+            "academicTitle": "Academic title",
+            "department": "Department",
+            "email": "E-mail",
+            "fax": "Fax",
+            "firstName": "First name",
+            "jobTitle": "Job title",
+            "lastName": "Last name",
+            "location": "Location",
+            "managerId": "Manager",
+            "mobile": "Mobile",
+            "name": "Name",
+            "organization": "Organization",
+            "phone": "Phone",
+            "salutation": "Salutation"
+          },
+          "presets": {
+            "activeDirectory": "Active Directory",
+            "ivbb": "IVBB directory (x500.bund.de)",
+            "openldap": "OpenLDAP / generic LDAP"
+          },
+          "transport": {
+            "ldaps": "Encrypted (LDAPS)",
+            "plaintext": "Plain text",
+            "plaintextHint": "Search terms and results cross the network unencrypted.",
+            "starttls": "Encrypted (StartTLS)",
+            "unknown": "Not known yet"
+          },
+          "errors": {
+            "authProviderRequired": "Choose a sign-in provider.",
+            "urlRequired": "Enter the directory URL.",
+            "baseDnRequired": "Enter the base DN.",
+            "urlPattern": "Use ldaps://host:636 or ldap://host:389, without a path.",
+            "bindDnRequired": "Enter the bind DN.",
+            "passwordRefRequired": "Choose the credential that holds the password.",
+            "tlsCaPattern": "\"{{name}}\" is not a certificate name: use lower-case letters, digits and \"-\", without \".pem\".",
+            "personFilterPattern": "An LDAP filter in parentheses, e.g. (objectClass=person).",
+            "attributeName": "\"{{name}}\" is not an LDAP attribute name.",
+            "limitRange": "Enter a whole number from {{min}} to {{max}}."
+          },
+          "statusTitle": "As saved, this directory has issues:",
+          "errorsTitle": "Please check these fields",
+          "testResults": "Directory connection test",
+          "testHelp": "Checks the configuration, the address, the connection, StartTLS and the bind with the values above (unsaved). With a name, it also runs a search and shows the mapped people next to the attributes they came from. Nothing is saved.",
+          "testQuery": "Sample search (a surname)",
+          "testQueryHelp": "Optional: a name to search for, to check the mapping."
+        },
+        "ldapBrowser": {
+          "directorySection": "People directory",
+          "directorySectionHelp": "The browser uses the connection of a People directory (LDAP) installation: its URL, TLS settings, trusted certificates, allowed hosts, base DN and, unless you give the browser an account of its own, its bind account.",
+          "directory": "Directory",
+          "directoryPlaceholder": "Choose a directory…",
+          "directoryMissing": "{{id}} (not installed)",
+          "directoryMissingHint": "The directory \"{{id}}\" is not installed: the browser offers no tools. Choose another one.",
+          "noDirectories": "No People directory (LDAP) is installed. Install one under Integrations first.",
+          "directoryDisabled": "This directory is disabled. The browser offers its tools only while the directory is enabled.",
+          "openDirectory": "Open the directory",
+          "signInProvider": "Sign-in provider",
+          "url": "URL",
+          "baseDnOfDirectory": "Base DN",
+          "bindOfDirectory": "Bind account",
+          "bindOfDirectoryService": "Service account {{dn}}",
+          "bindOfDirectoryAnonymous": "Anonymous",
+          "bindOfDirectoryProvider": "The sign-in provider's bind account",
+          "transport": "Transport",
+          "settingsSection": "Browse settings",
+          "settingsSectionHelp": "Lets admins ask about the directory in plain words and see the raw entries: attributes, branches, group members. Separate from people search, which only returns mapped fields.",
+          "base": "Browse base",
+          "baseHelp": "Every DN the browser reads must lie here. Leave empty for the directory's base DN, the whole directory; set a branch to limit what admins can see.",
+          "maxResults": "Maximum entries per search",
+          "maxResultsHelp": "1 to {{max}}; empty for {{default}}.",
+          "bind": "Account for browsing",
+          "bindDirectory": "The directory's account",
+          "bindDirectoryHelp": "The account the directory searches with. The browser can read everything it can read.",
+          "bindAnonymous": "Anonymous",
+          "bindAnonymousHelp": "Only what the directory shows to anonymous clients.",
+          "bindService": "An account of its own",
+          "bindServiceHelp": "A read-only account with exactly the reach admins should have.",
+          "bindDirectoryWarning": "With the directory's account, the browser has the full reach of the people search account. Use an account of its own if that account can read more than admins should see.",
+          "bindDn": "Bind DN",
+          "password": "Password",
+          "passwordHelp": "Choose the stored credential that holds the password.",
+          "servicePlaintext": "A service account never binds over plain text. Use ldaps:// or StartTLS on the directory, or the browser cannot connect.",
+          "denyAttributes": "Further attributes to withhold",
+          "denyAttributesHelp": "One attribute name per line. Passwords, LAPS and BitLocker secrets, certificates and photos are always withheld; add attributes where your directory keeps other secrets. Withheld attributes cannot be used in a filter either.",
+          "toolIds": "Tools:",
+          "auditNote": "Every browser call is written to the audit log with the filter used, never the values returned. The browser is never offered over the MCP gateway. The LDAP browser app ships disabled: enable it under Apps and give it only to admin groups.",
+          "accessNote": "Only signed-in users browse. Personal API keys, OAuth clients and agents never do, whatever their groups. Raw entries are not for everyone: grant this browser to admin groups only, not with \"*\".",
+          "errorsTitle": "Please check these fields",
+          "errors": {
+            "directoryRequired": "Choose the people directory whose connection the browser uses.",
+            "limitRange": "Enter a whole number from {{min}} to {{max}}.",
+            "bindDnRequired": "Enter the bind DN.",
+            "passwordRefRequired": "Choose the credential that holds the password.",
+            "attributeName": "\"{{name}}\" is not an LDAP attribute name."
+          },
+          "testResults": "LDAP browser connection test",
+          "testHelp": "Checks the directory it reuses, the address, the connection, StartTLS and the bind with the browser's account, and lists the entries directly under the browse base, with the values above (unsaved)."
+        },
+        "entra": {
+          "registrationSection": "App registration",
+          "registrationSectionHelp": "iHub looks people up through Microsoft Graph with the client credentials of an app registration, not as the signed-in user. Grant the registration the application permissions User.Read.All and GroupMember.Read.All, with admin consent.",
+          "tenantId": "Tenant ID",
+          "tenantIdHelp": "The directory (tenant) id of your Entra ID tenant.",
+          "clientId": "Application (client) ID",
+          "clientIdHelp": "The app registration that holds the Graph application permissions.",
+          "clientSecret": "Client secret",
+          "clientSecretHelp": "A credential of type secret holding the app registration's client secret (Admin → Credentials). The secret is never stored in the installation.",
+          "envUsed": "Empty: {{variable}} is used (set on the server).",
+          "envMissing": "Empty, and {{variable}} is not set on the server.",
+          "envFallback": "Empty: the environment variable {{variable}} is used.",
+          "notGuid": "This does not look like an id from Entra ID (a GUID).",
+          "incomplete": "Without {{fields}} the directory cannot sign in: fill the fields, or set the environment variables on the server.",
+          "testResults": "Entra ID connection test",
+          "testHelp": "Fetches a token with the values above (unsaved), falling back to the AZURE_* variables, and reads one user through Microsoft Graph."
+        },
+        "storage": {
+          "registerSection": "Register iHub with the provider",
+          "registerSectionHelp": "The provider sends users back to this URL after they sign in. It contains the installation id \"{{id}}\", which never changes.",
+          "redirectToRegister": "Redirect URI to register",
+          "register": {
+            "office365": "Azure portal → Microsoft Entra ID → App registrations → your app → Authentication → Platform \"Web\" → Redirect URIs.",
+            "googledrive": "Google Cloud console → APIs & Services → Credentials → your OAuth 2.0 client (Web application) → Authorized redirect URIs.",
+            "nextcloud": "Nextcloud → Administration settings → Security → OAuth 2.0 clients → add a client with this redirect URI."
+          },
+          "redirectDerivedHelp": "Derived the way the server derives it from each request: this address, the base path and the callback path. Set the field below when the provider must see a different address (an unusual proxy setup).",
+          "redirectConfiguredHelp": "The configured redirect URI below is used for every sign-in.",
+          "redirectUri": "Redirect URI (optional)",
+          "redirectUriHelp": "Leave empty to derive it from each request (recommended).",
+          "oauthSection": "OAuth app",
+          "oauthSectionHelp": {
+            "office365": "The Azure app registration users sign in with (Microsoft Graph, delegated permissions).",
+            "googledrive": "The OAuth 2.0 client (Web application) of your Google Cloud project, with the Drive API enabled.",
+            "nextcloud": "The Nextcloud server and the OAuth 2.0 client registered in it."
+          },
+          "serverUrl": "Nextcloud server URL",
+          "serverUrlHelp": "The base URL of the instance (no trailing slash); the base for OAuth, OCS and WebDAV.",
+          "tenantId": "Directory (tenant) ID",
+          "tenantIdHelp": "An identifier, not a secret: stored in the installation as plain text.",
+          "clientId": "Client ID",
+          "clientSecret": "Client secret",
+          "clientSecretHelp": "A credential of type secret holding the client secret (Admin → Integrations → Credentials).",
+          "sourcesSection": "Sources users may browse",
+          "sourcesSectionHelp": {
+            "office365": "Sign-in asks only for the Microsoft Graph permissions the checked sources need; switch off what your tenant does not consent to.",
+            "googledrive": "The picker offers only the checked sources."
+          },
+          "sources": {
+            "personalDrive": "Personal OneDrive",
+            "personalDriveHelp": "Asks for Files.Read only, which users consent to themselves.",
+            "followedSites": "Followed SharePoint sites",
+            "followedSitesHelp": "Asks for Sites.Read.All and Files.Read.All (admin consent).",
+            "teams": "Microsoft Teams",
+            "teamsHelp": "Asks for Team.ReadBasic.All, Channel.ReadBasic.All and Files.Read.All (admin consent).",
+            "myDrive": "My Drive",
+            "sharedDrives": "Shared drives",
+            "sharedWithMe": "Shared with me"
+          },
+          "noSource": "No source is checked: users can connect but browse nothing.",
+          "siteUrl": "SharePoint site URL",
+          "siteUrlHelp": "Restrict access to one SharePoint site.",
+          "driveId": "Drive ID",
+          "driveIdHelp": "Restrict access to one drive.",
+          "connectionsSection": "Connection and users",
+          "connectionsSectionHelp": "Every user connects their own account, under Settings → Integrations or from the file picker. Connections are stored per installation.",
+          "statusEnabled": "Enabled: users whose groups grant it can connect.",
+          "statusDisabled": "Disabled: users cannot connect or pick files from it.",
+          "connectedUsers": "{{count}} user(s) connected",
+          "testResults": "Storage provider test",
+          "testHelp": "Checks the values above (unsaved): client and secret, the provider settings, the redirect URI, whether the provider answers, and how many users are connected. Signing in needs a browser: connect under Settings → Integrations.",
+          "errors": {
+            "required": {
+              "tenantId": "Enter the Directory (tenant) ID of the app registration.",
+              "clientId": "Enter the client ID of the OAuth app.",
+              "clientSecretRef": "Pick the credential that holds the client secret.",
+              "serverUrl": "Enter the URL of the Nextcloud server."
+            },
+            "url": "Enter an http(s) URL.",
+            "redirectPath": "The redirect URI has to end in {{path}}."
+          }
+        }
+      },
+      "access": {
+        "grantedTo": "Granted to: {{groups}}",
+        "noGroup": "No group grants it yet: nobody can use it.",
+        "help": "Groups decide which integrations their members may use (inherited like apps).",
+        "editOnGroups": "Edit on Admin → Groups"
+      },
+      "migration": {
+        "status": {
+          "migrationPending": "Migration pending",
+          "migrationFailed": "Migration failed",
+          "needsReview": "Needs review"
+        },
+        "changes": {
+          "values_one": "{{count}} install value",
+          "values_other": "{{count}} install values",
+          "actions_one": "{{count}} action",
+          "actions_other": "{{count}} actions",
+          "apps_one": "{{count}} app binding",
+          "apps_other": "{{count}} app bindings"
+        },
+        "warnings": {
+          "actionRemoved": "The action “{{action}}” is removed from the app “{{app}}” (binding {{key}}); the app no longer offers it.",
+          "typeBindingAction": "The app “{{app}}” names the action “{{action}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
+          "typeBindingScope": "The app “{{app}}” sets the scope “{{scope}}” in its type binding {{key}}, which is shared with other definitions and not rewritten: edit the app.",
+          "openApp": "Open the app"
+        },
+        "log": {
+          "title": "Migration log",
+          "empty": "No migration has run for this installation.",
+          "fromTo": "{{from}} → {{to}}",
+          "noVersion": "no version",
+          "by": "by {{by}}",
+          "changes": "Changed {{changes}}.",
+          "migrations": "Migrations: {{list}}",
+          "reason": "Reason: {{reason}}",
+          "steps_one": "{{count}} step",
+          "steps_other": "{{count}} steps",
+          "backup": "Backup: {{backup}}",
+          "results": {
+            "migrated": "Migrated",
+            "stamped": "Version recorded",
+            "failed": "Failed",
+            "rolledBack": "Rolled back",
+            "restored": "Backup restored",
+            "adopted": "Version adopted",
+            "skipped": "Skipped"
+          },
+          "triggers": {
+            "manual": "run by hand",
+            "marketplace": "marketplace update",
+            "startup": "server start",
+            "recovery": "recovery at start",
+            "restore": "restore",
+            "downgrade": "downgrade",
+            "adopt": "adopt"
+          }
+        },
+        "actions": {
+          "migrate": "Migrate now",
+          "rerun": "Re-run migration",
+          "restore": "Restore backup",
+          "adopt": "Adopt current version",
+          "uninstall": "Uninstall",
+          "forInstallation": "{{action}}: {{label}}"
+        },
+        "confirm": {
+          "restore": {
+            "title": "Restore a backup of {{label}}?",
+            "message": "The installation’s values, its action policy and the bindings of its apps go back to the backup {{backup}} (v{{version}}, taken {{date}}). What changed since then is replaced; iHub backs up the current state first.",
+            "definition": "The backup also holds the definition of v{{version}}; when the loaded definition is another version, it is put back too."
+          },
+          "adopt": {
+            "title": "Adopt v{{version}} for {{label}}?",
+            "message": "You confirm that the stored values already fit {{definition}} v{{version}}. iHub checks them like the result of a migration and only then records the version; no value is changed. Values that do not fit are listed and nothing is recorded.",
+            "confirm": "Adopt version"
+          }
+        },
+        "outcome": {
+          "migrated": "{{label}} was migrated from v{{from}} to v{{to}}.",
+          "stamped": "{{label}} now records v{{to}}; no migration had to run.",
+          "current": "{{label}} is already at v{{to}}; nothing had to run.",
+          "restored": "The backup {{backup}} of {{label}} was restored; it is at v{{to}} again.",
+          "adopted": "{{label}} now records v{{to}}.",
+          "restoreFailed": "The backup of {{label}} could not be restored.",
+          "adoptFailed": "The current version could not be adopted for {{label}}.",
+          "migrateFailed": "The migration of {{label}} failed.",
+          "retry": "Nothing was written. Try again in a moment.",
+          "open": "Open {{label}}",
+          "dismiss": "Dismiss"
+        },
+        "panel": {
+          "title": "Definition migration",
+          "pending": "{{definition}} v{{to}} is loaded; this installation records v{{from}}. Until it is migrated it offers no actions and its settings cannot be saved.",
+          "pendingStamp": "{{definition}} v{{to}} is loaded; this installation records v{{from}}. No migration lies between the versions, so it keeps working: Migrate now (or the next save) records v{{to}}.",
+          "failed": "The migration to v{{to}} failed and changed nothing: the values are still those of v{{from}}. The installation offers no actions until you re-run the migration, restore the backup or uninstall it.",
+          "downgrade": "The loaded definition v{{to}} is older than this installation’s v{{from}} (a downgrade). Migrations only run forward, so the installation offers no actions until you restore the backup of v{{to}}, adopt v{{to}} or uninstall it.",
+          "review": "iHub cannot tell which definition version the values of this installation were written for. It offers no actions until you restore a backup, adopt the loaded version v{{to}} or uninstall it.",
+          "changes": "The migrations {{migrations}} change {{changes}}; a backup is made first.",
+          "noChanges": "The migrations {{migrations}} change nothing this installation stores; a backup is made first.",
+          "notPlanned": "The migrations {{migrations}} run; what they change could not be planned in advance. A backup is made first.",
+          "warningsTitle": "Check after the migration",
+          "collisionsTitle": "Collisions: the migration will fail",
+          "collisionsHelp": "A step would overwrite something that already exists. Remove the destination first (for example in the app), or the migration fails and changes nothing.",
+          "errorsTitle": "The result would not fit v{{to}}: the migration will fail",
+          "backup": "Restore backup puts back {{backup}} (v{{version}}, taken {{date}}).",
+          "noBackup": "No backup of this installation matches its state, so there is nothing to restore."
+        },
+        "settingsReadOnly": "The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.",
+        "settingsReadOnlyLegend": "Settings (read-only)",
+        "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
       }
     },
     "sidebar": {
@@ -3126,7 +3848,39 @@
       "projectSharing": "Project sharing",
       "projectSharingHint": "Allow members to add other users, groups or everyone to the projects they own or edit.",
       "contentAdmin": "Content Admin (Apps, Prompts, Projects)",
-      "contentAdminHint": "Allow members to manage Apps, Prompts, and Projects without full admin access"
+      "contentAdminHint": "Allow members to manage Apps, Prompts, and Projects without full admin access",
+      "integrations": {
+        "title": "Integrations",
+        "help": "Which installed integrations members may use. An app that binds an integration offers it only to members of a group that grants it. Groups that inherit this one get the same.",
+        "inheritedHelp": "Ticked and greyed out: granted by a group this one inherits. Change it there.",
+        "all": "All integrations",
+        "allHelp": "Every installed integration, including ones installed later.",
+        "none": "Members of this group may use no integration.",
+        "loading": "Loading integrations…",
+        "loadError": "Could not load the installed integrations: {{error}}",
+        "sections": {
+          "peopleDirectories": "People directories",
+          "webSearch": "Web search",
+          "storage": "Storage providers",
+          "mcp": "MCP servers",
+          "a2a": "Agents",
+          "builtIn": "Built-in",
+          "catalog": "From the catalog"
+        },
+        "allPeopleDirectories": "All people directories",
+        "allWebSearch": "All web search engines",
+        "allStorage": "All storage providers",
+        "allOfTypeHelp": "Every installation of this kind, including ones installed later ({{count}} now).",
+        "allInstallations": "All {{name}} installations",
+        "allInstallationsHelp": "Every installation of this integration, including ones installed later ({{count}} now).",
+        "noneInstalled": "Nothing installed yet.",
+        "disabled": "disabled",
+        "via": "via {{groups}}",
+        "with": "with {{name}}",
+        "other": "Other entries",
+        "otherHelp": "Entries the list above does not show: definition ids, or installations that no longer exist.",
+        "remove": "Remove {{key}}"
+      }
     },
     "contentAccess": {
       "title": "Group access",
@@ -4151,7 +4905,8 @@
         "features": "Features",
         "fixes": "Fixes"
       }
-    }
+    },
+    "translateField": "Translate"
   },
   "cloudStorage": {
     "selectFiles": "Select Files from Cloud Storage",

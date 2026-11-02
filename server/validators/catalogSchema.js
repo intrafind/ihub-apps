@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { definitionMigrationSchema } from './integrationDefinitionSchema.js';
 
 /**
  * Describes where the actual content file for a catalog item lives.
@@ -107,7 +108,16 @@ const catalogItemSchema = z.object({
         })
         .passthrough()
     )
-    .optional()
+    .optional(),
+  /**
+   * The definition migrations the listed releases name (integrations; the
+   * generator copies them from `integration.json`), so the update dialog can
+   * plan what an update changes without downloading the item. Parsed with
+   * the definition's own migration schema; a list that does not pass is
+   * kept as it came, so one bad item never drops the catalog, and the update
+   * preview reports it (`validateDefinitionMigrations`).
+   */
+  migrations: z.union([z.array(definitionMigrationSchema), z.array(z.unknown())]).optional()
 });
 
 /**
