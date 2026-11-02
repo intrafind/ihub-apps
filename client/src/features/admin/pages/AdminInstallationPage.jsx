@@ -44,7 +44,7 @@ import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
 
 /** The tabs of the page; Releases only when the definition has a release history. */
-const TABS = ['overview', 'settings', 'releases'];
+const TABS = new Set(['overview', 'settings', 'releases']);
 
 /** On the page the facts list everything known, not only the tile's top four. */
 const PAGE_FACT_LIMIT = 12;
@@ -52,6 +52,50 @@ const PAGE_FACT_LIMIT = 12;
 const CARD_CLASS =
   'bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-5';
 const CARD_TITLE_CLASS = 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-3';
+
+/**
+ * The tab to show: the one `?tab=` names when the page has it (Releases only
+ * with a release history), else Overview.
+ *
+ * @param {string|null} tabParam - the `tab` search parameter
+ * @param {boolean} hasReleases - the definition has a release history
+ * @returns {'overview'|'settings'|'releases'}
+ */
+function activeTab(tabParam, hasReleases) {
+  if (!TABS.has(tabParam)) return 'overview';
+  if (tabParam === 'releases' && !hasReleases) return 'overview';
+  return tabParam;
+}
+
+/**
+ * How a bound app reaches the installation, for the "Apps that use it" list:
+ * by its id, by its definition id, by its type, or (web search engines) as
+ * its named engine or through web search on Auto.
+ *
+ * @param {{ via: string }} app - an entry of `appsBindingInstallation`
+ * @param {Object} instance - the installation
+ * @param {Function} t - the translation function
+ * @returns {string}
+ */
+function bindingViaLabel(app, instance, t) {
+  switch (app.via) {
+    case 'installation':
+      return t('admin.integrations.page.via.installation', 'by this installation');
+    case 'definition':
+      return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
+        name: instance.definitionName || instance.definition
+      });
+    case 'webSearch':
+      return t('admin.integrations.page.via.webSearch', 'its web search engine');
+    case 'webSearchAuto':
+      return t(
+        'admin.integrations.page.via.webSearchAuto',
+        'web search on Auto (the first engine a user may use)'
+      );
+    default:
+      return t('admin.integrations.page.via.type', 'every installation of its type');
+  }
+}
 
 /**
  * Admin → Integrations → one installation (`/admin/integrations/:instanceId`).
@@ -134,8 +178,7 @@ function InstallationPageContent({ instanceId }) {
   const definition = detail?.definition || null;
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
-  const tab =
-    TABS.includes(tabParam) && (tabParam !== 'releases' || hasReleases) ? tabParam : 'overview';
+  const tab = activeTab(tabParam, hasReleases);
 
   const setTab = next => {
     const params = new URLSearchParams(searchParams);
@@ -157,26 +200,6 @@ function InstallationPageContent({ instanceId }) {
     () => (instance ? appsBindingInstallation(apps, instance, lang) : []),
     [apps, instance, lang]
   );
-  /** How an app uses this installation, as the Overview lists it. */
-  const boundViaText = via => {
-    switch (via) {
-      case 'installation':
-        return t('admin.integrations.page.via.installation', 'by this installation');
-      case 'definition':
-        return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
-          name: instance.definitionName || instance.definition
-        });
-      case 'webSearch':
-        return t('admin.integrations.page.via.webSearch', 'its web search engine');
-      case 'webSearchAuto':
-        return t(
-          'admin.integrations.page.via.webSearchAuto',
-          'web search on Auto (the first engine a user may use)'
-        );
-      default:
-        return t('admin.integrations.page.via.type', 'every installation of its type');
-    }
-  };
   const preloaded = useMemo(
     () => (detail && definition ? { definition, existing: detail } : null),
     [detail, definition]
@@ -287,7 +310,6 @@ function InstallationPageContent({ instanceId }) {
   const group = integrationGroup(integrationGroupOf(instance));
   const enabled = instance.enabled !== false;
   const unusable = instance.definitionMissing || instance.incompatible;
-  const dedicatedEditor = hasDedicatedEditor(instance.definition);
   const description = pickText(instance.description, lang) || definition?.description || '';
   const tabs = [
     { id: 'overview', label: t('admin.integrations.page.tabs.overview', 'Overview') },
@@ -377,12 +399,11 @@ function InstallationPageContent({ instanceId }) {
       </div>
 
       {message && (
-        <div
-          className={`mb-4 ${message.type === 'error' ? CALLOUT_CLASS.danger : CALLOUT_CLASS.success}`}
-          role="status"
+        <output
+          className={`mb-4 block ${message.type === 'error' ? CALLOUT_CLASS.danger : CALLOUT_CLASS.success}`}
         >
           {message.text}
-        </div>
+        </output>
       )}
       {instance.incompatible && instance.incompatibleReason && (
         <div className={`mb-4 ${CALLOUT_CLASS.danger}`} data-testid="incompatible-reason">
@@ -604,7 +625,7 @@ function InstallationPageContent({ instanceId }) {
                         {app.name}
                       </Link>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {boundViaText(app.via)}
+                        {bindingViaLabel(app, instance, t)}
                       </span>
                     </li>
                   ))}
@@ -617,33 +638,16 @@ function InstallationPageContent({ instanceId }) {
 
       {tab === 'settings' && (
         <div role="tabpanel" id="tabpanel-settings" aria-labelledby="tab-settings">
-          {unusable || !definition ? (
-            <div className={CALLOUT_CLASS.warning}>
-              {t(
-                'admin.integrations.page.notEditable',
-                'This installation cannot be edited while its definition is missing or incompatible.'
-              )}
-            </div>
-          ) : dedicatedEditor ? (
-            <InstallationEditor
-              key={editorKey}
-              definitionId={instance.definition}
-              instance={effective}
-              definition={definition}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          ) : (
-            <IntegrationInstallForm
-              key={editorKey}
-              variant="page"
-              definitionId={instance.definition}
-              instanceId={instance.id}
-              preloaded={preloaded}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+          <InstallationSettings
+            instance={instance}
+            definition={definition}
+            effective={effective}
+            preloaded={preloaded}
+            unusable={unusable}
+            editorKey={editorKey}
+            onSaved={onSaved}
+            onCancel={onCancel}
+          />
         </div>
       )}
 
@@ -716,6 +720,68 @@ function InstallationPageContent({ instanceId }) {
         onDeny={() => setConfirm(null)}
       />
     </div>
+  );
+}
+
+/**
+ * The content of the Settings tab: the dedicated editor of the installation's
+ * definition (`editors/index.js`), else the generic form built from the
+ * install fields; a notice instead while the definition is missing or
+ * incompatible. A new `editorKey` remounts the editor with the stored values.
+ *
+ * @param {Object} props
+ * @param {Object} props.instance - the installation as the detail lists it
+ * @param {Object|null} props.definition - its definition, null when missing
+ * @param {Object|null} props.effective - the installation with its effective values
+ * @param {{ definition: Object, existing: Object }|null} props.preloaded - for the generic form
+ * @param {boolean} props.unusable - the definition is missing or incompatible
+ * @param {number} props.editorKey
+ * @param {(saved: Object) => void} props.onSaved
+ * @param {() => void} props.onCancel
+ */
+function InstallationSettings({
+  instance,
+  definition,
+  effective,
+  preloaded,
+  unusable,
+  editorKey,
+  onSaved,
+  onCancel
+}) {
+  const { t } = useTranslation();
+  if (unusable || !definition) {
+    return (
+      <div className={CALLOUT_CLASS.warning}>
+        {t(
+          'admin.integrations.page.notEditable',
+          'This installation cannot be edited while its definition is missing or incompatible.'
+        )}
+      </div>
+    );
+  }
+  if (hasDedicatedEditor(instance.definition)) {
+    return (
+      <InstallationEditor
+        key={editorKey}
+        definitionId={instance.definition}
+        instance={effective}
+        definition={definition}
+        onSaved={onSaved}
+        onCancel={onCancel}
+      />
+    );
+  }
+  return (
+    <IntegrationInstallForm
+      key={editorKey}
+      variant="page"
+      definitionId={instance.definition}
+      instanceId={instance.id}
+      preloaded={preloaded}
+      onSaved={onSaved}
+      onCancel={onCancel}
+    />
   );
 }
 

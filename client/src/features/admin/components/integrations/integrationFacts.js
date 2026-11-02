@@ -194,6 +194,26 @@ function installationName(id, context) {
 }
 
 /**
+ * How iHub signs the tokens it sends iFinder (when it signs them itself, not
+ * under token exchange): with its OIDC key pair, or with the configured
+ * private key (shown as set or not set, never its value).
+ *
+ * @param {Object} values - the installation's values
+ * @returns {InstallationFact|null}
+ */
+function iFinderSigningKeyFact(values) {
+  if (values.useOidcKeyPair === true) {
+    return {
+      id: 'signingKey',
+      ...label('signingKey', 'Signing key'),
+      valueKey: `${FACT_PREFIX}.choices.oidcKeyPair`,
+      valueDefault: 'iHub OIDC key pair'
+    };
+  }
+  return secretFact('signingKey', label('privateKey', 'Private key'), values.privateKeyRef);
+}
+
+/**
  * Fact builders per definition id: `(item, context) => Array<InstallationFact|null>`.
  * Order matters: the first `limit` non-null facts are shown.
  */
@@ -222,14 +242,7 @@ const FACTS_BY_DEFINITION = {
               context
             }
           )
-        : values.useOidcKeyPair === true
-          ? {
-              id: 'signingKey',
-              ...label('signingKey', 'Signing key'),
-              valueKey: `${FACT_PREFIX}.choices.oidcKeyPair`,
-              valueDefault: 'iHub OIDC key pair'
-            }
-          : secretFact('signingKey', label('privateKey', 'Private key'), values.privateKeyRef),
+        : iFinderSigningKeyFact(values),
       fieldFact(
         item,
         'defaultSearchProfile',
