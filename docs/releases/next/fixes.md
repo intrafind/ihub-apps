@@ -14,3 +14,13 @@ The language selector, the account menu in the sidebar and the admin search butt
 named by the text they show (WCAG 2.5.3 Label in Name), for example "Select language: EN"
 instead of "Select language". Speech-input users can activate them by reading the text on the
 button, and screen readers announce the same words that are visible.
+
+## Chat: A Skill Used Several Times Shows Once Above the Answer
+
+When a skill was activated more than once in an answer — started with `/name` and loaded again by
+the model, or loaded in several rounds — its icon appeared once per activation above the answer.
+Each skill now appears there once.
+
+- The answer's thought chain lists every activation as a **Used skill** row, in order with the
+  searches and tool calls, saying whether you started it or the model loaded it.
+- Answers saved before this fix show each skill once as well.

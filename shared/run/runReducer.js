@@ -214,6 +214,40 @@ function appendThought(list, thought) {
 }
 
 /**
+ * Add a skill to the turn's skill set, once.
+ *
+ * A skill is activated more than once in a turn — the user's `/name` and then
+ * the model loading it, or the model loading it again in a later round — and
+ * each activation is its own `skill.activation` frame. The set holds the skill
+ * a single time (matched by `id` when both have one, else by display name) and
+ * keeps its first entry. Only `id`, a description and `activatedBy` are filled
+ * in from later ones, and `user` wins over `model`: a skill only users may
+ * start stays active in the next turns only when a user activated it.
+ *
+ * @param {Object[]} skills - the turn's skills so far
+ * @param {{name: string, description: string, id?: string, activatedBy?: 'user'|'model'}} skill
+ * @returns {Object[]} a new list
+ */
+export function foldSkill(skills, skill) {
+  const index = skills.findIndex(known =>
+    known.id && skill.id ? known.id === skill.id : known.name === skill.name
+  );
+  if (index < 0) return [...skills, skill];
+  const known = skills[index];
+  const activatedBy =
+    known.activatedBy === 'user' || skill.activatedBy === 'user'
+      ? 'user'
+      : known.activatedBy || skill.activatedBy;
+  const merged = {
+    ...known,
+    description: known.description || skill.description,
+    ...(!known.id && skill.id ? { id: skill.id } : {}),
+    ...(activatedBy ? { activatedBy } : {})
+  };
+  return skills.map((entry, i) => (i === index ? merged : entry));
+}
+
+/**
  * Fold one envelope into the stream state. Unknown or malformed envelopes are
  * ignored (the state object is returned unchanged).
  *
@@ -481,25 +515,25 @@ export function reduceRunEvent(state, envelope) {
           };
           break;
         case 'skill.activation':
+          // `run.skills` is the set of skills the turn used, one entry each.
+          // Every activation (the user's `/name`, each time the model loads it)
+          // stays on `run.progress` for the thought chain to list.
           run = {
             ...run,
-            skills: [
-              ...run.skills,
-              {
-                name: data.data?.skillName || data.message,
-                description: data.data?.description || '',
-                // The global skill name or user skill id the next turns of the
-                // chat keep the skill active by (`name` is for display).
-                ...(typeof data.data?.skillId === 'string' && data.data.skillId
-                  ? { id: data.data.skillId }
-                  : {}),
-                // Who activated it: a skill only users may start stays active
-                // only when a user did.
-                ...(data.data?.activatedBy === 'user' || data.data?.activatedBy === 'model'
-                  ? { activatedBy: data.data.activatedBy }
-                  : {})
-              }
-            ]
+            skills: foldSkill(run.skills, {
+              name: data.data?.skillName || data.message,
+              description: data.data?.description || '',
+              // The global skill name or user skill id the next turns of the
+              // chat keep the skill active by (`name` is for display).
+              ...(typeof data.data?.skillId === 'string' && data.data.skillId
+                ? { id: data.data.skillId }
+                : {}),
+              // Who activated it: a skill only users may start stays active
+              // only when a user did.
+              ...(data.data?.activatedBy === 'user' || data.data?.activatedBy === 'model'
+                ? { activatedBy: data.data.activatedBy }
+                : {})
+            })
           };
           break;
         case 'grounding':

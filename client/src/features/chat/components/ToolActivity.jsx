@@ -30,7 +30,10 @@ function ToolActivity({ activity, loading = false }) {
   const open = expanded ?? loading;
 
   const searches = items.filter(item => item.kind === 'search');
-  const onlyDocuments = items.every(item => item.kind === 'tool' || item.scope === 'documents');
+  // Skill and plain tool rows do not say where the turn looked, so they do not
+  // decide the icon between the web and the organisation's documents.
+  const isPlain = item => item.kind === 'tool' || item.kind === 'skill';
+  const onlyDocuments = items.every(item => isPlain(item) || item.scope === 'documents');
   const running = items.some(item => item.status === 'running');
   const headline = running
     ? runningHeadline(t, items, activity.reading)
@@ -50,11 +53,13 @@ function ToolActivity({ activity, loading = false }) {
         ) : (
           <Icon
             name={
-              items.every(item => item.kind === 'tool')
-                ? 'wrench'
-                : onlyDocuments
-                  ? 'document-text'
-                  : 'globe-alt'
+              items.every(item => item.kind === 'skill')
+                ? 'sparkles'
+                : items.every(isPlain)
+                  ? 'wrench'
+                  : onlyDocuments
+                    ? 'document-text'
+                    : 'globe-alt'
             }
             size="sm"
             className="shrink-0 text-gray-500 dark:text-gray-400"
@@ -147,6 +152,11 @@ function finishedHeadline(t, items, searches) {
   if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
   const documentsRead = countRead(items, 'documents');
   if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
+  // Distinct skills: one that was activated twice is still one skill.
+  const skills = new Set(
+    items.filter(item => item.kind === 'skill').map(item => item.skillId || item.name)
+  ).size;
+  if (skills) parts.push(t('toolActivity.skills', { count: skills }));
   const others = items.filter(item => item.kind === 'tool').length;
   if (others) parts.push(t('toolActivity.toolCalls', { count: others }));
   return parts.join(' · ');
@@ -164,6 +174,30 @@ function StatusIcon({ item, fallback }) {
 
 function ActivityItem({ item }) {
   const { t } = useTranslation();
+
+  if (item.kind === 'skill') {
+    return (
+      <li>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusIcon item={item} fallback="sparkles" />
+          <span>{t('toolActivity.usedSkill', 'Used skill')}</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50">
+            {item.name}
+          </span>
+          {item.activatedBy === 'user' && (
+            <span className="text-gray-500 dark:text-gray-400">
+              {t('toolActivity.skillByUser', 'started by you')}
+            </span>
+          )}
+          {item.activatedBy === 'model' && (
+            <span className="text-gray-500 dark:text-gray-400">
+              {t('toolActivity.skillByModel', 'loaded by the model')}
+            </span>
+          )}
+        </div>
+      </li>
+    );
+  }
 
   if (item.kind === 'search') {
     const queries = item.native ? item.queries : item.query ? [item.query] : [];

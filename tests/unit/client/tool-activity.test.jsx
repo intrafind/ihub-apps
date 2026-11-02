@@ -593,3 +593,99 @@ describe('page reader rows (issue #2520)', () => {
     expect(screen.getByText(/Page read limit reached for this answer/)).toBeInTheDocument();
   });
 });
+
+describe('skill rows — each activation once in the chain, each skill once in the header', () => {
+  const activate = (seq, data) =>
+    env(seq, 'tool/progress', { phase: 'skill.activation', message: data.skillName, data });
+  const loadSkill = (seq, callId) =>
+    env(seq, 'tool/started', {
+      step: 1,
+      callId,
+      toolId: 'activate_skill',
+      name: 'activate_skill',
+      args: { skill_name: 'research' },
+      execution: 'server'
+    });
+  const research = { skillName: 'Research', skillId: 'research', description: 'Deep research' };
+
+  // The user starts the skill with /research, the model then loads it in two
+  // later rounds, with a search in between.
+  const activatedThrice = () =>
+    runFrom([
+      started,
+      activate(2, { ...research, activatedBy: 'user' }),
+      loadSkill(3, 'a1'),
+      activate(4, { ...research, activatedBy: 'model' }),
+      searchStarted(5),
+      searchCompleted(6),
+      loadSkill(7, 'a2'),
+      activate(8, { ...research, activatedBy: 'model' }),
+      ended(9)
+    ]);
+
+  test('run.skills holds the skill once, however often it was activated', () => {
+    expect(activatedThrice().skills).toEqual([
+      { name: 'Research', description: 'Deep research', id: 'research', activatedBy: 'user' }
+    ]);
+    expect(projectRunToMessage(activatedThrice()).extras.activeSkills).toHaveLength(1);
+  });
+
+  test('the user activation wins over a later model one, whichever comes first', () => {
+    const run = runFrom([
+      started,
+      activate(2, { ...research, activatedBy: 'model' }),
+      activate(3, { ...research, activatedBy: 'user' })
+    ]);
+    expect(run.skills).toHaveLength(1);
+    expect(run.skills[0].activatedBy).toBe('user');
+  });
+
+  test('skills with different ids stay apart, even under one display name', () => {
+    const run = runFrom([
+      started,
+      activate(2, { skillName: 'Notes', skillId: 'global-notes', description: '' }),
+      activate(3, { skillName: 'Notes', skillId: 'user-notes', description: '' })
+    ]);
+    expect(run.skills.map(skill => skill.id)).toEqual(['global-notes', 'user-notes']);
+  });
+
+  test('every activation is a row of the chain, in time order, saying who activated it', () => {
+    const { items } = buildToolActivity(activatedThrice());
+    expect(items.map(item => [item.kind, item.activatedBy ?? item.toolId])).toEqual([
+      ['skill', 'user'],
+      ['skill', 'model'],
+      ['search', 'braveSearch'],
+      ['skill', 'model']
+    ]);
+    expect(items[0]).toMatchObject({ name: 'Research', skillId: 'research', status: 'completed' });
+    // The activate_skill calls themselves add no rows.
+    expect(items.some(item => item.id === 'a1' || item.id === 'a2')).toBe(false);
+    expect(new Set(items.map(item => item.id)).size).toBe(items.length);
+  });
+
+  test('a turn that only used a skill still has a chain', () => {
+    const run = runFrom([started, activate(2, { ...research, activatedBy: 'user' }), ended(3)]);
+    expect(buildToolActivity(run).items).toHaveLength(1);
+  });
+
+  test('a refused activate_skill call (no activation frame) leaves no row', () => {
+    expect(buildToolActivity(runFrom([started, loadSkill(2, 'a1'), ended(3)]))).toBeNull();
+  });
+
+  test('the component lists each activation and counts the skill once', () => {
+    render(<ToolActivity activity={buildToolActivity(activatedThrice())} loading={false} />);
+    const toggle = screen.getByRole('button');
+    expect(toggle).toHaveTextContent('toolActivity.skills:1');
+    fireEvent.click(toggle);
+    expect(screen.getAllByText('Used skill')).toHaveLength(3);
+    expect(screen.getAllByText('Research')).toHaveLength(3);
+    expect(screen.getByText('started by you')).toBeInTheDocument();
+    expect(screen.getAllByText('loaded by the model')).toHaveLength(2);
+  });
+
+  test('a chain of skills alone gets the skill icon, not a globe', () => {
+    const run = runFrom([started, activate(2, { ...research, activatedBy: 'user' }), ended(3)]);
+    render(<ToolActivity activity={buildToolActivity(run)} loading={false} />);
+    expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'sparkles');
+  });
+});

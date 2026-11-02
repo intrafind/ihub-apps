@@ -74,6 +74,7 @@ import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
+import { foldSkill } from '../../../../../shared/run/runReducer.js';
 import './ChatMessage.css';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
 
@@ -192,6 +193,16 @@ function ChatMessage({
         ? findSkillDraft(answerText)
         : null,
     [onSaveAsSkill, isUser, isError, readOnly, message.loading, interrupted, answerText]
+  );
+  // Each skill once, however often the answer activated it: when and how is in
+  // the thought chain (ToolActivity). Answers stored before the run folded
+  // repeat activations hold the skill once per activation.
+  const distinctSkills = useMemo(
+    () =>
+      Array.isArray(message.activeSkills)
+        ? message.activeSkills.reduce((skills, skill) => foldSkill(skills, skill), [])
+        : [],
+    [message.activeSkills]
   );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
@@ -904,11 +915,11 @@ function ChatMessage({
           />
         )}
         {/* Skill activation indicators */}
-        {!isUser && message.activeSkills?.length > 0 && (
+        {!isUser && distinctSkills.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
-            {message.activeSkills.map((skill, idx) => (
+            {distinctSkills.map(skill => (
               <div
-                key={idx}
+                key={skill.id || skill.name}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
               >
                 <Icon name="sparkles" className="w-3 h-3" />

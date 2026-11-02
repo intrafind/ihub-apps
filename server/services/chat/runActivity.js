@@ -356,6 +356,10 @@ function boundToolItem(item) {
     native: item.native === true ? true : undefined,
     toolId: text(item.toolId, MAX_LABEL_CHARS),
     name: text(item.name, MAX_LABEL_CHARS),
+    // A `skill` row: which skill, and who activated it (`user` or `model`).
+    skillId: text(item.skillId, MAX_LABEL_CHARS),
+    activatedBy:
+      item.activatedBy === 'user' || item.activatedBy === 'model' ? item.activatedBy : undefined,
     status: item.status,
     scope: item.scope,
     query: text(item.query),
@@ -556,6 +560,7 @@ export function shareableActivity(activity) {
               kind: item?.kind,
               toolId: item?.toolId,
               name: item?.name,
+              activatedBy: item?.activatedBy,
               status: item?.status,
               scope: item?.scope,
               query: item?.query,
