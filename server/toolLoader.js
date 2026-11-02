@@ -770,7 +770,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
   // (#3061). The chat's narrowing applies to them like to any other tool.
   if (app.integrations && typeof app.integrations === 'object') {
     try {
-      const { getIntegrationToolsForApp } =
+      const { getIntegrationToolsForApp, isBoundToolEnabled } =
         await import('./services/integrations/integrationTools.js');
       // An LDAP browser's own rules (signed-in, non-delegated users, its
       // directory enabled) hold on top of the binding and the group grant.
@@ -782,7 +782,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
         context.user
       );
       if (Array.isArray(context.enabledTools)) {
-        bound = bound.filter(t => isToolSelected(t, context.enabledTools));
+        // By the key the app binds it with, too: a definition id or a type
+        // key (`type:storage`) is what the chat's tools menu sends for it.
+        bound = bound.filter(t => isBoundToolEnabled(app, t, context.enabledTools));
       }
       appTools = appTools.concat(bound.filter(t => !appTools.some(a => a.id === t.id)));
     } catch (error) {
