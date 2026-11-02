@@ -4782,17 +4782,27 @@
               "authRequired": {
                 "type": "object",
                 "properties": {
-                  "serverId": {
+                  "integration": {
                     "type": "string"
                   },
-                  "serverName": {
+                  "name": {
                     "type": "string"
                   },
-                  "connectUrl": {
+                  "reason": {
+                    "type": "string",
+                    "enum": ["not_connected", "expired", "insufficient_scope"]
+                  },
+                  "action": {
                     "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
-                "required": ["serverId", "serverName", "connectUrl"],
+                "required": ["integration", "name", "reason"],
                 "additionalProperties": false
               },
               "scheduledTaskProposal": {
