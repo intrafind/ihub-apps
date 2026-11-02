@@ -6,6 +6,7 @@
  * Provides centralized configuration for HTTP clients including SSL and proxy settings.
  * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
+import { withOutboundRecording } from './outboundRecorder.js';
 import http from 'node:http';
 import https from 'node:https';
 import nodeFetch from 'node-fetch';
@@ -792,5 +793,7 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
   // unsaved draft through this same path instead of a bespoke fetch of its own.
   const { lookup = null, proxyConfig = null, ...fetchOptions } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
-  return nodeFetch(url, enhanced);
+  // An admin's action test shows the requests it sent (#2974); outside a
+  // recording this is one lookup.
+  return withOutboundRecording(url, fetchOptions, () => nodeFetch(url, enhanced));
 }

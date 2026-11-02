@@ -27,6 +27,20 @@ import {
   reviewStatesOf
 } from '../../services/integrations/actionReview.js';
 import { installApprovalPreset } from '../../../shared/toolApproval.js';
+import configCache from '../../configCache.js';
+import {
+  integrationInstructionsOf,
+  withActionOverrides
+} from '../../services/integrations/actionGuidance.js';
+import { describeAction } from '../../services/integrations/actionDetail.js';
+import {
+  ActionTestError,
+  auditArgs,
+  testAction
+} from '../../services/integrations/tester/ActionTester.js';
+
+/** An action name in a route: what MCP tools, OpenAPI operations and connectors use. */
+const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /**
  * Admin API of the integrations platform (#3061):
@@ -46,6 +60,10 @@ import { installApprovalPreset } from '../../../shared/toolApproval.js';
  *   POST /api/admin/integrations/installed/:id/_migrate        run (or re-run) the definition migration
  *   POST /api/admin/integrations/installed/:id/_restore        restore a backup (body `{ backup? }`)
  *   POST /api/admin/integrations/installed/:id/_adopt          adopt the loaded definition version (needsReview)
+ *   GET  /api/admin/integrations/installed/:id/actions/:action  action detail (#2974)
+ *   PUT  /api/admin/integrations/installed/:id/actions/:action  the action's admin override (texts, side effect, data flow)
+ *   POST /api/admin/integrations/installed/:id/actions/:action/_test  run the action without a model
+ *   PUT  /api/admin/integrations/installed/:id/instructions     the installation's own model guidance
  *
  * The `catalog` and `installed` segments keep these routes apart from the
  * older `/api/admin/integrations/ifinder/*` and `.../iassistant/*` endpoints.
@@ -76,6 +94,29 @@ async function observeFingerprints(instanceId, fingerprints) {
       error: error.message
     });
   }
+}
+
+/**
+ * The integration-level model guidance as the installation page shows it:
+ * the text that applies, where it comes from, and the stored override.
+ * @param {Object} resolved
+ * @param {Object} instance - the stored installation
+ * @param {string} language
+ * @returns {{text: string, source: string|null, own: Object|string|null}}
+ */
+function instructionsView(resolved, instance, language) {
+  if (!resolved?.definition) return { text: '', source: null, own: instance?.instructions ?? null };
+  const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+  let fromSystem = null;
+  try {
+    fromSystem = adapter?.serverInstructions?.(instance) || null;
+  } catch {
+    fromSystem = null;
+  }
+  return {
+    ...integrationInstructionsOf(resolved.definition, instance, language, fromSystem),
+    own: instance?.instructions ?? null
+  };
 }
 
 function definitionIdOf(req, res) {
@@ -600,8 +641,13 @@ export default function registerAdminIntegrationsRoutes(app) {
           migrations.get(instance.id) || null
         ),
         values: resolved.values,
+        // The model guidance of the installation (#2974): the admin's own, the
+        // definition's or what the system sent (MCP `instructions`).
+        instructions: instructionsView(resolved, instance, language),
         actions: actions.map(a => ({
-          ...a,
+          // The admin's texts (#2974): the description the model reads.
+          ...withActionOverrides(a, instance, language),
+          defaults: undefined,
           parameters: a.parameters,
           sources: undefined,
           // `new` or `changed` since the last admin review, else null (#2916).
@@ -721,6 +767,360 @@ export default function registerAdminIntegrationsRoutes(app) {
         res.json({ success: true, instance, reviewed });
       } catch (error) {
         sendIntegrationError(res, error, 'mark integration actions as reviewed');
+      }
+    }
+  );
+
+  // --- Action detail, guidance and the test runner (#2974) -----------------
+
+  /** The action name of the route, or null after answering 400. */
+  function actionNameOf(req, res) {
+    const name = String(req.params.action || '');
+    if (!ACTION_NAME_PATTERN.test(name)) {
+      sendBadRequest(res, 'Invalid action name');
+      return null;
+    }
+    return name;
+  }
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}:
+   *   get:
+   *     summary: Detail of one action of an installed integration
+   *     description: |
+   *       What the model sees (the tool description and the parameter schema as sent),
+   *       the side effect, data flow and approval mode with the source of each (admin
+   *       override, definition, MCP annotation, OpenAPI method hint), the model guidance
+   *       and example prompts, the apps, workflows and scheduled tasks that bind the
+   *       action, its usage in the last 7 days, and the connections a test can run with.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Installation id
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: "The action's own name (not the prefixed tool id)"
+   *     responses:
+   *       200:
+   *         description: "`{ success, detail }`"
+   *       400:
+   *         description: Invalid id or action name
+   *       404:
+   *         description: Installation or action not found
+   */
+  app.get(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        if (!resolved.definition) return sendNotFound(res, 'Integration definition');
+        const detail = await describeAction(resolved, actionName, {
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        if (!detail) return sendNotFound(res, 'Action');
+        res.json({ success: true, detail });
+      } catch (error) {
+        sendInternalError(res, error, 'read integration action');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}:
+   *   put:
+   *     summary: Change the admin override of one action
+   *     description: |
+   *       Any of `description` (the tool description the model reads), `guidance` (added
+   *       to the system prompt while the integration is active), `examples` (example
+   *       prompts), each `{ en, de }` or a string, and `sideEffect` / `dataFlow` (trusted
+   *       by the approval resolver). A key set to null removes that part of the override;
+   *       a key left out keeps it. Audited as an action policy change.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               description:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *               guidance:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *               examples:
+   *                 type: array
+   *               sideEffect:
+   *                 type: string
+   *                 enum: [read, write, destructive, unknown]
+   *               dataFlow:
+   *                 type: string
+   *                 enum: [internal, external]
+   *     responses:
+   *       200:
+   *         description: "`{ success, override, detail }`"
+   *       400:
+   *         description: "`INVALID_OVERRIDE`, an invalid id or action name"
+   *       404:
+   *         description: Installation or action not found
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        // Only an action the installation lists can carry an override.
+        const before = resolved.definition
+          ? await describeAction(resolved, actionName, { language })
+          : null;
+        if (!before) return sendNotFound(res, 'Action');
+        const { override } = await installedIntegrationService.setActionOverride(
+          id,
+          actionName,
+          req.body || {}
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `action.policyChange: override of action "${actionName}" of integration "${id}" set to ${Object.keys(override || {}).join(', ') || '(none)'}`
+        });
+        const after = await installedIntegrationService.resolve(id, language);
+        const detail = await describeAction(after, actionName, {
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        res.json({ success: true, override, detail });
+      } catch (error) {
+        sendIntegrationError(res, error, 'update integration action override');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/actions/{action}/_test:
+   *   post:
+   *     summary: Run one action without a model (admin test)
+   *     description: |
+   *       Runs the action through its protocol adapter with the given arguments, as the
+   *       acting admin (`connection: me`) or with the installation's shared credential
+   *       (`connection: shared`). Answers with the status, the duration, the request as
+   *       sent (credential headers, secret keys and resolved secrets redacted), the raw
+   *       response (redacted, capped) and the Answer Sources the result produced. An
+   *       action that is not a trusted read (write, destructive, unknown, or a read the
+   *       MCP server only claims) is refused with 409 `CONFIRMATION_REQUIRED` unless the
+   *       body has `confirm: true`. Every run is audited (`action.test`, arguments
+   *       redacted). A failed call is a 200 with `result.status` `error` or `timeout`.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               args:
+   *                 type: object
+   *                 description: The action's arguments, as the model would send them
+   *               connection:
+   *                 type: string
+   *                 enum: [me, shared]
+   *               confirm:
+   *                 type: boolean
+   *                 description: Required for an action that is not a trusted read
+   *     responses:
+   *       200:
+   *         description: "`{ success, result }`"
+   *       400:
+   *         description: "`INVALID_ARGUMENTS`, `INVALID_CONNECTION`, an invalid id or action name"
+   *       404:
+   *         description: "`ACTION_NOT_FOUND`, or the installation is not found"
+   *       409:
+   *         description: "`CONFIRMATION_REQUIRED`, `ACTION_UNAVAILABLE` or `NOT_RUNNABLE`"
+   *       422:
+   *         description: "`DEFINITION_MISSING`"
+   */
+  app.post(
+    buildServerPath('/api/admin/integrations/installed/:id/actions/:action/_test'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      const actionName = actionNameOf(req, res);
+      if (!actionName) return;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const args = body.args === undefined ? {} : body.args;
+      const connection = typeof body.connection === 'string' ? body.connection : undefined;
+      try {
+        const language = languageOf(req);
+        const resolved = await installedIntegrationService.resolve(id, language);
+        if (!resolved) return sendNotFound(res, 'Integration');
+        const result = await testAction({
+          resolved,
+          actionName,
+          args,
+          connection,
+          confirm: body.confirm === true,
+          user: req.user,
+          language,
+          platform: configCache.getPlatform() || {}
+        });
+        logAudit({
+          req,
+          action: 'execute',
+          resource: 'integration',
+          resourceId: id,
+          summary: `action.test: "${actionName}" of integration "${id}" as ${result.connection}${result.confirmed ? ' (confirmed ' + result.sideEffect + ')' : ''}: ${result.status} in ${result.durationMs} ms; args ${auditArgs(args)}`,
+          result: result.status === 'ok' ? 'success' : 'failure'
+        });
+        res.json({ success: true, result });
+      } catch (error) {
+        if (error instanceof ActionTestError) {
+          // A refused test is audited too: an admin tried to run the action.
+          logAudit({
+            req,
+            action: 'execute',
+            resource: 'integration',
+            resourceId: id,
+            summary: `action.test: "${actionName}" of integration "${id}" refused (${error.code}); args ${auditArgs(args)}`,
+            result: 'failure'
+          });
+          return res.status(error.status).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+            details: error.details
+          });
+        }
+        sendIntegrationError(res, error, 'test integration action');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/instructions:
+   *   put:
+   *     summary: Set the installation's own model guidance
+   *     description: |
+   *       `{ instructions }` (`{ en, de }` or a string) replaces the definition's
+   *       instructions (an MCP server's own, or the connector's guidance) in the system
+   *       prompt while the integration is active in a chat. Null or an empty text removes
+   *       it, so the definition's apply again.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               instructions:
+   *                 oneOf:
+   *                   - type: string
+   *                   - type: object
+   *     responses:
+   *       200:
+   *         description: "`{ success, instance }`"
+   *       400:
+   *         description: "`INVALID_INSTRUCTIONS` or an invalid id"
+   *       404:
+   *         description: Installation not found
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/instructions'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const instance = await installedIntegrationService.setInstructions(
+          id,
+          req.body?.instructions ?? null
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
+        });
+        res.json({ success: true, instance });
+      } catch (error) {
+        sendIntegrationError(res, error, 'update integration instructions');
       }
     }
   );

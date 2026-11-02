@@ -17,6 +17,7 @@
  * @module services/workflow/executors/PromptNodeExecutor
  */
 
+import { appendIntegrationGuidance } from '../../integrations/actionGuidance.js';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
@@ -567,6 +568,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // A node bound to a scope does not offer the tools that look for
       // another one, and tells the model the scope is fixed, as a chat does.
       tools = applyIntegrationScopes(messages, tools, context.integrationScopes);
+      // The instructions and action guidance of the integrations the node offers (#2974).
+      appendIntegrationGuidance(messages, tools);
 
       // Thread the workflow state into the context so agent tools
       // (createTask / listTasks / markTaskDone / writeArtifact) can read and

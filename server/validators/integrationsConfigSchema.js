@@ -34,13 +34,32 @@ const installedAuthSchema = z.object({
   credentialRef: z.string().min(1).max(128).optional()
 });
 
+/** Most example prompts one action keeps (#2974). */
+export const MAX_ACTION_EXAMPLES = 10;
+/** Longest model description, guidance or example prompt an admin can store, per language. */
+export const MAX_ACTION_TEXT_LENGTH = 4000;
+
+/** A `{ en, de }` text (or one plain string) of bounded length. */
+export const boundedLocalizedSchema = z.union([
+  z.record(z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/), z.string().max(MAX_ACTION_TEXT_LENGTH)),
+  z.string().max(MAX_ACTION_TEXT_LENGTH)
+]);
+
 /**
  * The admin's override of one action. `sideEffect` and `dataFlow` are trusted
  * (an admin confirmed them) and win over what the definition or a remote
  * server declares (`utils/toolApproval.js`).
+ *
+ * The texts (#2974) replace the definition's or the server's own:
+ * `description` is the tool description the model reads, `guidance` is added
+ * to the system prompt while the integration is active in a chat
+ * (`actionGuidance.js`), `examples` are the example prompts shown to admins
+ * and users. Absent means the definition's (or the server's) text.
  */
-const actionOverrideSchema = z.object({
-  description: localizedStringSchema.optional(),
+export const actionOverrideSchema = z.object({
+  description: boundedLocalizedSchema.optional(),
+  guidance: boundedLocalizedSchema.optional(),
+  examples: z.array(boundedLocalizedSchema).max(MAX_ACTION_EXAMPLES).optional(),
   sideEffect: z.enum(SIDE_EFFECTS).optional(),
   dataFlow: z.enum(DATA_FLOWS).optional()
 });
@@ -209,6 +228,13 @@ const installedIntegrationObjectSchema = z.object({
     .catch(undefined),
   label: localizedStringSchema.optional(),
   description: localizedStringSchema.optional(),
+  /**
+   * The admin's integration-level model guidance (#2974): replaces the
+   * definition's `instructions` (an MCP server's own `instructions` or the
+   * connector's guidance) in the system prompt while the integration is
+   * active. Absent: the definition's.
+   */
+  instructions: boundedLocalizedSchema.optional(),
   enabled: z.boolean().prefault(true),
   /** Non-sensitive install field values (a `list` field holds an array of strings). */
   values: z.record(z.string(), valueSchema).prefault({}),

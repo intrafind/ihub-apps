@@ -318,6 +318,12 @@ export class McpServerConnection {
         );
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
+        // The server's own model guidance from `initialize` (MCP
+        // `instructions`), shown and editable on the installation page and
+        // added to the system prompt while the integration is active (#2974).
+        const instructions = this.client.getInstructions?.();
+        this.instructions =
+          typeof instructions === 'string' && instructions.trim() ? instructions : null;
         this.connected = true;
         this.consecutiveFailures = 0;
         this.unhealthy = false;

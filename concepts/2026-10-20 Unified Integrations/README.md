@@ -37,6 +37,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [2026-11-02 · Tool approval](2026-11-02%20Tool%20approval.md) | Implementation notes for #2945: resolver, shared approval seam, how a paused chat turn continues (spike), workflow parking, what #2916 adds |
 | [2026-11-02 · Action approval and fingerprints](2026-11-02%20Action%20approval%20and%20fingerprints.md) | Implementation notes for #2916: action fingerprints, `approval.newOrChanged`, new/changed badges and review, install preselection, `dataFlow` override |
 | [2026-11-02 · Example apps and chat test for integrations](2026-11-02%20Example%20apps%20and%20chat%20test%20for%20integrations.md) | Definitions ship example apps as companion files; the installation page creates one bound to the installation with one click and tests it in a chat panel beside the page |
+| [2026-11-02 · Action detail and test runner](2026-11-02%20Action%20detail%20and%20test%20runner.md) | Implementation notes for #2974: action detail drawer, guidance in the system prompt, the test runner with redaction and server-side confirmation, per-action usage counter |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

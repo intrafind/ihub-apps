@@ -89,6 +89,52 @@ export const markInstalledIntegrationActionsReviewed = async (id, actions = null
   return { instance: data.instance, reviewed: data.reviewed || [] };
 };
 
+/** The path of one action of an installation. */
+const actionPath = (id, action) => `${instancePath(id)}/actions/${encodeURIComponent(action)}`;
+
+/**
+ * The detail of one action (#2974): what the model sees, side effect, data
+ * flow and approval with their sources, guidance, examples, bindings, usage
+ * and the connections a test can run with.
+ */
+export const fetchIntegrationAction = async (id, action) =>
+  (await makeAdminApiCall(actionPath(id, action))).data.detail;
+
+/**
+ * Change the admin override of one action: `{ description?, guidance?,
+ * examples?, sideEffect?, dataFlow? }`; null removes a part. Returns
+ * `{ override, detail }`.
+ */
+export const saveIntegrationActionOverride = async (id, action, patch) => {
+  const { data } = await makeAdminApiCall(actionPath(id, action), {
+    method: 'PUT',
+    ...json(patch)
+  });
+  return { override: data.override, detail: data.detail };
+};
+
+/**
+ * Run one action without a model: `{ args, connection, confirm }`. Returns
+ * the test result; a refused test (e.g. 409 `CONFIRMATION_REQUIRED`) throws
+ * with `err.response.data.code`.
+ */
+export const testIntegrationAction = async (id, action, { args, connection, confirm }) =>
+  (
+    await makeAdminApiCall(`${actionPath(id, action)}/_test`, {
+      method: 'POST',
+      ...json({ args, connection, confirm: confirm === true })
+    })
+  ).data.result;
+
+/** Set (or with null remove) the installation's own model instructions. */
+export const saveIntegrationInstructions = async (id, instructions) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/instructions`, {
+      method: 'PUT',
+      ...json({ instructions })
+    })
+  ).data.instance;
+
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
 };

@@ -8,6 +8,8 @@ import logger from '../../utils/logger.js';
 import integrationRegistry from './definitions/IntegrationRegistry.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import {
+  actionOverrideSchema,
+  boundedLocalizedSchema,
   installedApprovalSchema,
   validateIntegrationsConfig,
   validateInstalledIntegration
@@ -113,6 +115,46 @@ function sortedRecord(record) {
  * @param {object} instance - the installation about to be stored
  * @param {object|undefined} stored - the installation as stored
  */
+/**
+ * A localized text without its empty languages: `{ en: 'x', de: '' }` →
+ * `{ en: 'x' }`; null when nothing is left. Anything else is returned as is
+ * (the schema rejects it).
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function withoutEmptyTexts(value) {
+  if (typeof value === 'string') return value.trim() ? value : null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const kept = Object.fromEntries(
+    Object.entries(value).filter(([, text]) => typeof text !== 'string' || text.trim())
+  );
+  return Object.keys(kept).length ? kept : null;
+}
+
+/**
+ * Keep what the dedicated editors of the action detail write (#2974) when an
+ * update's payload does not carry it: the installation's `instructions` and
+ * the per-action `overrides`. The settings editors do not know these fields;
+ * a save there must not drop them.
+ *
+ * @param {Object} instance - the prepared installation (mutated)
+ * @param {Object} stored - the stored installation
+ * @param {Object} payload - the raw update payload
+ */
+function keepGuidance(instance, stored, payload) {
+  if (!Object.hasOwn(payload || {}, 'instructions') && stored?.instructions !== undefined) {
+    instance.instructions = stored.instructions;
+  }
+  const sentActions =
+    payload?.actions && typeof payload.actions === 'object' ? payload.actions : null;
+  if (!sentActions || !Object.hasOwn(sentActions, 'overrides')) {
+    const overrides = stored?.actions?.overrides;
+    if (overrides && Object.keys(overrides).length) {
+      instance.actions = { ...instance.actions, overrides };
+    }
+  }
+}
+
 function keepActionReview(instance, stored) {
   const { fingerprints, reviewedAt } = stored?.actions || {};
   if (!fingerprints && !reviewedAt) return;
@@ -573,6 +615,7 @@ export class InstalledIntegrationService {
       if (index < 0)
         throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
       keepActionReview(instance, config.installed[index]);
+      keepGuidance(instance, config.installed[index], payload);
       config.installed[index] = instance;
       await this.writeConfig(config);
       // Only once the file points elsewhere: a failed write must leave the
@@ -619,6 +662,103 @@ export class InstalledIntegrationService {
       const before = { ...instance };
       if (cleaned) instance.approval = cleaned;
       else delete instance.approval;
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
+      return instance;
+    });
+  }
+
+  /**
+   * Change the admin override of one action (#2974): any of `description`,
+   * `guidance`, `examples` (texts, `{ en, de }` or a string), `sideEffect`
+   * and `dataFlow`. A key set to null removes that part of the override; a
+   * key left out keeps it. Only this action's override changes.
+   *
+   * @param {string} id
+   * @param {string} actionName
+   * @param {Object} patch
+   * @returns {Promise<{instance: Object, override: Object|null}>}
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `INVALID_OVERRIDE`
+   */
+  setActionOverride(id, actionName, patch) {
+    return this._serialize(async () => {
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        throw new IntegrationError('The override must be an object', { code: 'INVALID_OVERRIDE' });
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const merged = { ...(instance.actions?.overrides?.[actionName] || {}) };
+      for (const key of ['description', 'guidance', 'examples', 'sideEffect', 'dataFlow']) {
+        if (!Object.hasOwn(patch, key)) continue;
+        const value =
+          key === 'examples' && Array.isArray(patch[key])
+            ? patch[key].map(withoutEmptyTexts).filter(Boolean)
+            : key === 'description' || key === 'guidance'
+              ? withoutEmptyTexts(patch[key])
+              : patch[key];
+        const empty =
+          value === null ||
+          value === '' ||
+          (Array.isArray(value) && value.length === 0 && key !== 'examples');
+        if (empty) delete merged[key];
+        else merged[key] = value;
+      }
+      const parsed = actionOverrideSchema.strict().safeParse(merged);
+      if (!parsed.success) {
+        throw new IntegrationError('Invalid action override', {
+          code: 'INVALID_OVERRIDE',
+          details: parsed.error.issues
+        });
+      }
+      const before = structuredClone(instance);
+      const overrides = { ...(instance.actions?.overrides || {}) };
+      if (Object.keys(parsed.data).length) overrides[actionName] = parsed.data;
+      else delete overrides[actionName];
+      instance.actions = { ...instance.actions, overrides };
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
+      return { instance, override: overrides[actionName] || null };
+    });
+  }
+
+  /**
+   * Set the installation's own model guidance (#2974), replacing the
+   * definition's `instructions` (or an MCP server's) in the system prompt;
+   * null or '' removes it.
+   *
+   * @param {string} id
+   * @param {Object|string|null} instructions - `{ en, de }` or a string
+   * @returns {Promise<Object>} the stored installation
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `INVALID_INSTRUCTIONS`
+   */
+  setInstructions(id, instructions) {
+    return this._serialize(async () => {
+      let cleaned = null;
+      if (instructions !== null && instructions !== undefined && instructions !== '') {
+        const parsed = boundedLocalizedSchema.safeParse(instructions);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid instructions', {
+            code: 'INVALID_INSTRUCTIONS',
+            details: parsed.error.issues
+          });
+        }
+        cleaned =
+          typeof parsed.data === 'string'
+            ? parsed.data
+            : Object.fromEntries(Object.entries(parsed.data).filter(([, text]) => text.trim()));
+        if (typeof cleaned === 'object' && Object.keys(cleaned).length === 0) cleaned = null;
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const before = structuredClone(instance);
+      if (cleaned) instance.instructions = cleaned;
+      else delete instance.instructions;
       instance.updatedAt = nowIso();
       await this.writeConfig(config);
       await this._afterChange(instance.id, { before, after: instance });

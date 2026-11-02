@@ -60,6 +60,9 @@ import {
   withNewOrChangedMode
 } from '../components/integrations/installationApproval';
 import ActionReviewBadge from '../components/integrations/ActionReviewBadge';
+import IntegrationActionDrawer from '../components/integrations/IntegrationActionDrawer';
+import IntegrationInstructionsCard from '../components/integrations/IntegrationInstructionsCard';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
@@ -265,6 +268,24 @@ function InstallationPageContent({ instanceId }) {
     const params = new URLSearchParams(searchParams);
     if (open) params.set('test', 'chat');
     else params.delete('test');
+    setSearchParams(params, { replace: true });
+  };
+
+  // The action detail (#2974); `?action=<name>` opens the page with it.
+  const user = useOptionalAuth()?.user || null;
+  const openAction = searchParams.get('action');
+  const setOpenAction = name => {
+    const params = new URLSearchParams(searchParams);
+    if (name) params.set('action', name);
+    else params.delete('action');
+    setSearchParams(params, { replace: true });
+  };
+  /** Try the integration in chat from the action detail: close it, open the chat test. */
+  const tryInChat = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('action');
+    params.set('test', 'chat');
+    setTestOpen(true);
     setSearchParams(params, { replace: true });
   };
 
@@ -800,6 +821,19 @@ function InstallationPageContent({ instanceId }) {
                                 {t('admin.integrations.actionReview.markOne', 'Mark reviewed')}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => setOpenAction(action.name)}
+                              className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-indigo-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300"
+                              aria-label={t(
+                                'admin.integrations.actionDetail.openLabel',
+                                'Details of {{action}}: what it does, how to use it, test it',
+                                { action: action.title || action.name }
+                              )}
+                              data-testid={`action-details-${action.name}`}
+                            >
+                              {t('admin.integrations.actionDetail.open', 'Details')}
+                            </button>
                             {action.enabled === false ? (
                               <Pill tone="gray">
                                 {t('admin.integrations.page.actionOff', 'Off')}
@@ -817,6 +851,15 @@ function InstallationPageContent({ instanceId }) {
                     </ul>
                   )}
                 </section>
+
+                {!unusable && (
+                  <IntegrationInstructionsCard
+                    instanceId={instance.id}
+                    instructions={detail.instructions}
+                    disabled={isMigrationBlocked(instance)}
+                    onSaved={load}
+                  />
+                )}
 
                 {(instance.migrationLog || []).length > 0 && (
                   <section
@@ -988,6 +1031,20 @@ function InstallationPageContent({ instanceId }) {
             <IntegrationConnectionsDialog
               instance={instance}
               onClose={() => setShowConnections(false)}
+            />
+          )}
+
+          {openAction && !unusable && (
+            <IntegrationActionDrawer
+              key={openAction}
+              isOpen
+              onClose={() => setOpenAction(null)}
+              instanceId={instance.id}
+              actionName={openAction}
+              approval={instance.approval || null}
+              userName={user?.username || user?.name || user?.id || ''}
+              onChanged={load}
+              onTryInChat={tryInChat}
             />
           )}
 

@@ -31,7 +31,9 @@ const mockApi = {
   fetchAdminPlatformConfig: jest.fn(),
   markInstalledIntegrationActionsReviewed: jest.fn(),
   fetchIntegrationDefinition: jest.fn(),
-  installIntegration: jest.fn()
+  installIntegration: jest.fn(),
+  fetchIntegrationAction: jest.fn(),
+  saveIntegrationInstructions: jest.fn()
 };
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   fetchInstalledIntegration: (...args) => mockApi.fetchInstalledIntegration(...args),
@@ -46,7 +48,9 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   fetchIntegrationDefinition: (...args) => mockApi.fetchIntegrationDefinition(...args),
   installIntegration: (...args) => mockApi.installIntegration(...args),
   testIntegrationDraft: jest.fn(),
-  fetchIntegrationConnections: jest.fn().mockResolvedValue([])
+  fetchIntegrationConnections: jest.fn().mockResolvedValue([]),
+  fetchIntegrationAction: (...args) => mockApi.fetchIntegrationAction(...args),
+  saveIntegrationInstructions: (...args) => mockApi.saveIntegrationInstructions(...args)
 }));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: (...args) => mockApi.fetchAdminApps(...args),
@@ -611,5 +615,41 @@ describe('install form: approval preselection (#2916)', () => {
     expect(mockApi.updateInstalledIntegration.mock.calls[0][1].approval).toEqual({
       default: 'never'
     });
+  });
+});
+
+describe('installation page: action detail and instructions (#2974)', () => {
+  test('opens the action detail from an action and edits the integration instructions', async () => {
+    mockApi.fetchInstalledIntegration.mockResolvedValue({
+      ...CKAN_DETAIL,
+      instructions: { text: 'Start with search_datasets.', source: 'definition', own: null }
+    });
+    mockApi.fetchIntegrationAction.mockReturnValue(new Promise(() => {}));
+    mockApi.saveIntegrationInstructions.mockResolvedValue({});
+    renderAt('/admin/integrations/govdata');
+    await screen.findByRole('heading', { level: 1, name: 'GovData' });
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Details of Search datasets: what it does, how to use it, test it'
+      })
+    );
+    expect(await screen.findByTestId('integration-action-drawer')).toBeInTheDocument();
+    expect(mockApi.fetchIntegrationAction).toHaveBeenCalledWith('govdata', 'search_datasets');
+
+    const card = screen.getByTestId('installation-instructions');
+    expect(within(card).getByText('Start with search_datasets.')).toBeInTheDocument();
+    expect(within(card).getByText('From the integration definition')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit instructions' }));
+    fireEvent.change(within(card).getByRole('textbox'), {
+      target: { value: 'Always link the dataset.' }
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('govdata', {
+        en: 'Always link the dataset.'
+      })
+    );
+    expectNoMissingKeys();
   });
 });

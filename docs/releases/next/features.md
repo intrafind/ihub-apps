@@ -94,6 +94,40 @@ Remote agents (Agent-to-Agent protocol) are installed from the **A2A agent** def
 - **Migrated for you:** migration V194 moves every agent of `a2aAgents.json` into an
   installation under the same id.
 
+## Integrations: Every Action Has a Detail With Guidance and a Test Runner
+
+Every action on the page of an installation (**Admin → Integrations → an installation**) now has
+**Details**, a panel that answers what the action does, how the model should use it, and whether
+it works, without a chat:
+
+- **What it does:** the description and the parameter schema exactly as the model receives them.
+  Vendor descriptions are often written for developers; replace the description for the model
+  per language, or reset it to the vendor's.
+- **Side effect, data flow, approval:** each value with where it came from (integration
+  definition, vendor annotation, admin override, platform default). Override the side effect or
+  data flow, set the action's approval mode, or mark a new or changed action as reviewed.
+  For an OpenAPI operation without a declared side effect, the HTTP method's suggestion is shown.
+- **How to use:** **model guidance** and **example prompts** per action, editable per language.
+  The guidance of every action a chat offers, with the integration's own **instructions**, is now
+  added to the system prompt while the integration is active (it used to be appended to the tool
+  description). The instructions are editable on the Overview, for MCP servers too, whose own
+  `instructions` are shown when the server sends them. The panel also lists the apps, workflows
+  and scheduled tasks that use the action.
+- **Test:** a form built from the parameter schema runs the action directly, without a model, as
+  you or with the installation's shared credential. It shows status, duration, the request as
+  sent (credentials, secret parameters and every resolved secret redacted), the raw response and
+  the Answer Sources it produced. An action that is not a confirmed read only runs after you tick
+  the confirmation; the server refuses it otherwise. Every test is written to the audit log
+  (`action.test`, with the arguments redacted).
+- **Usage:** calls, approvals, rejections, expired approvals, errors and admin tests in the last
+  7 days, counted per action from this version on.
+- **Try in chat** opens the installation's chat test from the panel.
+
+The built-in iFinder, Jira, Entra ID, iHub (asking the user, scheduled tasks) and web search
+integrations ship guidance and example prompts for their actions (definition version 1.1.0; no
+migration, no action shows as changed). The web search engines' instructions are now written for
+the model.
+
 ## Integrations Can Bring Their Own Code
 
 A definition in a registry may ship a connector module (`"protocol": { "type": "script",
