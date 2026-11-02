@@ -37,6 +37,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [2026-11-02 · Connection service and OAuth client](2026-11-02%20Connection%20service%20and%20OAuth%20client.md) | Implementation notes (#2914): one OAuth client with strategies, the connection index, server-side sign-in state, the one callback and its aliases, the re-index, `INTEGRATION_AUTH_REQUIRED`, the public interface #2917 builds on |
 | [2026-11-02 · Example apps and chat test for integrations](2026-11-02%20Example%20apps%20and%20chat%20test%20for%20integrations.md) | Definitions ship example apps as companion files; the installation page creates one bound to the installation with one click and tests it in a chat panel beside the page |
 | [2026-11-02 · One connect flow and connect card](2026-11-02%20One%20connect%20flow%20and%20connect%20card.md) | Implementation notes (#2917): `GET /api/integrations` and its shape, `POST …/connect`, `…/reconnect`, `…/disconnect`, the one Connect card, the retry once after connecting, what was removed |
+| [2026-11-02 · Chat picker and server-side defaults](2026-11-02%20Chat%20picker%20and%20server-side%20defaults.md) | Implementation notes (#2923): the picker rows from the server (`refs`, `coveredBy`), the per-user default per app and its one-time import, connect in a new tab |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals
