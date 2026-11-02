@@ -12,8 +12,13 @@
  *  - `run.tools` (`tool/started` / `tool/completed`): every server-executed
  *    tool call, with the sources it reported (`sources/added` with its
  *    callId, see `shared/sources`). A search is scoped to the web or to the organisation's
- *    documents (iFinder, configured sources), see `searchScope`. Clarifications (`ask_user`), chat-launched workflows and
- *    skill activation are left out: each has its own UI.
+ *    documents (iFinder, configured sources), see `searchScope`. Clarifications (`ask_user`) and
+ *    chat-launched workflows are left out: each has its own UI.
+ *  - `tool/progress{skill.activation}` frames: one `skill` row per activation,
+ *    placed among the tool calls by time, saying who activated the skill (the
+ *    user with `/name`, or the model). The `activate_skill` call itself is not a
+ *    row, so a skill the model loads twice shows twice here but only once in
+ *    `run.skills`, the set the message header lists.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
  *    (`webSearchQueries`). Its sources are listed in the sources panel.
@@ -25,7 +30,11 @@
  * @module shared/run/toolActivity
  */
 
-/** Tool ids with their own chat UI. */
+/**
+ * Tool ids with their own chat UI. `activate_skill` is shown as a `skill` row
+ * built from its `skill.activation` frame, which also covers a skill the user
+ * activated and a call that was refused (no frame, so no row).
+ */
 const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
 
 /**
@@ -209,13 +218,65 @@ function nativeSearchQueries(run) {
 }
 
 /**
+ * One row per `skill.activation` frame of the run, in the order they arrived,
+ * with the time of the frame for placing the row among the tool calls.
+ */
+function skillRows(run) {
+  const rows = [];
+  for (const [index, entry] of (run.progress || []).entries()) {
+    if (entry.kind !== 'tool/progress' || entry.phase !== 'skill.activation') continue;
+    const name = entry.data?.skillName || entry.message;
+    if (!name) continue;
+    rows.push({
+      at: Date.parse(entry.at),
+      item: {
+        id: `skill-${Number.isInteger(entry.seq) ? entry.seq : index}`,
+        kind: 'skill',
+        toolId: 'activate_skill',
+        name,
+        skillId: typeof entry.data?.skillId === 'string' ? entry.data.skillId : null,
+        activatedBy:
+          entry.data?.activatedBy === 'user' || entry.data?.activatedBy === 'model'
+            ? entry.data.activatedBy
+            : null,
+        status: 'completed',
+        scope: null,
+        details: [],
+        sources: [],
+        error: null,
+        durationMs: null
+      }
+    });
+  }
+  return rows;
+}
+
+/**
+ * Put the skill rows among the tool rows by time: each before the first tool
+ * call that started at or after the skill was activated (the user's `/name` precedes
+ * every call of the turn; a model activation follows its own `activate_skill`
+ * call, which has no row). A row with no usable time goes last.
+ */
+function mergeSkillRows(toolRows, skills) {
+  const rows = [...toolRows];
+  for (const skill of skills) {
+    const index = Number.isNaN(skill.at)
+      ? -1
+      : rows.findIndex(row => !Number.isNaN(row.at) && row.at >= skill.at);
+    if (index < 0) rows.push(skill);
+    else rows.splice(index, 0, skill);
+  }
+  return rows;
+}
+
+/**
  * @param {Object|null} run - RunState from the run reducer
  * @returns {{items: Array<Object>, reading: string|null}|null} null when the turn used no tools
  */
 export function buildToolActivity(run) {
   if (!run) return null;
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
-  const items = [];
+  const toolRows = [];
 
   for (const tool of run.tools || []) {
     if ((tool.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(tool.toolId)) {
@@ -228,24 +289,28 @@ export function buildToolActivity(run) {
     const query = kind === 'search' ? queryOf(tool.args) : null;
     const url = kind === 'fetch' ? urlOf(tool.args) : null;
     const documentId = kind === 'fetch' ? documentIdOf(tool.args) : null;
-    items.push({
-      id: tool.callId,
-      kind,
-      toolId: tool.toolId,
-      name: tool.name || tool.toolId,
-      status,
-      scope: kind === 'tool' ? null : searchScope(tool.toolId),
-      query,
-      url,
-      documentId,
-      details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
-      sources: Array.isArray(tool.sources) ? tool.sources : [],
-      error: tool.error?.message || null,
-      // A page read the per-turn cap (`websearch.maxPageReads`) refused.
-      limitReached: kind === 'fetch' && tool.result?.limitReached === true,
-      durationMs: tool.durationMs ?? null
+    toolRows.push({
+      at: Date.parse(tool.startedAt),
+      item: {
+        id: tool.callId,
+        kind,
+        toolId: tool.toolId,
+        name: tool.name || tool.toolId,
+        status,
+        scope: kind === 'tool' ? null : searchScope(tool.toolId),
+        query,
+        url,
+        documentId,
+        details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
+        sources: Array.isArray(tool.sources) ? tool.sources : [],
+        error: tool.error?.message || null,
+        // A page read the per-turn cap (`websearch.maxPageReads`) refused.
+        limitReached: kind === 'fetch' && tool.result?.limitReached === true,
+        durationMs: tool.durationMs ?? null
+      }
     });
   }
+  const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
 
   const nativeQueries = nativeSearchQueries(run);
   if (nativeQueries.length) {

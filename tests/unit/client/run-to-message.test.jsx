@@ -472,3 +472,23 @@ describe('projectMessageRuns — chat run + tool-launched workflow child run', (
     expect(projectMessageRuns(parent, [])).toEqual(projectRunToMessage(parent));
   });
 });
+
+describe('projectRunToMessage — a skill activated more than once', () => {
+  test('is listed once in activeSkills', () => {
+    const activation = (seq, activatedBy) =>
+      env(seq, 'tool/progress', {
+        phase: 'skill.activation',
+        message: 'Research',
+        data: { skillName: 'Research', skillId: 'research', description: 'Deep', activatedBy }
+      });
+    const run = runFrom([
+      started,
+      activation(2, 'model'),
+      activation(3, 'model'),
+      activation(4, 'user')
+    ]);
+    expect(projectRunToMessage(run).extras.activeSkills).toEqual([
+      { name: 'Research', description: 'Deep', id: 'research', activatedBy: 'user' }
+    ]);
+  });
+});
