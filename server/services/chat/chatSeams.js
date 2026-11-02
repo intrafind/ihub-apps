@@ -23,6 +23,7 @@ import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
 import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
+import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -315,6 +316,8 @@ export function chatToolSeam({
         callId: callIdOf(info),
         toolId: String(info.toolId),
         name: String(info.name || info.toolId),
+        // What the user reads instead of the id: the action and the system it ran against.
+        ...toolDisplayOf(info.toolDef),
         args: info.args,
         execution: info.toolDef?.passthrough
           ? 'passthrough'

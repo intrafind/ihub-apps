@@ -471,3 +471,18 @@ app that uses the installation.
 - The chat only runs enabled apps: an example app created with **Available to users now** is
   visible to groups that may use all apps; untick it to create the app disabled.
 - Integration definitions from the marketplace can ship example apps too (`exampleApps`).
+
+## Chat: Tool Calls Name the Action and the System They Asked
+
+The list of tool calls above an answer now reads the way users think about it: each call shows
+the action ("Search people") and the integration, MCP server or remote agent it ran against
+("Munich AD"), instead of an internal id like `muc-ad__search_people`.
+
+- The collapsed summary names the systems the answer asked: _4 tool calls · Munich AD, Microsoft
+  Entra ID directory_.
+- The action title comes from the integration definition, in the user's language; an MCP tool
+  shows the title its server declares, else its own name.
+- The internal id stays available as the tooltip of the action, for admins tracing a call.
+- Tools without a title (custom tools) keep showing their name as before.
+- A search in a connected system — a Jira ticket search, an MCP server's search — is listed as a
+  call to that system, with its query among the arguments, no longer as a web search with a globe.

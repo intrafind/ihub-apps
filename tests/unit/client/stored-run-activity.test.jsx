@@ -6,6 +6,7 @@ import { buildRunActivity } from '../../../shared/run/runActivity.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 import WorkflowStepIndicator from '../../../client/src/features/chat/components/WorkflowStepIndicator';
+import { withServerDecision } from './helpers/serverToolDecision.js';
 
 /**
  * A reopened answer shows what its run did — searches, documents, tool calls,
@@ -39,7 +40,7 @@ const env = (seq, type, data = {}, runId = 'run-1') => ({
   runId,
   ts: `2026-09-30T10:00:${String(seq).padStart(2, '0')}.000Z`,
   type,
-  data
+  data: withServerDecision(type, data)
 });
 
 /** A turn that searched the web and iFinder, with an iAssistant search status. */
