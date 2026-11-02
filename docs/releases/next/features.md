@@ -49,7 +49,9 @@ iFinder and iAssistant are the first two built-in integrations under **Admin →
   saved installation the same way.
 - **Apps bind instead of listing tools:** an app binds the installation (`integrations.ifinder`)
   and picks actions by name; the seven tools keep their ids, so group grants and prompts that
-  name `iFinder_search` and friends are unchanged. An iAssistant app binds `integrations.iassistant`.
+  name `iFinder_search` and friends are unchanged. An iAssistant app binds `integrations.iassistant`:
+  the **Enable iAssistant** switch of the app editor's iAssistant panel writes that binding, and
+  the panel holds its **Required** and scope settings (default and pinned iAssistant, scope picker).
   An app whose installation is missing or disabled is not offered, and **Admin → Apps** names it.
 - **Migrated for you:** migration V192 moves the two platform blocks into installations (keeping
   their enabled state), rewrites the shipped and custom apps and retires `tools/iFinder.json`.
@@ -121,8 +123,8 @@ category on the Providers page.
   needed only for the other models; on those, the chat offers the web search toggle only while
   an engine is available.
 - **Pick the engine per app:** the **Web Search** panel of the app editor, now on every chat app,
-  lists **Auto** and the installed engines, marks a disabled one, and warns when the app names an
-  engine that is not installed. Auto takes the first engine the user may use: Brave, Staan, Qwant,
+  lists **Auto** and the enabled engines (a disabled one only while the app names it, marked as
+  disabled), and warns when the app names an engine that is not installed. Auto takes the first engine the user may use: Brave, Staan, Qwant,
   then any other.
 - **An editor per engine:** the API key as a credential with the environment variable it falls
   back to (`BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`), and **Test connection** with the values as
@@ -251,7 +253,9 @@ Integrations**, one installation per directory, and no longer a page of their ow
 - **Bind one or all:** an app binds one directory like any installation, every LDAP directory
   with the definition binding `"integrations": { "com.intrafind/ldap-directory": {} }`, or every
   people directory with **All people directories** (`"type:people-directory": {}`), which
-  follows directories installed later.
+  follows directories installed later. In the app editor the **People directories** card has an
+  **Enable people directories** switch, then **All people directories** (with its **Required**
+  setting) or **Only selected directories**, and below the directories with their actions.
 - **Migrated for you:** migration V198 moves every directory of `peopleDirectories.json` into an
   installation (bind passwords stay credential references) and rewrites the shipped People search
   and LDAP browser apps and every app that listed `peopleDirectories` or a directory.
@@ -294,8 +298,10 @@ Integrations**, and no longer three pages of their own with a shared provider ed
   its own OAuth app, settings, connected users and group grant, and users see each one under its
   label. The installation id is the provider id in the callback URL and in the users' stored
   connections.
-- **Bound per app:** **Admin → Apps → Edit → Integrations → Storage providers** offers **All
-  storage providers**, **All … installations** of one provider, or single installations. The
+- **Bound per app:** **Admin → Apps → Edit → Integrations → Storage providers** has an **Enable
+  storage providers** switch, then **All storage providers** (with its **Required** setting) or
+  **Only selected storage providers**, and the rows **All … installations** of one provider and
+  single installations. The
   chat's cloud file picker offers the providers the app binds and the user's groups grant; the
   **Cloud Storage Upload** switch of the upload settings is gone.
 - **A dedicated editor per provider:** the **Settings** tab of an installation shows the redirect
@@ -481,6 +487,26 @@ says where the answer searched (**Searched in Contracts**) or which iAssistant i
 - **Reopened chats:** the labels are stored with the answer, so they show the same after reopening.
 - The names come from the same per-user list as the search profile picker; a profile whose name
   is unknown shows its id. Shared chats leave the labels out, like the documents themselves.
+
+## Integrations: Example Apps and a Chat Test on the Installation Page
+
+Admins can now try an integration the way users get it, without building an app first.
+**Test in chat** on the page of an installation opens the real chat beside the page, running an
+app that uses the installation.
+
+- **One click to an example app:** when no app uses the installation yet, the panel (and
+  **Create example app** under _Apps that use it_) creates one, bound to this installation. The
+  **LDAP browser** and **CKAN Open Data Portal** integrations ship their own example apps (_LDAP
+  browser_, _Open Data Assistant_); every other integration gets an assistant generated from its
+  description, instructions and example questions. Change it in the app editor afterwards.
+- **Pick the app:** with several apps using the installation, choose which one to chat with.
+- **Test after every save:** the chat restarts when the installation's settings are saved, so a
+  changed setting is tested with the next message.
+- **Hints:** the panel says when the installation is disabled, when your own groups do not grant
+  it, and when the chosen app is disabled.
+- The chat only runs enabled apps: an example app created with **Available to users now** is
+  visible to groups that may use all apps; untick it to create the app disabled.
+- Integration definitions from the marketplace can ship example apps too (`exampleApps`).
 
 ## Chat: Tool Calls Name the Action and the System They Asked
 

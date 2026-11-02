@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import swaggerJSDoc from 'swagger-jsdoc';
+import { apiDocGlobs } from '../routes/swagger.js';
 
 const routesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'routes');
 
@@ -30,4 +31,23 @@ test('every @swagger block under server/routes parses', () => {
   const spec = buildSpec([`${routesDir.split(path.sep).join('/')}/**/*.js`]);
   assert.ok(Object.keys(spec.paths).length > 0, 'no documented paths found');
   assert.ok(spec.paths['/api/admin/apps/integration-status'], 'integration-status is documented');
+});
+
+test('the API document globs use forward slashes, also for a Windows routes directory', () => {
+  const globs = apiDocGlobs('C:\\ihub\\server\\routes', '\\');
+  const all = [...globs.normal, ...globs.admin, ...globs.openai];
+  assert.ok(all.length > 0);
+  for (const pattern of all) {
+    assert.ok(!pattern.includes('\\'), `backslash in ${pattern}`);
+    assert.ok(pattern.startsWith('C:/ihub/server/routes/'), pattern);
+  }
+  assert.ok(globs.admin.includes('C:/ihub/server/routes/admin/**/*.js'));
+});
+
+test('each API document built from the server globs has paths', () => {
+  const globs = apiDocGlobs(routesDir);
+  for (const [name, apis] of Object.entries(globs)) {
+    const spec = buildSpec(apis);
+    assert.ok(Object.keys(spec.paths).length > 0, `${name} API document is empty`);
+  }
 });
