@@ -78,10 +78,12 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
 
 ## Web Search Engines Moved From `providers.json` to Installed Integrations
 
-Migrations V195 and V204 move the `websearch` entries of `contents/config/providers.json` (Brave,
-Staan, Qwant) into one installed integration per engine that worked, of type `web-search`, and
-delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and
-`read_url.json` from `contents/tools/`.
+Migration V195 moves the `websearch` entries of `contents/config/providers.json` (Brave, Staan,
+Qwant) into one installed integration, `websearch`, and deletes the tool files `braveSearch.json`,
+`staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`. Migration V204
+then replaces `websearch` with one installed integration per engine that worked, of type
+`web-search`. An upgrade from 5.6.4 or earlier runs both; an installation on 5.6.5-RC1 already has
+`websearch` and runs V204 only.
 
 - **What gets installed:** `brave` where a Brave key was configured (its key moves to the
   credential `integration-websearch-brave`, or `BRAVE_SEARCH_API_KEY` was set), `staan` likewise,

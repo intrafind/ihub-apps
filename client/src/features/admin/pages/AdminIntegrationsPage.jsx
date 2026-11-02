@@ -274,7 +274,8 @@ function AdminIntegrationsPage() {
     }
   };
 
-  // Disabling hides every app that binds the installation: ask first when there is one.
+  // Disabling takes the installation from every app that uses it, and hides an app
+  // that requires it: ask first when there is one.
   const requestToggle = item => {
     if (item.enabled !== false && boundAppNames(item).length > 0) {
       setConfirm({ kind: 'disable', item });
@@ -573,18 +574,18 @@ function AdminIntegrationsPage() {
               {confirm?.kind === 'disable'
                 ? t(
                     'admin.integrationCatalog.confirmDisable.message',
-                    'Apps that bind "{{id}}" are hidden from users while it is disabled.',
+                    'Apps that use "{{id}}" go without it while it is disabled. An app that requires it is hidden from users.',
                     { id: confirm?.item.id }
                   )
                 : t(
                     'admin.integrationCatalog.confirmRemove.message',
-                    'Apps that bind "{{id}}" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it.',
+                    'Apps that use "{{id}}" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it.',
                     { id: confirm?.item.id }
                   )}
             </p>
             {confirm && boundAppNames(confirm.item).length > 0 && (
               <p className="mt-2" data-testid="bound-apps">
-                {t('admin.integrationCatalog.boundApps', 'Bound by: {{apps}}', {
+                {t('admin.integrationCatalog.boundApps', 'Used by: {{apps}}', {
                   apps: boundAppNames(confirm.item).join(', ')
                 })}
               </p>
