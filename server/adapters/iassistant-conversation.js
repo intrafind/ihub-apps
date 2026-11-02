@@ -17,8 +17,10 @@ import iAssistantProfileResolver from '../services/integrations/iAssistantProfil
 import { AssistantNotAvailableError } from '../services/integrations/iFinderAssistants.js';
 import {
   conversationScopeOf,
+  describeAnswerScope,
   scopeToConversationConfig
 } from '../services/integrations/scopes/iAssistantScopes.js';
+import { searchProfileNames } from '../services/integrations/scopes/iFinderScopes.js';
 import { composeExtraContext } from '../services/integrations/iAssistantGrounding.js';
 import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
@@ -81,6 +83,12 @@ function distinctMetadataValues(hits, field) {
   return values;
 }
 
+/** `fn`, called at most once: later calls get the first call's promise. */
+function once(fn) {
+  let result = null;
+  return () => (result ??= fn());
+}
+
 class IAssistantConversationAdapterClass extends BaseAdapter {
   /**
    * Use the line-delimited SSE parser from BaseAdapter.
@@ -91,13 +99,18 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
    * as sources (`chunk.sources`, see `services/sources/producers/ifinder.js`),
    * with the conversation's search profile for documents whose ACCESS link
    * names none, so the sources panel can preview, download and attach them.
+   * Each document carries the name of the profile it was found in, and the
+   * frame records the iAssistant scope the answer was produced with (#3056);
+   * both names are read when the first documents arrive (`_nameSources`).
    */
   async *parseResponseStream(response, ctx) {
     const searchProfile = ctx?.request?._searchProfile;
+    const nameSources = ctx?.request?._nameSources;
     for await (const chunk of this.parseLineDelimitedSseStream(response)) {
       if (chunk?.citations) {
         const { citations, ...rest } = chunk;
-        const sources = iAssistantSourceFrame(citations, { searchProfile });
+        const names = typeof nameSources === 'function' ? await nameSources() : {};
+        const sources = iAssistantSourceFrame(citations, { searchProfile, ...names });
         yield sources ? { ...rest, sources } : rest;
       } else {
         yield chunk;
@@ -386,8 +399,50 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       _searchProfile:
         state.searchScope === 'all'
           ? undefined
-          : state.searchProfile || config.configuredSearchProfile
+          : state.searchProfile || config.configuredSearchProfile,
+      // Read once, when the answer brings its first documents.
+      _nameSources: once(() =>
+        this.nameSources({ state, config, user, model, options, signal }).catch(() => ({}))
+      )
     };
+  }
+
+  /**
+   * The names the sources panel shows for an answer (#3056): of the search
+   * profiles its documents are found in, and of the iAssistant scope it was
+   * produced with. Both come from per-user lists the scope check and the
+   * profile check read (cached), and neither ever fails the turn: an unknown
+   * name shows the id.
+   *
+   * @param {Object} params
+   * @param {Object} params.state - the conversation state
+   * @param {Object} params.config - `resolveConfig`'s result
+   * @param {Object} params.user
+   * @param {Object} params.model
+   * @param {Object} params.options - the request options (`appConfig`, `language`)
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<{scopeNames: Map<string, string>, scope: Object}>}
+   */
+  async nameSources({ state, config, user, model, options, signal }) {
+    const serviceConfig = iAssistantService.getConfig();
+    const [scopeNames, scope] = await Promise.all([
+      searchProfileNames({
+        user,
+        baseUrl: state.baseUrl || config.baseUrl,
+        application: serviceConfig.searchProfileApplication,
+        ttlMs: serviceConfig.searchProfileCacheTtlMs,
+        signal
+      }),
+      describeAnswerScope({
+        scopeId: conversationScopeOf(state),
+        user,
+        app: options.appConfig,
+        model,
+        language: options.language,
+        signal
+      })
+    ]);
+    return { scopeNames, scope };
   }
 
   /**

@@ -19,6 +19,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
 import { scopeToConversationConfig } from '../../services/integrations/scopes/iAssistantScopes.js';
+import { searchProfileNames } from '../../services/integrations/scopes/iFinderScopes.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
 function preferredModelConfig(app) {
@@ -235,14 +236,19 @@ export default function registerConversationRoutes(app) {
 
         // The documents of a reopened conversation become sources, with the
         // search profile the live stream gives them, so the sources panel can
-        // preview, download and attach them again.
-        const searchProfile = await conversationSearchProfile(appConfig, {
-          chatId,
-          conversationId,
-          user,
-          baseUrl
-        });
-        res.json(withConversationSources(result, searchProfile));
+        // preview, download and attach them again, and say where each was
+        // found (the profile names, from the user's cached list).
+        const { searchProfileApplication, searchProfileCacheTtlMs } = iAssistantService.getConfig();
+        const [searchProfile, scopeNames] = await Promise.all([
+          conversationSearchProfile(appConfig, { chatId, conversationId, user, baseUrl }),
+          searchProfileNames({
+            user,
+            baseUrl,
+            application: searchProfileApplication,
+            ttlMs: searchProfileCacheTtlMs
+          })
+        ]);
+        res.json(withConversationSources(result, searchProfile, { scopeNames }));
       } catch (error) {
         return sendInternalError(res, error, 'fetch conversation messages');
       }

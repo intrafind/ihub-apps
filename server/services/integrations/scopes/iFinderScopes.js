@@ -17,6 +17,7 @@
  *
  * {@link resolveToolSearchProfile} is what binds the `iFinder_*` tools: the
  * chat's scope wins over whatever `searchProfile` the model passes.
+ * {@link searchProfileNames} names the profiles the sources were found in.
  */
 import iFinderService from '../iFinderService.js';
 import iFinderSearchProfiles from '../iFinderSearchProfiles.js';
@@ -186,6 +187,50 @@ const iFinderScopes = {
     };
   }
 };
+
+/**
+ * The display names of the user's search profiles, by id, for the sources a
+ * search or an iAssistant answer reports (#3056): "Contracts" rather than
+ * `contracts_v2`.
+ *
+ * Read from the same per-user list as the scope picker
+ * (`iFinderSearchProfiles`, cached), so naming the profiles costs no iFinder
+ * request per hit, and none at all while the list is cached. Not narrowed to
+ * the allow-list: a document found in a profile is named whatever offered it.
+ *
+ * @param {Object} params
+ * @param {Object} params.user
+ * @param {string} [params.baseUrl] - iFinder base URL; the iFinder connection's by default
+ * @param {string} [params.application] - iFinder application whose profiles are read
+ * @param {number} [params.ttlMs] - how long the list is cached
+ * @param {AbortSignal} [params.signal]
+ * @returns {Promise<Map<string, string>>} empty when the list cannot be read;
+ *   never rejects, since a missing name only means the id is shown
+ */
+export async function searchProfileNames({ user, baseUrl, application, ttlMs, signal }) {
+  if (!isSignedIn(user)) return new Map();
+  try {
+    const cfg = iFinderService.getConfig();
+    const url = baseUrl || cfg.baseUrl;
+    if (!url) return new Map();
+    const profiles = await iFinderSearchProfiles.getUserSearchProfiles({
+      user,
+      baseUrl: url,
+      application: application || cfg.searchProfileApplication,
+      timeout: cfg.timeout,
+      ...(ttlMs ? { ttlMs } : {}),
+      signal
+    });
+    return new Map(profiles.map(profile => [profile.id, profile.name]));
+  } catch (error) {
+    logger.debug('Could not read the search profile names of the user; showing the ids', {
+      component: 'IFinderScopes',
+      status: error?.status,
+      error: error?.message
+    });
+    return new Map();
+  }
+}
 
 /**
  * The search profile an `iFinder_*` tool call searches.

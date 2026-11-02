@@ -21,7 +21,8 @@
  * stays an admin setting.
  *
  * {@link scopeToConversationConfig} maps a scope onto the settings the
- * adapter and the conversation routes resolve the profiles from.
+ * adapter and the conversation routes resolve the profiles from;
+ * {@link describeAnswerScope} names the scope an answer was produced with.
  */
 import iAssistantService from '../iAssistantService.js';
 import iFinderAssistants from '../iFinderAssistants.js';
@@ -86,6 +87,15 @@ function configuredSetup(app, model) {
       appConfig.searchProfile || modelConfig.searchProfile || serviceConfig.defaultSearchProfile,
     cacheTtlMs: serviceConfig.searchProfileCacheTtlMs
   };
+}
+
+const CONFIGURED_NAME = Object.freeze({ en: 'App default', de: 'App-Standard' });
+
+/** A scope's name when the list does not offer it: what its id says. */
+function fallbackScopeName(scopeId) {
+  if (scopeId === ALL_SEARCH_PROFILES_SCOPE) return ALL_PROFILES_NAME;
+  if (scopeId === CONFIGURED_SCOPE) return CONFIGURED_NAME;
+  return scopeToConversationConfig(scopeId)?.assistantId || scopeId;
 }
 
 const iAssistantScopes = {
@@ -224,5 +234,42 @@ const iAssistantScopes = {
     };
   }
 };
+
+/**
+ * The scope an answer was produced with, as its sources record it (#3056):
+ * whom it asked, with the name the scope picker shows ("HR assistant", "All
+ * my search profiles"), so the sources panel of the answer — live and when
+ * the chat is reopened — says which iAssistant answered.
+ *
+ * The name comes from the same list as the picker, cached per user; when the
+ * list does not offer the scope, the id stands in.
+ *
+ * @param {Object} params
+ * @param {string} params.scopeId - the conversation's scope (`conversationScopeOf`)
+ * @param {Object} params.user
+ * @param {Object} [params.app]
+ * @param {Object} [params.model]
+ * @param {string} [params.language]
+ * @param {AbortSignal} [params.signal]
+ * @returns {Promise<{integrationId: string, id: string, name: string|Object, action: 'ask'}>}
+ */
+export async function describeAnswerScope({ scopeId, user, app, model, language, signal }) {
+  let name;
+  try {
+    const { scopes } = await iAssistantScopes.listScopes({ user, app, model, language, signal });
+    name = scopes.find(scope => scope.id === scopeId)?.name;
+  } catch (error) {
+    logger.debug('Could not name the iAssistant scope of an answer; showing its id', {
+      component: 'IAssistantScopes',
+      error: error?.message
+    });
+  }
+  return {
+    integrationId: INTEGRATION_ID,
+    id: scopeId,
+    name: name || fallbackScopeName(scopeId),
+    action: iAssistantScopes.action
+  };
+}
 
 export default iAssistantScopes;

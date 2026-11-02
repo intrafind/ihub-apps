@@ -66,6 +66,8 @@ test('search hits become private documents with a ref into the searched profile'
       fileName: 'acme-contract.pdf',
       type: 'PDF',
       ref: { id: 'sharepoint-7f3a9c', scope: 'sales' },
+      // No name in the result: the id stands in.
+      scopeName: 'sales',
       private: true
     },
     {
@@ -75,8 +77,12 @@ test('search hits become private documents with a ref into the searched profile'
       title: 'Framework agreement',
       fileName: 'framework.docx',
       ref: { id: 'fs-0042aa', scope: 'sales' },
+      scopeName: 'sales',
       private: true
     }
+  ]);
+  assert.deepEqual(frame.scopes, [
+    { integrationId: 'ifinder', id: 'sales', name: 'sales', action: 'search' }
   ]);
 });
 
@@ -127,9 +133,56 @@ test('getMetadata names one document; getContent reads one', () => {
     title: 'Handbook',
     fileName: 'handbook.pdf',
     ref: { id: 'doc-654321', scope: 'default' },
+    scopeName: 'default',
     read: { ok: true },
     private: true
   });
+});
+
+test('every document shows the display name of the profile it was found in (#3056)', () => {
+  const frame = extract('iFinder_search', {
+    ...searchResult,
+    searchProfileName: 'Sales documents'
+  });
+  assert.deepEqual(
+    frame.items.map(item => [item.ref.scope, item.scopeName]),
+    [
+      ['sales', 'Sales documents'],
+      ['sales', 'Sales documents']
+    ]
+  );
+  // Where the search ran, with its name.
+  assert.deepEqual(frame.scopes, [
+    { integrationId: 'ifinder', id: 'sales', name: 'Sales documents', action: 'search' }
+  ]);
+  // A search that found nothing still says where it searched.
+  const empty = extract(
+    'iFinder_search',
+    { searchProfile: 'sales', searchProfileName: 'Sales documents', results: [] },
+    { query: 'nothing' }
+  );
+  assert.deepEqual(empty.items, []);
+  assert.deepEqual(
+    empty.scopes.map(scope => scope.name),
+    ['Sales documents']
+  );
+
+  // A read names the profile on the document, but is no search.
+  const read = extract('iFinder_getContent', {
+    searchProfile: 'default',
+    searchProfileName: 'Everything',
+    documentId: 'doc-654321',
+    metadata: { title: 'Handbook' }
+  });
+  assert.equal(read.items[0].scopeName, 'Everything');
+  assert.equal(read.scopes, undefined);
+  const meta = extract('iFinder_getMetadata', {
+    id: 'doc-1',
+    title: 'Price list',
+    searchProfile: 'default',
+    searchProfileName: 'Everything'
+  });
+  assert.equal(meta.items[0].scopeName, 'Everything');
 });
 
 test('nothing for other tools, failed calls, hits without an id or unparseable text', () => {
@@ -152,8 +205,10 @@ test('nothing for other tools, failed calls, hits without an id or unparseable t
 });
 
 test('a hit without a profile gets a ref without one (the provider falls back to the default)', () => {
-  const [item] = extract('iFinder_search', { results: [{ id: 'doc-777777', title: 'X' }] }).items;
-  assert.deepEqual(item.ref, { id: 'doc-777777' });
+  const frame = extract('iFinder_search', { results: [{ id: 'doc-777777', title: 'X' }] });
+  assert.deepEqual(frame.items[0].ref, { id: 'doc-777777' });
+  assert.equal(frame.items[0].scopeName, undefined);
+  assert.equal(frame.scopes, undefined);
 });
 
 test('one call reports at most MAX_FRAME_SOURCES documents', () => {
@@ -210,6 +265,7 @@ test('iAssistant: result items are documents cited by position, references are p
     site: 'Confluence',
     fileName: 'doc-a.pdf',
     type: 'PDF',
+    scopeName: 'hr',
     markers: ['r:1']
   });
   // The conversation's profile for a document whose ACCESS link names none.
@@ -232,6 +288,60 @@ test('iAssistant: result items without a title and no passage are not listed (iF
   assert.equal(iAssistantSourceFrame(null), null);
 });
 
+test('iAssistant over all search profiles: each document names the profile iFinder reports (#3056)', () => {
+  const scope = {
+    integrationId: 'iassistant',
+    id: 'all',
+    name: { en: 'All my search profiles', de: 'Alle meine Suchprofile' },
+    action: 'ask'
+  };
+  const frame = iAssistantSourceFrame(
+    {
+      resultItems: [
+        resultItem('doc-a', 'Travel policy', {
+          links: [{ type: 'ACCESS', documentId: 'doc-a', searchProfile: 'hr' }]
+        }),
+        resultItem('doc-b', 'Supplier contract', {
+          links: [{ type: 'ACCESS', documentId: 'doc-b', searchProfile: 'contracts' }]
+        }),
+        resultItem('doc-c', 'Unknown profile', {
+          links: [{ type: 'ACCESS', documentId: 'doc-c', searchProfile: 'archive' }]
+        }),
+        // Over all profiles the conversation has no profile of its own.
+        resultItem('doc-d', 'No profile reported')
+      ]
+    },
+    {
+      scopeNames: new Map([
+        ['hr', 'HR policies'],
+        ['contracts', 'Contracts']
+      ]),
+      scope
+    }
+  );
+  assert.deepEqual(
+    frame.items.map(item => [item.ref.id, item.ref.scope, item.scopeName]),
+    [
+      ['doc-a', 'hr', 'HR policies'],
+      ['doc-b', 'contracts', 'Contracts'],
+      // Not in the user's list: the id stands in.
+      ['doc-c', 'archive', 'archive'],
+      ['doc-d', undefined, undefined]
+    ]
+  );
+  // The answer records whom it asked.
+  assert.deepEqual(frame.scopes, [scope]);
+  // A plain object of names works as well.
+  const named = iAssistantSourceFrame(
+    { resultItems: [resultItem('doc-e', 'E')] },
+    { searchProfile: 'hr', scopeNames: { hr: 'HR policies' } }
+  );
+  assert.equal(named.items[0].scopeName, 'HR policies');
+  assert.equal(named.scopes, undefined);
+  // Nothing found: no frame, whatever was asked.
+  assert.equal(iAssistantSourceFrame({ resultItems: [] }, { scope }), null);
+});
+
 test('withConversationSources: a resumed conversation’s answers carry their documents as sources', () => {
   const page = {
     messages: [
@@ -252,4 +362,9 @@ test('withConversationSources: a resumed conversation’s answers carry their do
   const bare = withConversationSources([page.messages[1]], undefined);
   assert.deepEqual(bare[0].sources.items[0].ref, { id: 'doc-a' });
   assert.equal(withConversationSources(null, 'p'), null);
+  // The reopened answer names the profiles as the live one did.
+  const named = withConversationSources(page, 'sales', {
+    scopeNames: new Map([['sales', 'Sales documents']])
+  });
+  assert.equal(named.messages[1].sources.items[0].scopeName, 'Sales documents');
 });
