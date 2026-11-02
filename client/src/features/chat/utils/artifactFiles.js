@@ -34,6 +34,7 @@ const EXTENSIONS = {
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'application/zip': 'zip',
   'text/markdown': 'md',
   'text/plain': 'txt'
@@ -71,12 +72,18 @@ export function saveName(name) {
  * How an artifact is previewed.
  *
  * @param {{ kind?: string, mimeType?: string, name?: string }} artifact
- * @returns {'image'|'markdown'|'json'|'code'|'none'}
+ * @returns {'image'|'pdf'|'html'|'svg'|'csv'|'ipynb'|'markdown'|'json'|'code'|'none'}
  */
 export function previewTypeOf(artifact) {
   const mimeType = artifact?.mimeType || '';
+  const name = typeof artifact?.name === 'string' ? artifact.name.trim() : '';
   if (artifact?.kind === 'image' || mimeType.startsWith('image/')) return 'image';
+  if (mimeType === 'application/pdf') return 'pdf';
   if (mimeType === 'text/markdown') return 'markdown';
+  if (mimeType === 'text/csv' || /\.csv$/i.test(name)) return 'csv';
+  if (mimeType === 'application/x-ipynb+json' || /\.ipynb$/i.test(name)) return 'ipynb';
+  if (/\.html?$/i.test(name)) return 'html';
+  if (/\.svg$/i.test(name)) return 'svg';
   if (mimeType === 'application/json') return 'json';
   if (TEXT_FILE_MEDIA_TYPES.includes(mimeType)) return 'code';
   return 'none';
@@ -84,7 +91,9 @@ export function previewTypeOf(artifact) {
 
 /** Whether an artifact is text the user can copy. */
 export function isTextArtifact(artifact) {
-  return ['markdown', 'json', 'code'].includes(previewTypeOf(artifact));
+  return ['markdown', 'json', 'code', 'html', 'svg', 'csv', 'ipynb'].includes(
+    previewTypeOf(artifact)
+  );
 }
 
 /** highlight.js language by file extension, where the two differ or matter. */
@@ -118,7 +127,11 @@ const LANGUAGES = {
   less: 'less',
   xml: 'xml',
   html: 'xml',
+  htm: 'xml',
   svg: 'xml',
+  drawio: 'xml',
+  ipynb: 'json',
+  excalidraw: 'json',
   java: 'java',
   go: 'go',
   php: 'php',
@@ -157,6 +170,10 @@ const LOOKS = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
     icon: 'presentation-chart-bar',
     className: 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+  },
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+    icon: 'table-cells',
+    className: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
   },
   code: {
     icon: 'code-bracket',

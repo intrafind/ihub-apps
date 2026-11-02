@@ -26,6 +26,8 @@ export function docxSpecFromToolArgs(args) {
     title: optionalString(args.title, 300),
     subtitle: optionalString(args.subtitle, 300),
     author: optionalString(args.author, 200),
+    date: optionalString(args.date, 100),
+    showTitle: args.showTitle !== false,
     language: optionalString(args.language, 20),
     markdown: typeof args.markdown === 'string' ? args.markdown : '',
     coverPage: args.coverPage === true,
@@ -34,7 +36,10 @@ export function docxSpecFromToolArgs(args) {
     footer: optionalString(args.footer, 300),
     pageNumbers: args.pageNumbers !== false,
     page: { size: args.pageSize, orientation: args.orientation },
-    colors: { primary: optionalString(args.primaryColor, 20) },
+    colors: {
+      primary: optionalString(args.primaryColor, 20),
+      accent: optionalString(args.accentColor, 20)
+    },
     fonts: { body: optionalString(args.font, 64) }
   };
   assertSpecSize(spec);

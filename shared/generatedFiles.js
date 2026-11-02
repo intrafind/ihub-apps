@@ -30,7 +30,8 @@ export const ZIP_MEDIA_TYPE = 'application/zip';
 const OFFICE_MEDIA_TYPES = Object.freeze([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ]);
 
 /**
@@ -95,7 +96,22 @@ export const TEXT_FILE_TYPES = Object.freeze({
   svelte: 'text/plain',
   tex: 'text/x-tex',
   diff: 'text/x-diff',
-  patch: 'text/x-diff'
+  patch: 'text/x-diff',
+  ics: 'text/calendar',
+  vcf: 'text/vcard',
+  ipynb: 'application/x-ipynb+json',
+  mmd: 'text/vnd.mermaid',
+  mermaid: 'text/vnd.mermaid',
+  drawio: 'application/xml',
+  excalidraw: 'application/json',
+  dot: 'text/vnd.graphviz',
+  gv: 'text/vnd.graphviz',
+  puml: 'text/plain',
+  plantuml: 'text/plain',
+  graphql: 'application/graphql',
+  gql: 'application/graphql',
+  prisma: 'text/plain',
+  proto: 'text/plain'
 });
 
 /** Every media type a text file may be recorded under. */
@@ -159,6 +175,7 @@ export function generatedFileOf(entry) {
   const bytes = Number(entry.bytes);
   const pages = Number(entry.pages);
   const slides = Number(entry.slides);
+  const sheets = Number(entry.sheets);
   return {
     ...(id ? { id } : {}),
     name,
@@ -166,6 +183,7 @@ export function generatedFileOf(entry) {
     bytes: Number.isFinite(bytes) && bytes >= 0 ? bytes : 0,
     ...(Number.isInteger(pages) && pages > 0 ? { pages } : {}),
     ...(Number.isInteger(slides) && slides > 0 ? { slides } : {}),
+    ...(Number.isInteger(sheets) && sheets > 0 ? { sheets } : {}),
     ...(typeof entry.data === 'string' && entry.data ? { data: entry.data } : {}),
     ...(entry.stored === true ? { stored: true } : {}),
     ...(unavailable ? { unavailable } : {})

@@ -15,7 +15,7 @@ export const CREATE_DOCX_TOOL = {
     de: String.raw`Erstellt ein bearbeitbares Word-Dokument (.docx) auf dem Server und stellt es dem Benutzer als Download bereit. Inhalt als Markdown schreiben (Überschriften, Absätze, Listen, GFM-Tabellen, Code, Zitate, GitHub-Hinweise wie "> [!NOTE]"; "\pagebreak" in einer eigenen Zeile beginnt eine neue Seite). Überschriften werden echte Word-Überschriften, sodass der Benutzer das Dokument umformatieren und das Inhaltsverzeichnis aktualisieren kann. Der Benutzer sieht im Chat eine Download-Karte – keinen Link einfügen, stattdessen den Dateinamen nennen. Für Hinweise zuerst den Skill "docx" aktivieren.`
   },
   usesDocumentTemplate: true,
-  brandParameters: ['primaryColor', 'font'],
+  brandParameters: ['primaryColor', 'accentColor', 'font'],
   parameters: {
     type: 'object',
     properties: {
@@ -30,6 +30,16 @@ export const CREATE_DOCX_TOOL = {
       },
       subtitle: { type: 'string', description: 'Optional subtitle under the title.' },
       author: { type: 'string', description: 'Optional author for the properties and cover page.' },
+      date: {
+        type: 'string',
+        description:
+          'Optional date for the cover page and the {date} / {{date}} placeholder (defaults to today).'
+      },
+      showTitle: {
+        type: 'boolean',
+        description:
+          'Print the title block at the top of page 1 when there is no cover page or TOC (default true). Set to false for letters where the recipient block and subject line open the document.'
+      },
       language: {
         type: 'string',
         description: 'Language code of the document, e.g. "en" or "de" (spell checking, labels).'
@@ -59,6 +69,10 @@ export const CREATE_DOCX_TOOL = {
       primaryColor: {
         type: 'string',
         description: 'Hex colour for headings, table headers and bullets, e.g. "#0f766e".'
+      },
+      accentColor: {
+        type: 'string',
+        description: 'Hex colour for secondary accents, e.g. "#0284c7".'
       },
       font: {
         type: 'string',

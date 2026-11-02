@@ -6,6 +6,8 @@ import { CREATE_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
 import { CREATE_FILE_TOOL, CREATE_ZIP_TOOL } from './documents/files/fileToolDefinitions.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
 import { CREATE_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
+import { CREATE_WEB_ARTIFACT_TOOL } from './documents/webArtifacts/webArtifactToolDefinitions.js';
+import { CREATE_XLSX_TOOL } from './documents/xlsx/xlsxToolDefinitions.js';
 
 /**
  * Built-in tools that system skills bring with them.
@@ -23,6 +25,8 @@ import { CREATE_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
 const pdfTools = () => import('./documents/pdf/pdfTools.js');
 const docxTools = () => import('./documents/docx/docxTools.js');
 const pptxTools = () => import('./documents/pptx/pptxTools.js');
+const xlsxTools = () => import('./documents/xlsx/xlsxTools.js');
+const webArtifactTools = () => import('./documents/webArtifacts/webArtifactTools.js');
 const fileTools = () => import('./documents/files/fileTools.js');
 
 const REGISTRY = new Map([
@@ -41,6 +45,17 @@ const REGISTRY = new Map([
   [
     CREATE_PPTX_TOOL.id,
     { definition: CREATE_PPTX_TOOL, run: async params => (await pptxTools()).runCreatePptx(params) }
+  ],
+  [
+    CREATE_XLSX_TOOL.id,
+    { definition: CREATE_XLSX_TOOL, run: async params => (await xlsxTools()).runCreateXlsx(params) }
+  ],
+  [
+    CREATE_WEB_ARTIFACT_TOOL.id,
+    {
+      definition: CREATE_WEB_ARTIFACT_TOOL,
+      run: async params => (await webArtifactTools()).runCreateWebArtifact(params)
+    }
   ],
   [
     CREATE_FILE_TOOL.id,

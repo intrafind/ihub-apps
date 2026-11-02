@@ -35,11 +35,17 @@ const { documentTemplateSchema } = await import('../validators/documentTemplateS
 const templates = await import('../services/documents/templates/DocumentTemplateService.js');
 const { checkTemplateAsset, TemplateAssetError } =
   await import('../services/documents/templates/templateAssets.js');
-const { applyTemplateToPdfSpec, applyTemplateToDocxSpec, applyTemplateToPptxSpec } =
-  await import('../services/documents/templates/applyTemplate.js');
+const {
+  applyTemplateToPdfSpec,
+  applyTemplateToDocxSpec,
+  applyTemplateToPptxSpec,
+  applyTemplateToXlsxSpec
+} = await import('../services/documents/templates/applyTemplate.js');
 const { renderPdfSpec } = await import('../services/documents/pdf/renderPdf.js');
 const { renderDocx } = await import('../services/documents/docx/renderDocx.js');
 const { renderPptx } = await import('../services/documents/pptx/renderPptx.js');
+const { renderXlsx } = await import('../services/documents/xlsx/renderXlsx.js');
+const { runCreateXlsx } = await import('../services/documents/xlsx/xlsxTools.js');
 const { buildBaseTemplate } = await import('../services/documents/pptx/baseTemplate.js');
 const { analyzePowerpointTemplate, chooseLayouts, loadPresentationTemplate } =
   await import('../services/documents/pptx/pptxTemplate.js');
@@ -980,5 +986,112 @@ describe('Office packages, part names', () => {
     const xml = await (await JSZip.loadAsync(buffer)).file('ppt/slides/slide1.xml').async('string');
     assert.doesNotMatch(xml, /function/);
     assert.match(xml, /algn="r"/);
+  });
+
+  it('renders KPI metric cards and centers data labels on stacked bar/column charts', async () => {
+    const { buffer, warnings } = await renderPptx({
+      title: 'KPIs',
+      slides: [
+        {
+          title: 'Headline metrics and stacked breakdown',
+          metrics: [
+            { value: '€3.05M', label: 'Q3 Revenue', note: '+12 % YoY' },
+            { value: '98.4 %', label: 'Net Retention', note: '+1.2 pp' }
+          ],
+          chart: {
+            type: 'column',
+            stacked: true,
+            showValues: true,
+            categories: ['Q1', 'Q2'],
+            series: [
+              { name: 'EMEA', values: [10, 12] },
+              { name: 'APAC', values: [5, 8] }
+            ]
+          }
+        }
+      ]
+    });
+    assert.deepEqual(warnings, []);
+    const zip = await assertPackageIntegrity(buffer);
+    const slide = await zip.file('ppt/slides/slide1.xml').async('string');
+    assert.match(slide, /€3\.05M/);
+    assert.match(slide, /Q3 Revenue/);
+    const chartXml = await zip.file('ppt/charts/chart1.xml').async('string');
+    assert.match(chartXml, /<c:dLblPos val="ctr"\/>/);
+  });
+});
+
+describe('Excel workbooks (xlsx)', () => {
+  it('builds multi-sheet workbooks with corporate brand styles, live formulas and _xlfn prefixes', async () => {
+    const { spec } = applyTemplateToXlsxSpec(
+      {
+        title: 'Financial Model',
+        language: 'en-US',
+        sheets: [
+          {
+            name: 'Summary: 2026/2027?',
+            columns: [
+              { header: 'Region', align: 'left' },
+              { header: '2025 (€)', format: 'currency' },
+              { header: '2026 (€)', format: 'currency' },
+              { header: 'Growth', format: 'percent' },
+              { header: 'Tier', format: 'text' },
+              { header: 'Updated', format: 'date' }
+            ],
+            rows: [
+              ['EMEA', 120000, 144000, '=(C2-B2)/B2', '=IFS(D2>0.15,"High",TRUE,"Core")', '2026-10-15'],
+              ['APAC', 80000, 96000, '=(C3-B3)/B3', '=IFS(D3>0.15,"High",TRUE,"Core")', '2026-10-15'],
+              {
+                cells: ['Total', '=SUM(B2:B3)', '=SUM(C2:C3)', '=(C4-B4)/B4', '', ''],
+                total: true
+              }
+            ]
+          }
+        ]
+      },
+      { template: documentTemplateSchema.parse(VALID), assets: {} }
+    );
+    const { buffer, meta, warnings } = await renderXlsx(spec);
+    assert.equal(meta.sheets, 1);
+    assert.deepEqual(warnings, []);
+    const zip = await assertPackageIntegrity(buffer);
+    const workbook = await zip.file('xl/workbook.xml').async('string');
+    assert.match(workbook, /name="Summary 2026 2027"/);
+    assert.match(workbook, /fullCalcOnLoad="1"/);
+    const sheet = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    assert.match(sheet, /<f>\(C2-B2\)\/B2<\/f>/);
+    assert.match(sheet, /<f>_xlfn\.IFS\(D2&gt;0\.15,&quot;High&quot;,TRUE,&quot;Core&quot;\)<\/f>/);
+    assert.match(sheet, /<f>SUM\(B2:B3\)<\/f>/);
+    assert.match(sheet, /<autoFilter ref="A1:F3"\/>/);
+    const styles = await zip.file('xl/styles.xml').async('string');
+    assert.match(styles, /FFE30613/);
+  });
+
+  it('runs create_xlsx in the worker and holds the .xlsx file for the chat', async () => {
+    const user = { id: 'u-xlsx' };
+    const res = await runCreateXlsx({
+      filename: 'q3-budget',
+      title: 'Q3 Budget',
+      sheets: JSON.stringify([
+        {
+          name: 'Budget',
+          columns: ['Item', { header: 'Cost', format: 'currency' }],
+          rows: [
+            ['Hosting', 1200],
+            ['Licenses', 800],
+            ['Total', '=SUM(B2:B3)']
+          ]
+        }
+      ]),
+      user,
+      chatId: 'chat-xlsx'
+    });
+    assert.equal(res.success, true, res.error);
+    assert.equal(res.file.name, 'q3-budget.xlsx');
+    assert.equal(res.file.sheets, 1);
+    assert.equal(
+      heldGeneratedFile(user, res.file.id, { chatId: 'chat-xlsx' }).mimeType,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
   });
 });

@@ -506,6 +506,184 @@ function sanitizeBox(source, ctx, depth) {
   return node;
 }
 
+function renderFormField(field, ctx) {
+  if (!field || typeof field !== 'object') return null;
+  countNode(ctx);
+  const rawLabel = typeof field.label === 'string' ? field.label.trim().slice(0, 200) : '';
+  const required = field.required === true;
+  const labelNode = rawLabel
+    ? {
+        text: required
+          ? [
+              { text: rawLabel, bold: true, fontSize: 8.5, color: ctx.theme.muted || '#475569' },
+              { text: ' *', bold: true, fontSize: 8.5, color: '#dc2626' }
+            ]
+          : { text: rawLabel, bold: true, fontSize: 8.5, color: ctx.theme.muted || '#475569' },
+        margin: [0, 0, 0, 2]
+      }
+    : null;
+  const type = typeof field.type === 'string' ? field.type.toLowerCase() : 'text';
+  const rawValue =
+    field.value !== undefined && field.value !== null ? String(field.value).slice(0, 2000) : '';
+  const placeholder =
+    typeof field.placeholder === 'string' ? field.placeholder.slice(0, 300) : '';
+  const border = ctx.theme.border || '#cbd5e1';
+
+  if (type === 'checkbox') {
+    if (Array.isArray(field.options) && field.options.length > 0) {
+      const selected = new Set(
+        (Array.isArray(field.value) ? field.value : [field.value])
+          .filter(v => v !== undefined && v !== null)
+          .map(v => String(v))
+      );
+      const runs = [];
+      field.options.slice(0, 20).forEach((opt, idx) => {
+        const optLabel =
+          typeof opt === 'object' && opt !== null
+            ? String(opt.label ?? opt.value ?? '').slice(0, 120)
+            : String(opt).slice(0, 120);
+        const isChecked =
+          (typeof opt === 'object' && opt !== null && opt.checked === true) ||
+          selected.has(optLabel);
+        if (idx > 0) runs.push({ text: '    ' });
+        runs.push({
+          text: `${isChecked ? '\u2611' : '\u2610'} ${optLabel}`,
+          fontSize: 9.5
+        });
+      });
+      return {
+        stack: [...(labelNode ? [labelNode] : []), { text: runs, margin: [0, 2, 0, 4] }],
+        margin: [0, 2, 0, 6]
+      };
+    }
+    const isChecked =
+      field.checked === true ||
+      field.value === true ||
+      rawValue.toLowerCase() === 'true' ||
+      rawValue.toLowerCase() === 'yes' ||
+      rawValue.toLowerCase() === 'checked';
+    return {
+      text: [
+        { text: `${isChecked ? '\u2611' : '\u2610'} `, fontSize: 11, bold: true },
+        { text: rawLabel || rawValue, fontSize: 9.5 },
+        ...(required ? [{ text: ' *', color: '#dc2626', bold: true }] : [])
+      ],
+      margin: [0, 3, 0, 6]
+    };
+  }
+
+  if (type === 'signature') {
+    const sigBox = boxNode(
+      [
+        {
+          text: rawValue || '\u00a0',
+          fontSize: 11,
+          italics: Boolean(rawValue),
+          margin: [0, 14, 0, 2]
+        }
+      ],
+      {
+        fill: '#f8fafc',
+        border,
+        borderWidth: 0.75,
+        padding: 6,
+        fullBorder: true
+      }
+    );
+    sigBox.margin = [0, 0, 0, 0];
+    return {
+      stack: [
+        ...(labelNode
+          ? [labelNode]
+          : [
+              {
+                text: 'Signature',
+                bold: true,
+                fontSize: 8.5,
+                color: ctx.theme.muted || '#475569',
+                margin: [0, 0, 0, 2]
+              }
+            ]),
+        sigBox
+      ],
+      margin: [0, 2, 0, 6]
+    };
+  }
+
+  const rows = type === 'textarea' ? (clampNumber(field.rows, 2, 12) ?? 3) : 1;
+  const blankLines = rows > 1 ? '\n'.repeat(rows - 1) : '';
+  const boxContent = rawValue
+    ? [{ text: rawValue + (rows > 1 && !rawValue.includes('\n') ? blankLines : ''), fontSize: 9.5 }]
+    : [
+        {
+          text: (placeholder || '\u00a0') + blankLines,
+          fontSize: 9,
+          color: '#94a3b8',
+          italics: Boolean(placeholder)
+        }
+      ];
+  const fieldBox = boxNode(boxContent, {
+    fill: '#ffffff',
+    border,
+    borderWidth: 0.75,
+    padding: 6,
+    fullBorder: true
+  });
+  fieldBox.margin = [0, 0, 0, 0];
+  return {
+    stack: [...(labelNode ? [labelNode] : []), fieldBox],
+    margin: [0, 2, 0, 6]
+  };
+}
+
+function sanitizeForm(source, ctx) {
+  const spec =
+    source.form && typeof source.form === 'object' && !Array.isArray(source.form)
+      ? source.form
+      : { fields: source.form };
+  const rawFields = Array.isArray(spec.fields) ? spec.fields.slice(0, 100) : [];
+  if (rawFields.length === 0) {
+    warn(ctx, 'Skipped a form block without fields.');
+    return null;
+  }
+  const cols = clampNumber(spec.columns, 1, 3) === 2 ? 2 : clampNumber(spec.columns, 1, 3) === 3 ? 3 : 1;
+  const stack = [];
+  if (typeof spec.title === 'string' && spec.title.trim()) {
+    stack.push({
+      text: spec.title.trim().slice(0, 200),
+      bold: true,
+      fontSize: 11,
+      color: ctx.theme.accent || ctx.theme.primary || '#1e293b',
+      margin: [0, 0, 0, 6]
+    });
+  }
+  if (cols === 1) {
+    for (const f of rawFields) {
+      const rendered = renderFormField(f, ctx);
+      if (rendered) stack.push(rendered);
+    }
+  } else {
+    for (let i = 0; i < rawFields.length; i += cols) {
+      const slice = rawFields.slice(i, i + cols);
+      if (slice.length === 1 && slice[0]?.span === cols) {
+        const rendered = renderFormField(slice[0], ctx);
+        if (rendered) stack.push(rendered);
+      } else {
+        const rowCols = [];
+        for (let c = 0; c < cols; c += 1) {
+          const rendered = slice[c] ? renderFormField(slice[c], ctx) : { text: '' };
+          rowCols.push({ ...(rendered || { text: '' }), width: '*' });
+        }
+        stack.push({ columns: rowCols, columnGap: 12 });
+      }
+    }
+  }
+  const out = { stack, margin: [0, 4, 0, 10] };
+  const margin = sanitizeMargin(source.margin);
+  if (margin !== undefined) out.margin = margin;
+  return out;
+}
+
 /**
  * Sanitise one layout block.
  *
@@ -534,10 +712,19 @@ export function sanitizeNode(source, ctx, depth = 0) {
     source.callout === undefined &&
     source.box === undefined
   ) {
-    return applyCommon(source, { stack: markdownToContent(source.markdown, ctx) }, ctx, 'markdown');
+    const mdOptions = depth === 0 ? { body: true, title: ctx.stripOpeningTitle } : {};
+    if (depth === 0) ctx.stripOpeningTitle = undefined;
+    return applyCommon(
+      source,
+      { stack: markdownToContent(source.markdown, ctx, mdOptions) },
+      ctx,
+      'markdown'
+    );
   }
+  if (depth === 0) ctx.stripOpeningTitle = undefined;
   if (source.callout !== undefined) return sanitizeCallout(source, ctx, depth);
   if (source.box !== undefined) return sanitizeBox(source, ctx, depth);
+  if (source.form !== undefined) return sanitizeForm(source, ctx);
   if (source.pageBreak !== undefined && Object.keys(source).length === 1) {
     return { text: '', pageBreak: PAGE_BREAKS.has(source.pageBreak) ? source.pageBreak : 'after' };
   }
