@@ -2298,7 +2298,30 @@
       "projects": "Projects",
       "overview": "Overview",
       "integrations": "Integrations",
-      "documentTemplates": "Document templates"
+      "documentTemplates": "Document templates",
+      "apps": "Apps",
+      "models": "Models",
+      "providers": "Providers",
+      "prompts": "Prompts",
+      "tools": "Tools",
+      "skills": "Skills",
+      "workflows": "Workflows",
+      "agents": "Agents",
+      "users": "Users",
+      "groups": "Groups",
+      "authentication": "Authentication",
+      "oauth": "OAuth",
+      "credentials": "Credentials",
+      "ui": "UI Customization",
+      "pages": "Pages",
+      "shortlinks": "Short Links",
+      "usage": "Usage Reports",
+      "auditLog": "Audit Log",
+      "features": "Features",
+      "security": "Security",
+      "backup": "Backup & Restore",
+      "updates": "Updates",
+      "advanced": "Advanced"
     },
     "mcp": {
       "common": {
@@ -3769,7 +3792,16 @@
       "searchPlaceholder": "Search admin... Cmd+K",
       "navLabel": "Admin navigation",
       "openMenu": "Open menu",
-      "closeMenu": "Close menu"
+      "closeMenu": "Close menu",
+      "sections": {
+        "overview": "Overview",
+        "aiWorkspace": "AI Workspace",
+        "accessIdentity": "Access & Identity",
+        "integrations": "Integrations",
+        "customization": "Customization",
+        "observability": "Observability",
+        "platform": "Platform"
+      }
     },
     "ui": {
       "tabs": {
@@ -4973,6 +5005,13 @@
         "page": "Page {{current}} of {{total}}",
         "slide": "Slide {{current}} of {{total}}"
       }
+    },
+    "statusDot": {
+      "ok": "OK",
+      "warn": "Warning",
+      "degraded": "Degraded",
+      "error": "Error",
+      "off": "Off"
     }
   },
   "feedback": {
@@ -6603,6 +6642,12 @@
     "queries": "Searches",
     "cited": "Cited in this answer",
     "noneCited": "The answer cites none of the sources directly.",
+    "noneCitedInScope": "The answer cites none of the sources found here.",
+    "foundIn": "Found in {{scope}}",
+    "searchedIn": "Searched in {{scope}}",
+    "asked": "Asked {{scope}}",
+    "scopeFilter": "Filter by where the sources were found",
+    "scopeFilterAll": "All",
     "considered": "Also considered",
     "showInPanel": "Show source {{n}} in the sources panel",
     "showMoreCited_one": "Show {{count}} more",
@@ -7102,6 +7147,8 @@
       "appDefaultModel": "App's default",
       "appDefaultTools": "Use the app's defaults",
       "alwaysIncluded": "always included",
+      "scopes": "Where to search",
+      "scopesHelp": "Every run searches here, even when the chat the task came from moves elsewhere later.",
       "notify": "Notify me",
       "variables": "App variables"
     },
@@ -7124,6 +7171,8 @@
     "variablesHelp": "Variables you can use",
     "variablesHelpText": "Without \"Remember between runs\", runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
     "needsApproval": "Asks for approval",
+    "scopeFixed": "Set by the app; it cannot be changed.",
+    "scopeUnavailable": "“{{scope}}” is no longer available to you, so runs fail. Saving uses the one picked here.",
     "notify": {
       "always": "After every run",
       "failure": "Only when a run fails",

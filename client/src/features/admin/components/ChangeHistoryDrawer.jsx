@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { XMarkIcon, ClockIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import Drawer from '../../../shared/components/Drawer';
+import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import AdminLoadError from './AdminLoadError';
 
 /**
@@ -141,24 +144,60 @@ function JsonDiff({ before, after }) {
 }
 
 /**
- * ConfirmRollbackModal - Inline confirmation modal for rollback actions.
+ * ConfirmRollbackModal - Confirmation for a rollback, stacked on top of the
+ * history drawer. It is a modal alert dialog of its own (rendered into
+ * `document.body`, focus trapped on the Cancel button first, Escape cancels),
+ * so the drawer's focus trap and Escape leave it alone while it is open.
  */
 function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }) {
   const { t } = useTranslation();
+  const dialogRef = useRef(null);
+  const cancelButtonRef = useRef(null);
+  const baseId = useId();
+  const titleId = `rollback-${baseId}-title`;
+  const messageId = `rollback-${baseId}-message`;
+
+  useFocusTrap(dialogRef, {
+    isActive: isOpen,
+    initialFocusRef: cancelButtonRef,
+    returnFocusOnDeactivate: true
+  });
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = event => {
+      if (event.key !== 'Escape' || loading) return;
+      event.preventDefault();
+      onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, loading, onCancel]);
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-60 flex items-center justify-center">
       {/* Backdrop */}
       <div aria-hidden="true" className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full mx-4 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        // Focusable, so a click on the message keeps focus (and with it
+        // Escape and Tab) inside the confirmation instead of on <body>,
+        // where the drawer underneath would take the key.
+        tabIndex={-1}
+        className="relative focus:outline-hidden bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full mx-4 p-6"
+      >
+        <h3 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
           {t('admin.changeHistory.confirmRollbackTitle', 'Confirm Rollback')}
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+        <p id={messageId} className="text-sm text-gray-600 dark:text-gray-400 mb-1">
           {t(
             'admin.changeHistory.confirmRollbackMessage',
             'Are you sure you want to rollback to this snapshot? This will restore the configuration to the state it was in at:'
@@ -183,6 +222,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
 
         <div className="flex justify-end gap-3">
           <button
+            ref={cancelButtonRef}
             type="button"
             onClick={onCancel}
             disabled={loading}
@@ -222,7 +262,8 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -256,8 +297,8 @@ function LoadingSpinner() {
 }
 
 /**
- * ChangeHistoryDrawer - A fixed right-side drawer that displays the change history
- * for a given admin resource, allowing snapshot inspection and rollback.
+ * ChangeHistoryDrawer - A right-side drawer (the shared `Drawer`) that displays the
+ * change history for a given admin resource, allowing snapshot inspection and rollback.
  * `readOnly` hides the rollback for a resource the server cannot roll back
  * (projects).
  */
@@ -398,198 +439,171 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId, readOnly =
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={handleClose}
-      />
-
-      {/* Drawer */}
-      <div
-        className={`fixed inset-y-0 right-0 z-50 w-[480px] max-w-full bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out flex flex-col ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      <Drawer
+        isOpen={isOpen}
+        onClose={handleClose}
+        title={t('admin.changeHistory.title', 'Change History')}
+        icon={<ClockIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />}
+        closeLabel={t('admin.changeHistory.close', 'Close')}
+        subheader={
+          resource &&
+          resourceId && (
+            // Subtitle with resource info
+            <div className="px-5 py-2 border-b border-gray-100 dark:border-gray-800">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="font-medium text-gray-700 dark:text-gray-300">{resource}</span>
+                {' / '}
+                <span className="font-mono">{resourceId}</span>
+              </p>
+            </div>
+          )
+        }
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <ClockIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400 shrink-0" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {t('admin.changeHistory.title', 'Change History')}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1.5 rounded-md text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            aria-label={t('admin.changeHistory.close', 'Close')}
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
+        {/* Loading state */}
+        {loading && <LoadingSpinner />}
 
-        {/* Subtitle with resource info */}
-        {resource && resourceId && (
-          <div className="px-5 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              <span className="font-medium text-gray-700 dark:text-gray-300">{resource}</span>
-              {' / '}
-              <span className="font-mono">{resourceId}</span>
+        {/* Error state */}
+        {!loading && error && (
+          <div className="m-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            <button
+              type="button"
+              onClick={fetchSnapshots}
+              className="mt-2 text-xs font-medium text-red-700 dark:text-red-400 underline hover:no-underline"
+            >
+              {t('admin.changeHistory.retry', 'Try again')}
+            </button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && snapshots.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <ClockIcon className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              {t('admin.changeHistory.noChanges', 'No changes recorded yet.')}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {t(
+                'admin.changeHistory.noChangesHint',
+                'Changes will appear here when this resource is modified.'
+              )}
             </p>
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Loading state */}
-          {loading && <LoadingSpinner />}
-
-          {/* Error state */}
-          {!loading && error && (
-            <div className="m-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-              <button
-                type="button"
-                onClick={fetchSnapshots}
-                className="mt-2 text-xs font-medium text-red-700 dark:text-red-400 underline hover:no-underline"
-              >
-                {t('admin.changeHistory.retry', 'Try again')}
-              </button>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!loading && !error && snapshots.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <ClockIcon className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {t('admin.changeHistory.noChanges', 'No changes recorded yet.')}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {t(
-                  'admin.changeHistory.noChangesHint',
-                  'Changes will appear here when this resource is modified.'
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* Snapshot list */}
-          {!loading && !error && snapshots.length > 0 && !selectedSnapshot && (
-            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-              {snapshots.map((snapshot, index) => (
-                <li key={snapshot.filename || index}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectSnapshot(snapshot)}
-                    className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150 focus:outline-hidden focus:bg-gray-50 dark:focus:bg-gray-800/50"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {formatTimestamp(snapshot.ts)}
-                        </p>
-                        {snapshot.admin && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            {t('admin.changeHistory.by', 'by')} {snapshot.admin}
-                          </p>
-                        )}
-                      </div>
-                      <svg
-                        className="h-4 w-4 text-gray-500 shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Snapshot detail view */}
-          {selectedSnapshot && (
-            <div className="p-5">
-              {/* Back button */}
-              <button
-                type="button"
-                onClick={handleBackToList}
-                className="inline-flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-4"
-              >
-                <svg
-                  className="h-3.5 w-3.5 mr-1"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                {t('admin.changeHistory.backToList', 'Back to list')}
-              </button>
-
-              {/* Snapshot header */}
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {formatTimestamp(selectedSnapshot.ts)}
-                </p>
-                {selectedSnapshot.admin && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {t('admin.changeHistory.by', 'by')} {selectedSnapshot.admin}
-                  </p>
-                )}
-              </div>
-
-              {/* Rollback error */}
-              {rollbackError && (
-                <AdminLoadError
-                  message={rollbackError}
-                  framed={false}
-                  className="mb-4"
-                  action={null}
-                />
-              )}
-
-              {/* Rollback button */}
-              {!readOnly && (
+        {/* Snapshot list */}
+        {!loading && !error && snapshots.length > 0 && !selectedSnapshot && (
+          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+            {snapshots.map((snapshot, index) => (
+              <li key={snapshot.filename || index}>
                 <button
                   type="button"
-                  onClick={() => setRollbackModalOpen(true)}
-                  className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
+                  onClick={() => handleSelectSnapshot(snapshot)}
+                  className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150 focus:outline-hidden focus:bg-gray-50 dark:focus:bg-gray-800/50"
                 >
-                  <ArrowUturnLeftIcon className="h-4 w-4 mr-1.5" />
-                  {t('admin.changeHistory.rollbackToThis', 'Rollback to this version')}
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {formatTimestamp(snapshot.ts)}
+                      </p>
+                      {snapshot.admin && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t('admin.changeHistory.by', 'by')} {snapshot.admin}
+                        </p>
+                      )}
+                    </div>
+                    <svg
+                      className="h-4 w-4 text-gray-500 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </button>
-              )}
+              </li>
+            ))}
+          </ul>
+        )}
 
-              {/* Detail loading */}
-              {detailLoading && <LoadingSpinner />}
+        {/* Snapshot detail view */}
+        {selectedSnapshot && (
+          <div className="p-5">
+            {/* Back button */}
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="inline-flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mb-4"
+            >
+              <svg
+                className="h-3.5 w-3.5 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              {t('admin.changeHistory.backToList', 'Back to list')}
+            </button>
 
-              {/* Detail error */}
-              {!detailLoading && detailError && (
-                <AdminLoadError message={detailError} framed={false} action={null} />
-              )}
-
-              {/* Diff view */}
-              {!detailLoading && !detailError && detail && (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-                    {t('admin.changeHistory.changes', 'Changes')}
-                  </h4>
-                  <JsonDiff before={detail.before} after={detail.after} />
-                </div>
+            {/* Snapshot header */}
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {formatTimestamp(selectedSnapshot.ts)}
+              </p>
+              {selectedSnapshot.admin && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t('admin.changeHistory.by', 'by')} {selectedSnapshot.admin}
+                </p>
               )}
             </div>
-          )}
-        </div>
-      </div>
+
+            {/* Rollback error */}
+            {rollbackError && (
+              <AdminLoadError
+                message={rollbackError}
+                framed={false}
+                className="mb-4"
+                action={null}
+              />
+            )}
+
+            {/* Rollback button */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setRollbackModalOpen(true)}
+                className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
+              >
+                <ArrowUturnLeftIcon className="h-4 w-4 mr-1.5" />
+                {t('admin.changeHistory.rollbackToThis', 'Rollback to this version')}
+              </button>
+            )}
+
+            {/* Detail loading */}
+            {detailLoading && <LoadingSpinner />}
+
+            {/* Detail error */}
+            {!detailLoading && detailError && (
+              <AdminLoadError message={detailError} framed={false} action={null} />
+            )}
+
+            {/* Diff view */}
+            {!detailLoading && !detailError && detail && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                  {t('admin.changeHistory.changes', 'Changes')}
+                </h4>
+                <JsonDiff before={detail.before} after={detail.after} />
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
 
       {/* Rollback confirmation modal */}
       <ConfirmRollbackModal

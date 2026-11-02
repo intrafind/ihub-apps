@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import Switch from '../../../shared/components/Switch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
@@ -666,38 +667,30 @@ function AdminOAuthServerPage() {
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
                     <div>
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label
+                        id="oauth-personal-keys-enabled-label"
+                        htmlFor="oauth-personal-keys-enabled"
+                        className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
                         {t('admin.auth.oauth.personalKeys.enable', 'Personal API Keys')}
                       </label>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p
+                        id="oauth-personal-keys-enabled-help"
+                        className="text-sm text-gray-500 dark:text-gray-400"
+                      >
                         {t(
                           'admin.auth.oauth.personalKeys.enableDesc',
                           'Let users generate API keys for themselves under Settings > Integrations. Each key acts as its owner and inherits that user’s permissions.'
                         )}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={oauthConfig.personalKeys.enabled}
-                      onClick={() =>
-                        updatePersonalKeys('enabled', !oauthConfig.personalKeys.enabled)
-                      }
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        oauthConfig.personalKeys.enabled
-                          ? 'bg-blue-600'
-                          : 'bg-gray-200 dark:bg-gray-600'
-                      }`}
-                    >
-                      <span className="sr-only">
-                        {t('admin.auth.oauth.personalKeys.enable', 'Personal API Keys')}
-                      </span>
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          oauthConfig.personalKeys.enabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
+                    <Switch
+                      id="oauth-personal-keys-enabled"
+                      checked={oauthConfig.personalKeys.enabled}
+                      onChange={enabled => updatePersonalKeys('enabled', enabled)}
+                      aria-labelledby="oauth-personal-keys-enabled-label"
+                      aria-describedby="oauth-personal-keys-enabled-help"
+                    />
                   </div>
 
                   {oauthConfig.personalKeys.enabled && !clientsEnabled && (
@@ -796,49 +789,35 @@ function AdminOAuthServerPage() {
 
                       <div className="flex items-center justify-between">
                         <div>
-                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <label
+                            id="oauth-personal-keys-client-credentials-label"
+                            htmlFor="oauth-personal-keys-client-credentials"
+                            className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
                             {t(
                               'admin.auth.oauth.personalKeys.clientCredentials',
                               'Offer client credentials'
                             )}
                           </label>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <p
+                            id="oauth-personal-keys-client-credentials-help"
+                            className="text-sm text-gray-500 dark:text-gray-400"
+                          >
                             {t(
                               'admin.auth.oauth.personalKeys.clientCredentialsDesc',
                               'Also hand out a client ID and secret so users can request short-lived tokens from the token endpoint.'
                             )}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={oauthConfig.personalKeys.allowClientCredentials}
-                          onClick={() =>
-                            updatePersonalKeys(
-                              'allowClientCredentials',
-                              !oauthConfig.personalKeys.allowClientCredentials
-                            )
+                        <Switch
+                          id="oauth-personal-keys-client-credentials"
+                          checked={oauthConfig.personalKeys.allowClientCredentials}
+                          onChange={allowed =>
+                            updatePersonalKeys('allowClientCredentials', allowed)
                           }
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                            oauthConfig.personalKeys.allowClientCredentials
-                              ? 'bg-blue-600'
-                              : 'bg-gray-200 dark:bg-gray-600'
-                          }`}
-                        >
-                          <span className="sr-only">
-                            {t(
-                              'admin.auth.oauth.personalKeys.clientCredentials',
-                              'Offer client credentials'
-                            )}
-                          </span>
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              oauthConfig.personalKeys.allowClientCredentials
-                                ? 'translate-x-5'
-                                : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                          aria-labelledby="oauth-personal-keys-client-credentials-label"
+                          aria-describedby="oauth-personal-keys-client-credentials-help"
+                        />
                       </div>
                     </div>
                   )}

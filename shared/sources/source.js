@@ -31,6 +31,10 @@
  * @property {string} [type] - file type or application ("PDF")
  * @property {{id: string|number, scope?: string}} [ref] - handle for the
  *   provider's content actions (iFinder: document id and search profile)
+ * @property {string} [scopeName] - display name of `ref.scope` where users
+ *   pick it ("Contracts" for an iFinder search profile): the card shows where
+ *   the source was found. The producer sets it, falling back to the id; kept
+ *   only beside a `ref.scope`, and always names that scope
  * @property {{ok: boolean, words?: number, truncated?: boolean}} [read] - a read of its content
  * @property {boolean} [cited] - the provider reports that the answer relies on it
  * @property {string[]} [markers] - provider inline markers that point at it (iAssistant `r:3`)
@@ -65,6 +69,7 @@ const MAX_PASSAGE_CHARS = 4000;
 const MAX_FIELD_CHARS = 300;
 const MAX_REF_ID_CHARS = 1024;
 const MAX_SCOPE_CHARS = 256;
+const MAX_SCOPE_NAME_CHARS = 300;
 
 const PROVIDER = /^[\w.:-]{1,100}$/;
 const MARKER = /^[\w.:-]{1,32}$/;
@@ -262,6 +267,9 @@ export function normalizeSource(input, defaults = {}) {
   const type = text(input.type, 100);
   if (type) source.type = type;
   if (ref) source.ref = ref;
+  // A display name means nothing without the scope it names.
+  const scopeName = ref?.scope ? text(input.scopeName, MAX_SCOPE_NAME_CHARS) : null;
+  if (scopeName) source.scopeName = scopeName;
   const provenance = provenanceOf(input.provenance);
   if (provenance) source.provenance = provenance;
   const read = readOf(input.read);
@@ -313,6 +321,11 @@ export function mergeSource(known, seen) {
     if (value === undefined || value === null || value === '') merged[key] = seen[key];
   }
   if (known.ref && seen.ref && !known.ref.scope && seen.ref.scope) merged.ref = seen.ref;
+  // The display name of the scope the merged source keeps, not of another
+  // scope the same document was also found in.
+  const scopeName = scopeNameOf(merged.ref, known) || scopeNameOf(merged.ref, seen);
+  if (scopeName) merged.scopeName = scopeName;
+  else delete merged.scopeName;
   const passages = passagesOf([...(known.passages || []), ...(seen.passages || [])]);
   if (passages.length) merged.passages = passages;
   const markers = markersOf([...(known.markers || []), ...(seen.markers || [])]);
@@ -322,6 +335,11 @@ export function mergeSource(known, seen) {
   if (known.cited || seen.cited) merged.cited = true;
   merged.private = known.private === true && seen.private === true;
   return merged;
+}
+
+/** A sighting's scope name when it names `ref`'s scope, else undefined. */
+function scopeNameOf(ref, sighting) {
+  return ref?.scope && sighting.ref?.scope === ref.scope ? sighting.scopeName : undefined;
 }
 
 /**

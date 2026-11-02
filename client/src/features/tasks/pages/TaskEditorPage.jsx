@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useApps from '../../../shared/hooks/useApps';
@@ -15,6 +15,8 @@ import {
 } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import ScheduleBuilder from '../components/ScheduleBuilder';
+import TaskScopesSection from '../components/TaskScopesSection';
+import useIntegrationScopes from '../../chat/hooks/useIntegrationScopes';
 import { useScheduledTaskLimits } from '../hooks/useScheduledTasksConfig';
 import { errorMessage, fieldErrors, formToSchedule, scheduleToForm } from '../utils/taskFormat';
 
@@ -42,11 +44,29 @@ function emptyDraft(defaultAppId) {
     modelId: '',
     variables: {},
     enabledTools: null,
+    // `{ [integrationId]: scopeId }`: where the task's integrations search (#3057).
+    integrationScopes: {},
     notify: 'always',
     memory: { enabled: false },
     retention: { maxRuns: '', maxAgeDays: '' },
     schedule: { type: 'daily', time: '08:00', timezone: browserTimezone() }
   };
+}
+
+/**
+ * The task tools for a chat's `enabledTools`, from the app's tools resolved
+ * against them (`selected`): the app's defaults (`null`) when the chat had
+ * every tool the task can toggle on, otherwise the ids of the ones it had on.
+ *
+ * @param {Array<{id: string, toggleable: boolean, selected?: boolean}>} items
+ * @param {string[]} refs - The chat's `enabledTools`
+ * @returns {string[]|null}
+ */
+export function chatToolsToTask(items, refs) {
+  const toggleable = items.filter(tool => tool.toggleable);
+  if (refs.length === 0) return [];
+  const on = toggleable.filter(tool => tool.selected === true).map(tool => tool.id);
+  return on.length === toggleable.length ? null : on;
 }
 
 /**
@@ -75,6 +95,14 @@ export default function TaskEditorPage() {
   const [errors, setErrors] = useState({});
   const [tools, setTools] = useState([]);
   const [models, setModels] = useState([]);
+  // "Schedule this…" hands over the chat's `enabledTools`: tool references
+  // (`ifinder`, an MCP server id), not the tool ids a task stores. They are
+  // resolved once, against the app the chat used.
+  const chatToolsRef = useRef(
+    !editing && Array.isArray(incoming.draft?.enabledTools)
+      ? { appId: incoming.draft.appId, refs: incoming.draft.enabledTools }
+      : null
+  );
 
   useEffect(() => {
     if (!editing) return;
@@ -90,6 +118,7 @@ export default function TaskEditorPage() {
           modelId: task.modelId || '',
           variables: task.variables || {},
           enabledTools: task.enabledTools ?? null,
+          integrationScopes: task.integrationScopes || {},
           notify: task.notify || 'always',
           memory: { enabled: task.memory?.enabled === true },
           retention: {
@@ -117,8 +146,17 @@ export default function TaskEditorPage() {
   useEffect(() => {
     if (!draft.appId) return undefined;
     let cancelled = false;
-    fetchScheduledTaskAppTools(draft.appId)
-      .then(result => !cancelled && setTools(Array.isArray(result?.items) ? result.items : []))
+    const fromChat = chatToolsRef.current?.appId === draft.appId ? chatToolsRef.current.refs : null;
+    fetchScheduledTaskAppTools(draft.appId, fromChat?.length > 0 ? { select: fromChat } : {})
+      .then(result => {
+        if (cancelled) return;
+        const items = Array.isArray(result?.items) ? result.items : [];
+        setTools(items);
+        if (fromChat) {
+          chatToolsRef.current = null;
+          setDraft(prev => ({ ...prev, enabledTools: chatToolsToTask(items, fromChat) }));
+        }
+      })
       .catch(() => !cancelled && setTools([]));
     return () => {
       cancelled = true;
@@ -147,6 +185,21 @@ export default function TaskEditorPage() {
   const memoryOn = draft.memory?.enabled === true;
 
   const set = patch => setDraft(prev => ({ ...prev, ...patch }));
+
+  // The scopes the app's integrations offer for the task's app and model, as
+  // the chat lists them (`GET /api/integrations/scopes`); `pickedScopes` is
+  // what the task saves.
+  const {
+    integrations: scopeIntegrations,
+    scopes: pickedScopes,
+    setScope
+  } = useIntegrationScopes({
+    app,
+    modelId: draft.modelId || undefined,
+    language,
+    selected: draft.integrationScopes,
+    onChange: integrationScopes => set({ integrationScopes })
+  });
   // "Only when something changed" needs the notes, so notify falls back to "After
   // every run" when they are switched off.
   const setMemory = enabled =>
@@ -171,6 +224,9 @@ export default function TaskEditorPage() {
       modelId: draft.modelId || null,
       variables: draft.variables || {},
       enabledTools: customTools ? draft.enabledTools : null,
+      // Without a list (it could not be loaded) the scopes go as they are,
+      // for the server to check, rather than being dropped.
+      integrationScopes: scopeIntegrations.length > 0 ? pickedScopes : draft.integrationScopes,
       notify: draft.notify,
       memory: { enabled: memoryOn },
       retention: {
@@ -278,7 +334,13 @@ export default function TaskEditorPage() {
                 className={input}
                 value={draft.appId}
                 onChange={e =>
-                  set({ appId: e.target.value, enabledTools: null, modelId: '', variables: {} })
+                  set({
+                    appId: e.target.value,
+                    enabledTools: null,
+                    integrationScopes: {},
+                    modelId: '',
+                    variables: {}
+                  })
                 }
               >
                 {!app && draft.appId && <option value={draft.appId}>{draft.appId}</option>}
@@ -489,6 +551,16 @@ export default function TaskEditorPage() {
             {errors.enabledTools && <p className="text-xs text-red-600">{errors.enabledTools}</p>}
           </section>
         )}
+
+        <TaskScopesSection
+          integrations={scopeIntegrations}
+          saved={draft.integrationScopes}
+          onChange={setScope}
+          error={errors.integrationScopes}
+          className={section}
+          labelClassName={label}
+          inputClassName={input}
+        />
 
         <section className={section}>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">

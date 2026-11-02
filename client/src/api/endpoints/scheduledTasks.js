@@ -134,9 +134,24 @@ export const revokeScheduledTaskTool = (taskId, toolId) =>
 export const previewSchedule = (schedule, { count = 5 } = {}) =>
   call(() => apiClient.post(`${base}/_preview`, { schedule, count, timezone: browserTimezone() }));
 
-/** Tools a task of this app may use. */
-export const fetchScheduledTaskAppTools = appId =>
-  call(() => apiClient.get(`${base}/_apps/${encodeURIComponent(appId)}/tools`));
+/**
+ * Tools a task of this app may use. With `select` (a chat's `enabledTools`:
+ * tool references such as `ifinder` or an MCP server id), each item also says
+ * whether those references select it (`selected`).
+ *
+ * @param {string} appId
+ * @param {Object} [options]
+ * @param {string[]} [options.select]
+ */
+export const fetchScheduledTaskAppTools = (appId, { select } = {}) =>
+  call(() =>
+    apiClient.get(`${base}/_apps/${encodeURIComponent(appId)}/tools`, {
+      // `select=a&select=b`: the server's query parser reads no `select[]`.
+      ...(Array.isArray(select) && select.length > 0
+        ? { params: { select }, paramsSerializer: { indexes: null } }
+        : {})
+    })
+  );
 
 /** Runs the caller has not seen yet. */
 export const fetchScheduledTaskNotifications = () =>

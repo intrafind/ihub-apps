@@ -79,7 +79,8 @@ There are three ways in, and all of them end on the same form:
   default unless the app allows choosing), the app's variables, instructions,
   schedule, tools and when to notify.
 - **Schedule this…** on a message you sent in a chat. The form opens
-  prefilled with that message, the chat's app and the tools that were on.
+  prefilled with that message, the chat's app, the tools that were on and
+  where the chat searches (its [integration scopes](#where-a-task-searches)).
 - **Ask the app.** An app that offers the [scheduling tools](#scheduling-tools-in-apps)
   can draft a task from "every weekday at 8, summarize my open Jira tickets".
   The assistant only **proposes**: a confirmation card in the chat shows the
@@ -110,6 +111,33 @@ against):
 
 App variables (the app's own `variables`) are filled in once on the form and
 sent with every run.
+
+### Where a task searches
+
+In an app with iFinder or iAssistant, a chat picks where iFinder searches (a
+search profile) and which iAssistant it asks. A task keeps that choice as a
+snapshot, `integrationScopes` (`{ "ifinder": "contracts" }`, the shape a chat
+stores):
+
+- **From a chat:** **Schedule this…** and a task the app proposes
+  (`schedule_task`) take the chat's scopes at that moment. Moving the chat to
+  another profile later does not change the task.
+- **On the form:** **Where to search** lists, per integration of the task's
+  app, the same choices as the chat's **+** menu, for the task's app and
+  model. A scope the app or the installation fixes is shown, not editable.
+- **Every run** binds its tools to the snapshot and never reads chat state:
+  the `iFinder_*` tools search the task's profile whatever the model asks for,
+  and an iAssistant scope asks that iAssistant (each run is its own chat, so
+  it starts a new iFinder conversation).
+
+The server checks the scopes as the owner, against what each integration
+offers them, when the task is saved (a scope the owner may not use is refused,
+`INTEGRATION_SCOPE_NOT_ALLOWED` on the `integrationScopes` field) and again
+before every run. A run whose scope the owner no longer has **fails** with that
+code and a message naming the scope; it does not search somewhere else. The
+form names a saved scope the owner lost; saving picks another one. A task
+without `integrationScopes` runs as before: its tools search the default
+profile, or the one the model names after the usual checks.
 
 ## Schedules
 
@@ -248,6 +276,9 @@ groups carry are still read fresh.
   on the task page (`PERMISSION_REVOKED`, `APP_NOT_ACCESSIBLE`,
   `MODEL_NOT_ACCESSIBLE`, `TOOL_NOT_AVAILABLE`, …). Resuming it runs the same
   checks.
+- The owner lost a scope the task is bound to (an iFinder search profile, an
+  iAssistant) → the run **fails** with `INTEGRATION_SCOPE_NOT_ALLOWED`, naming
+  the scope. See [Where a task searches](#where-a-task-searches).
 - An integration that needs signing in again (an expired Jira token, for
   example) fails the run with `INTEGRATION_RECONNECT_REQUIRED` and a
   **Reconnect** link, rather than reporting a success whose answer apologises.
@@ -497,6 +528,7 @@ at `/api/docs`.
 | `server/services/scheduler/tasks/taskRunner.js`      | The run queue with global and per-owner limits            |
 | `server/services/scheduler/tasks/taskExecution.js`   | One run: owner principal, checks, the headless chat turn  |
 | `server/services/scheduler/tasks/taskService.js`     | Everything the routes and tools do to tasks               |
+| `server/services/scheduler/tasks/taskScopes.js`      | The integration scope snapshot: checked on save and per run |
 | `server/services/scheduler/tasks/runSeams.js`        | The approval gate and the integration check               |
 | `server/services/memory/memoryService.js`            | Memory shared by agents and tasks: scope, read, write     |
 | `server/services/scheduler/tasks/TaskMemoryRepository.js`, `taskMemory.js` | Notes storage, limits and metadata |

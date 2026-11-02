@@ -11,10 +11,20 @@
  * attaches and describes a document through, with the reader's own iFinder
  * permissions — so every document is private and a share never carries it.
  *
+ * Every document also carries `scopeName`, the display name of the profile it
+ * was found in ("Contracts"), or the profile id when the name is unknown; the
+ * sources panel shows it on the card (#3056). A search records the profile it
+ * ran in, and an iAssistant answer the iAssistant it asked, as the frame's
+ * `scopes` (`shared/sources/sourceSet.js`).
+ *
  * Tool results, read from the full result, never from the preview:
- *   - `iFinder_search`      `{ searchProfile, results: [hit, …] }`
- *   - `iFinder_getMetadata` a single hit carrying `searchProfile`
- *   - `iFinder_getContent`  `{ searchProfile, documentId, metadata: { title, filename, url } }`
+ *   - `iFinder_search`      `{ searchProfile, searchProfileName?, results: [hit, …] }`
+ *   - `iFinder_getMetadata` a single hit carrying `searchProfile` (and `searchProfileName`)
+ *   - `iFinder_getContent`  `{ searchProfile, searchProfileName?, documentId,
+ *                             metadata: { title, filename, url } }`
+ *
+ * `searchProfileName` is added by the tool (`tools/iFinder.js`) from the
+ * user's cached profile list.
  *
  * iAssistant payloads: `result_items` (documents, cited as
  * `<cite type="r">N</cite>` by their 1-based position) and `references`
@@ -28,6 +38,9 @@ import { storedSourceSet } from '../../../../shared/sources/index.js';
 const DOCUMENT_TOOLS = new Set(['ifinder_search', 'ifinder_getmetadata', 'ifinder_getcontent']);
 
 const DOCUMENT = { provider: 'ifinder', kind: 'document', private: true };
+
+/** The scope registry's id of the iFinder integration (`scopes/iFinderScopes.js`). */
+const IFINDER_INTEGRATION_ID = 'ifinder';
 
 /**
  * @param {string} toolId
@@ -61,19 +74,40 @@ function browserLink(...values) {
 }
 
 /**
+ * The display name of a search profile: its name when known, else its id.
+ *
+ * @param {string|undefined} searchProfile
+ * @param {Map<string, string>|Object<string, string>|undefined} names - by profile id
+ * @returns {string|undefined}
+ */
+function profileName(searchProfile, names) {
+  if (!searchProfile) return undefined;
+  return textOf(nameIn(names, searchProfile)) || searchProfile;
+}
+
+/** The entry for `id` in a Map or a plain object of names, if any. */
+function nameIn(names, id) {
+  if (names instanceof Map) return names.get(id);
+  if (names && typeof names === 'object' && Object.hasOwn(names, id)) return names[id];
+  return undefined;
+}
+
+/**
  * One iFinder document as a source input.
  *
  * @param {Object} doc - a hit, or the metadata of a read document
  * @param {string|undefined} searchProfile
+ * @param {string|undefined} scopeName - the profile's display name
  * @param {Object} [fields] - more fields (a read, markers, passages)
  * @returns {Object|null} null when the document carries no id
  */
-function documentSource(doc, searchProfile, fields = {}) {
+function documentSource(doc, searchProfile, scopeName, fields = {}) {
   const id = idOf(doc.id ?? doc.documentId);
   if (!id) return null;
   return {
     ...DOCUMENT,
     ref: { id, scope: searchProfile },
+    ...(searchProfile && scopeName ? { scopeName } : {}),
     title: textOf(doc.title),
     url: browserLink(doc.deepLink, doc.accessInfo?.deepLink, doc.url),
     site: textOf(doc.sourceName) || textOf(doc.sourceType),
@@ -122,21 +156,37 @@ export const iFinderSourceProducer = {
       return { items: [], queries };
     }
     const searchProfile = textOf(parsed.searchProfile) || textOf(args?.searchProfile);
+    const scopeName = textOf(parsed.searchProfileName) || searchProfile;
     let items;
     if (tool === 'ifinder_search') {
       items = (Array.isArray(parsed.results) ? parsed.results : []).map(hit =>
-        hit && typeof hit === 'object' ? documentSource(hit, searchProfile) : null
+        hit && typeof hit === 'object' ? documentSource(hit, searchProfile, scopeName) : null
       );
     } else if (tool === 'ifinder_getcontent') {
       items = [
-        documentSource({ ...parsed.metadata, documentId: parsed.documentId }, searchProfile, {
-          read: { ok: true }
-        })
+        documentSource(
+          { ...parsed.metadata, documentId: parsed.documentId },
+          searchProfile,
+          scopeName,
+          { read: { ok: true } }
+        )
       ];
     } else {
-      items = [documentSource(parsed, searchProfile)];
+      items = [documentSource(parsed, searchProfile, scopeName)];
     }
-    return { items: items.filter(Boolean), queries };
+    // Where the search ran, even when it found nothing; a read names no search.
+    const scopes =
+      tool === 'ifinder_search' && searchProfile
+        ? [
+            {
+              integrationId: IFINDER_INTEGRATION_ID,
+              id: searchProfile,
+              name: scopeName,
+              action: 'search'
+            }
+          ]
+        : [];
+    return { items: items.filter(Boolean), queries, ...(scopes.length ? { scopes } : {}) };
   }
 };
 
@@ -155,13 +205,17 @@ function accessProfile(item) {
 }
 
 /** One iAssistant result item as an iFinder document source, or null without a document id. */
-function iAssistantDocument(item, searchProfile, fields) {
+function iAssistantDocument(item, { searchProfile, scopeNames }, fields) {
   if (!item || typeof item !== 'object') return null;
   const id = idOf(item.document_id) || idOf(textOf(metaOf(item, 'id')));
   if (!id) return null;
+  // The profile iFinder names on the document; over all of the user's
+  // profiles, that is the only way to tell where a document was found.
+  const scope = accessProfile(item) || searchProfile;
   return {
     ...DOCUMENT,
-    ref: { id, scope: accessProfile(item) || searchProfile },
+    ref: { id, scope },
+    ...(scope ? { scopeName: profileName(scope, scopeNames) } : {}),
     title: textOf(item.title) || textOf(metaOf(item, 'title')),
     url: browserLink(metaOf(item, 'accessInfo.deepLink')),
     site: textOf(metaOf(item, 'sourceName')) || textOf(metaOf(item, 'sourceType')),
@@ -179,27 +233,44 @@ function iAssistantDocument(item, searchProfile, fields) {
  * a passage the answer can cite.
  *
  * @param {{references?: Array, resultItems?: Array}|null} payload
- * @param {{searchProfile?: string}} [context] - the conversation's search profile,
+ * @param {Object} [context]
+ * @param {string} [context.searchProfile] - the conversation's search profile,
  *   for documents whose ACCESS link names none (or that have none)
- * @returns {{items: Array}|null} null when the payload lists nothing
+ * @param {Map<string, string>|Object<string, string>} [context.scopeNames] -
+ *   display names of the user's search profiles, by id
+ * @param {Object} [context.scope] - the iAssistant scope the answer was
+ *   produced with (`{ integrationId, id, name, action }`), recorded as the
+ *   frame's `scopes`
+ * @returns {{items: Array, scopes?: Array}|null} null when the payload lists nothing
  */
-export function iAssistantSourceFrame(payload, { searchProfile } = {}) {
+export function iAssistantSourceFrame(payload, { searchProfile, scopeNames, scope } = {}) {
   if (!payload || typeof payload !== 'object') return null;
-  const items = [];
+  const context = { searchProfile, scopeNames };
+  const items = [...resultItemSources(payload, context), ...referenceSources(payload, context)];
+  if (!items.length) return null;
+  return scope ? { items, scopes: [scope] } : { items };
+}
+
+/** The payload's result items as sources (marker `r:<position>`), titled ones only. */
+function resultItemSources(payload, context) {
   const resultItems = Array.isArray(payload.resultItems) ? payload.resultItems : [];
-  resultItems.forEach((item, position) => {
-    const source = iAssistantDocument(item, searchProfile, { markers: [`r:${position + 1}`] });
-    if (source?.title) items.push(source);
-  });
-  for (const reference of Array.isArray(payload.references) ? payload.references : []) {
-    const content = textOf(reference?.content);
-    const marker = Number.isInteger(reference?.index) ? `s:${reference.index}` : undefined;
-    const source = iAssistantDocument(reference, searchProfile, {
-      passages: content ? [{ text: content, ...(marker ? { marker } : {}) }] : []
-    });
-    if (source && (source.title || source.passages.length)) items.push(source);
-  }
-  return items.length ? { items } : null;
+  return resultItems
+    .map((item, position) => iAssistantDocument(item, context, { markers: [`r:${position + 1}`] }))
+    .filter(source => source?.title);
+}
+
+/** The payload's references as sources with their passage (marker `s:<index>`). */
+function referenceSources(payload, context) {
+  const references = Array.isArray(payload.references) ? payload.references : [];
+  return references
+    .map(reference => {
+      const content = textOf(reference?.content);
+      const marker = Number.isInteger(reference?.index) ? `s:${reference.index}` : undefined;
+      return iAssistantDocument(reference, context, {
+        passages: content ? [{ text: content, ...(marker ? { marker } : {}) }] : []
+      });
+    })
+    .filter(source => source && (source.title || source.passages.length));
 }
 
 /**
@@ -211,15 +282,18 @@ export function iAssistantSourceFrame(payload, { searchProfile } = {}) {
  *
  * @param {Object|Array} page - the conversation API's response
  * @param {string} [searchProfile] - the conversation's search profile
+ * @param {Object} [context]
+ * @param {Map<string, string>|Object<string, string>} [context.scopeNames] -
+ *   display names of the user's search profiles, by id
  * @returns {Object|Array} the page with `sources` on each message that lists documents
  */
-export function withConversationSources(page, searchProfile) {
+export function withConversationSources(page, searchProfile, { scopeNames } = {}) {
   const convert = messages =>
     messages.map(message => {
       if (!message || typeof message !== 'object') return message;
       const frame = iAssistantSourceFrame(
         { references: message.references, resultItems: message.result_items },
-        { searchProfile }
+        { searchProfile, scopeNames }
       );
       const sources = frame ? storedSourceSet(frame) : null;
       return sources ? { ...message, sources } : message;

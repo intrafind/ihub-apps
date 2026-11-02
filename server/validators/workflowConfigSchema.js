@@ -275,7 +275,16 @@ export const nodeConfigSchema = z.object({
        * `required`: the node's first model call must call one of its tools
        * (later calls are `auto`, so the node can still answer). Default `auto`.
        */
-      toolChoice: z.enum(['auto', 'required']).optional()
+      toolChoice: z.enum(['auto', 'required']).optional(),
+      /**
+       * Integration scopes the node's tool calls are bound to (#3057), for
+       * prompt and tool nodes: `{ [integrationId]: scopeId }`, each value
+       * fixed (`"contracts"`) or a state reference (`"$.data.searchProfile"`).
+       * See `services/workflow/nodeScopes.js`.
+       */
+      integrationScopes: z
+        .record(z.string().regex(/^[\w.:-]{1,100}$/), z.string().min(1).max(256))
+        .optional()
     })
     .passthrough()
     .optional(),

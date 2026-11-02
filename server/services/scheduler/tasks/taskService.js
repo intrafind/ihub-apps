@@ -72,6 +72,7 @@ import {
 import { announceTaskChanged } from './taskEvents.js';
 import { effectiveRetention, parseRetention, selectRunsToPrune } from './runRetention.js';
 import { SCHEDULING_TOOLS } from './toolGate.js';
+import { validateTaskScopes } from './taskScopes.js';
 
 const COMPONENT = 'ScheduledTaskService';
 
@@ -172,37 +173,88 @@ function localizedName(value, language) {
 }
 
 /**
- * The tool ids an app offers a user — what a task may narrow its tools to.
- * `selectedByApp` tells the tools the app lists itself (which a task can
- * switch off) from the ones it gets injected.
+ * The tools an app offers a user, as a run loads them (with their `_mcp`,
+ * `_integration`, … internals), without the scheduling tools: those are not
+ * something a task picks for its own runs.
  *
  * @param {Object} app
  * @param {Object} user
  * @param {string} language
- * @returns {Promise<Array<{id: string, name: string, selectedByApp: boolean}>>}
+ * @returns {Promise<Object[]>}
  */
-export async function toolsOfferedByApp(app, user, language = 'en') {
+async function offeredToolsOf(app, user, language) {
   const { getToolsForApp } = await import('../../../toolLoader.js');
   const tools = await getToolsForApp(app, language, { user, language });
   const seen = new Set();
   const out = [];
   for (const tool of Array.isArray(tools) ? tools : []) {
-    // The scheduling tools are not something a task picks for its own runs.
     if (!tool?.id || seen.has(tool.id) || SCHEDULING_TOOLS.has(tool.id)) continue;
     seen.add(tool.id);
-    out.push({
-      id: tool.id,
-      name: localizedName(tool.name, language) || tool.id,
-      // Read the way the run reads the app's `tools` (directory, MCP server
-      // and agent references included), so a task can narrow exactly these.
-      // An installed integration's tool is here only because the app binds
-      // it (`app.integrations`) or names it in `tools`.
-      selectedByApp:
-        Boolean(tool._integration) ||
-        isToolSelected(tool, Array.isArray(app.tools) ? app.tools : [])
-    });
+    out.push(tool);
   }
   return out;
+}
+
+/**
+ * Resolve tool references to the ids of the offered tools they select. A
+ * chat's `enabledTools` holds references, not tool ids: an installation id or
+ * app binding key (`ifinder` selects `iFinder_search`, `iFinder_getContent`,
+ * …), an MCP server id, a base id (`jira`). A task stores the tool ids, which
+ * is what its form toggles and what a run checks. A tool id selects itself, so
+ * resolving a task's own ids returns them unchanged.
+ *
+ * @param {Object} app
+ * @param {Object[]} tools - From {@link offeredToolsOf}
+ * @param {string[]} refs
+ * @param {(app: Object, tool: Object, refs: string[]) => boolean} isSelected -
+ *   `isBoundToolEnabled` (integrationTools.js)
+ * @returns {{ids: string[], unknown: string[]}} `ids` in the app's tool order;
+ *   `unknown`: the references that select none of the tools
+ */
+export function resolveTaskToolRefs(app, tools, refs, isSelected) {
+  const list = [
+    ...new Set((Array.isArray(refs) ? refs : []).filter(ref => typeof ref === 'string' && ref))
+  ];
+  const ids = tools.filter(tool => isSelected(app, tool, list)).map(tool => tool.id);
+  const unknown = list.filter(ref => !tools.some(tool => isSelected(app, tool, [ref])));
+  return { ids, unknown };
+}
+
+async function loadToolSelector() {
+  const { isBoundToolEnabled } = await import('../../integrations/integrationTools.js');
+  return isBoundToolEnabled;
+}
+
+/**
+ * The tool ids an app offers a user — what a task may narrow its tools to.
+ * `selectedByApp` tells the tools the app lists itself (which a task can
+ * switch off) from the ones it gets injected. With `select` (a chat's
+ * `enabledTools`), each tool also says whether those references select it
+ * (`selected`), which is how "Schedule this…" ticks the chat's tools.
+ *
+ * @param {Object} app
+ * @param {Object} user
+ * @param {string} language
+ * @param {Object} [options]
+ * @param {string[]} [options.select] - Tool references to resolve
+ * @returns {Promise<Array<{id: string, name: string, selectedByApp: boolean, selected?: boolean}>>}
+ */
+export async function toolsOfferedByApp(app, user, language = 'en', { select } = {}) {
+  const tools = await offeredToolsOf(app, user, language);
+  const selected = Array.isArray(select)
+    ? new Set(resolveTaskToolRefs(app, tools, select, await loadToolSelector()).ids)
+    : null;
+  return tools.map(tool => ({
+    id: tool.id,
+    name: localizedName(tool.name, language) || tool.id,
+    // Read the way the run reads the app's `tools` (directory, MCP server
+    // and agent references included), so a task can narrow exactly these.
+    // An installed integration's tool is here only because the app binds
+    // it (`app.integrations`) or names it in `tools`.
+    selectedByApp:
+      Boolean(tool._integration) || isToolSelected(tool, Array.isArray(app.tools) ? app.tools : []),
+    ...(selected ? { selected: selected.has(tool.id) } : {})
+  }));
 }
 
 function fieldError(field, code, message) {
@@ -346,21 +398,40 @@ export async function validateTaskFields(
     out.enabledTools = null;
   } else {
     const ids = [...new Set(rawTools.filter(id => typeof id === 'string' && id))];
+    out.enabledTools = ids;
     if (app) {
-      const offered = new Set((await toolsOfferedByApp(app, user, language)).map(t => t.id));
-      const unknown = ids.filter(id => !offered.has(id));
-      if (unknown.length > 0) {
+      // References (a chat's `enabledTools`: `ifinder`, an MCP server id)
+      // become the tool ids they select; a task stores tool ids.
+      const resolved = resolveTaskToolRefs(
+        app,
+        await offeredToolsOf(app, user, language),
+        ids,
+        await loadToolSelector()
+      );
+      if (resolved.unknown.length > 0) {
         errors.push(
           fieldError(
             'enabledTools',
             'TOOL_NOT_AVAILABLE',
-            `The app does not offer: ${unknown.join(', ')}`
+            `The app does not offer: ${resolved.unknown.join(', ')}`
           )
         );
       }
+      out.enabledTools = resolved.ids;
     }
-    out.enabledTools = ids;
   }
+
+  // Integration scopes (#3057): the snapshot of where the task's
+  // integrations search and whom they ask, checked as the owner. An edit that
+  // does not name them keeps (and re-checks) the task's own.
+  const scopeCheck = await validateTaskScopes(
+    has('integrationScopes') ? body.integrationScopes : previous?.integrationScopes,
+    { user, app, modelId: out.modelId, language }
+  );
+  if (scopeCheck.error) {
+    errors.push(fieldError('integrationScopes', scopeCheck.error.code, scopeCheck.error.message));
+  }
+  out.integrationScopes = scopeCheck.scopes;
 
   out.websearchEnabled = has('websearchEnabled')
     ? typeof body.websearchEnabled === 'boolean'
@@ -701,6 +772,7 @@ export async function duplicateTask(user, taskId, { language = 'en' } = {}) {
       modelId: task.modelId,
       variables: task.variables,
       enabledTools: task.enabledTools,
+      integrationScopes: task.integrationScopes ?? null,
       websearchEnabled: task.websearchEnabled,
       // The setting, not the notes: the copy starts with its own first run.
       memory: task.memory,

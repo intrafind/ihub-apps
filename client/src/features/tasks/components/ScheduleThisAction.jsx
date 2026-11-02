@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useCanCreateScheduledTasks, useScheduledTasksAvailable } from '../hooks/useScheduledTasks';
 
-function ScheduleThisButton({ content, appId, enabledTools }) {
+function ScheduleThisButton({ content, appId, enabledTools, integrationScopes }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   return (
@@ -22,7 +22,11 @@ function ScheduleThisButton({ content, appId, enabledTools }) {
                 .slice(0, 80),
               instructions: content,
               ...(appId ? { appId } : {}),
-              ...(Array.isArray(enabledTools) ? { enabledTools } : {})
+              ...(Array.isArray(enabledTools) ? { enabledTools } : {}),
+              // Where the chat searches now: the task keeps it (#3057).
+              ...(integrationScopes && Object.keys(integrationScopes).length > 0
+                ? { integrationScopes }
+                : {})
             }
           }
         })
@@ -38,8 +42,10 @@ function ScheduleThisButton({ content, appId, enabledTools }) {
 
 /**
  * "Schedule this…" on a sent message: opens the task form pre-filled with
- * the message, the current app and its tools. Renders nothing (and touches no
- * router) unless scheduled tasks are available to the viewer.
+ * the message, the current app, its tools and the chat's integration scopes
+ * (the iFinder search profile, the iAssistant), which the task keeps however
+ * the chat changes later. Renders nothing (and touches no router) unless
+ * scheduled tasks are available to the viewer.
  */
 export default function ScheduleThisAction(props) {
   const available = useScheduledTasksAvailable();

@@ -483,6 +483,9 @@ Opening the history drawer shows:
 - A before/after diff for each change — only the fields that changed are shown
 - Both form edits and raw JSON editor changes are recorded
 
+The drawer keeps keyboard focus while it is open: Tab moves only between its controls, and Escape
+or the close button closes it and returns focus to the **History** button.
+
 ---
 
 ## Unsaved Changes

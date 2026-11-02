@@ -21,7 +21,7 @@ export const MAX_STORED_SOURCES_BYTES = 256 * 1024;
 
 /**
  * @param {Object|null} set - the turn's source set
- * @returns {{items: Array, queries: string[]}|null} null when nothing is left to store
+ * @returns {{items: Array, queries: string[], scopes?: Array}|null} null when nothing is left to store
  */
 export function boundStoredSources(set) {
   const stored = storedSourceSet(set);
@@ -30,7 +30,7 @@ export function boundStoredSources(set) {
   const items = stored.items.map(({ passages, ...source }) =>
     passages?.length ? { ...source, passages: passages.slice(0, 1) } : source
   );
-  const bounded = { items, queries: stored.queries };
+  const bounded = { ...stored, items };
   while (items.length && jsonByteLength(bounded) > MAX_STORED_SOURCES_BYTES) items.pop();
   return items.length || bounded.queries.length ? bounded : null;
 }

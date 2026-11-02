@@ -22,6 +22,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { runTool } from '../../../toolLoader.js';
 import { getAssignedSkillIds } from '../../skillAccess.js';
+import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
 
 /**
  * Tool node configuration
@@ -32,6 +33,8 @@ import { getAssignedSkillIds } from '../../skillAccess.js';
  * @property {number} [timeout] - Execution timeout in milliseconds
  * @property {boolean} [optional] - If true, tool failure won't fail the workflow
  * @property {Object} [errorMapping] - Map error types to custom outputs
+ * @property {Object<string, string>} [integrationScopes] - Integration scopes the call is
+ *   bound to (`{ ifinder: 'contracts' }` or a `$.data.…` reference), see `../nodeScopes.js`
  */
 
 /**
@@ -115,6 +118,20 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
     }
     const inputsForUi = { toolId, parameters: resolvedParams, outputVariable, timeout };
 
+    // The integration scopes the call is bound to, checked as the run's user.
+    // A refused scope fails the node, `optional` or not: the call must not
+    // search somewhere else.
+    const scopes = await resolveNodeScopes(node, state, context, this);
+    if (!scopes.ok) {
+      return this.createErrorResult(nodeScopeError(scopes), {
+        toolId,
+        nodeId: node.id,
+        code: scopes.code,
+        resolvedInputs: inputsForUi
+      });
+    }
+    if (Object.keys(scopes.scopes).length > 0) inputsForUi.integrationScopes = scopes.scopes;
+
     try {
       this.logger.debug('Resolved parameters for tool', {
         component: 'ToolNodeExecutor',
@@ -132,7 +149,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
           user,
           // A workflow node loads only the app's global skills, never users'
           // own: the `_skillIds` marker says so to the skill tools.
-          appConfig: { ...appConfig, _skillIds: getAssignedSkillIds(appConfig) }
+          appConfig: { ...appConfig, _skillIds: getAssignedSkillIds(appConfig) },
+          // After the parameters, so a node's `parameters` cannot pick a scope.
+          integrationScopes: scopes.scopes
         },
         timeout
       );

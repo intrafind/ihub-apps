@@ -174,6 +174,41 @@ from a registry the admin trusts for code and refuses a file that does not match
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.
 
+## Security
+
+### Which hosts the server fetches from
+
+Everything the marketplace downloads — the catalog, an item, the companion files of a skill or an
+integration, the GitHub file tree that lists them, the content preview — is fetched by the iHub
+server. A catalog therefore decides which addresses the server connects to. So that a catalog
+cannot steer the server into the internal network, every request is checked against the registry
+it is made for:
+
+| Target                                                        | Fetched                                                                      |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| The registry's own host — host and port of its Catalog URL    | Always, also on a private address. A registry inside the company network keeps working |
+| `api.github.com` and `raw.githubusercontent.com`              | For a registry whose catalog is on GitHub (`raw.githubusercontent.com`, `github.com`, `api.github.com`) |
+| Any other host                                                | Only when every address it resolves to is public: no loopback, private ranges (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), link-local and cloud metadata addresses (`169.254.169.254`), shared address space, multicast or reserved ranges. The connection is pinned to the addresses that were checked |
+
+- **Redirects** are followed by the server itself, at most 5, and every hop is checked by the same
+  rules: an allowed host cannot redirect the server to an internal address. A redirect to another
+  host is sent without the registry's credentials (between the GitHub hosts they are kept).
+- **A refused fetch** fails the install, update or refresh with a message that names the host, for
+  example:
+
+  > Marketplace fetch from '169.254.169.254' refused: the host is not the registry's own host and
+  > not a public address (IP 169.254.169.254 is private)
+
+  The content preview of an item is left empty instead, and a user who adds a skill from the
+  marketplace sees that the marketplace could not be reached; the server log names the host.
+- **A private registry** must serve its items and companion files from the host of its catalog
+  (a relative `source.path`). An item or a `source.rawBase` on another internal host is refused.
+- **Credentials:** the companion files of an integration whose `source.rawBase` is on another host
+  than the registry are fetched without the registry's credentials.
+- The check resolves a third-party host name on the iHub server, also when outbound traffic goes
+  through a [proxy](proxy-configuration.md); a host the server cannot resolve is refused. The
+  registry's own host and the GitHub hosts of a GitHub registry are not resolved for the check.
+
 ## Multi-server deployments
 
 Installations write to `contents/` and to `contents/config/installations.json`. With several
@@ -226,6 +261,7 @@ add skills with are listed under [Skills → API](skills.md#api).
 | ------------------------------------------------------ | ----------------------------------------------------- |
 | `server/services/marketplace/RegistryService.js`       | Fetching, caching and refreshing catalogs             |
 | `server/services/marketplace/ContentInstaller.js`      | Install, update, uninstall, detach; the installations manifest |
+| `server/services/marketplace/marketplaceFetch.js`      | Every marketplace download: allowed hosts, redirects, credential scope |
 | `server/validators/catalogSchema.js`                   | Catalog schema                                        |
 | `server/validators/registryConfigSchema.js`            | Registry configuration schema                         |
 | `server/routes/admin/marketplace.js`                   | The HTTP surface                                      |

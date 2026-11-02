@@ -70,6 +70,7 @@ import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
 import { composeTaskMemory, ownerMessagesAfterPreviousRun, sumUsage } from './memoryComposer.js';
 import { announceTaskChanged } from './taskEvents.js';
 import { currentPolicy, deleteRunChat, pruneTaskRuns, toolsOfferedByApp } from './taskService.js';
+import { resolveRunScopes } from './taskScopes.js';
 
 const COMPONENT = 'ScheduledTaskExecution';
 
@@ -139,9 +140,10 @@ function runTitle(task, run, language) {
 }
 
 /**
- * Check what the run needs, as the owner: the app, the model, the tools.
+ * Check what the run needs, as the owner: the app, the model, the tools and
+ * the integration scopes.
  *
- * @returns {Promise<{app: Object}>}
+ * @returns {Promise<{app: Object, integrationScopes: Object<string, string>|null}>}
  * @throws {RunFailure}
  */
 async function authorizeRun(task, user, language) {
@@ -172,7 +174,16 @@ async function authorizeRun(task, user, language) {
       throw pause('TOOL_NOT_AVAILABLE', `The app no longer offers: ${missing.join(', ')}`);
     }
   }
-  return { app };
+  // Where the run's integrations search and whom they ask: the task's
+  // snapshot, checked again as the owner (#3057). A scope the owner lost
+  // fails the run, naming the scope, instead of searching somewhere else.
+  const scopes = await resolveRunScopes(task, { user, app, language });
+  if (!scopes.ok) {
+    throw new RunFailure('failed', scopes.code, scopes.message, {
+      extra: scopes.integrationId ? { integrationId: scopes.integrationId } : {}
+    });
+  }
+  return { app, integrationScopes: scopes.scopes };
 }
 
 /**
@@ -429,7 +440,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         'Chats cannot be stored right now'
       );
     }
-    const { app } = await authorizeRun(task, user, language);
+    const { app, integrationScopes } = await authorizeRun(task, user, language);
 
     // Messages: the instructions (first turn), or the stored conversation plus
     // the approval note (continuation).
@@ -461,7 +472,8 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       ...(Array.isArray(task.enabledTools) ? { enabledTools: task.enabledTools } : {}),
       ...(typeof task.websearchEnabled === 'boolean'
         ? { websearchEnabled: task.websearchEnabled }
-        : {})
+        : {}),
+      ...(integrationScopes ? { integrationScopes } : {})
     });
     if (!prep.success) {
       const code = String(prep.error?.code || 'REQUEST_PREPARATION_FAILED');
@@ -559,7 +571,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         ...(Array.isArray(task.enabledTools) ? { enabledTools: task.enabledTools } : {}),
         ...(typeof task.websearchEnabled === 'boolean'
           ? { websearchEnabled: task.websearchEnabled }
-          : {})
+          : {}),
+        // The run's chat continues in the task's scope when the owner opens it.
+        ...(integrationScopes ? { integrationScopes } : {})
       }),
       ...(task.variables && !continuation ? { variables: task.variables } : {}),
       ...(continuation ? {} : { chat: { title: runTitle(task, run, language) } }),

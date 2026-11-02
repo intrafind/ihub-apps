@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import Switch from '../../../shared/components/Switch';
 import { chatIntegrationWarnings } from '../../workflows/utils/chatIntegration';
 
 const OUTPUT_FORMATS = ['markdown', 'text', 'json'];
@@ -65,36 +66,15 @@ function AssignmentNote({ assignedApps }) {
   return <p className={helpClass}>{note}</p>;
 }
 
-function ToggleSwitch({ enabled, onToggle, labelledBy }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-        enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-      }`}
-      role="switch"
-      aria-checked={enabled}
-      aria-labelledby={labelledBy}
-    >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-          enabled ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  );
-}
-
 function AvailableInChat({ enabled, onToggle, assignedApps }) {
   const { t } = useTranslation();
   return (
     <div className="sm:col-span-2">
       <div className="flex items-center">
-        <ToggleSwitch
-          enabled={enabled}
-          onToggle={onToggle}
-          labelledBy="workflow-chat-enabled-label"
+        <Switch
+          checked={enabled}
+          onChange={() => onToggle()}
+          aria-labelledby="workflow-chat-enabled-label"
         />
         <span
           id="workflow-chat-enabled-label"

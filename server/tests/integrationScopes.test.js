@@ -21,10 +21,12 @@ import {
 } from '../services/integrations/scopes/index.js';
 import iFinderScopes, {
   resolveToolSearchProfile,
+  searchProfileNames,
   SearchProfileNotAllowedError
 } from '../services/integrations/scopes/iFinderScopes.js';
 import iAssistantScopes, {
   conversationScopeOf,
+  describeAnswerScope,
   scopeToConversationConfig
 } from '../services/integrations/scopes/iAssistantScopes.js';
 import iFinderTool from '../tools/iFinder.js';
@@ -368,6 +370,36 @@ describe('iFinder tools bound to the chat scope', () => {
     assert.deepEqual(result.profiles, [{ id: 'contracts', name: 'Contracts', isDefault: true }]);
   });
 
+  it('names the searched profile in the result, for the sources panel (#3056)', async () => {
+    iFinderService.search = async params => ({
+      searchProfile: params.searchProfile,
+      results: []
+    });
+    const result = await iFinderTool.search({
+      query: 'x',
+      integrationScopes: { ifinder: 'contracts' },
+      user: USER,
+      chatId: 'chat-1',
+      appConfig: SEARCH_APP
+    });
+    assert.deepEqual(result, {
+      searchProfile: 'contracts',
+      searchProfileName: 'Contracts',
+      results: []
+    });
+  });
+
+  it('leaves the result as it is when the profile names cannot be read', async () => {
+    profilesAnswer = async () => {
+      throw Object.assign(new Error('forbidden'), { status: 403 });
+    };
+    iFinderService.search = async params => ({ searchProfile: params.searchProfile, results: [] });
+    const result = await iFinderTool.search({ query: 'x', user: USER, appConfig: SEARCH_APP });
+    assert.deepEqual(result, { searchProfile: 'searchprofile-standard', results: [] });
+    assert.deepEqual(await searchProfileNames({ user: USER }), new Map());
+    assert.deepEqual(await searchProfileNames({ user: { id: 'anonymous' } }), new Map());
+  });
+
   it('keeps integrationScopes out of what an external caller can set', () => {
     assert.deepEqual(
       stripReservedToolContext({ query: 'x', integrationScopes: { ifinder: 'a' } }),
@@ -471,6 +503,28 @@ describe('iAssistant scopes', () => {
     });
     assert.equal(scopeToConversationConfig('assistant:'), null);
     assert.equal(scopeToConversationConfig('other'), null);
+  });
+
+  it('names the scope an answer was produced with (#3056)', async () => {
+    const app = { id: 'ask', integrations: { iassistant: { allowAllSearchProfiles: true } } };
+    const ask = scopeId =>
+      describeAnswerScope({ scopeId, user: USER, app, model: IASSISTANT_MODEL, language: 'en' });
+    assert.deepEqual(await ask('assistant:hr-bot'), {
+      integrationId: 'iassistant',
+      id: 'assistant:hr-bot',
+      name: 'HR assistant',
+      action: 'ask'
+    });
+    assert.deepEqual((await ask('all')).name, {
+      en: 'All my search profiles',
+      de: 'Alle meine Suchprofile'
+    });
+    // An iAssistant the list does not offer (any more): its id stands in.
+    assert.equal((await ask('assistant:gone')).name, 'gone');
+    assistantsAnswer = async () => {
+      throw new Error('iFinder is down');
+    };
+    assert.equal((await ask('assistant:hr-bot')).name, 'hr-bot');
   });
 
   it('tells which scope a stored conversation runs in', () => {

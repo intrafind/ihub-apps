@@ -383,6 +383,21 @@ directories.
 
 See [People Directory Search](../../people-directory-search.md).
 
+## Scheduled Tasks and Workflows Keep Their Search Profile
+
+A scheduled task now searches where it was set up to search. It keeps the iFinder search profile
+and the iAssistant of the chat it was scheduled from, or the ones picked on its form, and every
+run uses them, even after the chat moved to another profile.
+
+- **Task form:** **Where to search** shows the same choices as the chat's **+** menu and lets the
+  owner change them. A profile the owner may not use is refused on save.
+- **Every run** checks the profile again. One the owner lost fails the run with an error naming
+  it, instead of quietly searching somewhere else.
+- **Workflows:** an agent or tool step can bind its iFinder tools to a profile with
+  `integrationScopes`, fixed or from a workflow input; the model cannot pick another one.
+- Tasks saved before keep running as they did: without a stored profile, they search the
+  default.
+
 ## LDAP Browser Is an Integration of Its Own
 
 The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the
@@ -423,3 +438,16 @@ The **Settings** tab of these installations is a dedicated editor instead of the
   directory type.
 
 See [Integrations → Editors](../../integrations.md#editors).
+
+## Sources Panel: Where Each Document Was Found
+
+The sources panel under an answer now says where each document came from. Every iFinder card
+names the search profile it was found in by its display name ("Contracts"), and the panel header
+says where the answer searched (**Searched in Contracts**) or which iAssistant it asked
+(**Asked HR assistant**).
+
+- **iAssistant over all search profiles:** each document names the profile iFinder reports on it.
+- **Several profiles in one answer:** the panel can show one profile at a time.
+- **Reopened chats:** the labels are stored with the answer, so they show the same after reopening.
+- The names come from the same per-user list as the search profile picker; a profile whose name
+  is unknown shows its id. Shared chats leave the labels out, like the documents themselves.

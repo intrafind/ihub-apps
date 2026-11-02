@@ -19,6 +19,8 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
+import { nodeScopeError, resolveNodeScopes } from '../nodeScopes.js';
+import { applyIntegrationScopes } from '../../chat/RequestBuilder.js';
 import { actionTracker } from '../../../actionTracker.js';
 import {
   getToolsForApp,
@@ -158,6 +160,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       options.contextSummarizer || new ContextSummarizer({ llmClient: this.llmClient });
     this._agentLoop = options.agentLoop || null;
     this._defaultLoop = null;
+    // How a tool call runs; injectable for tests.
+    this.runTool = options.runTool || runTool;
   }
 
   /**
@@ -244,6 +248,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         links: projectLinks
       } = await this.loadProjectContent(config, state, context);
       context = { ...context, projectLinks, ...(projectContent ? { projectContent } : {}) };
+
+      // The integration scopes the node's tool calls are bound to (#3057),
+      // checked as the run's user; a refused one fails the node rather than
+      // letting its tools search somewhere else.
+      const nodeScopes = await resolveNodeScopes(node, state, context, this);
+      if (!nodeScopes.ok) {
+        return this.createErrorResult(nodeScopeError(nodeScopes), {
+          nodeId: node.id,
+          code: nodeScopes.code
+        });
+      }
+      context = { ...context, integrationScopes: nodeScopes.scopes };
       // Recorded on the step log after model/tools are sorted out, so the
       // audit shows which projects the node was configured with.
       const stepProjectMetadata = Array.isArray(projectsMetadata) ? projectsMetadata : [];
@@ -535,6 +551,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           }
         }
       }
+
+      // A node bound to a scope does not offer the tools that look for
+      // another one, and tells the model the scope is fixed, as a chat does.
+      tools = applyIntegrationScopes(messages, tools, context.integrationScopes);
 
       // Thread the workflow state into the context so agent tools
       // (createTask / listTasks / markTaskDone / writeArtifact) can read and
@@ -1933,11 +1953,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       };
 
       const toolCallStartMs = Date.now();
-      const result = await runTool(toolId, {
+      const result = await this.runTool(toolId, {
         ...args,
         chatId,
         user,
-        appConfig: enrichedAppConfig
+        appConfig: enrichedAppConfig,
+        // The node's scopes (#3057), after the model's arguments: the model
+        // cannot pick another search profile.
+        integrationScopes: context.integrationScopes || {}
       });
       const toolCallDurationMs = Date.now() - toolCallStartMs;
 
