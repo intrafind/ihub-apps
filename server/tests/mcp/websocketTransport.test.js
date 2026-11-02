@@ -119,6 +119,37 @@ describe('McpWebSocketTransport and the SSL whitelist', () => {
     }
   });
 
+  test('gives up on time when the server keeps the connection busy without upgrading', async () => {
+    // Answers with an endless series of 103 Early Hints, which resets `ws`'s
+    // inactivity-based handshakeTimeout every time; only an absolute deadline ends it.
+    const timers = new Set();
+    const sockets = new Set();
+    const chatty = net.createServer(socket => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      const timer = setInterval(() => {
+        if (!socket.destroyed) socket.write('HTTP/1.1 103 Early Hints\r\nLink: </x>\r\n\r\n');
+      }, 50);
+      timers.add(timer);
+      socket.on('close', () => clearInterval(timer));
+    });
+    await new Promise(resolve => chatty.listen(0, '127.0.0.1', resolve));
+    try {
+      const transport = track(
+        new McpWebSocketTransport(`ws://127.0.0.1:${chatty.address().port}/mcp`, {
+          handshakeTimeoutMs: 300
+        })
+      );
+      const started = Date.now();
+      await expect(transport.start()).rejects.toThrow(/timed out/i);
+      expect(Date.now() - started).toBeLessThan(2000);
+    } finally {
+      for (const timer of timers) clearInterval(timer);
+      for (const socket of sockets) socket.destroy();
+      await new Promise(resolve => chatty.close(resolve));
+    }
+  });
+
   test('refuses a wss host that is not whitelisted', async () => {
     const transport = track(
       new McpWebSocketTransport(`wss://localhost:${port}/mcp`, {

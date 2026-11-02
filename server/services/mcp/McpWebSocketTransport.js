@@ -28,8 +28,9 @@ export class McpWebSocketTransport {
    * @param {Object} [options]
    * @param {Function} [options.WebSocketImpl] - Constructor to dial with (tests)
    * @param {Object} [options.sslConfig] - SSL config override (tests); defaults to the platform's
-   * @param {number} [options.handshakeTimeoutMs] - Upper bound for the opening handshake, so
-   *   `start()` cannot stay pending when a server accepts the TCP connection but never upgrades
+   * @param {number} [options.handshakeTimeoutMs] - Absolute upper bound for the opening
+   *   handshake, so `start()` cannot stay pending when a server accepts the TCP connection but
+   *   never upgrades, or keeps the connection busy without upgrading
    */
   constructor(
     url,
@@ -62,20 +63,44 @@ export class McpWebSocketTransport {
     }
     return new Promise((resolve, reject) => {
       let opened = false;
+      let settled = false;
       const socket = new this._WebSocket(this._url, SUBPROTOCOL, this.socketOptions());
       this._socket = socket;
 
+      // `ws`'s handshakeTimeout is an inactivity timer: a server that keeps
+      // sending something (1xx informational responses, a trickle of bytes)
+      // resets it forever. This deadline is absolute.
+      const deadline = setTimeout(() => {
+        if (opened || settled) return;
+        settled = true;
+        reject(new Error(`WebSocket handshake timed out after ${this._handshakeTimeoutMs} ms`));
+        socket.terminate?.();
+      }, this._handshakeTimeoutMs);
+      deadline.unref?.();
+
       socket.on('open', () => {
+        clearTimeout(deadline);
+        if (settled) return;
         opened = true;
+        settled = true;
         resolve();
       });
       socket.on('error', error => {
+        clearTimeout(deadline);
         const err = error instanceof Error ? error : new Error(`WebSocket error: ${error}`);
-        if (!opened) reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
         this.onerror?.(err);
       });
       socket.on('close', () => {
+        clearTimeout(deadline);
         this._socket = null;
+        if (!settled) {
+          settled = true;
+          reject(new Error('WebSocket closed before the handshake completed'));
+        }
         this.onclose?.();
       });
       socket.on('message', (data, isBinary) => {
