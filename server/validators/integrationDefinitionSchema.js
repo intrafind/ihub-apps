@@ -846,6 +846,25 @@ export const integrationTestSchema = z.object({
     .optional()
 });
 
+/** Companion JSON files a definition may name as example apps (`apps/<name>.json`). */
+export const EXAMPLE_APP_FILE_PATTERN =
+  /^(?!\.)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.json$/;
+
+/** The most example apps one definition ships. */
+export const MAX_EXAMPLE_APPS = 5;
+
+/**
+ * An example app a definition ships: a companion JSON file holding an app
+ * configuration (`appConfigSchema`) that binds the integration by its
+ * definition id or type. The admin creates it for one installation from the
+ * installation page (`services/integrations/exampleApps.js`).
+ */
+export const integrationExampleAppSchema = z
+  .object({
+    file: companionPathSchema.regex(EXAMPLE_APP_FILE_PATTERN, 'must be a .json companion file')
+  })
+  .strict();
+
 export const integrationPublisherSchema = z.object({
   name: z.string().min(1).max(200),
   url: z.string().url().optional(),
@@ -900,6 +919,14 @@ export const integrationDefinitionSchema = z
     test: integrationTestSchema.optional(),
     actions: z.array(integrationActionSchema).prefault([]),
     instructions: localizedStringSchema.optional(),
+    /** Example apps shipped as companion files, offered on the installation page. */
+    exampleApps: z
+      .array(integrationExampleAppSchema)
+      .max(MAX_EXAMPLE_APPS)
+      .refine(list => new Set(list.map(e => e.file)).size === list.length, {
+        message: 'each example app file is listed once'
+      })
+      .optional(),
     _meta: z.record(z.string(), z.any()).optional()
   })
   .superRefine((def, ctx) => {

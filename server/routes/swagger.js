@@ -14,6 +14,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * The route files each API document is built from, as glob patterns.
+ *
+ * swagger-jsdoc expands `apis` with glob, which takes `/` only: a Windows `\`
+ * reads as an escape character, so a pattern built with `path.join` matches
+ * nothing there and /api/docs comes up empty. Build the patterns with `/`.
+ *
+ * @param {string} routesDir - Absolute path of `server/routes`, in the platform's own form
+ * @param {string} [sep] - The separator used in `routesDir` (defaults to the platform's)
+ * @returns {{normal: string[], admin: string[], openai: string[]}}
+ */
+export function apiDocGlobs(routesDir, sep = path.sep) {
+  const base = routesDir.split(sep).join('/');
+  const at = rel => path.posix.join(base, rel);
+  return {
+    normal: [
+      'generalRoutes.js',
+      'modelRoutes.js',
+      'toolRoutes.js',
+      'appSessionRoutes.js',
+      'pageRoutes.js',
+      'magicPromptRoutes.js',
+      'shortLinkRoutes.js',
+      'auth.js',
+      'scheduledTasks.js',
+      'chat/**/*.js'
+    ].map(at),
+    admin: ['adminRoutes.js', 'admin/**/*.js'].map(at),
+    openai: ['openaiProxy.js', 'inference/*.js'].map(at)
+  };
+}
+
+/**
  * Creates the base Swagger configuration
  * @param {string} title - API documentation title
  * @param {string} description - API documentation description
@@ -101,23 +133,14 @@ export default async function registerSwaggerRoutes(app) {
   const middleware = requireAuth ? [authRequired] : [];
   const basePath = buildServerPath('/'); // Get base path without leading slash for config
 
+  const globs = apiDocGlobs(__dirname);
+
   // Normal/Chat APIs Documentation
   const normalApiConfig = createSwaggerConfig(
     'iHub Apps - Chat & General APIs',
     'APIs for chat functionality, models, tools, sessions, and general application features',
     '1.0.0',
-    [
-      path.join(__dirname, 'generalRoutes.js'),
-      path.join(__dirname, 'modelRoutes.js'),
-      path.join(__dirname, 'toolRoutes.js'),
-      path.join(__dirname, 'appSessionRoutes.js'),
-      path.join(__dirname, 'pageRoutes.js'),
-      path.join(__dirname, 'magicPromptRoutes.js'),
-      path.join(__dirname, 'shortLinkRoutes.js'),
-      path.join(__dirname, 'auth.js'),
-      path.join(__dirname, 'scheduledTasks.js'),
-      path.join(__dirname, 'chat/**/*.js')
-    ]
+    globs.normal
   );
 
   // Admin APIs Documentation
@@ -125,7 +148,7 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - Admin APIs',
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
-    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')]
+    globs.admin
   );
 
   // OpenAI Compatible APIs Documentation
@@ -133,7 +156,7 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - OpenAI Compatible APIs',
     'OpenAI-compatible inference APIs: chat completions, responses, conversations and model listings, for models and iHub apps',
     '1.0.0',
-    [path.join(__dirname, 'openaiProxy.js'), path.join(__dirname, 'inference/*.js')]
+    globs.openai
   );
 
   // Generate Swagger specs
