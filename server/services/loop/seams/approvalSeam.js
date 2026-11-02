@@ -37,7 +37,11 @@
  *
  * @module services/loop/seams/approvalSeam
  */
-import { APPROVAL_ERROR_CODES, needsApproval } from '../../../../shared/toolApproval.js';
+import {
+  APPROVAL_ERROR_CODES,
+  compareCodeUnits,
+  needsApproval
+} from '../../../../shared/toolApproval.js';
 import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { toolDisplayOf } from '../../../utils/toolDisplay.js';
 
@@ -59,6 +63,48 @@ export function awaitingApprovalPayload(interaction) {
     message:
       'This action needs the user’s approval. Nothing was sent; the turn is paused until they approve or reject it.',
     ...(interaction?.id ? { interactionId: String(interaction.id) } : {})
+  };
+}
+
+/**
+ * Whether two argument objects are the same JSON value (key order ignored).
+ * The approved call must run with exactly the arguments that were approved.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
+ */
+export function sameArgs(a, b) {
+  const canonical = value => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.keys(value)
+          .sort(compareCodeUnits)
+          .map(key => [key, canonical(value[key])])
+      );
+    }
+    return value;
+  };
+  return JSON.stringify(canonical(a ?? {})) === JSON.stringify(canonical(b ?? {}));
+}
+
+/**
+ * The grant of one approved call: it lets exactly that call id with exactly
+ * those arguments through, once. A second call — the same id again, or other
+ * arguments — is asked for like any other.
+ *
+ * @param {{callId: string, args: Object}|null} approved
+ * @returns {(info: Object) => boolean}
+ */
+export function oneShotGrant(approved) {
+  let used = false;
+  return info => {
+    if (used || !approved?.callId) return false;
+    if (String(info?.call?.id) !== String(approved.callId)) return false;
+    if (!sameArgs(info?.args, approved.args)) return false;
+    used = true;
+    return true;
   };
 }
 

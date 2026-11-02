@@ -41,6 +41,7 @@
  * @module utils/toolApproval
  */
 import logger from './logger.js';
+import { redact } from '../middleware/auditLogger.js';
 import {
   APPROVAL_MODES,
   DATA_FLOWS,
@@ -339,6 +340,75 @@ export function stampToolApproval(tools, app, platform, { getInstallation } = {}
 export function toolNeedsApproval(toolDef, app = null, platform = null) {
   if (!toolDef || toolDef.interactive === true || toolDef.requiresUserInput === true) return false;
   return needsApproval(resolveToolApproval(toolDef, app, platform));
+}
+
+/**
+ * Whether a call that reaches a tool outside the agent loop — the MCP gateway,
+ * the direct tool API for a token caller, an MCP App view — needs a person's
+ * approval. Nobody on those paths can give it, so such a call is refused
+ * (`APPROVAL_REQUIRED_NO_USER`). Resolved like in a chat without an app:
+ * platform default, tool or installation, action.
+ *
+ * @param {Object} toolDef
+ * @param {Object|null} platform
+ * @param {Object} [options]
+ * @param {(instanceId: string) => Object|null} [options.getInstallation]
+ * @returns {boolean}
+ */
+export function directCallNeedsApproval(toolDef, platform, { getInstallation } = {}) {
+  if (!toolDef || toolDef.interactive === true || toolDef.requiresUserInput === true) return false;
+  const instanceId = toolDef._integration?.instanceId || toolDef._mcp?.serverId;
+  const installation = instanceId && getInstallation ? getInstallation(instanceId) : null;
+  return needsApproval(resolveToolApproval(toolDef, null, platform, { installation }));
+}
+
+/**
+ * Whether a request's principal is a program rather than a person at a
+ * screen: an OAuth client, a personal API key, a third-party app acting with
+ * a user's token (`oauth_*`), an agent. Such a caller cannot approve.
+ *
+ * @param {Object|null} user
+ * @returns {boolean}
+ */
+export function isUnattendedCaller(user) {
+  if (!user) return true;
+  return (
+    user.isOAuthClient === true ||
+    user.isPersonalApiKey === true ||
+    user.isAgent === true ||
+    (typeof user.authMode === 'string' && user.authMode.startsWith('oauth_'))
+  );
+}
+
+/**
+ * Arguments with secret-looking keys (password, token, secret, api key,
+ * authorization, credential, …) replaced, for anyone but the person who asked
+ * (admin and approver views, logs). The requester's own card shows them in
+ * full, and the approved call always runs with the full arguments.
+ *
+ * @param {unknown} args
+ * @returns {unknown}
+ */
+export function redactApprovalArgs(args) {
+  return redact(args);
+}
+
+/**
+ * An approval interaction as someone other than its requester sees it: its
+ * `prompt.displayData.args` redacted. Other interactions come back unchanged.
+ *
+ * @param {Object} interaction
+ * @returns {Object}
+ */
+export function redactInteractionForViewer(interaction) {
+  const display = interaction?.prompt?.displayData;
+  if (interaction?.kind !== 'approval' || !display || display.args === undefined) {
+    return interaction;
+  }
+  return {
+    ...interaction,
+    prompt: { ...interaction.prompt, displayData: { ...display, args: redact(display.args) } }
+  };
 }
 
 /** Test hook: forget which loosening attempts were already logged. */

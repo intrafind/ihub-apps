@@ -117,6 +117,8 @@ function catalogEntryView(entry, language, instances, updates) {
     defaultAuthMode: def.auth.default,
     capabilities: def.capabilities,
     actionCount: def.actions.length,
+    /** Example apps the definition ships (`exampleApps`), created from the installation page. */
+    exampleAppCount: def.exampleApps?.length || 0,
     source: entry.source,
     installedInstances: instances.filter(i => i.definition === def.id).map(i => i.id)
   };
@@ -618,8 +620,15 @@ export default function registerAdminIntegrationsRoutes(app) {
       const id = req.params.id;
       if (!validateIdForPath(id, 'integration', res)) return;
       try {
-        const approval = req.body?.approval ?? null;
-        const instance = await installedIntegrationService.setApproval(id, approval);
+        // A body without `approval` is a mistake, not "remove it": only an
+        // explicit `null` clears the gate.
+        if (!req.body || typeof req.body !== 'object' || !Object.hasOwn(req.body, 'approval')) {
+          return res.status(400).json({
+            error: 'The body needs "approval": { default?, actions? } or null',
+            code: 'APPROVAL_REQUIRED_FIELD'
+          });
+        }
+        const instance = await installedIntegrationService.setApproval(id, req.body.approval);
         logAudit({
           req,
           action: 'update',

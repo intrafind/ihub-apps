@@ -88,6 +88,28 @@ export const setInstalledIntegrationEnabled = async (id, enabled) =>
     })
   ).data.instance;
 
+/**
+ * The example apps an installation offers (`GET …/installed/:id/example-apps`):
+ * the definition's shipped ones, or one generated from the definition.
+ *
+ * @param {string} id - the installation id
+ * @returns {Promise<{ templates: Array<{ key: string, source: 'definition'|'generated', templateId: string, name: string, description: string, icon: string|null, color: string|null, suggestedId: string }>, grantedToYou: boolean, enabled: boolean }>}
+ */
+export const fetchExampleApps = async id =>
+  (await makeAdminApiCall(`${instancePath(id)}/example-apps`)).data;
+
+/**
+ * Create an example app bound to the installation
+ * (`POST …/installed/:id/example-apps`).
+ *
+ * @param {string} id - the installation id
+ * @param {{ template: string, appId?: string, enabled?: boolean }} body
+ * @returns {Promise<Object>} the created app
+ */
+export const createExampleApp = async (id, body) =>
+  (await makeAdminApiCall(`${instancePath(id)}/example-apps`, { method: 'POST', ...json(body) }))
+    .data.app;
+
 /** Test a saved instance (optionally with an edited, unsaved body). */
 export const testInstalledIntegration = async (id, draft = {}) =>
   (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data

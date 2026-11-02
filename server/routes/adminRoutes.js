@@ -41,6 +41,7 @@ import registerAdminNextcloudEmbedRoutes from './admin/nextcloudEmbed.js';
 import registerAdminMcpGatewayRoutes from './admin/mcpGateway.js';
 import registerAdminIntegrationsRoutes from './admin/integrations.js';
 import registerAdminIntegrationBuilderRoutes from './admin/integrationBuilder.js';
+import registerAdminIntegrationExampleAppsRoutes from './admin/integrationExampleApps.js';
 import registerAdminPeopleDirectoryEditorRoutes from './admin/peopleDirectoryEditor.js';
 import registerAdminDocumentTemplatesRoutes from './admin/documentTemplates.js';
 import registerAdminCredentialsRoutes from './admin/credentials.js';
@@ -96,6 +97,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminMcpGatewayRoutes(app);
   registerAdminIntegrationsRoutes(app);
   registerAdminIntegrationBuilderRoutes(app);
+  registerAdminIntegrationExampleAppsRoutes(app);
   registerAdminPeopleDirectoryEditorRoutes(app);
   registerAdminDocumentTemplatesRoutes(app);
   registerAdminCredentialsRoutes(app);

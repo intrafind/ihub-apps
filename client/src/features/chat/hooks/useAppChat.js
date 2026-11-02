@@ -18,6 +18,7 @@ import {
   getRuns
 } from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
+import { toolApprovalAnswer } from '../toolApprovalAnswer';
 import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
@@ -26,6 +27,16 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
  * Refusals of the chat request the user can do something about, by the code
  * the server answers with: translation key and English fallback.
  */
+/** Frames that show an approval answer's turn got going (the decision is used). */
+const APPROVAL_USED_EVENTS = new Set([
+  RUN_EVENTS.TOOL_STARTED,
+  RUN_EVENTS.TOOL_COMPLETED,
+  RUN_EVENTS.STEP_DELTA
+]);
+
+/** Refusals after which an approval card must not ask again: the decision is final. */
+const APPROVAL_FINAL_CODES = new Set(['APPROVAL_ALREADY_ANSWERED', 'APPROVAL_NOT_PENDING']);
+
 const CHAT_REFUSAL_MESSAGES = {
   CHAT_STORAGE_UNAVAILABLE: [
     'error.chatStorageUnavailable',
@@ -133,6 +144,9 @@ function useAppChat({
   // so forking the stored one at the same point is what puts the two back in
   // agreement.
   const pendingReplaceFromRef = useRef(null);
+  // The approval card a sent decision came from, until its turn gets going:
+  // `{ messageId, toolApproval }` (#2945). A turn refused before that reopens it.
+  const approvalRetryRef = useRef(null);
   // The run this surface re-attached to after reopening the chat, and what to
   // do when it settles. Set by `reattachToRun`, consumed once by `handleEvent`.
   const reattachedRunRef = useRef(null);
@@ -286,6 +300,30 @@ function useAppChat({
   );
 
   /**
+   * Put the approval card back to asking after the turn carrying its
+   * decision failed before it started (#2945): the server kept the approval
+   * open, so the same decision can be sent again. A final refusal (already
+   * answered, no longer pending) leaves the card as it is.
+   *
+   * @param {string} [code] - the error code the turn failed with
+   */
+  const reopenToolApproval = useCallback(
+    code => {
+      const retry = approvalRetryRef.current;
+      approvalRetryRef.current = null;
+      if (!retry || APPROVAL_FINAL_CODES.has(code)) return;
+      const owner = messagesRef.current.find(m => m.id === retry.messageId);
+      if (!owner) return;
+      updateAssistantMessage(owner.id, owner.content || '', false, {
+        toolApproval: retry.toolApproval,
+        awaitingInput: true,
+        loading: false
+      });
+    },
+    [messagesRef, updateAssistantMessage]
+  );
+
+  /**
    * Send the message queued by sendMessage / submitClarificationResponse once
    * the stream is connected. On failure the error is rendered into the
    * assistant placeholder (401 → session expired) and the stream is closed.
@@ -343,8 +381,9 @@ function useAppChat({
       }
       detachEventSourceRef.current?.();
       setProcessing(false);
+      reopenToolApproval(error?.code);
     }
-  }, [t, messagesRef, updateAssistantMessage, toolApprovals]);
+  }, [t, messagesRef, updateAssistantMessage, toolApprovals, reopenToolApproval]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -419,6 +458,17 @@ function useAppChat({
       if (type === RUN_EVENTS.STREAM_CONNECTED) {
         await sendPendingMessage();
         return;
+      }
+
+      // A tool approval answer (#2945) is used once its turn does something;
+      // a turn that failed before that left the approval open, so its card
+      // asks again.
+      if (approvalRetryRef.current) {
+        if (APPROVAL_USED_EVENTS.has(type)) {
+          approvalRetryRef.current = null;
+        } else if (type === RUN_EVENTS.STREAM_ERROR) {
+          reopenToolApproval(data?.code);
+        }
       }
 
       const messageId = bindRunToMessage(envelope);
@@ -562,6 +612,7 @@ function useAppChat({
       chatId,
       bindRunToMessage,
       sendPendingMessage,
+      reopenToolApproval,
       settleReattachedRun,
       updateAssistantMessage,
       onMessageComplete,
@@ -975,14 +1026,17 @@ function useAppChat({
    * @param {Object} [params] - Parameters for the continuation request (model, style, …)
    */
   const submitToolApproval = useCallback(
-    ({ interactionId, decision, grant = null }, params = {}) => {
-      if (!interactionId || (decision !== 'approve' && decision !== 'reject')) return;
+    (answer, params = {}) => {
+      const decided = toolApprovalAnswer(answer);
+      if (!decided) return;
+      const { outcome, approvalResponse } = decided;
+      const { interactionId } = approvalResponse;
       const owner = messagesRef.current.find(m => m.toolApproval?.interactionId === interactionId);
       if (!owner || owner.toolApproval.decision) return;
-      const outcome =
-        decision === 'reject' ? 'rejected' : grant === 'chat' ? 'approvedForChat' : 'approved';
       const toolName = owner.toolApproval.toolName || owner.toolApproval.toolId;
-      // The card shows the decision instead of its buttons from here on.
+      // The card shows the decision instead of its buttons from here on —
+      // unless the turn fails before it starts (`reopenToolApproval`).
+      approvalRetryRef.current = { messageId: owner.id, toolApproval: owner.toolApproval };
       updateAssistantMessage(owner.id, owner.content || '', false, {
         toolApproval: { ...owner.toolApproval, decision: outcome },
         awaitingInput: false,
@@ -997,11 +1051,6 @@ function useAppChat({
                 tool: toolName
               })
             : t('chat.toolApproval.approvedMessage', 'Approved: {{tool}}', { tool: toolName });
-      const approvalResponse = {
-        interactionId,
-        decision,
-        ...(decision === 'approve' && grant === 'chat' ? { grant: 'chat' } : {})
-      };
       try {
         isCancellingRef.current = false;
         detachEventSource();

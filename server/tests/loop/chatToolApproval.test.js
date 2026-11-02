@@ -36,6 +36,8 @@ import {
   settleChatApprovals
 } from '../../services/chat/chatToolApproval.js';
 import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
+import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
+import { ChatRepository } from '../../services/chat/ChatRepository.js';
 
 const { INTERACTION_RAISED, TOOL_STARTED, TOOL_COMPLETED, RUN_PAUSED } = SSE_V2_EVENTS;
 
@@ -178,15 +180,63 @@ function turn(service, { chatId, prepData, ...rest }) {
 
 const newChatId = label => `chat-approval-${label}-${crypto.randomUUID().slice(0, 8)}`;
 
+/** A real chat store over a scratch directory, and the order of its approval writes. */
+async function chatStore(t, events = []) {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tool-approval-chats-'));
+  const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+  await provider.initialize();
+  const repository = new ChatRepository({
+    documents: provider.documents,
+    locks: provider.locks,
+    logger: silentLogger
+  });
+  const updateChat = repository.updateChat.bind(repository);
+  repository.updateChat = async (chatId, patch) => {
+    if (patch?.toolApproval?.pending) events.push('pending-stored');
+    return updateChat(chatId, patch);
+  };
+  t.after(async () => {
+    await provider.shutdown();
+    await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  });
+  return repository;
+}
+
+const persistenceFor = repository => ({
+  repository,
+  ownerId: 'u1',
+  identityMode: 'default',
+  content: 'Please change ACME-12'
+});
+
 test('a gated call raises an approval and pauses; it never starts and never runs', async t => {
   const chatId = newChatId('pause');
+  const order = [];
   const frames = captureFrames(t, chatId);
+  const sink = sinks.get(chatId);
+  sinks.set(chatId, {
+    push: frame => {
+      if (frame.type === INTERACTION_RAISED) order.push('raised');
+      return sink.push(frame);
+    }
+  });
+  const repository = await chatStore(t, order);
   const interactionService = await interactionsFor(t);
   const { service, runTool, requests } = makeService(
     [toolTurn('dangerous', { target: 'ACME-12' }, { content: 'I will update the ticket.' })],
     { interactionService }
   );
-  const summary = await turn(service, { chatId, prepData: prep() });
+  const summary = await turn(service, {
+    chatId,
+    prepData: prep(),
+    persistence: persistenceFor(repository)
+  });
+
+  // The card is only shown once an answer to it can be accepted (review #5).
+  assert.deepEqual(order, ['pending-stored', 'raised']);
+  const stored = (await repository.getChat(chatId)).toolApproval.pending;
+  assert.equal(stored.call.id, 'call_1');
+  assert.deepEqual(stored.call.args, { target: 'ACME-12' });
 
   assert.equal(summary.status, 'paused');
   assert.equal(summary.finishReason, 'approval');
@@ -206,9 +256,43 @@ test('a gated call raises an approval and pauses; it never starts and never runs
   assert.equal(interaction.prompt.displayData.dataFlow, 'external');
   assert.equal(interaction.prompt.displayData.justification, 'I will update the ticket.');
   assert.equal(summary.pendingInteraction.id, interaction.id);
-  // The placeholder the continuation replaces.
-  const placeholder = summary.messages?.find?.(m => m.role === 'tool');
-  if (placeholder) assert.match(placeholder.content, /awaiting_approval/);
+  // The placeholder the continuation replaces is in the stored transcript.
+  const placeholder = stored.transcript.find(m => m.role === 'tool');
+  assert.match(placeholder.content, /awaiting_approval/);
+});
+
+test('a pause that cannot be kept with the chat shows no card and cancels the approval', async t => {
+  const chatId = newChatId('unstored');
+  const frames = captureFrames(t, chatId);
+  const repository = await chatStore(t);
+  repository.updateChat = async () => null;
+  const interactionService = await interactionsFor(t);
+  const { service } = makeService([toolTurn('dangerous', { target: 'ACME-12' })], {
+    interactionService
+  });
+  const summary = await turn(service, {
+    chatId,
+    prepData: prep(),
+    persistence: persistenceFor(repository)
+  });
+  assert.equal(ofType(frames, INTERACTION_RAISED).length, 0);
+  const [done] = ofType(frames, TOOL_COMPLETED);
+  assert.equal(done.data.error.code, 'APPROVAL_NOT_STORED');
+  assert.equal((await interactionService.get(summary.pendingInteraction.id)).status, 'cancelled');
+});
+
+test('a turn that is not stored cannot pause: it refuses like a headless one', async t => {
+  const chatId = newChatId('nostore');
+  captureFrames(t, chatId);
+  const { service, runTool, requests } = makeService([
+    toolTurn('dangerous', { target: 'A' }),
+    textTurn('Not possible here.')
+  ]);
+  const summary = await turn(service, { chatId, prepData: prep() });
+  assert.equal(summary.status, 'completed');
+  assert.equal(runTool.calls.length, 0);
+  const toolMessage = requests[1].body.messages.find(m => m.role === 'tool');
+  assert.equal(JSON.parse(toolMessage.content).code, 'APPROVAL_REQUIRED_NO_USER');
 });
 
 test('headless, or a client that cannot draw the card: APPROVAL_REQUIRED_NO_USER and the model carries on', async t => {

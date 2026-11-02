@@ -63,7 +63,18 @@ updates:
       semver-major-days: 14
       semver-minor-days: 7
       semver-patch-days: 7
+      # OpenTelemetry pins @opentelemetry/api per SDK line (3.x needs api
+      # >=1.10 <1.11, 2.x needs <1.10). Different cooldowns for majors and minors
+      # would let api arrive without the SDK packages and break `npm install`
+      # with ERESOLVE (see #3111), so the whole set skips the cooldown.
+      exclude:
+        - "@opentelemetry/*"
     groups:
+      # Listed first: a dependency joins the first group it matches. No
+      # update-types, so majors and minors of the set travel in one PR.
+      opentelemetry:
+        patterns:
+          - "@opentelemetry/*"
       all-patches:
         update-types:
           - "patch"

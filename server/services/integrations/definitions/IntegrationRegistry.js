@@ -14,7 +14,8 @@ import {
   definitionSchemaRevision,
   unsupportedSchemaMessage,
   dirNameToDefinitionId,
-  definitionIdToDirName
+  definitionIdToDirName,
+  EXAMPLE_APP_FILE_PATTERN
 } from '../../../validators/integrationDefinitionSchema.js';
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { checkScriptCodeFiles } from './scriptModule.js';
@@ -156,6 +157,39 @@ export class IntegrationRegistry {
       if (!stat.isFile() || stat.size > MAX_COMPANION_BYTES) return null;
       return await fs.readFile(target, 'utf8');
     } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A JSON companion file a definition names as an example app
+   * (`exampleApps[].file`), parsed. Only files the definition lists are
+   * read; the path is resolved inside the folder. A missing, oversized or
+   * unparsable file yields null.
+   *
+   * @param {string} id - definition id
+   * @param {string} relPath - the `file` of one of its `exampleApps`
+   * @returns {Promise<object|null>}
+   */
+  async readExampleApp(id, relPath) {
+    const entry = this.entries.get(id);
+    if (!entry) return null;
+    const listed = (entry.definition.exampleApps || []).some(e => e.file === relPath);
+    if (!listed || !EXAMPLE_APP_FILE_PATTERN.test(relPath)) return null;
+    const target = await resolveAndValidatePath(relPath, entry.dir);
+    if (!target) return null;
+    try {
+      const stat = await fs.stat(target);
+      if (!stat.isFile() || stat.size > MAX_COMPANION_BYTES) return null;
+      const parsed = JSON.parse(await fs.readFile(target, 'utf8'));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (error) {
+      logger.warn('Example app of an integration definition could not be read', {
+        component: COMPONENT,
+        id,
+        file: relPath,
+        error: error.message
+      });
       return null;
     }
   }

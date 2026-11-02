@@ -6,6 +6,13 @@ With German as the interface language, the admin sidebar showed most section and
 English, for example "AI Workspace", "Access & Identity", "Users" or "Backup & Restore". All
 sections and pages of the sidebar are now translated.
 
+## API Documentation on Windows
+
+On a server running on Windows, the API documentation at `/api/docs` listed no endpoints: the
+route files were looked up with Windows path separators, which the file search does not accept.
+All three documents (Chat & General, Admin, OpenAI compatible) now list their endpoints on
+Windows too.
+
 ## Accessibility: Admin Switches and the Change History Drawer
 
 The change history drawer and the on/off switches of the admin now work the same way with the
@@ -86,3 +93,10 @@ search was badged "Based on web search". They now show **Based on connected syst
   on iFinder documents".
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
+
+## Workflows Continue as Their Own User After a Person Answers
+
+A workflow or agent run that paused for a `human` step or a question now continues as the user (or
+agent) it started with. Before, the steps after the answer ran as the person who answered, with
+their groups and their connected accounts. The person who answered is still recorded with the
+answer. Runs started before this release continue as before.

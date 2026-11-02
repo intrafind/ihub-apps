@@ -102,6 +102,14 @@ tool result and carries on without the call.
 
 Sending any other message instead of answering supersedes the approval: the call is not run. A
 double click or a repeated request cannot run a call twice: the approval is answered exactly once.
+The decision is only used once the turn is ready to run; a request refused before that keeps the
+approval open, so the same decision can be sent again. An approval that expired in the meantime
+continues with `APPROVAL_EXPIRED`.
+
+Admins and approver groups who see an approval in **Admin → Agents → Approvals** (or a run's
+interactions) see secret-looking argument values (passwords, tokens, API keys, authorization,
+credentials, …) redacted; only the person who asked sees them in full. The call itself always
+runs with the full arguments.
 
 There is no persistent "always allow" per user, and the arguments cannot be edited before
 approving. Both may come later.
@@ -112,7 +120,9 @@ approving. Both may come later.
 | ------------------------------------------------------------------------ | --------- |
 | Inference API (OpenAI-compatible), app-as-tool, MCP gateway, A2A gateway | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
 | A client that does not draw the card (an integration posting to the chat API without `toolApprovalCapable: true`, or a chat request without an open stream) | Same: `APPROVAL_REQUIRED_NO_USER`. |
-| Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). |
+| `POST /api/tools/:id` called by a program (OAuth client, personal API key, an app using a user's token) | 403 `APPROVAL_REQUIRED_NO_USER`. A person calling a tool directly chose the call and is not asked. |
+| MCP App views calling their server's tools (`POST /api/mcp-apps/tools/call`) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool: a view has no approval card. Only the model's calls in the chat can be approved. |
+| Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |
 | Scheduled tasks                                                          | Unchanged flow: the run pauses for the task owner, who approves from the run's chat or the task page. **Always allow for this task** still applies. The gate now uses the same resolver, so every mode above applies to scheduled runs too. |
 
 The loop policy `interactions.headlessFallback` decides the no-person case for the shared seam:
@@ -120,8 +130,12 @@ The loop policy `interactions.headlessFallback` decides the no-person case for t
 groups) and refuses otherwise, `fail` ends the run with an error.
 
 Calls nobody's model decided on are not gated: a workflow **tool node** (the author chose the
-call), a direct `POST /api/tools/:id` (the user chose it), and admin tools such as building agent
-memory from a tool.
+call), a direct `POST /api/tools/:id` by a signed-in person (they chose it), and admin tools such
+as building agent memory from a tool.
+
+A workflow resumed after a person answered a `human` node, a question or a tool approval now
+continues as the principal it started with, not as the person who answered (for executions
+started before this release, a `human` node or a question still continues as the answerer).
 
 ## For developers
 

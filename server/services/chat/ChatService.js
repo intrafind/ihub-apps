@@ -737,7 +737,8 @@ class ChatService {
           chatId,
           app,
           platform: configCache.getPlatform?.() || null,
-          headless: headless || canApproveTools === false,
+          // A turn that is not stored cannot be continued after the answer.
+          headless: headless || canApproveTools === false || !persist,
           grants: toolApproval?.grants || [],
           approvedCall:
             resume?.outcome === 'approved' && resume.call?.id
@@ -837,6 +838,9 @@ class ChatService {
         ? llmMessages[llmMessages.length - 1]
         : loopMessages[loopMessages.length - resume.transcript.length - 1];
 
+    // From here the answered approval is used: a caller must not put it back.
+    if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
+
     let outcome;
     try {
       const result = await this.agentLoop.run({
@@ -912,15 +916,16 @@ class ChatService {
           )
       });
       // Paused on a chat approval: keep what the continuation needs with the
-      // chat before the client hears the run paused, so an immediate answer
-      // finds it.
+      // chat, and only then show the card (`interaction/raised`), so even an
+      // immediate answer finds it. One that could not be kept is cancelled
+      // and never shown as answerable.
       if (
         !approvalGate &&
         persist &&
         result.status === 'paused' &&
         result.pendingInteraction?.kind === 'approval'
       ) {
-        await this._storePendingApproval({
+        const stored = await this._storePendingApproval({
           repository: persist.repository,
           chatId,
           runId,
@@ -929,6 +934,26 @@ class ChatService {
           messages: result.messages,
           startMessage: turnStartMessage
         });
+        if (stored) {
+          stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
+        } else {
+          const toolCallId = result.pendingInteraction.source?.toolCallId;
+          stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+            step: result.pendingInteraction.step || 0,
+            callId: String(toolCallId || '0'),
+            toolId: String(result.pendingInteraction.source?.toolId || 'tool'),
+            name: String(result.pendingInteraction.source?.toolId || 'tool'),
+            resultPreview: {
+              error: true,
+              code: 'APPROVAL_NOT_STORED',
+              message: 'The approval could not be kept with the chat; the call was not run.'
+            },
+            error: {
+              code: 'APPROVAL_NOT_STORED',
+              message: 'The approval could not be kept with the chat; the call was not run.'
+            }
+          });
+        }
       }
       outcome = await this._finishTurn({
         result,
@@ -1096,6 +1121,7 @@ class ChatService {
     if (!stored) {
       await this.interactionService.cancel(interaction.id, 'unrecoverable').catch(() => {});
     }
+    return Boolean(stored);
   }
 
   /**
