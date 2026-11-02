@@ -33,7 +33,7 @@ process.env.CONTENTS_DIR = contents;
 
 const { IntegrationRegistry } =
   await import('../../services/integrations/definitions/IntegrationRegistry.js');
-const { DefinitionMigrationRunner } =
+const { DefinitionMigrationRunner, migrationLockName } =
   await import('../../services/integrations/definitions/DefinitionMigrationRunner.js');
 const backups = await import('../../services/integrations/definitions/migrationBackups.js');
 const { planMigration, planMigrationAsync, MIGRATION_WARNINGS } =
@@ -783,10 +783,20 @@ describe('registry version policy and catalog versions', () => {
 // Revert
 
 describe('revert to an intermediate version', () => {
-  const fetchDefinitionVersion = async version => ({
-    files: packageFiles(portalDefinition(MARKET, version)),
-    manifestEntry: { version, codeIntegrity: null }
-  });
+  // Whether the installation's migration lock was free while a boundary
+  // package was fetched (registry I/O must not run under the lock).
+  const lockFreeDuringFetch = [];
+  const fetchDefinitionVersion = async version => {
+    lockFreeDuringFetch.push(
+      await locks
+        .withLock(migrationLockName('market'), async () => true, { waitMs: 50 })
+        .catch(() => false)
+    );
+    return {
+      files: packageFiles(portalDefinition(MARKET, version)),
+      manifestEntry: { version, codeIntegrity: null }
+    };
+  };
 
   async function updateMarketTo14() {
     return runner().applyDefinitionUpdate({
@@ -816,6 +826,7 @@ describe('revert to an intermediate version', () => {
     const manifest = await backups.readSnapshotJson(boundary, MANIFEST);
     assert.equal(manifest.installations[MARKET_KEY].version, '1.3.0');
     assert.equal(manifest.installations[MARKET_KEY].registryId, 'trusted');
+    assert.deepEqual(lockFreeDuringFetch, [true], 'fetched after the lock was released');
   });
 
   it('puts back definition folder, installation entry, app bindings and manifest entry together', async () => {

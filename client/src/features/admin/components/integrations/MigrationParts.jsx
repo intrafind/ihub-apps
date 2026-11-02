@@ -12,7 +12,8 @@ import {
   backupsOf,
   changeParts,
   defaultBackupOf,
-  migrationLogNewestFirst
+  migrationLogNewestFirst,
+  revertability
 } from './migrationState';
 
 /**
@@ -535,11 +536,12 @@ export function backupKindLabel(kind, t) {
  * @param {Object} props.instance
  * @param {string|null} props.value - the backup picked
  * @param {(id: string) => void} props.onChange
+ * @param {(backup: Object) => boolean} [props.filter] - which backups to offer (Revert: only those it can go back to)
  */
-function BackupPicker({ instance, value, onChange }) {
+function BackupPicker({ instance, value, onChange, filter = () => true }) {
   const { t, i18n } = useTranslation();
   const lang = i18n?.language || 'en';
-  const list = backupsOf(instance);
+  const list = backupsOf(instance).filter(filter);
   if (list.length < 2 || !onChange) return null;
   return (
     <div className="mt-3">
@@ -619,7 +621,12 @@ export function MigrationConfirmDialog({ pending, onConfirm, onCancel, onSelectB
             )}
           </p>
         )}
-        <BackupPicker instance={instance} value={pending?.backup} onChange={onSelectBackup} />
+        <BackupPicker
+          instance={instance}
+          value={pending?.backup}
+          onChange={onSelectBackup}
+          filter={candidate => revertability(instance, candidate).ok}
+        />
       </>
     );
   } else if (pending?.action === MIGRATION_ACTION.RESTORE) {

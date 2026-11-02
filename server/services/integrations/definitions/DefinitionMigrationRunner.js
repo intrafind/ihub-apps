@@ -467,6 +467,9 @@ export class DefinitionMigrationRunner {
       if (notify) await this._afterCommit([outcome.unitResult], {});
       throw outcome.error;
     }
+    // Boundary backups fetch from the registry: never while the lock and the
+    // write queue are held.
+    if (outcome.boundarySnapshots) await outcome.boundarySnapshots();
     if (notify && outcome.changed) await this._afterCommit([outcome.unitResult], {});
     return { result: outcome.result, instance: outcome.instance, logEntry: outcome.logEntry };
   }
@@ -559,13 +562,18 @@ export class DefinitionMigrationRunner {
       const failed = await this._markCommitFailed(unit, error);
       return { error: this._failureError(failed), changed: true, unitResult: failed };
     }
-    await this._writeBoundarySnapshots(unit, { by, trigger, source: entry.source });
+    const boundarySnapshots = await this._boundarySnapshotJob(unit, {
+      by,
+      trigger,
+      source: entry.source
+    });
     return {
       result: 'migrated',
       instance: unit.after,
       logEntry: unit.logEntry,
       changed: true,
-      unitResult: unit
+      unitResult: unit,
+      boundarySnapshots
     };
   }
 
@@ -944,7 +952,26 @@ export class DefinitionMigrationRunner {
    * without it the backup holds no folder and a revert to it is refused
    * while another version is loaded.
    */
-  async _writeBoundarySnapshots(unit, { by, trigger, source, fetchDefinitionVersion }) {
+  /**
+   * Read, while the lock is held, the committed state the boundary backups
+   * of `unit` are built from (`integrations.json` and the marketplace
+   * manifest), and return the job that fetches the boundary packages and
+   * writes the backups once the lock and the write queue are released; null
+   * when the run passed no boundary.
+   *
+   * @returns {Promise<(() => Promise<void>)|null>}
+   */
+  async _boundarySnapshotJob(unit, options) {
+    if (!(unit.plan?.boundaries || []).length) return null;
+    const integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
+    const manifest = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || { installations: {} };
+    return () => this._writeBoundarySnapshots(unit, { ...options, integrations, manifest });
+  }
+
+  async _writeBoundarySnapshots(
+    unit,
+    { by, trigger, source, fetchDefinitionVersion, integrations: committed, manifest }
+  ) {
     const fetchVersion =
       fetchDefinitionVersion ||
       (source === 'installed'
@@ -953,11 +980,13 @@ export class DefinitionMigrationRunner {
     // Sequential on purpose: one backup at a time, in boundary order, each failure logged.
     for (const boundary of unit.plan?.boundaries || []) {
       try {
-        const integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
-        integrations.installed = (integrations.installed || []).map(inst =>
-          inst.id === unit.instanceId ? withoutState(boundary.instance) : inst
-        );
-        const pkg = await this._boundaryPackage(unit, boundary.version, fetchVersion);
+        const integrations = {
+          ...committed,
+          installed: (committed.installed || []).map(inst =>
+            inst.id === unit.instanceId ? withoutState(boundary.instance) : inst
+          )
+        };
+        const pkg = await this._boundaryPackage(unit, boundary.version, fetchVersion, manifest);
         await backups.createSnapshot({
           instanceId: unit.instanceId,
           definitionId: unit.definitionId,
@@ -993,7 +1022,7 @@ export class DefinitionMigrationRunner {
    * backup; null when there is nothing to fetch it from or the fetch failed
    * (logged).
    */
-  async _boundaryPackage(unit, version, fetchVersion) {
+  async _boundaryPackage(unit, version, fetchVersion, manifest) {
     if (!fetchVersion) return null;
     try {
       const pkg = await fetchVersion(version);
@@ -1002,9 +1031,7 @@ export class DefinitionMigrationRunner {
       const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
       if (raw?.id !== unit.definitionId || raw?.version !== version) return null;
       const entryKey = manifestKeyOf(unit.definitionId);
-      const manifestData = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || {
-        installations: {}
-      };
+      const manifestData = { ...(manifest || { installations: {} }) };
       manifestData.installations = {
         ...manifestData.installations,
         [entryKey]: { ...manifestData.installations?.[entryKey], ...pkg.manifestEntry, version }
@@ -1952,6 +1979,9 @@ export class DefinitionMigrationRunner {
         )
       );
       committed = true;
+      // Boundary backups fetch from the registry: after the locks and the
+      // write queue are released, one unit at a time.
+      for (const job of outcome.boundarySnapshots || []) await job();
       if (notify) {
         await this._afterCommit(outcome.units, { definitionChanged: true, definitionId });
       }
@@ -2042,18 +2072,20 @@ export class DefinitionMigrationRunner {
       manifest: { entryKey: manifestKey, patch: manifestPatch },
       trigger: 'marketplace'
     });
-    // Sequential on purpose: boundary backups are written one unit at a time.
+    // What the boundary backups need from the committed state is read here;
+    // the registry fetches and the writes run after the locks are released.
+    const boundarySnapshots = [];
     for (const unit of units) {
-      if (!unit.failed) {
-        await this._writeBoundarySnapshots(unit, {
-          by,
-          trigger: 'marketplace',
-          source: 'installed',
-          fetchDefinitionVersion
-        });
-      }
+      if (unit.failed) continue;
+      const job = await this._boundarySnapshotJob(unit, {
+        by,
+        trigger: 'marketplace',
+        source: 'installed',
+        fetchDefinitionVersion
+      });
+      if (job) boundarySnapshots.push(job);
     }
-    return { units, results };
+    return { units, results, boundarySnapshots };
   }
 
   // --- After a commit ------------------------------------------------------
