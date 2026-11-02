@@ -746,7 +746,7 @@ export class InstalledIntegrationService {
   setInstructions(id, instructions) {
     return this._serialize(async () => {
       let cleaned = null;
-      if (instructions !== null && instructions !== undefined && instructions !== '') {
+      if ((instructions ?? '') !== '') {
         const parsed = boundedLocalizedSchema.safeParse(instructions);
         if (!parsed.success) {
           throw new IntegrationError('Invalid instructions', {

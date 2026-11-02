@@ -773,7 +773,14 @@ export function redactUrlSecrets(url) {
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
-export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+export function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+  // An admin's action test shows the requests it sent (#2974); outside a
+  // recording this is one lookup.
+  return withOutboundRecording(url, options, () => sendHttpFetch(url, options, forceIgnoreSSL));
+}
+
+/** {@link httpFetch} without the recording. */
+async function sendHttpFetch(url, options = {}, forceIgnoreSSL = null) {
   // Validate URL scheme - admin-configured URLs are trusted but must use http(s).
   // Include the offending URL (secrets redacted) in the error: a bad scheme
   // usually means a model/tool has no valid endpoint URL and its id or an
@@ -793,7 +800,5 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
   // unsaved draft through this same path instead of a bespoke fetch of its own.
   const { lookup = null, proxyConfig = null, ...fetchOptions } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
-  // An admin's action test shows the requests it sent (#2974); outside a
-  // recording this is one lookup.
-  return withOutboundRecording(url, fetchOptions, () => nodeFetch(url, enhanced));
+  return nodeFetch(url, enhanced);
 }

@@ -109,8 +109,7 @@ export function argsFromFormValues(fields, values) {
       if (raw === true || field.required) args[field.name] = raw === true;
       continue;
     }
-    const text =
-      typeof raw === 'string' ? raw : raw === undefined || raw === null ? '' : String(raw);
+    const text = String(raw ?? '');
     if (text.trim() === '') {
       if (field.required) errors[field.name] = 'required';
       continue;
