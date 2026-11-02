@@ -1,10 +1,21 @@
 {
   "id": "com.intrafind/ldap-browser",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Ships the LDAP browser app as an example app: create it for an installation and test it in the chat panel of the installation page.",
+        "de": "Liefert die App LDAP-Browser als Beispiel-App: für eine Installation anlegen und im Chat-Bereich der Installationsseite testen."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-11-01",
@@ -158,6 +169,7 @@
     }
   ],
   "capabilities": ["tools"],
+  "exampleApps": [{ "file": "apps/ldap-browser.json" }],
   "instructions": {
     "en": "The browser returns raw LDAP entries as the directory stores them. Never invent attributes or values; attributes listed in \"omitted\" hold secrets and are never shown. On \"truncated\": true narrow the filter or the base instead of paging.",
     "de": "Der Browser liefert rohe LDAP-Einträge, wie das Verzeichnis sie speichert. Erfinde nie Attribute oder Werte; Attribute in \"omitted\" enthalten Geheimnisse und werden nie gezeigt. Bei \"truncated\": true Filter oder Basis eingrenzen statt zu blättern."

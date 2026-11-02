@@ -7,13 +7,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
-import {
-  buildToolActivity,
-  searchScope,
-  toolDetails,
-  toolKind
-} from '../../../shared/run/toolActivity.js';
+import { buildToolActivity, toolDetails } from '../../../shared/run/toolActivity.js';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
+import { withServerDecision } from './helpers/serverToolDecision.js';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -42,7 +38,7 @@ const env = (seq, type, data = {}, runId = 'run-1') => ({
   runId,
   ts: ts(seq),
   type,
-  data
+  data: withServerDecision(type, data)
 });
 const started = env(1, 'run/started', {
   kind: 'chat',
@@ -112,25 +108,49 @@ const searchFound = (seq, callId = 'c1') =>
     queries: ['berlin weather']
   });
 
-describe('toolKind', () => {
-  test('classifies search, fetch and other tools', () => {
-    expect(toolKind('braveSearch')).toBe('search');
-    expect(toolKind('source_handbook')).toBe('search');
-    expect(toolKind('read_url')).toBe('fetch');
-    expect(toolKind('jira')).toBe('tool');
+describe('row kind and scope', () => {
+  // The server decides them (server/utils/toolDisplay.js); the client infers nothing from the id.
+  const rowOf = data =>
+    buildToolActivity(
+      runFrom([
+        started,
+        // Raw, not through `env`: the frame carries exactly what each case gives.
+        {
+          v: 2,
+          seq: 2,
+          runId: 'run-1',
+          ts: ts(2),
+          type: 'tool/started',
+          data: {
+            step: 1,
+            callId: 'c1',
+            name: 'x',
+            args: { query: 'q' },
+            execution: 'server',
+            ...data
+          }
+        }
+      ])
+    ).items[0];
+
+  test('a call is drawn as the server says', () => {
+    expect(
+      rowOf({ toolId: 'anything', activityKind: 'search', activityScope: 'documents' })
+    ).toMatchObject({ kind: 'search', scope: 'documents', query: 'q' });
+    expect(
+      rowOf({ toolId: 'anything', activityKind: 'fetch', activityScope: 'web' })
+    ).toMatchObject({ kind: 'fetch', scope: 'web' });
   });
 
-  test('a people search is a plain tool call, not a web search', () => {
-    expect(toolKind('entraPeopleSearch')).toBe('tool');
-    expect(toolKind('x500bund__search_people')).toBe('tool');
-  });
-});
-
-describe('searchScope', () => {
-  test('iFinder and configured sources search documents, not the web', () => {
-    expect(searchScope('iFinder_search')).toBe('documents');
-    expect(searchScope('source_handbook')).toBe('documents');
-    expect(searchScope('braveSearch')).toBe('web');
+  test('a call the server said nothing about is a plain call, whatever its id', () => {
+    expect(rowOf({ toolId: 'braveSearch' })).toMatchObject({
+      kind: 'tool',
+      scope: null,
+      query: null
+    });
+    expect(rowOf({ toolId: 'jira_searchTickets', activityKind: 'tool' })).toMatchObject({
+      kind: 'tool'
+    });
   });
 });
 
@@ -518,6 +538,66 @@ describe('ToolActivity', () => {
     expect(screen.getByText('IPD-531')).toBeInTheDocument();
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByText('Document not found: IPD-531')).toBeInTheDocument();
+  });
+
+  test('an integration call reads as its action and the system it ran against, not its id', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        call(2, 'tool/started', 'c1', 'muc-ad__search_people', {
+          title: 'Search people',
+          integration: 'Munich AD',
+          args: { query: 'Daniel Manzke' },
+          execution: 'server'
+        }),
+        call(3, 'tool/completed', 'c1', 'muc-ad__search_people', { durationMs: 40 }),
+        call(4, 'tool/started', 'c2', 'legacy_tool', { args: {}, execution: 'server' }),
+        call(5, 'tool/completed', 'c2', 'legacy_tool', { durationMs: 10 }),
+        ended(6)
+      ])
+    );
+    expect(activity.items[0]).toMatchObject({
+      name: 'Search people',
+      titled: true,
+      integration: 'Munich AD'
+    });
+    render(<ToolActivity activity={activity} loading={false} />);
+    // The summary names the system the answer came from.
+    expect(screen.getByRole('button')).toHaveTextContent('Munich AD');
+    fireEvent.click(screen.getByRole('button'));
+    const action = screen.getByText('Search people');
+    expect(action).toHaveAttribute('title', 'muc-ad__search_people');
+    expect(screen.getByTitle('Data from Munich AD')).toHaveTextContent('Munich AD');
+    expect(screen.queryByText('muc-ad__search_people')).not.toBeInTheDocument();
+    // A tool without a title still reads by its name.
+    expect(screen.getByText('Ran legacy_tool')).toBeInTheDocument();
+  });
+
+  test('a connected system search is a plain call, not a web search', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        call(2, 'tool/started', 'c1', 'jira_searchTickets', {
+          title: 'Search tickets',
+          integration: 'Jira',
+          activityKind: 'tool',
+          args: { query: 'login bug' },
+          execution: 'server'
+        }),
+        call(3, 'tool/completed', 'c1', 'jira_searchTickets', { durationMs: 40 }),
+        ended(4)
+      ])
+    );
+    expect(activity.items[0]).toMatchObject({ kind: 'tool', scope: null, query: null });
+    render(<ToolActivity activity={activity} loading={false} />);
+    const toggle = screen.getByRole('button');
+    expect(toggle).not.toHaveTextContent('Searched the web');
+    expect(screen.getAllByTestId('icon').map(icon => icon.dataset.name)).toContain('wrench');
+    expect(screen.getAllByTestId('icon').map(icon => icon.dataset.name)).not.toContain('globe-alt');
+    fireEvent.click(toggle);
+    expect(screen.getByText('Search tickets')).toBeInTheDocument();
+    // The query is an argument of the call, listed like any other.
+    expect(screen.getByText('login bug')).toBeInTheDocument();
   });
 
   test('renders nothing without activity', () => {

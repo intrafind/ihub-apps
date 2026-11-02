@@ -120,6 +120,12 @@ function runningHeadline(t, items, reading) {
       ? t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(current.url) })
       : t('toolActivity.searching', 'Searching the web…');
   }
+  if (current?.integration) {
+    return t('toolActivity.runningToolIn', '{{name}} · {{integration}}…', {
+      name: current.name,
+      integration: current.integration
+    });
+  }
   return t('toolActivity.runningTool', 'Running {{name}}', { name: current?.name || '' });
 }
 
@@ -157,8 +163,11 @@ function finishedHeadline(t, items, searches) {
     items.filter(item => item.kind === 'skill').map(item => item.skillId || item.name)
   ).size;
   if (skills) parts.push(t('toolActivity.skills', { count: skills }));
-  const others = items.filter(item => item.kind === 'tool').length;
-  if (others) parts.push(t('toolActivity.toolCalls', { count: others }));
+  const others = items.filter(item => item.kind === 'tool');
+  if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
+  // The systems the turn asked, so the summary says where the answer came from.
+  const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
+  if (integrations.length) parts.push(integrations.join(', '));
   return parts.join(' · ');
 }
 
@@ -223,6 +232,7 @@ function ActivityItem({ item }) {
               {t('toolActivity.sources', { count: item.sources.length })}
             </span>
           )}
+          <IntegrationChip item={item} />
           <ItemStatus item={item} />
         </div>
         <ItemDetails item={item} />
@@ -301,16 +311,39 @@ function ActivityItem({ item }) {
     <li>
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusIcon item={item} fallback="wrench" />
-        <span>
-          {item.status === 'running'
-            ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
-            : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
-        </span>
+        {item.titled ? (
+          // A titled action reads on its own ("Search people"); the id stays in the tooltip.
+          <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
+            {item.name}
+          </span>
+        ) : (
+          <span>
+            {item.status === 'running'
+              ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
+              : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
+          </span>
+        )}
+        <IntegrationChip item={item} />
         <ItemStatus item={item} />
       </div>
       <ItemDetails item={item} />
       <ItemError item={item} />
     </li>
+  );
+}
+
+/** The integration, MCP server or remote agent the call ran against. */
+function IntegrationChip({ item }) {
+  const { t } = useTranslation();
+  if (!item.integration) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
+      title={t('toolActivity.integrationTitle', 'Data from {{name}}', { name: item.integration })}
+    >
+      <Icon name="link" size="xs" className="shrink-0" />
+      {item.integration}
+    </span>
   );
 }
 

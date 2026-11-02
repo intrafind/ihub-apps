@@ -1,11 +1,22 @@
 {
   "$schema": "https://ihub.intrafind.com/schemas/integration/v1.json",
   "id": "org.ckan/open-data-portal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "ihub": ">=5.6.0"
   },
   "releases": [
+    {
+      "version": "1.1.0",
+      "date": "2026-11-02",
+      "summary": {
+        "en": "Ships the Open Data Assistant as an example app: create it for an installation and test it in the chat panel of the installation page.",
+        "de": "Liefert den Open-Data-Assistenten als Beispiel-App: für eine Installation anlegen und im Chat-Bereich der Installationsseite testen."
+      },
+      "notes": {
+        "features": "releases/1.1.0/features.md"
+      }
+    },
     {
       "version": "1.0.0",
       "date": "2026-10-31",
@@ -166,6 +177,7 @@
     }
   ],
   "capabilities": ["tools", "scopes", "sources"],
+  "exampleApps": [{ "file": "apps/open-data-assistant.json" }],
   "scopes": {
     "action": "list_organizations",
     "label": { "en": "Publisher", "de": "Herausgeber" },
