@@ -490,7 +490,10 @@ describe('review fixes (#3140)', () => {
       req: fakeRequest({ user: member('mallory'), query: { code: 'c', state } })
     });
     assert.equal(mallory.ok, false);
-    assert.match(mallory.redirectTo, /^\/settings\/integrations\?googledrive_error=invalid_state$/);
+    assert.equal(
+      mallory.redirectTo,
+      '/settings/integrations?integration_error=user_mismatch&integration=gdrive'
+    );
     const elsewhere = await service.completeConnect({
       req: fakeRequest({ user: alice, query: { code: 'c', state } }),
       alias: { installationId: 'nc', stack: 'cloud-storage' }
