@@ -36,6 +36,7 @@ export default function IFinderTokenExchangeSettings({
   const [extraScopesText, setExtraScopesText] = useState(() =>
     (values.tokenExchangeExtraScopes || []).join(' ')
   );
+  const providerDisabledLabel = t(`${K}.providerDisabled`, 'disabled');
 
   return (
     <div className="space-y-4" data-testid="ifinder-token-exchange">
@@ -60,7 +61,7 @@ export default function IFinderTokenExchangeSettings({
           {oidcProviders.map(provider => (
             <option key={provider.name} value={provider.name}>
               {provider.displayName || provider.name}
-              {provider.enabled === false ? ` (${t(`${K}.providerDisabled`, 'disabled')})` : ''}
+              {provider.enabled === false ? ` (${providerDisabledLabel})` : ''}
             </option>
           ))}
         </select>

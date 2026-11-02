@@ -44,6 +44,25 @@ function statusTone(status) {
   return 'gray';
 }
 
+/**
+ * The text of the live status pill: unreachable, the number of connected
+ * users (per-user sign-in), connected or not connected.
+ *
+ * @param {Object} status - the installation's live status
+ * @param {Function} t - the translation function
+ * @returns {string}
+ */
+function statusLabel(status, t) {
+  if (status.unhealthy) return t('admin.integrationCatalog.status.unhealthy', 'Unreachable');
+  if (status.perUser) {
+    return t('admin.integrationCatalog.status.userConnections', '{{count}} connected users', {
+      count: status.userConnections || 0
+    });
+  }
+  if (status.connected) return t('admin.integrationCatalog.status.connected', 'Connected');
+  return t('admin.integrationCatalog.status.notConnected', 'Not connected');
+}
+
 /** The tone of the LDAP transport pill: plain text red, unknown gray, protected blue. */
 function transportTone(transport) {
   if (transport === 'plaintext') return 'red';
@@ -138,19 +157,7 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
       {item.status && enabled && (
         <Pill tone={statusTone(item.status)}>
           <span data-testid="live-status">
-            {item.status.unhealthy
-              ? t('admin.integrationCatalog.status.unhealthy', 'Unreachable')
-              : item.status.perUser
-                ? t(
-                    'admin.integrationCatalog.status.userConnections',
-                    '{{count}} connected users',
-                    {
-                      count: item.status.userConnections || 0
-                    }
-                  )
-                : item.status.connected
-                  ? t('admin.integrationCatalog.status.connected', 'Connected')
-                  : t('admin.integrationCatalog.status.notConnected', 'Not connected')}
+            {statusLabel(item.status, t)}
             {typeof item.status.toolCount === 'number' &&
               ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.status.toolCount })}`}
           </span>

@@ -32,6 +32,42 @@ export function SideEffectBadge({ sideEffect }) {
 }
 
 /**
+ * The hint above the actions of a system that lists its own (MCP, A2A): why
+ * the list is empty (not listed with a stored selection, or not tested yet),
+ * else how a tool the server adds later starts (off under an allowlist, on
+ * otherwise).
+ *
+ * @param {Array<Object>} actions - the known actions
+ * @param {Object|null} storedPolicy - the installation's saved `actions`
+ * @param {Function} t - the translation function
+ * @returns {string}
+ */
+function dynamicActionsHint(actions, storedPolicy, t) {
+  if (actions.length === 0 && storedPolicy) {
+    return t(
+      'admin.integrationCatalog.wizard.dynamicActionsUnavailable',
+      'The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.'
+    );
+  }
+  if (actions.length === 0) {
+    return t(
+      'admin.integrationCatalog.wizard.dynamicActionsEmpty',
+      'The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.'
+    );
+  }
+  if (isAllowlist(storedPolicy)) {
+    return t(
+      'admin.integrationCatalog.wizard.dynamicActionsAllowlistHint',
+      'These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.'
+    );
+  }
+  return t(
+    'admin.integrationCatalog.wizard.dynamicActionsHint',
+    'These are the tools the server lists; a tool the server adds later is on by default.'
+  );
+}
+
+/**
  * The actions an installation may offer the model, one checkbox each, with
  * the side effect, the description, a requirement and the "needs a token"
  * hint. For dynamic actions (MCP) it explains where the list comes from.
@@ -60,25 +96,7 @@ function ActionToggleList({
     <>
       {dynamicActions && (
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          {actions.length === 0 && storedPolicy
-            ? t(
-                'admin.integrationCatalog.wizard.dynamicActionsUnavailable',
-                'The server did not list its tools (not reachable, or nobody connected yet). Saving keeps the stored tool selection as it is; test the connection to see and change it.'
-              )
-            : actions.length === 0
-              ? t(
-                  'admin.integrationCatalog.wizard.dynamicActionsEmpty',
-                  'The server lists its tools when iHub connects. Test the connection to see them; every tool is on until you switch some off.'
-                )
-              : isAllowlist(storedPolicy)
-                ? t(
-                    'admin.integrationCatalog.wizard.dynamicActionsAllowlistHint',
-                    'These are the tools the server lists; only the checked ones may run, and a tool the server adds later stays off until you switch it on.'
-                  )
-                : t(
-                    'admin.integrationCatalog.wizard.dynamicActionsHint',
-                    'These are the tools the server lists; a tool the server adds later is on by default.'
-                  )}
+          {dynamicActionsHint(actions, storedPolicy, t)}
         </p>
       )}
       {actions.length > 0 && (
