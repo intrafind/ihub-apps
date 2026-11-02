@@ -11,6 +11,7 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { loadAppSettings } from '../../../utils/appSettings';
+import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { useChatAttachedProjects } from '../../projects/hooks/useChatAttachedProjects';
 import { ATTACH_PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
@@ -199,7 +200,7 @@ export default function AppChatStarter({
     }
     const saved = loadAppSettings(appDetails.id) || {};
     setEnabledTools(
-      Array.isArray(saved.enabledTools) ? saved.enabledTools : appDetails.tools || []
+      Array.isArray(saved.enabledTools) ? saved.enabledTools : appToolRefs(appDetails)
     );
     setWebsearchEnabled(saved.websearchEnabled ?? appDetails.websearch?.enabledByDefault ?? false);
     setImageAspectRatio(saved.imageAspectRatio || appDetails.imageGeneration?.aspectRatio || '1:1');
