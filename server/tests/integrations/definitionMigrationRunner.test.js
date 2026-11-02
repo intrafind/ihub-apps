@@ -463,11 +463,20 @@ describe('a failing migration', () => {
 
 describe('the lock', () => {
   it('answers MIGRATION_LOCKED while another holder runs a migration of the installation', async () => {
+    // withLock takes the lock asynchronously: wait until the holder is
+    // inside it, or migrate() can win the race and run.
     let release;
+    let entered;
+    const inside = new Promise(resolve => (entered = resolve));
     const held = locks.withLock(
       migrationLockName('builtin'),
-      () => new Promise(resolve => (release = resolve))
+      () =>
+        new Promise(resolve => {
+          release = resolve;
+          entered();
+        })
     );
+    await inside;
     try {
       await assert.rejects(
         () =>
