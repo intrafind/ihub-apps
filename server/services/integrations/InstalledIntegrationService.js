@@ -278,11 +278,18 @@ export class InstalledIntegrationService {
     delete rest.status;
     delete rest.statusReason;
     delete rest.migrationLog;
+    // The tool approval (#2945) is edited on its own (`setApproval`): a save
+    // that does not name it keeps the stored one, so an editor that knows
+    // nothing about approval cannot drop an admin's gate. `approval: null`
+    // removes it explicitly.
+    const keepsApproval = !Object.hasOwn(rest, 'approval') && existing?.approval;
+    if (rest.approval === null) delete rest.approval;
     const parsed = validateInstalledIntegration({
       ...rest,
       installedAt: existing?.installedAt,
       health: existing?.health,
-      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {})
+      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
+      ...(keepsApproval ? { approval: existing.approval } : {})
     });
     if (!parsed.success) {
       throw new IntegrationError('Invalid installed integration', {

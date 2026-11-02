@@ -25,8 +25,13 @@ import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { heldGeneratedFileData } from '../documents/generatedFiles.js';
 import crypto from 'node:crypto';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
-import { resolveToolApproval } from '../../utils/toolApproval.js';
-import { approvalDisplayData, justificationOf } from '../loop/seams/approvalSeam.js';
+import { redactApprovalArgs, resolveToolApproval } from '../../utils/toolApproval.js';
+import {
+  approvalDisplayData,
+  justificationOf,
+  oneShotGrant,
+  sameArgs
+} from '../loop/seams/approvalSeam.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /**
@@ -607,28 +612,8 @@ export function chatQuestionOptions({
   };
 }
 
-/**
- * Whether two argument objects are the same JSON value (key order ignored).
- * The approved call must run with exactly the arguments that were approved.
- *
- * @param {unknown} a
- * @param {unknown} b
- * @returns {boolean}
- */
-export function sameArgs(a, b) {
-  const canonical = value => {
-    if (Array.isArray(value)) return value.map(canonical);
-    if (value && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.keys(value)
-          .sort()
-          .map(key => [key, canonical(value[key])])
-      );
-    }
-    return value;
-  };
-  return JSON.stringify(canonical(a ?? {})) === JSON.stringify(canonical(b ?? {}));
-}
+/** Whether two argument objects are the same JSON value (see `approvalSeam.sameArgs`). */
+export { sameArgs };
 
 /**
  * Options for the shared `approvalSeam` in a chat turn (#2945): the
@@ -661,6 +646,7 @@ export function chatApprovalOptions({
   runLog = defaultRunLog
 }) {
   const granted = new Set((Array.isArray(grants) ? grants : []).map(String));
+  const approvedOnce = oneShotGrant(approvedCall);
   return {
     headless,
     resolvePolicy: toolDef => resolveToolApproval(toolDef, app, platform),
@@ -668,11 +654,7 @@ export function chatApprovalOptions({
       const toolId = String(info.toolId || info.toolDef?.id);
       if (granted.has(toolId)) return true;
       // The call a person approved runs once, with exactly those arguments.
-      return Boolean(
-        approvedCall &&
-        String(info.call?.id) === String(approvedCall.callId) &&
-        sameArgs(info.args, approvedCall.args)
-      );
+      return approvedOnce(info);
     },
     async raise(info, ctx, policy) {
       const runId = ctx.runId || chatId;
@@ -731,7 +713,9 @@ export function chatApprovalOptions({
         dataFlow: displayData.dataFlow,
         approvalSource: displayData.approvalSource
       });
-      emit(ctx, SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
+      // `interaction/raised` is sent by the turn once the paused turn is kept
+      // with the chat (ChatService), so the card never appears before an
+      // answer to it could be accepted.
       return interaction;
     },
     async onDenied(info, ctx, payload) {
@@ -745,7 +729,12 @@ export function chatApprovalOptions({
       });
       await logInteraction(
         'tool_error',
-        buildLogData(true, { toolId: info.toolId, toolInput: info.args, error: payload })
+        buildLogData(true, {
+          toolId: info.toolId,
+          // A refused call never ran: its arguments are logged redacted.
+          toolInput: redactApprovalArgs(info.args),
+          error: payload
+        })
       );
     }
   };

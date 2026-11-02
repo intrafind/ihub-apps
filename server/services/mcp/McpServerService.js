@@ -22,8 +22,8 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
 import { installedIntegrationById } from '../integrations/installedRefs.js';
-import { resolveToolApproval } from '../../utils/toolApproval.js';
-import { needsApproval, APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+import { directCallNeedsApproval } from '../../utils/toolApproval.js';
+import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 
 /**
  * Whether a tool exposed through the gateway needs a person's approval
@@ -35,11 +35,7 @@ import { needsApproval, APPROVAL_ERROR_CODES } from '../../../shared/toolApprova
  * @returns {boolean}
  */
 export function gatewayCallNeedsApproval(tool, platform) {
-  if (!tool || tool.interactive === true || tool.requiresUserInput === true) return false;
-  const installation = tool._integration?.instanceId
-    ? installedIntegrationById(tool._integration.instanceId)
-    : null;
-  return needsApproval(resolveToolApproval(tool, null, platform, { installation }));
+  return directCallNeedsApproval(tool, platform, { getInstallation: installedIntegrationById });
 }
 
 /**

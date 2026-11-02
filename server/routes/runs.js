@@ -43,6 +43,7 @@ import {
 } from '../services/loop/runIdentity.js';
 import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
 import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
+import { redactInteractionForViewer } from '../utils/toolApproval.js';
 import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
@@ -216,7 +217,16 @@ export default function registerRunRoutes(app) {
           ? sendNotFound(res, 'Run')
           : sendInsufficientPermissions(res, 'access run');
       }
-      res.json({ runId, interactions });
+      // Tool approval arguments in full only for their requester (#2945).
+      const visible = [];
+      for (const i of interactions) {
+        const mode = i.source?.identityMode || runLog.identityMode();
+        const mine =
+          !!i.source?.principalId &&
+          i.source.principalId === (await resolvePrincipal(req.user, { mode })).id;
+        visible.push(mine ? i : redactInteractionForViewer(i));
+      }
+      res.json({ runId, interactions: visible });
     } catch (error) {
       sendFailedOperationError(res, 'list run interactions', error);
     }
@@ -480,6 +490,8 @@ export default function registerRunRoutes(app) {
       for (const mode of new Set(all.map(modeOf))) {
         myIdByMode.set(mode, (await resolvePrincipal(req.user, { mode })).id);
       }
+      const ownedByCaller = i =>
+        !!i.source?.principalId && i.source.principalId === myIdByMode.get(modeOf(i));
       const visible = admin
         ? all
         : all.filter(i => {
@@ -487,9 +499,13 @@ export default function registerRunRoutes(app) {
             if (Array.isArray(approvers) && approvers.length > 0) {
               return approvers.some(g => groups.includes(g));
             }
-            return !!i.source?.principalId && i.source.principalId === myIdByMode.get(modeOf(i));
+            return ownedByCaller(i);
           });
-      res.json({ interactions: visible });
+      // A tool approval's arguments are the requester's: anyone else (an
+      // admin, an approver group) sees secret-looking values redacted (#2945).
+      res.json({
+        interactions: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
+      });
     } catch (error) {
       sendFailedOperationError(res, 'list pending interactions', error);
     }

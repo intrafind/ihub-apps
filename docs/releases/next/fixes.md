@@ -86,3 +86,10 @@ search was badged "Based on web search". They now show **Based on connected syst
   on iFinder documents".
 - A call that only returned an error does not count, and iHub's own tools (asking the user,
   scheduled tasks) do not either.
+
+## Workflows Continue as Their Own User After a Person Answers
+
+A workflow or agent run that paused for a `human` step or a question now continues as the user (or
+agent) it started with. Before, the steps after the answer ran as the person who answered, with
+their groups and their connected accounts. The person who answered is still recorded with the
+answer. Runs started before this release continue as before.

@@ -29,6 +29,7 @@ import { HumanNodeExecutor } from './executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
 import { TOOL_APPROVAL_CHECKPOINT } from './questionPause.js';
+import { resolveExecutionActor } from './executionActor.js';
 
 /**
  * 30-minute node timeout for agent runs: the phased planner node blocks while
@@ -193,6 +194,10 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       'WORKFLOW_NOT_AVAILABLE'
     );
   }
+  // The execution continues as its own principal; the person who answered is
+  // only the answer's `by`. Resolved before anything changes, so a principal
+  // that cannot be rebuilt leaves the checkpoint pending.
+  const actingUser = executionActingUser(state, pending, { answeringUser: user, answer });
   if (pending.type === TOOL_APPROVAL_CHECKPOINT) {
     return resumeToolApproval({
       pending,
@@ -200,7 +205,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       state,
       executionId,
       answer,
-      user,
+      user: actingUser,
       engine,
       registry
     });
@@ -212,7 +217,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       state,
       executionId,
       answer,
-      user,
+      user: actingUser,
       engine,
       registry
     });
@@ -277,7 +282,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       executionId,
       {},
       {
-        user: user || { id: answer.by || 'system', groups: [] },
+        user: actingUser,
         workflow,
         ...(isAgentRun ? { timeout: AGENT_NODE_TIMEOUT_MS } : {})
       }
@@ -427,6 +432,47 @@ async function resumeToolApproval({
     await restorePausedState({ engine, registry, executionId, state, pending, cause: err });
     throw wrapEngineError(err);
   }
+}
+
+/**
+ * The principal a resumed execution acts as: the one recorded when it started
+ * (`_workflow.actor`) or, for a parked tool approval, with the paused loop —
+ * never the person who answered. A tool approval refuses to resume without
+ * one (the approved call must not run with the approver's tokens).
+ *
+ * An execution started before the actor was recorded continues as the
+ * answering user for a `human` node or a question, as it always did.
+ *
+ * @param {Object} state - the paused execution's state
+ * @param {Object} pending - the pending checkpoint
+ * @param {Object} options
+ * @param {Object|null} options.answeringUser
+ * @param {Object} options.answer
+ * @returns {Object} the user to resume with
+ * @throws {CheckpointResumeError} when the recorded principal cannot be rebuilt
+ */
+export function executionActingUser(state, pending, { answeringUser = null, answer = {} } = {}) {
+  const paused = state?.data?._pausedLoops?.[pending?.nodeId];
+  const isToolApproval = pending?.type === TOOL_APPROVAL_CHECKPOINT;
+  const snapshot =
+    (isToolApproval ? paused?.approval?.actor : null) || state?.data?._workflow?.actor || null;
+  if (!snapshot) {
+    if (isToolApproval) {
+      throw new CheckpointResumeError(
+        'The execution has no recorded principal; the approved call cannot run',
+        'ACTOR_UNKNOWN'
+      );
+    }
+    return answeringUser || { id: answer.by || 'system', groups: [] };
+  }
+  const resolved = resolveExecutionActor(snapshot);
+  if (!resolved.ok) {
+    throw new CheckpointResumeError(
+      `The execution's principal cannot act any more: ${resolved.message}`,
+      resolved.code
+    );
+  }
+  return resolved.user;
 }
 
 /** Ledger marker after the answer was accepted: `run/resumed` follows `interaction/answered`. */

@@ -37,6 +37,9 @@
 import { z } from 'zod';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
+import { directCallNeedsApproval } from '../utils/toolApproval.js';
+import { installedIntegrationById } from '../services/integrations/installedRefs.js';
+import { APPROVAL_ERROR_CODES } from '../../shared/toolApproval.js';
 import {
   isAuthRequiredError,
   isTokenRefreshError,
@@ -302,6 +305,25 @@ export default function registerMcpAppRoutes(app) {
           // Visibility: only tools of this same server that list "app".
           const target = await conn.getAppTool(name);
           if (!target) return { forbidden: true };
+          // A view's own call has no approval card: a tool that needs a
+          // person's approval (#2945) is refused here, like on the MCP
+          // gateway. Only the model's calls in the chat can be approved.
+          const viewCall = {
+            id: name,
+            _mcp: {
+              serverId,
+              originalName: name,
+              ...(target.annotations ? { annotations: target.annotations } : {})
+            },
+            _integration: { instanceId: serverId, action: name }
+          };
+          if (
+            directCallNeedsApproval(viewCall, configCache.getPlatform?.() || null, {
+              getInstallation: installedIntegrationById
+            })
+          ) {
+            return { needsApproval: true };
+          }
           // The specification asks hosts to log view-initiated calls.
           logger.info('MCP App tool call', {
             component: COMPONENT,
@@ -316,6 +338,12 @@ export default function registerMcpAppRoutes(app) {
         });
         if (outcome.forbidden) {
           return res.status(403).json({ error: `Tool ${name} is not callable from this app` });
+        }
+        if (outcome.needsApproval) {
+          return res.status(403).json({
+            error: `Tool ${name} needs a person's approval and cannot be called from a view`,
+            code: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
+          });
         }
         return res.json(toViewToolResult(outcome.result));
       } catch (error) {
