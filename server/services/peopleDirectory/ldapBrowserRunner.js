@@ -176,6 +176,33 @@ export async function runLdapBrowserTool(tool, params = {}, deps = {}) {
 const TEST_CHILDREN = 20;
 
 /**
+ * The status of the test's configuration step: failed on a problem, a
+ * warning on any other hint, else ok.
+ *
+ * @param {string[]} problems - What keeps the browser from being offered
+ * @param {string[]} hints - Every hint of the step, problems included
+ * @returns {string} A {@link STATUS} value
+ */
+function configurationStatus(problems, hints) {
+  if (problems.length > 0) return STATUS.FAIL;
+  return hints.length > 0 ? STATUS.WARN : STATUS.OK;
+}
+
+/**
+ * The bind of a resolved browser, for the configuration step's details: its
+ * own account (the bind DN of a service account, else the bind mode), or the
+ * directory's.
+ *
+ * @param {Object} resolved - From `resolveBrowser`
+ * @returns {string}
+ */
+function bindDescription(resolved) {
+  if (!resolved.ownBind) return 'the directory bind';
+  const account = resolved.bind?.mode === 'service' ? resolved.bind.dn : resolved.bind?.mode;
+  return `own account ${account}`;
+}
+
+/**
  * The admin connection test of a browser: resolve (the directory it reuses,
  * its base and bind), address check, connect, StartTLS, bind with the
  * browser's account, and a look at the browse base (its direct children),
@@ -208,7 +235,7 @@ export async function testBrowser(raw, { deps = {}, unsaved = false } = {}) {
   report.add({
     id: 'configuration',
     label: 'Effective configuration',
-    status: resolved.problems.length > 0 ? STATUS.FAIL : hints.length > 0 ? STATUS.WARN : STATUS.OK,
+    status: configurationStatus(resolved.problems, hints),
     message:
       resolved.problems.length > 0
         ? resolved.problems.join(' ')
@@ -218,9 +245,7 @@ export async function testBrowser(raw, { deps = {}, unsaved = false } = {}) {
       url: resolved.directory?.url || null,
       transport: resolved.transport,
       base: resolved.base || null,
-      bind: resolved.ownBind
-        ? `own account ${resolved.bind?.mode === 'service' ? resolved.bind.dn : resolved.bind?.mode}`
-        : 'the directory bind',
+      bind: bindDescription(resolved),
       maxResults: resolved.maxResults,
       denyAttributes: resolved.denyAttributes
     },

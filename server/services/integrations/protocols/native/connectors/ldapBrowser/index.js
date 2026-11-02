@@ -87,7 +87,7 @@ function action(name) {
       };
       // `params` is everything the tool call received: the model's arguments
       // and iHub's context (`user`, `chatId`, `appConfig`), as the runner expects.
-      const params = { ...(ctx.params || {}) };
+      const params = { ...ctx.params };
       if (ctx.user && !params.user) params.user = ctx.user;
       if (ctx.chatId && !params.chatId) params.chatId = ctx.chatId;
       return runLdapBrowserTool(tool, params);

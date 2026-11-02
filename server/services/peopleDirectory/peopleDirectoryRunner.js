@@ -179,6 +179,18 @@ function presentableEntry(entry) {
 const TEST_SAMPLE_SIZE = 3;
 
 /**
+ * The status of the test's configuration step: failed on a problem, a
+ * warning on a warning, else ok.
+ *
+ * @param {{ problems: string[], warnings: string[] }} resolved - From `resolveDirectory`
+ * @returns {string} A {@link STATUS} value
+ */
+function configurationStatus(resolved) {
+  if (resolved.problems.length > 0) return STATUS.FAIL;
+  return resolved.warnings.length > 0 ? STATUS.WARN : STATUS.OK;
+}
+
+/**
  * The admin connection test: resolve, SSRF check, connect, StartTLS, bind,
  * and a sample search, reported step by step. Changes nothing.
  *
@@ -204,12 +216,7 @@ export async function testDirectory(raw, { query, deps = {}, unsaved = false } =
   report.add({
     id: 'configuration',
     label: 'Effective configuration',
-    status:
-      resolved.problems.length > 0
-        ? STATUS.FAIL
-        : resolved.warnings.length > 0
-          ? STATUS.WARN
-          : STATUS.OK,
+    status: configurationStatus(resolved),
     message:
       resolved.problems.length > 0
         ? resolved.problems.join(' ')

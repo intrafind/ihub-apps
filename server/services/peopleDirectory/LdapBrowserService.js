@@ -103,6 +103,71 @@ function directoryInstallation(directoryId) {
 }
 
 /**
+ * The schema issues of a browser entry, as problems.
+ * @param {Object} parsed - `ldapBrowserSchema.safeParse` result
+ * @returns {string[]}
+ */
+function schemaProblems(parsed) {
+  if (parsed.success) return [];
+  return parsed.error.issues.map(issue => `${issue.path.join('.') || 'entry'}: ${issue.message}`);
+}
+
+/**
+ * The directory a browser names: its installation, the resolved directory,
+ * and what keeps it from serving the browser (none selected, not installed,
+ * or the directory's own problems).
+ *
+ * @param {string} directoryId - The browser's `directory`, trimmed
+ * @param {Object} platform - Platform config (for `ldapAuth.providers`)
+ * @returns {{ instance: Object|null, directory: Object|null, problems: string[], warnings: string[] }}
+ */
+function resolveBrowserDirectory(directoryId, platform) {
+  const problems = [];
+  const instance = directoryInstallation(directoryId);
+  if (!directoryId) {
+    problems.push('No people directory is selected: pick the directory whose connection to use.');
+  } else if (!instance) {
+    problems.push(`There is no People directory (LDAP) installation "${directoryId}".`);
+  }
+  const directory = instance ? resolveDirectory(directoryFromInstance(instance), platform) : null;
+  if (!directory) return { instance, directory, problems, warnings: [] };
+  for (const problem of directory.problems) {
+    problems.push(`The directory "${directoryId}": ${problem}`);
+  }
+  return { instance, directory, problems, warnings: [...directory.warnings] };
+}
+
+/**
+ * What keeps a browser of a resolved directory from connecting: no base, no
+ * bind, or a bind that would cross the network in plain text.
+ *
+ * @param {Object|null} directory - The resolved directory (none: nothing to check)
+ * @param {string} base - The browser's effective base
+ * @param {Object|null} bind - The browser's effective bind
+ * @returns {string[]}
+ */
+function connectionProblems(directory, base, bind) {
+  if (!directory) return [];
+  const problems = [];
+  if (!base) {
+    problems.push(
+      "The LDAP browser needs a base: set its browse base, or the directory's base DN."
+    );
+  }
+  if (!bind) {
+    problems.push('The LDAP browser has no bind account: give it an account of its own.');
+  }
+  if (directory.url && bind) {
+    try {
+      assertTransportAllowed({ ...directory, bind });
+    } catch (error) {
+      problems.push(error.message);
+    }
+  }
+  return problems;
+}
+
+/**
  * Resolve a browser into everything its connection and its tools need: the
  * resolved directory it reuses (connection), its base, its bind (its own, or
  * the directory's), its limits and deny list. Resolved at call time, so an
@@ -125,48 +190,19 @@ function directoryInstallation(directoryId) {
  * }}
  */
 export function resolveBrowser(raw, platform = configCache.getPlatform() || {}) {
-  const problems = [];
-  const warnings = [];
   const parsed = ldapBrowserSchema.safeParse(raw);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      problems.push(`${issue.path.join('.') || 'entry'}: ${issue.message}`);
-    }
-  }
   const browser = parsed.success ? parsed.data : { ...raw };
   const directoryId = trimmed(browser.directory);
-
-  const instance = directoryInstallation(directoryId);
-  if (!directoryId) {
-    problems.push('No people directory is selected: pick the directory whose connection to use.');
-  } else if (!instance) {
-    problems.push(`There is no People directory (LDAP) installation "${directoryId}".`);
-  }
-  const directory = instance ? resolveDirectory(directoryFromInstance(instance), platform) : null;
-  if (directory) {
-    for (const problem of directory.problems) {
-      problems.push(`The directory "${directoryId}": ${problem}`);
-    }
-    warnings.push(...directory.warnings);
-  }
+  const named = resolveBrowserDirectory(directoryId, platform);
+  const { instance, directory } = named;
 
   const base = trimmed(browser.base) || directory?.baseDn || '';
   const bind = browser.bind || directory?.bind || null;
-  if (directory && !base) {
-    problems.push(
-      "The LDAP browser needs a base: set its browse base, or the directory's base DN."
-    );
-  }
-  if (directory && !bind) {
-    problems.push('The LDAP browser has no bind account: give it an account of its own.');
-  }
-  if (directory?.url && bind) {
-    try {
-      assertTransportAllowed({ ...directory, bind });
-    } catch (error) {
-      problems.push(error.message);
-    }
-  }
+  const problems = [
+    ...schemaProblems(parsed),
+    ...named.problems,
+    ...connectionProblems(directory, base, bind)
+  ];
 
   return {
     id: browser.id,
@@ -184,7 +220,7 @@ export function resolveBrowser(raw, platform = configCache.getPlatform() || {}) 
     dataFlow: directory?.dataFlow || 'internal',
     transport: directory?.transport || 'unknown',
     problems,
-    warnings
+    warnings: named.warnings
   };
 }
 
