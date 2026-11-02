@@ -39,7 +39,8 @@ export const MAX_GENERATED_FILE_BYTES = 25 * 1024 * 1024;
 export const GENERATED_FILE_TYPES = Object.freeze({
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx'
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx'
 });
 
 const HOLD_MS = 60 * 60 * 1000;
@@ -176,7 +177,8 @@ export function holdGeneratedFile({ user, chatId, data, mimeType, name, meta = {
     mimeType,
     bytes: data.length,
     ...(Number.isInteger(meta.pages) && meta.pages > 0 ? { pages: meta.pages } : {}),
-    ...(Number.isInteger(meta.slides) && meta.slides > 0 ? { slides: meta.slides } : {})
+    ...(Number.isInteger(meta.slides) && meta.slides > 0 ? { slides: meta.slides } : {}),
+    ...(Number.isInteger(meta.sheets) && meta.sheets > 0 ? { sheets: meta.sheets } : {})
   };
   held.set(descriptor.id, {
     owner: ownerOf(user),

@@ -136,6 +136,8 @@ describe('tools of system skills', () => {
       ['create_file', 'files'],
       ['create_pdf', 'pdf'],
       ['create_pptx', 'pptx'],
+      ['create_web_artifact', 'web-artifacts'],
+      ['create_xlsx', 'xlsx'],
       ['create_zip', 'files'],
       ['preview_pdf', 'pdf']
     ]);

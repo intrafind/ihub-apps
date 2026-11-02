@@ -68,6 +68,13 @@ describe('file types', () => {
     assert.equal(textFileMediaType('app.PY'), 'text/x-python');
     assert.equal(textFileMediaType('data.json'), 'application/json');
     assert.equal(textFileMediaType('config.yml'), 'application/yaml');
+    assert.equal(textFileMediaType('invite.ics'), 'text/calendar');
+    assert.equal(textFileMediaType('contact.vcf'), 'text/vcard');
+    assert.equal(textFileMediaType('notebook.ipynb'), 'application/x-ipynb+json');
+    assert.equal(textFileMediaType('flow.mmd'), 'text/vnd.mermaid');
+    assert.equal(textFileMediaType('arch.drawio'), 'application/xml');
+    assert.equal(textFileMediaType('board.excalidraw'), 'application/json');
+    assert.equal(textFileMediaType('schema.graphql'), 'application/graphql');
     assert.equal(textFileMediaType('Dockerfile'), 'text/plain');
     // Never something a browser runs or renders as a page.
     assert.equal(textFileMediaType('page.html'), 'text/plain');

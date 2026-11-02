@@ -414,3 +414,45 @@ export function tableFrame({ id, rect, table, lang, accent, fontSize, columnWidt
   const width = columnWidths.reduce((a, b) => a + b, 0);
   return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${rect.x}" y="${rect.y}"/><a:ext cx="${width}" cy="${rowHeight * rows.length}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId></a:tblPr><a:tblGrid>${columnWidths.map(w => `<a:gridCol w="${w}"/>`).join('')}</a:tblGrid>${rows.join('')}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
 }
+
+/**
+ * Row of 1–4 KPI / big-number callout cards styled with the template's
+ * `accent1` and `tx1` scheme colours.
+ *
+ * @param {Object} params
+ * @param {() => number} params.nextId
+ * @param {{ x: number, y: number, cx: number, cy: number }} params.rect
+ * @param {Array<{ value: string, label: string, note?: string }>} params.metrics
+ * @param {string} params.lang
+ * @returns {string[]}
+ */
+export function metricCards({ nextId, rect, metrics, lang }) {
+  const count = metrics.length;
+  if (!count) return [];
+  const gap = Math.round((rect.cx < 5 * EMU_PER_INCH ? 0.16 : 0.22) * EMU_PER_INCH);
+  const cardWidth = Math.max(1, Math.floor((rect.cx - gap * (count - 1)) / count));
+  const cardHeight = Math.min(rect.cy, Math.round(2.2 * EMU_PER_INCH));
+  const cardY = Math.round(rect.y + Math.max(0, (rect.cy - cardHeight) / 2));
+  const compact = cardHeight < Math.round(1.4 * EMU_PER_INCH);
+  const valSz = compact
+    ? 2200
+    : count <= 2 && rect.cx > 6 * EMU_PER_INCH
+      ? 3600
+      : count === 3
+        ? 3000
+        : 2400;
+  const labelSz = compact ? 1200 : 1400;
+  const noteSz = 1100;
+  const safeLang = xmlEscape(lang);
+
+  return metrics.map((metric, idx) => {
+    const id = nextId();
+    const x = rect.x + idx * (cardWidth + gap);
+    const valPara = `<a:p><a:pPr algn="ctr"><a:spcAft><a:spcPts val="300"/></a:spcAft><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${valSz}" b="1" dirty="0"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.value)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
+    const labelPara = `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${labelSz}" b="1" dirty="0"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.label)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
+    const notePara = metric.note
+      ? `<a:p><a:pPr algn="ctr"><a:spcBef><a:spcPts val="200"/></a:spcBef><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${noteSz}" dirty="0"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill></a:rPr><a:t>${xmlEscape(metric.note)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`
+      : '';
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Metric ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${cardY}"/><a:ext cx="${cardWidth}" cy="${cardHeight}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="10000"/><a:lumOff val="90000"/></a:schemeClr></a:solidFill><a:ln w="12700"><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="30000"/><a:lumOff val="70000"/></a:schemeClr></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="114300" tIns="91440" rIns="114300" bIns="91440" rtlCol="0" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${valPara}${labelPara}${notePara}</p:txBody></p:sp>`;
+  });
+}

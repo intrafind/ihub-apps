@@ -18,7 +18,7 @@ export const CREATE_PDF_TOOL = {
   // A document template (Admin → Document templates) styles the PDF; the
   // brand parameters are left out when the app fixes one.
   usesDocumentTemplate: true,
-  brandParameters: ['theme', 'primaryColor', 'font'],
+  brandParameters: ['theme', 'primaryColor', 'accentColor', 'font'],
   parameters: {
     type: 'object',
     properties: {
@@ -32,6 +32,21 @@ export const CREATE_PDF_TOOL = {
       },
       subtitle: { type: 'string', description: 'Optional subtitle under the title.' },
       author: { type: 'string', description: 'Optional author for the metadata and cover page.' },
+      date: {
+        type: 'string',
+        description:
+          'Optional date for the cover page and the {date} header/footer placeholder (defaults to today).'
+      },
+      subject: { type: 'string', description: 'Optional subject for the PDF document metadata.' },
+      keywords: {
+        type: 'string',
+        description: 'Optional comma-separated keywords for the PDF document metadata.'
+      },
+      showTitle: {
+        type: 'boolean',
+        description:
+          'Print the title block at the top of page 1 when there is no cover page or TOC (default true). Set to false for letters, certificates, or posters that arrange their own header in blocks.'
+      },
       language: {
         type: 'string',
         description: 'Language code of the document, e.g. "en" or "de" (page labels, metadata).'
@@ -39,7 +54,7 @@ export const CREATE_PDF_TOOL = {
       markdown: {
         type: 'string',
         description:
-          'The document body in Markdown. Supports GFM tables with column alignment, task lists, nested lists, code blocks, quotes, horizontal rules, <sub>/<sup>, and images as data:image/png|jpeg URIs.'
+          'The document body in Markdown. Supports GFM tables with column alignment, task lists, nested lists, code blocks, quotes, horizontal rules, <sub>/<sup>, and images as data:image/png|jpeg URIs. When mixing prose with layout blocks in reading order, prefer putting {"markdown": "..."} items inside "blocks" instead of combining top-level "markdown" and "blocks".'
       },
       // JSON text rather than a schema'd array: the blocks are alternatives
       // (one content key each), which providers with a strict schema mode
@@ -47,7 +62,7 @@ export const CREATE_PDF_TOOL = {
       blocks: {
         type: 'string',
         description:
-          'Optional JSON array of layout blocks, rendered after the markdown. Each block has one content key: markdown, text, stack, columns, table, ul, ol, image, svg, canvas, qr, toc, pageBreak, callout or box. Example: [{"callout": {"tone": "warning", "title": "Action required", "markdown": "Renew by **31 March**."}}, {"qr": "https://example.com", "fit": 90}]. The full grammar is in the pdf skill reference "references/layout-blocks.md".'
+          'Optional JSON array of layout blocks, rendered after top-level markdown. Each block has one content key: markdown, text, stack, columns, table, ul, ol, image, svg, canvas, qr, toc, pageBreak, callout or box. Example: [{"callout": {"tone": "warning", "title": "Action required", "markdown": "Renew by **31 March**."}}, {"qr": "https://example.com", "fit": 90}]. The full grammar is in the pdf skill reference "references/layout-blocks.md".'
       },
       theme: {
         type: 'string',
@@ -57,7 +72,11 @@ export const CREATE_PDF_TOOL = {
       },
       primaryColor: {
         type: 'string',
-        description: 'Hex colour for headings and accents, e.g. "#0f766e" (brand colour).'
+        description: 'Hex colour for headings and table headers, e.g. "#0f766e" (brand colour).'
+      },
+      accentColor: {
+        type: 'string',
+        description: 'Hex colour for secondary accents and callout borders, e.g. "#0284c7".'
       },
       font: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Body font family.' },
       fontSize: { type: 'number', description: 'Body text size in points, 7–16 (default 10.5).' },
