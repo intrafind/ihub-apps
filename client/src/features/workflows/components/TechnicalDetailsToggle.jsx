@@ -1,18 +1,28 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import Switch from '../../../shared/components/Switch';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 
 /**
  * Inline switch that flips the persistent "show technical details" preference.
  * When OFF (default), execution IDs, token counts, model badges, raw JSON,
  * and internal node-type stickers are hidden across the workflow UI.
+ *
+ * The visible text ("Show/Hide technical details") is a `<label>` of the
+ * shared {@link Switch}, so it names the switch and a click on it toggles it.
+ *
+ * @param {Object} props
+ * @param {string} [props.className] - Extra classes for the row.
+ * @returns {JSX.Element}
  */
 function TechnicalDetailsToggle({ className = '' }) {
   const { t } = useTranslation();
   const [showTechnical, setShowTechnical] = useTechnicalDetailsToggle();
+  const switchId = `technical-details-${useId()}`;
 
   const tooltip = t(
     'workflows.technicalDetails.tooltip',
@@ -23,28 +33,21 @@ function TechnicalDetailsToggle({ className = '' }) {
     : t('workflows.technicalDetails.show', 'Show technical details');
 
   return (
-    <label
-      className={`inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none ${className}`}
+    <div
+      className={`inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 select-none ${className}`}
       title={tooltip}
     >
-      <span className="flex items-center gap-1.5">
+      <label htmlFor={switchId} className="flex items-center gap-1.5 cursor-pointer">
         <Icon name="cog" className="w-4 h-4" aria-hidden="true" />
         {label}
-      </span>
-      <span className="relative inline-flex">
-        <input
-          type="checkbox"
-          checked={showTechnical}
-          onChange={event => setShowTechnical(event.target.checked)}
-          className="sr-only peer"
-          aria-label={label}
-        />
-        <span
-          aria-hidden="true"
-          className="w-9 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 transition-colors relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4"
-        />
-      </span>
-    </label>
+      </label>
+      <Switch
+        id={switchId}
+        size="sm"
+        checked={showTechnical}
+        onChange={checked => setShowTechnical(checked)}
+      />
+    </div>
   );
 }
 

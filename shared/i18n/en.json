@@ -2533,6 +2533,7 @@
       "update": "Update",
       "uninstall": "Uninstall",
       "detach": "Detach",
+      "byAuthor": "by {{author}}",
       "allRegistries": "All Registries",
       "filterRegistry": "Filter by registry",
       "filterStatus": "Filter by status",

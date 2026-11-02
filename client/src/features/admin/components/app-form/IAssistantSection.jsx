@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../../api/adminApi';
+import Switch from '../../../../shared/components/Switch';
 
 const INPUT_CLASS =
   'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
@@ -69,18 +70,17 @@ function IAssistantSection({ app, onChange, notice = null, children = null }) {
           {notice}
           {/* Enable iAssistant toggle */}
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="iassistant-enabled"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.apps.edit.iassistantEnabled', 'Enable iAssistant')}
             </label>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={app.iassistant?.enabled ?? false}
-                onChange={e => handleIAssistantChange({ enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-            </label>
+            <Switch
+              id="iassistant-enabled"
+              checked={app.iassistant?.enabled ?? false}
+              onChange={enabled => handleIAssistantChange({ enabled })}
+            />
           </div>
 
           {/* iAssistant settings - only shown when enabled */}
