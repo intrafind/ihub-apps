@@ -2859,6 +2859,7 @@
       "update": "Aktualisieren",
       "uninstall": "Deinstallieren",
       "detach": "Trennen",
+      "byAuthor": "von {{author}}",
       "allRegistries": "Alle Registries",
       "filterRegistry": "Nach Registry filtern",
       "filterStatus": "Nach Status filtern",
@@ -2983,6 +2984,26 @@
           "failed": "Die Migration von {{label}} ist fehlgeschlagen: Die Installation bleibt auf v{{from}} und bietet keine Aktionen an, bis Sie auf ihrer Seite handeln. Grund: {{reason}}",
           "skipped": "{{label}} wurde nicht migriert: {{reason}}"
         }
+      },
+      "integrationFacts": {
+        "title": "Eckdaten der Integration",
+        "effect": "Wirkung",
+        "runs": "Betrieb",
+        "effectValues": {
+          "read": "lesend",
+          "readWrite": "lesend · schreibend",
+          "unknown": "nicht angegeben"
+        },
+        "runsValues": {
+          "cloud": "Cloud",
+          "onPrem": "On-Premises",
+          "local": "lokal",
+          "unknown": "nicht angegeben"
+        },
+        "actionsDynamic": "vom Server gelistet",
+        "actionsDynamicHint": "Der Server listet seine Aktionen, wenn iHub sich mit ihm verbindet; installieren und testen Sie die Integration, um sie zu sehen.",
+        "noActions": "Diese Integration gibt keine Aktionen an.",
+        "unavailable": "Die Definition konnte nicht aus der Registry gelesen werden, daher werden ihre Eckdaten nicht angezeigt."
       }
     },
     "apps": {
@@ -4118,17 +4139,6 @@
         "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
         "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
       },
-      "actionReview": {
-        "new": "Neu",
-        "changed": "Geändert",
-        "newHint": "Seit der letzten Prüfung hinzugekommen. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
-        "changedHint": "Wirkung oder Eingabe haben sich seit der letzten Prüfung geändert. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
-        "pending": "{{count}} Aktionen sind seit der letzten Prüfung neu oder geändert.",
-        "markAll": "Alle als geprüft markieren",
-        "markOne": "Als geprüft markieren",
-        "markOneLabel": "{{action}} als geprüft markieren",
-        "marked": "Als geprüft markiert: {{actions}}"
-      },
       "testChat": {
         "title": "Im Chat testen",
         "open": "Im Chat testen",
@@ -4157,6 +4167,17 @@
         "notGranted": "Ihre Gruppen geben diese Installation nicht frei, daher läuft der Chat ohne ihre Aktionen. Geben Sie sie unter Administration → Gruppen frei.",
         "openGroups": "Gruppen öffnen",
         "appDisabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren Sie sie im App-Editor, um sie zu testen."
+      },
+      "actionReview": {
+        "new": "Neu",
+        "changed": "Geändert",
+        "newHint": "Seit der letzten Prüfung hinzugekommen. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "changedHint": "Wirkung oder Eingabe haben sich seit der letzten Prüfung geändert. Sie fragt nach Freigabe, bis Sie sie als geprüft markieren.",
+        "pending": "{{count}} Aktionen sind seit der letzten Prüfung neu oder geändert.",
+        "markAll": "Alle als geprüft markieren",
+        "markOne": "Als geprüft markieren",
+        "markOneLabel": "{{action}} als geprüft markieren",
+        "marked": "Als geprüft markiert: {{actions}}"
       },
       "actionDetail": {
         "source": {

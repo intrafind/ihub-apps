@@ -2416,6 +2416,9 @@ describe('routes', () => {
 
   it('refuses an unsupported type before accepting bytes and a file over the limit', async () => {
     const project = await create();
+    // Uploads accepted by earlier tests (202) finish in the background and may
+    // still hold their temp folder; only folders created by this test count.
+    const tempBefore = new Set(await fs.readdir(getIngestService().tempDir).catch(() => []));
     const png = multipartRequest({
       name: 'photo.png',
       contentType: 'image/png',
@@ -2451,8 +2454,10 @@ describe('routes', () => {
     } finally {
       setLimits({});
     }
-    const entries = await fs.readdir(getIngestService().tempDir).catch(() => []);
-    assert.equal(entries.length, 0, 'no upload directory is left behind');
+    const entries = (await fs.readdir(getIngestService().tempDir).catch(() => [])).filter(
+      entry => !tempBefore.has(entry)
+    );
+    assert.deepEqual(entries, [], 'no upload directory is left behind');
 
     const stillJson = await drive(route.addItem, {
       user: ADA,

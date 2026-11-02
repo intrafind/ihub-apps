@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import Icon from '../../../../shared/components/Icon';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
-import { Pill } from './IntegrationPills';
+import Badge from '../../../../shared/components/Badge';
 import {
   MIGRATION_ACTION,
   changeParts,
@@ -28,15 +28,15 @@ import {
 /** Codes of the errors that mean "nothing was written, try again". */
 const RETRY_CODES = new Set(['MIGRATION_LOCKED', 'MIGRATION_LOCK_LOST', 'MIGRATION_CONFLICT']);
 
-/** The pill tone of a log entry's result. */
+/** The Badge tone of a log entry's result. */
 const RESULT_TONES = {
-  migrated: 'green',
-  stamped: 'blue',
-  failed: 'red',
-  rolledBack: 'red',
-  restored: 'blue',
-  adopted: 'blue',
-  skipped: 'gray'
+  migrated: 'success',
+  stamped: 'info',
+  failed: 'danger',
+  rolledBack: 'danger',
+  restored: 'info',
+  adopted: 'info',
+  skipped: 'neutral'
 };
 
 /**
@@ -270,7 +270,9 @@ export function MigrationLogEntry({ entry, appName, headingLevel = 'h3' }) {
             })}
           </span>
         </Heading>
-        <Pill tone={RESULT_TONES[entry.result] || 'gray'}>{logResultLabel(entry.result, t)}</Pill>
+        <Badge tone={RESULT_TONES[entry.result] || 'neutral'}>
+          {logResultLabel(entry.result, t)}
+        </Badge>
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-400">
         {entry.at && <time dateTime={entry.at}>{formatMigrationDate(entry.at, lang)}</time>}

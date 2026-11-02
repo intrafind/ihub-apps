@@ -21,6 +21,70 @@ const SIZES = {
 };
 
 /**
+ * Classes of the track (the pill) in its on or off state. Shared by
+ * {@link Switch} and {@link SwitchIndicator} so both look the same.
+ *
+ * @param {boolean} isOn - Whether the switch is on.
+ * @param {{track: string}} dimensions - An entry of `SIZES`.
+ * @returns {string}
+ */
+function trackClassName(isOn, dimensions) {
+  return `relative inline-flex ${dimensions.track} shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out motion-reduce:transition-none ${
+    isOn ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
+  }`;
+}
+
+/**
+ * Classes of the thumb (the knob) in its on or off state.
+ *
+ * @param {boolean} isOn - Whether the switch is on.
+ * @param {{thumb: string, on: string}} dimensions - An entry of `SIZES`.
+ * @returns {string}
+ */
+function thumbClassName(isOn, dimensions) {
+  return `pointer-events-none inline-block ${dimensions.thumb} transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out motion-reduce:transition-none ${
+    isOn ? dimensions.on : 'translate-x-0'
+  }`;
+}
+
+/**
+ * SwitchIndicator — the look of a {@link Switch} without its behaviour: a
+ * track and thumb hidden from assistive technology, not focusable and not
+ * clickable on its own.
+ *
+ * Use it only where an enclosing element already is the control and owns
+ * the role, the state and the keyboard: a `role="menuitemcheckbox"` row of a
+ * menu, for example. A real switch inside such a row would be a nested
+ * interactive control, which ARIA does not allow (axe `nested-interactive`).
+ * Everywhere else use {@link Switch}.
+ *
+ * @param {Object} props
+ * @param {boolean} props.checked - Whether to draw the "on" state.
+ * @param {'sm'|'md'} [props.size='md'] - Same sizes as {@link Switch}.
+ * @param {string} [props.className] - Extra classes for the track.
+ * @returns {JSX.Element}
+ *
+ * @example
+ * <div role="menuitemcheckbox" aria-checked={enabled} tabIndex={0} onClick={toggle}>
+ *   <span>{t('websearch.toggleLabel', 'Web Search')}</span>
+ *   <SwitchIndicator checked={enabled} />
+ * </div>
+ */
+export function SwitchIndicator({ checked, size = 'md', className = '' }) {
+  const isOn = Boolean(checked);
+  const dimensions = SIZES[size] || SIZES.md;
+  return (
+    <span
+      aria-hidden="true"
+      data-state={isOn ? 'on' : 'off'}
+      className={`pointer-events-none ${trackClassName(isOn, dimensions)} ${className}`}
+    >
+      <span className={thumbClassName(isOn, dimensions)} />
+    </span>
+  );
+}
+
+/**
  * Switch — the one on/off control of the client (WAI-ARIA "switch" pattern).
  *
  * Renders a native `<button role="switch" aria-checked>`, so Space and Enter
@@ -115,16 +179,11 @@ function Switch({
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={event => onChange?.(!isOn, event)}
-      className={`relative inline-flex ${dimensions.track} ${dimensions.hit} shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out motion-reduce:transition-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-gray-800 disabled:cursor-not-allowed disabled:opacity-50 ${
-        isOn ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-      } ${hasRow ? '' : className}`}
+      className={`${trackClassName(isOn, dimensions)} ${dimensions.hit} cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-gray-800 disabled:cursor-not-allowed disabled:opacity-50 ${
+        hasRow ? '' : className
+      }`}
     >
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none inline-block ${dimensions.thumb} transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out motion-reduce:transition-none ${
-          isOn ? dimensions.on : 'translate-x-0'
-        }`}
-      />
+      <span aria-hidden="true" className={thumbClassName(isOn, dimensions)} />
     </button>
   );
 

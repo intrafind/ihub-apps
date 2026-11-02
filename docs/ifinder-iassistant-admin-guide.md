@@ -392,6 +392,14 @@ iAssistant-specific request timeout (see
 [Platform → Request timeouts](platform.md#request-timeouts)). Per-app overrides are
 described in [Apps → iAssistant Configuration](apps.md#iassistant-configuration).
 
+Apps on any other model can ask the iAssistant through the action **Ask the
+iAssistant** (`ask`, tool `iassistant__ask`): one question, one grounded answer
+with the cited documents as the answer's sources. Tick it in the app's iAssistant
+binding (**Admin → Apps → Integrations → iAssistant → Use in this app**, or
+`"integrations": { "iassistant": { "actions": ["ask"] } }`). The iAssistant the
+user picked in the chat (or the app pinned) is the one asked. See
+[Integrations → The iAssistant `ask` action](integrations.md#built-in-integrations).
+
 ### 3. Profile ID Encoding
 
 iAssistant requires base64-encoded profile IDs. The system handles this automatically, but you can verify encoding:

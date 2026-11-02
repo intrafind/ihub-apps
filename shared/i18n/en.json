@@ -2567,6 +2567,7 @@
       "update": "Update",
       "uninstall": "Uninstall",
       "detach": "Detach",
+      "byAuthor": "by {{author}}",
       "allRegistries": "All Registries",
       "filterRegistry": "Filter by registry",
       "filterStatus": "Filter by status",
@@ -2691,6 +2692,26 @@
           "failed": "The migration of {{label}} failed: it stays on v{{from}} and offers no actions until you act on its page. Reason: {{reason}}",
           "skipped": "{{label}} was not migrated: {{reason}}"
         }
+      },
+      "integrationFacts": {
+        "title": "Integration facts",
+        "effect": "Effect",
+        "runs": "Where it runs",
+        "effectValues": {
+          "read": "read",
+          "readWrite": "read · write",
+          "unknown": "not declared"
+        },
+        "runsValues": {
+          "cloud": "cloud",
+          "onPrem": "on-premises",
+          "local": "local",
+          "unknown": "not stated"
+        },
+        "actionsDynamic": "listed by the server",
+        "actionsDynamicHint": "The server lists its actions when iHub connects to it; install and test the integration to see them.",
+        "noActions": "This integration declares no actions.",
+        "unavailable": "The definition could not be read from the registry, so its facts are not shown."
       }
     },
     "apps": {
@@ -3826,17 +3847,6 @@
         "settingsReadOnlyLegend": "Settings (read-only)",
         "noActionsWhileBlocked": "No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version."
       },
-      "actionReview": {
-        "new": "New",
-        "changed": "Changed",
-        "newHint": "Added since the last review. It asks for approval until you mark it reviewed.",
-        "changedHint": "Its side effect or input changed since the last review. It asks for approval until you mark it reviewed.",
-        "pending": "{{count}} actions are new or changed since the last review.",
-        "markAll": "Mark all reviewed",
-        "markOne": "Mark reviewed",
-        "markOneLabel": "Mark {{action}} reviewed",
-        "marked": "Marked as reviewed: {{actions}}"
-      },
       "testChat": {
         "title": "Test in chat",
         "open": "Test in chat",
@@ -3865,6 +3875,17 @@
         "notGranted": "Your groups do not grant this installation, so the chat runs without its actions. Grant it under Admin → Groups.",
         "openGroups": "Open groups",
         "appDisabled": "This app is disabled, so it cannot be opened in the chat. Enable it in the app editor to test it."
+      },
+      "actionReview": {
+        "new": "New",
+        "changed": "Changed",
+        "newHint": "Added since the last review. It asks for approval until you mark it reviewed.",
+        "changedHint": "Its side effect or input changed since the last review. It asks for approval until you mark it reviewed.",
+        "pending": "{{count}} actions are new or changed since the last review.",
+        "markAll": "Mark all reviewed",
+        "markOne": "Mark reviewed",
+        "markOneLabel": "Mark {{action}} reviewed",
+        "marked": "Marked as reviewed: {{actions}}"
       },
       "actionDetail": {
         "source": {

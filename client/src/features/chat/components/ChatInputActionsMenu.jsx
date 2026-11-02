@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { SwitchIndicator } from '../../../shared/components/Switch';
 import { fetchToolsBasic } from '../../../api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
@@ -26,6 +27,12 @@ import {
  * ChatInputActionsMenu component - unified menu for all chat input actions
  * Consolidates tools, file upload, magic prompt, and voice input into one menu
  * Supports single action optimization and tool usage tracking
+ *
+ * On/off rows (message context, web search, tools) are `menuitemcheckbox`
+ * items of the `role="menu"`: the row owns the state (`aria-checked`), the
+ * roving tab index and Space/Enter. The switch drawn in a row is the shared
+ * {@link SwitchIndicator}, a visual only: a real `Switch` (or checkbox)
+ * inside a menu item would be a nested interactive control.
  */
 function ChatInputActionsMenu({
   app,
@@ -304,6 +311,7 @@ function ChatInputActionsMenu({
   enabledCloudProviders.forEach(p => {
     if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
   });
+  hostContextToggles.forEach(toggle => menuNavItems.push(`host-${toggle.key}`));
   if (hasWebsearch) menuNavItems.push('websearch');
   if (hasScopes) {
     scopeIntegrations.forEach(integration => {
@@ -501,10 +509,21 @@ function ChatInputActionsMenu({
               <div className="space-y-1">
                 {hostContextToggles.map(toggle => {
                   const enabled = hostContextFlags?.[toggle.key] ?? toggle.defaultEnabled ?? true;
+                  const flip = () => onHostContextFlagChange?.(toggle.key, !enabled);
                   return (
                     <div
                       key={toggle.key}
-                      className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                      role="menuitemcheckbox"
+                      aria-checked={enabled}
+                      tabIndex={navTabIndex(`host-${toggle.key}`)}
+                      className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg cursor-pointer"
+                      onClick={flip}
+                      onKeyDown={e => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          flip();
+                        }
+                      }}
                     >
                       <div className="flex-1 min-w-0 mr-3">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -516,15 +535,7 @@ function ChatInputActionsMenu({
                           </div>
                         )}
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={enabled}
-                          onChange={e => onHostContextFlagChange?.(toggle.key, e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                      </label>
+                      <SwitchIndicator checked={enabled} />
                     </div>
                   );
                 })}
@@ -561,20 +572,8 @@ function ChatInputActionsMenu({
                   </div>
                 </div>
                 {/* Purely visual switch: the row owns the role, the state and
-                    the interaction, so the checkbox only drives the `peer-*`
-                    styling and is kept out of the tab order, out of the
-                    accessibility tree and out of the click target. */}
-                <span className="relative inline-flex items-center pointer-events-none">
-                  <input
-                    type="checkbox"
-                    checked={websearchEnabled}
-                    readOnly
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                </span>
+                    the interaction. */}
+                <SwitchIndicator checked={websearchEnabled} />
               </div>
             </div>
           )}
@@ -766,18 +765,8 @@ function ChatInputActionsMenu({
                             </div>
                           )}
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={allEnabled}
-                            ref={el => {
-                              if (el) el.indeterminate = someEnabled && !allEnabled;
-                            }}
-                            onChange={() => toggleTool(group.id, true, group.matchedTools)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                        </label>
+                        {/* Visual only; the row carries `aria-checked` (incl. "mixed"). */}
+                        <SwitchIndicator checked={allEnabled} />
                       </div>
                     );
                   })}
@@ -817,15 +806,7 @@ function ChatInputActionsMenu({
                             </div>
                           )}
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isEnabled}
-                            onChange={() => toggleTool(toolId)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                        </label>
+                        <SwitchIndicator checked={isEnabled} />
                       </div>
                     );
                   })}

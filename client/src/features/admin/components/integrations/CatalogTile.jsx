@@ -4,7 +4,8 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { PRIMARY_BUTTON_CLASS } from '../formStyles';
-import { Pill, marketplaceLinkFor } from './IntegrationPills';
+import Badge from '../../../../shared/components/Badge';
+import { marketplaceLinkFor } from './IntegrationPills';
 
 /**
  * The tooltip of a definition's Install button: why it is disabled (the
@@ -49,29 +50,29 @@ function CatalogTile({ item, onInstall }) {
         </h3>
         <div className="flex flex-wrap justify-end gap-1">
           {item.compatible === false && (
-            <Pill tone="red" title={item.statusReason || undefined}>
+            <Badge tone="danger" title={item.statusReason || undefined}>
               {t('admin.integrationCatalog.status.incompatible', 'Incompatible')}
-            </Pill>
+            </Badge>
           )}
           {item.update?.compatible && (
             <Link
               to={marketplaceLinkFor(item.id)}
               className="inline-flex rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
-              <Pill tone="orange">
+              <Badge tone="warning">
                 {t(
                   'admin.integrationCatalog.status.updateAvailable',
                   'Update to v{{version}} available',
                   { version: item.update.latestVersion }
                 )}
-              </Pill>
+              </Badge>
             </Link>
           )}
-          <Pill tone={item.source === 'installed' ? 'blue' : 'gray'}>
+          <Badge tone={item.source === 'installed' ? 'info' : 'neutral'}>
             {item.source === 'installed'
               ? t('admin.integrationCatalog.source.installed', 'From registry')
               : t('admin.integrationCatalog.source.shipped', 'Shipped')}
-          </Pill>
+          </Badge>
         </div>
       </div>
       {item.compatible === false && item.statusReason && (
@@ -108,9 +109,9 @@ function CatalogTile({ item, onInstall }) {
       <div className="mt-4 flex items-center justify-between gap-2">
         <span className="text-xs text-gray-500 dark:text-gray-400">
           {item.runsCode && (
-            <Pill tone="yellow">
+            <Badge tone="warning">
               {t('admin.integrationCatalog.runsCode', 'Runs code on this server')}
-            </Pill>
+            </Badge>
           )}{' '}
           {item.installedInstances?.length
             ? t('admin.integrationCatalog.installedCount', '{{count}} installed', {

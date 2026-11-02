@@ -304,6 +304,39 @@ describe('installed instances', () => {
     await admin(request(app).get('/api/admin/integrations/installed/ckan-demo')).expect(404);
   });
 
+  it('keeps the tool approval on a save without it; PUT …/approval without the field is a 400 (#2945)', async () => {
+    await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
+    await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo/approval')
+        .send({ approval: { default: 'always' } })
+    ).expect(200);
+    expect(state.integrations.installed[0].approval).toEqual({ default: 'always' });
+
+    // A body that does not name `approval` is refused, the gate stays.
+    const missing = await admin(
+      request(app).put('/api/admin/integrations/installed/ckan-demo/approval').send({})
+    ).expect(400);
+    expect(missing.body.code).toBe('APPROVAL_REQUIRED_FIELD');
+    expect(state.integrations.installed[0].approval).toEqual({ default: 'always' });
+
+    // An installation save that knows nothing about approval keeps it.
+    await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo')
+        .send({ ...payload, values: { baseUrl: 'https://other.example' } })
+    ).expect(200);
+    expect(state.integrations.installed[0].approval).toEqual({ default: 'always' });
+
+    // Only an explicit null clears it.
+    await admin(
+      request(app)
+        .put('/api/admin/integrations/installed/ckan-demo/approval')
+        .send({ approval: null })
+    ).expect(200);
+    expect(state.integrations.installed[0].approval).toBeUndefined();
+  });
+
   it('rejects duplicates, unknown definitions, bad values and reserved ids', async () => {
     await admin(request(app).post('/api/admin/integrations/installed').send(payload)).expect(201);
     const dup = await admin(
