@@ -434,7 +434,7 @@ export class FilesystemLockManager extends LockManager {
     if (issued !== token) return false;
     const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
     const lease = await readJsonMarker(lockPath);
-    if (!lease?.data || lease.data.token !== token) return false;
+    if (lease?.data?.token !== token) return false;
     return !isExpiredLease(lease, DEFAULT_TTL_MS);
   }
 

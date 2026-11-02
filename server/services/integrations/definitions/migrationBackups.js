@@ -123,52 +123,13 @@ export async function createSnapshot({
   }
   if (!BACKUP_KINDS.includes(kind)) throw new Error(`Unknown backup kind ${kind}`);
   const root = await ensureRoot();
-  const base = `${instanceId}-${representedVersion}-${compactTimestamp(now)}`;
-  let id = base;
-  let dir = null;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    id = attempt === 0 ? base : `${base}-${attempt}`;
-    const candidate = await resolveAndValidatePath(id, root);
-    if (!candidate || path.dirname(candidate) !== (await fs.realpath(root))) {
-      throw new Error(`Backup folder escapes the backups directory: ${id}`);
-    }
-    try {
-      await fs.mkdir(candidate);
-      dir = candidate;
-      break;
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-    }
-  }
-  if (!dir) throw new Error(`Could not create a backup folder for ${instanceId}`);
-
+  const { id, dir } = await createBackupFolder(
+    root,
+    `${instanceId}-${representedVersion}-${compactTimestamp(now)}`,
+    instanceId
+  );
   try {
-    const files = [];
-    await writeBackupJson(dir, 'config/integrations.json', integrations);
-    files.push({ path: 'config/integrations.json', type: 'integrations' });
-    for (const app of apps) {
-      await writeBackupJson(dir, app.path, app.data);
-      files.push({
-        path: app.path,
-        type: 'app',
-        appId: app.data?.id || null,
-        bindingKeys: [...(app.bindingKeys || [])]
-      });
-    }
-    if (installations?.data) {
-      await writeBackupJson(dir, 'config/installations.json', installations.data);
-      files.push({
-        path: 'config/installations.json',
-        type: 'marketplace-manifest',
-        entryKey: installations.entryKey
-      });
-    }
-    if (definition?.sourceDir) {
-      const relPath = `integration-definitions/${definition.folder}`;
-      const target = await backupFilePath(dir, relPath);
-      await fs.cp(definition.sourceDir, target, { recursive: true, errorOnExist: true });
-      files.push({ path: relPath, type: 'definition', version: definition.version });
-    }
+    const files = await copyIntoBackup(dir, { integrations, apps, installations, definition });
     const manifest = {
       representedVersion,
       instanceId,
@@ -185,6 +146,74 @@ export async function createSnapshot({
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     throw error;
   }
+}
+
+/**
+ * Create a new, empty backup folder below the backups root: `base`, or
+ * `base-1`, `base-2`, … when a backup of the same millisecond took it.
+ *
+ * @param {string} root - the backups root
+ * @param {string} base - `<instanceId>-<version>-<timestamp>`
+ * @param {string} instanceId - for the error message
+ * @returns {Promise<{ id: string, dir: string }>} the folder name and its absolute path
+ * @throws {Error} when a name escapes the root, or no free name is left
+ */
+async function createBackupFolder(root, base, instanceId) {
+  // Sequential on purpose: the names are tried in order and the first free one wins.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const id = attempt === 0 ? base : `${base}-${attempt}`;
+    const candidate = await resolveAndValidatePath(id, root);
+    if (!candidate || path.dirname(candidate) !== (await fs.realpath(root))) {
+      throw new Error(`Backup folder escapes the backups directory: ${id}`);
+    }
+    try {
+      await fs.mkdir(candidate);
+      return { id, dir: candidate };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  throw new Error(`Could not create a backup folder for ${instanceId}`);
+}
+
+/**
+ * Copy what a backup keeps into its `files/` folder and describe each copy
+ * for the manifest: `integrations.json`, the app files, the marketplace
+ * manifest and the definition folder (the last two only when given).
+ *
+ * @param {string} dir - the backup folder
+ * @param {object} input - see {@link createSnapshot}
+ * @returns {Promise<Array<object>>} the manifest's `files`
+ */
+async function copyIntoBackup(dir, { integrations, apps, installations, definition }) {
+  const files = [];
+  await writeBackupJson(dir, 'config/integrations.json', integrations);
+  files.push({ path: 'config/integrations.json', type: 'integrations' });
+  // Sequential on purpose: the first failed copy stops the backup (the caller removes it).
+  for (const app of apps) {
+    await writeBackupJson(dir, app.path, app.data);
+    files.push({
+      path: app.path,
+      type: 'app',
+      appId: app.data?.id || null,
+      bindingKeys: [...(app.bindingKeys || [])]
+    });
+  }
+  if (installations?.data) {
+    await writeBackupJson(dir, 'config/installations.json', installations.data);
+    files.push({
+      path: 'config/installations.json',
+      type: 'marketplace-manifest',
+      entryKey: installations.entryKey
+    });
+  }
+  if (definition?.sourceDir) {
+    const relPath = `integration-definitions/${definition.folder}`;
+    const target = await backupFilePath(dir, relPath);
+    await fs.cp(definition.sourceDir, target, { recursive: true, errorOnExist: true });
+    files.push({ path: relPath, type: 'definition', version: definition.version });
+  }
+  return files;
 }
 
 /** The absolute path of a file inside a backup's `files/`, refused outside it. */
@@ -261,14 +290,12 @@ export async function listSnapshots({ instanceId } = {}) {
     }
     return [];
   }
-  const out = [];
-  for (const name of names) {
-    if (instanceId && !name.startsWith(`${instanceId}-`)) continue;
-    const snapshot = await openSnapshot(name);
-    if (!snapshot) continue;
-    if (instanceId && snapshot.manifest.instanceId !== instanceId) continue;
-    out.push(snapshot);
-  }
+  const candidates = instanceId ? names.filter(name => name.startsWith(`${instanceId}-`)) : names;
+  // Independent reads that never throw (an unreadable backup is null); sorted below.
+  const opened = await Promise.all(candidates.map(name => openSnapshot(name)));
+  const out = opened.filter(
+    snapshot => snapshot && (!instanceId || snapshot.manifest.instanceId === instanceId)
+  );
   return out.sort(
     (a, b) =>
       String(b.manifest.createdAt).localeCompare(String(a.manifest.createdAt)) ||
@@ -385,10 +412,10 @@ export async function removeMarker(snapshot) {
  * @returns {Promise<Array<{ snapshot: object, marker: object }>>}
  */
 export async function listUnfinishedCommits({ instanceId } = {}) {
-  const out = [];
-  for (const snapshot of await listSnapshots({ instanceId })) {
-    const marker = await readMarker(snapshot);
-    if (marker && marker.finished !== true) out.push({ snapshot, marker });
-  }
-  return out;
+  const snapshots = await listSnapshots({ instanceId });
+  // Independent reads that never throw (no marker is null); the order stays newest first.
+  const markers = await Promise.all(snapshots.map(snapshot => readMarker(snapshot)));
+  return snapshots
+    .map((snapshot, i) => ({ snapshot, marker: markers[i] }))
+    .filter(({ marker }) => marker && marker.finished !== true);
 }

@@ -116,8 +116,19 @@ function appendLog(log, entry) {
 
 /** The installation without its migration state (a run that succeeded or a restore clears it). */
 function withoutState(instance) {
-  const { status: _status, statusReason: _reason, ...rest } = instance;
+  const rest = { ...instance };
+  delete rest.status;
+  delete rest.statusReason;
   return rest;
+}
+
+/**
+ * The `result` of a run's log entry: `failed` with a reason, `migrated`
+ * when migrations ran, else `stamped` (only the version changed).
+ */
+function runResult(reason, selected) {
+  if (reason) return 'failed';
+  return selected.length > 0 ? 'migrated' : 'stamped';
 }
 
 /** The marketplace manifest key of a definition (`integration:<folder>`). */
@@ -293,15 +304,10 @@ export class DefinitionMigrationRunner {
    */
   async describe(instances) {
     await this.registry.ensureLoaded();
-    const snapshotsByInstance = new Map();
-    for (const snapshot of await backups.listSnapshots()) {
-      if (snapshot.manifest.kind === 'journal') continue;
-      const list = snapshotsByInstance.get(snapshot.manifest.instanceId) || [];
-      list.push(snapshot);
-      snapshotsByInstance.set(snapshot.manifest.instanceId, list);
-    }
+    const snapshotsByInstance = await this._offeredSnapshotsByInstance();
     let allApps = null;
     const out = new Map();
+    // Sequential on purpose: the apps are read once, lazily; a failed read is retried by the next.
     for (const instance of instances) {
       const entry = this.registry.get(instance.definition);
       const state = installationMigrationState(instance, entry);
@@ -310,43 +316,11 @@ export class DefinitionMigrationRunner {
         out.set(instance.id, null);
         continue;
       }
-      const view = {
-        pending: state.pending,
-        blocked: state.blocked,
-        downgrade: state.downgrade,
-        from: state.from,
-        to: state.to,
-        migrations: state.migrations,
-        summary: null,
-        warnings: [],
-        collisions: [],
-        errors: [],
-        backups: snapshots.map(backups.snapshotView),
-        defaultBackup: this._defaultBackup(state, entry, snapshots)?.id || null
-      };
+      const view = this._migrationView(state, entry, snapshots);
       if (state.pending && state.migrations.length > 0 && entry) {
         try {
           allApps ??= await this._readApps();
-          const apps = this._boundApps(allApps, instance, entry.definition);
-          const plan = planMigration({
-            instance,
-            apps: apps.map(app => ({ path: app.path, app: app.data })),
-            definition: entry.definition,
-            from: state.from,
-            to: state.to
-          });
-          view.summary = plan.summary;
-          view.warnings = plan.warnings;
-          view.collisions = plan.collisions;
-          if (plan.ok) {
-            view.errors = validateMigrationResult({
-              before: instance,
-              after: plan.instance,
-              apps: plan.apps,
-              definition: entry.definition,
-              dynamicActions: hasDynamicActions(entry.definition)
-            });
-          }
+          this._planIntoView(view, { instance, entry, state, allApps });
         } catch (error) {
           logger.warn('Could not plan a pending integration migration for the admin view', {
             component: COMPONENT,
@@ -358,6 +332,64 @@ export class DefinitionMigrationRunner {
       out.set(instance.id, view);
     }
     return out;
+  }
+
+  /** The backups an admin is offered (journals are not), by installation id, newest first. */
+  async _offeredSnapshotsByInstance() {
+    const snapshotsByInstance = new Map();
+    for (const snapshot of await backups.listSnapshots()) {
+      if (snapshot.manifest.kind === 'journal') continue;
+      const list = snapshotsByInstance.get(snapshot.manifest.instanceId) || [];
+      list.push(snapshot);
+      snapshotsByInstance.set(snapshot.manifest.instanceId, list);
+    }
+    return snapshotsByInstance;
+  }
+
+  /** The admin view of an installation's migration state, before a pending migration is planned. */
+  _migrationView(state, entry, snapshots) {
+    return {
+      pending: state.pending,
+      blocked: state.blocked,
+      downgrade: state.downgrade,
+      from: state.from,
+      to: state.to,
+      migrations: state.migrations,
+      summary: null,
+      warnings: [],
+      collisions: [],
+      errors: [],
+      backups: snapshots.map(backups.snapshotView),
+      defaultBackup: this._defaultBackup(state, entry, snapshots)?.id || null
+    };
+  }
+
+  /**
+   * Plan a pending migration against the current apps (no writes) and put
+   * its summary, warnings, collisions and, when it plans cleanly, the
+   * validation errors into the view.
+   */
+  _planIntoView(view, { instance, entry, state, allApps }) {
+    const apps = this._boundApps(allApps, instance, entry.definition);
+    const plan = planMigration({
+      instance,
+      apps: apps.map(app => ({ path: app.path, app: app.data })),
+      definition: entry.definition,
+      from: state.from,
+      to: state.to
+    });
+    view.summary = plan.summary;
+    view.warnings = plan.warnings;
+    view.collisions = plan.collisions;
+    if (plan.ok) {
+      view.errors = validateMigrationResult({
+        before: instance,
+        after: plan.instance,
+        apps: plan.apps,
+        definition: entry.definition,
+        dynamicActions: hasDynamicActions(entry.definition)
+      });
+    }
   }
 
   /**
@@ -675,7 +707,7 @@ export class DefinitionMigrationRunner {
       at: now,
       by,
       trigger,
-      result: reason ? 'failed' : selected.length > 0 ? 'migrated' : 'stamped',
+      result: runResult(reason, selected),
       migrations: plan.migrations,
       steps: plan.steps,
       warnings: plan.warnings,
@@ -778,6 +810,7 @@ export class DefinitionMigrationRunner {
 
   /** Keep the state at every migration boundary a run passed (best effort, after the commit). */
   async _writeBoundarySnapshots(unit, { by, trigger }) {
+    // Sequential on purpose: one backup at a time, in boundary order, each failure logged.
     for (const boundary of unit.plan?.boundaries || []) {
       try {
         const integrations = (await this.store.readJson(INTEGRATIONS_FILE)) || { installed: [] };
@@ -830,6 +863,45 @@ export class DefinitionMigrationRunner {
 
     // The results, computed from the files as they are now: only the
     // entries and binding keys of these installations change.
+    const integrations = await this._integrationsResult(units);
+    const appResults = await this._appResults(units);
+    const manifestResult = manifest
+      ? await this._patchedManifest(manifest.entryKey, manifest.patch)
+      : null;
+
+    // 1. Stage.
+    const targets = await this._stage(primary, { integrations, appResults, manifestResult });
+
+    // 2. Markers, carrying the fencing token of each installation's lease.
+    await this._writeMarkers(units, { primary, targets, trigger, manifest, definitionSwap });
+
+    // 3. Fencing: every holder must still hold its lease before anything moves.
+    await this._assertLeasesCurrent(units, primary);
+
+    // 4. Move into place (a failure rolls everything back and is rethrown).
+    const previous = await this._moveIntoPlace({
+      units,
+      primary,
+      appResults,
+      manifestResult,
+      definitionSwap,
+      manifest
+    });
+
+    // 5. Finalise.
+    await this._finaliseMarkers(units);
+    await backups.removeStaging(primary);
+    if (definitionSwap) await this.registry.dropPrevious(definitionSwap.id, previous);
+  }
+
+  /**
+   * `integrations.json` with each unit's entry replaced by its result,
+   * validated. An entry that is no longer the one a unit was planned from
+   * is a conflict.
+   *
+   * @throws {IntegrationError} 409 `MIGRATION_CONFLICT`, 500 `INVALID_CONFIG`
+   */
+  async _integrationsResult(units) {
     const config = await this._readIntegrations();
     for (const unit of units) {
       const index = config.installed.findIndex(inst => inst.id === unit.instanceId);
@@ -849,30 +921,49 @@ export class DefinitionMigrationRunner {
         details: validated.errors
       });
     }
-    const appResults = new Map();
-    for (const unit of units) {
-      for (const write of unit.appWrites || []) {
-        const current = appResults.get(write.path) ?? (await this.store.readJson(write.path));
-        if (!current) continue;
-        current.integrations = { ...(current.integrations || {}), ...clone(write.bindings) };
-        appResults.set(write.path, current);
-      }
-    }
-    let manifestResult = null;
-    if (manifest) {
-      manifestResult = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || {
-        installations: {}
-      };
-      manifestResult.installations ??= {};
-      manifestResult.installations[manifest.entryKey] = {
-        ...(manifestResult.installations[manifest.entryKey] || {}),
-        ...manifest.patch
-      };
-    }
+    return validated.data;
+  }
 
-    // 1. Stage.
+  /**
+   * The app files the units rewrite, read fresh, with the rewritten binding
+   * keys put in (other keys stay as they are now). A file that is gone is
+   * skipped.
+   *
+   * @returns {Promise<Map<string, object>>} path → app JSON, in the order of the first write
+   */
+  async _appResults(units) {
+    const appResults = new Map();
+    // Sequential on purpose: several units may rewrite one app file, each on top of the one before.
+    for (const write of units.flatMap(unit => unit.appWrites || [])) {
+      const current = appResults.get(write.path) ?? (await this.store.readJson(write.path));
+      if (!current) continue;
+      current.integrations = { ...current.integrations, ...clone(write.bindings) };
+      appResults.set(write.path, current);
+    }
+    return appResults;
+  }
+
+  /** The marketplace manifest, read fresh, with one entry patched (nothing is written). */
+  async _patchedManifest(entryKey, patch) {
+    const manifestData = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || {
+      installations: {}
+    };
+    manifestData.installations ??= {};
+    manifestData.installations[entryKey] = {
+      ...manifestData.installations[entryKey],
+      ...patch
+    };
+    return manifestData;
+  }
+
+  /**
+   * Write the results into the backup's staging folder.
+   * @returns {Promise<string[]>} the files the commit moves, in that order
+   */
+  async _stage(primary, { integrations, appResults, manifestResult }) {
     const targets = [INTEGRATIONS_FILE];
-    await backups.stageJson(primary, INTEGRATIONS_FILE, validated.data);
+    await backups.stageJson(primary, INTEGRATIONS_FILE, integrations);
+    // Sequential on purpose: staged in order; a failure stops the commit before any marker.
     for (const [relPath, data] of appResults) {
       await backups.stageJson(primary, relPath, data);
       targets.push(relPath);
@@ -881,9 +972,13 @@ export class DefinitionMigrationRunner {
       await backups.stageJson(primary, INSTALLATIONS_MANIFEST, manifestResult);
       targets.push(INSTALLATIONS_MANIFEST);
     }
+    return targets;
+  }
 
-    // 2. Markers, carrying the fencing token of each installation's lease.
+  /** Write an unfinished commit marker into each unit's backup, with its lease's fencing token. */
+  async _writeMarkers(units, { primary, targets, trigger, manifest, definitionSwap }) {
     const startedAt = this._now().toISOString();
+    // Sequential on purpose: in unit order; a failure stops before the later markers exist.
     for (const unit of units) {
       await backups.writeMarker(unit.snapshot, {
         instanceId: unit.instanceId,
@@ -903,10 +998,20 @@ export class DefinitionMigrationRunner {
           : null
       });
     }
+  }
 
-    // 3. Fencing: every holder must still hold its lease before anything moves.
+  /**
+   * Every unit must still hold its lease. The first one (in unit order)
+   * whose lease was taken over discards the markers and the staging, and
+   * nothing moves.
+   *
+   * @throws {IntegrationError} 409 `MIGRATION_LOCK_LOST`
+   */
+  async _assertLeasesCurrent(units, primary) {
+    // Sequential on purpose: the first lease taken over, in unit order, names the error.
     for (const unit of units) {
       if (await unit.lease.isCurrent()) continue;
+      // Sequential on purpose: one marker at a time; the first failure stops the cleanup.
       for (const other of units) await backups.removeMarker(other.snapshot);
       await backups.removeStaging(primary);
       throw new IntegrationError(
@@ -914,8 +1019,16 @@ export class DefinitionMigrationRunner {
         { status: 409, code: 'MIGRATION_LOCK_LOST' }
       );
     }
+  }
 
-    // 4. Move into place.
+  /**
+   * Move the staged files (and a staged definition folder) into place. A
+   * failure rolls every unit back from its backup, puts the previous
+   * definition folder back, and is rethrown.
+   *
+   * @returns {Promise<object|null>} the previous definition folder, for `dropPrevious`
+   */
+  async _moveIntoPlace({ units, primary, appResults, manifestResult, definitionSwap, manifest }) {
     let previous = null;
     try {
       if (definitionSwap) {
@@ -925,6 +1038,7 @@ export class DefinitionMigrationRunner {
         INTEGRATIONS_FILE,
         await backups.readStagedJson(primary, INTEGRATIONS_FILE)
       );
+      // Sequential on purpose: staged order; the first failure rolls everything back.
       for (const relPath of appResults.keys()) {
         await this.store.writeJson(relPath, await backups.readStagedJson(primary, relPath));
       }
@@ -935,46 +1049,61 @@ export class DefinitionMigrationRunner {
         );
       }
     } catch (error) {
-      logger.error('Integration migration commit failed; rolling back from the backup', {
-        component: COMPONENT,
-        instances: units.map(unit => unit.instanceId),
-        error: error.message
+      await this._rollBackFailedCommit({
+        units,
+        primary,
+        definitionSwap,
+        previous,
+        manifest,
+        error
       });
-      for (const unit of units) {
-        await this._rollbackUnit(unit.snapshot, {
-          instanceId: unit.instanceId,
-          manifestEntry: manifest?.entryKey || null,
-          restoreDefinition: false,
-          reason: `commit failed: ${error.message}`
-        }).catch(rollbackError =>
-          logger.error('Rollback of an integration migration failed', {
-            component: COMPONENT,
-            instanceId: unit.instanceId,
-            error: rollbackError.message
-          })
-        );
-      }
-      if (definitionSwap) {
-        await this.registry.restorePrevious(definitionSwap, previous).catch(restoreError =>
-          logger.error('Could not put the previous integration definition folder back', {
-            component: COMPONENT,
-            definitionId: definitionSwap.id,
-            error: restoreError.message
-          })
-        );
-      }
-      await backups.removeStaging(primary).catch(() => {});
       throw error;
     }
+    return previous;
+  }
 
-    // 5. Finalise.
+  /** After a failed move: roll every unit back, put the previous definition folder back, drop the staging. */
+  async _rollBackFailedCommit({ units, primary, definitionSwap, previous, manifest, error }) {
+    logger.error('Integration migration commit failed; rolling back from the backup', {
+      component: COMPONENT,
+      instances: units.map(unit => unit.instanceId),
+      error: error.message
+    });
+    // Sequential on purpose: one rollback at a time, in unit order, each failure logged.
+    for (const unit of units) {
+      await this._rollbackUnit(unit.snapshot, {
+        instanceId: unit.instanceId,
+        manifestEntry: manifest?.entryKey || null,
+        restoreDefinition: false,
+        reason: `commit failed: ${error.message}`
+      }).catch(rollbackError =>
+        logger.error('Rollback of an integration migration failed', {
+          component: COMPONENT,
+          instanceId: unit.instanceId,
+          error: rollbackError.message
+        })
+      );
+    }
+    if (definitionSwap) {
+      await this.registry.restorePrevious(definitionSwap, previous).catch(restoreError =>
+        logger.error('Could not put the previous integration definition folder back', {
+          component: COMPONENT,
+          definitionId: definitionSwap.id,
+          error: restoreError.message
+        })
+      );
+    }
+    await backups.removeStaging(primary).catch(() => {});
+  }
+
+  /** Mark each unit's commit marker finished. */
+  async _finaliseMarkers(units) {
     const finishedAt = this._now().toISOString();
+    // Sequential on purpose: in unit order; a failure leaves the later markers unfinished.
     for (const unit of units) {
       const marker = await backups.readMarker(unit.snapshot);
       await backups.writeMarker(unit.snapshot, { ...marker, finished: true, finishedAt });
     }
-    await backups.removeStaging(primary);
-    if (definitionSwap) await this.registry.dropPrevious(definitionSwap.id, previous);
   }
 
   /** Write installation entries (a failed mark, a stamp, an adopt): one file, no backup needed. */
@@ -1061,12 +1190,13 @@ export class DefinitionMigrationRunner {
 
   /** Restore the binding keys a backup kept, app by app; other changes to the apps stay. */
   async _restoreAppBindings(snapshot) {
+    // Sequential on purpose: each app read right before its write; a failure stops here.
     for (const file of backups.snapshotApps(snapshot)) {
       const kept = await backups.readSnapshotJson(snapshot, file.path);
       const current = await this.store.readJson(file.path);
       if (!kept || !current) continue;
       let changed = false;
-      const integrations = { ...(current.integrations || {}) };
+      const integrations = { ...current.integrations };
       for (const key of file.bindingKeys || []) {
         const keptBinding = kept.integrations?.[key];
         if (canonicalJson(integrations[key]) === canonicalJson(keptBinding)) continue;
@@ -1103,17 +1233,19 @@ export class DefinitionMigrationRunner {
    * @returns {Promise<number>} how many commits were rolled back
    */
   async recoverInterruptedCommits({ instanceId } = {}) {
-    if (instanceId) return this._recoverLocked(instanceId);
-    let count = 0;
-    for (const { snapshot, marker } of await backups.listUnfinishedCommits()) {
-      count += await this._recoverOne(snapshot, marker);
-    }
-    return count;
+    return this._rollBackUnfinished({ instanceId });
   }
 
+  /** Roll back the interrupted commits of one installation (its lock is held). */
   async _recoverLocked(instanceId) {
+    return this._rollBackUnfinished({ instanceId });
+  }
+
+  /** Roll back the unfinished commits `filter` selects; how many were rolled back. */
+  async _rollBackUnfinished(filter) {
     let count = 0;
-    for (const { snapshot, marker } of await backups.listUnfinishedCommits({ instanceId })) {
+    // Sequential on purpose: interrupted commits roll back one at a time, newest first.
+    for (const { snapshot, marker } of await backups.listUnfinishedCommits(filter)) {
       count += await this._recoverOne(snapshot, marker);
     }
     return count;
@@ -1179,6 +1311,83 @@ export class DefinitionMigrationRunner {
 
   async _restoreLocked(instanceId, { backup, by, lease, automatic = false }) {
     await this._recoverLocked(instanceId);
+    const { instance, entry, state } = await this._restorable(instanceId, automatic);
+    const snapshot = await this._backupToRestore(instanceId, { backup, state, entry });
+    const keptEntry = await this._keptEntryOf(snapshot, instanceId);
+    const representedVersion = snapshot.manifest.representedVersion;
+    const definitionDir = await backups.snapshotDefinitionDir(snapshot);
+    const restoreDefinition =
+      Boolean(definitionDir) && entry?.definition?.version !== representedVersion;
+    if (!entry && !restoreDefinition) {
+      throw new IntegrationError(
+        `The definition "${instance.definition}" of "${instanceId}" is not installed and the backup holds none`,
+        { status: 422, code: 'DEFINITION_MISSING' }
+      );
+    }
+    const trigger = automatic ? 'downgrade' : 'restore';
+    const journal = await this._restoreJournal({
+      instance,
+      entry,
+      by,
+      trigger,
+      restoreDefinition,
+      representedVersion
+    });
+
+    const now = this._now().toISOString();
+    const logEntry = {
+      from: instance.definitionVersion || null,
+      to: representedVersion,
+      at: now,
+      by,
+      trigger,
+      result: 'restored',
+      migrations: [],
+      steps: [],
+      warnings: [],
+      reason: `restored backup ${snapshot.id}${restoreDefinition ? ' with its definition folder' : ''}`,
+      backup: snapshot.id
+    };
+    const after = {
+      ...withoutState(keptEntry),
+      definitionVersion: keptEntry.definitionVersion || representedVersion,
+      updatedAt: now,
+      migrationLog: appendLog(instance.migrationLog, logEntry)
+    };
+    const appWrites = await this._keptAppWrites(snapshot);
+    const { definitionSwap, manifest } = restoreDefinition
+      ? await this._stageKeptDefinition(snapshot, definitionDir)
+      : { definitionSwap: null, manifest: null };
+    const unit = {
+      instanceId,
+      definitionId: instance.definition,
+      before: instance,
+      after,
+      lease,
+      from: instance.definitionVersion || null,
+      to: representedVersion,
+      appWrites,
+      snapshot: journal,
+      logEntry
+    };
+    try {
+      await this._commit({ units: [unit], definitionSwap, manifest, trigger: 'restore' });
+    } catch (error) {
+      if (definitionSwap) await this.registry.discardStaged(definitionSwap).catch(() => {});
+      throw error;
+    }
+    return { unit, backup: backups.snapshotView(snapshot), definitionChanged: restoreDefinition };
+  }
+
+  /**
+   * The installation a restore works on, its definition entry and its
+   * migration state. An admin restores only a failed migration or an
+   * installation that needs a review; an automatic restore (a downgrade)
+   * any.
+   *
+   * @throws {IntegrationError} 404 `NOT_FOUND`, 409 `RESTORE_NOT_APPLICABLE`
+   */
+  async _restorable(instanceId, automatic) {
     const config = await this._readIntegrations();
     const instance = config.installed.find(inst => inst.id === instanceId);
     if (!instance) {
@@ -1192,6 +1401,16 @@ export class DefinitionMigrationRunner {
         { status: 409, code: 'RESTORE_NOT_APPLICABLE' }
       );
     }
+    return { instance, entry, state };
+  }
+
+  /**
+   * The backup a restore puts back: the one named (it must be the
+   * installation's and not a journal), else the default for the state.
+   *
+   * @throws {IntegrationError} 404 `BACKUP_NOT_FOUND`
+   */
+  async _backupToRestore(instanceId, { backup, state, entry }) {
     let snapshot = null;
     if (backup) {
       const named = await backups.openSnapshot(String(backup));
@@ -1212,6 +1431,14 @@ export class DefinitionMigrationRunner {
         { status: 404, code: 'BACKUP_NOT_FOUND' }
       );
     }
+    return snapshot;
+  }
+
+  /**
+   * The installation's entry in a backup's `integrations.json`.
+   * @throws {IntegrationError} 422 `BACKUP_INVALID`
+   */
+  async _keptEntryOf(snapshot, instanceId) {
     const kept = await backups.readSnapshotJson(snapshot, INTEGRATIONS_FILE);
     const keptEntry = (kept?.installed || []).find(inst => inst.id === instanceId);
     if (!keptEntry) {
@@ -1220,58 +1447,42 @@ export class DefinitionMigrationRunner {
         code: 'BACKUP_INVALID'
       });
     }
-    const representedVersion = snapshot.manifest.representedVersion;
-    const definitionDir = await backups.snapshotDefinitionDir(snapshot);
-    const restoreDefinition =
-      Boolean(definitionDir) && entry?.definition?.version !== representedVersion;
-    if (!entry && !restoreDefinition) {
-      throw new IntegrationError(
-        `The definition "${instance.definition}" of "${instanceId}" is not installed and the backup holds none`,
-        { status: 422, code: 'DEFINITION_MISSING' }
-      );
-    }
+    return keptEntry;
+  }
 
-    // A journal of the current state, so a crash while restoring rolls back
-    // to it; offered as a backup itself when the current version is valid.
+  /**
+   * A backup of the current state before a restore replaces it, so a crash
+   * while restoring rolls back to it; offered as a backup itself
+   * (`pre-restore`) when the current version is valid, else a `journal`.
+   */
+  async _restoreJournal({ instance, entry, by, trigger, restoreDefinition, representedVersion }) {
     const allApps = await this._readApps();
     const boundApps = this._boundApps(allApps, instance, entry?.definition);
     const currentVersionValid = isStrictSemver(instance.definitionVersion);
-    const journal = await this._snapshot({
+    return this._snapshot({
       instance,
       definitionId: instance.definition,
       currentEntry: entry,
       boundApps,
       by,
-      trigger: automatic ? 'downgrade' : 'restore',
+      trigger,
       manifest: restoreDefinition,
       kind: currentVersionValid ? 'pre-restore' : 'journal',
       representedVersion: currentVersionValid ? instance.definitionVersion : representedVersion
     });
+  }
 
-    const now = this._now().toISOString();
-    const logEntry = {
-      from: instance.definitionVersion || null,
-      to: representedVersion,
-      at: now,
-      by,
-      trigger: automatic ? 'downgrade' : 'restore',
-      result: 'restored',
-      migrations: [],
-      steps: [],
-      warnings: [],
-      reason: `restored backup ${snapshot.id}${restoreDefinition ? ' with its definition folder' : ''}`,
-      backup: snapshot.id
-    };
-    const after = {
-      ...withoutState(keptEntry),
-      definitionVersion: keptEntry.definitionVersion || representedVersion,
-      updatedAt: now,
-      migrationLog: appendLog(instance.migrationLog, logEntry)
-    };
+  /** The binding keys a backup kept, app by app, as the commit writes them back. */
+  async _keptAppWrites(snapshot) {
+    const files = backups.snapshotApps(snapshot);
+    // Independent reads that never throw (a missing copy is null); the file order stays.
+    const keptApps = await Promise.all(
+      files.map(file => backups.readSnapshotJson(snapshot, file.path))
+    );
     const appWrites = [];
-    for (const file of backups.snapshotApps(snapshot)) {
-      const keptApp = await backups.readSnapshotJson(snapshot, file.path);
-      if (!keptApp) continue;
+    files.forEach((file, i) => {
+      const keptApp = keptApps[i];
+      if (!keptApp) return;
       appWrites.push({
         path: file.path,
         bindings: Object.fromEntries(
@@ -1280,38 +1491,31 @@ export class DefinitionMigrationRunner {
             .map(key => [key, clone(keptApp.integrations[key])])
         )
       });
-    }
-    let definitionSwap = null;
-    let manifest = null;
-    if (restoreDefinition) {
-      definitionSwap = await this.registry.stageCopy(snapshot.manifest.definitionId, definitionDir);
-      const manifestFile = backups.snapshotFile(snapshot, 'marketplace-manifest');
-      const keptManifest = manifestFile
-        ? await backups.readSnapshotJson(snapshot, manifestFile.path)
-        : null;
-      const entryKey = manifestKeyOf(snapshot.manifest.definitionId);
-      const keptManifestEntry = keptManifest?.installations?.[entryKey];
-      if (keptManifestEntry) manifest = { entryKey, patch: clone(keptManifestEntry) };
-    }
-    const unit = {
-      instanceId,
-      definitionId: instance.definition,
-      before: instance,
-      after,
-      lease,
-      from: instance.definitionVersion || null,
-      to: representedVersion,
-      appWrites,
-      snapshot: journal,
-      logEntry
+    });
+    return appWrites;
+  }
+
+  /**
+   * Stage the definition folder a backup holds, and the definition's entry
+   * of the marketplace manifest it kept (when it kept one), for the commit.
+   *
+   * @returns {Promise<{ definitionSwap: object, manifest: { entryKey: string, patch: object }|null }>}
+   */
+  async _stageKeptDefinition(snapshot, definitionDir) {
+    const definitionSwap = await this.registry.stageCopy(
+      snapshot.manifest.definitionId,
+      definitionDir
+    );
+    const manifestFile = backups.snapshotFile(snapshot, 'marketplace-manifest');
+    const keptManifest = manifestFile
+      ? await backups.readSnapshotJson(snapshot, manifestFile.path)
+      : null;
+    const entryKey = manifestKeyOf(snapshot.manifest.definitionId);
+    const keptManifestEntry = keptManifest?.installations?.[entryKey];
+    return {
+      definitionSwap,
+      manifest: keptManifestEntry ? { entryKey, patch: clone(keptManifestEntry) } : null
     };
-    try {
-      await this._commit({ units: [unit], definitionSwap, manifest, trigger: 'restore' });
-    } catch (error) {
-      if (definitionSwap) await this.registry.discardStaged(definitionSwap).catch(() => {});
-      throw error;
-    }
-    return { unit, backup: backups.snapshotView(snapshot), definitionChanged: restoreDefinition };
   }
 
   /**
@@ -1404,6 +1608,7 @@ export class DefinitionMigrationRunner {
     if (!entry || entry.status === 'incompatible') return [];
     const results = [];
     const config = await this._readIntegrations();
+    // Sequential on purpose: one installation at a time, each under its own lock.
     for (const instance of config.installed.filter(inst => inst.definition === definitionId)) {
       const state = installationMigrationState(instance, entry);
       if (!state.downgrade) continue;
@@ -1494,15 +1699,10 @@ export class DefinitionMigrationRunner {
       if (ids.length === 0) {
         await this.registry.commitStaged(staged);
         committed = true;
-        const manifestData = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || {
-          installations: {}
-        };
-        manifestData.installations ??= {};
-        manifestData.installations[manifestKey] = {
-          ...(manifestData.installations[manifestKey] || {}),
-          ...manifestPatch
-        };
-        await this.store.writeJson(INSTALLATIONS_MANIFEST, manifestData);
+        await this.store.writeJson(
+          INSTALLATIONS_MANIFEST,
+          await this._patchedManifest(manifestKey, manifestPatch)
+        );
         if (notify) await this._afterCommit([], { definitionChanged: true, definitionId });
         return { installations: [] };
       }
@@ -1522,6 +1722,7 @@ export class DefinitionMigrationRunner {
   }
 
   async _updateLocked({ definitionId, staged, leases, manifestKey, manifestPatch, by }) {
+    // Sequential on purpose: one installation at a time, in lock order.
     for (const id of leases.keys()) await this._recoverLocked(id);
     const config = await this._readIntegrations();
     const currentEntry = this.registry.get(definitionId);
@@ -1529,6 +1730,7 @@ export class DefinitionMigrationRunner {
     const allApps = await this._readApps();
     const units = [];
     const results = [];
+    // Sequential on purpose: each installation takes its backup in turn, in file order.
     for (const instance of config.installed.filter(inst => inst.definition === definitionId)) {
       const lease = leases.get(instance.id);
       const from = instance.definitionVersion;
@@ -1577,15 +1779,10 @@ export class DefinitionMigrationRunner {
     }
     if (units.length === 0) {
       await this.registry.commitStaged(staged);
-      const manifestData = (await this.store.readJson(INSTALLATIONS_MANIFEST)) || {
-        installations: {}
-      };
-      manifestData.installations ??= {};
-      manifestData.installations[manifestKey] = {
-        ...(manifestData.installations[manifestKey] || {}),
-        ...manifestPatch
-      };
-      await this.store.writeJson(INSTALLATIONS_MANIFEST, manifestData);
+      await this.store.writeJson(
+        INSTALLATIONS_MANIFEST,
+        await this._patchedManifest(manifestKey, manifestPatch)
+      );
       return { units, results };
     }
     await this._commit({
@@ -1594,6 +1791,7 @@ export class DefinitionMigrationRunner {
       manifest: { entryKey: manifestKey, patch: manifestPatch },
       trigger: 'marketplace'
     });
+    // Sequential on purpose: boundary backups are written one unit at a time.
     for (const unit of units) {
       if (!unit.failed) await this._writeBoundarySnapshots(unit, { by, trigger: 'marketplace' });
     }
@@ -1620,6 +1818,7 @@ export class DefinitionMigrationRunner {
       await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
       await configCache.refreshAppsCache?.();
       await configCache.refreshInstallationsCache?.();
+      // Sequential on purpose: one installation's hooks at a time; a failure stops the refresh.
       for (const unit of units.filter(Boolean)) {
         await this.service._afterChange(unit.instanceId, {
           before: unit.before,
@@ -1669,6 +1868,7 @@ export class DefinitionMigrationRunner {
       return { recovered, results: [] };
     }
     const results = [];
+    // Sequential on purpose: one installation at a time, each under its own lock.
     for (const instance of config.installed) {
       const entry = this.registry.get(instance.definition);
       if (!entry || entry.status === 'incompatible') continue;

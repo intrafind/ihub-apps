@@ -331,7 +331,6 @@ export function checkReleaseMigrations(releases, migrations) {
     }
     migrationIds.add(migration.id);
   });
-  const referenced = new Set();
   (releases || []).forEach((release, i) => {
     if (!release.migration) return;
     if (release.migration !== release.version) {
@@ -346,11 +345,10 @@ export function checkReleaseMigrations(releases, migrations) {
         message: `migration "${release.migration}" is not listed in migrations`
       });
     }
-    referenced.add(release.migration);
   });
   (migrations || []).forEach((migration, i) => {
     const release = (releases || []).find(r => r.version === migration.id);
-    if (!release || release.migration !== migration.id) {
+    if (release?.migration !== migration.id) {
       issues.push({
         path: ['migrations', i, 'id'],
         message: `migration "${migration.id}" needs the release ${migration.id} to name it ("migration": "${migration.id}")`

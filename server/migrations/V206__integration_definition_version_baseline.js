@@ -41,12 +41,35 @@ const DEFINITION_FILE = 'integration.json';
 // of V206: MAJOR.MINOR.PATCH with an optional prerelease, no leading zeros,
 // no `v` prefix, no build metadata. Do NOT replace with an import —
 // migrations must be self-contained.
-const STRICT_SEMVER =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$/;
 
-/** Whether a value is a version in the exact form a definition writes it. */
+/** A MAJOR, MINOR or PATCH number: digits without a leading zero. */
+const VERSION_NUMBER = /^(?:0|[1-9]\d*)$/;
+
+/** One dot-separated prerelease identifier: a number without a leading zero, or alphanumerics and `-` with at least one non-digit. */
+const PRERELEASE_IDENTIFIER = /^(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)$/;
+
+/**
+ * Whether a value is a version in the exact form a definition writes it:
+ * `MAJOR.MINOR.PATCH`, optionally `-` and dot-separated prerelease
+ * identifiers (`1.4.0`, `2.0.0-rc.1`), at most 64 characters. The numbers
+ * hold no `-`, so the first `-` starts the prerelease.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
 export function isStrictVersion(value) {
-  return typeof value === 'string' && value.length <= 64 && STRICT_SEMVER.test(value);
+  if (typeof value !== 'string' || value.length > 64) return false;
+  const dash = value.indexOf('-');
+  const core = dash < 0 ? value : value.slice(0, dash);
+  const numbers = core.split('.');
+  if (numbers.length !== 3 || !numbers.every(part => VERSION_NUMBER.test(part))) return false;
+  return (
+    dash < 0 ||
+    value
+      .slice(dash + 1)
+      .split('.')
+      .every(id => PRERELEASE_IDENTIFIER.test(id))
+  );
 }
 
 /**
@@ -66,18 +89,25 @@ export async function readDefinitionVersions(root) {
     if (error.code === 'ENOENT') return versions;
     throw error;
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-    let definition;
-    try {
-      definition = JSON.parse(await fs.readFile(join(root, entry.name, DEFINITION_FILE), 'utf8'));
-    } catch {
-      continue;
-    }
+  const folders = entries.filter(entry => entry.isDirectory() && !entry.name.startsWith('.'));
+  // Independent reads that never throw (unreadable is null); applied in folder order.
+  const definitions = await Promise.all(
+    folders.map(entry => readDefinition(join(root, entry.name, DEFINITION_FILE)))
+  );
+  for (const definition of definitions) {
     if (typeof definition?.id !== 'string' || !isStrictVersion(definition.version)) continue;
     versions.set(definition.id, definition.version);
   }
   return versions;
+}
+
+/** A parsed definition file, or null when it cannot be read or parsed. */
+async function readDefinition(file) {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 /**
