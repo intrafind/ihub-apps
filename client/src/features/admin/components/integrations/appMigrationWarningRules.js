@@ -72,14 +72,8 @@ export function appMigrationWarnings(installations, app) {
   const seen = new Set();
   const out = [];
   for (const installation of installations) {
-    const log = Array.isArray(installation?.migrationLog) ? installation.migrationLog : [];
-    for (let index = log.length - 1; index >= 0; index -= 1) {
-      const entry = log[index];
-      if (entry?.result === 'restored') break;
-      if (entry?.result !== 'migrated') continue;
-      for (const warning of entry.warnings || []) {
-        if (!CODES.has(warning?.code) || warning.appId !== app.id) continue;
-        if (!stillApplies(app, warning)) continue;
+    for (const entry of migratedSinceRestore(installation)) {
+      for (const warning of warningsForApp(entry, app)) {
         const id = [installation.id, warning.code, warning.key, warning.action, warning.scope].join(
           '\u0000'
         );
@@ -97,6 +91,25 @@ export function appMigrationWarnings(installations, app) {
     }
   }
   return out;
+}
+
+/** An installation's `migrated` log entries since its last restore, newest first. */
+function migratedSinceRestore(installation) {
+  const log = Array.isArray(installation?.migrationLog) ? installation.migrationLog : [];
+  const entries = [];
+  for (let index = log.length - 1; index >= 0; index -= 1) {
+    const entry = log[index];
+    if (entry?.result === 'restored') break;
+    if (entry?.result === 'migrated') entries.push(entry);
+  }
+  return entries;
+}
+
+/** The warnings of one log entry that concern `app` and still apply to it. */
+function warningsForApp(entry, app) {
+  return (entry.warnings || []).filter(
+    warning => CODES.has(warning?.code) && warning.appId === app.id && stillApplies(app, warning)
+  );
 }
 
 /**

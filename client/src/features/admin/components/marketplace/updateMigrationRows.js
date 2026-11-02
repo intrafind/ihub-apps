@@ -80,7 +80,7 @@ export function previewLabels(preview, lang) {
  * @returns {boolean}
  */
 export function previewNotPlanned(preview) {
-  if (!preview || preview.planFromCatalog !== false) return false;
+  if (preview?.planFromCatalog !== false) return false;
   return !preview.to || (preview.errors || []).length > 0;
 }
 

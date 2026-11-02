@@ -138,6 +138,34 @@ function AdminInstallationPage() {
 }
 
 /**
+ * Why the Actions card is empty: the installation is blocked by its migration
+ * state, its system lists actions only once connected, or it offers none.
+ *
+ * @param {Function} t
+ * @param {boolean} blocked
+ * @param {boolean|undefined} dynamicActions
+ * @returns {string}
+ */
+function noActionsText(t, blocked, dynamicActions) {
+  if (blocked) {
+    return t(
+      'admin.integrations.migration.noActionsWhileBlocked',
+      'No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version.'
+    );
+  }
+  if (dynamicActions) {
+    return t(
+      'admin.integrations.page.noLiveActions',
+      'The system lists its actions when iHub connects. Test the connection to see them.'
+    );
+  }
+  return t(
+    'admin.integrations.page.noActions',
+    'This integration offers no actions to the model; apps use it through their own settings.'
+  );
+}
+
+/**
  * The page of one installation; see `AdminInstallationPage`.
  *
  * @param {Object} props
@@ -530,20 +558,7 @@ function InstallationPageContent({ instanceId }) {
               </h2>
               {(detail.actions || []).length === 0 ? (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {isMigrationBlocked(instance)
-                    ? t(
-                        'admin.integrations.migration.noActionsWhileBlocked',
-                        'No actions while the migration state is unresolved: the stored values do not belong to the loaded definition version.'
-                      )
-                    : definition?.dynamicActions
-                      ? t(
-                          'admin.integrations.page.noLiveActions',
-                          'The system lists its actions when iHub connects. Test the connection to see them.'
-                        )
-                      : t(
-                          'admin.integrations.page.noActions',
-                          'This integration offers no actions to the model; apps use it through their own settings.'
-                        )}
+                  {noActionsText(t, isMigrationBlocked(instance), definition?.dynamicActions)}
                 </p>
               ) : (
                 <ul
