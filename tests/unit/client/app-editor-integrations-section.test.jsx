@@ -161,6 +161,16 @@ describe('IntegrationsConfigSection', () => {
     );
   });
 
+  it('keeps the engine the app names selected when the engine list fails to load', async () => {
+    mockFetchInstalled.mockRejectedValue(new Error('offline'));
+    renderSection({ id: 'a', websearch: { enabled: true, provider: 'brave' } });
+    const select = await screen.findByLabelText('Search engine');
+    // Not "Auto": the stored engine stays shown, without a not-installed claim.
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'brave' })).toBeTruthy());
+    expect(select).toHaveValue('brave');
+    expect(screen.queryByTestId('websearch-engine-missing')).not.toBeInTheDocument();
+  });
+
   it('warns about a disabled engine the app names', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     renderSection({ id: 'a', websearch: { enabled: true, provider: 'brave' } });

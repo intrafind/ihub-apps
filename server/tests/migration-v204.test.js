@@ -398,6 +398,17 @@ describe('V204 web_search_engines', () => {
       assert.equal(files['tools/read_url.json'].script, 'webContentExtractor.js');
     });
 
+    it('stays off when the whole websearch installation was disabled', async () => {
+      // A disabled installation offered none of its actions, the reader
+      // included, even with `readUrl` among its enabled actions.
+      const files = {
+        '.migration-history.json': UPGRADE_HISTORY,
+        'config/integrations.json': integrationsFile(websearch({}, { enabled: false }))
+      };
+      await up(makeCtx(files));
+      assert.equal(files['tools/read_url.json'].enabled, false);
+    });
+
     it('writes no tool file while it was on, and keeps an existing one', async () => {
       const files = {
         '.migration-history.json': UPGRADE_HISTORY,
