@@ -103,6 +103,7 @@ import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
 import personalApiKeyRoutes from './routes/integrations/personalApiKeys.js';
 import connectionRoutes from './routes/integrations/connections.js';
+import userIntegrationRoutes from './routes/integrations/userIntegrations.js';
 import integrationScopeRoutes from './routes/integrations/scopes.js';
 import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
@@ -906,6 +907,10 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
+  // The user's integrations and the one connect flow (GET /api/integrations,
+  // POST /api/integrations/:id/connect|reconnect|disconnect). First, so an
+  // installation id that equals a provider slug still reaches /:id/connect.
+  app.use(buildApiPath('/integrations'), userIntegrationRoutes);
   app.use(buildApiPath('/integrations/jira'), jiraRoutes);
   app.use(buildApiPath('/integrations/office365'), office365Routes);
   app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);

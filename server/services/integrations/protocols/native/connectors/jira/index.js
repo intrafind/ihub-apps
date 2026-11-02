@@ -5,7 +5,7 @@
  * Built-in connector of the `jira` installation (`com.intrafind/jira`): the
  * six Jira Cloud tools of `tools/jira.js` under their old ids
  * (`jira_searchTickets`, …), every call as the signed-in user with the
- * Atlassian account they connected through `/api/integrations/jira/auth`.
+ * Atlassian account they connected through `POST /api/integrations/jira/connect`.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

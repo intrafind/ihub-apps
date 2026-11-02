@@ -13,12 +13,6 @@ import {
   integrationAuthRequiredResult,
   isIntegrationAuthRequired
 } from '../services/integrations/auth/integrationAuthRequired.js';
-import { buildServerPath } from '../utils/basePath.js';
-
-/** Where the user connects their Atlassian account. */
-function jiraConnectUrl() {
-  return buildServerPath('/api/integrations/jira/auth');
-}
 
 /**
  * The structured "connect first" result when the caller has no usable Jira
@@ -43,8 +37,7 @@ async function jiraConnectionMissing(user, message) {
     message:
       reason === INTEGRATION_AUTH_REASONS.NOT_CONNECTED
         ? message
-        : 'JIRA authentication expired. Please reconnect your account.',
-    connectUrl: jiraConnectUrl()
+        : 'JIRA authentication expired. Please reconnect your account.'
   });
 }
 
@@ -64,8 +57,7 @@ function jiraAuthFailure(error) {
   return integrationAuthRequiredResult({
     integration: JIRA_INSTANCE_ID,
     reason: error.reason || INTEGRATION_AUTH_REASONS.EXPIRED,
-    message: 'JIRA authentication expired. Please reconnect your account.',
-    connectUrl: jiraConnectUrl()
+    message: 'JIRA authentication expired. Please reconnect your account.'
   });
 }
 

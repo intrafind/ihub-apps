@@ -6,7 +6,7 @@
  * `com.intrafind/google-drive` and `com.intrafind/nextcloud` (any number of
  * installations each). They have no model-facing actions: an installation
  * holds one OAuth app, every user connects their own account
- * (`/api/integrations/<service>/auth?providerId=<installation id>`), and the
+ * (`POST /api/integrations/<installation id>/connect`), and the
  * file browsers, the picker and the project cloud kinds read the providers
  * through `cloudStorageConfig.js`. The connectors supply the installation
  * test, the "n users connected" status and the Connections dialog, each per

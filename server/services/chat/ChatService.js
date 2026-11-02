@@ -679,7 +679,7 @@ class ChatService {
     const mcpAppViews = [];
     // Per-user OAuth MCP servers the turn's tools asked the user to connect,
     // stored with the answer so the Connect card survives the sign-in redirect.
-    const mcpAuthPrompts = [];
+    const authPrompts = [];
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
@@ -712,7 +712,7 @@ class ChatService {
         buildLogData: log,
         logInteraction: this.logInteraction,
         mcpAppViews,
-        mcpAuthPrompts,
+        authPrompts,
         scheduledTaskProposals,
         generatedFiles
       }),
@@ -836,7 +836,7 @@ class ChatService {
         language,
         channel,
         mcpAppViews,
-        mcpAuthPrompts,
+        authPrompts,
         scheduledTaskProposals,
         generatedFiles,
         promptSources,
@@ -946,7 +946,7 @@ class ChatService {
     language,
     channel,
     mcpAppViews = [],
-    mcpAuthPrompts = [],
+    authPrompts = [],
     scheduledTaskProposals = [],
     generatedFiles = [],
     promptSources = [],
@@ -972,7 +972,7 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
-      mcpAuthRequired: mcpAuthPrompts,
+      integrationAuthRequired: authPrompts,
       scheduledTaskProposals,
       generatedFiles,
       // Everything the turn found — web pages, documents, records — and the
