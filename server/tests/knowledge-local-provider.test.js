@@ -839,7 +839,7 @@ describe('tools', () => {
         enabled: true,
         values: {},
         auth: { mode: 'none' },
-        // A switch an admin set before V201: it reaches the knowledge tools no more.
+        // A switch an admin set before V202: it reaches the knowledge tools no more.
         actions: { enabled: ['ask_user'], disabled: ['knowledge_search'], overrides: {} },
         allowedGroups: ['nobody']
       }

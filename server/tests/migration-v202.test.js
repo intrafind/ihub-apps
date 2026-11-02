@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * V201: the `ihub` installation keeps only `ask_user` and the scheduled-task
+ * V202: the `ihub` installation keeps only `ask_user` and the scheduled-task
  * tools; the knowledge, agent workspace and evidence tools leave its action
  * lists. A workflow or agent tool the installation had switched off stays
  * off through a tool file; the retired tool files that initial setup had
  * seeded again are removed.
  *
- * Run: node --test server/tests/migration-v201.test.js
+ * Run: node --test server/tests/migration-v202.test.js
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +28,7 @@ import {
   SHIPPED_HASHES,
   WORKFLOW_ACTIONS,
   WORKFLOW_TOOL_FILES
-} from '../migrations/V201__ihub_integration_chat_tools_only.js';
+} from '../migrations/V202__ihub_integration_chat_tools_only.js';
 import {
   ihubInstance,
   SHIPPED_HASHES as V199_SHIPPED_HASHES
@@ -76,9 +76,9 @@ const integrations = (...installed) => ({
   security: { blockPrivateIps: true, allowedHosts: [] }
 });
 
-describe('V201 iHub integration keeps only the chat tools', () => {
+describe('V202 iHub integration keeps only the chat tools', () => {
   it('declares its version', () => {
-    assert.equal(version, '201');
+    assert.equal(version, '202');
     assert.equal(description, 'ihub_integration_chat_tools_only');
   });
 

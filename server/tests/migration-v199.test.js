@@ -50,7 +50,7 @@ describe('V199 iHub tools → installed integration', () => {
   it('declares its version', () => assert.equal(version, '199'));
 
   it('knows every tool file it retired, with its hash as shipped', () => {
-    // Since V201 the files are read by three owners: the iHub connector
+    // Since V202 the files are read by three owners: the iHub connector
     // (ask_user, scheduled tasks), the platform tools of workflows and agents,
     // and the project knowledge tools. Together they are the files V199 retired.
     const ids = [...IHUB_TOOL_FILE_IDS, ...PLATFORM_TOOL_FILE_IDS, KNOWLEDGE_TOOL_FILE_ID].sort();
