@@ -3153,6 +3153,11 @@
       }
     },
     "integrationCatalog": {
+      "field": {
+        "choose": "Auswählen…",
+        "custom": "Eigener Wert…",
+        "customValue": "Eigener Wert für {{field}}"
+      },
       "title": "Installierte Integrationen",
       "subtitle": "Installiere eine Integration aus dem Katalog, richte sie auf dein System aus und binde sie an Apps. Jede Installation bringt ihre Aktionen zum Modell.",
       "install": "Installieren",
