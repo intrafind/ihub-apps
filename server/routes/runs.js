@@ -43,6 +43,7 @@ import {
 } from '../services/loop/runIdentity.js';
 import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
 import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
+import { isViewToolApproval } from '../services/mcp/mcpViewToolApproval.js';
 import { redactInteractionForViewer } from '../utils/toolApproval.js';
 import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
@@ -326,7 +327,7 @@ export default function registerRunRoutes(app) {
         // A chat tool approval is answered with the next chat message, which
         // also runs the approved call (#2945). Answered here, the interaction
         // would be settled while nothing ran the call.
-        if (isChatToolApproval(interaction)) {
+        if (isChatToolApproval(interaction) || isViewToolApproval(interaction)) {
           return res.status(409).json({
             error: 'Answer this approval in its chat',
             code: 'ANSWER_IN_CHAT'

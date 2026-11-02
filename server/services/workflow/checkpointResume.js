@@ -197,7 +197,15 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
   // The execution continues as its own principal; the person who answered is
   // only the answer's `by`. Resolved before anything changes, so a principal
   // that cannot be rebuilt leaves the checkpoint pending.
-  const actingUser = executionActingUser(state, pending, { answeringUser: user, answer });
+  const actingUser = executionActingUser(state, pending, {
+    ...(opts.resolveActor ? { resolveActor: opts.resolveActor } : {})
+  });
+  // Who answered is documented with the answer, never adopted as the
+  // execution's identity.
+  const answerLog = [
+    ...(Array.isArray(state.data?._answerLog) ? state.data._answerLog : []),
+    answerLogEntry(pending, answer)
+  ];
   if (pending.type === TOOL_APPROVAL_CHECKPOINT) {
     return resumeToolApproval({
       pending,
@@ -205,6 +213,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       state,
       executionId,
       answer,
+      answerLog,
       user: actingUser,
       engine,
       registry
@@ -217,6 +226,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       state,
       executionId,
       answer,
+      answerLog,
       user: actingUser,
       engine,
       registry
@@ -268,6 +278,8 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       ...resumeResult.stateUpdates,
       // The human response, for edge condition evaluation.
       [`_humanResult_${humanNode.id}`]: humanResult,
+      // Who answered, documented with the execution (never its identity).
+      _answerLog: answerLog,
       nodeResults: {
         ...state.data?.nodeResults,
         [humanNode.id]: humanResult
@@ -309,6 +321,7 @@ async function resumeQuestion({
   state,
   executionId,
   answer,
+  answerLog,
   user,
   engine,
   registry
@@ -321,12 +334,14 @@ async function resumeQuestion({
   await engine.stateManager.update(executionId, {
     data: {
       pendingCheckpoint: null,
+      _answerLog: answerLog,
       _questionAnswers: {
         ...state.data?._questionAnswers,
         [pending.id]: {
           value: answer.value ?? null,
           skipped: answer.skipped === true,
           by: answer.by || null,
+          ...(answer.approver ? { approver: answer.approver } : {}),
           at: answer.at || new Date().toISOString()
         }
       }
@@ -353,7 +368,8 @@ async function resumeQuestion({
       executionId,
       {},
       {
-        user: user || { id: answer.by || 'system', groups: [] },
+        // The execution's own principal (executionActingUser), never the answerer.
+        user,
         workflow,
         ...(isAgentRun ? { timeout: AGENT_NODE_TIMEOUT_MS } : {})
       }
@@ -378,6 +394,7 @@ async function resumeToolApproval({
   state,
   executionId,
   answer,
+  answerLog,
   user,
   engine,
   registry
@@ -392,11 +409,13 @@ async function resumeToolApproval({
   await engine.stateManager.update(executionId, {
     data: {
       pendingCheckpoint: null,
+      _answerLog: answerLog,
       _approvalAnswers: {
         ...state.data?._approvalAnswers,
         [pending.id]: {
           decision,
           by: answer.by || null,
+          ...(answer.approver ? { approver: answer.approver } : {}),
           at: answer.at || new Date().toISOString()
         }
       }
@@ -423,7 +442,8 @@ async function resumeToolApproval({
       executionId,
       {},
       {
-        user: user || { id: answer.by || 'system', groups: [] },
+        // The execution's own principal (executionActingUser), never the answerer.
+        user,
         workflow,
         ...(isAgentRun ? { timeout: AGENT_NODE_TIMEOUT_MS } : {})
       }
@@ -435,37 +455,62 @@ async function resumeToolApproval({
 }
 
 /**
+ * One entry of an execution's answer log (`state.data._answerLog`): which
+ * checkpoint, what was answered, and who answered (`answer.approver`, see
+ * `InteractionService.answer`). The execution's history keeps it; the
+ * execution never acts as that person.
+ *
+ * @param {Object} pending - the answered checkpoint
+ * @param {Object} answer - the interaction's answer
+ * @returns {Object}
+ */
+export function answerLogEntry(pending, answer = {}) {
+  return {
+    checkpointId: pending?.id || null,
+    nodeId: pending?.nodeId || null,
+    type: pending?.type || null,
+    ...(answer.decision ? { decision: answer.decision } : {}),
+    ...(answer.skipped ? { skipped: true } : {}),
+    by: answer.by || null,
+    ...(answer.approver ? { approver: answer.approver } : {}),
+    at: answer.at || new Date().toISOString()
+  };
+}
+
+/** Code of the refusal to resume an execution that records no principal. */
+export const EXECUTION_PRINCIPAL_UNKNOWN = 'EXECUTION_PRINCIPAL_UNKNOWN';
+
+/**
  * The principal a resumed execution acts as: the one recorded when it started
  * (`_workflow.actor`) or, for a parked tool approval, with the paused loop —
- * never the person who answered. A tool approval refuses to resume without
- * one (the approved call must not run with the approver's tokens).
+ * never the person who answered a `human` node, a question or an approval.
+ * Answers may come from anyone in an approver group; who answered is
+ * documented on the answer (`answer.approver`), not adopted as the
+ * execution's identity.
  *
- * An execution started before the actor was recorded continues as the
- * answering user for a `human` node or a question, as it always did.
+ * An execution that records no principal (started before this version)
+ * refuses to resume: it must be started again.
  *
  * @param {Object} state - the paused execution's state
  * @param {Object} pending - the pending checkpoint
- * @param {Object} options
- * @param {Object|null} options.answeringUser
- * @param {Object} options.answer
+ * @param {Object} [options] - kept for callers; the answering user is never used
+ * @param {Function} [options.resolveActor] - rebuilds a snapshot (tests)
  * @returns {Object} the user to resume with
- * @throws {CheckpointResumeError} when the recorded principal cannot be rebuilt
+ * @throws {CheckpointResumeError} `EXECUTION_PRINCIPAL_UNKNOWN`, or the reason the
+ *   recorded principal cannot act any more
  */
-export function executionActingUser(state, pending, { answeringUser = null, answer = {} } = {}) {
+export function executionActingUser(state, pending, { resolveActor = resolveExecutionActor } = {}) {
   const paused = state?.data?._pausedLoops?.[pending?.nodeId];
   const isToolApproval = pending?.type === TOOL_APPROVAL_CHECKPOINT;
   const snapshot =
     (isToolApproval ? paused?.approval?.actor : null) || state?.data?._workflow?.actor || null;
   if (!snapshot) {
-    if (isToolApproval) {
-      throw new CheckpointResumeError(
-        'The execution has no recorded principal; the approved call cannot run',
-        'ACTOR_UNKNOWN'
-      );
-    }
-    return answeringUser || { id: answer.by || 'system', groups: [] };
+    throw new CheckpointResumeError(
+      'This execution was started before this version and records no principal to continue as; start it again.',
+      EXECUTION_PRINCIPAL_UNKNOWN
+    );
   }
-  const resolved = resolveExecutionActor(snapshot);
+  const resolved = resolveActor(snapshot);
   if (!resolved.ok) {
     throw new CheckpointResumeError(
       `The execution's principal cannot act any more: ${resolved.message}`,

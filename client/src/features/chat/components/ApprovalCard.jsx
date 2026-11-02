@@ -58,9 +58,11 @@ export function formatApprovalArgs(args) {
  * @param {(answer: {interactionId: string, decision: 'approve'|'reject', grant?: 'chat'}) => void} [props.onDecide]
  *   Called with the decision; without it the card is read-only (a surface that cannot answer).
  * @param {boolean} [props.disabled] - Buttons disabled (a turn is still running)
+ * @param {boolean} [props.allowChatGrant=true] - Offer "Approve & allow for this chat"
+ *   (not for an MCP App view's own call, which has no chat-wide grant)
  * @returns {JSX.Element}
  */
-function ApprovalCard({ approval, onDecide = null, disabled = false }) {
+function ApprovalCard({ approval, onDecide = null, disabled = false, allowChatGrant = true }) {
   const { t } = useTranslation();
   const titleId = useId();
   const argsId = useId();
@@ -185,14 +187,16 @@ function ApprovalCard({ approval, onDecide = null, disabled = false }) {
           >
             {t('chat.toolApproval.approve', 'Approve')}
           </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => decide('approve', 'chat')}
-            className="inline-flex items-center rounded-md border border-blue-700 dark:border-blue-400 px-3 py-1.5 text-sm font-medium text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 dark:focus-visible:ring-offset-gray-800"
-          >
-            {t('chat.toolApproval.approveForChat', 'Approve & allow for this chat')}
-          </button>
+          {allowChatGrant && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => decide('approve', 'chat')}
+              className="inline-flex items-center rounded-md border border-blue-700 dark:border-blue-400 px-3 py-1.5 text-sm font-medium text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 dark:focus-visible:ring-offset-gray-800"
+            >
+              {t('chat.toolApproval.approveForChat', 'Approve & allow for this chat')}
+            </button>
+          )}
           <button
             type="button"
             disabled={disabled}

@@ -899,7 +899,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         setInput(text);
         setTimeout(() => formRef.current?.requestSubmit(), 0);
       },
-      isProcessing: processing
+      isProcessing: processing,
+      // This page shows the approval card for a view's own call that needs
+      // approval (#2945); hosts without it get the call refused.
+      toolApprovals: true
     }),
     [processing]
   );

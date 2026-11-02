@@ -121,7 +121,7 @@ approving. Both may come later.
 | Inference API (OpenAI-compatible), app-as-tool, MCP gateway, A2A gateway | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
 | A client that does not draw the card (an integration posting to the chat API without `toolApprovalCapable: true`, or a chat request without an open stream) | Same: `APPROVAL_REQUIRED_NO_USER`. |
 | `POST /api/tools/:id` called by a program (OAuth client, personal API key, an app using a user's token) | 403 `APPROVAL_REQUIRED_NO_USER`. A person calling a tool directly chose the call and is not asked. |
-| MCP App views calling their server's tools (`POST /api/mcp-apps/tools/call`) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool: a view has no approval card. Only the model's calls in the chat can be approved. |
+| An MCP App view in a host that cannot show the card (an embed, a shared chat, Office) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool. |
 | Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |
 | Scheduled tasks                                                          | Unchanged flow: the run pauses for the task owner, who approves from the run's chat or the task page. **Always allow for this task** still applies. The gate now uses the same resolver, so every mode above applies to scheduled runs too. |
 
@@ -133,9 +133,33 @@ Calls nobody's model decided on are not gated: a workflow **tool node** (the aut
 call), a direct `POST /api/tools/:id` by a signed-in person (they chose it), and admin tools such
 as building agent memory from a tool.
 
-A workflow resumed after a person answered a `human` node, a question or a tool approval now
-continues as the principal it started with, not as the person who answered (for executions
-started before this release, a `human` node or a question still continues as the answerer).
+A signed-in person calling `POST /api/tools/:id` is not asked for approval: they chose the call
+themselves. Programs calling it (OAuth clients, personal API keys, an app acting with a user's
+token, agents) are refused gated tools with `APPROVAL_REQUIRED_NO_USER`.
+
+## MCP App views
+
+An MCP App view in the chat can call its own server's tools (`tools/call`). A gated tool waits for
+the user's approval like a model's call: the view shows nothing, the chat shows the approval card
+below the view (no "allow for this chat" there), and the view's call waits for the decision. On
+**Approve** the server runs the stored call with the arguments shown on the card and returns the
+result to the view; **Reject** or expiry returns a tool error to the view (`USER_REJECTED`,
+`APPROVAL_EXPIRED`). A host that cannot show the card gets `APPROVAL_REQUIRED_NO_USER`.
+
+API: `POST /api/mcp-apps/tools/call` with `chatId` and `toolApprovalCapable: true` answers
+`202 { awaitingApproval: true, interaction }` for a gated tool; the host sends the decision with
+`POST /api/mcp-apps/tools/call/approval` `{ appId, toolId, interactionId, decision }`, whose answer
+is the view's `tools/call` result. Answered exactly once.
+
+## Who a workflow acts as after an answer
+
+A workflow or agent run resumed after a person answered a `human` node, a question or a tool
+approval continues as the principal it started with — the user who started it, or the agent's
+service account — never as the person who answered: an approver group can hold many people. Who
+answered is documented on the answer (`answer.approver`: id, display name unless the run ledger is
+pseudonymized, `via` = `approverGroups` | `admin` | `owner`, the approver groups that matched) and
+in the execution's answer log. A run started before this release records no principal and cannot
+be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
 
 ## For developers
 
