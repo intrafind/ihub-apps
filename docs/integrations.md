@@ -166,7 +166,7 @@ The LDAP browser of a directory (`browse.groups`) still needs its own groups on 
 
 Delegated tokens (an OAuth client acting for a user, a personal API key) keep their owner's grant: clients have no integration allow-list. A machine OAuth client (client credentials, static API key) is in no group: it may use what the apps in its **allowed apps** bind. Anonymous users get what the groups in `anonymousAuth.defaultGroups` grant. The shipped groups grant `*` to `admins`, `users` and `authenticated`, and `ihub` and `type:web-search` to `anonymous`.
 
-Installations carry no groups of their own: the admin API refuses an install or update payload that still sends `allowedGroups` (400 `ALLOWED_GROUPS_REMOVED`, naming the group page) and no longer returns the field. Migration V202 moved every installation's former `allowedGroups` onto the groups: a group that could use every installation got `*`, any other group the ids of the installations it could use.
+Installations carry no groups of their own: the admin API refuses an install or update payload that still sends `allowedGroups` (400 `ALLOWED_GROUPS_REMOVED`, naming the group page) and no longer returns the field. Migration V203 moved every installation's former `allowedGroups` onto the groups: a group that could use every installation got `*`, any other group the ids of the installations it could use.
 
 ## Binding to an app
 

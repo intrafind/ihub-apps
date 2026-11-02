@@ -74,7 +74,7 @@ function builtInInstance(definition) {
 
 /**
  * Refuse a payload that still carries `allowedGroups`. Installations have no
- * groups of their own since #3093 (V202): the groups decide, in
+ * groups of their own since #3093 (V203): the groups decide, in
  * `groups.json` → `permissions.integrations`, edited on the group page. A
  * client that still sends the field (an install dialog from before) gets a
  * 400 naming the place to go instead of a save that silently drops it.
