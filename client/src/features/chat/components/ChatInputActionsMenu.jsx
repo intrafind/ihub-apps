@@ -13,7 +13,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import { boundIntegrationRefs } from '../../../shared/utils/boundIntegrationRefs';
+import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
 import { modelSupportsWebSearch } from '../webSearch';
 import {
   currentScopeOf,
@@ -107,7 +107,7 @@ function ChatInputActionsMenu({
   // and are triggered via @mentions, so they are intentionally not surfaced here.
   useEffect(() => {
     const loadTools = async () => {
-      if ((!app?.tools || app.tools.length === 0) && boundIntegrationRefs(app).length === 0) return;
+      if (appToolRefs(app).length === 0) return;
 
       try {
         setToolsLoading(true);
@@ -148,9 +148,7 @@ function ChatInputActionsMenu({
     availableTools.find(tool => tool.id === toolId)?.requiresUserInput === true;
   // Installed integrations the app binds are tools too, one toggle per
   // installation (its actions fold into it like an MCP server's tools).
-  const selectableToolRefs = [...(app?.tools || []), ...boundIntegrationRefs(app)].filter(
-    id => !isInteractiveToolRef(id)
-  );
+  const selectableToolRefs = appToolRefs(app).filter(id => !isInteractiveToolRef(id));
 
   const { grouped, individual } = groupToolsByMcpServer(selectableToolRefs, availableTools, name =>
     getLocalizedContent(name, i18n.language)
