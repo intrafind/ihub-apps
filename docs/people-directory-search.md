@@ -97,7 +97,7 @@ The installation's **label** is the directory's name and its **description** the
 | `concurrency`, `requestDelayMs` | Default 2 and 0. One queue per directory, shared by all its tools and its test. |
 | `dataFlow` | `internal` (default) or `external`: the search terms leave your network. Shown as a badge on the installed list and carried on the tools. |
 
-The admin LDAP browser is not a value of the directory any more: it is an installation of [LDAP browser](#ldap-browser-for-admins) that names the directory (migration V204 moved the former `browse*` values there).
+The admin LDAP browser is not a value of the directory any more: it is an installation of [LDAP browser](#ldap-browser-for-admins) that names the directory (migration V205 moved the former `browse*` values there).
 
 ## Tools
 
@@ -197,7 +197,7 @@ Install it under **Admin → Integrations → Catalog → LDAP browser**: pick t
 
 **Binding.** An app binds a browser like any installation: `"integrations": { "corp-browser": {} }` binds its three browse actions (a browser binding without `actions` binds all three; `{ "actions": ["browse_read"] }` narrows it), `"integrations": { "com.intrafind/ldap-browser": {} }` every browser, including later ones. The shipped **LDAP browser** app (`ldap-browser`) binds the definition. A binding of a directory, of `com.intrafind/ldap-directory` or of `type:people-directory` never includes a browser, and neither does a `tools` entry: the `ldapBrowse` reference is retired.
 
-**Migration V204** turned every directory that had the browser switched on (`browse: true`) into a browser installation `<directory id>-browser` (a numbered suffix when the id was taken), enabled like the directory and labelled "<directory label> – LDAP browser". Its groups (`browseGroups`, `admins` when empty) were granted the browser; an unknown group was skipped with a warning, and the log names the groups that hold `*` and may now browse. App bindings and `tools` entries of the browse actions were rewritten to bind the browser.
+**Migration V205** turned every directory that had the browser switched on (`browse: true`) into a browser installation `<directory id>-browser` (a numbered suffix when the id was taken), enabled like the directory and labelled "<directory label> – LDAP browser". Its groups (`browseGroups`, `admins` when empty) were granted the browser; an unknown group was skipped with a warning, and the log names the groups that hold `*` and may now browse. App bindings and `tools` entries of the browse actions were rewritten to bind the browser.
 
 ### Browse tools
 

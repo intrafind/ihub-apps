@@ -22,13 +22,13 @@ const DEFINITIONS_DIR = path.join(here, '..', 'defaults', 'integration-definitio
  * Definitions a migration creates or changes that have no release entry yet.
  * Do not add to this list: give the definition a `releases` entry instead.
  *
- * - The storage PR (migration V205) adds the entries of the three storage
+ * - The storage PR (migration V206) adds the entries of the three storage
  *   providers and removes them here.
  */
 const NOT_YET_RELEASED = new Set([
-  'com.intrafind/office365', // storage PR (V205)
-  'com.intrafind/google-drive', // storage PR (V205)
-  'com.intrafind/nextcloud' // storage PR (V205)
+  'com.intrafind/office365', // storage PR (V206)
+  'com.intrafind/google-drive', // storage PR (V206)
+  'com.intrafind/nextcloud' // storage PR (V206)
 ]);
 
 /** The shipped definitions by id, with the folder each lives in. */

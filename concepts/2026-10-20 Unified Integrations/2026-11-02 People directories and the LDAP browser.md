@@ -4,7 +4,7 @@
 **Status:** Implemented on `claude/exciting-feynman-2aju98-people-directories`
 **Decision:** [07 · Types and built-in configuration, sections 3 and 6](07-types-and-built-in-configuration.md)
 **User docs:** [docs/people-directory-search.md](../../docs/people-directory-search.md), [docs/integrations.md](../../docs/integrations.md)
-**Migration:** `server/migrations/V204__ldap_browser_installations.js`
+**Migration:** `server/migrations/V205__ldap_browser_installations.js`
 
 These notes are for whoever continues the work: what was asked, what exists now, where it lives,
 how the pieces talk to each other, and what is still open.
@@ -50,10 +50,10 @@ browser has its own account — the bind. Its calls go through the directory's t
 | A browser's tools | the browser installation's grant (`*`, its id, `com.intrafind/ldap-browser`) **and** signed-in, non-delegated user (`isAdminEligiblePrincipal`) **and** its directory installed and enabled | `LdapBrowserService.mayUseBrowser` (+ `filterBrowserToolsForUser`), `toolRoutes.mayRunTool`, `ldapBrowserRunner` |
 | Browser over MCP | never | `McpServerService.isToolAllowed` (`_ldapBrowser`), and only `_peopleDirectory` tools are added there |
 
-`browse.groups` is **gone**. Migration V204 granted each browser to the groups that were in
+`browse.groups` is **gone**. Migration V205 granted each browser to the groups that were in
 `browseGroups` (the definition default `admins` when empty). Important: groups holding `*` in
 `permissions.integrations` (the shipped `users` and `authenticated`) may use every installation,
-the browsers included. V204 logs a warning naming those groups; the docs tell admins to replace
+the browsers included. V205 logs a warning naming those groups; the docs tell admins to replace
 `*` with explicit grants or to keep the browser out of their apps. See "Open points".
 
 ## Binding
@@ -65,7 +65,7 @@ the browsers included. V204 logs a warning naming those groups; the docs tell ad
   (`server/defaults/apps/ldap-browser.json`, ships disabled).
 - A **browser binding without `actions` binds all three browse actions** (no `bindExplicitly`
   any more; the generic `bindExplicitly` mechanism stays for third-party definitions).
-- The `ldapBrowse` tool reference is retired: `isToolSelected` no longer knows it, and V204
+- The `ldapBrowse` tool reference is retired: `isToolSelected` no longer knows it, and V205
   rewrote `tools: ["ldapBrowse"]` into a binding.
 
 ## File map
@@ -74,7 +74,7 @@ Server:
 
 | File | What it does |
 | --- | --- |
-| `server/defaults/integration-definitions/com.intrafind__ldap-directory/` | the renamed definition, no `browse*` fields or actions; release 1.0.0 with notes (V198, V204) |
+| `server/defaults/integration-definitions/com.intrafind__ldap-directory/` | the renamed definition, no `browse*` fields or actions; release 1.0.0 with notes (V198, V205) |
 | `server/defaults/integration-definitions/com.intrafind__ldap-browser/` | the new definition, release 1.0.0 with notes |
 | `server/services/integrations/ldapDirectoryConfig.js` | installations → directory shape (`directoryFromInstance`) and browser shape (`browserFromInstance`) |
 | `server/validators/peopleDirectorySchema.js` | `peopleDirectorySchema` (no `browse` any more) and `ldapBrowserSchema` |
@@ -84,7 +84,7 @@ Server:
 | `server/services/peopleDirectory/LdapBrowser.js` | the LDAP operations, now on a resolved browser |
 | `server/services/integrations/protocols/native/connectors/ldapBrowser/index.js` | **new** connector (registered in `register.js`) |
 | `server/routes/admin/peopleDirectoryEditor.js` | **new** `GET /api/admin/integrations/people-directories/editor-context` |
-| `server/migrations/V204__ldap_browser_installations.js` | the migration (below) |
+| `server/migrations/V205__ldap_browser_installations.js` | the migration (below) |
 | `server/tests/integration-definition-releases.test.js` | #3092: every shipped definition a migration names has a release entry |
 
 Client (all under `client/src/features/admin/components/integrations/editors/`):
@@ -124,7 +124,7 @@ commit e53c041 (`git show e53c041^:<path>`).
 
 Field mapping (form → install value) is documented at the top of `peopleDirectoryEditorModel.js`.
 
-## Migration V204 in short
+## Migration V205 in short
 
 For every `com.intrafind/ldap-directory` installation with `values.browse === true`:
 
@@ -154,7 +154,7 @@ Example: `corp` with `{ browse: true, browseGroups: ["it-ops"], browseBase: "ou=
 
 ```bash
 npm run test:people-directory      # browse.test.js covers the browser end to end
-npm run test:migrations            # migration-v198, -v204
+npm run test:migrations            # migration-v198, -v205
 npm run test:integrations          # includes integration-definition-releases.test.js
 npx jest --config tests/config/jest.config.js tests/unit/client/admin-people-directory-editors.test.jsx
 ```
@@ -163,8 +163,8 @@ npx jest --config tests/config/jest.config.js tests/unit/client/admin-people-dir
 
 - **`*` grants the browser.** The decision was "group access is the installation's grant". With
   the shipped groups (`users`, `authenticated` hold `*`), every signed-in user may use a browser
-  that an app they can open binds. Before V204 only `browseGroups` could browse. Mitigations in
-  place: the LDAP browser app ships disabled, delegated principals never browse, V204 warns, the
+  that an app they can open binds. Before V205 only `browseGroups` could browse. Mitigations in
+  place: the LDAP browser app ships disabled, delegated principals never browse, V205 warns, the
   docs say so. If that is not enough, an "explicit grant only" flag on the definition (a grant
   by `*` or a type key does not count) would restore the old default; it needs a decision.
 - Entra's `tenantId` and `clientId` are no longer `required` in the definition, so the

@@ -4,7 +4,7 @@
 /**
  * The admin LDAP browser (`com.intrafind/ldap-browser`): an installation of
  * its own that names a people directory installation and reuses its
- * connection (concept "Unified Integrations" 07 §6, migration V204).
+ * connection (concept "Unified Integrations" 07 §6, migration V205).
  *
  * Who sees and runs the browse tools (the browser installation's group grant,
  * signed-in non-delegated users only, its directory enabled, never through a

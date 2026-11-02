@@ -17,7 +17,7 @@ import {
   browserFromInstance,
   directoryFromInstance
 } from '../services/integrations/ldapDirectoryConfig.js';
-import { browserValuesOf } from '../migrations/V204__ldap_browser_installations.js';
+import { browserValuesOf } from '../migrations/V205__ldap_browser_installations.js';
 import { peopleDirectorySchema } from '../validators/peopleDirectorySchema.js';
 
 function makeCtx(files) {
@@ -131,7 +131,7 @@ describe('V198 people directories → installed integrations', () => {
       assert.deepEqual(back.name, directory.name);
       if (directory.bind) assert.deepEqual(back.bind, directory.bind);
       if (directory.browse) {
-        // V204 moves the browse values into an LDAP browser installation.
+        // V205 moves the browse values into an LDAP browser installation.
         const browser = browserFromInstance({
           id: `${directory.id}-browser`,
           values: browserValuesOf(directory.id, instance.values)

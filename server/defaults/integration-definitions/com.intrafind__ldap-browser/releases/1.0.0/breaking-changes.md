@@ -1,6 +1,6 @@
 # LDAP browser 1.0.0 — breaking changes
 
-Config migration V204 created the browser installations from the people directories:
+Config migration V205 created the browser installations from the people directories:
 
 - Every `com.intrafind/ldap-directory` installation with `browse` on got an LDAP browser
   installation `<directory id>-browser` (a suffix when the id was taken), enabled like the

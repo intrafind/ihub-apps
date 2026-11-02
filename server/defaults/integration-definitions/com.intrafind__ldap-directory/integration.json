@@ -9,8 +9,8 @@
       "version": "1.0.0",
       "date": "2026-11-01",
       "summary": {
-        "en": "First version: every people directory is an installation (migration V198); the LDAP browser moved into its own integration (migration V204).",
-        "de": "Erste Version: jedes Personenverzeichnis ist eine Installation (Migration V198); der LDAP-Browser ist eine eigene Integration (Migration V204)."
+        "en": "First version: every people directory is an installation (migration V198); the LDAP browser moved into its own integration (migration V205).",
+        "de": "Erste Version: jedes Personenverzeichnis ist eine Installation (Migration V198); der LDAP-Browser ist eine eigene Integration (Migration V205)."
       },
       "notes": {
         "features": "releases/1.0.0/features.md",

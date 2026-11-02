@@ -31,7 +31,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [2026-11-01 · Admin integrations page and installation editors](2026-11-01%20Admin%20integrations%20page%20and%20installation%20editors.md) | Implementation notes: the one admin page, groups, tiles, the installation page, the editor registry and how to add an editor |
 | [2026-11-01 · iHub integration: chat tools only](2026-11-01%20iHub%20integration%20chat%20tools%20only.md) | Implementation note: which iHub tools are integration actions, which belong to projects, workflows and agents, and how they are loaded |
 | [2026-11-02 · Web search engines](2026-11-02%20Web%20search%20engines.md) | Implementation notes: one integration per engine, Auto's order, native search without an engine, the page reader as a platform tool, migration V203, the engine contract |
-| [2026-11-02 · People directories and the LDAP browser](2026-11-02%20People%20directories%20and%20the%20LDAP%20browser.md) | Implementation notes: People directory (LDAP), the LDAP browser as its own integration, migration V204, the dedicated directory, browser and Entra editors |
+| [2026-11-02 · People directories and the LDAP browser](2026-11-02%20People%20directories%20and%20the%20LDAP%20browser.md) | Implementation notes: People directory (LDAP), the LDAP browser as its own integration, migration V205, the dedicated directory, browser and Entra editors |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

@@ -171,7 +171,7 @@ integration of `com.intrafind/ldap-directory` (same id, same tool ids) in
   definition binding `"integrations": { "com.intrafind/ldap-directory": {} }`; a directory id or
   `<id>__search_people` in `tools` becomes a binding of that installation (narrowed to the action
   where one was named). `ldapBrowse` and `<id>__browse_*` entries were kept by V198; migration
-  V204 turns them into bindings of the new LDAP browser installations (see
+  V205 turns them into bindings of the new LDAP browser installations (see
   [LDAP Browser Moved Into Its Own Integration](#ldap-browser-moved-into-its-own-integration)).
   The shipped `ldap-browser` app binds the LDAP browsers instead of `requiredIntegrations`.
 - **Groups:** a directory's `groups` became the installation's `allowedGroups`; `["*"]` became
@@ -304,30 +304,30 @@ for one installation).
 
 The admin LDAP browser is no longer a switch of a people directory but an installation of the new
 integration **LDAP browser** (`com.intrafind/ldap-browser`) that reuses the directory's
-connection. Migration V204 moves it for you.
+connection. Migration V205 moves it for you.
 
 - **Tool ids change:** a directory's `<directory id>__browse_search`, `__browse_read` and
-  `__browse_children` become `<browser id>__browse_*`. V204 names each browser
+  `__browse_children` become `<browser id>__browse_*`. V205 names each browser
   `<directory id>-browser` (with a number when the id is taken) and rewrites app bindings,
   `tools` entries and group tool grants that named the old ids or `ldapBrowse`. The `ldapBrowse`
   reference selects nothing any more.
 - **`browse.groups` is gone:** who may browse is the browser installation's grant on the groups
-  (`permissions.integrations`). V204 grants the browser to the groups that were in the
+  (`permissions.integrations`). V205 grants the browser to the groups that were in the
   directory's browser groups (`admins` when none were set) and warns about groups it cannot find.
   **Groups that hold `*` may use every installation, the browser included**: with the shipped
-  groups that is every signed-in user, wherever an app they can open binds the browser. V204 logs
+  groups that is every signed-in user, wherever an app they can open binds the browser. V205 logs
   the groups this opens the browser to.
 - **The directory definition lost its browser fields:** `browse`, `browseGroups`, `browseBase`,
   `browseMaxResults`, `browseBindMode`, `browseBindDn`, `browseBindPasswordRef` and
   `browseDenyAttributes` and the actions `browse_*` are no longer part of People directory
-  (LDAP). V204 removes them from every directory; the settings of a browser that was switched off
+  (LDAP). V205 removes them from every directory; the settings of a browser that was switched off
   are dropped (the log lists them). Deployments that write `integrations.json` have to write an
   LDAP browser installation instead (fields: `directory`, `baseDn`, `maxResults`, `bindMode`,
   `bindDn`, `bindPasswordRef`, `denyAttributes`).
 - **Audit records** of new browser calls carry the browser installation id as resource id (the
   directory is in the summary).
 
-**Before upgrading:** nothing is required. After the upgrade, check the server log for the V204
+**Before upgrading:** nothing is required. After the upgrade, check the server log for the V205
 warnings and, under **Admin → Groups**, which groups may use the new LDAP browser installations:
 replace a `*` grant with explicit integrations for groups that should not browse, or keep the
 LDAP browser app limited to admin groups.
