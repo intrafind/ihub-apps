@@ -118,7 +118,19 @@ export function pausedLoopState({
 export function resumeApprovalPlan(pausedLoop, answer) {
   if (!pausedLoop || pausedLoop.kind !== 'approval' || !pausedLoop.approval || !answer) return null;
   const messages = Array.isArray(pausedLoop.messages) ? [...pausedLoop.messages] : [];
-  const { toolCallId, name, args } = pausedLoop.approval;
+  const { toolCallId, name, args, consumed } = pausedLoop.approval;
+  if (answer.decision === 'approve' && consumed) {
+    // The step was retried after the approved call ran: never run it twice.
+    const content = JSON.stringify({
+      error: true,
+      code: 'APPROVAL_ALREADY_USED',
+      message: `The approved call "${name}" already ran once in an earlier attempt of this step. It is not run again; continue without its result.`
+    });
+    const at = messages.findIndex(m => m?.role === 'tool' && m.tool_call_id === toolCallId);
+    if (at >= 0) messages[at] = { ...messages[at], content };
+    else messages.push({ role: 'tool', tool_call_id: toolCallId, name, content });
+    return { messages, resume: null };
+  }
   if (answer.decision === 'approve') {
     return {
       messages,

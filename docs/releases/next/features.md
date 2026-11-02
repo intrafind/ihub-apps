@@ -382,6 +382,9 @@ a mode.
   workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
   step that names approver groups parks the approval for them instead. Scheduled tasks keep
   asking their owner, now for every tool the settings gate.
+- **Custom tools with `requiresApproval: true`** used to ask only in scheduled runs. They now ask
+  in the chat too, and are refused where nobody can approve (the API, other clients without the
+  approval card).
 
 See [Tool Approval](../../tool-approval.md).
 

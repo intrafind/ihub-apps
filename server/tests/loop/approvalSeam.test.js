@@ -230,7 +230,8 @@ const KNOWN_RUN_TOOL_CALLERS = {
   'services/workflow/executors/PromptNodeExecutor.js': 'executeTool of the node loop',
   // Not model-decided: an author, an admin or the user chose this exact call.
   'services/workflow/executors/ToolNodeExecutor.js': 'workflow tool node (author-chosen)',
-  'routes/toolRoutes.js': 'direct tool API, the user calls the tool themselves',
+  'routes/toolRoutes.js':
+    'direct tool API: a person chose the call; token callers are refused gated tools',
   'routes/admin/agents.js': 'admin builds agent memory from a tool',
   'services/mcp/a2aHandler.js': 'A2A skill runs a workflow; its nodes are gated',
   'services/mcp/McpServerService.js': 'MCP gateway: gated tools are refused before runTool'
@@ -261,4 +262,35 @@ test('every runTool caller is listed with a reason (no unnoticed bypass of the a
   assert.deepEqual(unknown, [], `new runTool callers: list them with a reason or use the loop`);
   const gone = Object.keys(KNOWN_RUN_TOOL_CALLERS).filter(rel => !callers.has(rel));
   assert.deepEqual(gone, [], 'listed callers that no longer call runTool');
+});
+
+/**
+ * Every place that calls an MCP server's or A2A agent's tool directly
+ * (`callTool`, `callToolRaw`, `_callUserTool`) — below `runTool`, so outside
+ * the approval seam — and why that is not a bypass.
+ */
+const KNOWN_REMOTE_TOOL_CALLERS = {
+  'toolLoader.js': 'runTool dispatch, reached through the seams',
+  'services/integrations/protocols/a2a/A2aAdapter.js': 'adapter.run, reached through runTool',
+  'services/integrations/protocols/mcp/McpAdapter.js': 'adapter.run, reached through runTool',
+  'services/mcp/McpClientManager.js': 'the client manager itself',
+  'services/mcp/McpServerConnection.js': 'the connection itself',
+  'routes/mcpAppRoutes.js': 'MCP App view calls: gated tools are refused before callToolRaw'
+};
+
+test('every direct MCP / A2A tool caller is listed with a reason', async () => {
+  const callers = new Set();
+  for await (const file of jsFiles(serverRoot)) {
+    const rel = path.relative(serverRoot, file).split(path.sep).join('/');
+    const source = await fs.readFile(file, 'utf8');
+    const code = source
+      .split('\n')
+      .filter(line => !/^\s*(\*|\/\/)/.test(line))
+      .join('\n');
+    if (/\.(callTool|callToolRaw|_callUserTool)\(/.test(code)) callers.add(rel);
+  }
+  const unknown = [...callers].filter(rel => !KNOWN_REMOTE_TOOL_CALLERS[rel]);
+  assert.deepEqual(unknown, [], 'new direct MCP/A2A tool callers: gate them or list them');
+  const gone = Object.keys(KNOWN_REMOTE_TOOL_CALLERS).filter(rel => !callers.has(rel));
+  assert.deepEqual(gone, [], 'listed callers that no longer call a remote tool');
 });

@@ -13,7 +13,6 @@ import {
   actionFingerprint,
   actionReviewState,
   canonicalSchema,
-  compareCodeUnits,
   isFingerprint
 } from '../../utils/actionFingerprint.js';
 import { resolveToolApproval, _resetLoggedLoosening } from '../../utils/toolApproval.js';
@@ -26,7 +25,11 @@ import {
 } from '../../services/integrations/actionReview.js';
 import { McpServerConnection } from '../../services/mcp/McpServerConnection.js';
 import { buildSkillTools } from '../../services/a2a/a2aTools.js';
-import { installApprovalPreset, needsApproval } from '../../../shared/toolApproval.js';
+import {
+  compareCodeUnits,
+  installApprovalPreset,
+  needsApproval
+} from '../../../shared/toolApproval.js';
 import { validateIntegrationsConfig } from '../../validators/integrationsConfigSchema.js';
 import { planMigration } from '../../services/integrations/definitions/migrationPlanner.js';
 

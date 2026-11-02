@@ -43,6 +43,7 @@
  * @module utils/actionFingerprint
  */
 import { createHash } from 'node:crypto';
+import { compareCodeUnits } from '../../shared/toolApproval.js';
 
 /** Prefix of every fingerprint (`sha256:<64 hex>`), as the architecture concept shows it. */
 export const FINGERPRINT_PREFIX = 'sha256:';
@@ -78,19 +79,8 @@ const LITERAL_KEYWORDS = new Set(['enum', 'const', 'default']);
 
 const SIDE_EFFECT_VALUES = new Set(['read', 'write', 'destructive', 'unknown']);
 
-/**
- * Order two strings by UTF-16 code units. Explicit on purpose: a fingerprint
- * must not depend on the server's locale (`localeCompare` would), so the same
- * schema hashes the same on every server.
- *
- * @param {string} a
- * @param {string} b
- * @returns {number} negative, zero or positive
- */
-export function compareCodeUnits(a, b) {
-  if (a < b) return -1;
-  return a > b ? 1 : 0;
-}
+// Keys are ordered by `compareCodeUnits` (UTF-16 code units), never by the
+// locale: the same schema must hash the same on every server.
 
 /**
  * A plain value with every object's keys sorted (arrays keep their order).

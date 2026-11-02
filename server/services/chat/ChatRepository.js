@@ -1285,6 +1285,52 @@ export class ChatRepository {
   }
 
   /**
+   * Take the chat's pending tool approval (#2945) if it is the one named:
+   * a compare-and-set under the chat lock, so of two requests answering the
+   * same approval exactly one gets it. The grants are set at the same time.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} interactionId - The approval being answered.
+   * @param {{grants: string[]}} next - The chat's grants after the answer.
+   * @returns {Promise<Object|null>} The pending approval that was taken, or
+   *   null when another request took it (or it is not pending).
+   */
+  async takeToolApproval(chatId, interactionId, { grants }) {
+    if (!this._usable(chatId, 'takeToolApproval')) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      const pending = existing?.toolApproval?.pending;
+      if (!pending || pending.interactionId !== interactionId) return null;
+      await this._writeChat(
+        applyChatPatch(existing, { toolApproval: { grants, pending: null } }),
+        etag
+      );
+      return pending;
+    });
+  }
+
+  /**
+   * Put a taken tool approval back, when the turn that took it was refused
+   * before the call could run. Only while no other approval is pending.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} pending - The pending approval as taken, with `settled`.
+   * @returns {Promise<boolean>} Whether it was put back.
+   */
+  async restoreToolApproval(chatId, pending) {
+    if (!this._usable(chatId, 'restoreToolApproval')) return false;
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing || existing.toolApproval?.pending) return false;
+      const grants = Array.isArray(existing.toolApproval?.grants)
+        ? existing.toolApproval.grants
+        : [];
+      await this._writeChat(applyChatPatch(existing, { toolApproval: { grants, pending } }), etag);
+      return true;
+    });
+  }
+
+  /**
    * Patch a chat for a turn that names projects, under its lock: the
    * project fields are checked against the chat as it stands now, not as
    * the turn read it before its prompt was prepared.

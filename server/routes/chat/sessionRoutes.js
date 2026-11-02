@@ -27,7 +27,7 @@ import runLog, { newRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
-import { settleChatApprovals } from '../../services/chat/chatToolApproval.js';
+import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
@@ -838,6 +838,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // before it ever reaches the turn.
       const { appId, chatId } = req.params;
       let durableTurn = false;
+      // A tool approval this request answered, and how to put it back if the
+      // turn never reached its loop (see `commitApproval`).
+      let restoreApproval = null;
+      let toolApproval = null;
       try {
         const {
           messages,
@@ -1004,10 +1008,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         const temporaryChat = access.chat ? access.chat.temporary === true : storage.temporary;
 
         // A tool approval (#2945) is answered by the next message, like a
-        // clarification: `approvalResponse` answers its interaction exactly
-        // once and hands the turn the stored part of the paused one; any other
+        // clarification: `approvalResponse` is checked here and answered
+        // (exactly once) only after the turn is prepared (`commitApproval`
+        // below), so a request that fails first does not use it up; any other
         // message supersedes a pending approval.
-        const approvals = await settleChatApprovals({
+        const approvals = await prepareChatApproval({
           chatId,
           user: req.user,
           chat: access.chat || null,
@@ -1019,7 +1024,21 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             .status(approvals.refusal.status)
             .json({ error: approvals.refusal.message, code: approvals.refusal.code });
         }
-        const toolApproval = { grants: approvals.grants, resume: approvals.resume };
+        toolApproval = { grants: approvals.grants, resume: null };
+        /**
+         * Answer the approval once the turn can run. Returns a refusal to send
+         * instead of running the turn, or null. A turn refused after this
+         * (before its loop started) puts the approval back (`restoreApproval`).
+         */
+        const commitApproval = async () => {
+          if (!approvals.commit) return null;
+          const committed = await approvals.commit();
+          if (committed.refusal) return committed.refusal;
+          toolApproval.grants = committed.grants;
+          toolApproval.resume = committed.resume;
+          restoreApproval = committed.restore;
+          return null;
+        };
 
         let conversation = messages;
         let persistence = null;
@@ -1252,6 +1271,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               )
               .json({ error: errMsg, code: prep.error.code });
           }
+          const approvalRefusal = await commitApproval();
+          if (approvalRefusal) {
+            return res
+              .status(approvalRefusal.status)
+              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
+          }
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           ({ model, llmMessages } = prep.data);
 
@@ -1292,6 +1317,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             );
             emitFailedRun(chatId, { messageId, code: prep.error.code, message: errMsg });
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
+          }
+          const approvalRefusal = await commitApproval();
+          if (approvalRefusal) {
+            emitFailedRun(chatId, {
+              messageId,
+              code: approvalRefusal.code,
+              message: approvalRefusal.message
+            });
+            return res
+              .status(approvalRefusal.status)
+              .json({ error: approvalRefusal.message, code: approvalRefusal.code });
           }
           model = prep.data.model;
           // What open MCP App views reported since the last turn; model-only.
@@ -1339,6 +1375,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // The turn is over however it ended, so a disconnect from here on has
         // nothing to protect and should abort again.
         if (durableTurn) clearChatDurable(chatId);
+        // Answered, but the turn was refused (or failed) before its loop
+        // could run the call: put the approval back, with its answer, so the
+        // same decision can be sent again.
+        if (restoreApproval && !toolApproval?.started) await restoreApproval();
       }
     }
   );

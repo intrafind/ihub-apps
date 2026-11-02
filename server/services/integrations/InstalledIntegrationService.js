@@ -18,7 +18,7 @@ import {
 } from '../../validators/integrationDefinitionSchema.js';
 import { effectiveValues, instanceLabel, localized } from './definitions/installedValues.js';
 import { installationMigrationState } from './definitions/migrationPlanner.js';
-import { compareCodeUnits } from '../../utils/actionFingerprint.js';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 
 /**
  * Installed integrations (04-architecture §1.3): the admin's instances of
@@ -303,6 +303,12 @@ export class InstalledIntegrationService {
     delete rest.status;
     delete rest.statusReason;
     delete rest.migrationLog;
+    // The tool approval (#2945) is edited on its own (`setApproval`): a save
+    // that does not name it keeps the stored one, so an editor that knows
+    // nothing about approval cannot drop an admin's gate. `approval: null`
+    // removes it explicitly.
+    const keepsApproval = !Object.hasOwn(rest, 'approval') && existing?.approval;
+    if (rest.approval === null) delete rest.approval;
     // The accepted action fingerprints (#2916) are the server's: a baseline
     // or "Mark reviewed" writes them, a save keeps the stored ones (`update`).
     if (rest.actions && typeof rest.actions === 'object') {
@@ -313,7 +319,8 @@ export class InstalledIntegrationService {
       ...rest,
       installedAt: existing?.installedAt,
       health: existing?.health,
-      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {})
+      ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
+      ...(keepsApproval ? { approval: existing.approval } : {})
     });
     if (!parsed.success) {
       throw new IntegrationError('Invalid installed integration', {
@@ -598,10 +605,10 @@ export class InstalledIntegrationService {
    * @param {{default?: string, actions?: Object<string,string>, newOrChanged?: string}|null} approval
    * @returns {Promise<Object>} the stored installation
    */
-  setApproval(id, approval) {
+  setApproval(id, approval = null) {
     return this._serialize(async () => {
       let cleaned = null;
-      if (approval !== null && approval !== undefined) {
+      if (approval !== null) {
         const parsed = installedApprovalSchema.safeParse(approval);
         if (!parsed.success) {
           throw new IntegrationError('Invalid approval settings', {
