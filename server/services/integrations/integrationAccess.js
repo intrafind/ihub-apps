@@ -25,7 +25,7 @@ import { bindingKeyOfType, getDefinitionTypes } from './integrationTypes.js';
  * The grant holds on top of every app binding and tool grant: an app that
  * binds an installation offers its tools, scopes and sources only to users
  * whose groups grant it. Installations carry no groups of their own any more
- * (`allowedGroups` was removed; migration V202 moved it onto the groups).
+ * (`allowedGroups` was removed; migration V203 moved it onto the groups).
  *
  * Pure checks, no I/O: they read the user, the groups configuration and the
  * definition types the registry published (`integrationTypes.getDefinitionTypes`),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V202 — which groups may use an installed integration moves onto
+ * Migration V203 — which groups may use an installed integration moves onto
  * the groups (#3093)
  *
  * Until now every installation in `config/integrations.json` carried
@@ -44,7 +44,7 @@
  * `server/migrations/README.md`).
  */
 
-export const version = '202';
+export const version = '203';
 export const description = 'integration_access_on_groups';
 
 const GROUPS_FILE = 'config/groups.json';

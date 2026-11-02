@@ -238,6 +238,29 @@ describe('IntegrationsConfigSection', () => {
     expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({ iassistant: {} });
   });
 
+  it('does not list a definition or type binding of an installed integration as not installed', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
+    renderSection({
+      id: 'a',
+      integrations: {
+        'com.intrafind/office365': {},
+        'type:storage': {},
+        'com.intrafind/web-search': {},
+        'type:web-search': {},
+        'gone-integration': {}
+      }
+    });
+    expect(await screen.findByTestId('stale-integration-gone-integration')).toBeInTheDocument();
+    for (const key of [
+      'com.intrafind/office365',
+      'type:storage',
+      'com.intrafind/web-search',
+      'type:web-search'
+    ]) {
+      expect(screen.queryByTestId(`stale-integration-${key}`)).not.toBeInTheDocument();
+    }
+  });
+
   it('offers a definition row the actions of all its installations', async () => {
     mockFetchInstalled.mockResolvedValue({
       items: [
