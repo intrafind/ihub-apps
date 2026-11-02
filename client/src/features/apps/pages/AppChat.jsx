@@ -3187,6 +3187,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
                       <ChatMessageList
                         scheduleEnabledTools={effectiveEnabledTools}
+                        scheduleIntegrationScopes={integrationScopes}
                         messages={messages}
                         mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
@@ -3242,6 +3243,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     <div className="mb-8">
                       <ChatMessageList
                         scheduleEnabledTools={effectiveEnabledTools}
+                        scheduleIntegrationScopes={integrationScopes}
                         messages={messages}
                         mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
@@ -3292,6 +3294,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                 <div className="flex-1 overflow-hidden flex flex-col">
                   <ChatMessageList
                     scheduleEnabledTools={effectiveEnabledTools}
+                    scheduleIntegrationScopes={integrationScopes}
                     messages={messages}
                     mcpAppHost={mcpAppHost}
                     outputFormat={selectedOutputFormat}
@@ -3328,6 +3331,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               <div className="hidden md:flex md:flex-col md:h-full">
                 <ChatMessageList
                   scheduleEnabledTools={effectiveEnabledTools}
+                  scheduleIntegrationScopes={integrationScopes}
                   messages={messages}
                   mcpAppHost={mcpAppHost}
                   outputFormat={selectedOutputFormat}

@@ -126,6 +126,8 @@ function ChatMessage({
   readOnly = false,
   // The tools enabled in the chat right now, for "Schedule this…".
   scheduleEnabledTools = null,
+  // The chat's integration scopes right now, for "Schedule this…".
+  scheduleIntegrationScopes = null,
   // What an MCP App view in this answer may do in the composer:
   // `{ sendMessage(text), isProcessing }`. Surfaces without a composer omit it.
   mcpAppHost = null,
@@ -1411,6 +1413,7 @@ function ChatMessage({
                 }
                 appId={appId}
                 enabledTools={scheduleEnabledTools}
+                integrationScopes={scheduleIntegrationScopes}
               />
             </>
           )}

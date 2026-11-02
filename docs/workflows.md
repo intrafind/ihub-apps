@@ -456,6 +456,46 @@ What callers receive changes in one way: for MCP and A2A, a JSON answer now arri
 (`structuredContent`, a `data` part) next to the text, and the answer is the Output only, not the
 run around it.
 
+## Integration scopes in a node
+
+A prompt (agent) step or a tool step can bind its integration tools to a scope:
+the iFinder search profile its `iFinder_*` calls search, or the scope of an
+installed integration's actions. Set `integrationScopes` in the step's
+`config`, `{ "<integration id>": "<scope id>" }`, with each value fixed or read
+from the workflow state, usually a workflow input:
+
+```json
+{ "id": "search", "type": "tool",
+  "config": {
+    "toolId": "iFinder_search",
+    "parameters": { "query": "$.data.question" },
+    "integrationScopes": { "ifinder": "contracts" } } }
+```
+
+```json
+{ "id": "research", "type": "agent",
+  "config": {
+    "tools": ["iFinder_search", "iFinder_getContent"],
+    "integrationScopes": { "ifinder": "$.data.searchProfile" } } }
+```
+
+- The engine hands the scopes to every tool call of the step after the tool's
+  arguments, as a chat does: the model, or a tool step's `parameters`, cannot
+  pick another profile. An agent step is told the profile is fixed and is not
+  offered `iFinder_listProfiles`.
+- When the step runs, the scopes are checked as the user the run belongs to,
+  against what each integration offers them. A scope they may not use, or one
+  of an integration that is not installed and enabled, **fails the step** with
+  `INTEGRATION_SCOPE_NOT_ALLOWED` and a message naming the scope, even for an
+  `optional` tool step; nothing is searched elsewhere. A profile the iFinder
+  installation pins replaces the one named.
+- A `$.data.…` reference that resolves to nothing (an optional input left
+  empty) leaves that integration unscoped, as a step without the setting is:
+  its tools search the default profile, or the one the model names after the
+  usual checks.
+- A run started by a [schedule trigger](#schedule-triggers) runs as `system`,
+  so its scopes are checked for that principal.
+
 ## Schedule triggers
 
 A workflow runs on a schedule with a `schedule` trigger:

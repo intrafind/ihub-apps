@@ -6235,6 +6235,8 @@
     },
     "fields": {
       "alwaysIncluded": "immer dabei",
+      "scopes": "Wo gesucht wird",
+      "scopesHelp": "Jeder Lauf sucht hier, auch wenn der Chat, aus dem die Aufgabe stammt, später woanders sucht.",
       "app": "App",
       "appDefaultModel": "Standard der App",
       "appDefaultTools": "Standards der App verwenden",
@@ -6251,6 +6253,8 @@
     "limitReached": "Sie haben die Grenze von {{limit}} Aufgaben erreicht",
     "loadMore": "Ältere Läufe anzeigen",
     "needsApproval": "Fragt nach Freigabe",
+    "scopeFixed": "Von der App festgelegt; nicht änderbar.",
+    "scopeUnavailable": "„{{scope}}“ steht Ihnen nicht mehr zur Verfügung, daher schlagen die Läufe fehl. Beim Speichern wird die hier gewählte Auswahl verwendet.",
     "newTask": "Neue Aufgabe",
     "newTitle": "Neue geplante Aufgabe",
     "nextRun": "Nächster Lauf",

@@ -132,6 +132,9 @@ export function newTaskDocument(
     modelId: fields.modelId || null,
     variables: fields.variables || null,
     enabledTools: Array.isArray(fields.enabledTools) ? fields.enabledTools : null,
+    // Where its integrations search and whom they ask, fixed when the task is
+    // saved (`taskScopes.js`); null runs unscoped.
+    integrationScopes: fields.integrationScopes || null,
     websearchEnabled: typeof fields.websearchEnabled === 'boolean' ? fields.websearchEnabled : null,
     memory: { enabled: fields.memory?.enabled === true },
     memorySummary: null,

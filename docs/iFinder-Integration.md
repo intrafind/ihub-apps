@@ -518,6 +518,8 @@ The choice is saved with the chat and restored when the chat is reopened. It bin
 
 The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With the installation's **Users may change the search profile** off (`allowUserSearchProfileChange: false`), or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
 
+Runs outside a chat keep a profile too. A [scheduled task](scheduled-tasks.md#where-a-task-searches) stores the profile (and iAssistant) of the chat it was scheduled from, or the one picked on its form, and every run searches it, even after the chat moved elsewhere. A [workflow step](workflows.md#integration-scopes-in-a-node) sets one with `integrationScopes`. Both are checked as the user running them: a profile they no longer have fails the run with an error naming it.
+
 ### Example User Interactions
 
 1. **"Show my latest tickets"**

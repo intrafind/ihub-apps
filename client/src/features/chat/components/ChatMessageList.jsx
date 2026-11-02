@@ -68,6 +68,8 @@ function ChatMessageList({
   mcpAppHost = null,
   // The chat's enabled tools, for a message's "Schedule this…" — see ChatMessage.
   scheduleEnabledTools = null,
+  // The chat's integration scopes, for a message's "Schedule this…".
+  scheduleIntegrationScopes = null,
   // "Save as prompt" on the user's messages — see ChatMessage.
   onSaveAsPrompt = null,
   // "Save as skill" on answers that draft a skill — see ChatMessage.
@@ -232,6 +234,7 @@ function ChatMessageList({
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}
                 scheduleEnabledTools={scheduleEnabledTools}
+                scheduleIntegrationScopes={scheduleIntegrationScopes}
                 onSaveAsPrompt={onSaveAsPrompt}
                 onSaveAsSkill={onSaveAsSkill}
               />
