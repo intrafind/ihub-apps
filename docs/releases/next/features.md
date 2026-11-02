@@ -253,27 +253,40 @@ See [People Directory Search](../../people-directory-search.md).
   `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
   **Admin → Tools** lists only custom tools from now on.
 
-## Cloud Storage Providers Are Installed Integrations
+## Storage Providers Are Installed Integrations, Several per Provider, Bound per App
 
-Office 365 (OneDrive / SharePoint), Google Drive and Nextcloud are the built-in integrations
-**Microsoft Office 365**, **Google Drive** and **Nextcloud** (installations `office365`,
-`googledrive`, `nextcloud`) under **Admin → Integrations**, and no longer three
-pages of their own with a shared provider editor.
+Office 365 (OneDrive / SharePoint / Teams), Google Drive and Nextcloud are the built-in storage
+providers **Microsoft Office 365**, **Google Drive** and **Nextcloud** under **Admin →
+Integrations**, and no longer three pages of their own with a shared provider editor.
 
-- **One wizard per provider:** the install wizard holds the OAuth app — client id, client secret
-  as a credential reference, redirect URI — and the provider's own settings (tenant, sources,
-  site and drive restrictions; the Nextcloud server URL). **Test connection** checks the client,
-  the redirect URI (and shows the derived URL to register when the field is empty), the route to
-  the provider's authorization server and how many users are connected; **Connections** lists the
-  connected users and disconnects one.
-- **Nothing changes for users:** they connect under **Settings → Integrations** or from the file
-  picker as before, through the unchanged `/api/integrations/<provider>/…` routes, and existing
-  connections keep working — the installation's **Provider id** keeps the id the provider had.
-  The pickers, browsers and project cloud documents read the enabled providers from the
-  installations.
-- **Migrated for you:** migration V200 moves the `platform.cloudStorage` providers into the
-  three installations (Office 365's tenant id back into the clear, a plain-text secret into the
-  credential store) and removes the block.
+- **Several installations per provider:** install a provider as often as needed — one per Azure
+  app registration or tenant, per Google OAuth client, per Nextcloud server. Each installation has
+  its own OAuth app, settings, connected users and group grant, and users see each one under its
+  label. The installation id is the provider id in the callback URL and in the users' stored
+  connections.
+- **Bound per app:** **Admin → Apps → Edit → Integrations → Storage providers** offers **All
+  storage providers**, **All … installations** of one provider, or single installations. The
+  chat's cloud file picker offers the providers the app binds and the user's groups grant; the
+  **Cloud Storage Upload** switch of the upload settings is gone.
+- **A dedicated editor per provider:** the **Settings** tab of an installation shows the redirect
+  URI to register — derived with the base path, with a **Copy** button and where to register it
+  (Azure portal, Google Cloud console, Nextcloud) — then the tenant or server URL, client id and
+  client secret credential, the sources (with the Microsoft Graph permissions each one needs) and
+  Office 365's site and drive restrictions, how many users connected, and **Test connection** on
+  the unsaved values. Tiles show the tenant id, the Nextcloud server, the sources and whether the
+  client secret is set.
+- **Redirect URI with the base path:** an empty redirect URI is derived from each request
+  including the base path (as for Jira), so iHub under `/ihub` sends
+  `https://<host>/ihub/api/integrations/<provider>/<installation id>/callback`.
+- **Nothing changes for connected users:** existing connections, registered redirect URIs, project
+  cloud documents and the Nextcloud embed plugin keep working. Migrations V200 and V206 move the
+  `platform.cloudStorage` providers into installations under the ids they had — a second provider
+  of one type included — restore an Office 365 tenant id the first migration could not read, clean
+  up the old tenant id credentials and bind every storage provider in the apps that had cloud
+  storage switched on.
+
+See [Integrations → Built-in integrations](../../integrations.md#built-in-integrations) and
+[Apps → Files from storage providers](../../apps.md#files-from-storage-providers).
 
 ## Groups Decide Which Integrations Their Members May Use
 

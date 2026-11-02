@@ -1232,7 +1232,7 @@ For setup and client registration see [OAuth Integration Guide](oauth-integratio
 
 ## Cloud Storage Configuration
 
-Retired in migration V200: the cloud storage providers (Office 365, Google Drive, Nextcloud) are the installed integrations `office365`, `googledrive` and `nextcloud` in `contents/config/integrations.json` (**Admin → Integrations**), and the platform schema no longer accepts a `cloudStorage` key. The app-side switch stays `upload.cloudStorageUpload.enabled`. See [Office 365 Integration](office365-integration.md), [Google Drive Integration](google-drive-integration.md), [Nextcloud Integration](nextcloud-integration.md) and [Integrations](integrations.md#built-in-integrations).
+Retired in migration V200: the cloud storage providers (Office 365, Google Drive, Nextcloud) are the installed integrations `office365`, `googledrive` and `nextcloud` in `contents/config/integrations.json` (**Admin → Integrations**), and the platform schema no longer accepts a `cloudStorage` key. Apps offer them by binding them (`app.integrations`: `type:storage`, a provider's definition id or an installation id; migration V206 replaced the former switch `upload.cloudStorageUpload.enabled`), and several installations per provider are possible. See [Office 365 Integration](office365-integration.md), [Google Drive Integration](google-drive-integration.md), [Nextcloud Integration](nextcloud-integration.md) and [Integrations](integrations.md#built-in-integrations).
 
 ## Skills Configuration
 

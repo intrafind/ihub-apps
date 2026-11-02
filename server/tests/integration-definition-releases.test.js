@@ -3,10 +3,13 @@
 
 /**
  * #3092: a shipped integration definition that a config migration creates or
- * changes (`server/migrations/V*.js` names its id) has a `releases` entry for
- * its current version, whose notes files exist. The admin reads there what
+ * changes (`server/migrations/V*.js` names its id in a string literal, e.g.
+ * `'com.intrafind/nextcloud'`) has a release history whose newest entry is its
+ * current version, with notes files that exist. The admin reads there what
  * the migration did to their installations (Admin → Integrations → an
  * installation → Releases).
+ *
+ * Run with `npm run test:integrations`.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,16 +23,12 @@ const DEFINITIONS_DIR = path.join(here, '..', 'defaults', 'integration-definitio
 
 /**
  * Definitions a migration creates or changes that have no release entry yet.
- * Do not add to this list: give the definition a `releases` entry instead.
- *
- * - The storage PR (migration V206) adds the entries of the three storage
- *   providers and removes them here.
+ * Empty since every migrated built-in got its entry (web search V204, LDAP
+ * browser V205, storage providers V206, iHub V202). Do not add to this list:
+ * give the definition a `releases` entry instead. The list only shrinks: a
+ * definition on it that has an entry by now fails the last test below.
  */
-const NOT_YET_RELEASED = new Set([
-  'com.intrafind/office365', // storage PR (V206)
-  'com.intrafind/google-drive', // storage PR (V206)
-  'com.intrafind/nextcloud' // storage PR (V206)
-]);
+const NOT_YET_RELEASED = new Set([]);
 
 /** The shipped definitions by id, with the folder each lives in. */
 function shippedDefinitions() {
@@ -60,6 +59,14 @@ function definitionsNamedByMigrations(shippedIds) {
   return named;
 }
 
+/** Whether a definition has a release entry for its current version. */
+function hasReleaseForVersion(definition) {
+  return (
+    Array.isArray(definition.releases) &&
+    definition.releases.some(entry => entry?.version === definition.version)
+  );
+}
+
 const shipped = shippedDefinitions();
 const named = definitionsNamedByMigrations(new Set(shipped.keys()));
 
@@ -72,7 +79,10 @@ describe('release entries of migrated definitions (#3092)', () => {
       'com.intrafind/ldap-browser',
       'com.intrafind/brave-search',
       'com.intrafind/staan-search',
-      'com.intrafind/qwant-search'
+      'com.intrafind/qwant-search',
+      'com.intrafind/office365',
+      'com.intrafind/google-drive',
+      'com.intrafind/nextcloud'
     ]) {
       assert.ok(named.has(id), `${id} is named by a migration`);
     }
@@ -80,22 +90,34 @@ describe('release entries of migrated definitions (#3092)', () => {
 
   for (const [id, migrations] of named) {
     if (NOT_YET_RELEASED.has(id)) continue;
-    it(`${id} has a release entry for its version (${[...migrations].join(', ')})`, () => {
+    const files = [...migrations].sort().join(', ');
+    it(`${id} has a release entry for its version (${files})`, () => {
       const { definition, folder } = shipped.get(id);
-      assert.ok(Array.isArray(definition.releases), `${id} has no releases`);
-      const release = definition.releases.find(entry => entry.version === definition.version);
-      assert.ok(release, `${id} has no release entry for version ${definition.version}`);
+      assert.ok(
+        Array.isArray(definition.releases) && definition.releases.length > 0,
+        `${id} is created or changed by ${files} but has no releases`
+      );
+      const [newest] = definition.releases;
+      assert.equal(
+        newest.version,
+        definition.version,
+        `${id}: the newest release (releases[0]) is version ${definition.version}`
+      );
       assert.ok(definition.compatibility?.ihub, `${id} states the iHub versions it runs on`);
-      for (const notes of Object.values(release.notes || {})) {
+      for (const notes of Object.values(newest.notes || {})) {
         assert.ok(fs.existsSync(path.join(folder, notes)), `${id}: ${notes} exists`);
       }
     });
   }
 
-  it('allow-lists only shipped definitions a migration names', () => {
+  it('allow-lists only shipped definitions a migration names that still lack an entry', () => {
     for (const id of NOT_YET_RELEASED) {
       assert.ok(shipped.has(id), `${id} is a shipped definition`);
       assert.ok(named.has(id), `${id} is named by a migration`);
+      assert.ok(
+        !hasReleaseForVersion(shipped.get(id).definition),
+        `${id} has a release entry now: remove it from NOT_YET_RELEASED`
+      );
     }
   });
 });

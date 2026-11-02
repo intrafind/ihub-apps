@@ -245,15 +245,22 @@ describe('userMayUse', () => {
   });
 });
 
-describe('cloud storage providers', () => {
+describe('storage providers', () => {
   const STORAGE_GROUPS = {
     groups: {
       users: { id: 'users', name: 'Users', permissions: { integrations: ['office365'] } },
       storage: { id: 'storage', name: 'Storage', permissions: { integrations: ['type:storage'] } },
+      branch: { id: 'branch', name: 'Branch', permissions: { integrations: ['nextcloud-branch'] } },
+      nextcloud: {
+        id: 'nextcloud',
+        name: 'Nextcloud',
+        permissions: { integrations: ['com.intrafind/nextcloud'] }
+      },
       none: { id: 'none', name: 'None', permissions: { integrations: [] } },
       anonymous: { id: 'anonymous', name: 'Anonymous', permissions: { integrations: [] } }
     }
   };
+  // Several installations per provider; the installation id is the provider id.
   const installed = [
     {
       id: 'office365',
@@ -262,10 +269,16 @@ describe('cloud storage providers', () => {
       values: { clientId: 'c', tenantId: 't' }
     },
     {
-      id: 'nextcloud',
+      id: 'nextcloud-main',
       definition: 'com.intrafind/nextcloud',
       enabled: true,
-      values: { providerId: 'nextcloud-main', serverUrl: 'https://cloud.example' }
+      values: { serverUrl: 'https://cloud.example' }
+    },
+    {
+      id: 'nextcloud-branch',
+      definition: 'com.intrafind/nextcloud',
+      enabled: true,
+      values: { serverUrl: 'https://branch.example' }
     }
   ];
 
@@ -281,32 +294,42 @@ describe('cloud storage providers', () => {
   const as = groups =>
     enhanceUserWithPermissions({ id: 'u', groups }, {}, configCache.getPlatform());
 
-  it('lists in /api/auth/status only the providers the groups grant', () => {
+  it('lists in /api/auth/status only the installations the groups grant', () => {
     assert.deepEqual(
       cloudStorageStatus(as(['users'])).providers.map(p => p.id),
       ['office365']
     );
     assert.deepEqual(
       cloudStorageStatus(as(['storage'])).providers.map(p => p.id),
-      ['office365', 'nextcloud-main']
+      ['office365', 'nextcloud-main', 'nextcloud-branch']
+    );
+    assert.deepEqual(
+      cloudStorageStatus(as(['branch'])).providers.map(p => p.id),
+      ['nextcloud-branch']
+    );
+    assert.deepEqual(
+      cloudStorageStatus(as(['nextcloud'])).providers.map(p => p.id),
+      ['nextcloud-main', 'nextcloud-branch']
     );
     const none = cloudStorageStatus(as(['none']));
     assert.deepEqual(none, { enabled: false, providers: [] });
     assert.deepEqual(cloudStorageStatus(undefined).providers, []);
     assert.deepEqual(
       listCloudStorageProvidersFor(as(['storage'])).map(p => p.installationId),
-      ['office365', 'nextcloud']
+      ['office365', 'nextcloud-main', 'nextcloud-branch']
     );
   });
 
-  it('checks a provider named by its provider id against its installation', () => {
+  it('checks a provider named by its installation id against that installation', () => {
     assert.equal(mayUseCloudStorageProvider(as(['users']), 'office365', 'office365'), true);
     assert.equal(mayUseCloudStorageProvider(as(['users']), 'nextcloud-main', 'nextcloud'), false);
     assert.equal(mayUseCloudStorageProvider(as(['storage']), 'nextcloud-main', 'nextcloud'), true);
+    assert.equal(mayUseCloudStorageProvider(as(['branch']), 'nextcloud-main', 'nextcloud'), false);
+    assert.equal(mayUseCloudStorageProvider(as(['branch']), 'nextcloud-branch', 'nextcloud'), true);
     assert.equal(mayUseCloudStorageProvider(as(['storage']), 'missing', 'nextcloud'), false);
   });
 
-  it('refuses the storage routes for a provider the groups do not grant', () => {
+  it('needs an installation on the storage routes, and refuses one the groups do not grant', () => {
     const run = (type, req) => {
       let status = null;
       let body = null;
@@ -326,7 +349,7 @@ describe('cloud storage providers', () => {
       });
       return { status, body, passed };
     };
-    const member = as(['users']);
+    const member = as(['branch']);
     const refused = run('nextcloud', {
       path: '/items',
       query: { providerId: 'nextcloud-main' },
@@ -341,20 +364,29 @@ describe('cloud storage providers', () => {
         .status,
       403
     );
-    // Granted, unnamed, unknown, and the status / disconnect routes pass.
+    // No installation named: 400; an unknown one, or one of another provider: 404.
+    const unnamed = run('nextcloud', { path: '/items', query: {}, user: member });
+    assert.equal(unnamed.status, 400);
+    assert.equal(unnamed.body.code, 'STORAGE_PROVIDER_REQUIRED');
+    assert.equal(run('nextcloud', { path: '/status', query: {}, user: member }).status, 400);
     for (const req of [
-      { path: '/items', query: { providerId: 'office365' }, user: member, type: 'office365' },
-      { path: '/items', query: {}, user: member, type: 'nextcloud' },
-      { path: '/items', query: { providerId: 'gone' }, user: member, type: 'nextcloud' },
-      { path: '/status', query: { providerId: 'nextcloud-main' }, user: member, type: 'nextcloud' },
-      {
-        path: '/disconnect',
-        query: { providerId: 'nextcloud-main' },
-        user: member,
-        type: 'nextcloud'
-      }
+      { path: '/items', query: { providerId: 'gone' } },
+      { path: '/download', query: { providerId: 'office365' } }
     ]) {
-      assert.equal(run(req.type, req).passed, true, JSON.stringify(req));
+      const result = run('nextcloud', { ...req, user: member });
+      assert.equal(result.status, 404, JSON.stringify(req));
+      assert.equal(result.body.code, 'STORAGE_PROVIDER_NOT_FOUND');
+    }
+    // Granted, the callback (id in the path), and status / disconnect of any installation pass.
+    for (const req of [
+      { path: '/items', query: { providerId: 'nextcloud-branch' }, type: 'nextcloud' },
+      { path: '/auth', query: { providerId: 'nextcloud-branch' }, type: 'nextcloud' },
+      { path: '/nextcloud-main/callback', query: { code: 'x', state: 'y' }, type: 'nextcloud' },
+      { path: '/status', query: { providerId: 'nextcloud-main' }, type: 'nextcloud' },
+      { path: '/status', query: { providerId: 'gone' }, type: 'nextcloud' },
+      { path: '/disconnect', query: {}, body: { providerId: 'nextcloud-main' }, type: 'nextcloud' }
+    ]) {
+      assert.equal(run(req.type, { ...req, user: member }).passed, true, JSON.stringify(req));
     }
   });
 });

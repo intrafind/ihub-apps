@@ -149,10 +149,21 @@ export function credentialFact(item) {
   return secretFact('credential', label('credential', 'Credential'), item.auth?.credentialRef);
 }
 
-/** The names of the boolean source switches that are on, e.g. "My Drive, Shared drives". */
+/**
+ * The names of the source switches that are on, e.g. "My Drive, Shared
+ * drives". A switch is on unless stored as `false` (the definitions default
+ * every source to on, and a tile sees only the stored values).
+ */
 function sourcesFact(item, sources) {
-  const on = sources.filter(([key]) => item?.values?.[key] === true).map(([, name]) => name);
-  if (on.length === 0) return null;
+  const on = sources.filter(([key]) => item?.values?.[key] !== false).map(([, name]) => name);
+  if (on.length === 0) {
+    return {
+      id: 'sources',
+      ...label('sources', 'Sources'),
+      valueKey: `${FACT_PREFIX}.noSources`,
+      valueDefault: 'none'
+    };
+  }
   return { id: 'sources', ...label('sources', 'Sources'), text: on.join(', ') };
 }
 
@@ -394,36 +405,28 @@ const FACTS_BY_DEFINITION = {
       mono: true,
       context
     }),
-    fieldFact(item, 'clientId', 'clientId', label('clientId', 'Client ID'), {
-      mono: true,
-      context
-    }),
-    secretFact(
-      'clientSecret',
-      label('clientSecret', 'Client secret'),
-      item.values?.clientSecretRef
-    ),
     sourcesFact(item, [
       ['sourcePersonalDrive', 'OneDrive'],
       ['sourceFollowedSites', 'SharePoint'],
       ['sourceTeams', 'Teams']
-    ])
-  ],
-  'com.intrafind/google-drive': (item, context) => [
+    ]),
     fieldFact(item, 'clientId', 'clientId', label('clientId', 'Client ID'), {
       mono: true,
       context
     }),
-    secretFact(
-      'clientSecret',
-      label('clientSecret', 'Client secret'),
-      item.values?.clientSecretRef
-    ),
+    secretFact('clientSecret', label('clientSecret', 'Client secret'), item.values?.clientSecretRef)
+  ],
+  'com.intrafind/google-drive': (item, context) => [
     sourcesFact(item, [
       ['sourceMyDrive', 'My Drive'],
       ['sourceSharedDrives', 'Shared drives'],
       ['sourceSharedWithMe', 'Shared with me']
-    ])
+    ]),
+    fieldFact(item, 'clientId', 'clientId', label('clientId', 'Client ID'), {
+      mono: true,
+      context
+    }),
+    secretFact('clientSecret', label('clientSecret', 'Client secret'), item.values?.clientSecretRef)
   ],
   'com.intrafind/nextcloud': (item, context) => [
     fieldFact(item, 'serverUrl', 'serverUrl', label('serverUrl', 'Server URL'), {

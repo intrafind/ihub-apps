@@ -2965,7 +2965,11 @@
             "a2a": "Agenten",
             "builtIn": "Integriert",
             "catalog": "Aus dem Katalog"
-          }
+          },
+          "allStorageProviders": "Alle Speicheranbieter",
+          "storageRequiredHelp": "Die App ausblenden, solange dieser Speicheranbieter deaktiviert ist oder fehlt. Aus: Die App bleibt verfügbar, und die Dateiauswahl bietet die vorhandenen Anbieter an.",
+          "storageProvidersTitle": "Speicheranbieter",
+          "storageProvidersDesc": "Benutzer Dateien für den Chat aus den Speicheranbietern auswählen lassen: aus allen oder aus einzelnen. Benutzer sehen die, die ihre Gruppen freigeben; ausgewählte Dateien folgen den Upload-Einstellungen."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
@@ -3121,7 +3125,8 @@
         "languageCode": "Sprachcode (z. B. en, de, es)",
         "add": "Hinzufügen",
         "removeLanguage": "Sprache {{lang}} entfernen",
-        "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen."
+        "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen.",
+        "cloudStorageMoved": "Dateien aus Speicheranbietern (Office 365, Google Drive, Nextcloud): binden Sie die Anbieter unter Integrationen → Speicheranbieter."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -3464,7 +3469,8 @@
         "directoryType": "Verzeichnistyp",
         "directory": "Verzeichnis",
         "browseBase": "Browse-Basis",
-        "account": "Konto"
+        "account": "Konto",
+        "noSources": "keine"
       },
       "groups": {
         "peopleDirectories": {
@@ -3840,6 +3846,71 @@
           "incomplete": "Ohne {{fields}} kann sich das Verzeichnis nicht anmelden: füllen Sie die Felder aus oder setzen Sie die Umgebungsvariablen auf dem Server.",
           "testResults": "Verbindungstest Entra ID",
           "testHelp": "Holt ein Token mit den Werten oben (ungespeichert), ersatzweise mit den AZURE_*-Variablen, und liest einen Benutzer über Microsoft Graph."
+        },
+        "storage": {
+          "registerSection": "iHub beim Anbieter registrieren",
+          "registerSectionHelp": "Der Anbieter schickt Benutzer nach der Anmeldung an diese URL zurück. Sie enthält die Installations-ID „{{id}}“, die sich nie ändert.",
+          "redirectToRegister": "Zu registrierende Redirect-URI",
+          "register": {
+            "office365": "Azure-Portal → Microsoft Entra ID → App-Registrierungen → Ihre App → Authentifizierung → Plattform „Web“ → Umleitungs-URIs.",
+            "googledrive": "Google Cloud Console → APIs & Dienste → Anmeldedaten → Ihr OAuth-2.0-Client (Webanwendung) → Autorisierte Weiterleitungs-URIs.",
+            "nextcloud": "Nextcloud → Verwaltungseinstellungen → Sicherheit → OAuth-2.0-Clients → einen Client mit dieser Redirect-URI hinzufügen."
+          },
+          "redirectDerivedHelp": "So abgeleitet, wie der Server sie aus jeder Anfrage ableitet: diese Adresse, der Basispfad und der Callback-Pfad. Das Feld unten setzen, wenn der Anbieter eine andere Adresse sehen muss (eine ungewöhnliche Proxy-Einrichtung).",
+          "redirectConfiguredHelp": "Die unten eingetragene Redirect-URI gilt für jede Anmeldung.",
+          "redirectUri": "Redirect-URI (optional)",
+          "redirectUriHelp": "Leer lassen, damit sie aus jeder Anfrage abgeleitet wird (empfohlen).",
+          "oauthSection": "OAuth-App",
+          "oauthSectionHelp": {
+            "office365": "Die Azure-App-Registrierung, mit der sich Benutzer anmelden (Microsoft Graph, delegierte Berechtigungen).",
+            "googledrive": "Der OAuth-2.0-Client (Webanwendung) Ihres Google-Cloud-Projekts mit aktivierter Drive-API.",
+            "nextcloud": "Der Nextcloud-Server und der darin registrierte OAuth-2.0-Client."
+          },
+          "serverUrl": "Nextcloud-Server-URL",
+          "serverUrlHelp": "Die Basis-URL der Instanz (ohne abschließenden Schrägstrich); Basis für OAuth, OCS und WebDAV.",
+          "tenantId": "Verzeichnis-ID (Mandanten-ID)",
+          "tenantIdHelp": "Eine Kennung, kein Geheimnis: wird in der Installation als Klartext gespeichert.",
+          "clientId": "Client-ID",
+          "clientSecret": "Client-Secret",
+          "clientSecretHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret (Admin → Integrationen → Zugangsdaten).",
+          "sourcesSection": "Quellen, die Benutzer durchsuchen dürfen",
+          "sourcesSectionHelp": {
+            "office365": "Die Anmeldung fragt nur die Microsoft-Graph-Berechtigungen an, die die angehakten Quellen brauchen; schalten Sie ab, wofür Ihr Mandant keine Zustimmung gibt.",
+            "googledrive": "Die Dateiauswahl bietet nur die angehakten Quellen an."
+          },
+          "sources": {
+            "personalDrive": "Persönliches OneDrive",
+            "personalDriveHelp": "Fragt nur Files.Read an; dem stimmen Benutzer selbst zu.",
+            "followedSites": "Gefolgte SharePoint-Sites",
+            "followedSitesHelp": "Fragt Sites.Read.All und Files.Read.All an (Administratorzustimmung).",
+            "teams": "Microsoft Teams",
+            "teamsHelp": "Fragt Team.ReadBasic.All, Channel.ReadBasic.All und Files.Read.All an (Administratorzustimmung).",
+            "myDrive": "Meine Ablage",
+            "sharedDrives": "Geteilte Ablagen",
+            "sharedWithMe": "Für mich freigegeben"
+          },
+          "noSource": "Keine Quelle angehakt: Benutzer können sich verbinden, aber nichts durchsuchen.",
+          "siteUrl": "SharePoint-Site-URL",
+          "siteUrlHelp": "Zugriff auf eine SharePoint-Site beschränken.",
+          "driveId": "Laufwerks-ID",
+          "driveIdHelp": "Zugriff auf ein Laufwerk beschränken.",
+          "connectionsSection": "Verbindung und Benutzer",
+          "connectionsSectionHelp": "Jeder Benutzer verbindet sein eigenes Konto, unter Einstellungen → Integrationen oder aus der Dateiauswahl. Verbindungen werden je Installation gespeichert.",
+          "statusEnabled": "Aktiviert: Benutzer, deren Gruppen sie freigeben, können sich verbinden.",
+          "statusDisabled": "Deaktiviert: Benutzer können sich weder verbinden noch Dateien daraus auswählen.",
+          "connectedUsers": "{{count}} Benutzer verbunden",
+          "testResults": "Test des Speicheranbieters",
+          "testHelp": "Prüft die Werte oben (ungespeichert): Client und Secret, die Anbieter-Einstellungen, die Redirect-URI, ob der Anbieter antwortet, und wie viele Benutzer verbunden sind. Die Anmeldung braucht einen Browser: unter Einstellungen → Integrationen verbinden.",
+          "errors": {
+            "required": {
+              "tenantId": "Geben Sie die Verzeichnis-ID (Mandanten-ID) der App-Registrierung ein.",
+              "clientId": "Geben Sie die Client-ID der OAuth-App ein.",
+              "clientSecretRef": "Wählen Sie den Zugangsdaten-Eintrag mit dem Client-Secret.",
+              "serverUrl": "Geben Sie die URL des Nextcloud-Servers ein."
+            },
+            "url": "Geben Sie eine http(s)-URL ein.",
+            "redirectPath": "Die Redirect-URI muss auf {{path}} enden."
+          }
         }
       },
       "access": {

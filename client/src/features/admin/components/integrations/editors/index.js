@@ -4,6 +4,7 @@
 import { createElement } from 'react';
 import IFinderEditor from './IFinderEditor';
 import IAssistantEditor from './IAssistantEditor';
+import StorageProviderEditor from './StorageProviderEditor';
 import PeopleDirectoryEditor from './PeopleDirectoryEditor';
 import LdapBrowserEditor from './LdapBrowserEditor';
 import EntraDirectoryEditor from './EntraDirectoryEditor';
@@ -50,6 +51,11 @@ import WebSearchEngineEditor from './WebSearchEngineEditor';
 const EDITORS = Object.freeze({
   'com.intrafind/ifinder': IFinderEditor,
   'com.intrafind/iassistant': IAssistantEditor,
+  // The storage providers share one editor; `storageEditorModel.js` holds
+  // what differs per provider (tenant, server URL, sources).
+  'com.intrafind/office365': StorageProviderEditor,
+  'com.intrafind/google-drive': StorageProviderEditor,
+  'com.intrafind/nextcloud': StorageProviderEditor,
   'com.intrafind/ldap-directory': PeopleDirectoryEditor,
   'com.intrafind/ldap-browser': LdapBrowserEditor,
   'com.intrafind/entra-directory': EntraDirectoryEditor,

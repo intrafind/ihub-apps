@@ -26,8 +26,9 @@
  * for each path.
  *
  * @typedef {Object} NextcloudSelection
- * @property {string} providerId  Nextcloud cloud-storage provider id (matches
- *                                the existing cloudStorage providers admin UI).
+ * @property {string} providerId  The id of the Nextcloud installation
+ *                                (Admin → Integrations), the `ihub_provider_id`
+ *                                configured in the Nextcloud app.
  * @property {string[]} paths     File paths inside the user's Nextcloud root.
  */
 

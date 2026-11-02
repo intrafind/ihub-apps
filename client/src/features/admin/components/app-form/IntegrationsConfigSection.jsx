@@ -13,6 +13,7 @@ import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import IntegrationBindingRow from './IntegrationBindingRow';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
+import { storageBindingRows } from './storageBindingRows';
 import { webSearchEnginesOf } from './webSearchEngines';
 
 /** The built-in installation that has its own panel instead of a row. */
@@ -35,7 +36,7 @@ const ROW_GROUPS = [
 function hasOwnPanel(item) {
   if (item.id === IASSISTANT_INSTANCE_ID) return true;
   // Web search engines are picked in the web search panel; storage providers
-  // are offered through the upload settings (they bring no model actions).
+  // have their own card (they bring files, no model actions).
   return item.type === 'web-search' || item.type === 'storage';
 }
 
@@ -107,14 +108,18 @@ function Card({ title, description, children, testId }) {
  *   installed or the app already uses it.
  * - **People directories**: "All people directories" (`type:people-directory`)
  *   and each directory.
+ * - **Storage providers**: "All storage providers" (`type:storage`), "All …
+ *   installations" of a provider with several, and each installation; no
+ *   action list (they bring files for the chat's file picker, not actions),
+ *   a new binding starts optional. Shown while a storage provider is
+ *   installed or the app binds one (`storageBindingRows.js`). Replaces the
+ *   former upload switch `upload.cloudStorageUpload`.
  * - **Integrations**: every other installation, grouped into MCP servers,
  *   agents, built-in and catalog integrations (the LDAP browsers are built-in:
  *   they have no type; a browser binding without `actions` binds all three
  *   browse actions); a definition with several installations also gets
  *   "All … installations" (`app.integrations[<definition id>]`).
  *
- * Storage providers have no rows here: they bring no model actions and are
- * offered through the upload settings.
  *
  * @param {Object} props
  * @param {Object} props.app - the app being edited
@@ -235,13 +240,59 @@ function IntegrationsConfigSection({ app, onChange }) {
   // A definition row of the LDAP directories stays in the directories card.
   const directoryDefinitionRows = definitionRows.filter(row => row.type === 'people-directory');
 
+  // Rows of the Storage providers card: all, all of one provider, each one.
+  const storageRows = useMemo(() => {
+    const storageRequiredHelp = t(
+      'admin.apps.edit.integrations.storageRequiredHelp',
+      'Hide the app while this storage provider is disabled or missing. Off: the app stays available and the file picker offers the providers that are there.'
+    );
+    return storageBindingRows(installed, bindings).map(row => {
+      const common = {
+        noActions: true,
+        newBinding: { required: false },
+        requiredHelp: storageRequiredHelp
+      };
+      if (row.kind === 'type') {
+        return {
+          ...row,
+          ...common,
+          label: t('admin.apps.edit.integrations.allStorageProviders', 'All storage providers'),
+          definitionName: t(
+            'admin.apps.edit.integrations.allOfTypeHelp',
+            'Every installation of this kind, including ones installed later ({{count}} now).',
+            { count: row.count }
+          )
+        };
+      }
+      if (row.kind === 'definition') {
+        return {
+          ...row,
+          ...common,
+          label: t('admin.apps.edit.integrations.allInstallations', 'All {{name}} installations', {
+            name: row.name
+          }),
+          definitionName: t(
+            'admin.apps.edit.integrations.allInstallationsHelp',
+            'Every installation of this integration, including ones installed later ({{count}} now).',
+            { count: row.count }
+          )
+        };
+      }
+      return { ...row, ...common };
+    });
+  }, [installed, bindings, t]);
+  const storageRowIds = useMemo(() => new Set(storageRows.map(row => row.id)), [storageRows]);
+
   // Load the actions of every bound installation or definition once bound.
   // A definition row merges the actions of all its installations (an MCP
   // server lists its own tools, so two installations of one definition can
   // differ); one installation that fails to load does not hide the others.
   // Type rows offer no actions.
   useEffect(() => {
-    const ids = Object.keys(bindings).filter(id => !id.startsWith(TYPE_PREFIX) && !details[id]);
+    // Storage providers have no actions to load.
+    const ids = Object.keys(bindings).filter(
+      id => !id.startsWith(TYPE_PREFIX) && !details[id] && !storageRowIds.has(id)
+    );
     if (ids.length === 0 || loading) return;
     let cancelled = false;
     void (async () => {
@@ -257,7 +308,7 @@ function IntegrationsConfigSection({ app, onChange }) {
     return () => {
       cancelled = true;
     };
-  }, [bindings, details, definitionRows, loading]);
+  }, [bindings, details, definitionRows, storageRowIds, loading]);
 
   // Bindings to installations that are gone: the app is hidden from users
   // until they are unbound, so they are listed with a way to do that.
@@ -271,10 +322,11 @@ function IntegrationsConfigSection({ app, onChange }) {
       ...installed.map(i => i.definition).filter(Boolean),
       ...installed.filter(i => i.type).map(i => `${TYPE_PREFIX}${i.type}`),
       ...definitionRows.map(row => row.id),
-      ...directoryRows.map(row => row.id)
+      ...directoryRows.map(row => row.id),
+      ...storageRowIds
     ]);
     return Object.keys(bindings).filter(id => !known.has(id));
-  }, [bindings, installed, definitionRows, directoryRows, loading, error]);
+  }, [bindings, installed, definitionRows, directoryRows, storageRowIds, loading, error]);
 
   // The web search engines in Auto's order; null while unknown (not loaded).
   const webSearchEngines = useMemo(
@@ -350,6 +402,19 @@ function IntegrationsConfigSection({ app, onChange }) {
           {directoryRows.slice(0, 1).map(renderRow)}
           {directoryDefinitionRows.map(renderRow)}
           {directoryRows.slice(1).map(renderRow)}
+        </Card>
+      )}
+
+      {storageRows.length > 0 && (
+        <Card
+          testId="app-integrations-storage-providers"
+          title={t('admin.apps.edit.integrations.storageProvidersTitle', 'Storage providers')}
+          description={t(
+            'admin.apps.edit.integrations.storageProvidersDesc',
+            'Let users pick files for the chat from the storage providers: all of them, or single ones. Users see the ones their groups grant; picked files follow the upload settings.'
+          )}
+        >
+          {storageRows.map(renderRow)}
         </Card>
       )}
 

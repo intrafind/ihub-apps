@@ -169,9 +169,10 @@ npx jest --config tests/config/jest.config.js tests/unit/client/admin-people-dir
   by `*` or a type key does not count) would restore the old default; it needs a decision.
 - Entra's `tenantId` and `clientId` are no longer `required` in the definition, so the
   documented `AZURE_*` fallback can be used from the editor (the server always fell back).
-- The storage definitions (Office 365, Google Drive, Nextcloud) are on the allow-list of
-  `integration-definition-releases.test.js`; the storage PR adds their release entries and empties
-  the list. `com.intrafind/ihub` (V202) and the web search engines (V204) have theirs since the
-  web search branch was merged in (2026-11-02).
+- The allow-list of `integration-definition-releases.test.js` is empty since the storage branch
+  merged this one (2026-11-02): every shipped definition a migration names (iHub V202, web search
+  V204, LDAP browser V205, storage providers V206, …) has its release entry. The storage branch's
+  own copy of the check (`server/tests/integrations/definitionReleases.test.js`) was folded into
+  it.
 - Workflow nodes or agent profiles that name a `<dirId>__browse_*` tool id are not rewritten (no
   shipped one does).

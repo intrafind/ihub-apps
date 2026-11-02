@@ -24,8 +24,13 @@ function withoutKey(object, key) {
  * definitions of one type name their actions differently, so a type binding
  * always takes each installation's default actions.
  *
+ * A row with `noActions` (a storage provider: it brings files, no model
+ * actions) offers no action list either; `newBinding` is the binding a tick
+ * creates (a storage provider starts optional) and `requiredHelp` replaces
+ * the help text of the Required switch.
+ *
  * @param {Object} props
- * @param {{ id: string, label: string, definitionName?: string, enabled?: boolean, kind: 'instance'|'definition'|'type' }} props.item
+ * @param {{ id: string, label: string, definitionName?: string, enabled?: boolean, kind: 'instance'|'definition'|'type', noActions?: boolean, newBinding?: Object, requiredHelp?: string }} props.item
  * @param {Object|undefined} props.binding - `app.integrations[item.id]`, undefined when unbound
  * @param {Object|undefined} props.detail - the installation as `GET …/installed/:id` returns it (actions, definition)
  * @param {(binding: Object|null) => void} props.onBindingChange - null unbinds
@@ -35,16 +40,17 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
   const bound = Boolean(binding);
   const current = binding || {};
   const isType = item.kind === 'type';
+  const withoutActions = isType || item.noActions === true;
   // A definition row lists the actions the definition declares (through its
   // first installation); an installation row its available ones.
-  const actions = isType
+  const actions = withoutActions
     ? []
     : (detail?.actions || []).filter(a =>
         item.kind === 'definition' ? a.enabledByDefault !== false || a.enabled : a.available
       );
   const implicitNames = actions.filter(a => !a.bindExplicitly).map(a => a.name);
   const selected = Array.isArray(current.actions) ? current.actions : implicitNames;
-  const scopes = isType ? null : detail?.definition?.scopes;
+  const scopes = withoutActions ? null : detail?.definition?.scopes;
   const checkboxId = `app-integration-${item.id.replace(/[/:]/g, '__')}`;
 
   const toggleAction = (actionName, checked) => {
@@ -81,7 +87,9 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
           type="checkbox"
           className={`${CHECKBOX_CLASS} mt-1`}
           checked={bound}
-          onChange={e => onBindingChange(e.target.checked ? { ...current } : null)}
+          onChange={e =>
+            onBindingChange(e.target.checked ? { ...item.newBinding, ...current } : null)
+          }
         />
         <span className="flex-1">
           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
@@ -104,7 +112,7 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
       </label>
       {bound && (
         <div className="mt-3 pl-7 space-y-3">
-          {!isType && (
+          {!withoutActions && (
             <div>
               <p className={LABEL_CLASS}>{t('admin.apps.edit.integrations.actions', 'Actions')}</p>
               {!detail && <p className={HELP_CLASS}>{t('common.loading', 'Loading…')}</p>}
@@ -157,10 +165,11 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange }) {
             <span>
               {t('admin.apps.edit.integrations.required', 'Required')}
               <span className={`${HELP_CLASS} block`}>
-                {t(
-                  'admin.apps.edit.integrations.requiredHelp',
-                  'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
-                )}
+                {item.requiredHelp ||
+                  t(
+                    'admin.apps.edit.integrations.requiredHelp',
+                    'Hide the app while this integration is disabled or missing. Off: the app stays available without its actions.'
+                  )}
               </span>
             </span>
           </label>

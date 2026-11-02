@@ -1068,9 +1068,6 @@ The `upload` property controls file and media upload capabilities:
     "enabled": true,
     "maxFileSizeMB": 20,
     "supportedFormats": ["application/pdf", "text/plain", "text/csv"]
-  },
-  "cloudStorageUpload": {
-    "enabled": true
   }
 }
 ```
@@ -1098,7 +1095,37 @@ Every upload type has its own size limit, and a file is held to the limit of its
 | `upload.fileUpload.trackedChanges`    | String  | `"accepted"`                                                      | `"markup"` sends tracked changes of Word documents as `{++added++}` / `{--removed--}`; `"accepted"` sends the accepted view                                                                                                                                                                                            |
 | `upload.fileUpload.comments`          | String  | `"ignore"`                                                        | `"inline"` sends Word comments as `{>>Author: text<<}` after the text they belong to                                                                                                                                                                                                                                   |
 | `upload.fileUpload.speakerNotes`      | String  | `"ignore"`                                                        | `"include"` sends the speaker notes of PowerPoint and OpenDocument slides as `[Notes]` after the slide text                                                                                                                                                                                                            |
-| `upload.cloudStorageUpload.enabled`   | Boolean | `false`                                                           | Enable the cloud storage file picker (requires cloud storage configured in platform.json)                                                                                                                                                                                                                              |
+
+##### Files from storage providers
+
+The cloud file picker (Office 365, Google Drive, Nextcloud, in the **+** menu of the message box) is
+not an upload switch: an app offers storage providers by **binding** them in `integrations`, like
+any installed integration (**Admin → Apps → Edit → Integrations → Storage providers**):
+
+```json
+"integrations": {
+  "type:storage": { "required": false }
+}
+```
+
+| Key                         | Binds                                                                     |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `type:storage`              | every storage provider installation, the ones installed later included    |
+| `com.intrafind/nextcloud`   | every installation of one provider (also `com.intrafind/office365`, `com.intrafind/google-drive`) |
+| `nextcloud-branch`          | one installation, by its id                                               |
+
+- The picker offers the bound providers that are enabled and that the user's groups grant
+  (`permissions.integrations`); with several installations of one provider each one is listed under
+  its label.
+- `required: false` keeps the app available while no bound provider is enabled (the picker is then
+  simply not offered); without it the app is hidden like for any required integration. The editor
+  creates storage bindings as optional.
+- Picked files are processed like uploads and follow `upload.enabled` and the `fileUpload`
+  extraction options (`trackedChanges`, `comments`, `speakerNotes`); `upload.enabled: false` turns
+  the picker off too.
+- `upload.cloudStorageUpload` is retired: migration V206 turned every
+  `upload.cloudStorageUpload.enabled: true` into `"type:storage": { "required": false }`, and the
+  app schema refuses the key.
 
 #### Skill Settings
 
@@ -1325,6 +1352,8 @@ The binding is also the requirement: the app is offered to users only while ever
 **MCP servers.** An [MCP server](mcp-integration.md) is an installation too (**Admin → Integrations**), and its tools are its actions: `"drawio": {}` offers every tool the installation has enabled, `"drawio": { "actions": ["create_diagram"] }` one of them. The tools keep their ids in the chat and in group tool grants (`drawio__create_diagram`). The shipped **draw.io Diagrams** and **Excalidraw Sketches** apps bind the `drawio` and `excalidraw` installations, which ship disabled; enable the installation to offer the app.
 
 **Every installation of a definition.** A key may be a definition id, with its one `/`: `"integrations": { "com.intrafind/ldap-directory": {} }` binds every installation of the People directory (LDAP) definition, including directories installed later, with the same `actions` and `required` for each; an installation's own key on top of it wins for that installation. The app is offered while at least one installation of the definition is enabled. The app editor shows such a row as **All … installations** for definitions with several installations (and always for the people directories). A type key binds every installation of every definition of that type: `"type:people-directory": {}` is the shipped People search app (every LDAP directory and the Entra ID directory), and `"com.intrafind/ldap-browser": {}` the shipped LDAP browser app (every LDAP browser, all three browse actions). An action a definition marks `bindExplicitly` is bound only when `actions` names it.
+
+**Storage providers.** Office 365, Google Drive and Nextcloud installations bring no actions: binding one (by installation id, by its definition id, or all of them with `"type:storage"`) offers it in the chat's cloud file picker. See [Files from storage providers](#files-from-storage-providers).
 
 **Remote A2A agents.** A [remote A2A agent](a2a-agents.md) is an installation of the "A2A agent" definition (**Admin → Integrations**), and the skills of its Agent Card are its actions: `"langdock": {}` offers every skill the installation has enabled, `"langdock": { "actions": ["<skill id>"] }` only the named ones (skill ids as the card names them). The tools keep their ids (`a2a__langdock__<skill>`) in the chat and in group tool grants.
 

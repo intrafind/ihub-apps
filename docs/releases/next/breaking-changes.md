@@ -234,20 +234,24 @@ restored from a backup after the upgrade fails validation until the block is rem
 
 - **Admin pages:** **Admin → Integrations → Office 365 / Google Drive / Nextcloud**
   (`/admin/integrations/office365`, `/admin/integrations/google-drive`,
-  `/admin/integrations/nextcloud`) and the shared provider editor are gone; use
-  **Admin → Integrations**. The user-facing routes
-  `/api/integrations/{office365,googledrive,nextcloud}/*` and `/api/auth/status` (its
-  `cloudStorage` payload is filled from the installations) are unchanged.
-- **One installation per provider type.** Each definition is a singleton; the first enabled
-  provider of a type (else the first) becomes the installation, further providers of the same type
-  are kept in `contents/config/cloudStorage.unmigrated.json` with a warning in the log. The
-  provider's `id` becomes the installation's **Provider id** value when it differs from the
-  installation id, so callback URLs, stored user tokens and the Nextcloud embed plugin's
-  `ihub_provider_id` keep working.
-- **Office 365 tenant id:** the tenant id is an identifier, not a secret; the migration decrypts
-  the former `tenantIdRef` credential into the plain `tenantId` value (the credential entry is
-  left in the store). A plain `clientSecret` in a hand-edited file goes into the credential store
-  as `integration-<id>-clientSecretRef`.
+  `/admin/integrations/nextcloud`) and the shared provider editor are gone; each installation has
+  its page under **Admin → Integrations** with the provider's editor. The user-facing routes
+  `/api/integrations/{office365,googledrive,nextcloud}/*` stay; see
+  [Storage Providers](#storage-providers-apps-bind-them-requests-name-the-installation) for what
+  they require now.
+- **Installation id = provider id.** Each provider becomes an installation whose id is the
+  provider's former `id` (migration V206 renames what V200 created and installs the further
+  providers of a type V200 kept in `contents/config/cloudStorage.unmigrated.json`, then deletes the
+  file), so callback URLs, stored user tokens and the Nextcloud embed plugin's `ihub_provider_id`
+  keep working. Group grants (`permissions.integrations`) and app bindings naming the old
+  installation id follow the rename. When a provider id cannot be an installation id (another
+  installation holds it, or it is reserved such as `jira`), the log warns: those users connect
+  again and the redirect URI of the installation id has to be registered.
+- **Office 365 tenant id:** the tenant id is an identifier, not a secret; it is stored in the
+  clear on the installation (restored from the former `tenantIdRef` credential where V200 could not
+  read it), and the tenant id credentials no configuration names any more are deleted from the
+  credential store. A plain `clientSecret` in a hand-edited file goes into the credential store as
+  `integration-<id>-clientSecretRef`.
 - **Deployments that write `platform.json` themselves** (Helm values, templates, scripts) have
   to write the installations instead; the field names are listed in
   `docs/office365-integration.md`, `docs/google-drive-integration.md` and
@@ -333,3 +337,40 @@ connection. Migration V205 moves it for you.
 warnings and, under **Admin → Groups**, which groups may use the new LDAP browser installations:
 replace a `*` grant with explicit integrations for groups that should not browse, or keep the
 LDAP browser app limited to admin groups.
+
+## Storage Providers: Apps Bind Them, Requests Name the Installation
+
+An app offers storage providers (Office 365, Google Drive, Nextcloud) by binding them, and every
+request to a storage provider names the installation it means, since a provider can be installed
+several times.
+
+- **`upload.cloudStorageUpload` is removed.** Migration V206 turned every
+  `upload.cloudStorageUpload.enabled: true` into the binding
+  `"integrations": { "type:storage": { "required": false } }` (all storage providers, optional) and
+  removed the key from every app. The app schema refuses it from now on: saving such an app under
+  **Admin → Apps** or installing it from the marketplace fails with a message naming the binding,
+  and an app file written by hand that still has it loads with a validation warning and offers no
+  cloud file picker. Bind single providers with their installation id or definition id instead.
+- **Routes need the installation id.** `/api/integrations/{office365,googledrive,nextcloud}/…`
+  require `?providerId=<installation id>` (the OAuth callback carries it in its path, `/disconnect`
+  also accepts it in the JSON body): `400 STORAGE_PROVIDER_REQUIRED` without it,
+  `404 STORAGE_PROVIDER_NOT_FOUND` for an installation that does not exist (except `/status` and
+  `/disconnect`), `403 INTEGRATION_NOT_GRANTED` as before. The shipped client always sends it;
+  scripts that called the browse routes without it have to add it.
+- **`/api/auth/status`:** `cloudStorage.providers[].id` is the installation id; each provider also
+  carries its `definition`.
+- **Redirect URI derivation:** an empty redirect URI is derived from the request including the
+  base path (`X-Forwarded-Prefix`), and the environment variables `OFFICE365_OAUTH_REDIRECT_URI`,
+  `GOOGLEDRIVE_OAUTH_REDIRECT_URI` and `NEXTCLOUD_OAUTH_REDIRECT_URI` and the
+  `SERVER_URL`/localhost fallback are no longer read; without a configured value and without a
+  request host the sign-in refuses to start.
+- **Install field `providerId` is removed** from the three definitions; an installation saved with
+  it is refused (unknown value).
+
+**Before upgrading:** if iHub runs under a base path (for example `/ihub`) and an installation
+leaves **Redirect URI** empty, register the new URI
+`https://<host>/ihub/api/integrations/<provider>/<installation id>/callback` with the provider (the
+installation's **Settings** tab shows it) — or set the old, working URI as the installation's
+**Redirect URI**. If you set one of the `*_OAUTH_REDIRECT_URI` variables, enter its value as the
+installation's **Redirect URI**. After the upgrade, check the server log for V206 warnings
+(installations that kept their id, tenant ids to enter).

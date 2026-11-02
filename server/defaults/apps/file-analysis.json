@@ -64,9 +64,11 @@
     "allowMultiple": true,
     "audioUpload": {
       "enabled": true
-    },
-    "cloudStorageUpload": {
-      "enabled": true
+    }
+  },
+  "integrations": {
+    "type:storage": {
+      "required": false
     }
   },
   "disallowModelSelection": false,

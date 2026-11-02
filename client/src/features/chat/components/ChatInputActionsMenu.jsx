@@ -11,7 +11,6 @@ import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
@@ -71,7 +70,6 @@ function ChatInputActionsMenu({
   onIntegrationScopeChange = null
 }) {
   const { t, i18n } = useTranslation();
-  const { platformConfig } = usePlatformConfig();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
   // its `contextToggles` array. Empty in the main web app — the section
@@ -101,14 +99,9 @@ function ChatInputActionsMenu({
     onClose: handleActionsMenuClose
   });
 
-  // Get enabled cloud storage providers
-  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
-  const cloudStorageConfig = uploadConfig?.cloudStorageUpload || {};
-  const isCloudStorageEnabledForApp = cloudStorageConfig.enabled === true;
-  const enabledCloudProviders =
-    cloudStorage.enabled && isCloudStorageEnabledForApp
-      ? cloudStorage.providers.filter(p => p.enabled)
-      : [];
+  // The storage providers the app binds and the user's groups grant
+  // (`useFileUploadHandler().createUploadConfig` → `cloudStorage.providers`)
+  const enabledCloudProviders = uploadConfig?.cloudStorage?.providers || [];
 
   // Load tool metadata when component mounts. Workflows live in app.workflows now
   // and are triggered via @mentions, so they are intentionally not surfaced here.

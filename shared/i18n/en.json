@@ -2674,7 +2674,11 @@
             "a2a": "Agents",
             "builtIn": "Built-in",
             "catalog": "From the catalog"
-          }
+          },
+          "allStorageProviders": "All storage providers",
+          "storageRequiredHelp": "Hide the app while this storage provider is disabled or missing. Off: the app stays available and the file picker offers the providers that are there.",
+          "storageProvidersTitle": "Storage providers",
+          "storageProvidersDesc": "Let users pick files for the chat from the storage providers: all of them, or single ones. Users see the ones their groups grant; picked files follow the upload settings."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
@@ -2830,7 +2834,8 @@
         "languageCode": "Language code (e.g., en, de, es)",
         "add": "Add",
         "removeLanguage": "Remove language {{lang}}",
-        "noLanguages": "No languages configured. Add a language to get started."
+        "noLanguages": "No languages configured. Add a language to get started.",
+        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -3173,7 +3178,8 @@
         "directoryType": "Directory type",
         "directory": "Directory",
         "browseBase": "Browse base",
-        "account": "Account"
+        "account": "Account",
+        "noSources": "none"
       },
       "groups": {
         "peopleDirectories": {
@@ -3549,6 +3555,71 @@
           "incomplete": "Without {{fields}} the directory cannot sign in: fill the fields, or set the environment variables on the server.",
           "testResults": "Entra ID connection test",
           "testHelp": "Fetches a token with the values above (unsaved), falling back to the AZURE_* variables, and reads one user through Microsoft Graph."
+        },
+        "storage": {
+          "registerSection": "Register iHub with the provider",
+          "registerSectionHelp": "The provider sends users back to this URL after they sign in. It contains the installation id \"{{id}}\", which never changes.",
+          "redirectToRegister": "Redirect URI to register",
+          "register": {
+            "office365": "Azure portal → Microsoft Entra ID → App registrations → your app → Authentication → Platform \"Web\" → Redirect URIs.",
+            "googledrive": "Google Cloud console → APIs & Services → Credentials → your OAuth 2.0 client (Web application) → Authorized redirect URIs.",
+            "nextcloud": "Nextcloud → Administration settings → Security → OAuth 2.0 clients → add a client with this redirect URI."
+          },
+          "redirectDerivedHelp": "Derived the way the server derives it from each request: this address, the base path and the callback path. Set the field below when the provider must see a different address (an unusual proxy setup).",
+          "redirectConfiguredHelp": "The configured redirect URI below is used for every sign-in.",
+          "redirectUri": "Redirect URI (optional)",
+          "redirectUriHelp": "Leave empty to derive it from each request (recommended).",
+          "oauthSection": "OAuth app",
+          "oauthSectionHelp": {
+            "office365": "The Azure app registration users sign in with (Microsoft Graph, delegated permissions).",
+            "googledrive": "The OAuth 2.0 client (Web application) of your Google Cloud project, with the Drive API enabled.",
+            "nextcloud": "The Nextcloud server and the OAuth 2.0 client registered in it."
+          },
+          "serverUrl": "Nextcloud server URL",
+          "serverUrlHelp": "The base URL of the instance (no trailing slash); the base for OAuth, OCS and WebDAV.",
+          "tenantId": "Directory (tenant) ID",
+          "tenantIdHelp": "An identifier, not a secret: stored in the installation as plain text.",
+          "clientId": "Client ID",
+          "clientSecret": "Client secret",
+          "clientSecretHelp": "A credential of type secret holding the client secret (Admin → Integrations → Credentials).",
+          "sourcesSection": "Sources users may browse",
+          "sourcesSectionHelp": {
+            "office365": "Sign-in asks only for the Microsoft Graph permissions the checked sources need; switch off what your tenant does not consent to.",
+            "googledrive": "The picker offers only the checked sources."
+          },
+          "sources": {
+            "personalDrive": "Personal OneDrive",
+            "personalDriveHelp": "Asks for Files.Read only, which users consent to themselves.",
+            "followedSites": "Followed SharePoint sites",
+            "followedSitesHelp": "Asks for Sites.Read.All and Files.Read.All (admin consent).",
+            "teams": "Microsoft Teams",
+            "teamsHelp": "Asks for Team.ReadBasic.All, Channel.ReadBasic.All and Files.Read.All (admin consent).",
+            "myDrive": "My Drive",
+            "sharedDrives": "Shared drives",
+            "sharedWithMe": "Shared with me"
+          },
+          "noSource": "No source is checked: users can connect but browse nothing.",
+          "siteUrl": "SharePoint site URL",
+          "siteUrlHelp": "Restrict access to one SharePoint site.",
+          "driveId": "Drive ID",
+          "driveIdHelp": "Restrict access to one drive.",
+          "connectionsSection": "Connection and users",
+          "connectionsSectionHelp": "Every user connects their own account, under Settings → Integrations or from the file picker. Connections are stored per installation.",
+          "statusEnabled": "Enabled: users whose groups grant it can connect.",
+          "statusDisabled": "Disabled: users cannot connect or pick files from it.",
+          "connectedUsers": "{{count}} user(s) connected",
+          "testResults": "Storage provider test",
+          "testHelp": "Checks the values above (unsaved): client and secret, the provider settings, the redirect URI, whether the provider answers, and how many users are connected. Signing in needs a browser: connect under Settings → Integrations.",
+          "errors": {
+            "required": {
+              "tenantId": "Enter the Directory (tenant) ID of the app registration.",
+              "clientId": "Enter the client ID of the OAuth app.",
+              "clientSecretRef": "Pick the credential that holds the client secret.",
+              "serverUrl": "Enter the URL of the Nextcloud server."
+            },
+            "url": "Enter an http(s) URL.",
+            "redirectPath": "The redirect URI has to end in {{path}}."
+          }
         }
       },
       "access": {
