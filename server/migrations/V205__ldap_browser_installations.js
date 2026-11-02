@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V204 — the admin LDAP browser becomes its own integration
+ * Migration V205 — the admin LDAP browser becomes its own integration
  *
  * Until now the LDAP browser was a switch of a people directory installation
  * (`com.intrafind/ldap-directory` → `values.browse` and the `browse*` values)
@@ -65,7 +65,7 @@
  * `server/migrations/README.md`).
  */
 
-export const version = '204';
+export const version = '205';
 export const description = 'ldap_browser_installations';
 
 const INTEGRATIONS_FILE = 'config/integrations.json';
@@ -90,7 +90,7 @@ export const BROWSE_VALUE_KEYS = Object.freeze([
   'browseBindPasswordRef',
   'browseDenyAttributes'
 ]);
-/** `browseGroups` when the directory named none: the definition's default until V204. */
+/** `browseGroups` when the directory named none: the definition's default until V205. */
 export const DEFAULT_BROWSE_GROUPS = Object.freeze(['admins']);
 const ALL = '*';
 const MAX_ID_LENGTH = 64;

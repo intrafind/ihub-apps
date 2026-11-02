@@ -80,7 +80,7 @@ Option **B**: groups get `permissions.integrations` (`*`, installation ids, defi
 | iHub | §7 | V201 |
 | Group access | §9, #3093 | V202 |
 | Web search | §4, web search editor | V203 |
-| People directories | §6, directory and browser editors, People search app on `type:people-directory` | V204 |
+| People directories | §6, directory and browser editors, People search app on `type:people-directory` | V205 |
 | Storage | §5, storage editor, app binding, #3094 | V206 |
 
 Group access goes before the three type PRs so that web search engines, the LDAP browser and the storage providers are built on the group model of §9. The release entries of #3092 for the LDAP directory and the storage definitions ship with the PR that rewrites each definition.

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-/** V204: the admin LDAP browser of a people directory becomes its own installation. */
+/** V205: the admin LDAP browser of a people directory becomes its own installation. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -21,7 +21,7 @@ import {
   BROWSER_DEFINITION,
   DIRECTORY_DEFINITION,
   PEOPLE_DIRECTORY_TYPE_KEY
-} from '../migrations/V204__ldap_browser_installations.js';
+} from '../migrations/V205__ldap_browser_installations.js';
 
 const INTEGRATIONS = 'config/integrations.json';
 const GROUPS = 'config/groups.json';
@@ -180,9 +180,9 @@ function fullFiles() {
 
 const byId = (files, id) => files[INTEGRATIONS].installed.find(entry => entry.id === id);
 
-describe('V204 LDAP browser installations', () => {
+describe('V205 LDAP browser installations', () => {
   it('declares its version and description', () => {
-    assert.equal(version, '204');
+    assert.equal(version, '205');
     assert.equal(description, 'ldap_browser_installations');
   });
 
