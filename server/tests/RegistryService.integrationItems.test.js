@@ -265,6 +265,17 @@ describe('catalog load screens integration items', () => {
 
     expect(detail.facts).toMatchObject({ effect: 'read-write', actionCount: 2 });
   });
+
+  test('the item detail derives facts the refresh could not read (cached as null)', async () => {
+    const cachedItem = integrationItem('open-data', { facts: null });
+    jest
+      .spyOn(registryService, 'getCachedCatalogAsync')
+      .mockResolvedValue({ registryId: 'acme', catalog: { items: [cachedItem] } });
+
+    const detail = await registryService.getItemDetail('acme', 'integration', 'open-data');
+
+    expect(detail.facts).toMatchObject({ effect: 'read-write', actionCount: 2 });
+  });
 });
 
 describe('registryProtocolRefusal', () => {

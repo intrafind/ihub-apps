@@ -402,8 +402,24 @@ async function screenCatalogItem(item, registry, authHeaders) {
  */
 async function screenCatalogItems(catalog, registry, authHeaders) {
   if (!catalog || !Array.isArray(catalog.items)) return catalog;
-  const screened = await mapWithConcurrency(catalog.items, DEFINITION_FETCH_CONCURRENCY, item =>
-    screenCatalogItem(item, registry, authHeaders)
+  const screened = await mapWithConcurrency(
+    catalog.items,
+    DEFINITION_FETCH_CONCURRENCY,
+    async item => {
+      try {
+        return await screenCatalogItem(item, registry, authHeaders);
+      } catch (error) {
+        // One unexpected failure must not abort the whole refresh; install
+        // still refuses what the screen would have dropped.
+        logger.warn('Could not screen a catalog item; it is kept without facts', {
+          component: COMPONENT,
+          registryId: registry?.id,
+          itemName: item?.name,
+          error: error?.message
+        });
+        return item && typeof item === 'object' ? { ...item, facts: null } : item;
+      }
+    }
   );
   return { ...catalog, items: screened.filter(item => item !== null) };
 }
@@ -1126,7 +1142,8 @@ class RegistryService {
     // A catalog cached before facts were derived: the preview is the definition
     let facts = item.facts;
     if (
-      facts === undefined &&
+      // null: the refresh could not read the definition; the preview may have it now
+      (facts === undefined || facts === null) &&
       type === 'integration' &&
       contentPreview &&
       typeof contentPreview === 'object' &&

@@ -206,6 +206,24 @@ describe('MarketplaceItemDetail', () => {
     expect(section).toHaveTextContent(en.admin.marketplace.integrationFacts.actionsDynamicHint);
   });
 
+  test('a positive action count without the list says nothing about actions', async () => {
+    // The browse item (no action list) when the detail could not be loaded.
+    const section = await renderDetail({ ...OPEN_DATA, facts: { ...OPEN_DATA.facts } });
+
+    expect(within(section).queryByTestId('integration-actions')).not.toBeInTheDocument();
+    expect(section).not.toHaveTextContent(en.admin.marketplace.integrationFacts.noActions);
+    expect(section).not.toHaveTextContent(en.admin.marketplace.integrationFacts.actionsDynamicHint);
+  });
+
+  test('says when an integration declares no actions', async () => {
+    const section = await renderDetail({
+      ...OPEN_DATA,
+      facts: { ...OPEN_DATA.facts, actionCount: 0, actions: [] }
+    });
+
+    expect(section).toHaveTextContent(en.admin.marketplace.integrationFacts.noActions);
+  });
+
   test('says when the facts are not available', async () => {
     const section = await renderDetail({ ...OPEN_DATA, facts: null });
 

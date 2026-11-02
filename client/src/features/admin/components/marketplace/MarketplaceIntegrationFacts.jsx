@@ -97,7 +97,9 @@ function MarketplaceIntegrationSection({ facts }) {
                 </li>
               ))}
             </ul>
-          ) : (
+          ) : facts.actionCount === null || facts.actionCount === 0 ? (
+            // A positive count without a list (the browse item when the detail
+            // could not be loaded) shows nothing rather than "no actions".
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {facts.actionCount === null
                 ? t(
@@ -109,7 +111,7 @@ function MarketplaceIntegrationSection({ facts }) {
                     'This integration declares no actions.'
                   )}
             </p>
-          )}
+          ) : null}
         </>
       )}
     </section>
