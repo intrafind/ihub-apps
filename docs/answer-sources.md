@@ -176,7 +176,10 @@ registerSourceProducer({
 ```
 
 The built-in producers work the same way. Web search and the page reader use
-`services/sources/producers/web.js`, and the iFinder tools use `producers/ifinder.js`.
+`services/sources/producers/web.js`, and the iFinder tools use `producers/ifinder.js`. So does the
+iAssistant `ask` action (`iassistant__ask`): it reports the cited documents beside its result, each
+renumbered onto passage numbers reserved for that call, and its producer adds the iAssistant scope
+it asked, so the frame is the one an iAssistant chat answer carries.
 
 Model adapters report what they found on the stream chunk as `chunk.sources`; the iAssistant
 adapter does this. Provider-run web search (Anthropic, Google, OpenAI) reports through the chunk's

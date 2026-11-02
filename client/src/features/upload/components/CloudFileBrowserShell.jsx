@@ -47,6 +47,7 @@ const CloudFileBrowserShell = ({
   const {
     authStatus,
     authReason,
+    authScopes,
     sources,
     currentSource,
     drives,
@@ -211,7 +212,8 @@ const CloudFileBrowserShell = ({
           prompt={{
             integration: provider.id,
             name: provider.displayName || provider.name || provider.id,
-            reason: authReason
+            reason: authReason,
+            ...(authScopes?.length > 0 ? { scopes: authScopes } : {})
           }}
           context="files"
         />

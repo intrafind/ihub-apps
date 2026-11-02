@@ -4,9 +4,16 @@
 /**
  * The built-in iAssistant integration (`com.intrafind/iassistant`,
  * installation `iassistant`): the conversation settings on the iFinder
- * connection, the "whom to ask" scopes of the chat and the connection test.
- * It has no tool actions yet; the `iassistant-conversation` model is how a
- * chat talks to it.
+ * connection, the "whom to ask" scopes of the chat, the connection test and
+ * the `ask` action.
+ *
+ * A chat talks to the iAssistant in two ways: as its model
+ * (`iassistant-conversation`, the model selector), or — with any other model —
+ * through `ask` (`iassistant__ask`), one conversation turn as a tool
+ * (`services/integrations/iAssistantAsk.js`). An app gets `ask` only by
+ * naming it in its binding (`integrations.iassistant.actions: ["ask"]`, the
+ * action is `bindExplicitly`), so apps that bind the installation for the
+ * model keep the tools they had.
  */
 import iAssistantScopes from '../../../scopes/iAssistantScopes.js';
 import iAssistantService from '../../../iAssistantService.js';
@@ -130,9 +137,54 @@ async function test({ instance, user }) {
   return report.steps;
 }
 
+/** The model-facing parameters of `ask`. */
+const ASK_PARAMETERS = {
+  type: 'object',
+  properties: {
+    question: {
+      type: 'string',
+      description: {
+        en: 'The question for the iAssistant, as a complete sentence in the user’s language. It answers from the documents in iFinder the user may see.',
+        de: 'Die Frage an den iAssistant als vollständiger Satz in der Sprache des Benutzers. Er antwortet aus den Dokumenten in iFinder, die der Benutzer sehen darf.'
+      }
+    },
+    assistant: {
+      type: 'string',
+      description: {
+        en: 'Optional: the id of the iAssistant to ask. Leave it out to ask the one the chat or app uses; a scope picked in the chat always wins.',
+        de: 'Optional: die ID des zu fragenden iAssistants. Weglassen, um den des Chats oder der App zu fragen; ein im Chat gewählter Bereich hat immer Vorrang.'
+      }
+    }
+  },
+  required: ['question']
+};
+
+const ask = {
+  parameters: ASK_PARAMETERS,
+  /**
+   * One iAssistant turn. `ctx.scope` is the chat's scope pick for this
+   * installation, which `runIntegrationTool` read from `integrationScopes`.
+   * Imported on first use: the conversation client pulls in the iAssistant
+   * model adapter, which the connector registry must not load at startup.
+   */
+  async run(args, ctx) {
+    const { askIAssistant } = await import('../../../iAssistantAsk.js');
+    const params = ctx.params || {};
+    return askIAssistant({
+      question: args.question,
+      assistant: args.assistant,
+      chatScope: ctx.scope?.id || null,
+      user: ctx.user ?? params.user,
+      appConfig: params.appConfig,
+      language: params.language,
+      signal: params.signal
+    });
+  }
+};
+
 const connector = {
   id: 'iassistant',
-  actions: {},
+  actions: { ask },
   test,
   /** The "ask …" picker of the chat (#3050), unchanged. */
   scopeProvider() {

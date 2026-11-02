@@ -40,6 +40,12 @@ import { getLocalizedString } from '../../utils/localize.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
+/**
+ * Prefix of the tool an app becomes when another app may call it
+ * (`app__<appId>`). Such tools belong to the apps-as-tools feature.
+ */
+export const APP_TOOL_ID_PREFIX = 'app__';
+
 /** Most sources an app invoked as a tool hands back to its caller. */
 const MAX_FORWARDED_SOURCES = 50;
 
@@ -157,7 +163,7 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
     // locale here, do NOT re-wrap as a localized object.
     const appName = getLocalizedString(app.name, language, undefined, app.id);
     tools.push({
-      id: `app__${app.id}`,
+      id: `${APP_TOOL_ID_PREFIX}${app.id}`,
       name: `App: ${appName}`,
       description: localizedDescription(app, language),
       parameters: buildToolParameters(app),
@@ -180,7 +186,9 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
 export function stripAppToolsForAgent(tools, user) {
   if (!user || user.isAgent !== true) return tools;
   if (!user.isInvokedViaAppAsTool) return tools;
-  return tools.filter(t => !(t.id && typeof t.id === 'string' && t.id.startsWith('app__')));
+  return tools.filter(
+    t => !(t.id && typeof t.id === 'string' && t.id.startsWith(APP_TOOL_ID_PREFIX))
+  );
 }
 
 /**
@@ -217,10 +225,10 @@ export async function invokeAppTool({
   language,
   callerAppId
 }) {
-  if (!toolId || !toolId.startsWith('app__')) {
+  if (!toolId || !toolId.startsWith(APP_TOOL_ID_PREFIX)) {
     throw new Error(`Invalid app tool id: ${toolId}`);
   }
-  const appId = toolId.slice('app__'.length);
+  const appId = toolId.slice(APP_TOOL_ID_PREFIX.length);
 
   // App→App nesting guard. `getToolsForApp` / `stripAppToolsForAgent` already
   // suppress `app__*` tools for nested principals; this rejects anything that

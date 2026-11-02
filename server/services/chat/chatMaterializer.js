@@ -39,20 +39,34 @@ export function boundStoredAuthPrompts(prompts) {
   if (!Array.isArray(prompts)) return [];
   const out = [];
   for (const p of prompts) {
-    if (!p || typeof p.integration !== 'string' || !p.integration) continue;
-    if (out.some(existing => existing.integration === p.integration)) continue;
-    out.push({
-      integration: p.integration,
-      name: typeof p.name === 'string' && p.name ? p.name : p.integration,
-      reason: typeof p.reason === 'string' ? p.reason : 'not_connected',
-      ...(typeof p.action === 'string' && p.action ? { action: p.action } : {}),
-      ...(Array.isArray(p.scopes) && p.scopes.length
-        ? { scopes: p.scopes.filter(scope => typeof scope === 'string') }
-        : {})
-    });
+    const entry = storedAuthPromptOf(p);
+    if (!entry || out.some(existing => existing.integration === entry.integration)) continue;
+    out.push(entry);
     if (out.length >= MAX_STORED_AUTH_PROMPTS) break;
   }
   return out;
+}
+
+/**
+ * One stored Connect card, well-formed, or null when it names no
+ * integration. Scopes are kept as non-empty strings, and left out when none
+ * remain.
+ *
+ * @param {unknown} p
+ * @returns {{integration: string, name: string, reason: string, action?: string, scopes?: string[]}|null}
+ */
+function storedAuthPromptOf(p) {
+  if (!p || typeof p.integration !== 'string' || !p.integration) return null;
+  const scopes = Array.isArray(p.scopes)
+    ? p.scopes.filter(scope => typeof scope === 'string' && scope)
+    : [];
+  return {
+    integration: p.integration,
+    name: typeof p.name === 'string' && p.name ? p.name : p.integration,
+    reason: typeof p.reason === 'string' ? p.reason : 'not_connected',
+    ...(typeof p.action === 'string' && p.action ? { action: p.action } : {}),
+    ...(scopes.length > 0 ? { scopes } : {})
+  };
 }
 import logger from '../../utils/logger.js';
 import { chatProjectConflict, deriveChatTitle } from './ChatRepository.js';

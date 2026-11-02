@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { installMarketplaceItem } from '../../../../api/adminApi';
+import { MarketplaceIntegrationFacts } from './MarketplaceIntegrationFacts';
 
 /**
  * Color classes for each item type badge, applying both light and dark mode variants.
@@ -40,6 +41,8 @@ const TYPE_COLORS = {
  * @param {string} [props.item.registryName] - Display name of the source registry
  * @param {string} [props.item.installationStatus] - One of: installed, local (present on this
  *   instance but not installed from the marketplace), available, update-available, or undefined
+ * @param {Object|null} [props.item.facts] - Integrations: the four fixed facts the server derives
+ *   from the definition (sign-in modes, effect, where it runs, action count)
  * @param {Function} props.onClick - Called when the card body is clicked (open detail panel)
  * @param {Function} [props.onAction] - Called after a successful install to refresh the parent list
  */
@@ -155,6 +158,11 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
             </span>
           ))}
         </div>
+      )}
+
+      {/* Integrations: sign-in, effect, where it runs, action count */}
+      {item.type === 'integration' && item.facts && (
+        <MarketplaceIntegrationFacts facts={item.facts} className="mb-3" />
       )}
 
       {/* Why the item cannot be installed here */}

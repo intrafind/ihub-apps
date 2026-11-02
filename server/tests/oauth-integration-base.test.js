@@ -364,6 +364,17 @@ describe('_makeApiRequestWithRetry: 401 handling', () => {
     expect(store.tokens.accessToken).toBe('refreshed-access');
   });
 
+  it('reports the refused token as "connect first" (expired) for the installation', async () => {
+    httpFetch.mockResolvedValue(response(401, {}));
+
+    const error = await rejection(service.makeApiRequest('/files', 'GET', null, USER, PROVIDER));
+
+    // The storage routes answer this with the Connect card (409), not a 500.
+    expect(error.code).toBe('INTEGRATION_AUTH_REQUIRED');
+    expect(error.reason).toBe('expired');
+    expect(error.integration).toBe(PROVIDER);
+  });
+
   // The retried request is not part of the refresh: whatever it fails with is
   // reported as itself, and the tokens that were just refreshed stay.
   it.each([
@@ -656,5 +667,50 @@ describe('getUserTokens', () => {
 
     expect(error.message).toBe('User not authenticated with Test Drive');
     expect(error.reason).toBe('not_connected');
+  });
+});
+
+describe('Nextcloud: a refused access token on the storage routes', () => {
+  it('is "connect first" (expired), which the storage routes answer with 409', async () => {
+    const { default: nextcloudService } =
+      await import('../services/integrations/NextcloudService.js');
+    const { respondIfAuthRequired } = await import('../routes/integrations/cloudStorageAccess.js');
+    const tokens = { accessToken: 'nc-access', providerId: 'nc-main', nextcloudUserId: 'erin' };
+    const getTokens = jest.spyOn(nextcloudService, 'getUserTokens').mockResolvedValue(tokens);
+    const getProvider = jest
+      .spyOn(nextcloudService, '_getProviderConfig')
+      .mockReturnValue({ serverUrl: 'https://nc.example.com' });
+    try {
+      for (const call of [
+        () => nextcloudService.listItems(USER, '', 'nc-main'),
+        () => nextcloudService.downloadFile(USER, '/a.txt', 'nc-main')
+      ]) {
+        httpFetch.mockResolvedValueOnce(response(401, {}));
+        const error = await rejection(call());
+        expect(error.code).toBe('INTEGRATION_AUTH_REQUIRED');
+        expect(error.reason).toBe('expired');
+
+        const res = {
+          status: jest.fn(function status(code) {
+            this.statusCode = code;
+            return this;
+          }),
+          json: jest.fn(function json(body) {
+            this.body = body;
+            return this;
+          })
+        };
+        expect(respondIfAuthRequired(res, error, 'nc-main')).toBe(true);
+        expect(res.statusCode).toBe(409);
+        expect(res.body).toMatchObject({
+          error: 'INTEGRATION_AUTH_REQUIRED',
+          integration: 'nc-main',
+          reason: 'expired'
+        });
+      }
+    } finally {
+      getTokens.mockRestore();
+      getProvider.mockRestore();
+    }
   });
 });

@@ -66,54 +66,64 @@ export function retryKey(chatId, messageId) {
 }
 
 /**
+ * The storage to use: the one passed, else the session storage. Reading
+ * `sessionStorage` itself throws (`SecurityError`) where the browser blocks
+ * storage, so callers do it inside their `try`.
+ *
+ * @param {Storage|null|undefined} storage
+ * @returns {Storage|null|undefined}
+ */
+function storageOf(storage) {
+  return storage === undefined ? globalThis.sessionStorage : storage;
+}
+
+/**
  * Whether an answer was already retried.
  * @param {string} key - {@link retryKey}
- * @param {Storage} [storage]
+ * @param {Storage|null} [storage] - Defaults to the session storage
  * @returns {boolean}
  */
-export function wasRetried(key, storage = globalThis.sessionStorage) {
+export function wasRetried(key, storage) {
   if (retriedInMemory.has(key)) return true;
   try {
-    return storage?.getItem(key) === '1';
+    return storageOf(storage)?.getItem(key) === '1';
   } catch {
     return false;
   }
 }
 
 /**
- * Remember that an answer was retried (before the retry is sent, so a
- * failure to send does not lead to a second attempt).
+ * Remember that an answer was retried, once the retry was sent.
  * @param {string} key - {@link retryKey}
- * @param {Storage} [storage]
+ * @param {Storage|null} [storage] - Defaults to the session storage
  */
-export function markRetried(key, storage = globalThis.sessionStorage) {
+export function markRetried(key, storage) {
   retriedInMemory.add(key);
   try {
-    storage?.setItem(key, '1');
+    storageOf(storage)?.setItem(key, '1');
   } catch {
     /* private mode: the in-memory record still holds for this page */
   }
 }
 
 /**
- * Decide the one retry, and claim it. Returns the target when the caller
- * should send the retry now, else null.
+ * Decide the one retry, without claiming it. Returns the target and its
+ * storage key when the caller should send the retry now, else null; the
+ * caller marks it ({@link markRetried}) once the chat took the message.
  *
  * @param {Object} params
  * @param {string|null} params.connected - `integration_connected` of this page
  * @param {string} params.chatId
  * @param {Array<Object>} params.messages
- * @param {Storage} [params.storage]
- * @returns {{messageId: string, prompt: import('./authPrompts').AuthPrompt}|null}
+ * @param {Storage|null} [params.storage]
+ * @returns {{messageId: string, prompt: import('./authPrompts').AuthPrompt, key: string}|null}
  */
-export function claimRetry({ connected, chatId, messages, storage }) {
+export function pendingRetry({ connected, chatId, messages, storage }) {
   if (!connected) return null;
   const target = findRetryTarget(messages, connected);
   if (!target) return null;
   const key = retryKey(chatId, target.messageId);
-  if (wasRetried(key, storage)) return null;
-  markRetried(key, storage);
-  return target;
+  return wasRetried(key, storage) ? null : { ...target, key };
 }
 
 /** Test seam: forget the in-memory record. */

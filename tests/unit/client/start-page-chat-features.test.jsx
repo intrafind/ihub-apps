@@ -111,13 +111,7 @@ function openActionsMenu() {
 }
 
 /** The switch belonging to the menu row labelled `text`. */
-function switchFor(text) {
-  let node = screen.getByText(text);
-  while (node && !node.querySelector?.('input[type="checkbox"]')) node = node.parentElement;
-  return node?.querySelector('input[type="checkbox"]');
-}
-
-/** The tool row labelled `text` (role=menuitemcheckbox carries its state). */
+/** The menu row labelled `text` (role=menuitemcheckbox carries its state). */
 function toolRow(text) {
   return screen.getByText(text).closest('[role="menuitemcheckbox"]');
 }
@@ -133,12 +127,12 @@ describe('start page chat input features', () => {
     await renderStartPage();
     openActionsMenu();
 
-    expect(switchFor('Web Search')).not.toBeChecked();
+    expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'false');
     // Transcription is a model to select now, not a toggle.
     expect(screen.queryByText('Transcription')).toBeNull();
 
-    fireEvent.click(switchFor('Web Search'));
-    expect(switchFor('Web Search')).toBeChecked();
+    fireEvent.click(toolRow('Web Search'));
+    expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'true');
   });
 
   it("starts the app's tools switched on and lets them be toggled", async () => {
@@ -155,7 +149,7 @@ describe('start page chat input features', () => {
   it('carries the picked features into the app when the chat starts', async () => {
     await renderStartPage();
     openActionsMenu();
-    fireEvent.click(switchFor('Web Search'));
+    fireEvent.click(toolRow('Web Search'));
 
     await screen.findByText('Jira');
     fireEvent.click(toolRow('Jira'));
@@ -181,7 +175,7 @@ describe('start page chat input features', () => {
     await renderStartPage();
     openActionsMenu();
 
-    expect(switchFor('Web Search')).toBeChecked();
+    expect(toolRow('Web Search')).toHaveAttribute('aria-checked', 'true');
     await screen.findByText('Brave Search');
     expect(toolRow('Brave Search')).toHaveAttribute('aria-checked', 'false');
     expect(toolRow('Jira')).toHaveAttribute('aria-checked', 'true');

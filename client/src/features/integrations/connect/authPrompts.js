@@ -40,21 +40,33 @@ export function normalizeAuthPrompts(prompts) {
   if (!Array.isArray(prompts)) return [];
   const out = [];
   for (const prompt of prompts) {
-    if (!prompt || typeof prompt !== 'object') continue;
-    const { integration } = prompt;
-    if (typeof integration !== 'string' || !integration) continue;
-    if (out.some(p => p.integration === integration)) continue;
-    out.push({
-      integration,
-      name: typeof prompt.name === 'string' && prompt.name ? prompt.name : integration,
-      reason: AUTH_REASONS.includes(prompt.reason) ? prompt.reason : 'not_connected',
-      ...(typeof prompt.action === 'string' && prompt.action ? { action: prompt.action } : {}),
-      ...(Array.isArray(prompt.scopes) && prompt.scopes.length
-        ? { scopes: prompt.scopes.filter(scope => typeof scope === 'string' && scope) }
-        : {})
-    });
+    const entry = authPromptOf(prompt);
+    if (entry && !out.some(p => p.integration === entry.integration)) out.push(entry);
   }
   return out;
+}
+
+/**
+ * One prompt, well-formed, or null when it names no integration. Scopes are
+ * kept as non-empty strings, and left out when none remain.
+ *
+ * @param {unknown} prompt
+ * @returns {AuthPrompt|null}
+ */
+function authPromptOf(prompt) {
+  if (!prompt || typeof prompt !== 'object') return null;
+  const { integration, name, reason, action, scopes } = prompt;
+  if (typeof integration !== 'string' || !integration) return null;
+  const keptScopes = Array.isArray(scopes)
+    ? scopes.filter(scope => typeof scope === 'string' && scope)
+    : [];
+  return {
+    integration,
+    name: typeof name === 'string' && name ? name : integration,
+    reason: AUTH_REASONS.includes(reason) ? reason : 'not_connected',
+    ...(typeof action === 'string' && action ? { action } : {}),
+    ...(keptScopes.length > 0 ? { scopes: keptScopes } : {})
+  };
 }
 
 /**

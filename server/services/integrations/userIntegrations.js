@@ -28,8 +28,11 @@
  * definition's `categories`, and, for a shared account or key, the user's
  * groups that grant it (`connection.sharedWith`).
  *
- * The status comes from the connection index (`IntegrationConnectionService.resolve`);
- * no vendor is called and no token leaves the server.
+ * The status comes from the connection index (`IntegrationConnectionService.resolve`),
+ * and no token leaves the server. A vendor is called once per connection: the
+ * first listing after a connect reads the account ("connected as …") from the
+ * provider and keeps it on the connection record; a failed read is not retried
+ * for a while (`ensureAccountLabel`).
  *
  * @module services/integrations/userIntegrations
  */
@@ -549,32 +552,35 @@ export async function listUserIntegrations({ user, language = 'en', only } = {})
   ]);
   const bindingKeyFor = runtime?.[0]?.bindingKeyFor || (() => null);
   const getProtocolAdapter = runtime?.[1]?.getProtocolAdapter || null;
-  const out = [];
-  for (const resolved of visible) {
-    const { instance } = resolved;
-    try {
-      const apps = userApps
-        .filter(app =>
-          appUsesIntegration(app, instance, tools.get(instance.id), bindingKeyFor, autoEngineId)
-        )
-        .map(app => ({ id: app.id, name: localized(app.name, language, app.id) || app.id }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      out.push(
-        await entryFor({ ...resolved, language }, user, {
+  // The entries are independent (one connection each), so they are built
+  // side by side: a first listing that reads several account labels waits
+  // for the slowest vendor, not for all of them in turn.
+  const entries = await Promise.all(
+    visible.map(async resolved => {
+      const { instance } = resolved;
+      try {
+        const apps = userApps
+          .filter(app =>
+            appUsesIntegration(app, instance, tools.get(instance.id), bindingKeyFor, autoEngineId)
+          )
+          .map(app => ({ id: app.id, name: localized(app.name, language, app.id) || app.id }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        return await entryFor({ ...resolved, language }, user, {
           actions: actions.get(instance.id) || [],
           apps,
           live: liveStatusOf(getProtocolAdapter, resolved)
-        })
-      );
-    } catch (error) {
-      logger.warn('Could not describe an integration for the user', {
-        component: COMPONENT,
-        integration: instance.id,
-        error: error.message
-      });
-    }
-  }
-  return out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        });
+      } catch (error) {
+        logger.warn('Could not describe an integration for the user', {
+          component: COMPONENT,
+          integration: instance.id,
+          error: error.message
+        });
+        return null;
+      }
+    })
+  );
+  return entries.filter(Boolean).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
 
 /**

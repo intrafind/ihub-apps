@@ -21,7 +21,11 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
  */
 
 const httpFetch = jest.fn();
-jest.unstable_mockModule('../utils/httpConfig.js', () => ({ httpFetch }));
+jest.unstable_mockModule('../utils/httpConfig.js', () => ({
+  httpFetch,
+  // Imported by modules on the disconnect path (cloud storage connector).
+  redactUrlSecrets: url => String(url)
+}));
 
 const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.unstable_mockModule('../utils/logger.js', () => ({ default: logger }));

@@ -9,6 +9,10 @@ import OAuthIntegrationBase from './OAuthIntegrationBase.js';
 import { isUnavailableError } from './oauthRefreshError.js';
 import { createFixedEndpointStrategy } from './auth/strategies/fixedEndpoint.js';
 import { getIntegrationConnectionService } from './auth/IntegrationConnectionService.js';
+import {
+  INTEGRATION_AUTH_REASONS,
+  IntegrationAuthRequiredError
+} from './auth/integrationAuthRequired.js';
 
 /**
  * Nextcloud Service for Nextcloud file access integration.
@@ -39,6 +43,22 @@ import { getIntegrationConnectionService } from './auth/IntegrationConnectionSer
 // than the download budget defends against malicious or misconfigured
 // servers without affecting healthy responses.
 const MAX_PROPFIND_BYTES = 10 * 1024 * 1024; // 10 MiB
+
+/**
+ * Nextcloud refused the access token (401): "connect first" with reason
+ * `expired`, so the storage routes answer with the Connect card (409) instead
+ * of a generic failure.
+ *
+ * @param {string} [providerId] - The installation id
+ * @returns {IntegrationAuthRequiredError}
+ */
+function nextcloudAuthRequired(providerId) {
+  return new IntegrationAuthRequiredError({
+    integration: providerId,
+    reason: INTEGRATION_AUTH_REASONS.EXPIRED,
+    message: 'Nextcloud authentication required. Please reconnect your account.'
+  });
+}
 
 class NextcloudService extends OAuthIntegrationBase {
   constructor() {
@@ -343,7 +363,7 @@ class NextcloudService extends OAuthIntegrationBase {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Nextcloud authentication required. Please reconnect your account.');
+        throw nextcloudAuthRequired(tokens.providerId);
       }
       if (response.status === 404) {
         throw new Error(`Nextcloud folder not found: ${folderPath || '/'}`);
@@ -419,7 +439,7 @@ class NextcloudService extends OAuthIntegrationBase {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Nextcloud authentication required. Please reconnect your account.');
+        throw nextcloudAuthRequired(tokens.providerId);
       }
       if (response.status === 404) {
         throw new Error(`Nextcloud file not found: ${filePath}`);
