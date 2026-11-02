@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * V205: storage providers become several installations per provider whose id
+ * V206: storage providers become several installations per provider whose id
  * is the provider id; the parked providers are installed, the tenant id
  * credentials are cleaned up, and apps bind `type:storage` instead of the
  * `upload.cloudStorageUpload` switch.
@@ -23,7 +23,7 @@ import {
   trimChars,
   v061IdOf,
   STORAGE_TYPE_BINDING
-} from '../migrations/V205__storage_provider_installations.js';
+} from '../migrations/V206__storage_provider_installations.js';
 import {
   cloudStorageCallbackPath,
   providerFromInstance
@@ -175,9 +175,9 @@ function afterV200() {
 const installedOf = files => files['config/integrations.json'].installed;
 const byId = (files, id) => installedOf(files).find(i => i.id === id);
 
-describe('V205 storage provider installations', () => {
+describe('V206 storage provider installations', () => {
   it('declares its version and description', () => {
-    assert.equal(version, '205');
+    assert.equal(version, '206');
     assert.equal(description, 'storage_provider_installations');
   });
 
@@ -569,7 +569,7 @@ describe('V205 storage provider installations', () => {
   });
 });
 
-describe('V205 id cleanup without regex backtracking', () => {
+describe('V206 id cleanup without regex backtracking', () => {
   it('trims only leading and trailing characters of the set', () => {
     assert.equal(trimChars('', '-._'), '');
     assert.equal(trimChars('---', '-._'), '');

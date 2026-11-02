@@ -171,7 +171,7 @@ The installation lives in `contents/config/integrations.json`; the client secret
 
 > **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/office365` for every Office 365 installation, or `type:storage` for all storage providers). The chat's file picker offers the bound providers the user's groups grant. See [Apps → Upload](apps.md#upload-configuration).
 
-> **Upgrades:** migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V205 renamed that installation to the provider's former `id` (e.g. `office365-1`) and installed further Office 365 providers V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs and the users' connections stay valid. V205 also restored a tenant id V200 could not decrypt and deleted the tenant id credentials (`cloudstorage_<id>_tenant`) nothing uses any more.
+> **Upgrades:** migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed that installation to the provider's former `id` (e.g. `office365-1`) and installed further Office 365 providers V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs and the users' connections stay valid. V206 also restored a tenant id V200 could not decrypt and deleted the tenant id credentials (`cloudstorage_<id>_tenant`) nothing uses any more.
 
 ---
 

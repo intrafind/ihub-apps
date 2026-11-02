@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V205 — storage providers: several installations per provider,
+ * Migration V206 — storage providers: several installations per provider,
  * the installation id is the provider id, apps bind them (#3094)
  *
  * Until now the storage providers Office 365 (`com.intrafind/office365`),
@@ -60,7 +60,7 @@
  * injectable for tests.
  */
 
-export const version = '205';
+export const version = '206';
 export const description = 'storage_provider_installations';
 
 const INTEGRATIONS_FILE = 'config/integrations.json';

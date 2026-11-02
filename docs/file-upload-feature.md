@@ -109,7 +109,7 @@ The cloud file picker offers the storage providers the app **binds** in `integra
 - [Google Drive](google-drive-integration.md)
 - [Nextcloud](nextcloud-integration.md)
 
-Picked files are processed like uploads (`upload.enabled` must not be `false`; the `fileUpload` extraction options apply). The former switch `upload.cloudStorageUpload` was replaced by the binding in migration V205 and is refused by the app schema. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
+Picked files are processed like uploads (`upload.enabled` must not be `false`; the `fileUpload` extraction options apply). The former switch `upload.cloudStorageUpload` was replaced by the binding in migration V206 and is refused by the app schema. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
 
 ## Supported File Types
 

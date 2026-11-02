@@ -14,7 +14,7 @@
  * callback URL (`/api/integrations/<service>/<id>/callback`), in the users'
  * stored connections (`<userId>__<id>.json` in the service's token
  * directory), in project cloud documents (`ref.providerId`) and in the
- * Nextcloud embed plugin (`ihub_provider_id`). Migration V205 renamed every
+ * Nextcloud embed plugin (`ihub_provider_id`). Migration V206 renamed every
  * installation to the provider id it had before, so none of these changed.
  *
  * The services (`Office365Service`, …), the file browser routes, the
