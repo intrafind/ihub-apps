@@ -3997,8 +3997,7 @@
           "restore": "Sicherung wiederherstellen",
           "adopt": "Aktuelle Version übernehmen",
           "uninstall": "Deinstallieren",
-          "forInstallation": "{{action}}: {{label}}",
-          "running": "Läuft…"
+          "forInstallation": "{{action}}: {{label}}"
         },
         "confirm": {
           "restore": {

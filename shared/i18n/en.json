@@ -3706,8 +3706,7 @@
           "restore": "Restore backup",
           "adopt": "Adopt current version",
           "uninstall": "Uninstall",
-          "forInstallation": "{{action}}: {{label}}",
-          "running": "Working…"
+          "forInstallation": "{{action}}: {{label}}"
         },
         "confirm": {
           "restore": {

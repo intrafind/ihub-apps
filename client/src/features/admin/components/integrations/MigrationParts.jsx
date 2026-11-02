@@ -249,7 +249,8 @@ function triggerLabel(trigger, t) {
  * @param {Object} props
  * @param {Object} props.entry - a `migrationLog` entry
  * @param {(appId: string) => string} [props.appName]
- * @param {'h3'|'h4'} [props.headingLevel='h3']
+ * @param {'h3'|'h4'|'p'} [props.headingLevel='h3'] - `p` where the entry is no section
+ *   of the page (the outcome message above the tabs)
  */
 export function MigrationLogEntry({ entry, appName, headingLevel = 'h3' }) {
   const { t, i18n } = useTranslation();
@@ -444,7 +445,11 @@ export function MigrationActionButtons({
   const { t } = useTranslation();
   if (!actions || actions.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-2" data-testid="migration-actions">
+    <div
+      className="flex flex-wrap gap-2"
+      data-testid="migration-actions"
+      aria-busy={busy || undefined}
+    >
       {actions.map(action => {
         const label = migrationActionLabel(action, t);
         return (
@@ -473,9 +478,7 @@ export function MigrationActionButtons({
             data-action={action}
           >
             <Icon name={ACTION_ICONS[action]} size="sm" />
-            {busy && action !== MIGRATION_ACTION.UNINSTALL
-              ? t('admin.integrations.migration.actions.running', 'Working…')
-              : label}
+            {label}
           </button>
         );
       })}
@@ -690,7 +693,7 @@ export function MigrationOutcome({ outcome, onDismiss, linkToInstallation = fals
         {!outcome.ok && <MigrationProblemList problems={outcome.problems} />}
         {outcome.logEntry && (
           <div className="rounded-md bg-white/70 dark:bg-gray-900/40 p-2 text-gray-900 dark:text-gray-100">
-            <MigrationLogEntry entry={outcome.logEntry} appName={appName} headingLevel="h4" />
+            <MigrationLogEntry entry={outcome.logEntry} appName={appName} headingLevel="p" />
           </div>
         )}
         {linkToInstallation && (

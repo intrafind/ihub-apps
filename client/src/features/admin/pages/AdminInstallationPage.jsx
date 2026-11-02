@@ -877,7 +877,7 @@ function InstallationSettings({
       <fieldset
         disabled
         aria-describedby="installation-settings-read-only"
-        className="min-w-0 m-0 p-0 border-0 opacity-75"
+        className="min-w-0 m-0 p-0 border-0"
         data-testid="settings-fieldset"
       >
         <legend className="sr-only">
