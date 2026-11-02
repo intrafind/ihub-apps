@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useApps from '../../../shared/hooks/useApps';
@@ -54,6 +54,22 @@ function emptyDraft(defaultAppId) {
 }
 
 /**
+ * The task tools for a chat's `enabledTools`, from the app's tools resolved
+ * against them (`selected`): the app's defaults (`null`) when the chat had
+ * every tool the task can toggle on, otherwise the ids of the ones it had on.
+ *
+ * @param {Array<{id: string, toggleable: boolean, selected?: boolean}>} items
+ * @param {string[]} refs - The chat's `enabledTools`
+ * @returns {string[]|null}
+ */
+export function chatToolsToTask(items, refs) {
+  const toggleable = items.filter(tool => tool.toggleable);
+  if (refs.length === 0) return [];
+  const on = toggleable.filter(tool => tool.selected === true).map(tool => tool.id);
+  return on.length === toggleable.length ? null : on;
+}
+
+/**
  * Create or edit a scheduled task. A new task can arrive pre-filled — from
  * "Schedule this…" on a chat message or "Edit in form" on a confirmation
  * card — through the router state `{ draft, proposalId?, sourceChatId? }`.
@@ -79,6 +95,14 @@ export default function TaskEditorPage() {
   const [errors, setErrors] = useState({});
   const [tools, setTools] = useState([]);
   const [models, setModels] = useState([]);
+  // "Schedule this…" hands over the chat's `enabledTools`: tool references
+  // (`ifinder`, an MCP server id), not the tool ids a task stores. They are
+  // resolved once, against the app the chat used.
+  const chatToolsRef = useRef(
+    !editing && Array.isArray(incoming.draft?.enabledTools)
+      ? { appId: incoming.draft.appId, refs: incoming.draft.enabledTools }
+      : null
+  );
 
   useEffect(() => {
     if (!editing) return;
@@ -122,8 +146,17 @@ export default function TaskEditorPage() {
   useEffect(() => {
     if (!draft.appId) return undefined;
     let cancelled = false;
-    fetchScheduledTaskAppTools(draft.appId)
-      .then(result => !cancelled && setTools(Array.isArray(result?.items) ? result.items : []))
+    const fromChat = chatToolsRef.current?.appId === draft.appId ? chatToolsRef.current.refs : null;
+    fetchScheduledTaskAppTools(draft.appId, fromChat?.length > 0 ? { select: fromChat } : {})
+      .then(result => {
+        if (cancelled) return;
+        const items = Array.isArray(result?.items) ? result.items : [];
+        setTools(items);
+        if (fromChat) {
+          chatToolsRef.current = null;
+          setDraft(prev => ({ ...prev, enabledTools: chatToolsToTask(items, fromChat) }));
+        }
+      })
       .catch(() => !cancelled && setTools([]));
     return () => {
       cancelled = true;

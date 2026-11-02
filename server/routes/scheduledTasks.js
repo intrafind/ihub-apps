@@ -10,6 +10,7 @@
  *   GET    /api/scheduled-tasks/_notifications           runs the caller has not seen
  *   POST   /api/scheduled-tasks/_notifications/seen      mark them seen
  *   GET    /api/scheduled-tasks/_apps/:appId/tools       tools a task of this app may use
+ *                                                         (`?select=` resolves a chat's tool references)
  *   GET    /api/scheduled-tasks/:taskId                  one task
  *   PUT    /api/scheduled-tasks/:taskId                  edit (absent fields keep their value)
  *   PATCH  /api/scheduled-tasks/:taskId                  same as PUT
@@ -320,7 +321,16 @@ export default function registerScheduledTaskRoutes(app) {
         return res.status(404).json({ error: 'App not found' });
       }
       const language = requestLanguage(req);
-      const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language);
+      // `select`: a chat's `enabledTools` (references such as `ifinder` or an
+      // MCP server id); each item then says whether they select it.
+      const rawSelect = req.query.select;
+      const select =
+        rawSelect === undefined
+          ? undefined
+          : (Array.isArray(rawSelect) ? rawSelect : [rawSelect])
+              .filter(ref => typeof ref === 'string')
+              .slice(0, 200);
+      const offered = await tasks.toolsOfferedByApp(appConfig, req.user, language, { select });
       const { data: toolDefs = [] } = configCache.getTools() || {};
       res.json({
         items: offered.map(({ selectedByApp, ...tool }) => {
