@@ -219,23 +219,30 @@ installations of the built-in integration **LDAP people directory** under **Admi
 
 See [People Directory Search](../../people-directory-search.md).
 
-## iHub's Own Tools Are the Always-Installed iHub Integration
+## Asking the User and Scheduled Tasks Are the Always-Installed iHub Integration
 
-`ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
-tools and the scheduled-task tools are the actions of the built-in integration **iHub**
-(installation `ihub`) under **Admin → Integrations**, instead of tool files.
+`ask_user` and the scheduled-task tools (`schedule_task`, `list_scheduled_tasks`,
+`update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`,
+`get_task_run`) are the actions of the built-in integration **iHub** (installation `ihub`) under
+**Admin → Integrations**, instead of tool files.
 
 - **Always there:** the installation exists and is enabled at all times — it is created when
   missing and shows **Always installed** without a remove or disable switch. Edit it to switch
   single actions off for every app (what `enabled: false` on a tool file did); which groups may
   use it is granted on the groups.
 - **Nothing changes for apps:** the tools keep their ids, so `tools: ["ask_user"]`,
-  `["knowledge"]`, `["write_artifact"]` and group grants work as before; the rules for
-  `ask_user` (kept through a chat's tool narrowing) and the scheduled-task tools are unchanged.
-  Every action carries its side effect (read, write, destructive).
-- **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
-  (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
-  lists only custom tools from now on.
+  `["schedule_task"]` and group grants work as before; the rules for `ask_user` (kept through a
+  chat's tool narrowing) and the scheduled-task tools are unchanged. Every action carries its
+  side effect (read, write, destructive).
+- **Project knowledge works whenever projects are on:** `knowledge_search`, `knowledge_read` and
+  `knowledge_list` belong to projects, not to an integration. Every request that reaches a project
+  gets them while the projects feature is on, whatever the app's `tools` or an installation says.
+- **Agent and evidence tools stay with workflows and agents:** artifacts, agent memory, inboxes
+  and tasks and the evidence tools are not listed under the iHub integration. Workflows, agent
+  profiles and apps name them in `tools` as before, and group grants select them.
+- **Migrated for you:** migrations V199 and V202 remove the shipped tool files from
+  `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
+  **Admin → Tools** lists only custom tools from now on.
 
 ## Cloud Storage Providers Are Installed Integrations
 

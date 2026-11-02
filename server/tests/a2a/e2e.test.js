@@ -56,7 +56,8 @@ jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({
 }));
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   runTool: jest.fn(),
-  loadConfiguredTools: jest.fn(async () => [])
+  loadConfiguredTools: jest.fn(async () => []),
+  loadLocalTools: jest.fn(async () => [])
 }));
 jest.unstable_mockModule('../../services/mcp/permissions.js', () => ({
   getVisibleToolIds: jest.fn(async () => new Set()),
