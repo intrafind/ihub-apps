@@ -26,7 +26,7 @@ const FOCUSABLE_SELECTOR = [
  * @param {HTMLElement} container - The DOM element to search within
  * @returns {HTMLElement[]} Array of focusable elements in DOM order
  */
-function getFocusableElements(container) {
+export function getFocusableElements(container) {
   if (!container) return [];
   const elements = Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
   return elements.filter(el => {
@@ -106,8 +106,9 @@ export function useFocusTrap(
       const lastElement = focusable[focusable.length - 1];
 
       if (event.shiftKey) {
-        // Shift+Tab: if on the first element, wrap to the last
-        if (document.activeElement === firstElement) {
+        // Shift+Tab: from the first element, or from the container itself
+        // (focused by a click on non-focusable content), wrap to the last
+        if (document.activeElement === firstElement || document.activeElement === container) {
           event.preventDefault();
           lastElement.focus();
         }

@@ -7,6 +7,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../shared/components/Icon';
+import Switch from '../../../shared/components/Switch';
 import ReorderableList from './ReorderableList';
 import {
   APP_SHORTCUT_MODES,
@@ -267,24 +268,12 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
               )}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showUserName}
+          <Switch
+            checked={showUserName}
+            onChange={value => onUpdate({ showUserName: value })}
             aria-labelledby="startPage-showUserName-label"
             aria-describedby="startPage-showUserName-help"
-            onClick={() => onUpdate({ showUserName: !showUserName })}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-              showUserName ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                showUserName ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          />
         </div>
 
         <div>
@@ -348,24 +337,12 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
               )}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showDefaultApp}
+          <Switch
+            checked={showDefaultApp}
+            onChange={value => onUpdate({ showDefaultApp: value })}
             aria-labelledby="startPage-showDefaultApp-label"
             aria-describedby="startPage-showDefaultApp-help"
-            onClick={() => onUpdate({ showDefaultApp: !showDefaultApp })}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-              showDefaultApp ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                showDefaultApp ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          />
         </div>
 
         {/* Default app selector */}

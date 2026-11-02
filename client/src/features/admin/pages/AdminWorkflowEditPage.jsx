@@ -6,6 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import Switch from '../../../shared/components/Switch';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -466,24 +467,16 @@ function AdminWorkflowEditPage() {
                 {/* Enabled Toggle */}
                 <div className="sm:col-span-2">
                   <div className="flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => handleMetadataChange('enabled', !workflowData.enabled)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        workflowData.enabled !== false
-                          ? 'bg-indigo-600'
-                          : 'bg-gray-200 dark:bg-gray-600'
-                      }`}
-                      role="switch"
-                      aria-checked={workflowData.enabled !== false}
+                    {/* Named by the state text beside it, so the name matches what is shown. */}
+                    <Switch
+                      checked={workflowData.enabled !== false}
+                      onChange={enabled => handleMetadataChange('enabled', enabled)}
+                      aria-labelledby="workflow-enabled-label"
+                    />
+                    <span
+                      id="workflow-enabled-label"
+                      className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300"
                     >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          workflowData.enabled !== false ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                    <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
                       {workflowData.enabled !== false
                         ? t('admin.workflows.enabled', 'Enabled')
                         : t('admin.workflows.disabled', 'Disabled')}

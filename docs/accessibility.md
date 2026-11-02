@@ -123,6 +123,38 @@ The application uses semantic HTML elements where possible:
 - `<h1>` through `<h6>` in a logical hierarchy
 - `<button>` for interactive controls (not `<div onClick>`)
 
+### Shared Components
+
+Four components in `client/src/shared/components/` carry the keyboard and screen-reader behaviour
+of common controls. Use them instead of building the markup again; `role="switch"` appears
+nowhere in `client/src` outside `Switch.jsx`.
+
+| Component | Use it for | What it guarantees |
+|---|---|---|
+| `Switch` | Any on/off setting | Native `<button role="switch" aria-checked>`: in the tab order, Space and Enter toggle it, disabled by `disabled` or an enclosing `<fieldset disabled>`. Sizes `sm` and `md`, dark mode. |
+| `Badge` | Short status or kind labels ("Preview", "Installed", "Read and write") | Tones `neutral`, `info`, `success`, `warning`, `danger`, `accent`, `highlight` in `soft` or `outline`; every light and dark pair keeps 4.5:1 text contrast. The text carries the meaning. |
+| `StatusDot` | The health of an integration, connection or server | Statuses `ok`, `warn`, `degraded`, `error`, `off`. The status is always in text as well: visually hidden by default, next to the dot with `showLabel`. `off` is a hollow ring. |
+| `Drawer` | A panel that slides in from the right (details, history) | `role="dialog"` with `aria-modal`, named by its `title`; focus moves in on open, Tab stays inside, Escape and the backdrop close it, focus returns to the opener, the page does not scroll behind it, full width on phones. A dialog stacked on top (with its own `aria-modal`) keeps Escape and Tab. |
+
+A switch needs a name. Give it one of `label` (rendered by the switch, with an optional
+`description`), `aria-labelledby` (a label the screen lays out itself) or `aria-label`:
+
+```jsx
+<Switch
+  checked={settings.enabled}
+  onChange={enabled => update({ enabled })}
+  label={t('admin.example.enable', 'Enable example')}
+  description={t('admin.example.enableHelp', 'What switching it on does.')}
+  labelPosition="start"
+/>
+
+<span id="pwa-enabled-label">{t('admin.ui.pwa.enable', 'Enable PWA')}</span>
+<Switch checked={pwa.enabled} onChange={toggle} aria-labelledby="pwa-enabled-label" />
+```
+
+`StatusDot` without `showLabel` is only enough where other visible text already states the status;
+otherwise show the label (WCAG 1.4.1). Use `showLabel` in lists and tables.
+
 ## Testing
 
 ### Automated Tests

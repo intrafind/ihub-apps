@@ -16,6 +16,7 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
+import Switch from '../../../shared/components/Switch';
 import {
   cancelAdminExecution,
   fetchAdminExecutions,
@@ -344,26 +345,21 @@ function AdminWorkflowExecutionsPage() {
                 {t('admin.workflowExecutions.totalCount', '{{count}} total', { count: total })}
               </div>
             )}
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {t('admin.workflowExecutions.autoRefresh', 'Auto-refresh')}
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoRefresh}
-                onClick={() => setAutoRefresh(prev => !prev)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                  autoRefresh ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-                }`}
+            <div className="flex items-center gap-2">
+              <label
+                id="workflow-executions-auto-refresh-label"
+                htmlFor="workflow-executions-auto-refresh"
+                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none"
               >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    autoRefresh ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </label>
+                {t('admin.workflowExecutions.autoRefresh', 'Auto-refresh')}
+              </label>
+              <Switch
+                id="workflow-executions-auto-refresh"
+                checked={autoRefresh}
+                onChange={enabled => setAutoRefresh(enabled)}
+                aria-labelledby="workflow-executions-auto-refresh-label"
+              />
+            </div>
             <button
               onClick={() => loadExecutions(false)}
               className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"

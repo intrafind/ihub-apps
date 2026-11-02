@@ -2298,7 +2298,30 @@
       "projects": "Projects",
       "overview": "Overview",
       "integrations": "Integrations",
-      "documentTemplates": "Document templates"
+      "documentTemplates": "Document templates",
+      "apps": "Apps",
+      "models": "Models",
+      "providers": "Providers",
+      "prompts": "Prompts",
+      "tools": "Tools",
+      "skills": "Skills",
+      "workflows": "Workflows",
+      "agents": "Agents",
+      "users": "Users",
+      "groups": "Groups",
+      "authentication": "Authentication",
+      "oauth": "OAuth",
+      "credentials": "Credentials",
+      "ui": "UI Customization",
+      "pages": "Pages",
+      "shortlinks": "Short Links",
+      "usage": "Usage Reports",
+      "auditLog": "Audit Log",
+      "features": "Features",
+      "security": "Security",
+      "backup": "Backup & Restore",
+      "updates": "Updates",
+      "advanced": "Advanced"
     },
     "mcp": {
       "common": {
@@ -3769,7 +3792,16 @@
       "searchPlaceholder": "Search admin... Cmd+K",
       "navLabel": "Admin navigation",
       "openMenu": "Open menu",
-      "closeMenu": "Close menu"
+      "closeMenu": "Close menu",
+      "sections": {
+        "overview": "Overview",
+        "aiWorkspace": "AI Workspace",
+        "accessIdentity": "Access & Identity",
+        "integrations": "Integrations",
+        "customization": "Customization",
+        "observability": "Observability",
+        "platform": "Platform"
+      }
     },
     "ui": {
       "tabs": {
@@ -4973,6 +5005,13 @@
         "page": "Page {{current}} of {{total}}",
         "slide": "Slide {{current}} of {{total}}"
       }
+    },
+    "statusDot": {
+      "ok": "OK",
+      "warn": "Warning",
+      "degraded": "Degraded",
+      "error": "Error",
+      "off": "Off"
     }
   },
   "feedback": {
