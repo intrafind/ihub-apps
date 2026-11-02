@@ -19,6 +19,9 @@ import {
   toggleApps
 } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
+import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
+import AppMigrationWarnings from '../components/integrations/AppMigrationWarnings';
+import { appMigrationWarnings } from '../components/integrations/appMigrationWarnings';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -181,6 +184,9 @@ function AdminAppsPage() {
   const { platformConfig } = usePlatformConfig();
   const [apps, setApps] = useState([]);
   const [integrationStatus, setIntegrationStatus] = useState(null);
+  // The installations with their migration logs, for the warnings a definition
+  // migration left on an app (an action it was bound to removed); [] when unknown.
+  const [installedIntegrations, setInstalledIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
@@ -216,13 +222,16 @@ function AdminAppsPage() {
   const loadApps = async () => {
     try {
       setLoading(true);
-      const [data, status] = await Promise.all([
+      const [data, status, installed] = await Promise.all([
         fetchAdminApps(),
         // The marker is a hint: the list is useful without it
-        fetchAppIntegrationStatus().catch(() => null)
+        fetchAppIntegrationStatus().catch(() => null),
+        // So are the migration warnings
+        fetchInstalledIntegrations().catch(() => null)
       ]);
       setApps(data);
       setIntegrationStatus(status);
+      setInstalledIntegrations(Array.isArray(installed?.items) ? installed.items : []);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     } finally {
@@ -461,6 +470,10 @@ function AdminAppsPage() {
                 })}
               </span>
             )}
+            <AppMigrationWarnings
+              warnings={appMigrationWarnings(installedIntegrations, app)}
+              compact
+            />
           </div>
         );
       }

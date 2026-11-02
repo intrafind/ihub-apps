@@ -16,6 +16,14 @@ import IntegrationInstallForm from '../components/integrations/IntegrationInstal
 import IntegrationReleaseNotes from '../components/integrations/IntegrationReleaseNotes';
 import IntegrationFactList from '../components/integrations/IntegrationFactList';
 import { InstallationStatusPills, Pill } from '../components/integrations/IntegrationPills';
+import InstallationMigrationPanel from '../components/integrations/InstallationMigrationPanel';
+import {
+  MigrationConfirmDialog,
+  MigrationLog,
+  MigrationOutcome
+} from '../components/integrations/MigrationParts';
+import useMigrationActions from '../components/integrations/useMigrationActions';
+import { isSettingsReadOnly } from '../components/integrations/migrationState';
 import { SideEffectBadge } from '../components/integrations/ActionToggleList';
 import { pickText } from '../components/integrations/ConfigFieldInput';
 import { installationFacts } from '../components/integrations/integrationFacts';
@@ -106,11 +114,19 @@ function bindingViaLabel(app, instance, t) {
  * and Remove. Tabs:
  *
  * - **Overview**: the key facts of its values (never a secret), description,
- *   docs link, groups, the actions with their side effects and the apps that
- *   bind it (by installation id, by definition id or by `type:<type>`).
+ *   docs link, groups, the actions with their side effects, the apps that
+ *   bind it (by installation id, by definition id or by `type:<type>`) and
+ *   the migration log (the last 10 runs).
  * - **Settings**: the dedicated editor of its definition (`editors/index.js`),
- *   or the generic form built from the install fields.
+ *   or the generic form built from the install fields; read-only while a
+ *   migration state makes `PUT` refuse the save.
  * - **Releases**: the definition's release history, when it has one.
+ *
+ * Above the tabs, while the installation has a migration state
+ * (`migrationPending`, `migrationFailed`, `needsReview`), the migration panel
+ * (`InstallationMigrationPanel`) explains it and offers the actions the state
+ * allows; the outcome of an action (its log entry, or the error and its
+ * reason) stays above the tabs until dismissed.
  *
  * Reads `GET /api/admin/integrations/installed/:id`, the installation list
  * (to name the installation an `instance` field points at) and the apps.
@@ -147,6 +163,8 @@ function InstallationPageContent({ instanceId }) {
   const [editorKey, setEditorKey] = useState(0);
   // The groups (id → group), for who grants the installation; null when unknown.
   const [groups, setGroups] = useState(null);
+  // The outcome of the last migration action (log entry or error), until dismissed.
+  const [migrationOutcome, setMigrationOutcome] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -204,6 +222,22 @@ function InstallationPageContent({ instanceId }) {
     () => (detail && definition ? { definition, existing: detail } : null),
     [detail, definition]
   );
+  /** An app's display name for the migration warnings, its id when unknown. */
+  const appName = useCallback(
+    appId => pickText(apps.find(app => app.id === appId)?.name, lang) || appId,
+    [apps, lang]
+  );
+
+  // Migrate now, Re-run, Restore, Adopt: show what the server answered, then
+  // reload (the state, the log and the editor change); Uninstall is Remove.
+  const migration = useMigrationActions({
+    onDone: async outcome => {
+      setMigrationOutcome(outcome);
+      await load();
+      setEditorKey(key => key + 1);
+    },
+    onUninstall: () => setConfirm('remove')
+  });
 
   const flash = (type, text) => {
     setMessage({ type, text });
@@ -423,6 +457,21 @@ function InstallationPageContent({ instanceId }) {
           )}
         </div>
       )}
+      {migrationOutcome && (
+        <div className="mb-4">
+          <MigrationOutcome
+            outcome={migrationOutcome}
+            onDismiss={() => setMigrationOutcome(null)}
+            appName={appName}
+          />
+        </div>
+      )}
+      <InstallationMigrationPanel
+        instance={instance}
+        onRequest={migration.request}
+        busy={busy || migration.running === instance.id}
+        appName={appName}
+      />
       {testResult && (
         <div className="mb-6" data-testid="installation-test-results">
           <IntegrationTestResults
@@ -528,6 +577,18 @@ function InstallationPageContent({ instanceId }) {
                 </ul>
               )}
             </section>
+
+            {(instance.migrationLog || []).length > 0 && (
+              <section className={CARD_CLASS} aria-labelledby="installation-migration-log-title">
+                <h2 id="installation-migration-log-title" className={CARD_TITLE_CLASS}>
+                  {t('admin.integrations.migration.log.title', 'Migration log')}
+                  <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                    ({instance.migrationLog.length})
+                  </span>
+                </h2>
+                <MigrationLog log={instance.migrationLog} appName={appName} />
+              </section>
+            )}
           </div>
 
           <div className="space-y-5">
@@ -644,6 +705,7 @@ function InstallationPageContent({ instanceId }) {
             effective={effective}
             preloaded={preloaded}
             unusable={unusable}
+            readOnly={isSettingsReadOnly(instance)}
             editorKey={editorKey}
             onSaved={onSaved}
             onCancel={onCancel}
@@ -672,6 +734,12 @@ function InstallationPageContent({ instanceId }) {
           onClose={() => setShowConnections(false)}
         />
       )}
+
+      <MigrationConfirmDialog
+        pending={migration.pending}
+        onConfirm={migration.confirm}
+        onCancel={migration.cancel}
+      />
 
       <ConfirmDialog
         isOpen={Boolean(confirm)}
@@ -729,12 +797,19 @@ function InstallationPageContent({ instanceId }) {
  * install fields; a notice instead while the definition is missing or
  * incompatible. A new `editorKey` remounts the editor with the stored values.
  *
+ * While a migration state makes `PUT …/installed/:id` refuse the save
+ * (`readOnly`, see `isSettingsReadOnly`), the editor is shown inside a
+ * disabled `<fieldset>`: every input and button of every editor, dedicated or
+ * generic, is disabled in one place, with the reason above it. No editor
+ * needs to know about migrations.
+ *
  * @param {Object} props
  * @param {Object} props.instance - the installation as the detail lists it
  * @param {Object|null} props.definition - its definition, null when missing
  * @param {Object|null} props.effective - the installation with its effective values
  * @param {{ definition: Object, existing: Object }|null} props.preloaded - for the generic form
  * @param {boolean} props.unusable - the definition is missing or incompatible
+ * @param {boolean} [props.readOnly] - a migration state blocks saving
  * @param {number} props.editorKey
  * @param {(saved: Object) => void} props.onSaved
  * @param {() => void} props.onCancel
@@ -745,6 +820,7 @@ function InstallationSettings({
   effective,
   preloaded,
   unusable,
+  readOnly = false,
   editorKey,
   onSaved,
   onCancel
@@ -760,19 +836,16 @@ function InstallationSettings({
       </div>
     );
   }
-  if (hasDedicatedEditor(instance.definition)) {
-    return (
-      <InstallationEditor
-        key={editorKey}
-        definitionId={instance.definition}
-        instance={effective}
-        definition={definition}
-        onSaved={onSaved}
-        onCancel={onCancel}
-      />
-    );
-  }
-  return (
+  const editor = hasDedicatedEditor(instance.definition) ? (
+    <InstallationEditor
+      key={editorKey}
+      definitionId={instance.definition}
+      instance={effective}
+      definition={definition}
+      onSaved={onSaved}
+      onCancel={onCancel}
+    />
+  ) : (
     <IntegrationInstallForm
       key={editorKey}
       variant="page"
@@ -782,6 +855,32 @@ function InstallationSettings({
       onSaved={onSaved}
       onCancel={onCancel}
     />
+  );
+  if (!readOnly) return editor;
+  return (
+    <div className="space-y-4">
+      <div
+        id="installation-settings-read-only"
+        className={CALLOUT_CLASS.warning}
+        data-testid="settings-read-only"
+      >
+        {t(
+          'admin.integrations.migration.settingsReadOnly',
+          'The settings are read-only until the migration state is resolved: iHub refuses to save values that were written for another definition version. Use the actions of the migration panel above.'
+        )}
+      </div>
+      <fieldset
+        disabled
+        aria-describedby="installation-settings-read-only"
+        className="min-w-0 m-0 p-0 border-0 opacity-75"
+        data-testid="settings-fieldset"
+      >
+        <legend className="sr-only">
+          {t('admin.integrations.migration.settingsReadOnlyLegend', 'Settings (read-only)')}
+        </legend>
+        {editor}
+      </fieldset>
+    </div>
   );
 }
 

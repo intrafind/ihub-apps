@@ -10,6 +10,8 @@ import {
 } from '../../../../api/integrationsAdminApi';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
 import { HELP_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
+import AppMigrationWarnings from '../integrations/AppMigrationWarnings';
+import { appMigrationWarnings, warningsByBindingKey } from '../integrations/appMigrationWarnings';
 import IntegrationBindingRow from './IntegrationBindingRow';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
@@ -120,6 +122,10 @@ function Card({ title, description, children, testId }) {
  *   browse actions); a definition with several installations also gets
  *   "All … installations" (`app.integrations[<definition id>]`).
  *
+ * A binding a definition migration changed (an action it named was removed,
+ * or a type binding names a renamed action or scope) shows the warning next
+ * to its row (`appMigrationWarnings`); a warning about a binding without a
+ * row here shows at the top of the Integrations card.
  *
  * @param {Object} props
  * @param {Object} props.app - the app being edited
@@ -128,6 +134,8 @@ function Card({ title, description, children, testId }) {
 function IntegrationsConfigSection({ app, onChange }) {
   const { t } = useTranslation();
   const [installed, setInstalled] = useState([]);
+  // Every installation (also those whose definition is missing), for the migration warnings.
+  const [allInstalled, setAllInstalled] = useState([]);
   const [details, setDetails] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -142,7 +150,10 @@ function IntegrationsConfigSection({ app, onChange }) {
     void (async () => {
       try {
         const res = await fetchInstalledIntegrations();
-        if (!cancelled) setInstalled((res.items || []).filter(i => !i.definitionMissing));
+        if (!cancelled) {
+          setAllInstalled(res.items || []);
+          setInstalled((res.items || []).filter(i => !i.definitionMissing));
+        }
       } catch (err) {
         if (!cancelled) setError(getAdminApiErrorMessage(err));
       } finally {
@@ -328,6 +339,11 @@ function IntegrationsConfigSection({ app, onChange }) {
     () => (loading || error ? null : webSearchEnginesOf(installed)),
     [installed, loading, error]
   );
+  // What definition migrations left on this app's bindings, by binding key.
+  const migrationWarnings = useMemo(
+    () => warningsByBindingKey(appMigrationWarnings(allInstalled, app)),
+    [allInstalled, app]
+  );
   const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
   const showIAssistant =
     Boolean(iAssistantInstallation) ||
@@ -359,8 +375,28 @@ function IntegrationsConfigSection({ app, onChange }) {
       binding={bindings[item.id]}
       detail={details[item.id]}
       onBindingChange={binding => setBinding(item.id, binding)}
+      notice={
+        migrationWarnings.has(item.id) ? (
+          <AppMigrationWarnings warnings={migrationWarnings.get(item.id)} />
+        ) : null
+      }
     />
   );
+
+  // Warnings about bindings that have no row of their own here (a web search
+  // engine, a binding to an installation that is gone): shown on top.
+  const rowIds = new Set(
+    [
+      ...directoryRows,
+      ...directoryDefinitionRows,
+      ...storageRows,
+      ...groupedRows.flatMap(group => group.rows)
+    ].map(row => row.id)
+  );
+  if (iAssistantInstallation) rowIds.add(IASSISTANT_INSTANCE_ID);
+  const unplacedWarnings = [...migrationWarnings.entries()]
+    .filter(([key]) => !rowIds.has(key))
+    .flatMap(([, warnings]) => warnings);
 
   return (
     <>
@@ -427,6 +463,7 @@ function IntegrationsConfigSection({ app, onChange }) {
           </p>
         )}
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <AppMigrationWarnings warnings={unplacedWarnings} />
         {!loading && !error && groupedRows.length === 0 && staleIds.length === 0 && (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}

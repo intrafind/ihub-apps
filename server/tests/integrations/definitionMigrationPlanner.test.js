@@ -835,7 +835,7 @@ describe('marketplace update preview', () => {
       definitionId: 'org.ckan/portal',
       item,
       instances: [
-        instance(),
+        instance({ label: { en: 'GovData', de: 'GovData DE' } }),
         instance({ id: 'collide', values: { fq: 'a', defaultFilter: 'b' } }),
         instance({ id: 'current', definitionVersion: '1.4.0' })
       ],
@@ -844,6 +844,8 @@ describe('marketplace update preview', () => {
     });
     assert.equal(preview.planFromCatalog, true);
     const [govdata, collide, current] = preview.installations;
+    assert.deepEqual(govdata.label, { en: 'GovData', de: 'GovData DE' }, 'names the installation');
+    assert.equal(collide.label, null);
     assert.deepEqual(govdata.summary, { values: 2, actions: 1, apps: 1 });
     assert.deepEqual(govdata.migrations, ['1.3.0', '1.4.0']);
     assert.equal(govdata.ok, true);
