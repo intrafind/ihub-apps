@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import Switch from '../../../shared/components/Switch';
 import { useFilterState } from '../hooks/useFilterState';
 import {
   DataTable,
@@ -102,21 +103,18 @@ function StatusCell({ user, onToggle }) {
       >
         {user.active !== false ? 'Active' : 'Inactive'}
       </span>
-      <label
-        className="relative inline-flex items-center cursor-pointer"
-        onClick={e => e.stopPropagation()}
-      >
-        <input
-          type="checkbox"
-          checked={user.active !== false}
-          onChange={() => onToggle(user)}
-          aria-label={t('admin.users.statusToggle', 'Account active: {{name}}', {
-            name: user.name || user.username
-          })}
-          className="sr-only peer"
-        />
-        <div className="w-9 h-5 bg-gray-200 dark:bg-gray-600 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-      </label>
+      <Switch
+        size="sm"
+        checked={user.active !== false}
+        onChange={(_next, event) => {
+          // The row must not react to the toggle.
+          event.stopPropagation();
+          onToggle(user);
+        }}
+        aria-label={t('admin.users.statusToggle', 'Account active: {{name}}', {
+          name: user.name || user.username
+        })}
+      />
     </div>
   );
 }
