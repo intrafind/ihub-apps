@@ -425,15 +425,11 @@ function ChatInput({
   // Local upload (paper-clip + dropzone) is independent from cloud storage
   // upload, which is rendered as separate entries in the actions menu.
   const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
-  // Match ChatInputActionsMenu's hasCloudProviders calculation so the
+  // The storage providers the app binds and the user may use
+  // (`useFileUploadHandler`); ChatInputActionsMenu lists the same ones, so the
   // single-action optimization stays in sync (issue #1426).
-  const cloudStorageEnabledForApp = uploadConfig?.cloudStorageUpload?.enabled === true;
-  const platformCloudStorage = platformConfig?.cloudStorage;
-  const hasCloudProviders =
-    cloudStorageEnabledForApp &&
-    platformCloudStorage?.enabled === true &&
-    Array.isArray(platformCloudStorage?.providers) &&
-    platformCloudStorage.providers.some(p => p.enabled);
+  const cloudStorageProviders = uploadConfig?.cloudStorage?.providers || [];
+  const hasCloudProviders = cloudStorageProviders.length > 0;
   const quickActionCount =
     (localUploadEnabled ? 1 : 0) +
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
@@ -1152,6 +1148,7 @@ function ChatInput({
             setCloudStorageProvider(null);
           }}
           preSelectedProvider={cloudStorageProvider}
+          providers={cloudStorageProviders}
           uploadConfig={uploadConfig}
         />
       )}

@@ -172,10 +172,22 @@ describe('installation facts', () => {
       lines(
         installationFacts({
           definition: 'com.intrafind/google-drive',
-          values: { clientId: 'gd', sourceMyDrive: true, sourceSharedDrives: true }
+          values: { clientId: 'gd', sourceMyDrive: true, sourceSharedWithMe: false }
         })
       )
     ).toContain('Sources: My Drive, Shared drives');
+    // Sources are on unless stored as off; all off says so.
+    expect(
+      lines(installationFacts({ definition: 'com.intrafind/office365', values: { tenantId: 't' } }))
+    ).toEqual(['Tenant ID: t', 'Sources: OneDrive, SharePoint, Teams', 'Client secret: not set']);
+    expect(
+      lines(
+        installationFacts({
+          definition: 'com.intrafind/google-drive',
+          values: { sourceMyDrive: false, sourceSharedDrives: false, sourceSharedWithMe: false }
+        })
+      )
+    ).toContain('Sources: none');
     expect(
       lines(
         installationFacts({

@@ -9,7 +9,8 @@ import '@testing-library/jest-dom';
  * App editor → Integrations: each integration in one place. Web search and
  * iAssistant keep their own panels (shown while installed or in use), the
  * people directories get a card with "All people directories"
- * (`type:people-directory`), and the generic list never repeats web search,
+ * (`type:people-directory`), the storage providers a card with "All storage
+ * providers" (`type:storage`), and the generic list never repeats web search,
  * iAssistant or a storage provider.
  */
 
@@ -152,6 +153,75 @@ describe('IntegrationsConfigSection', () => {
     const row = await screen.findByTestId('definition-binding-mcp/github');
     expect(await within(row).findByText('List issues')).toBeInTheDocument();
     expect(within(row).getByText('Create PR')).toBeInTheDocument();
+  });
+});
+
+describe('IntegrationsConfigSection: storage providers', () => {
+  const NEXTCLOUD = [
+    {
+      id: 'nextcloud',
+      definition: 'com.intrafind/nextcloud',
+      definitionName: 'Nextcloud',
+      type: 'storage',
+      builtIn: true,
+      label: 'Head office'
+    },
+    {
+      id: 'nextcloud-branch',
+      definition: 'com.intrafind/nextcloud',
+      definitionName: 'Nextcloud',
+      type: 'storage',
+      builtIn: true,
+      label: 'Branch office',
+      enabled: false
+    }
+  ];
+
+  it('offers all storage providers, all of one provider and each installation, without actions', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: [...INSTALLED, ...NEXTCLOUD] });
+    const onChange = renderSection({ id: 'a' });
+    const card = await screen.findByTestId('app-integrations-storage-providers');
+    expect(within(card).getByText('Storage providers')).toBeInTheDocument();
+    expect(within(card).getByLabelText(/All storage providers/)).toBeInTheDocument();
+    expect(within(card).getByText(/\(3 now\)/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/All Nextcloud installations/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
+    expect(within(card).getByLabelText(/Branch office/)).toBeInTheDocument();
+    // A new storage binding starts optional.
+    fireEvent.click(within(card).getByLabelText(/All storage providers/));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)[0].integrations).toEqual({
+      'type:storage': { required: false }
+    });
+  });
+
+  it('shows a bound storage provider with the Required switch and no action list', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: NEXTCLOUD });
+    renderSection({ id: 'a', integrations: { 'nextcloud-branch': { required: false } } });
+    const card = await screen.findByTestId('app-integrations-storage-providers');
+    expect(within(card).getByLabelText(/Branch office/)).toBeChecked();
+    expect(within(card).getByLabelText(/Required/)).not.toBeChecked();
+    expect(within(card).getByText(/the file picker offers the providers/)).toBeInTheDocument();
+    expect(within(card).queryByText('Actions')).not.toBeInTheDocument();
+    expect(mockFetchOne).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('stale-integration-nextcloud-branch')).not.toBeInTheDocument();
+  });
+
+  it('is hidden while no storage provider is installed and the app binds none', async () => {
+    mockFetchInstalled.mockResolvedValue({
+      items: INSTALLED.filter(item => item.type !== 'storage')
+    });
+    renderSection({ id: 'a' });
+    await screen.findByTestId('app-integrations');
+    expect(screen.queryByTestId('app-integrations-storage-providers')).not.toBeInTheDocument();
+  });
+
+  it('keeps the card while the app binds type:storage, and never calls it stale', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: [] });
+    renderSection({ id: 'a', integrations: { 'type:storage': { required: false } } });
+    const card = await screen.findByTestId('app-integrations-storage-providers');
+    expect(within(card).getByLabelText(/All storage providers/)).toBeChecked();
+    expect(screen.queryByTestId('stale-integration-type:storage')).not.toBeInTheDocument();
   });
 });
 

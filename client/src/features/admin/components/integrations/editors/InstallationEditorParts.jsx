@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
@@ -261,5 +262,74 @@ export function FieldError({ id, message }) {
     <p id={id} className="mt-1 text-xs text-red-600 dark:text-red-400">
       {message}
     </p>
+  );
+}
+
+/**
+ * A value the admin copies somewhere else (a redirect URI to register with a
+ * provider): read-only, selected on focus, with a Copy button whose state is
+ * announced to screen readers.
+ *
+ * @param {Object} props
+ * @param {string} props.id - the input's id
+ * @param {string} props.label
+ * @param {string} props.value
+ * @param {React.ReactNode} [props.help] - shown below, referenced by `aria-describedby`
+ */
+export function CopyableValue({ id, label, value, help }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef(null);
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const copyLabel = copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy');
+  return (
+    <div>
+      <label htmlFor={id} className={LABEL_CLASS}>
+        {label}
+      </label>
+      <div className="flex">
+        <input
+          id={id}
+          type="text"
+          readOnly
+          value={value}
+          onFocus={e => e.target.select()}
+          aria-describedby={help ? `${id}-help` : undefined}
+          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+        />
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1 px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          <Icon
+            name={copied ? 'check' : 'clipboard'}
+            size="sm"
+            className={copied ? 'text-green-700 dark:text-green-400' : ''}
+          />
+          {copyLabel}
+        </button>
+      </div>
+      <span className="sr-only" aria-live="polite">
+        {copied ? t('common.copied', 'Copied') : ''}
+      </span>
+      {help && (
+        <p id={`${id}-help`} className={HELP_CLASS}>
+          {help}
+        </p>
+      )}
+    </div>
   );
 }
