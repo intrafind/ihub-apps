@@ -24,7 +24,8 @@ function installationOf(directory) {
   if (directory.browse) {
     throw new Error('A directory has no browse block any more: describe an LDAP browser instead');
   }
-  const { allowedGroups: _removed, ...instance } = instanceFrom(directory);
+  const instance = instanceFrom(directory);
+  delete instance.allowedGroups;
   return instance;
 }
 

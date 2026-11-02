@@ -24,14 +24,11 @@ const DEFINITIONS_DIR = path.join(here, '..', 'defaults', 'integration-definitio
  *
  * - The storage PR (migration V205) adds the entries of the three storage
  *   providers and removes them here.
- * - The iHub integration PR (migration V201) adds the entry of
- *   `com.intrafind/ihub` and removes it here.
  */
 const NOT_YET_RELEASED = new Set([
   'com.intrafind/office365', // storage PR (V205)
   'com.intrafind/google-drive', // storage PR (V205)
-  'com.intrafind/nextcloud', // storage PR (V205)
-  'com.intrafind/ihub' // iHub integration PR (V201)
+  'com.intrafind/nextcloud' // storage PR (V205)
 ]);
 
 /** The shipped definitions by id, with the folder each lives in. */
@@ -70,8 +67,12 @@ describe('release entries of migrated definitions (#3092)', () => {
   it('finds the definitions the migrations create or change', () => {
     for (const id of [
       'com.intrafind/ifinder',
+      'com.intrafind/ihub',
       'com.intrafind/ldap-directory',
-      'com.intrafind/ldap-browser'
+      'com.intrafind/ldap-browser',
+      'com.intrafind/brave-search',
+      'com.intrafind/staan-search',
+      'com.intrafind/qwant-search'
     ]) {
       assert.ok(named.has(id), `${id} is named by a migration`);
     }

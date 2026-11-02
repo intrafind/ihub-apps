@@ -50,7 +50,8 @@ export const INTEGRATION_GROUPS = Object.freeze([
     titleKey: 'admin.integrations.groups.webSearch.title',
     titleDefault: 'Web search',
     descriptionKey: 'admin.integrations.groups.webSearch.description',
-    descriptionDefault: 'The search engines and the page reader of apps with web search on.',
+    descriptionDefault:
+      'Search engines apps with web search on use; without one, models search natively where they can.',
     icon: 'globe',
     accent: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300'
   },

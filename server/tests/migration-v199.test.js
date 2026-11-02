@@ -18,6 +18,8 @@ import {
   SHIPPED_HASHES
 } from '../migrations/V199__ihub_tools_installed_integration.js';
 import { IHUB_TOOL_FILE_IDS } from '../services/integrations/protocols/native/connectors/ihub/index.js';
+import { PLATFORM_TOOL_FILE_IDS } from '../services/tools/platformTools.js';
+import { KNOWLEDGE_TOOL_FILE_ID } from '../services/knowledge/knowledgeTools.js';
 
 const TOOLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults/tools');
 const sha256 = text => createHash('sha256').update(text).digest('hex');
@@ -47,8 +49,17 @@ function makeCtx(files) {
 describe('V199 iHub tools → installed integration', () => {
   it('declares its version', () => assert.equal(version, '199'));
 
-  it('knows every tool file the connector ships, with its hash as shipped', () => {
-    const ids = [...IHUB_TOOL_FILE_IDS].sort();
+  it('knows every tool file it retired, with its hash as shipped', () => {
+    // Since V201 the files are read by three owners: the iHub connector
+    // (ask_user, scheduled tasks), the platform tools of workflows and agents,
+    // and the project knowledge tools. Together they are the files V199 retired.
+    // The page reader (`read_url`) joined the platform tools with V203; V195
+    // had retired its file, not V199.
+    const ids = [
+      ...IHUB_TOOL_FILE_IDS,
+      ...PLATFORM_TOOL_FILE_IDS.filter(id => id !== 'read_url'),
+      KNOWLEDGE_TOOL_FILE_ID
+    ].sort();
     assert.deepEqual(Object.keys(SHIPPED_HASHES).sort(), ids);
     for (const id of ids) {
       assert.equal(contentHash(shipped(id), sha256), SHIPPED_HASHES[id], id);

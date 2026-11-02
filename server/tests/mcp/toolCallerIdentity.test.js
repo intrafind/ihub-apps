@@ -27,6 +27,7 @@ let adminAccess = false;
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   runTool,
   loadConfiguredTools: jest.fn(async () => []),
+  loadLocalTools: jest.fn(async () => []),
   loadTools: jest.fn(async () => loadedTools)
 }));
 jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({

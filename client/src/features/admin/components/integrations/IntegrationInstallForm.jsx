@@ -54,15 +54,17 @@ export function proposeInstanceId(definitionId, taken = []) {
   return `${base}-${n}`;
 }
 
+/** One validation detail as text: `key: message`, `path.to.field: message` or the message. */
+function detailLine(detail) {
+  if (detail?.key) return `${detail.key}: ${detail.message}`;
+  if (detail?.path) return `${detail.path.join('.')}: ${detail.message}`;
+  return detail?.message;
+}
+
 function detailText(err) {
   const details = err?.response?.data?.details;
   if (!Array.isArray(details)) return '';
-  return details
-    .map(d =>
-      d?.key ? `${d.key}: ${d.message}` : d?.path ? `${d.path.join('.')}: ${d.message}` : d?.message
-    )
-    .filter(Boolean)
-    .join('; ');
+  return details.map(detailLine).filter(Boolean).join('; ');
 }
 
 /** `GET /api/admin/groups` → `groups` (id → group), or null when it failed. */
@@ -70,6 +72,48 @@ function groupsOf(groupsResult) {
   return groupsResult?.groups && typeof groupsResult.groups === 'object'
     ? groupsResult.groups
     : null;
+}
+
+/**
+ * The stored installation the form edits, as `GET …/installed/:id` returns
+ * it: the one the caller preloaded, else fetched when editing, else none.
+ *
+ * @param {{ instanceId?: string, isEdit: boolean, preloaded?: Object }} options
+ * @returns {Object|null|Promise<Object|null>}
+ */
+function existingInstallation({ instanceId, isEdit, preloaded }) {
+  if (preloaded) return preloaded.existing;
+  return isEdit ? fetchInstalledIntegration(instanceId) : Promise.resolve(null);
+}
+
+/**
+ * The starting values of the admin fields (never a sensitive one): the
+ * stored value, else (installing) the prefilled one, else the field's
+ * default, else empty.
+ *
+ * @param {Object} definition - the integration definition
+ * @param {Object|null} existing - the stored installation, null when installing
+ * @param {boolean} isEdit
+ * @param {{ values?: Object }} [prefill]
+ * @returns {Object<string, unknown>}
+ */
+function initialValues(definition, existing, isEdit, prefill) {
+  const values = {};
+  for (const field of definition.install || []) {
+    if (field.sensitive || field.scope !== 'admin') continue;
+    values[field.key] =
+      existing?.values?.[field.key] ??
+      (isEdit ? undefined : prefill?.values?.[field.key]) ??
+      field.default ??
+      '';
+  }
+  return values;
+}
+
+/** The label of the submit button: "Saving…" while saving, else Save (editing) or Install. */
+function submitLabel(t, { saving, isEdit }) {
+  if (saving) return t('common.saving', 'Saving…');
+  return isEdit ? t('common.save', 'Save') : t('admin.integrationCatalog.install', 'Install');
 }
 
 /** Stable default: a fresh `[]` per render would re-run the load effect every render. */
@@ -147,25 +191,13 @@ function IntegrationInstallForm({
         const [def, groupsResult, existing] = await Promise.all([
           preloaded?.definition || fetchIntegrationDefinition(definitionId),
           fetchAdminGroups().catch(() => null),
-          preloaded
-            ? preloaded.existing
-            : isEdit
-              ? fetchInstalledIntegration(instanceId)
-              : Promise.resolve(null)
+          existingInstallation({ instanceId, isEdit, preloaded })
         ]);
         if (cancelled) return;
         setDefinition(def);
         onLoaded?.(def);
         setGroups(groupsOf(groupsResult));
-        const values = {};
-        for (const field of def.install || []) {
-          if (field.sensitive || field.scope !== 'admin') continue;
-          values[field.key] =
-            existing?.values?.[field.key] ??
-            (!isEdit ? prefill?.values?.[field.key] : undefined) ??
-            field.default ??
-            '';
-        }
+        const values = initialValues(def, existing, isEdit, prefill);
         const instance = existing?.instance;
         const { knownActions: actions, checked } = initialCheckedActions({
           definition: def,
@@ -662,11 +694,7 @@ function IntegrationInstallForm({
           className={PRIMARY_BUTTON_CLASS}
           disabled={saving || testing || !definition.supported}
         >
-          {saving
-            ? t('common.saving', 'Saving…')
-            : isEdit
-              ? t('common.save', 'Save')
-              : t('admin.integrationCatalog.install', 'Install')}
+          {submitLabel(t, { saving, isEdit })}
         </button>
       </div>
     </div>

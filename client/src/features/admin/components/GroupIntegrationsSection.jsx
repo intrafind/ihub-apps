@@ -165,9 +165,13 @@ function GroupIntegrationsSection({ group, groups = {}, onChange }) {
   };
 
   /** Inherited or own broader key over a type or definition row (only `*` is broader). */
+  const inheritedCover = key => {
+    if (inheritedKeys.has(key)) return key;
+    return inheritedKeys.has(ALL_INTEGRATIONS) ? ALL_INTEGRATIONS : null;
+  };
   const broadRowNote = key =>
     coverNoteOf(
-      inheritedKeys.has(key) ? key : inheritedKeys.has(ALL_INTEGRATIONS) ? ALL_INTEGRATIONS : null,
+      inheritedCover(key),
       own.has(ALL_INTEGRATIONS) && key !== ALL_INTEGRATIONS ? ALL_INTEGRATIONS : null
     );
 

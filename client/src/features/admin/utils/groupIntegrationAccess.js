@@ -83,7 +83,7 @@ export function grantingKey(item, keys) {
  * @returns {Array<{ id: string, type?: string, items: Object[], definitions: Array<{ id: string, name: string, count: number }> }>}
  */
 export function sectionsOf(items) {
-  const usable = (items || []).filter(item => item && item.id && !item.definitionMissing);
+  const usable = (items || []).filter(item => item?.id && !item.definitionMissing);
   const sections = INTEGRATION_SECTIONS.map(section => ({
     id: section.id,
     type: section.type,
@@ -208,5 +208,5 @@ export function groupsGranting(item, groups) {
   return Object.entries(groups)
     .filter(([, group]) => grantingKey(item, group?.permissions?.integrations || []))
     .map(([id]) => id)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
 }

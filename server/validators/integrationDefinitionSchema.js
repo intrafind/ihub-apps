@@ -697,6 +697,21 @@ export const integrationDefinitionSchema = z
       }
     });
 
+    // The web search engine contract: the web search feature calls the
+    // engine's action `search` (docs/integration-development.md). Protocols
+    // whose actions are listed at run time (MCP, A2A) cannot declare it.
+    if (
+      def.type === 'web-search' &&
+      !['mcp', 'a2a'].includes(def.protocol.type) &&
+      !actionNames.has('search')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['actions'],
+        message: 'a web-search definition needs an action named "search"'
+      });
+    }
+
     if (def.alwaysInstalled && !(def.builtIn && def.singleton)) {
       ctx.addIssue({
         code: 'custom',

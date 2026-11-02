@@ -1,0 +1,83 @@
+{
+  "id": "com.intrafind/brave-search",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: Brave Search is its own web search engine integration, installed as brave (migration V203).",
+        "de": "Erste Version: Brave Search ist eine eigene Websuchmaschinen-Integration, installiert als brave (Migration V203)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "Brave Search",
+    "de": "Brave Search"
+  },
+  "description": {
+    "en": "Search the web with the Brave Search API (api.search.brave.com) for up-to-date information, with dates, extra snippets and favicons. Needs an API key.",
+    "de": "Das Web mit der Brave-Search-API (api.search.brave.com) nach aktuellen Informationen durchsuchen, mit Datum, zusätzlichen Textauszügen und Favicons. Braucht einen API-Schlüssel."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["search", "web"],
+  "type": "web-search",
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "brave"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "braveSearch"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "apiKeyRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "API key",
+        "de": "API-Schlüssel"
+      },
+      "description": {
+        "en": "A credential of type secret holding the Brave Search API key (api.search.brave.com). The environment variable BRAVE_SEARCH_API_KEY is used when empty.",
+        "de": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Brave-Search-API-Schlüssel (api.search.brave.com). Leer: die Umgebungsvariable BRAVE_SEARCH_API_KEY."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "search",
+      "toolId": "braveSearch",
+      "title": {
+        "en": "Search the web",
+        "de": "Im Web suchen"
+      },
+      "description": {
+        "en": "Search the web with Brave.",
+        "de": "Das Web mit Brave durchsuchen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  ],
+  "instructions": {
+    "en": "Web search is switched on per app under Apps → Edit → Integrations → Web search; the user turns it on or off in the chat. The app uses this engine when it names it, or on Auto when it is the first engine the user may use.",
+    "de": "Die Websuche wird pro App unter Apps → Bearbeiten → Integrationen → Websuche eingeschaltet; der Benutzer schaltet sie im Chat ein oder aus. Die App nutzt diese Suchmaschine, wenn sie sie nennt, oder bei Auto, wenn sie die erste Suchmaschine ist, die der Benutzer nutzen darf."
+  }
+}

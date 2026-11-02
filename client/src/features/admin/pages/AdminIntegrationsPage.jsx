@@ -41,7 +41,7 @@ import {
   getAdminApiErrorMessage
 } from '../../../api/adminApi';
 
-const TABS = ['installed', 'catalog', 'inbound'];
+const TABS = new Set(['installed', 'catalog', 'inbound']);
 
 /** Marketplace item names are definition folder names: `/` became `__`. */
 export function definitionIdFromParam(value) {
@@ -115,7 +115,7 @@ function AdminIntegrationsPage() {
   const featureFlags = useFeatureFlags();
   const integrationsEnabled = featureFlags.isEnabled('integrations', true);
   const tabParam = searchParams.get('tab');
-  const tab = TABS.includes(tabParam) ? tabParam : 'installed';
+  const tab = TABS.has(tabParam) ? tabParam : 'installed';
   const installParam = searchParams.get('install');
 
   const [installed, setInstalled] = useState([]);
@@ -204,7 +204,8 @@ function AdminIntegrationsPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('install');
     next.delete('label');
-    for (const key of [...next.keys()]) if (key.startsWith('v.')) next.delete(key);
+    // Iterate the original: deleting from `next` while iterating it would skip keys.
+    for (const key of searchParams.keys()) if (key.startsWith('v.')) next.delete(key);
     setSearchParams(next, { replace: true });
   }, [installParam, loading, searchParams, setSearchParams]);
 
@@ -343,9 +344,9 @@ function AdminIntegrationsPage() {
   );
 
   const noMatch = (
-    <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
+    <output className="block text-sm text-gray-600 dark:text-gray-400">
       {t('admin.integrations.noMatch', 'Nothing matches "{{query}}".', { query: search.trim() })}
-    </p>
+    </output>
   );
 
   return (
@@ -384,12 +385,11 @@ function AdminIntegrationsPage() {
       </div>
 
       {message && (
-        <div
-          className={`mb-4 ${message.type === 'error' ? CALLOUT_CLASS.danger : CALLOUT_CLASS.success}`}
-          role="status"
+        <output
+          className={`mb-4 block ${message.type === 'error' ? CALLOUT_CLASS.danger : CALLOUT_CLASS.success}`}
         >
           {message.text}
-        </div>
+        </output>
       )}
       {error && <AdminLoadError message={error} framed={false} className="mb-4" />}
 
@@ -400,11 +400,12 @@ function AdminIntegrationsPage() {
         ariaLabel={t('admin.integrations.title', 'Integrations')}
       />
 
-      {loading ? (
+      {loading && (
         <div className="flex justify-center py-16">
           <LoadingSpinner size="lg" />
         </div>
-      ) : tab === 'installed' ? (
+      )}
+      {!loading && tab === 'installed' && (
         <div role="tabpanel" id="tabpanel-installed" aria-labelledby="tab-installed">
           {testResult && (
             <div className="mb-6" data-testid="tile-test-results">
@@ -475,7 +476,8 @@ function AdminIntegrationsPage() {
             </>
           )}
         </div>
-      ) : tab === 'catalog' ? (
+      )}
+      {!loading && tab === 'catalog' && (
         <div role="tabpanel" id="tabpanel-catalog" aria-labelledby="tab-catalog">
           {searchBox}
           {catalogGroups.length === 0 ? (
@@ -501,7 +503,8 @@ function AdminIntegrationsPage() {
             </div>
           )}
         </div>
-      ) : (
+      )}
+      {!loading && tab === 'inbound' && (
         <div role="tabpanel" id="tabpanel-inbound" aria-labelledby="tab-inbound">
           <InboundIntegrations platform={platform} />
         </div>

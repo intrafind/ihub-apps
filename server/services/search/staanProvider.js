@@ -393,6 +393,8 @@ class StaanSearchProvider extends SearchProvider {
    * @param {boolean} [options.skipCache] - Bypass the result cache and always
    *   issue a request. Used by the admin connectivity test, where a cached hit
    *   would report success for a key that has since stopped working.
+   * @param {string} [options.apiKey] - Key to use instead of the installation's
+   *   (the admin test of unsaved values; always with `skipCache`)
    * @returns {Promise<{results: Array<Object>}>}
    */
   async search(query, options = {}) {
@@ -405,7 +407,7 @@ class StaanSearchProvider extends SearchProvider {
       skipCache = false
     } = options;
 
-    const apiKey = this.getApiKey();
+    const apiKey = options.apiKey || this.getApiKey();
     if (!apiKey) {
       // Phrased like Brave's so the admin diagnostics recognise it as a
       // configuration problem rather than an opaque provider failure.

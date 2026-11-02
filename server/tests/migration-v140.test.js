@@ -81,17 +81,22 @@ async function scratch(name) {
   return fs.mkdtemp(path.join(baseDir, `${name}-`));
 }
 
-// The web tools ship as actions of the built-in web search connector now
-// (V195); NEW_PARAMETERS still keys them by the migration-era tool ids, so
-// map those to the connector's action names here.
+// The search tools ship as the `search` actions of the built-in engine
+// connectors (V195, V203: one parameters file keyed by engine); the page
+// reader as the platform tool `server/defaults/tools/read_url.json`.
+// NEW_PARAMETERS still keys them by the migration-era tool ids.
 const CONNECTOR_ACTION = {
   braveSearch: 'brave',
   qwantSearch: 'qwant',
-  staanSearch: 'staan',
-  webContentExtractor: 'readUrl'
+  staanSearch: 'staan'
 };
 
 async function readDefault(id) {
+  if (id === 'webContentExtractor' || id === 'read_url') {
+    return JSON.parse(
+      await fs.readFile(new URL('../defaults/tools/read_url.json', import.meta.url), 'utf8')
+    );
+  }
   const parameters = JSON.parse(
     await fs.readFile(
       new URL(
