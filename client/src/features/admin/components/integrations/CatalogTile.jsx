@@ -7,6 +7,20 @@ import { PRIMARY_BUTTON_CLASS } from '../formStyles';
 import { Pill, marketplaceLinkFor } from './IntegrationPills';
 
 /**
+ * The tooltip of a definition's Install button: why it is disabled (the
+ * incompatibility reason, or an unsupported protocol), else none.
+ *
+ * @param {Object} item - a definition as the catalog lists it
+ * @param {Function} t - the translation function
+ * @returns {string|undefined}
+ */
+function installTitle(item, t) {
+  if (item.compatible === false) return item.statusReason || undefined;
+  if (item.supported) return undefined;
+  return t('admin.integrationCatalog.unsupportedShort', 'Protocol not supported yet');
+}
+
+/**
  * One definition on the Catalog tab: name, version, compatibility, update
  * badge, source, description, the facts (protocol, sign-in, actions,
  * publisher, required iHub version) and **Install**. An incompatible
@@ -108,13 +122,7 @@ function CatalogTile({ item, onInstall }) {
           type="button"
           className={PRIMARY_BUTTON_CLASS}
           disabled={!item.supported || item.compatible === false}
-          title={
-            item.compatible === false
-              ? item.statusReason || undefined
-              : item.supported
-                ? undefined
-                : t('admin.integrationCatalog.unsupportedShort', 'Protocol not supported yet')
-          }
+          title={installTitle(item, t)}
           aria-label={t('admin.integrations.catalog.installAria', 'Install {{name}}', {
             name: item.name
           })}
