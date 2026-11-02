@@ -343,6 +343,33 @@ the list is `permissions.integrations`.
 
 See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
 
+## Tool Calls Can Need a Person's Approval
+
+Admins decide which of the model's tool calls a person has to approve before anything is sent —
+for example, before an external MCP server receives what was found in your own documents, or
+before a comment lands on a Jira issue. Nothing changes on upgrade: approval is off until you set
+a mode.
+
+- **Three modes:** never, ask unless the call only reads, always. Every tool carries what it does
+  (reads, writes, deletes or overwrites, unknown) and where its data goes (internal, external).
+- **Where to set it:** a platform default for internal and external tools (**Admin → Security →
+  Tool approval**), a default and a mode per action on each integration (**Admin → Integrations
+  → an installation → Overview**), `approval` on a tool (**Admin → Tools → Edit**), and an app
+  override (**Admin → Apps → Edit → Tools**). The strictest setting wins; an app can make it
+  stricter, never looser.
+- **Approval card in the chat:** the tool and integration, what it does, the exact arguments, and
+  any text the assistant wrote, labelled as such. **Approve**, **Approve & allow for this chat**
+  or **Reject**. On approve, iHub runs exactly the call that was shown; the assistant does not
+  issue it again. A rejected or expired approval is reported to the assistant, which carries on.
+- **Claims are not trusted:** an MCP server that labels a tool as read-only is still asked for
+  under "ask unless it only reads" until an admin confirms the tool as a read.
+- **Where nobody can approve** (OpenAI-compatible API, apps as tools, the MCP and A2A gateways,
+  workflow and agent steps) a gated call is refused and the model is told so. A workflow or agent
+  step that names approver groups parks the approval for them instead. Scheduled tasks keep
+  asking their owner, now for every tool the settings gate.
+
+See [Tool Approval](../../tool-approval.md).
+
 ## Integrations: One Admin Page, Grouped Tiles and a Page per Installation
 
 **Admin → Integrations** is one page with the tabs **Installed**, **Catalog** and **Inbound**.

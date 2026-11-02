@@ -55,14 +55,92 @@ export function buildQuestionCheckpoint({ node, interaction, language = 'en' }) 
   };
 }
 
-/** What the node persists so the same step can continue after the answer. */
-export function pausedLoopState({ checkpointId, toolCallId = null, messages = [] }) {
+/** Checkpoint type of a tool call that waits for an approver group's decision (#2945). */
+export const TOOL_APPROVAL_CHECKPOINT = 'toolApproval';
+
+/**
+ * The checkpoint shown for a tool call a node parked for its approver groups
+ * (#2945): approve / reject, with the call's arguments, tool and side effect.
+ */
+export function buildToolApprovalCheckpoint({ node, interaction, language = 'en' }) {
+  const prompt = interaction?.prompt || {};
+  return {
+    id: String(interaction.id),
+    nodeId: node.id,
+    nodeName: localizedName(node, language) || node.id,
+    type: TOOL_APPROVAL_CHECKPOINT,
+    message: String(prompt.message || ''),
+    ...(prompt.title ? { title: prompt.title } : {}),
+    options: [
+      { value: 'approve', label: 'Approve', style: 'primary' },
+      { value: 'reject', label: 'Reject', style: 'danger' }
+    ],
+    displayData: prompt.displayData || {},
+    inputSchema: null,
+    showData: null,
+    timeout: interaction.policy?.timeoutMs || null,
+    createdAt: interaction.createdAt || new Date().toISOString(),
+    expiresAt: interaction.policy?.expiresAt || null,
+    interactionId: String(interaction.id)
+  };
+}
+
+/**
+ * What the node persists so the same step can continue after the answer.
+ * `approval` names the parked call (`{ toolCallId, toolId, name, args }`)
+ * when the pause is a tool approval rather than a question.
+ */
+export function pausedLoopState({
+  checkpointId,
+  toolCallId = null,
+  messages = [],
+  approval = null
+}) {
   return {
     checkpointId: String(checkpointId),
     toolCallId: toolCallId ? String(toolCallId) : null,
     messages: Array.isArray(messages) ? messages : [],
+    ...(approval ? { kind: 'approval', approval } : {}),
     pausedAt: new Date().toISOString()
   };
+}
+
+/**
+ * How a node paused on a tool approval continues once its approver answered:
+ * the paused transcript, and either the approved call (run by the loop with
+ * the stored arguments, `AgentLoop` `resume`) or the rejection as the tool
+ * result.
+ *
+ * @param {Object|null} pausedLoop - `state.data._pausedLoops[nodeId]`
+ * @param {Object|null} answer - `state.data._approvalAnswers[checkpointId]` (`{ decision }`)
+ * @returns {{messages: Array, resume: Object|null}|null} null when nothing is to resume
+ */
+export function resumeApprovalPlan(pausedLoop, answer) {
+  if (!pausedLoop || pausedLoop.kind !== 'approval' || !pausedLoop.approval || !answer) return null;
+  const messages = Array.isArray(pausedLoop.messages) ? [...pausedLoop.messages] : [];
+  const { toolCallId, name, args } = pausedLoop.approval;
+  if (answer.decision === 'approve') {
+    return {
+      messages,
+      resume: {
+        toolCall: {
+          id: toolCallId,
+          type: 'function',
+          function: { name, arguments: JSON.stringify(args || {}) }
+        },
+        args: args || {}
+      }
+    };
+  }
+  const content = JSON.stringify({
+    error: true,
+    code: 'USER_REJECTED',
+    message: `The approver rejected "${name}". It was not run; continue without it.`
+  });
+  const at = messages.findIndex(m => m?.role === 'tool' && m.tool_call_id === toolCallId);
+  if (at >= 0) messages[at] = { ...messages[at], content };
+  else messages.push({ role: 'tool', tool_call_id: toolCallId, name, content });
+  return { messages, resume: null };
 }
 
 /** The `ask_user` tool result the model sees once the human answered. */
@@ -110,4 +188,11 @@ export function resumeTranscript(pausedLoop, answer) {
   return messages;
 }
 
-export default { buildQuestionCheckpoint, pausedLoopState, answeredToolContent, resumeTranscript };
+export default {
+  buildQuestionCheckpoint,
+  buildToolApprovalCheckpoint,
+  pausedLoopState,
+  answeredToolContent,
+  resumeTranscript,
+  resumeApprovalPlan
+};

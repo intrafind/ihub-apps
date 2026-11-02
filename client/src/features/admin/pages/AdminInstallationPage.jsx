@@ -44,9 +44,18 @@ import {
   fetchInstalledIntegration,
   fetchInstalledIntegrations,
   fetchIntegrationDefinitionFile,
+  setInstalledIntegrationApproval,
   setInstalledIntegrationEnabled,
   testInstalledIntegration
 } from '../../../api/integrationsAdminApi';
+import { ApprovalModeSelect } from '../components/ToolApprovalFields';
+import {
+  approvalChanged,
+  approvalPayload,
+  normalizeApproval,
+  withActionMode,
+  withDefaultMode
+} from '../components/integrations/installationApproval';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
@@ -222,6 +231,12 @@ function InstallationPageContent({ instanceId }) {
 
   const instance = detail?.instance || null;
   const definition = detail?.definition || null;
+  // The tool approval being edited on the Overview (#2945); reset when the
+  // stored installation changes.
+  const [approvalDraft, setApprovalDraft] = useState(() => normalizeApproval(null));
+  useEffect(() => {
+    setApprovalDraft(normalizeApproval(instance?.approval));
+  }, [instance]);
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
   const tab = activeTab(tabParam, hasReleases);
@@ -270,6 +285,19 @@ function InstallationPageContent({ instanceId }) {
   const flash = (type, text) => {
     setMessage({ type, text });
     window.setTimeout(() => setMessage(null), 6000);
+  };
+
+  const saveApproval = async () => {
+    setBusy(true);
+    try {
+      await setInstalledIntegrationApproval(instance.id, approvalPayload(approvalDraft));
+      await load();
+      flash('success', t('admin.toolApproval.installationSaved', 'Approval settings saved.'));
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const runTest = async () => {
@@ -556,6 +584,45 @@ function InstallationPageContent({ instanceId }) {
                   ({(detail.actions || []).length})
                 </span>
               </h2>
+              {/* Tool approval (#2945): the installation's default and a mode per action. */}
+              <div
+                className="mb-3 flex flex-wrap items-end gap-3"
+                data-testid="installation-approval"
+              >
+                <div className="min-w-[240px]">
+                  <ApprovalModeSelect
+                    label={t('admin.toolApproval.installationMode', 'Ask before an action runs')}
+                    value={approvalDraft.default}
+                    inheritLabel={t('admin.toolApproval.inheritPlatform', 'Platform default')}
+                    disabled={busy}
+                    onChange={mode => setApprovalDraft(draft => withDefaultMode(draft, mode))}
+                    help={t(
+                      'admin.toolApproval.installationModeHelp',
+                      'The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.'
+                    )}
+                  />
+                </div>
+                {approvalChanged(instance.approval, approvalDraft) && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={saveApproval}
+                      disabled={busy}
+                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                    >
+                      {t('admin.toolApproval.saveApproval', 'Save approval')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setApprovalDraft(normalizeApproval(instance.approval))}
+                      disabled={busy}
+                      className={SECONDARY_BUTTON_CLASS}
+                    >
+                      {t('common.cancel', 'Cancel')}
+                    </button>
+                  </div>
+                )}
+              </div>
               {(detail.actions || []).length === 0 ? (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {noActionsText(t, isMigrationBlocked(instance), definition?.dynamicActions)}
@@ -580,8 +647,24 @@ function InstallationPageContent({ instanceId }) {
                           </p>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <SideEffectBadge sideEffect={action.sideEffect} />
+                        <ApprovalModeSelect
+                          compact
+                          label={t('admin.toolApproval.actionMode', 'Approval for {{action}}', {
+                            action: action.title || action.name
+                          })}
+                          value={approvalDraft.actions[action.name]}
+                          inheritLabel={t(
+                            'admin.toolApproval.inheritInstallation',
+                            'Approval: as the integration'
+                          )}
+                          modes={['writes', 'always']}
+                          disabled={busy}
+                          onChange={mode =>
+                            setApprovalDraft(draft => withActionMode(draft, action.name, mode))
+                          }
+                        />
                         {action.enabled === false ? (
                           <Pill tone="gray">{t('admin.integrations.page.actionOff', 'Off')}</Pill>
                         ) : (

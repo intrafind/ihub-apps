@@ -35,6 +35,14 @@ const CHAT_REFUSAL_MESSAGES = {
     'error.clientHistoryNotAllowed',
     'This page is out of date. Reload it to continue the chat.'
   ],
+  APPROVAL_NOT_PENDING: [
+    'chat.toolApproval.notPending',
+    'This approval is no longer open (it was answered, or a newer message replaced it).'
+  ],
+  APPROVAL_ALREADY_ANSWERED: [
+    'chat.toolApproval.alreadyAnswered',
+    'This approval was already answered.'
+  ],
   GUEST_COOKIE_MISSING: [
     'error.guestCookieMissing',
     'This chat cannot be continued because your browser does not keep cookies for this site. Allow cookies for this site to continue chats here.'
@@ -73,6 +81,10 @@ const CHAT_REFUSAL_MESSAGES = {
  * @param {boolean} [options.hydrates=true] - Whether the transcript has to be fetched
  *   from the store before the surface can tell an empty chat from one still loading
  *   (see `useChatMessages`). False for a surface that only ever opens new chats.
+ * @param {boolean} [options.toolApprovals=false] - The surface draws tool approval cards
+ *   and answers them with `submitToolApproval` (#2945). It tells the server so with every
+ *   request (`toolApprovalCapable`); a surface that does not is treated as headless and a
+ *   tool call that needs approval is refused instead of waiting for a card nobody sees.
  */
 function useAppChat({
   appId,
@@ -82,7 +94,8 @@ function useAppChat({
   onRunStarted,
   persistConversationId = true,
   ephemeral = false,
-  hydrates = true
+  hydrates = true,
+  toolApprovals = false
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
@@ -281,7 +294,12 @@ function useAppChat({
     if (!pendingMessageDataRef.current) return;
     try {
       const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-      await sendAppChatMessage(appId, chatId, messages, params);
+      await sendAppChatMessage(
+        appId,
+        chatId,
+        messages,
+        toolApprovals ? { ...params, toolApprovalCapable: true } : params
+      );
       pendingMessageDataRef.current = null;
       // The server has the turn — the chat is in the store from here on.
       onMessageAcceptedRef.current?.(chatId);
@@ -326,7 +344,7 @@ function useAppChat({
       detachEventSourceRef.current?.();
       setProcessing(false);
     }
-  }, [t, messagesRef, updateAssistantMessage]);
+  }, [t, messagesRef, updateAssistantMessage, toolApprovals]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -943,6 +961,98 @@ function useAppChat({
     ]
   );
 
+  /**
+   * Answer a tool approval (#2945): Approve, Approve and allow the tool for
+   * this chat, or Reject. The decision travels as the next message
+   * (`approvalResponse`); the server answers the approval exactly once and,
+   * on approve, runs the stored call with the arguments shown on the card,
+   * then the assistant continues in a new answer.
+   *
+   * @param {Object} answer
+   * @param {string} answer.interactionId - The approval's interaction id
+   * @param {'approve'|'reject'} answer.decision
+   * @param {'chat'|null} [answer.grant] - `'chat'`: allow this tool for the rest of the chat
+   * @param {Object} [params] - Parameters for the continuation request (model, style, …)
+   */
+  const submitToolApproval = useCallback(
+    ({ interactionId, decision, grant = null }, params = {}) => {
+      if (!interactionId || (decision !== 'approve' && decision !== 'reject')) return;
+      const owner = messagesRef.current.find(m => m.toolApproval?.interactionId === interactionId);
+      if (!owner || owner.toolApproval.decision) return;
+      const outcome =
+        decision === 'reject' ? 'rejected' : grant === 'chat' ? 'approvedForChat' : 'approved';
+      const toolName = owner.toolApproval.toolName || owner.toolApproval.toolId;
+      // The card shows the decision instead of its buttons from here on.
+      updateAssistantMessage(owner.id, owner.content || '', false, {
+        toolApproval: { ...owner.toolApproval, decision: outcome },
+        awaitingInput: false,
+        loading: false
+      });
+
+      const displayText =
+        outcome === 'rejected'
+          ? t('chat.toolApproval.rejectedMessage', 'Rejected: {{tool}}', { tool: toolName })
+          : outcome === 'approvedForChat'
+            ? t('chat.toolApproval.approvedForChatMessage', 'Approved for this chat: {{tool}}', {
+                tool: toolName
+              })
+            : t('chat.toolApproval.approvedMessage', 'Approved: {{tool}}', { tool: toolName });
+      const approvalResponse = {
+        interactionId,
+        decision,
+        ...(decision === 'approve' && grant === 'chat' ? { grant: 'chat' } : {})
+      };
+      try {
+        isCancellingRef.current = false;
+        detachEventSource();
+        setProcessing(true);
+        const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        lastMessageIdRef.current = exchangeId;
+        addUserMessage(displayText, {
+          approvalResponse,
+          isApprovalAnswer: true,
+          clientMessageId: exchangeId
+        });
+        addAssistantMessage(exchangeId);
+        pendingMessageDataRef.current = {
+          appId,
+          chatId,
+          messages: getMessagesForApi({
+            role: 'user',
+            content: displayText,
+            messageId: exchangeId,
+            approvalResponse
+          }),
+          params: { ...params, ...takeProtocolParams() }
+        };
+        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      } catch (err) {
+        console.error('Error submitting tool approval:', err);
+        addSystemMessage(
+          `Error: ${t('chat.toolApproval.submitFailed', 'The decision could not be sent.')} ${
+            err.message || t('error.tryAgain', 'Please try again.')
+          }`,
+          true
+        );
+        setProcessing(false);
+      }
+    },
+    [
+      detachEventSource,
+      updateAssistantMessage,
+      addUserMessage,
+      addAssistantMessage,
+      getMessagesForApi,
+      initEventSource,
+      addSystemMessage,
+      messagesRef,
+      takeProtocolParams,
+      t,
+      appId,
+      chatId
+    ]
+  );
+
   const resetConversationState = useCallback(() => {
     setConversationTitle(null);
   }, []);
@@ -1055,6 +1165,7 @@ function useAppChat({
     cancelGeneration,
     addSystemMessage,
     submitClarificationResponse,
+    submitToolApproval,
     loadServerMessages,
     reattachToRun,
     resetConversationState,

@@ -147,6 +147,39 @@
       "modelA": "Modell A",
       "modelB": "Modell B",
       "tooltip": "Vergleichen Sie die Antworten von zwei verschiedenen Modellen nebeneinander"
+    },
+    "toolApproval": {
+      "titleWithIntegration": "{{integration}} · {{tool}}",
+      "intro": "Der Assistent möchte dieses Tool mit den folgenden Argumenten ausführen. Es wird nichts gesendet, bevor Sie entscheiden.",
+      "introDecided": "Der Assistent wollte dieses Tool ausführen.",
+      "arguments": "Argumente",
+      "justification": "Vom Assistenten geschrieben (keine geprüfte Begründung)",
+      "approve": "Freigeben",
+      "approveForChat": "Freigeben & für diesen Chat erlauben",
+      "reject": "Ablehnen",
+      "expired": "Diese Freigabe ist abgelaufen. Der Aufruf wurde nicht ausgeführt.",
+      "closed": "Diese Freigabe ist abgeschlossen.",
+      "approvedMessage": "Freigegeben: {{tool}}",
+      "approvedForChatMessage": "Für diesen Chat freigegeben: {{tool}}",
+      "rejectedMessage": "Abgelehnt: {{tool}}",
+      "submitFailed": "Die Entscheidung konnte nicht gesendet werden.",
+      "notPending": "Diese Freigabe ist nicht mehr offen (sie wurde beantwortet oder durch eine neuere Nachricht ersetzt).",
+      "alreadyAnswered": "Diese Freigabe wurde bereits beantwortet.",
+      "decided": {
+        "approved": "Sie haben diesen Aufruf freigegeben.",
+        "approvedForChat": "Sie haben diesen Aufruf freigegeben und das Tool für den Rest des Chats erlaubt.",
+        "rejected": "Sie haben diesen Aufruf abgelehnt. Er wurde nicht ausgeführt."
+      },
+      "sideEffect": {
+        "read": "Liest",
+        "write": "Schreibt",
+        "destructive": "Löscht oder überschreibt",
+        "unknown": "Wirkung unbekannt"
+      },
+      "dataFlow": {
+        "internal": "Intern",
+        "external": "Extern"
+      }
     }
   },
   "websearch": {
@@ -2358,7 +2391,8 @@
         "ssrf": "SSRF-Allowlist",
         "proxy": "Ausgehender Proxy",
         "encryption": "Wert-Verschlüsselung",
-        "rateLimits": "Ratenbegrenzung"
+        "rateLimits": "Ratenbegrenzung",
+        "toolApproval": "Tool-Freigabe"
       },
       "rateLimits": {
         "title": "Ratenbegrenzung",
@@ -3169,7 +3203,10 @@
         "add": "Hinzufügen",
         "removeLanguage": "Sprache {{lang}} entfernen",
         "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen.",
-        "cloudStorageMoved": "Dateien aus Speicheranbietern (Office 365, Google Drive, Nextcloud): binden Sie die Anbieter unter Integrationen → Speicheranbieter."
+        "cloudStorageMoved": "Dateien aus Speicheranbietern (Office 365, Google Drive, Nextcloud): binden Sie die Anbieter unter Integrationen → Speicheranbieter.",
+        "toolApproval": "Freigabe vor Tool-Aufrufen",
+        "toolApprovalInherit": "Wie in den Admin-Einstellungen (Standard)",
+        "toolApprovalHelp": "Macht die Freigabe für diese App strenger. Sie kann die Einstellungen von Plattform, Tool oder Integration nie lockern: ein lockererer Wert wird ignoriert."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -5229,7 +5266,45 @@
         "fixes": "Fehlerbehebungen"
       }
     },
-    "translateField": "Übersetzen"
+    "translateField": "Übersetzen",
+    "toolApproval": {
+      "mode": {
+        "never": "Nie fragen",
+        "writes": "Fragen, außer es wird nur gelesen",
+        "always": "Immer fragen"
+      },
+      "notDeclared": "Nicht angegeben",
+      "dataFlow": {
+        "internal": "Intern",
+        "external": "Extern"
+      },
+      "toolSection": "Freigabe",
+      "toolMode": "Vor einem Aufruf fragen",
+      "inheritPlatform": "Plattform-Standard",
+      "toolModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung und der App. Eine Funktion kann im JSON eine eigene \"approval\" setzen.",
+      "sideEffect": "Was ein Aufruf bewirkt",
+      "sideEffectHelp": "\"Fragen, außer es wird nur gelesen\" fragt bei allem, was nicht als Lesen angegeben ist.",
+      "dataFlowLabel": "Wohin die Daten gehen",
+      "dataFlowHelp": "Bestimmt, welcher Plattform-Standard gilt (intern oder extern).",
+      "title": "Tool-Freigabe",
+      "description": "Legen Sie fest, wann eine Person einen Tool-Aufruf freigeben muss, bevor er ausgeführt wird. Auch ein Lesezugriff auf ein externes System kann interne Informationen hinaustragen, deshalb können externe Tools strenger sein. Integrationen, Tools, ihre Aktionen und Apps können dies nur verschärfen, nie lockern. Es wird nichts gefragt, bis Sie hier oder an einer Integration oder einem Tool einen Modus setzen.",
+      "loadError": "Die Einstellungen zur Tool-Freigabe konnten nicht geladen werden.",
+      "saved": "Einstellungen zur Tool-Freigabe gespeichert.",
+      "saveError": "Die Einstellungen zur Tool-Freigabe konnten nicht gespeichert werden.",
+      "platformDefault": "Alle Tools",
+      "platformDefaultHelp": "Gilt, wo keine Regel für den Datenfluss gesetzt ist.",
+      "platformInternal": "Interne Tools",
+      "platformInternalHelp": "Tools, die in Ihren Systemen bleiben (iHubs eigene Tools, interne Integrationen).",
+      "platformExternal": "Externe Tools",
+      "platformExternalHelp": "Entfernte MCP-Server, A2A-Agenten und Integrationen, deren Daten Ihre Systeme verlassen.",
+      "sameAsAll": "Wie alle Tools",
+      "actionMode": "Freigabe für {{action}}",
+      "inheritInstallation": "Freigabe: wie die Integration",
+      "installationMode": "Vor einer Aktion fragen",
+      "installationModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung, der Aktion und der App. Eine Wirkung, die nur der Server selbst angibt, zählt nicht als Lesen.",
+      "saveApproval": "Freigabe speichern",
+      "installationSaved": "Freigabe-Einstellungen gespeichert."
+    }
   },
   "cloudStorage": {
     "selectFiles": "Dateien aus Cloud-Speicher auswählen",

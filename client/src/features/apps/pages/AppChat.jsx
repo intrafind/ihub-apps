@@ -843,6 +843,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     cancelGeneration,
     addSystemMessage,
     submitClarificationResponse,
+    submitToolApproval,
     conversationTitle,
     loadServerMessages,
     reattachToRun,
@@ -869,7 +870,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     persistConversationId: !embedded,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, a new chat is created as a temporary one.
-    ephemeral
+    ephemeral,
+    // This page draws tool approval cards and answers them (#2945).
+    toolApprovals: true
   });
 
   // Form-based start (issue #2581): a new chat — or a new comparison, whose
@@ -1880,6 +1883,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       submitClarificationResponse(response, clarificationParams());
     },
     [submitClarificationResponse, clarificationParams]
+  );
+
+  /**
+   * Answer a tool approval card (#2945): the decision goes out as the next
+   * message, with the same continuation parameters a clarification answer uses.
+   *
+   * @param {{interactionId: string, decision: 'approve'|'reject', grant?: 'chat'}} answer
+   */
+  const handleToolApproval = useCallback(
+    answer => {
+      submitToolApproval(answer, clarificationParams());
+    },
+    [submitToolApproval, clarificationParams]
   );
 
   // "Open in App" on a source: a new chat of the chosen app, with the source's
@@ -3156,6 +3172,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onConnectIntegration={connectIntegration}
                   onClarificationSubmit={onClarificationSubmitInChat}
                   onClarificationSkip={onClarificationSkipInChat}
+                  onToolApproval={handleToolApproval}
                   onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                   startForm={showStartForm ? renderStartForm() : null}
@@ -3209,6 +3226,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         models={models}
                         onClarificationSubmit={onClarificationSubmitInChat}
                         onClarificationSkip={onClarificationSkipInChat}
+                        onToolApproval={handleToolApproval}
                         onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
@@ -3265,6 +3283,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         models={models}
                         onClarificationSubmit={onClarificationSubmitInChat}
                         onClarificationSkip={onClarificationSkipInChat}
+                        onToolApproval={handleToolApproval}
                         onOpenSourceInApp={handleOpenSourceInApp}
                         linkPath={appPagePath}
                       />
@@ -3320,6 +3339,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     models={models}
                     onClarificationSubmit={onClarificationSubmitInChat}
                     onClarificationSkip={onClarificationSkipInChat}
+                    onToolApproval={handleToolApproval}
                     onOpenSourceInApp={handleOpenSourceInApp}
                     linkPath={appPagePath}
                   />
@@ -3357,6 +3377,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   models={models}
                   onClarificationSubmit={onClarificationSubmitInChat}
                   onClarificationSkip={onClarificationSkipInChat}
+                  onToolApproval={handleToolApproval}
                   onOpenSourceInApp={handleOpenSourceInApp}
                   linkPath={appPagePath}
                 />

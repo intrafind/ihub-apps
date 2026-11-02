@@ -21,6 +21,7 @@ import {
 } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
+import ApprovalCard from './ApprovalCard';
 import GeneratedImage from './GeneratedImage';
 import AnswerSources, { CitedSources } from './AnswerSources';
 import { resolveCitations } from '../../../../../shared/sources/index.js';
@@ -116,6 +117,8 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
+  // Tool approval (#2945): `({ interactionId, decision, grant }) => void`.
+  onToolApproval = null,
   // `(source, appId)`: open a source in a new chat of another app ("Open in
   // App"). Only surfaces with a router pass it.
   onOpenSourceInApp = null,
@@ -1140,6 +1143,11 @@ function ChatMessage({
             onSubmit={onClarificationSubmit}
             onSkip={onClarificationSkip}
           />
+        )}
+
+        {/* Tool approval (#2945): the call waits for the user's decision. */}
+        {!isUser && message.toolApproval && (
+          <ApprovalCard approval={message.toolApproval} onDecide={onToolApproval} />
         )}
 
         {/* What the finished turn searched for and found. Rendered here rather

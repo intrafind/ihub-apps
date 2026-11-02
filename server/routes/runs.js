@@ -42,6 +42,7 @@ import {
   isAdminUser
 } from '../services/loop/runIdentity.js';
 import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
+import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
 import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
@@ -311,6 +312,15 @@ export default function registerRunRoutes(app) {
           interaction.policy.approverGroups.length > 0;
         if (!hasApproverPolicy && !(await authorizeInteraction(interaction, req.user))) {
           return sendInsufficientPermissions(res, 'answer interaction');
+        }
+        // A chat tool approval is answered with the next chat message, which
+        // also runs the approved call (#2945). Answered here, the interaction
+        // would be settled while nothing ran the call.
+        if (isChatToolApproval(interaction)) {
+          return res.status(409).json({
+            error: 'Answer this approval in its chat',
+            code: 'ANSWER_IN_CHAT'
+          });
         }
         const channel = typeof req.body?.channel === 'string' ? req.body.channel : 'api';
         const answered = await interactionService.answer(interactionId, parsed.data, {

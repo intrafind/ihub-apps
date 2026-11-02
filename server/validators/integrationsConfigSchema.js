@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { zSafeId } from './common.js';
+import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   AUTH_MODES,
   integrationIdSchema,
@@ -42,6 +43,19 @@ const installedActionsSchema = z.object({
   enabled: z.array(z.string().min(1).max(64)).prefault(['*']),
   disabled: z.array(z.string().min(1).max(64)).prefault([]),
   overrides: z.record(z.string(), actionOverrideSchema).prefault({})
+});
+
+/**
+ * Tool approval of an installation (#2945): whether a person approves a call
+ * before it runs. `default` applies to every action; `actions` sets a mode per
+ * action, keyed by the action's own name (the MCP tool's name, never the
+ * prefixed tool id). The strictest of platform default, `default`, the
+ * action's mode and the app's override wins (`utils/toolApproval.js`). Absent
+ * means nothing is asked on account of the installation.
+ */
+export const installedApprovalSchema = z.object({
+  default: z.enum(APPROVAL_MODES).optional(),
+  actions: z.record(z.string().min(1).max(128), z.enum(APPROVAL_MODES)).optional()
 });
 
 const healthSchema = z.object({
@@ -176,6 +190,8 @@ const installedIntegrationObjectSchema = z.object({
   values: z.record(z.string(), valueSchema).prefault({}),
   auth: installedAuthSchema.prefault({ mode: 'none' }),
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
+  /** Tool approval: `{ default?, actions? }` (see {@link installedApprovalSchema}). */
+  approval: installedApprovalSchema.optional(),
   // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),

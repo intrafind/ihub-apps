@@ -462,6 +462,39 @@
       "disable": "Turn off incognito — keep this chat in your history",
       "activeNotice": "Temporary chat — not saved to your history and deleted {{hours}} hours after its last activity.",
       "keepFailed": "This chat could not be saved to your history: {{error}}"
+    },
+    "toolApproval": {
+      "titleWithIntegration": "{{integration}} · {{tool}}",
+      "intro": "The assistant wants to run this tool with the arguments below. Nothing is sent until you choose.",
+      "introDecided": "The assistant asked to run this tool.",
+      "arguments": "Arguments",
+      "justification": "Written by the assistant (not a verified reason)",
+      "approve": "Approve",
+      "approveForChat": "Approve & allow for this chat",
+      "reject": "Reject",
+      "expired": "This approval expired. The call was not run.",
+      "closed": "This approval is closed.",
+      "approvedMessage": "Approved: {{tool}}",
+      "approvedForChatMessage": "Approved for this chat: {{tool}}",
+      "rejectedMessage": "Rejected: {{tool}}",
+      "submitFailed": "The decision could not be sent.",
+      "notPending": "This approval is no longer open (it was answered, or a newer message replaced it).",
+      "alreadyAnswered": "This approval was already answered.",
+      "decided": {
+        "approved": "You approved this call.",
+        "approvedForChat": "You approved this call and allowed this tool for the rest of the chat.",
+        "rejected": "You rejected this call. It was not run."
+      },
+      "sideEffect": {
+        "read": "Reads",
+        "write": "Writes",
+        "destructive": "Deletes or overwrites",
+        "unknown": "Effect unknown"
+      },
+      "dataFlow": {
+        "internal": "Internal",
+        "external": "External"
+      }
     }
   },
   "auth": {
@@ -2067,7 +2100,8 @@
         "ssrf": "SSRF Allowlist",
         "proxy": "Outbound Proxy",
         "encryption": "Value Encryption",
-        "rateLimits": "Rate Limits"
+        "rateLimits": "Rate Limits",
+        "toolApproval": "Tool approval"
       },
       "rateLimits": {
         "title": "Rate limits",
@@ -2878,7 +2912,10 @@
         "add": "Add",
         "removeLanguage": "Remove language {{lang}}",
         "noLanguages": "No languages configured. Add a language to get started.",
-        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers."
+        "cloudStorageMoved": "Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers.",
+        "toolApproval": "Approval before tool calls",
+        "toolApprovalInherit": "As the admin settings (default)",
+        "toolApprovalHelp": "Makes the approval stricter for this app. It can never relax the platform, tool or integration settings: a looser value is ignored."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -4938,7 +4975,45 @@
         "fixes": "Fixes"
       }
     },
-    "translateField": "Translate"
+    "translateField": "Translate",
+    "toolApproval": {
+      "mode": {
+        "never": "Never ask",
+        "writes": "Ask unless it only reads",
+        "always": "Always ask"
+      },
+      "notDeclared": "Not declared",
+      "dataFlow": {
+        "internal": "Internal",
+        "external": "External"
+      },
+      "toolSection": "Approval",
+      "toolMode": "Ask before a call runs",
+      "inheritPlatform": "Platform default",
+      "toolModeHelp": "The strictest of the platform default, this setting and the app wins. A function can set its own \"approval\" in the JSON.",
+      "sideEffect": "What a call does",
+      "sideEffectHelp": "\"Ask unless it only reads\" asks for everything that is not declared as a read.",
+      "dataFlowLabel": "Where its data goes",
+      "dataFlowHelp": "Picks which platform default applies (internal or external).",
+      "title": "Tool approval",
+      "description": "Decide when a person has to approve a tool call before it runs. A read on an external system can carry internal information out, so external tools can be stricter. Integrations, tools, their actions and apps can only make this stricter, never looser. Nothing is asked until you set a mode here or on an integration or tool.",
+      "loadError": "The tool approval settings could not be loaded.",
+      "saved": "Tool approval settings saved.",
+      "saveError": "The tool approval settings could not be saved.",
+      "platformDefault": "All tools",
+      "platformDefaultHelp": "Applies where no data flow rule is set.",
+      "platformInternal": "Internal tools",
+      "platformInternalHelp": "Tools that stay inside your systems (iHub's own tools, internal integrations).",
+      "platformExternal": "External tools",
+      "platformExternalHelp": "Remote MCP servers, A2A agents and integrations whose data leaves your systems.",
+      "sameAsAll": "Same as all tools",
+      "actionMode": "Approval for {{action}}",
+      "inheritInstallation": "Approval: as the integration",
+      "installationMode": "Ask before an action runs",
+      "installationModeHelp": "The strictest of the platform default, this setting, the action and the app wins. A side effect the server only claims for itself does not count as a read.",
+      "saveApproval": "Save approval",
+      "installationSaved": "Approval settings saved."
+    }
   },
   "cloudStorage": {
     "selectFiles": "Select Files from Cloud Storage",

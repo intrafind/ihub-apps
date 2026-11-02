@@ -28,6 +28,7 @@ import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { HumanNodeExecutor } from './executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
+import { TOOL_APPROVAL_CHECKPOINT } from './questionPause.js';
 
 /**
  * 30-minute node timeout for agent runs: the phased planner node blocks while
@@ -192,6 +193,18 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       'WORKFLOW_NOT_AVAILABLE'
     );
   }
+  if (pending.type === TOOL_APPROVAL_CHECKPOINT) {
+    return resumeToolApproval({
+      pending,
+      workflow,
+      state,
+      executionId,
+      answer,
+      user,
+      engine,
+      registry
+    });
+  }
   if (pending.type === 'question') {
     return resumeQuestion({
       pending,
@@ -328,6 +341,76 @@ async function resumeQuestion({
     nodeId: node.id,
     checkpointId: pending.id,
     skipped: answer.skipped === true
+  });
+  const isAgentRun = !!state.data?._agent?.profileId;
+  try {
+    return await engine.resume(
+      executionId,
+      {},
+      {
+        user: user || { id: answer.by || 'system', groups: [] },
+        workflow,
+        ...(isAgentRun ? { timeout: AGENT_NODE_TIMEOUT_MS } : {})
+      }
+    );
+  } catch (err) {
+    await restorePausedState({ engine, registry, executionId, state, pending, cause: err });
+    throw wrapEngineError(err);
+  }
+}
+
+/**
+ * Resume an execution whose prompt / agent node parked a tool call for its
+ * approver groups (#2945): the decision is stored on the state, the pending
+ * checkpoint cleared, and the engine re-runs the node, which runs the stored
+ * call (approve) or hands the model the rejection, then continues its loop
+ * (`questionPause.resumeApprovalPlan`).
+ * @private
+ */
+async function resumeToolApproval({
+  pending,
+  workflow,
+  state,
+  executionId,
+  answer,
+  user,
+  engine,
+  registry
+}) {
+  const node = (workflow.nodes || []).find(n => n.id === pending.nodeId);
+  if (!node) {
+    throw new CheckpointResumeError('Paused node not found in workflow', 'NODE_NOT_FOUND');
+  }
+  const raw = answer.decision ?? answer.value;
+  const decision = raw === 'approve' ? 'approve' : 'reject';
+  registry.clearPendingCheckpoint(executionId);
+  await engine.stateManager.update(executionId, {
+    data: {
+      pendingCheckpoint: null,
+      _approvalAnswers: {
+        ...state.data?._approvalAnswers,
+        [pending.id]: {
+          decision,
+          by: answer.by || null,
+          at: answer.at || new Date().toISOString()
+        }
+      }
+    }
+  });
+  actionTracker.emit('fire-sse', {
+    event: 'workflow.human.responded',
+    chatId: executionId,
+    executionId,
+    nodeId: node.id,
+    checkpointId: pending.id,
+    response: decision
+  });
+  logger.info('Tool approval answered; resuming the paused node', {
+    component: 'CheckpointResume',
+    executionId,
+    nodeId: node.id,
+    checkpointId: pending.id,
+    decision
   });
   const isAgentRun = !!state.data?._agent?.profileId;
   try {

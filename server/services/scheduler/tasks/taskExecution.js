@@ -64,6 +64,8 @@ import {
 import { resolveOwnerPrincipal } from './ownerPrincipal.js';
 import { checkTaskPrincipal, SCHEDULED_TASK_ORIGIN, SCHEDULED_TASK_SOURCE } from './taskPolicy.js';
 import { scheduledRunSeams } from './runSeams.js';
+import { approvalDisplayData } from '../../loop/seams/approvalSeam.js';
+import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { WITHHELD_IN_SCHEDULED_RUNS } from './toolGate.js';
 import { isMemoryOn } from './taskMemory.js';
 import { prepareRunMemory, settleMemoryMarker } from './runMemory.js';
@@ -510,7 +512,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     for (const id of run.approvedTools || []) allowedTools.add(id);
     const integrationIssues = [];
     const ledgerRunId = newLedgerRunId('chat');
-    const seams = scheduledRunSeams({
+    const { approvalGate, seams } = scheduledRunSeams({
       allowedTools,
       onIntegrationIssue: issue => integrationIssues.push(issue),
       raiseApproval: async (info, ctx) => {
@@ -526,7 +528,9 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
               `The scheduled task "${task.name}" wants to run ${info.name || info.toolId}. ` +
               'Approve it to let the run continue.',
             inputType: 'text',
-            displayData: { toolId: String(info.toolId), args: info.args || {} }
+            // The exact arguments, the tool and its installation, side effect
+            // and data flow, as on the chat's approval card.
+            displayData: approvalDisplayData(info, resolveToolApproval(info.toolDef, null, null))
           },
           policy: { expiresAt, onTimeout: 'fail', fallback: 'park' },
           source: {
@@ -602,6 +606,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
         user,
         runId: ledgerRunId,
         persistence,
+        approvalGate,
         extraSeams: seams,
         trigger: { type: 'schedule', source: SCHEDULED_TASK_SOURCE },
         maxWallClockMs: settings.maxRunMinutes * 60_000,

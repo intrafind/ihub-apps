@@ -27,6 +27,7 @@ import runLog, { newRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
+import { settleChatApprovals } from '../../services/chat/chatToolApproval.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
@@ -679,7 +680,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     getLocalizedError,
     clientLanguage,
     user,
-    persistence = null
+    persistence = null,
+    toolApproval = null,
+    canApproveTools = false
   }) {
     await logInteraction('chat_request', buildLogData(streaming));
 
@@ -694,7 +697,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       getLocalizedError,
       language: clientLanguage,
       user,
-      persistence
+      persistence,
+      toolApproval,
+      canApproveTools
     });
     if (streaming) return outcome;
 
@@ -857,7 +862,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
-          integrationScopes: requestedScopes
+          integrationScopes: requestedScopes,
+          toolApprovalCapable
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -996,6 +1002,24 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // hides a kept chat nor keeps a temporary one (that is
         // `PATCH /api/chats/:id { temporary: false }`).
         const temporaryChat = access.chat ? access.chat.temporary === true : storage.temporary;
+
+        // A tool approval (#2945) is answered by the next message, like a
+        // clarification: `approvalResponse` answers its interaction exactly
+        // once and hands the turn the stored part of the paused one; any other
+        // message supersedes a pending approval.
+        const approvals = await settleChatApprovals({
+          chatId,
+          user: req.user,
+          chat: access.chat || null,
+          lastMessage: messages[0],
+          repository
+        });
+        if (approvals.refusal) {
+          return res
+            .status(approvals.refusal.status)
+            .json({ error: approvals.refusal.message, code: approvals.refusal.code });
+        }
+        const toolApproval = { grants: approvals.grants, resume: approvals.resume };
 
         let conversation = messages;
         let persistence = null;
@@ -1246,7 +1270,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             getLocalizedError,
             clientLanguage,
             user: req.user,
-            persistence
+            persistence,
+            // No stream, no card: a gated call is refused (APPROVAL_REQUIRED_NO_USER).
+            toolApproval,
+            canApproveTools: false
           });
         } else {
           // Note that `hasChatClient` refreshed lastActivity on the
@@ -1290,7 +1317,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             getLocalizedError,
             clientLanguage,
             user: req.user,
-            persistence
+            persistence,
+            toolApproval,
+            // Only a client that draws the approval card can answer one.
+            canApproveTools: toolApprovalCapable === true
           });
           // Refused at persistence: the chat's container changed under the
           // turn (`settleUserTurn`), and nothing of it was stored.

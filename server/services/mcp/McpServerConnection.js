@@ -515,7 +515,13 @@ export class McpServerConnection {
           serverId: this.config.id,
           originalName: t.name,
           ...(this.config.name ? { serverName: this.config.name } : {}),
-          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
+          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {}),
+          // What the server says about its own tool (`readOnlyHint`, …). Read
+          // by the approval resolver as an untrusted side effect: shown, but
+          // never allowed to relax a gate (#2945).
+          ...(t.annotations && typeof t.annotations === 'object'
+            ? { annotations: t.annotations }
+            : {})
         }
       });
     }

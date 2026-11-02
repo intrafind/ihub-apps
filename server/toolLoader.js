@@ -18,7 +18,11 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import { isInteractiveTool, isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
-import { installedIntegrationRefs } from './services/integrations/installedRefs.js';
+import {
+  installedIntegrationById,
+  installedIntegrationRefs
+} from './services/integrations/installedRefs.js';
+import { stampToolApproval } from './utils/toolApproval.js';
 import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
 import { filterDirectoryToolsForUser } from './services/peopleDirectory/PeopleDirectoryService.js';
@@ -1004,7 +1008,17 @@ export async function getToolsForApp(app, language = null, context = {}) {
   // The scheduling tools are listed by the apps that offer them, but only
   // reach a user who may use scheduled tasks — and a scheduled run never gets
   // the ones that would let a task create, delete or start tasks.
-  return filterSchedulingTools(appTools, context.user);
+  //
+  // Every tool leaves stamped with its approval policy (#2945): `approval`,
+  // `sideEffect`, `dataFlow` and `approvalSource`, resolved from the platform
+  // default, the tool or installation, the action and this app. The approval
+  // seam of the chat, workflow nodes and scheduled runs reads the stamp.
+  return stampToolApproval(
+    filterSchedulingTools(appTools, context.user),
+    app,
+    configCache.getPlatform?.() || null,
+    { getInstallation: installedIntegrationById }
+  );
 }
 
 /**

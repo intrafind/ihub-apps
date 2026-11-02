@@ -231,7 +231,9 @@ function IntegrationInstallForm({
           overrides: instance?.actions?.overrides || {},
           // The stored policy: sent back unchanged while no actions are known,
           // and it decides whether an allowlist stays one (`buildActionsPolicy`).
-          storedActions: instance?.actions || null
+          storedActions: instance?.actions || null,
+          // Tool approval (#2945) is edited on the Overview; sent back unchanged.
+          storedApproval: instance?.approval || null
         });
       } catch (err) {
         if (!cancelled) setLoadError(getAdminApiErrorMessage(err));
@@ -289,7 +291,8 @@ function IntegrationInstallForm({
         checkedActions: form.checkedActions,
         stored: form.storedActions,
         overrides: form.overrides || {}
-      })
+      }),
+      ...(form.storedApproval ? { approval: form.storedApproval } : {})
     };
     if (secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };

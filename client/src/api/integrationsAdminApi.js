@@ -64,6 +64,18 @@ export const installIntegration = async payload =>
 export const updateInstalledIntegration = async (id, payload) =>
   (await makeAdminApiCall(instancePath(id), { method: 'PUT', ...json(payload) })).data.instance;
 
+/**
+ * Set the tool approval of an installation (#2945): `{ default?, actions? }`, or
+ * null to remove it. Changes nothing else of the installation.
+ */
+export const setInstalledIntegrationApproval = async (id, approval) =>
+  (
+    await makeAdminApiCall(`${instancePath(id)}/approval`, {
+      method: 'PUT',
+      ...json({ approval })
+    })
+  ).data.instance;
+
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
 };

@@ -8,6 +8,7 @@ import logger from '../../utils/logger.js';
 import integrationRegistry from './definitions/IntegrationRegistry.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import {
+  installedApprovalSchema,
   validateIntegrationsConfig,
   validateInstalledIntegration
 } from '../../validators/integrationsConfigSchema.js';
@@ -552,6 +553,44 @@ export class InstalledIntegrationService {
         await this._removeManagedCredential(existing);
       }
       await this._afterChange(instance.id, { before: existing, after: instance });
+      return instance;
+    });
+  }
+
+  /**
+   * Set the tool approval of an installation (#2945): `{ default?, actions? }`,
+   * or null to remove it. Only this field changes, so the Overview's approval
+   * controls cannot touch the values or the secret.
+   *
+   * @param {string} id
+   * @param {{default?: string, actions?: Object<string,string>}|null} approval
+   * @returns {Promise<Object>} the stored installation
+   */
+  setApproval(id, approval) {
+    return this._serialize(async () => {
+      let cleaned = null;
+      if (approval !== null && approval !== undefined) {
+        const parsed = installedApprovalSchema.safeParse(approval);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid approval settings', {
+            code: 'INVALID_APPROVAL',
+            details: parsed.error.issues
+          });
+        }
+        cleaned = parsed.data;
+        if (cleaned.actions && Object.keys(cleaned.actions).length === 0) delete cleaned.actions;
+        if (!cleaned.default && !cleaned.actions) cleaned = null;
+      }
+      const config = this._readConfigForWrite();
+      const instance = config.installed.find(inst => inst.id === id);
+      if (!instance)
+        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+      const before = { ...instance };
+      if (cleaned) instance.approval = cleaned;
+      else delete instance.approval;
+      instance.updatedAt = nowIso();
+      await this.writeConfig(config);
+      await this._afterChange(instance.id, { before, after: instance });
       return instance;
     });
   }

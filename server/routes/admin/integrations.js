@@ -607,6 +607,33 @@ export default function registerAdminIntegrationsRoutes(app) {
     }
   });
 
+  /**
+   * Tool approval of an installation (#2945): `{ approval: { default?, actions? } | null }`.
+   * Changes only this field (the Overview's approval controls).
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/approval'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      if (!validateIdForPath(id, 'integration', res)) return;
+      try {
+        const approval = req.body?.approval ?? null;
+        const instance = await installedIntegrationService.setApproval(id, approval);
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'integration',
+          resourceId: id,
+          summary: `Updated the tool approval of integration "${id}"`
+        });
+        res.json({ success: true, instance });
+      } catch (error) {
+        sendIntegrationError(res, error, 'update integration approval');
+      }
+    }
+  );
+
   app.delete(
     buildServerPath('/api/admin/integrations/installed/:id'),
     adminAuth,
