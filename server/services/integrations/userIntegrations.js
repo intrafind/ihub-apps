@@ -78,8 +78,9 @@ export function sharedModeOf(instance, definition) {
   const oauthFields = new Set(
     [definition?.auth?.oauthUser?.field, definition?.auth?.oauthClient?.field].filter(Boolean)
   );
+  // A secret value or a reference into the credential store.
   const secrets = (definition?.install || []).filter(
-    field => field?.sensitive && !oauthFields.has(field.key)
+    field => (field?.sensitive || field?.type === 'credential') && !oauthFields.has(field.key)
   );
   if (secrets.length === 0) return CONNECTION_MODES.NONE;
   return secrets.some(field => API_KEY_FIELD.test(field.key))

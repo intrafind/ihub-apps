@@ -73,12 +73,18 @@ const MAX_ID_LENGTH = 64;
 const SCOPE_TOKEN = /^[\x21\x23-\x5B\x5D-\x7E]{1,200}$/;
 const MAX_SCOPES = 50;
 
-/** Starting a sign-in reaches the vendor's authorization server; bound it per IP. */
-const connectLimiter = rateLimit({
+/**
+ * Starting a sign-in reaches the vendor's authorization server (and, for MCP,
+ * discovery and client registration); bound it per signed-in user, 20 a
+ * minute. Runs after `authRequired`, so the user is known; a shared NAT does
+ * not make colleagues share one budget. Exported for tests (`resetKey`).
+ */
+export const connectLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  keyGenerator: req => `user:${req.user?.id || 'anonymous'}`
 });
 
 /** HTTP status per flow error code (everything else is 400). */

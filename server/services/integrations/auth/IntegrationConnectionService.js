@@ -428,6 +428,13 @@ export class IntegrationConnectionService {
         `Connect ${descriptor.displayName} to continue`
       );
     }
+    // Disconnected (by the user, or an admin revoked it): connect, not reconnect.
+    if (record.status === 'revoked') {
+      return fail(
+        INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
+        `Connect ${descriptor.displayName} to continue`
+      );
+    }
     if (await this._invalidateIfRepointed(descriptor, record)) {
       return fail(
         INTEGRATION_AUTH_REASONS.EXPIRED,
