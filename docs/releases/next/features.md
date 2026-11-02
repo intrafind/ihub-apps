@@ -195,27 +195,25 @@ and [Marketplace](../../marketplace.md).
 ## People Directories Are Installed Integrations
 
 LDAP people directories — the company directory and external ones such as x500.bund.de — are
-installations of the built-in integration **LDAP people directory** under **Admin → Integrations**, one installation per directory, and no longer a page of their own.
+installations of the built-in integration **People directory (LDAP)** under **Admin →
+Integrations**, one installation per directory, and no longer a page of their own.
 
 - **One wizard per directory:** the install wizard holds everything the directory editor had —
   reuse an LDAP sign-in provider or connect directly, access (anonymous or a service account whose
-  password is a credential), preset and mapping, units, data flow, limits, trusted certificates and
-  the admin **LDAP browser**. **Test connection** runs the known directory test, and a field next to the button takes
+  password is a credential), preset and mapping, units, data flow, limits and trusted certificates
+  (the admin **LDAP browser** is an integration of its own now, see below). **Test connection** runs the known directory test, and a field next to the button takes
   a surname for the sample search. **Use for people search** on an LDAP sign-in provider opens the
   wizard with the provider selected.
 - **Same tools, same ids:** every directory keeps its id, so `<id>__search_people`,
-  `<id>__get_person`, `<id>__list_units` and the browser's `<id>__browse_*` tools, group grants
-  and audit records are unchanged. The installed list shows the transport (LDAPS, StartTLS, plain
+  `<id>__get_person`, `<id>__list_units`, group grants and audit records are unchanged. The installed list shows the transport (LDAPS, StartTLS, plain
   text) and marks external directories.
-- **Bind one or all:** an app binds one directory like any installation, or **All LDAP people
-  directory installations** — the new definition binding `"integrations":
-  { "com.intrafind/ldap-directory": {} }`, which follows directories installed later. The app
-  editor offers that row for every integration installed more than once. Actions such as the LDAP
-  browser are bound only when named, never as part of "every action".
+- **Bind one or all:** an app binds one directory like any installation, every LDAP directory
+  with the definition binding `"integrations": { "com.intrafind/ldap-directory": {} }`, or every
+  people directory with **All people directories** (`"type:people-directory": {}`), which
+  follows directories installed later.
 - **Migrated for you:** migration V198 moves every directory of `peopleDirectories.json` into an
-  installation (bind passwords stay credential references), rewrites the shipped People search
-  and LDAP browser apps and every app that listed `peopleDirectories` or a directory, and keeps
-  `ldapBrowse` references working.
+  installation (bind passwords stay credential references) and rewrites the shipped People search
+  and LDAP browser apps and every app that listed `peopleDirectories` or a directory.
 
 See [People Directory Search](../../people-directory-search.md).
 
@@ -305,3 +303,60 @@ shows what matters at a glance.
   installations use the form generated from their definition.
 - **Inbound** lists what connects to iHub: Outlook add-in, browser extension, Microsoft 365
   Copilot, Nextcloud embed and the MCP gateway, each with its status.
+
+## People Search Uses Every People Directory, Entra ID Included
+
+The LDAP directory integration is now called **People directory (LDAP)** (German:
+**Personenverzeichnis (LDAP)**), and it shares the **People directories** group with the
+**Microsoft Entra ID directory** on the Integrations page and in the app editor: both are people
+directories.
+
+- **People search follows Entra ID:** the shipped **People search** app binds every people
+  directory (`"type:people-directory": {}`) instead of only the LDAP ones. With the Entra ID
+  directory enabled, users find people there too, and the app is offered as soon as any people
+  directory is enabled. Its instructions know the Entra tools.
+- **Migrated for you:** migration V204 rewrites an existing People search app that still has the
+  binding it got in V198. A customised binding is left alone.
+
+See [People Directory Search](../../people-directory-search.md).
+
+## LDAP Browser Is an Integration of Its Own
+
+The admin LDAP browser — ask about a directory in plain words and see the raw entries — is the
+new built-in integration **LDAP browser**, separate from people search. Install it under
+**Admin → Integrations → Catalog**, once for every directory admins should be able to read.
+
+- **Reuses a directory:** an LDAP browser names a People directory (LDAP) installation and uses
+  its connection — URL, TLS settings, trusted certificates, allowed hosts, base DN and bind
+  account — with its own browse base, result limit, attributes to withhold and, optionally, a
+  read-only account of its own.
+- **Granted like any integration:** who may browse is the browser's grant under **Admin → Groups →
+  Integrations**. Only signed-in users browse; personal API keys, OAuth clients and agents never
+  do, the browser is never offered over the MCP gateway, and every call is audited.
+- **Bound like any integration:** an app binds one browser or every browser
+  (`com.intrafind/ldap-browser`); a binding without actions binds all three browse tools. The
+  shipped **LDAP browser** app binds every browser and still ships disabled.
+- **Migrated for you:** migration V204 creates a browser installation for every directory that
+  had the browser switched on and grants it to the groups that could browse.
+
+See [People Directory Search → LDAP browser](../../people-directory-search.md#ldap-browser-for-admins).
+
+## Integrations: Dedicated Editors for People Directories, the LDAP Browser and Entra ID
+
+The **Settings** tab of these installations is a dedicated editor instead of the generic form.
+
+- **People directory (LDAP):** the directory editor from before directories became integrations
+  is back — model-facing name and description in English and German with a preview of what the
+  model sees, source (reuse an LDAP sign-in provider or connect directly), access, network with
+  the transport, plain text, allowed hosts, trusted certificates and TLS versions, visibility with
+  the groups that grant the directory, limits, search and mapping with the preset's value next to
+  every field, and a sample search next to **Test connection**.
+- **LDAP browser:** pick the directory and see what the browser takes over from it, then set the
+  browse base, result limit, account and withheld attributes.
+- **Microsoft Entra ID directory:** tenant ID, application ID and client secret, each saying
+  whether the `AZURE_*` environment variable it falls back to is set on the server. Tenant ID and
+  application ID may now be left empty to use that fallback.
+- **Tiles:** an LDAP browser shows its directory, browse base and account; a directory shows its
+  directory type.
+
+See [Integrations → Editors](../../integrations.md#editors).
