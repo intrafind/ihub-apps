@@ -439,7 +439,7 @@ describe('planner: module steps', () => {
   it('keeps the collision rules of declarative steps around a module', async () => {
     const plan = await planMigrationAsync(
       {
-        instance: inst({}),
+        instance: inst(),
         apps: [],
         definition: {
           id: 'org.example/p',
