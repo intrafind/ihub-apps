@@ -40,6 +40,9 @@ const ROW_GROUPS = [
   { id: 'catalog', match: () => true }
 ];
 
+/** Whether an installation is switched on (absent `enabled` means on). */
+const isEnabled = item => item.enabled !== false;
+
 /** Whether an installation belongs on a dedicated panel or nowhere in the editor. */
 function hasOwnPanel(item) {
   if (item.id === IASSISTANT_INSTANCE_ID) return true;
@@ -129,6 +132,12 @@ function Card({ title, description, children, testId }) {
  *   browse actions); a definition with several installations also gets
  *   "All … installations" (`app.integrations[<definition id>]`).
  *
+ * A disabled installation is offered nowhere (no row, no engine, no
+ * iAssistant panel, not counted in "… now") unless the app binds it by its
+ * own id; a note in the Integrations card says how many are left out. A
+ * definition or type binding still covers the disabled installations once
+ * they are enabled.
+ *
  * A binding a definition migration changed (an action it named was removed,
  * or a type binding names a renamed action or scope) shows the warning next
  * to its row (`appMigrationWarnings`); a warning about a binding without a
@@ -184,14 +193,26 @@ function IntegrationsConfigSection({ app, onChange }) {
   const setBindings = patch => onChange({ ...app, integrations: patchedBindings(patch) });
   const setBinding = (id, binding) => setBindings({ [id]: binding });
 
+  // The installations the editor offers: the enabled ones, and a disabled one
+  // only while the app binds it by its id (so it can be unbound).
+  const shown = useMemo(
+    () => installed.filter(item => isEnabled(item) || Object.hasOwn(bindings, item.id)),
+    [installed, bindings]
+  );
+  const hiddenCount = installed.length - shown.length;
+
   // The installations of the People directories card (its type binding is the card's switch).
   const directories = useMemo(
-    () => installed.filter(item => item.type === 'people-directory'),
-    [installed]
+    () => shown.filter(item => item.type === 'people-directory'),
+    [shown]
   );
+  const enabledDirectoryCount = installed.filter(
+    item => item.type === 'people-directory' && isEnabled(item)
+  ).length;
 
   // Definition rows ("All … installations"): definitions with two or more
-  // installations, and any definition the app already binds.
+  // enabled installations, and any definition the app already binds. The
+  // actions come from every installation of the definition.
   const definitionRows = useMemo(() => {
     const byDefinition = new Map();
     for (const item of installed) {
@@ -208,7 +229,8 @@ function IntegrationsConfigSection({ app, onChange }) {
       byDefinition.set(item.definition, row);
     }
     return [...byDefinition.values()]
-      .filter(row => row.instances.length > 1 || Object.hasOwn(bindings, row.id))
+      .map(row => ({ ...row, enabledCount: row.instances.filter(isEnabled).length }))
+      .filter(row => row.enabledCount > 1 || Object.hasOwn(bindings, row.id))
       .map(row => ({
         id: row.id,
         kind: 'definition',
@@ -222,9 +244,9 @@ function IntegrationsConfigSection({ app, onChange }) {
         definitionName: t(
           'admin.apps.edit.integrations.allInstallationsHelp',
           'Every installation of this integration, including ones installed later ({{count}} now).',
-          { count: row.instances.length }
+          { count: row.enabledCount }
         ),
-        enabled: row.instances.some(i => i.enabled !== false)
+        enabled: row.enabledCount > 0
       }));
   }, [installed, bindings, t]);
 
@@ -232,7 +254,7 @@ function IntegrationsConfigSection({ app, onChange }) {
   const groupedRows = useMemo(() => {
     const rest = [
       ...definitionRows.filter(row => row.type !== 'people-directory'),
-      ...installed
+      ...shown
         .filter(item => !hasOwnPanel(item) && item.type !== 'people-directory')
         .map(item => ({ ...item, kind: 'instance' }))
     ];
@@ -240,7 +262,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       id: group.id,
       rows: rest.filter(item => ROW_GROUPS.find(g => g.match(item))?.id === group.id)
     })).filter(group => group.rows.length > 0);
-  }, [definitionRows, installed]);
+  }, [definitionRows, shown]);
 
   // The rows of the People directories card: "All … installations" of a
   // directory definition with several, then each directory.
@@ -261,7 +283,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       'admin.apps.edit.integrations.storageRequiredHelp',
       'Hide the app while this storage provider is disabled or missing. Off: the app stays available and the file picker offers the providers that are there.'
     );
-    return storageBindingRows(installed, bindings).map(row => {
+    return storageBindingRows(shown, bindings).map(row => {
       const common = {
         noActions: true,
         newBinding: { required: false },
@@ -283,7 +305,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       }
       return { ...row, ...common };
     });
-  }, [installed, bindings, t]);
+  }, [shown, bindings, t]);
   const storageTypeRow = storageAllRows.find(row => row.kind === 'type');
   const storageRows = storageAllRows.filter(row => row.kind !== 'type');
   const storageRowIds = useMemo(() => new Set(storageAllRows.map(row => row.id)), [storageAllRows]);
@@ -318,7 +340,7 @@ function IntegrationsConfigSection({ app, onChange }) {
 
   const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
   const showIAssistant =
-    Boolean(iAssistantInstallation) ||
+    Boolean(iAssistantInstallation && isEnabled(iAssistantInstallation)) ||
     app.iassistant?.enabled === true ||
     Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID);
   const iAssistantBinding = bindings[IASSISTANT_INSTANCE_ID];
@@ -354,8 +376,13 @@ function IntegrationsConfigSection({ app, onChange }) {
 
   // The web search engines in Auto's order; null while unknown (not loaded).
   const webSearchEngines = useMemo(
-    () => (loading || error ? null : webSearchEnginesOf(installed)),
-    [installed, loading, error]
+    () =>
+      loading || error
+        ? null
+        : webSearchEnginesOf(installed).filter(
+            engine => isEnabled(engine) || engine.id === app.websearch?.provider
+          ),
+    [installed, loading, error, app.websearch?.provider]
   );
   // What definition migrations left on this app's bindings, by binding key.
   const migrationWarnings = useMemo(
@@ -464,7 +491,7 @@ function IntegrationsConfigSection({ app, onChange }) {
           allHelp={t(
             'admin.apps.edit.integrations.allOfTypeHelp',
             'Every installation of this kind, including ones installed later ({{count}} now).',
-            { count: directories.length }
+            { count: enabledDirectoryCount }
           )}
           someLabel={t(
             'admin.apps.edit.integrations.selectedPeopleDirectories',
@@ -495,7 +522,9 @@ function IntegrationsConfigSection({ app, onChange }) {
           allHelp={t(
             'admin.apps.edit.integrations.allOfTypeHelp',
             'Every installation of this kind, including ones installed later ({{count}} now).',
-            { count: storageTypeRow.count }
+            {
+              count: installed.filter(item => item.type === 'storage' && isEnabled(item)).length
+            }
           )}
           someLabel={t(
             'admin.apps.edit.integrations.selectedStorageProviders',
@@ -527,17 +556,21 @@ function IntegrationsConfigSection({ app, onChange }) {
         )}
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <AppMigrationWarnings warnings={unplacedWarnings} />
-        {!loading && !error && groupedRows.length === 0 && staleIds.length === 0 && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
-            <Link
-              to="/admin/integrations?tab=catalog"
-              className="text-blue-700 dark:text-blue-300 hover:underline"
-            >
-              {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
-            </Link>
-          </p>
-        )}
+        {!loading &&
+          !error &&
+          groupedRows.length === 0 &&
+          staleIds.length === 0 &&
+          hiddenCount === 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {t('admin.apps.edit.integrations.none', 'No integration is installed yet.')}{' '}
+              <Link
+                to="/admin/integrations?tab=catalog"
+                className="text-blue-700 dark:text-blue-300 hover:underline"
+              >
+                {t('admin.apps.edit.integrations.openCatalog', 'Open the catalog')}
+              </Link>
+            </p>
+          )}
         {groupedRows.map(group => (
           <section key={group.id} aria-labelledby={`app-integrations-group-${group.id}`}>
             <h4
@@ -581,6 +614,24 @@ function IntegrationsConfigSection({ app, onChange }) {
             </button>
           </div>
         ))}
+        {!loading && !error && hiddenCount > 0 && (
+          <p
+            className="text-sm text-gray-500 dark:text-gray-400"
+            data-testid="app-integrations-hidden"
+          >
+            {t(
+              'admin.apps.edit.integrations.disabledHidden',
+              'Disabled integrations are not offered here ({{count}}). Enable one under Integrations to bind it to this app.',
+              { count: hiddenCount }
+            )}{' '}
+            <Link
+              to="/admin/integrations"
+              className="text-blue-700 dark:text-blue-300 hover:underline"
+            >
+              {t('admin.apps.edit.integrations.openIntegrations', 'Open Integrations')}
+            </Link>
+          </p>
+        )}
       </Card>
     </>
   );

@@ -137,7 +137,7 @@ describe('IntegrationsConfigSection', () => {
     );
   });
 
-  it('lists Auto and the installed engines in Auto’s order, disabled ones marked', async () => {
+  it('lists Auto and the enabled engines in Auto’s order, leaving disabled ones out', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     const onChange = renderSection({ id: 'a', websearch: { enabled: true } });
     const select = await screen.findByLabelText('Search engine');
@@ -145,7 +145,7 @@ describe('IntegrationsConfigSection', () => {
       within(select)
         .getAllByRole('option')
         .map(option => option.textContent)
-    ).toEqual(['Auto', 'Brave Search (brave) — disabled', 'Qwant (qwant)']);
+    ).toEqual(['Auto', 'Qwant (qwant)']);
     expect(select).toHaveValue('auto');
     expect(screen.queryByTestId('websearch-no-engine')).not.toBeInTheDocument();
     fireEvent.change(select, { target: { value: 'qwant' } });
@@ -173,9 +173,13 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.queryByTestId('websearch-engine-missing')).not.toBeInTheDocument();
   });
 
-  it('warns about a disabled engine the app names', async () => {
+  it('keeps and warns about a disabled engine the app names', async () => {
     mockFetchInstalled.mockResolvedValue({ items: INSTALLED });
     renderSection({ id: 'a', websearch: { enabled: true, provider: 'brave' } });
+    const select = await screen.findByLabelText('Search engine');
+    expect(
+      within(select).getByRole('option', { name: 'Brave Search (brave) — disabled' })
+    ).toBeInTheDocument();
     expect(await screen.findByTestId('websearch-engine-disabled')).toHaveTextContent(
       'The engine "brave" is disabled'
     );
@@ -370,6 +374,70 @@ describe('IntegrationsConfigSection', () => {
   });
 });
 
+describe('IntegrationsConfigSection: disabled installations', () => {
+  const DISABLED = [
+    { id: 'iassistant', definition: 'com.intrafind/iassistant', builtIn: true, enabled: false },
+    {
+      id: 'corp',
+      definition: 'com.intrafind/ldap-directory',
+      definitionName: 'People directory (LDAP)',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Corporate directory',
+      enabled: false
+    },
+    {
+      id: 'muc',
+      definition: 'com.intrafind/ldap-directory',
+      definitionName: 'People directory (LDAP)',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Munich directory'
+    },
+    {
+      id: 'entra',
+      definition: 'com.intrafind/entra-directory',
+      type: 'people-directory',
+      builtIn: true,
+      label: 'Entra ID'
+    },
+    { id: 'drawio', definition: 'mcp/drawio', protocol: 'mcp', label: 'draw.io', enabled: false },
+    { id: 'open-data-portal', definition: 'org.ckan/open-data-portal', label: 'GovData' }
+  ];
+
+  it('offers no disabled installation the app does not bind, and says how many are left out', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: DISABLED });
+    renderSection({ id: 'a', integrations: { 'type:people-directory': {} } });
+    const card = await screen.findByTestId('app-integrations-people-directories');
+    expect(within(card).queryByText('Corporate directory')).not.toBeInTheDocument();
+    expect(within(card).getByText('Munich directory')).toBeInTheDocument();
+    // One enabled LDAP directory left: no "All … installations" row, and the count is the enabled ones.
+    expect(
+      within(card).queryByText(/All People directory \(LDAP\) installations/)
+    ).not.toBeInTheDocument();
+    expect(within(card).getByText(/\(2 now\)/)).toBeInTheDocument();
+    const generic = screen.getByTestId('app-integrations');
+    expect(within(generic).queryByText('draw.io')).not.toBeInTheDocument();
+    expect(within(generic).getByText('GovData')).toBeInTheDocument();
+    expect(screen.getByTestId('app-integrations-hidden')).toHaveTextContent('(3)');
+    // A disabled iAssistant the app does not use gets no panel.
+    expect(screen.queryByText('Enable iAssistant')).not.toBeInTheDocument();
+  });
+
+  it('keeps a disabled installation the app binds, marked disabled', async () => {
+    mockFetchInstalled.mockResolvedValue({ items: DISABLED });
+    renderSection({ id: 'a', integrations: { drawio: {}, corp: {}, iassistant: {} } });
+    const checkbox = await screen.findByLabelText(/draw.io/);
+    expect(screen.getByTestId('app-integrations')).toContainElement(checkbox);
+    const row = checkbox.closest('div');
+    expect(within(row).getByText('Disabled')).toBeInTheDocument();
+    const card = screen.getByTestId('app-integrations-people-directories');
+    expect(within(card).getByLabelText(/Corporate directory/)).toBeChecked();
+    expect(screen.getByText('Enable iAssistant')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-integrations-hidden')).not.toBeInTheDocument();
+  });
+});
+
 describe('IntegrationsConfigSection: storage providers', () => {
   const NEXTCLOUD = [
     {
@@ -409,10 +477,12 @@ describe('IntegrationsConfigSection: storage providers', () => {
     renderSection({ id: 'a', integrations: { 'type:storage': { required: false } } });
     const card = await screen.findByTestId('app-integrations-storage-providers');
     expect(within(card).getByLabelText('All storage providers')).toBeChecked();
-    expect(within(card).getByText(/\(3 now\)/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/All Nextcloud installations/)).toBeInTheDocument();
+    // Branch office is disabled: not counted, not listed.
+    expect(within(card).getByText(/\(2 now\)/)).toBeInTheDocument();
     expect(within(card).getByLabelText(/Head office/)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/Branch office/)).toBeInTheDocument();
+    expect(within(card).queryByLabelText(/Branch office/)).not.toBeInTheDocument();
+    // One enabled Nextcloud left: no "All Nextcloud installations" row.
+    expect(within(card).queryByLabelText(/All Nextcloud installations/)).not.toBeInTheDocument();
   });
 
   it('shows a bound storage provider with the Required switch and no action list', async () => {

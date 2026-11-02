@@ -123,8 +123,8 @@ category on the Providers page.
   needed only for the other models; on those, the chat offers the web search toggle only while
   an engine is available.
 - **Pick the engine per app:** the **Web Search** panel of the app editor, now on every chat app,
-  lists **Auto** and the installed engines, marks a disabled one, and warns when the app names an
-  engine that is not installed. Auto takes the first engine the user may use: Brave, Staan, Qwant,
+  lists **Auto** and the enabled engines (a disabled one only while the app names it, marked as
+  disabled), and warns when the app names an engine that is not installed. Auto takes the first engine the user may use: Brave, Staan, Qwant,
   then any other.
 - **An editor per engine:** the API key as a credential with the environment variable it falls
   back to (`BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`), and **Test connection** with the values as

@@ -2726,7 +2726,9 @@
           "enableStorageProviders": "Enable storage providers",
           "selectedStorageProviders": "Only selected storage providers",
           "typeOverrideHelp": "Tick one to give it settings of its own; the others follow the settings above.",
-          "typePickHelp": "The app uses only the ones ticked here."
+          "typePickHelp": "The app uses only the ones ticked here.",
+          "disabledHidden": "Disabled integrations are not offered here ({{count}}). Enable one under Integrations to bind it to this app.",
+          "openIntegrations": "Open Integrations"
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",

@@ -3018,7 +3018,9 @@
           "enableStorageProviders": "Speicheranbieter aktivieren",
           "selectedStorageProviders": "Nur ausgewählte Speicheranbieter",
           "typeOverrideHelp": "Haken Sie einen Eintrag an, um ihm eigene Einstellungen zu geben; die übrigen folgen den Einstellungen oben.",
-          "typePickHelp": "Die App verwendet nur die hier angehakten Einträge."
+          "typePickHelp": "Die App verwendet nur die hier angehakten Einträge.",
+          "disabledHidden": "Deaktivierte Integrationen werden hier nicht angeboten ({{count}}). Aktivieren Sie eine unter Integrationen, um sie an diese App zu binden.",
+          "openIntegrations": "Integrationen öffnen"
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
