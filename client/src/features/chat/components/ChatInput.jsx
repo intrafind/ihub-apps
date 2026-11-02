@@ -36,6 +36,7 @@ import {
   useEstimatedTokenCount,
   useEstimatedTokensForFragments
 } from '../../../shared/hooks/useEstimatedTokenCount.js';
+import { modelSupportsWebSearch } from '../webSearch';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**
@@ -849,26 +850,29 @@ function ChatInput({
 
             {/* Web search is on: say so in the bar, and turn it off in one
                 click. The switch itself lives in the "+" menu. */}
-            {app?.websearch?.enabled === true && websearchEnabled && onWebsearchEnabledChange && (
-              <button
-                type="button"
-                onClick={() => onWebsearchEnabledChange(false)}
-                disabled={isInputDisabled || isProcessing}
-                aria-pressed="true"
-                aria-label={t('websearch.chipLabel', 'Web search is on — turn it off')}
-                title={t('websearch.chipTitle', 'Web search is on. Click to turn it off.')}
-                className="group flex shrink-0 items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-900/60"
-              >
-                <Icon name="globe-alt" size="sm" />
-                <span className="hidden sm:inline">{t('websearch.chip', 'Web search')}</span>
-                <Icon
-                  name="x"
-                  size="xs"
-                  className="opacity-60 group-hover:opacity-100"
-                  aria-hidden="true"
-                />
-              </button>
-            )}
+            {app?.websearch?.enabled === true &&
+              websearchEnabled &&
+              onWebsearchEnabledChange &&
+              modelSupportsWebSearch(app, model) !== false && (
+                <button
+                  type="button"
+                  onClick={() => onWebsearchEnabledChange(false)}
+                  disabled={isInputDisabled || isProcessing}
+                  aria-pressed="true"
+                  aria-label={t('websearch.chipLabel', 'Web search is on — turn it off')}
+                  title={t('websearch.chipTitle', 'Web search is on. Click to turn it off.')}
+                  className="group flex shrink-0 items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:bg-indigo-900/40 dark:text-indigo-300 dark:hover:bg-indigo-900/60"
+                >
+                  <Icon name="globe-alt" size="sm" />
+                  <span className="hidden sm:inline">{t('websearch.chip', 'Web search')}</span>
+                  <Icon
+                    name="x"
+                    size="xs"
+                    className="opacity-60 group-hover:opacity-100"
+                    aria-hidden="true"
+                  />
+                </button>
+              )}
 
             {/* Where the next question goes: the scopes are picked in the "+"
                 menu, the chip keeps them visible before sending. */}

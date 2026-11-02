@@ -115,8 +115,9 @@ unsaved values (`POST …/installed/:id/_test` with the draft body).
 - `allowedGroups` is still shown and edited where the old page did; it moves to
   `permissions.integrations` on groups in a parallel change and has to be adapted after both
   merge.
-- Dedicated editors for web search, storage providers, people directories (incl. LDAP browser)
-  and Jira follow in later PRs.
+- Dedicated editors for storage providers, people directories (incl. LDAP browser) and Jira
+  follow in later PRs. The web search engines have theirs (`WebSearchEngineEditor.jsx`, see
+  [2026-11-02 · Web search engines](2026-11-02%20Web%20search%20engines.md)).
 - The Command Palette (`AdminCommandPalette.jsx`) lists only "Integrations"; the tabs are not
   separate entries.
 - If the diagnostics options (test as user, include token, round-trip) are wanted again, the

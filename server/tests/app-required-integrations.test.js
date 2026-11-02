@@ -27,6 +27,9 @@ import {
   isIFinderConfigured
 } from '../services/integrations/iAssistantModelActivation.js';
 
+const BRAVE = 'com.intrafind/brave-search';
+const QWANT = 'com.intrafind/qwant-search';
+
 const APPS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults/apps');
 
 const APPS = [
@@ -44,34 +47,81 @@ describe('areAppIntegrationsEnabled', () => {
     assert.equal(areAppIntegrationsEnabled({ id: 'chat' }, {}), true);
   });
 
-  it('stays available without the websearch installation unless web search is required', () => {
-    // Web search is an enhancement for most apps: on by itself it never hides the app.
+  it('stays available without a web search engine unless web search is required', () => {
+    // Native search needs no engine: web search on by itself never hides the app.
     const optional = { id: 'web', websearch: { enabled: true } };
     assert.equal(areAppIntegrationsEnabled(optional, { installedIntegrations: [] }), true);
     assert.deepEqual(
       missingAppIntegrations(optional, {
-        installedIntegrations: [{ id: 'websearch', enabled: false }]
+        installedIntegrations: [{ id: 'brave', definition: BRAVE, enabled: false }]
       }),
       []
     );
-    const app = { id: 'web', websearch: { enabled: true, required: true } };
-    assert.equal(areAppIntegrationsEnabled(app, { installedIntegrations: [] }), false);
-    assert.equal(
-      areAppIntegrationsEnabled(app, {
-        installedIntegrations: [{ id: 'websearch', enabled: false }]
-      }),
-      false
-    );
-    assert.equal(
-      areAppIntegrationsEnabled(app, { installedIntegrations: [{ id: 'websearch' }] }),
-      true
-    );
     assert.equal(
       areAppIntegrationsEnabled(
-        { id: 'plain', websearch: { enabled: false } },
+        { id: 'plain', websearch: { enabled: false, required: true } },
         { installedIntegrations: [] }
       ),
       true
+    );
+  });
+
+  it('with required and auto, needs one enabled engine of any kind', () => {
+    const app = { id: 'web', websearch: { enabled: true, required: true, provider: 'auto' } };
+    assert.deepEqual(missingAppIntegrations(app, { installedIntegrations: [] }), [
+      'type:web-search'
+    ]);
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'brave', definition: BRAVE, enabled: false }]
+      }),
+      ['type:web-search']
+    );
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'qwant', definition: QWANT }]
+      }),
+      true
+    );
+    // A third-party engine counts by its definition's type.
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'acme', definition: 'org.acme/search' }],
+        definitionTypes: { 'org.acme/search': 'web-search' }
+      }),
+      true
+    );
+    // Another installation does not.
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'jira', definition: 'com.intrafind/jira' }]
+      }),
+      false
+    );
+    // The retired umbrella installation does not either.
+    assert.equal(
+      areAppIntegrationsEnabled(app, {
+        installedIntegrations: [{ id: 'websearch', definition: 'com.intrafind/web-search' }]
+      }),
+      false
+    );
+  });
+
+  it('with required and a named engine, needs that engine', () => {
+    const app = { id: 'web', websearch: { enabled: true, required: true, provider: 'brave' } };
+    assert.deepEqual(
+      missingAppIntegrations(app, { installedIntegrations: [{ id: 'qwant', definition: QWANT }] }),
+      ['brave']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, {
+        installedIntegrations: [{ id: 'brave', definition: BRAVE, enabled: false }]
+      }),
+      ['brave']
+    );
+    assert.deepEqual(
+      missingAppIntegrations(app, { installedIntegrations: [{ id: 'brave', definition: BRAVE }] }),
+      []
     );
   });
 
@@ -252,6 +302,28 @@ describe('areAppIntegrationsEnabled', () => {
     // Absent means optional for web search and required for a binding.
     const defaults = appConfigSchema.safeParse({ ...base, id: 'y', websearch: { enabled: true } });
     assert.equal(defaults.data.websearch.required, false);
+    assert.equal(defaults.data.websearch.provider, 'auto');
+  });
+
+  it('accepts any engine installation id as the web search engine', () => {
+    const base = { name: { en: 'x' }, description: { en: 'x' }, color: '#4F46E5', icon: 'chat' };
+    for (const provider of ['auto', 'brave', 'staan', 'qwant', 'acme-search']) {
+      const parsed = appConfigSchema.safeParse({
+        ...base,
+        id: 'x',
+        websearch: { enabled: true, provider }
+      });
+      assert.equal(parsed.success, true, provider);
+      assert.equal(parsed.data.websearch.provider, provider);
+    }
+    for (const provider of ['', 'not an id', '../etc']) {
+      const parsed = appConfigSchema.safeParse({
+        ...base,
+        id: 'x',
+        websearch: { enabled: true, provider }
+      });
+      assert.equal(parsed.success, false, provider);
+    }
   });
 
   it('reports each binding once, in order', () => {

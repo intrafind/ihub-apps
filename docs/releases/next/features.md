@@ -109,25 +109,36 @@ with a clear message. The reason is that an update from the Marketplace reloads 
 only; a helper file would keep running its old code until a restart. Updating a code-based
 integration takes effect at once, for its actions and for the scopes it offers in the chat.
 
-## Web Search Is an Installed Integration
+## Web Search Engines Are Installed Integrations
 
-The search engines and the page reader are the built-in integration **Web search** under
-**Admin → Integrations**, and no longer a category on the Providers page.
+Each web search engine is an integration of its own under **Admin → Integrations → Web search** —
+**Brave Search**, **Staan** and **Qwant** — installed only where it is wanted, and no longer a
+category on the Providers page.
 
-- **One place for the engines:** the installation `websearch` holds the Brave and Staan API keys
-  as credential references and the **default search engine** every app on `auto` uses. The groups
-  granted the installation may search — the grant holds for native search on Google, OpenAI and
-  Anthropic models too, so a user without it gets no web search on any model. Qwant still needs
-  no key.
-- **Test:** the installation's **Test** reports which engines have a key and runs one live search
-  with the default engine, with the same verdicts and hints as the former connectivity test.
-- **Apps unchanged:** an app still switches web search on in its own settings and may name an
-  engine; the tools keep their ids (`braveSearch`, `staanSearch`, `qwantSearch`, `read_url`). An
-  app with web search on is offered only while the installation is enabled, and **Admin → Apps**
-  names it when it is missing.
-- **Migrated for you:** migration V195 moves the provider keys into credentials, creates the
-  installation and retires the four tool files. `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still
-  apply when no credential is referenced.
+- **Native search needs no engine:** an app with web search on searches with the model's own
+  search on Google, OpenAI and Anthropic models even while no engine is installed (a fresh
+  install ships none), with the page reader next to it on OpenAI and Anthropic. An engine is
+  needed only for the other models; on those, the chat offers the web search toggle only while
+  an engine is available.
+- **Pick the engine per app:** the **Web Search** panel of the app editor, now on every chat app,
+  lists **Auto** and the installed engines, marks a disabled one, and warns when the app names an
+  engine that is not installed. Auto takes the first engine the user may use: Brave, Staan, Qwant,
+  then any other.
+- **An editor per engine:** the API key as a credential with the environment variable it falls
+  back to (`BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`), and **Test connection** with the values as
+  entered: where the key comes from, then one live search with the verdicts and hints of the
+  former connectivity test. The tiles show whether the key is set; Qwant needs none.
+- **Who may search:** the groups grant engines like any integration — one engine, or **All web
+  search engines** (`type:web-search`).
+- **Your own engine:** a `script` or OpenAPI definition of type `web-search` with one action
+  `search` is an engine like the shipped ones (see
+  [Building an Integration](../../integration-development.md#web-search-engines)).
+- **Tools keep their ids:** `braveSearch`, `staanSearch`, `qwantSearch` and the page reader
+  `read_url`; a workflow node's generic `webSearch` uses the first engine the user may use on
+  models without native search.
+- **Migrated for you:** migrations V195 and V203 move the provider keys into credentials and
+  install one engine per key, and Qwant where it was reachable. `BRAVE_SEARCH_API_KEY` and
+  `STAAN_API_KEY` still apply when no credential is referenced.
 
 ## Jira Is an Installed Integration
 
@@ -219,23 +230,30 @@ installations of the built-in integration **LDAP people directory** under **Admi
 
 See [People Directory Search](../../people-directory-search.md).
 
-## iHub's Own Tools Are the Always-Installed iHub Integration
+## Asking the User and Scheduled Tasks Are the Always-Installed iHub Integration
 
-`ask_user`, the project knowledge tools, artifacts, agent memory, inboxes and tasks, the evidence
-tools and the scheduled-task tools are the actions of the built-in integration **iHub**
-(installation `ihub`) under **Admin → Integrations**, instead of tool files.
+`ask_user` and the scheduled-task tools (`schedule_task`, `list_scheduled_tasks`,
+`update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`,
+`get_task_run`) are the actions of the built-in integration **iHub** (installation `ihub`) under
+**Admin → Integrations**, instead of tool files.
 
 - **Always there:** the installation exists and is enabled at all times — it is created when
   missing and shows **Always installed** without a remove or disable switch. Edit it to switch
   single actions off for every app (what `enabled: false` on a tool file did); which groups may
   use it is granted on the groups.
 - **Nothing changes for apps:** the tools keep their ids, so `tools: ["ask_user"]`,
-  `["knowledge"]`, `["write_artifact"]` and group grants work as before; the rules for
-  `ask_user` (kept through a chat's tool narrowing) and the scheduled-task tools are unchanged.
-  Every action carries its side effect (read, write, destructive).
-- **Migrated for you:** migration V199 removes the shipped tool files from `contents/tools/`
-  (a file an admin edited is kept, with a warning) and creates the installation. **Admin → Tools**
-  lists only custom tools from now on.
+  `["schedule_task"]` and group grants work as before; the rules for `ask_user` (kept through a
+  chat's tool narrowing) and the scheduled-task tools are unchanged. Every action carries its
+  side effect (read, write, destructive).
+- **Project knowledge works whenever projects are on:** `knowledge_search`, `knowledge_read` and
+  `knowledge_list` belong to projects, not to an integration. Every request that reaches a project
+  gets them while the projects feature is on, whatever the app's `tools` or an installation says.
+- **Agent and evidence tools stay with workflows and agents:** artifacts, agent memory, inboxes
+  and tasks and the evidence tools are not listed under the iHub integration. Workflows, agent
+  profiles and apps name them in `tools` as before, and group grants select them.
+- **Migrated for you:** migrations V199 and V201 remove the shipped tool files from
+  `contents/tools/` (a file an admin edited is kept, with a warning) and create the installation.
+  **Admin → Tools** lists only custom tools from now on.
 
 ## Storage Providers Are Installed Integrations, Several per Provider, Bound per App
 
@@ -287,13 +305,13 @@ the list is `permissions.integrations`.
 - **Inherited like apps:** a group gets what the groups it inherits grant; the editor shows those
   rows ticked and greyed out with the group they come from ("via users").
 - **Everywhere the integration is used:** chat, workflows, scheduled tasks, direct tool runs, the
-  MCP and A2A gateways, web search (native search included) and the LDAP people directories hold
-  to the grant. Storage providers do too: users see, connect, browse and import only from the
+  MCP and A2A gateways, the web search engines and the LDAP people directories hold to the grant
+  (native web search on the model needs no grant). Storage providers do too: users see, connect, browse and import only from the
   providers their groups grant.
 - **Tokens and API keys:** a token acting for a user and a personal API key keep the user's grant;
   a machine OAuth client may use what the apps it is allowed to use bind.
 - **Shipped groups:** `admins`, `users` and `authenticated` may use every integration; `anonymous`
-  may use iHub's own tools and web search.
+  may use iHub's own tools and every web search engine.
 
 See [Integrations → Who may use an integration](../../integrations.md#who-may-use-an-integration).
 
@@ -307,14 +325,16 @@ shows what matters at a glance.
 - **Tiles:** label, definition, version, enabled or disabled, update available, incompatible,
   live status (connected, unreachable, connected users), sign-in mode, groups and two to four key
   facts of its settings — the iFinder base URL and sign-in, a directory's URL and base DN, the
-  Nextcloud server, which web search keys are set. A secret only ever shows as set or not set.
+  Nextcloud server, whether a web search engine's key is set. A secret only ever shows as set or
+  not set.
   Test, enable or disable, remove and the connected users stay one click away on the tile.
 - **A page per installation:** a tile opens `/admin/integrations/<id>` with **Overview** (facts,
   actions with their side effects, documentation link and the apps that bind it), **Settings**
   and, where the definition has a history, **Releases**.
 - **iFinder and iAssistant get their editor back:** the Settings tab of the two installations is
   the well-structured editor they had on the Providers page — token issuer, OIDC key pair with the
-  iFinder settings to copy, token exchange, search profiles — and tests the unsaved values. Other
-  installations use the form generated from their definition.
+  iFinder settings to copy, token exchange, search profiles — and tests the unsaved values. The
+  web search engines have an editor of their own; other installations use the form generated
+  from their definition.
 - **Inbound** lists what connects to iHub: Outlook add-in, browser extension, Microsoft 365
   Copilot, Nextcloud embed and the MCP gateway, each with its status.

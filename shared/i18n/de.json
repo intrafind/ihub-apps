@@ -2974,12 +2974,15 @@
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
         "websearchEnabled": "Websuche aktivieren",
-        "websearchProvider": "Anbieter",
+        "websearchProvider": "Suchmaschine",
         "websearchProviderAuto": "Automatisch",
-        "websearchProviderBrave": "Brave",
-        "websearchProviderStaan": "Staan",
-        "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
-        "websearchProviderDesc": "Suchmaschine, wenn das Modell keine eigene Websuche hat. „Automatisch“ nimmt die Standard-Suchmaschine der Integration „Websuche“ (Admin → Integrationen → Installiert); steht sie ebenfalls auf „Automatisch“, wird Brave verwendet, wenn ein API-Schlüssel hinterlegt ist, sonst Staan, sonst Qwant. Brave und Staan brauchen einen API-Schlüssel an dieser Integration; Qwant braucht keinen, ist aber auf vielen Cloud-Hosts gesperrt.",
+        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, Qwant, dann jede weitere.",
+        "websearchEngineDisabledOption": "{{name}} — deaktiviert",
+        "websearchEngineMissingOption": "{{name}} — nicht installiert",
+        "websearchEngineMissing": "Die Suchmaschine „{{engine}}“ ist nicht installiert. Die App sucht selbst, wo das Modell es kann, und bei anderen Modellen gar nicht. Installieren Sie sie unter Integrationen oder wählen Sie „Automatisch“.",
+        "websearchEngineDisabled": "Die Suchmaschine „{{engine}}“ ist deaktiviert. Bis sie aktiviert ist, sucht die App selbst, wo das Modell es kann, und bei anderen Modellen gar nicht.",
+        "websearchNoEngine": "Keine Suchmaschine installiert: Die App sucht nur mit Modellen, die eine eigene Websuche haben.",
+        "websearchInstallEngine": "Suchmaschine installieren",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
@@ -2996,7 +2999,7 @@
         "websearchResearchGuidanceCustomDesc": "Optional. Ersetzt die eingebaute Anweisung, die dem Systemprompt hinzugefügt wird, wenn die Websuche aktiv ist. Leer lassen, um die eingebaute Anweisung zu verwenden.",
         "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
         "websearchRequired": "Erforderlich",
-        "websearchRequiredDesc": "Blendet die App aus, solange die Websuche-Integration deaktiviert ist oder fehlt. Aus: Die App bleibt ohne Websuche verfügbar.",
+        "websearchRequiredDesc": "Blendet die App aus, solange ihre Suchmaschine nicht verfügbar ist („Automatisch“: keine Suchmaschine installiert und aktiviert; eine benannte Suchmaschine: diese fehlt oder ist deaktiviert). Aus: Die App bleibt verfügbar und sucht selbst, wo das Modell es kann.",
         "toolChoice": "Werkzeugnutzung",
         "toolChoiceDesc": "Ob das Modell selbst entscheidet, die Werkzeuge dieser App zu nutzen",
         "toolChoiceAuto": "Modell entscheidet (Standard)",
@@ -3128,6 +3131,7 @@
       "openDisabledHint": "Aktivieren Sie die App, um sie zu öffnen",
       "openMissingFeaturesHint": "Schalten Sie {{features}} ein, um sie zu öffnen",
       "missingInstalledIntegration": "Installierte Integration \"{{id}}\"",
+      "missingWebSearchEngine": "Eine Websuchmaschine",
       "test": {
         "title": "App testen",
         "subtitle": "Läuft mit der gespeicherten Version, so wie Benutzer sie sehen",
@@ -3373,7 +3377,9 @@
         "via": {
           "installation": "über diese Installation",
           "definition": "jede {{name}}-Installation",
-          "type": "jede Installation ihres Typs"
+          "type": "jede Installation ihres Typs",
+          "webSearch": "ihre Websuchmaschine",
+          "webSearchAuto": "Websuche auf „Automatisch“ (die erste Suchmaschine, die ein Benutzer nutzen darf)"
         },
         "notEditable": "Diese Installation lässt sich nicht bearbeiten, solange ihre Definition fehlt oder inkompatibel ist."
       },
@@ -3410,9 +3416,8 @@
         "tenantId": "Tenant-ID",
         "clientId": "Client-ID",
         "clientSecret": "Client-Secret",
-        "defaultEngine": "Standard-Suchmaschine",
-        "braveKey": "Brave-API-Schlüssel",
-        "staanKey": "Staan-API-Schlüssel",
+        "apiKey": "API-Schlüssel",
+        "keyFallback": "Ohne Schlüssel",
         "serverUrl": "Server-URL",
         "siteUrl": "Site-URL",
         "portalUrl": "Portal-URL",
@@ -3424,15 +3429,12 @@
         "endpoint": "Endpunkt",
         "secretSet": "gesetzt",
         "secretNotSet": "nicht gesetzt",
+        "noKeyNeeded": "kein Schlüssel nötig",
         "yes": "ja",
         "no": "nein",
         "choices": {
           "ihubSigned": "JWT von iHub signiert",
           "oidcTokenExchange": "OIDC-Token-Austausch",
-          "auto": "Automatisch",
-          "brave": "Brave Search",
-          "staan": "Staan",
-          "qwant": "Qwant",
           "streamableHttp": "Streamable HTTP",
           "sse": "SSE",
           "websocket": "WebSocket",
@@ -3448,7 +3450,7 @@
         },
         "webSearch": {
           "title": "Websuche",
-          "description": "Die Suchmaschinen und der Seitenleser von Apps mit eingeschalteter Websuche."
+          "description": "Suchmaschinen für Apps mit eingeschalteter Websuche; ohne Suchmaschine suchen Modelle selbst, wo sie es können."
         },
         "storage": {
           "title": "Speicheranbieter",
@@ -3483,6 +3485,17 @@
           "defaultSearchProfileHelp": "Das Suchprofil, das iAssistant-Konversationen durchsuchen, wenn weder die App noch das Modell eines nennt.",
           "testResults": "Verbindungstest iAssistant",
           "testHelp": "Der Test erreicht iAssistant über die gewählte iFinder-Installation mit Ihrem eigenen Admin-Konto, mit den Werten oben (ungespeichert)."
+        },
+        "webSearch": {
+          "engineSection": "Suchmaschine",
+          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, Qwant, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem API-Schlüssel von {{engine}}. Anlegen unter Admin → Integrationen → Zugangsdaten.",
+          "envFallback": "Ohne Zugangsdaten nutzt der Server die Umgebungsvariable {{env}}, wenn sie gesetzt ist. Ausgewählte Zugangsdaten haben immer Vorrang.",
+          "noKeyNeeded": "{{engine}} braucht keinen API-Schlüssel.",
+          "egressHint": "Qwant sperrt viele IP-Adressen von Rechenzentren. „Verbindung testen“ zeigt, ob Qwant diesem Server antwortet.",
+          "testResults": "Test der Suchmaschine",
+          "testHelp": "Der Test prüft den API-Schlüssel der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
         },
         "ifinder": {
           "privateKey": "Privater Schlüssel",

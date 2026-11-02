@@ -132,6 +132,66 @@ export function installationsOf(config) {
   return out;
 }
 
+/**
+ * Grant every group without `permissions.integrations` what it could use
+ * before (`grantFor`).
+ * @returns {boolean} whether a group changed
+ */
+function grantGroups(groups, installed, ctx) {
+  let changed = false;
+  for (const [groupId, group] of Object.entries(groups)) {
+    if (!group || typeof group !== 'object') continue;
+    if (Array.isArray(group.permissions?.integrations)) {
+      ctx.log(`Group "${groupId}" already has permissions.integrations; left as it is`);
+      continue;
+    }
+    const grant = grantFor(groupId, groups, installed);
+    if (!group.permissions || typeof group.permissions !== 'object') group.permissions = {};
+    group.permissions.integrations = grant;
+    changed = true;
+    ctx.log(`Group "${groupId}" may use integrations: ${JSON.stringify(grant)}`);
+  }
+  return changed;
+}
+
+/**
+ * Warn about groups an installation named that groups.json does not define:
+ * their members lose the installation unless the admin creates the group.
+ */
+function warnUnknownGroups(groups, installed, ctx) {
+  const unknown = new Map();
+  for (const instance of installed) {
+    if (!Array.isArray(instance.allowedGroups)) continue;
+    for (const group of instance.allowedGroups) {
+      if (group === ALL || Object.hasOwn(groups, group)) continue;
+      if (!unknown.has(group)) unknown.set(group, []);
+      unknown.get(group).push(instance.id);
+    }
+  }
+  for (const [group, ids] of unknown) {
+    const names = ids.map(id => `"${id}"`).join(', ');
+    ctx.warn(
+      `Group "${group}" is named in allowedGroups of ${names} but is not defined in groups.json; ` +
+        `create the group and grant it these integrations (Admin → Groups → Integrations), or its members lose them`
+    );
+  }
+}
+
+/**
+ * Remove `allowedGroups` from every installation of `integrations.json`.
+ * @returns {number} how many installations had it
+ */
+function stripAllowedGroups(config) {
+  let removed = 0;
+  for (const instance of config.installed) {
+    if (instance && typeof instance === 'object' && Object.hasOwn(instance, 'allowedGroups')) {
+      delete instance.allowedGroups;
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 export async function up(ctx) {
   if (!(await ctx.fileExists(GROUPS_FILE))) {
     ctx.log('No groups.json: nothing to grant');
@@ -151,58 +211,21 @@ export async function up(ctx) {
   const installed = installationsOf(config);
 
   // 1. Grant each group what it could use before.
-  let groupsChanged = false;
   if (groups) {
-    for (const [groupId, group] of Object.entries(groups)) {
-      if (!group || typeof group !== 'object') continue;
-      if (Array.isArray(group.permissions?.integrations)) {
-        ctx.log(`Group "${groupId}" already has permissions.integrations; left as it is`);
-        continue;
+    if (grantGroups(groups, installed, ctx)) {
+      if (groupsData.metadata && typeof groupsData.metadata === 'object') {
+        groupsData.metadata.lastModified = new Date().toISOString();
       }
-      const grant = grantFor(groupId, groups, installed);
-      if (!group.permissions || typeof group.permissions !== 'object') group.permissions = {};
-      group.permissions.integrations = grant;
-      groupsChanged = true;
-      ctx.log(`Group "${groupId}" may use integrations: ${JSON.stringify(grant)}`);
+      await ctx.writeJson(GROUPS_FILE, groupsData);
     }
-
-    // Groups an installation named that groups.json does not define: their
-    // members lose the installation unless the admin creates the group.
-    const unknown = new Map();
-    for (const instance of installed) {
-      if (!Array.isArray(instance.allowedGroups)) continue;
-      for (const group of instance.allowedGroups) {
-        if (group === ALL || Object.hasOwn(groups, group)) continue;
-        if (!unknown.has(group)) unknown.set(group, []);
-        unknown.get(group).push(instance.id);
-      }
-    }
-    for (const [group, ids] of unknown) {
-      ctx.warn(
-        `Group "${group}" is named in allowedGroups of ${ids.map(id => `"${id}"`).join(', ')} but is not defined in groups.json; ` +
-          `create the group and grant it these integrations (Admin → Groups → Integrations), or its members lose them`
-      );
-    }
+    warnUnknownGroups(groups, installed, ctx);
   } else {
     ctx.warn('groups.json holds no groups: no group was granted integrations');
   }
 
-  if (groupsChanged) {
-    if (groupsData.metadata && typeof groupsData.metadata === 'object') {
-      groupsData.metadata.lastModified = new Date().toISOString();
-    }
-    await ctx.writeJson(GROUPS_FILE, groupsData);
-  }
-
   // 2. Installations carry no groups any more.
   if (hasIntegrationsFile && Array.isArray(config?.installed)) {
-    let removed = 0;
-    for (const instance of config.installed) {
-      if (instance && typeof instance === 'object' && Object.hasOwn(instance, 'allowedGroups')) {
-        delete instance.allowedGroups;
-        removed += 1;
-      }
-    }
+    const removed = stripAllowedGroups(config);
     if (removed > 0) {
       await ctx.writeJson(INTEGRATIONS_FILE, config);
       ctx.log(`Removed allowedGroups from ${removed} installed integration(s)`);

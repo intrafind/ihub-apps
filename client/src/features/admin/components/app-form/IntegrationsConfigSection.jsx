@@ -14,9 +14,9 @@ import IntegrationBindingRow from './IntegrationBindingRow';
 import WebSearchSection from './WebSearchSection';
 import IAssistantSection from './IAssistantSection';
 import { storageBindingRows } from './storageBindingRows';
+import { webSearchEnginesOf } from './webSearchEngines';
 
-/** The built-in installations that have their own panel instead of a row. */
-const WEBSEARCH_INSTANCE_ID = 'websearch';
+/** The built-in installation that has its own panel instead of a row. */
 const IASSISTANT_INSTANCE_ID = 'iassistant';
 const TYPE_PREFIX = 'type:';
 
@@ -34,7 +34,7 @@ const ROW_GROUPS = [
 
 /** Whether an installation belongs on a dedicated panel or nowhere in the editor. */
 function hasOwnPanel(item) {
-  if (item.id === WEBSEARCH_INSTANCE_ID || item.id === IASSISTANT_INSTANCE_ID) return true;
+  if (item.id === IASSISTANT_INSTANCE_ID) return true;
   // Web search engines are picked in the web search panel; storage providers
   // have their own card (they bring files, no model actions).
   return item.type === 'web-search' || item.type === 'storage';
@@ -99,8 +99,10 @@ function Card({ title, description, children, testId }) {
  * the way the admin Integrations page groups them, each integration in one
  * place only.
  *
- * - **Web search** keeps its own panel (`app.websearch`), shown while the web
- *   search integration is installed or the app already uses it.
+ * - **Web search** keeps its own panel (`app.websearch`), shown for every
+ *   chat app: native search needs no engine. Its engine select lists Auto
+ *   and the installed engines (installations of type `web-search`); the
+ *   engines never appear as rows.
  * - **iAssistant** keeps its own panel (`app.iassistant`) with the binding of
  *   the `iassistant` installation inside it, shown while iAssistant is
  *   installed or the app already uses it.
@@ -319,9 +321,12 @@ function IntegrationsConfigSection({ app, onChange }) {
     return Object.keys(bindings).filter(id => !known.has(id));
   }, [bindings, installed, definitionRows, directoryRows, storageRowIds, loading, error]);
 
-  const webSearchInstalled = installed.some(i => i.id === WEBSEARCH_INSTANCE_ID);
+  // The web search engines in Auto's order; null while unknown (not loaded).
+  const webSearchEngines = useMemo(
+    () => (loading || error ? null : webSearchEnginesOf(installed)),
+    [installed, loading, error]
+  );
   const iAssistantInstallation = installed.find(i => i.id === IASSISTANT_INSTANCE_ID);
-  const showWebSearch = webSearchInstalled || app.websearch?.enabled === true;
   const showIAssistant =
     Boolean(iAssistantInstallation) ||
     app.iassistant?.enabled === true ||
@@ -357,17 +362,7 @@ function IntegrationsConfigSection({ app, onChange }) {
 
   return (
     <>
-      {!loading && showWebSearch && (
-        <WebSearchSection
-          app={app}
-          onChange={onChange}
-          notice={
-            webSearchInstalled
-              ? null
-              : notInstalledNotice(t('admin.apps.edit.websearch', 'Web Search'))
-          }
-        />
-      )}
+      {!loading && <WebSearchSection app={app} onChange={onChange} engines={webSearchEngines} />}
 
       {!loading && showIAssistant && (
         <IAssistantSection

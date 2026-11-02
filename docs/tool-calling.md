@@ -1068,9 +1068,9 @@ Native (provider-handled) web search is resolved directly by `toolLoader.resolve
 | `openai-responses` | `{ type: 'web_search' }` — combinable with function tools |
 | `anthropic` | `{ type: <toolVersion>, name: 'web_search', max_uses: <cap> }` — the version comes from the model's `nativeWebSearch.toolVersion` (default `web_search_20250305`); newer versions are sent with `allowed_callers: ['direct']` unless the model enables `dynamicFiltering`; `max_uses` is the app's `websearch.maxSearches` or the node's `maxWebSearches` (default 5); combinable with function tools; billed separately by Anthropic per search |
 
-For any other provider — and for models with `nativeWebSearch.enabled: false` — `websearch` config falls back to the real, script-backed `braveSearch` tool. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge, the Sources list under the answer and (for workflow agent nodes) the synthesizer's citation ledger.
+For any other provider — and for models with `nativeWebSearch.enabled: false` — `websearch` config uses the search tool of the app's engine (`websearch.provider`, an installed integration of type `web-search`; `auto` takes the first engine the user may use), and offers nothing while no engine is available. Native search itself needs no engine. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge, the Sources list under the answer and (for workflow agent nodes) the synthesizer's citation ledger.
 
-Two runtime safeguards live in the agent loop and the LLM client: when the provider rejects the request with a client error that names web search, the loop retries once without the directive and with the `braveSearch` tool, and remembers the rejection per model for 15 minutes (`server/services/loop/nativeWebSearchFallback.js`); when Anthropic pauses a search turn (`stop_reason: pause_turn`), `LLMClient` replays the paused assistant blocks verbatim on a follow-up request (`providerContent`), up to three times per call.
+Two runtime safeguards live in the agent loop and the LLM client: when the provider rejects the request with a client error that names web search, the loop retries once without the directive and with the app's engine (`auto` for a workflow node), and remembers the rejection per model for 15 minutes (`server/services/loop/nativeWebSearchFallback.js`); when Anthropic pauses a search turn (`stop_reason: pause_turn`), `LLMClient` replays the paused assistant blocks verbatim on a follow-up request (`providerContent`), up to three times per call.
 
 ## Built-in Tools Reference
 
@@ -1080,13 +1080,13 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
-- **Type**: Server-side execution — an action of the built-in **Web search** installation (`websearch`, **Admin → Integrations**), not a tool file in `contents/tools/`; the same holds for `staanSearch`, `qwantSearch` and the page reader `read_url`. None of them appears under **Admin → Tools**
+- **Type**: Server-side execution — the `search` action of the built-in engine **Brave Search** (installation `brave`, **Admin → Integrations → Web search**), not a tool file in `contents/tools/`; the same holds for `staanSearch` (`staan`) and `qwantSearch` (`qwant`). None of them appears under **Admin → Tools**. The page reader `read_url` is a platform tool of the web search feature (`server/defaults/tools/read_url.json`)
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
   - `maxResults` (number, optional): Maximum results to return (default: configured by app's `websearch.maxResults`, max: 10)
   - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
-- **Authentication**: Reference a **secret** credential from the `websearch` installation (**Admin → Integrations → Web search → Brave Search API key**) or set the `BRAVE_SEARCH_API_KEY` environment variable
+- **Authentication**: Pick a **secret** credential in the **API key** field of the `brave` engine (**Admin → Integrations → Web search → Brave Search**) or set the `BRAVE_SEARCH_API_KEY` environment variable
 - **Configuration**:
   - **Installation Method** (Recommended):
     1. Store the key as a credential of type **secret** under Admin → Integrations → Credentials
@@ -1139,7 +1139,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
 - **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
-- **Otherwise** → the engine named by `provider`; for `"auto"`, the `websearch` installation's **Default search engine**, and when that is `auto` too, Brave if it has a key, then Staan, else Qwant
+- **Otherwise** → the engine named by `provider` (an engine installation id), if it is installed, enabled and granted to the user; for `"auto"`, the first engine that is, in the order Brave, Staan, Qwant, then any other engine by id; no engine means no web search on that model
 
 **Key properties**:
 
@@ -1154,7 +1154,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 | `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials referenced by the `websearch` installation, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips these ids from `app.tools`.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from `app.tools`; migration V203 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
 
 ### `iFinder`
 
@@ -1186,10 +1186,11 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 ### iHub's own tools (`ask_user`, `knowledge_*`, `write_artifact`, …)
 
-- **Type**: Actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). There are no tool files for them any more (migration V199 retired `contents/tools/<id>.json`); the installation cannot be removed or disabled, only single actions can be switched off.
-- **Tools** (ids unchanged): `ask_user`; the project knowledge tools `knowledge_search`, `knowledge_read`, `knowledge_list`; the agent tools `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done`; the evidence tools `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport`; the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run`.
-- **Apps**: list them in `tools` as before — the exact id (`"ask_user"`) or the base id of a function-style tool (`"knowledge"`, `"evidence"`). `"ihub"` itself selects nothing. The special rules stay: `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
-- **Actions on/off**: **Admin → Integrations → iHub → Settings** switches single actions off for every app (the former `enabled: false` of a tool file). Group tool grants (`permissions.tools`) by tool id keep working.
+iHub's own tools keep the ids they always had; there are no tool files for them in `contents/tools/` any more (migration V199 retired them, and initial setup no longer copies them there). Each belongs to the feature that uses it (Unified Integrations concept §6.9):
+
+- **Asking the user and scheduled tasks — the iHub integration.** `ask_user` and the scheduled-task tools `schedule_task`, `list_scheduled_tasks`, `update_scheduled_task`, `delete_scheduled_task`, `run_scheduled_task_now`, `list_task_runs`, `get_task_run` are the actions of the always-installed built-in integration **iHub** (`com.intrafind/ihub`, installation `ihub` under **Admin → Integrations**). The installation cannot be removed or disabled; its **Settings** switch single actions off for every app (the former `enabled: false` of a tool file); groups grant it on **Admin → Groups**. Apps list the tools in `tools` by id (`"ask_user"`); `"ihub"` itself selects nothing. `ask_user` survives a chat's tool narrowing, the scheduling tools follow the scheduled-tasks gate, `list_task_runs` and `get_task_run` are only ever added to a scheduled run.
+- **Project knowledge — projects.** `knowledge_search`, `knowledge_read` and `knowledge_list` come with every request that reaches a project (a linked, attached or workflow project the user may use) while the projects feature is on, and never otherwise. Neither the app's `tools` nor an integration adds, removes or switches them off; the definition ships with iHub (`server/defaults/tools/knowledge.json`, read in place) and a `contents/tools/knowledge.json` is not read. See [Projects → The knowledge tools](projects.md#the-knowledge-tools).
+- **Agent workspace and evidence — workflows and agents.** `write_artifact`, `read_memory`, `write_memory`, `read_inbox`, `write_inbox`, `create_task`, `list_tasks`, `mark_task_done` and `evidence_collect`, `evidence_validateQuotesFastPath`, `evidence_composeReport` are plain tools, not integration actions, and are not listed on the Integrations page. Workflow nodes, agent profiles and apps name them in `tools` by exact id or base id (`"evidence"`), agent runs attach them, a scheduled run with memory gets `read_memory` / `write_memory`, and group grants (`permissions.tools`) select them, also for the inbound MCP gateway. A tool file of the same id in `contents/tools/` takes the place of the shipped definition: one with `enabled: false` switches the tool off (migration V201 writes such a file for a tool that was switched off on the `ihub` installation).
 - **Documentation**: [Ask User Tool](ask-user-tool.md), [Projects](projects.md), [Scheduled Tasks](scheduled-tasks.md)
 
 ## Related Documentation

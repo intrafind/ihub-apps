@@ -53,7 +53,7 @@ describe('integration groups', () => {
       { id: 'drawio', protocol: 'mcp', builtIn: true },
       { id: 'office365', type: 'storage', protocol: 'native', builtIn: true },
       { id: 'x500bund', type: 'people-directory', protocol: 'native', builtIn: true },
-      { id: 'websearch', type: 'web-search', protocol: 'native', builtIn: true },
+      { id: 'brave', type: 'web-search', protocol: 'native', builtIn: true },
       { id: 'excalidraw', protocol: 'mcp', builtIn: true },
       { id: 'iassistant', protocol: 'native', builtIn: true }
     ];
@@ -152,14 +152,21 @@ describe('installation facts', () => {
         })
       )
     ).toEqual(['Tenant ID: tenant-1', 'Client ID: client-1', 'Client secret: not set']);
+    // Web search engines: whether the key is set, the variable it falls back to, never the id.
     expect(
       lines(
         installationFacts({
-          definition: 'com.intrafind/web-search',
-          values: { defaultProvider: 'brave', braveCredentialRef: 'brave-key' }
+          definition: 'com.intrafind/brave-search',
+          values: { apiKeyRef: 'brave-key' }
         })
       )
-    ).toEqual(['Default engine: Brave Search', 'Brave API key: set', 'Staan API key: not set']);
+    ).toEqual(['API key: set']);
+    expect(
+      lines(installationFacts({ definition: 'com.intrafind/staan-search', values: {} }))
+    ).toEqual(['API key: not set', 'Without a key: STAAN_API_KEY']);
+    expect(
+      lines(installationFacts({ definition: 'com.intrafind/qwant-search', values: {} }))
+    ).toEqual(['API key: no key needed']);
     expect(
       lines(
         installationFacts({
@@ -281,7 +288,9 @@ describe('installation facts', () => {
       'com.intrafind/iassistant',
       'com.intrafind/ldap-directory',
       'com.intrafind/entra-directory',
-      'com.intrafind/web-search',
+      'com.intrafind/brave-search',
+      'com.intrafind/staan-search',
+      'com.intrafind/qwant-search',
       'com.intrafind/office365',
       'com.intrafind/google-drive',
       'com.intrafind/nextcloud',
@@ -338,6 +347,20 @@ describe('apps binding an installation', () => {
       { id: 'by-type', name: 'By type', via: 'type' }
     ]);
     expect(appsBindingInstallation(APPS, { id: 'lonely', definition: 'x/y' }, 'en')).toEqual([]);
+  });
+
+  test('a web search engine: the apps that name it, and the apps on Auto', () => {
+    const apps = [
+      { id: 'named', name: { en: 'Named' }, websearch: { enabled: true, provider: 'brave' } },
+      { id: 'auto', name: { en: 'Auto' }, websearch: { enabled: true } },
+      { id: 'other', name: { en: 'Other' }, websearch: { enabled: true, provider: 'qwant' } },
+      { id: 'off', name: { en: 'Off' }, websearch: { enabled: false, provider: 'brave' } }
+    ];
+    const brave = { id: 'brave', definition: 'com.intrafind/brave-search', type: 'web-search' };
+    expect(appsBindingInstallation(apps, brave, 'en')).toEqual([
+      { id: 'named', name: 'Named', via: 'webSearch' },
+      { id: 'auto', name: 'Auto', via: 'webSearchAuto' }
+    ]);
   });
 });
 

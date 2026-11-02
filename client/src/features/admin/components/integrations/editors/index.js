@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import IFinderEditor from './IFinderEditor';
 import IAssistantEditor from './IAssistantEditor';
 import StorageProviderEditor from './StorageProviderEditor';
+import WebSearchEngineEditor from './WebSearchEngineEditor';
 
 /**
  * Dedicated installation editors, keyed by definition id.
@@ -51,7 +52,11 @@ const EDITORS = Object.freeze({
   // what differs per provider (tenant, server URL, sources).
   'com.intrafind/office365': StorageProviderEditor,
   'com.intrafind/google-drive': StorageProviderEditor,
-  'com.intrafind/nextcloud': StorageProviderEditor
+  'com.intrafind/nextcloud': StorageProviderEditor,
+  // The web search engines (`type: "web-search"`) share one editor.
+  'com.intrafind/brave-search': WebSearchEngineEditor,
+  'com.intrafind/staan-search': WebSearchEngineEditor,
+  'com.intrafind/qwant-search': WebSearchEngineEditor
 });
 
 /**

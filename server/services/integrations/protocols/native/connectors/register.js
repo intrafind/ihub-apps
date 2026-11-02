@@ -9,7 +9,11 @@
 import { registerConnector } from './index.js';
 import ifinder from './ifinder/index.js';
 import iassistant from './iassistant.js';
-import websearch from './websearch/index.js';
+import {
+  braveSearchConnector,
+  qwantSearchConnector,
+  staanSearchConnector
+} from './websearch/index.js';
 import jira from './jira/index.js';
 import entra from './entra/index.js';
 import ldapDirectory from './ldapDirectory/index.js';
@@ -22,7 +26,9 @@ import {
 
 registerConnector(ifinder);
 registerConnector(iassistant);
-registerConnector(websearch);
+registerConnector(braveSearchConnector);
+registerConnector(staanSearchConnector);
+registerConnector(qwantSearchConnector);
 registerConnector(jira);
 registerConnector(entra);
 registerConnector(ldapDirectory);

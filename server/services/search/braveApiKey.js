@@ -22,7 +22,7 @@ import { resolveBraveApiKey } from './websearchConfig.js';
 
 /**
  * Resolve the Brave Search API key, in order:
- * 1. the credential the `websearch` installation references
+ * 1. the credential the `brave` installation references (`apiKeyRef`)
  * 2. the `BRAVE_SEARCH_API_KEY` environment variable
  *
  * @returns {string|undefined} The key, or undefined when none is configured

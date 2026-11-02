@@ -76,32 +76,52 @@ of `com.intrafind/a2a-agent` (same id, same tool ids) and removes the file.
   is not moved: it is kept in `contents/config/a2aAgents.unmigrated.json` with a warning in the
   log. Install it under a free id and bind it to its apps.
 
-## Web Search Keys Moved From `providers.json` to the `websearch` Installation
+## Web Search Engines Moved From `providers.json` to Installed Integrations
 
-Migration V195 moves the `websearch` entries of `contents/config/providers.json` (Brave, Staan,
-Qwant) into the installed integration `websearch` and the credentials
-`integration-websearch-brave` / `integration-websearch-staan`, and deletes the tool files
-`braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from
-`contents/tools/`.
+Migrations V195 and V203 move the `websearch` entries of `contents/config/providers.json` (Brave,
+Staan, Qwant) into one installed integration per engine that worked, of type `web-search`, and
+delete the tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and
+`read_url.json` from `contents/tools/`.
 
+- **What gets installed:** `brave` where a Brave key was configured (its key moves to the
+  credential `integration-websearch-brave`, or `BRAVE_SEARCH_API_KEY` was set), `staan` likewise,
+  and `qwant` where Qwant was reachable (no key at all, or an app or the default engine named
+  Qwant). A fresh install ships no engine. The server log names each engine V203 installed or
+  left out, and why.
 - **Admin page and API:** the **Web Search Providers** category on **Admin → Providers** and
-  `POST /api/admin/providers/{id}/websearch-test` are gone; use the installation and
-  `POST /api/admin/integrations/installed/websearch/_test`. A provider with
-  `category: "websearch"` can no longer be created.
-- **Tools:** the four tools are no longer listed under **Admin → Tools** and cannot be disabled
-  there; switch the installation's actions off instead. A `tools` entry naming one of them (an
-  app's, a workflow node's) still selects it, now from the installation and only while the
-  installation is enabled and one of the user's groups grants it (`permissions.integrations`). The migration removes `braveSearch`,
-  `staanSearch` and `qwantSearch` from apps' `tools`; an app that had web search only through such
-  an entry gets `websearch: { enabled: true, enabledByDefault: true, provider }` with the engine it
-  named instead (logged per app). `read_url` entries stay.
-- **Apps with web search on** stay available while the `websearch` installation is disabled or
-  missing, without the search toggle and without native search; `websearch.required: true` hides
-  the app instead, like a required integration binding. The group grant applies to them
-  — to native search on Google, OpenAI and Anthropic models as well, not only to the
-  script-backed search tools.
-- **Deployments that write `providers.json` or the tool files themselves** have to write the
-  installation and credentials instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work.
+  `POST /api/admin/providers/{id}/websearch-test` are gone; use the engines under **Admin →
+  Integrations → Web search** and `POST /api/admin/integrations/installed/<engine>/_test`. A
+  provider with `category: "websearch"` can no longer be created.
+- **Apps:** `websearch.provider` is `auto` or an engine's installation id. `auto` now takes the
+  first engine the user may use (Brave, Staan, Qwant, then any other) instead of picking by API
+  key; a named engine that is missing, disabled or not granted means no web search on models
+  without native search, never another engine. Apps with web search on stay available without
+  any engine and search natively on Google, OpenAI and Anthropic models;
+  `websearch.required: true` hides the app while its engine is not available.
+- **Tools:** the search tools are not listed under **Admin → Tools**; switch an engine (or its
+  **Search the web** action) off instead. A `tools` entry naming `braveSearch`, `staanSearch` or
+  `qwantSearch` (an app's, a workflow node's — the shipped `claude-style-agent` and
+  `research-assistant` workflows name `braveSearch`) selects the tool only while that engine is
+  installed, enabled and granted. V195 removes these ids from apps' `tools`; an app that had web
+  search only through such an entry gets `websearch: { enabled: true, enabledByDefault: true,
+  provider }` with the engine it named (logged per app). `read_url` entries stay: the page reader
+  is a platform tool of web search now, switched off with a `contents/tools/read_url.json` that
+  says `"enabled": false`.
+- **Groups:** who may use an engine is granted on the groups (`permissions.integrations`: the
+  engine's id or `type:web-search`); native search on the model needs no grant.
+- **Installs that ran 5.6.5-RC1** have the single installation `websearch`
+  (`com.intrafind/web-search`); V203 replaces it with the engines that worked (credential
+  references, the enabled state and switched-off actions carried over; apps on Auto set to its
+  default engine when that was an explicit one), turns group grants of `websearch` into
+  `type:web-search` and removes app bindings and `tools` entries of `websearch`. The definition
+  `com.intrafind/web-search` and `POST …/installed/websearch/_test` are gone.
+- **Deployments that write `providers.json`, the tool files or the `websearch` installation
+  themselves** have to write engine installations (`brave`, `staan`, `qwant` with `apiKeyRef`)
+  instead; `BRAVE_SEARCH_API_KEY` and `STAAN_API_KEY` still work for an installed engine.
+
+**Before upgrading:** nothing is required. After the upgrade, check **Admin → Integrations → Web
+search** for the engines V203 installed, and install one if apps should search on models without
+native search.
 
 ## Jira Configuration Moved Out of `platform.json`
 
@@ -173,21 +193,32 @@ Migration V199 deletes `contents/tools/ask_user.json`, `knowledge.json`, `eviden
 `write_inbox.json`, `create_task.json`, `list_tasks.json`, `mark_task_done.json`,
 `schedule_task.json`, `list_scheduled_tasks.json`, `update_scheduled_task.json`,
 `delete_scheduled_task.json`, `run_scheduled_task_now.json`, `list_task_runs.json` and
-`get_task_run.json` when they are the shipped files; the always-installed integration `ihub`
-(`com.intrafind/ihub`) owns these tools under the same ids.
+`get_task_run.json` when they are the shipped files, and iHub no longer copies them back on
+start. The tools keep their ids: `ask_user` and the scheduled-task tools are actions of the
+always-installed integration `ihub` (`com.intrafind/ihub`), the knowledge tools belong to
+projects, and the agent workspace and evidence tools to workflows and agents.
 
-- **Admin → Tools** no longer lists them and they cannot be switched off there; switch the
-  action off on the `ihub` installation instead (a file that was `enabled: false` is migrated
-  into `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a
-  warning in the log and keeps serving its tool in place of the installation's action until it
-  is deleted; move the change over first.
+- **Admin → Tools** no longer lists them. Switch `ask_user` or a scheduled-task tool off on the
+  `ihub` installation instead (a file that was `enabled: false` is migrated into
+  `actions.disabled`). A tool file an admin edited is left in `contents/tools/` with a warning in
+  the log and keeps serving its tool until it is deleted; move the change over first.
+- **The knowledge tools can no longer be switched off:** a disabled `knowledge.json`, or a
+  knowledge action switched off on the `ihub` installation, no longer applies — every request that
+  reaches a project gets them while the projects feature is on. An edited `knowledge.json` is not
+  read any more (migration V201 warns about it); delete it.
+- **The agent workspace and evidence tools are no longer listed under the iHub integration**
+  (migration V201 removes them from the installation's actions). One that was switched off there
+  stays off: V201 writes its tool file to `contents/tools/` with `enabled: false`. A single
+  evidence function cannot be switched off on its own; V201 names one in a warning.
 - **Apps and groups** need no change: `tools: ["ask_user"]` and friends and `permissions.tools`
-  grants keep selecting the tools. `tools: ["ihub"]` selects nothing.
+  grants keep selecting the tools. `tools: ["ihub"]` selects nothing, and neither does
+  `tools: ["knowledge"]`: the knowledge tools come with the request's projects.
 - **The `ihub` installation** cannot be removed or disabled: `DELETE
   /api/admin/integrations/installed/ihub` and `POST …/ihub/_disable` answer 400
   (`ALWAYS_INSTALLED`). The instance id `ihub` is reserved.
-- **Deployments that ship these tool files themselves** (templates, scripts) can drop them; a
-  shipped copy is deleted on the next start.
+- **Deployments that ship these tool files themselves** (templates, scripts) have to drop them:
+  the migrations remove a shipped copy once, and a copy written later takes the place of the
+  built-in tool again, out of reach of the `ihub` installation's switches.
 
 ## Cloud Storage Providers Moved Out of `platform.json`
 

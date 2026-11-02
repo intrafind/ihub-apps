@@ -155,9 +155,7 @@ export function parseScopeList(text) {
  * @returns {string}
  */
 export function effectiveIssuer(configuredIssuer, detectedIssuer) {
-  return configuredIssuer && configuredIssuer.startsWith('http')
-    ? configuredIssuer
-    : detectedIssuer || '';
+  return configuredIssuer?.startsWith('http') ? configuredIssuer : detectedIssuer || '';
 }
 
 /**
