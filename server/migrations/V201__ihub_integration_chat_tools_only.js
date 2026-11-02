@@ -145,7 +145,7 @@ function sortKeys(value) {
  * @returns {string}
  */
 export function contentHash(tool, sha256) {
-  const rest = { ...(tool || {}) };
+  const rest = { ...tool };
   delete rest.enabled;
   return sha256(JSON.stringify(sortKeys(rest)));
 }
@@ -174,34 +174,84 @@ export function switchedOffMovedActions(actions = {}) {
 }
 
 /**
+ * Remove the moved action names from one per-action list, in place.
+ * @param {object} actions - the installation's `actions`
+ * @param {'enabled'|'disabled'} list - which list
+ * @returns {string[]} the names removed, labelled with the list (`disabled: write_artifact`)
+ */
+function removeMovedFromList(actions, list) {
+  if (!Array.isArray(actions[list])) return [];
+  const removed = actions[list].filter(name => MOVED.has(name)).map(name => `${list}: ${name}`);
+  actions[list] = actions[list].filter(name => !MOVED.has(name));
+  return removed;
+}
+
+/**
+ * Remove the moved action names from `actions.overrides`, in place.
+ * @param {object} [overrides] - the installation's `actions.overrides`
+ * @returns {string[]} the names removed, labelled (`overrides: write_memory`)
+ */
+function removeMovedOverrides(overrides) {
+  if (!overrides || typeof overrides !== 'object') return [];
+  const names = Object.keys(overrides).filter(name => MOVED.has(name));
+  for (const name of names) delete overrides[name];
+  return names.map(name => `overrides: ${name}`);
+}
+
+/**
  * Remove the moved action names from an installation's action policy, in place.
  * @param {object} instance - the `ihub` installation
  * @returns {string[]} the names removed, list by list (`disabled: write_artifact`, …)
  */
 export function removeMovedActions(instance) {
-  const removed = [];
   const actions = instance.actions;
-  if (!actions || typeof actions !== 'object') return removed;
-  for (const list of ['enabled', 'disabled']) {
-    if (!Array.isArray(actions[list])) continue;
-    for (const name of actions[list]) {
-      if (MOVED.has(name)) removed.push(`${list}: ${name}`);
-    }
-    actions[list] = actions[list].filter(name => !MOVED.has(name));
-  }
-  if (actions.overrides && typeof actions.overrides === 'object') {
-    for (const name of Object.keys(actions.overrides)) {
-      if (!MOVED.has(name)) continue;
-      delete actions.overrides[name];
-      removed.push(`overrides: ${name}`);
-    }
-  }
-  return removed;
+  if (!actions || typeof actions !== 'object') return [];
+  return [
+    ...removeMovedFromList(actions, 'enabled'),
+    ...removeMovedFromList(actions, 'disabled'),
+    ...removeMovedOverrides(actions.overrides)
+  ];
+}
+
+/**
+ * The retired tool files present in `contents/tools/`, read in parallel (the
+ * reads are independent; the result keeps the order of {@link SHIPPED_HASHES}).
+ * @param {object} ctx - migration context
+ * @returns {Promise<Array<{id: string, rel: string, tool: object}>>}
+ */
+async function readRetiredToolFiles(ctx) {
+  const found = await Promise.all(
+    Object.keys(SHIPPED_HASHES).map(async id => {
+      const rel = toolFile(id);
+      if (!(await ctx.fileExists(rel))) return null;
+      return { id, rel, tool: await ctx.readJson(rel) };
+    })
+  );
+  return found.filter(Boolean);
+}
+
+/**
+ * What step 1 does with a retired tool file found in `contents/tools/`.
+ * @param {string} id - the file's id
+ * @param {object} tool - the parsed file
+ * @param {(text: string) => string} sha256 - hex digest
+ * @returns {'remove'|'keep'|'stale-knowledge'} `remove` for a copy as shipped;
+ *   `stale-knowledge` for an edited `knowledge.json`, which is no longer read;
+ *   `keep` for any other edited file (it keeps serving its tool, as V199 left
+ *   it) and for a switched-off workflow or agent tool file (that tool's off switch)
+ */
+function retiredToolFileFate(id, tool, sha256) {
+  const asShipped = Boolean(tool) && contentHash(tool, sha256) === SHIPPED_HASHES[id];
+  if (!asShipped) return id === KNOWLEDGE_FILE_ID ? 'stale-knowledge' : 'keep';
+  if (WORKFLOW_TOOL_FILES[id] && tool.enabled === false) return 'keep';
+  return 'remove';
 }
 
 /**
  * Step 1: remove the retired tool files that are back in `contents/tools/`
  * as shipped.
+ * @param {object} ctx - migration context
+ * @param {(text: string) => string} sha256 - hex digest
  * @returns {Promise<{disabledIhubActions: string[], knowledgeOff: boolean}>}
  *   the iHub actions a removed copy had switched off, and whether a removed
  *   `knowledge.json` had been switched off
@@ -209,23 +259,19 @@ export function removeMovedActions(instance) {
 async function removeShippedCopies(ctx, sha256) {
   const disabledIhubActions = [];
   let knowledgeOff = false;
-  for (const [id, shipped] of Object.entries(SHIPPED_HASHES)) {
-    const rel = toolFile(id);
-    if (!(await ctx.fileExists(rel))) continue;
-    const tool = await ctx.readJson(rel);
-    const asShipped = Boolean(tool) && contentHash(tool, sha256) === shipped;
-    if (id === KNOWLEDGE_FILE_ID && !asShipped) {
+  const files = await readRetiredToolFiles(ctx);
+  // Sequential on purpose: a migration deletes one file at a time, so its log follows the files' order.
+  for (const { id, rel, tool } of files) {
+    const fate = retiredToolFileFate(id, tool, sha256);
+    if (fate === 'stale-knowledge') {
       ctx.warn(
         `${rel} is no longer read: the knowledge tools are defined by projects and offered whenever a request reaches a project. Delete the file; its changes do not apply any more.`
       );
-      continue;
     }
-    // An edited file keeps serving its tool, as V199 left it.
-    if (!asShipped) continue;
-    // A switched-off copy of a workflow or agent tool file is that tool's off switch.
-    if (WORKFLOW_TOOL_FILES[id] && tool.enabled === false) continue;
-    if (IHUB_TOOL_FILES.includes(id) && tool.enabled === false) disabledIhubActions.push(id);
-    if (id === KNOWLEDGE_FILE_ID && tool.enabled === false) knowledgeOff = true;
+    if (fate !== 'remove') continue;
+    const off = tool.enabled === false;
+    if (off && IHUB_TOOL_FILES.includes(id)) disabledIhubActions.push(id);
+    if (off && id === KNOWLEDGE_FILE_ID) knowledgeOff = true;
     await ctx.deleteFile(rel);
     ctx.log(`${rel} removed: it was the shipped file, which iHub reads in place`);
   }
@@ -233,36 +279,144 @@ async function removeShippedCopies(ctx, sha256) {
 }
 
 /**
+ * The workflow and agent tool files whose actions the installation had all
+ * switched off, each with what `contents/tools/` and the shipped defaults
+ * hold for it, read in parallel (the reads are independent; the result keeps
+ * the order of {@link WORKFLOW_TOOL_FILES}).
+ * @param {object} ctx - migration context
+ * @param {Set<string>} switchedOff - moved action names the installation kept off
+ * @returns {Promise<Array<{rel: string, actions: string[], kind: 'present'|'shipped'|'unreadable', shipped?: object, error?: any}>>}
+ *   `present`: `contents/tools/` has a file of that id; `shipped`: the shipped
+ *   file to write; `unreadable`: the shipped file could not be read
+ */
+async function readSwitchedOffWorkflowTools(ctx, switchedOff) {
+  const offFiles = Object.entries(WORKFLOW_TOOL_FILES).filter(([, actions]) =>
+    actions.every(name => switchedOff.has(name))
+  );
+  return Promise.all(
+    offFiles.map(async ([id, actions]) => {
+      const rel = toolFile(id);
+      if (await ctx.fileExists(rel)) return { rel, actions, kind: 'present' };
+      try {
+        return { rel, actions, kind: 'shipped', shipped: await ctx.readDefaultJson(rel) };
+      } catch (error) {
+        return { rel, actions, kind: 'unreadable', error };
+      }
+    })
+  );
+}
+
+/**
  * Write the shipped tool file of every workflow or agent tool whose actions
  * the installation had all switched off, with `enabled: false`.
- * @param {object} ctx
+ * @param {object} ctx - migration context
  * @param {Set<string>} switchedOff - moved action names the installation kept off
  * @returns {Promise<Set<string>>} the switched-off action names now carried by a tool file
  */
 async function keepWorkflowToolsOff(ctx, switchedOff) {
   const carried = new Set();
-  for (const [id, actions] of Object.entries(WORKFLOW_TOOL_FILES)) {
-    if (!actions.every(name => switchedOff.has(name))) continue;
-    const rel = toolFile(id);
-    if (await ctx.fileExists(rel)) {
-      // A file of that id decides about the tool, as it did before and since V199.
-      for (const name of actions) carried.add(name);
-      continue;
-    }
-    let shipped;
-    try {
-      shipped = await ctx.readDefaultJson(rel);
-    } catch (error) {
+  const files = await readSwitchedOffWorkflowTools(ctx, switchedOff);
+  // Sequential on purpose: a migration writes one file at a time, so its log follows the files' order.
+  for (const { rel, actions, kind, shipped, error } of files) {
+    if (kind === 'unreadable') {
       ctx.warn(`${rel} could not be read from the shipped defaults: ${error.message}`);
       continue;
     }
-    await ctx.writeJson(rel, { ...shipped, enabled: false });
+    // A file of that id (kind `present`) decides about the tool, as it did before and since V199.
+    if (kind === 'shipped') {
+      await ctx.writeJson(rel, { ...shipped, enabled: false });
+      ctx.log(
+        `${rel} written with enabled: false: ${actions.join(', ')} stayed switched off (switch it on in Admin → Tools or delete the file)`
+      );
+    }
     for (const name of actions) carried.add(name);
-    ctx.log(
-      `${rel} written with enabled: false: ${actions.join(', ')} stayed switched off (switch it on in Admin → Tools or delete the file)`
-    );
   }
   return carried;
+}
+
+/**
+ * The SHA-256 hex digest from node:crypto, loaded when the migration runs.
+ * @returns {Promise<(text: string) => string>}
+ */
+async function nodeSha256() {
+  const { createHash } = await import('node:crypto');
+  return text => createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * `config/integrations.json`, with an `installed` list.
+ * @param {object} ctx - migration context
+ * @param {boolean} hasConfig - whether the file exists (an empty config when not)
+ * @returns {Promise<object>}
+ */
+async function readIntegrations(ctx, hasConfig) {
+  const config = (hasConfig ? await ctx.readJson(INTEGRATIONS_FILE) : null) || {};
+  if (!Array.isArray(config.installed)) config.installed = [];
+  return config;
+}
+
+/**
+ * Add the `ihub` installation to `config` as V199 creates it: enabled, every
+ * action on unless switched off afterwards.
+ * @param {object} ctx - migration context
+ * @param {object} config - `config/integrations.json`, changed in place
+ * @returns {object} the new installation
+ */
+function createInstance(ctx, config) {
+  const now = new Date().toISOString();
+  const instance = {
+    id: INSTANCE_ID,
+    definition: DEFINITION,
+    definitionVersion: DEFINITION_VERSION,
+    enabled: true,
+    values: {},
+    auth: { mode: 'none' },
+    actions: { enabled: ['*'], disabled: [], overrides: {} },
+    allowedGroups: [],
+    installedAt: now,
+    updatedAt: now
+  };
+  config.installed.push(instance);
+  if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
+  ctx.log(`Installed integration "${INSTANCE_ID}" created (${DEFINITION})`);
+  return instance;
+}
+
+/**
+ * Add iHub actions to an installation's `actions.disabled`, in place.
+ * @param {object} instance - the `ihub` installation
+ * @param {string[]} names - the actions to switch off
+ */
+function disableIhubActions(instance, names) {
+  if (!instance.actions || typeof instance.actions !== 'object') {
+    instance.actions = { enabled: ['*'], disabled: [], overrides: {} };
+  }
+  const disabled = Array.isArray(instance.actions.disabled) ? instance.actions.disabled : [];
+  instance.actions.disabled = [...new Set([...disabled, ...names])];
+}
+
+/**
+ * Step 2 on the installation, in place: drop the moved action names and
+ * switch off the iHub actions whose removed tool files were switched off.
+ * @param {object} ctx - migration context
+ * @param {object} instance - the `ihub` installation
+ * @param {string[]} disabledIhubActions - from {@link removeShippedCopies}
+ * @returns {boolean} whether the installation changed
+ */
+function moveInstanceActions(ctx, instance, disabledIhubActions) {
+  const removed = removeMovedActions(instance);
+  if (removed.length) {
+    ctx.log(
+      `Installation "${INSTANCE_ID}": removed the knowledge, agent and evidence tools from its actions (${removed.join(', ')})`
+    );
+  }
+  if (disabledIhubActions.length) {
+    disableIhubActions(instance, disabledIhubActions);
+    ctx.log(
+      `Installation "${INSTANCE_ID}": ${disabledIhubActions.join(', ')} switched off, as their tool files were`
+    );
+  }
+  return removed.length > 0 || disabledIhubActions.length > 0;
 }
 
 /**
@@ -270,76 +424,26 @@ async function keepWorkflowToolsOff(ctx, switchedOff) {
  * @param {{ sha256?: (text: string) => string }} [deps] - hashing (node:crypto when absent)
  */
 export async function up(ctx, deps = {}) {
-  let sha256 = deps.sha256;
-  if (!sha256) {
-    const { createHash } = await import('node:crypto');
-    sha256 = text => createHash('sha256').update(text).digest('hex');
-  }
-
-  const { disabledIhubActions, knowledgeOff: knowledgeFileOff } = await removeShippedCopies(
-    ctx,
-    sha256
-  );
+  const sha256 = deps.sha256 || (await nodeSha256());
+  const { disabledIhubActions, knowledgeOff } = await removeShippedCopies(ctx, sha256);
 
   const hasConfig = await ctx.fileExists(INTEGRATIONS_FILE);
   if (!hasConfig && disabledIhubActions.length === 0) {
-    warnSwitchedOff(ctx, knowledgeFileOff ? [...KNOWLEDGE_ACTIONS] : [], []);
+    warnSwitchedOff(ctx, knowledgeOff);
     return;
   }
-  const config = (hasConfig ? await ctx.readJson(INTEGRATIONS_FILE) : null) || {};
-  if (!Array.isArray(config.installed)) config.installed = [];
-  let instance = config.installed.find(inst => inst?.id === INSTANCE_ID);
-
-  if (!instance && disabledIhubActions.length === 0) {
+  const config = await readIntegrations(ctx, hasConfig);
+  const existing = config.installed.find(inst => inst?.id === INSTANCE_ID);
+  if (!existing && disabledIhubActions.length === 0) {
     ctx.log(`No installation "${INSTANCE_ID}" in ${INTEGRATIONS_FILE}; nothing to change`);
-    warnSwitchedOff(ctx, knowledgeFileOff ? [...KNOWLEDGE_ACTIONS] : [], []);
+    warnSwitchedOff(ctx, knowledgeOff);
     return;
   }
 
-  let changed = false;
-  if (!instance) {
-    // As V199 creates it: enabled, every action on unless switched off below.
-    const now = new Date().toISOString();
-    instance = {
-      id: INSTANCE_ID,
-      definition: DEFINITION,
-      definitionVersion: DEFINITION_VERSION,
-      enabled: true,
-      values: {},
-      auth: { mode: 'none' },
-      actions: { enabled: ['*'], disabled: [], overrides: {} },
-      allowedGroups: [],
-      installedAt: now,
-      updatedAt: now
-    };
-    config.installed.push(instance);
-    if (!config.security) config.security = { blockPrivateIps: true, allowedHosts: [] };
-    changed = true;
-    ctx.log(`Installed integration "${INSTANCE_ID}" created (${DEFINITION})`);
-  }
-
+  const instance = existing || createInstance(ctx, config);
   const switchedOff = new Set(switchedOffMovedActions(instance.actions));
-  const removed = removeMovedActions(instance);
-  if (removed.length) {
-    changed = true;
-    ctx.log(
-      `Installation "${INSTANCE_ID}": removed the knowledge, agent and evidence tools from its actions (${removed.join(', ')})`
-    );
-  }
-
-  if (disabledIhubActions.length) {
-    if (!instance.actions || typeof instance.actions !== 'object') {
-      instance.actions = { enabled: ['*'], disabled: [], overrides: {} };
-    }
-    const disabled = Array.isArray(instance.actions.disabled) ? instance.actions.disabled : [];
-    instance.actions.disabled = [...new Set([...disabled, ...disabledIhubActions])];
-    changed = true;
-    ctx.log(
-      `Installation "${INSTANCE_ID}": ${disabledIhubActions.join(', ')} switched off, as their tool files were`
-    );
-  }
-
-  if (changed) {
+  const updated = moveInstanceActions(ctx, instance, disabledIhubActions);
+  if (!existing || updated) {
     instance.updatedAt = new Date().toISOString();
     await ctx.writeJson(INTEGRATIONS_FILE, config);
   } else {
@@ -347,20 +451,21 @@ export async function up(ctx, deps = {}) {
   }
 
   const carried = await keepWorkflowToolsOff(ctx, switchedOff);
-  warnSwitchedOff(
-    ctx,
-    KNOWLEDGE_ACTIONS.filter(name => knowledgeFileOff || switchedOff.has(name)),
-    WORKFLOW_ACTIONS.filter(name => switchedOff.has(name) && !carried.has(name))
-  );
+  warnSwitchedOff(ctx, knowledgeOff, switchedOff, carried);
 }
 
 /**
- * Warn about the switches that do not survive the move.
- * @param {object} ctx
- * @param {string[]} knowledgeOff - knowledge actions an admin had switched off
- * @param {string[]} workflowOn - workflow or agent actions that were off and are on now
+ * Warn about the switches that do not survive the move: knowledge actions
+ * that were off (they cannot be switched off any more), and workflow or agent
+ * actions that were off and no tool file keeps off.
+ * @param {object} ctx - migration context
+ * @param {boolean} knowledgeFileOff - a removed `knowledge.json` had been switched off
+ * @param {Set<string>} [switchedOff] - moved action names the installation kept off
+ * @param {Set<string>} [carried] - the ones a tool file now keeps off
  */
-function warnSwitchedOff(ctx, knowledgeOff, workflowOn) {
+function warnSwitchedOff(ctx, knowledgeFileOff, switchedOff = new Set(), carried = new Set()) {
+  const knowledgeOff = KNOWLEDGE_ACTIONS.filter(name => knowledgeFileOff || switchedOff.has(name));
+  const workflowOn = WORKFLOW_ACTIONS.filter(name => switchedOff.has(name) && !carried.has(name));
   const parts = [];
   if (knowledgeOff.length) {
     parts.push(
