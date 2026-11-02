@@ -27,9 +27,9 @@
  *
  * Each engine takes over the enabled state of `websearch`, and an engine
  * whose action `websearch` had switched off gets its `search` action switched
- * off. A page reader `websearch` had switched off (`readUrl`) stays off
- * through `contents/tools/read_url.json` with `enabled: false`, which takes the
- * place of the shipped definition.
+ * off. A page reader `websearch` had switched off (its `readUrl` action, or
+ * the whole installation) stays off through `contents/tools/read_url.json`
+ * with `enabled: false`, which takes the place of the shipped definition.
  *
  * When the installation's default engine was an explicit one, every app with
  * `websearch.provider` `auto` (or unset) is rewritten to that engine, so its
@@ -282,7 +282,10 @@ export function planEngines(websearch, { apps = [], env = {}, fresh = false, now
     reasons,
     skipped,
     defaultEngine: defaultProvider === 'auto' ? null : defaultProvider,
-    readerOff: Boolean(websearch) && !oldActionEnabled(websearch, OLD_READER_ACTION)
+    // A disabled `websearch` offered no reader either, whatever its actions said.
+    readerOff:
+      Boolean(websearch) &&
+      (websearch.enabled === false || !oldActionEnabled(websearch, OLD_READER_ACTION))
   };
 }
 

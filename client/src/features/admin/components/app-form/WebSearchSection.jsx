@@ -108,13 +108,18 @@ function WebSearchSection({ app, onChange, engines = null }) {
                         : engineLabel(engine)}
                     </option>
                   ))}
-                  {engineStatus === 'missing' && (
+                  {/* The named engine, when the list does not have it: not
+                      installed, or the list failed to load (`unknown`). Without
+                      it the select would show Auto for a stored engine. */}
+                  {(engineStatus === 'missing' || engineStatus === 'unknown') && (
                     <option value={provider}>
-                      {t(
-                        'admin.apps.edit.websearchEngineMissingOption',
-                        '{{name}} — not installed',
-                        { name: provider }
-                      )}
+                      {engineStatus === 'missing'
+                        ? t(
+                            'admin.apps.edit.websearchEngineMissingOption',
+                            '{{name}} — not installed',
+                            { name: provider }
+                          )
+                        : provider}
                     </option>
                   )}
                 </select>
