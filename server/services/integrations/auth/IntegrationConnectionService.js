@@ -78,6 +78,9 @@ export const CONNECTIONS_NAMESPACE = RUNTIME_NAMESPACES.integrationConnections;
 /** Where the browser lands when no (valid) return URL was given. */
 export const DEFAULT_RETURN_PATH = '/settings/integrations';
 
+/** A failed "connected as" lookup is not repeated sooner than this. */
+const ACCOUNT_LABEL_RETRY_MS = 10 * 60 * 1000;
+
 /** `lastUsedAt` is written at most this often per connection. */
 const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -179,6 +182,8 @@ export class IntegrationConnectionService {
     this.memory = new Map();
     /** @type {Map<string, Promise<Object>>} single-flight refreshes per connection id */
     this._refreshes = new Map();
+    /** @type {Map<string, number>} failed "connected as" lookups per connection id */
+    this.accountLabelFailures = new Map();
     /** Test seam: the SDK-style refresh function handed to the OAuth client. */
     this.refreshFn = null;
   }
@@ -851,30 +856,49 @@ export class IntegrationConnectionService {
       summary: `Connected ${descriptor.displayName} (${descriptor.installationId})${flow.stepUp ? ' with additional scopes' : ''}`
     });
     await descriptor.onConnected?.({ userId, user: req?.user, wasConnected });
-    await this._recordAccountLabel(descriptor, id, userId);
   }
 
   /**
-   * "Connected as …": ask the provider whose account the new tokens belong to
-   * and keep the label on the record (`externalAccount.label`), so listing a
-   * user's integrations never calls a vendor. Best effort: a failure leaves
-   * the record without a label.
+   * "Connected as …": the label of the account a user's connection belongs to
+   * (`externalAccount.label`). Read from the provider once — the first time
+   * the user's integrations are listed after connecting — and then kept on
+   * the record, so later listings never call the vendor. Not done during the
+   * callback: connecting stays one token exchange.
+   *
+   * Best effort: a failure leaves the record without a label and is not
+   * retried for {@link ACCOUNT_LABEL_RETRY_MS} on this worker.
+   *
+   * @param {Object} params
+   * @param {string} params.installationId
+   * @param {string} params.userId
+   * @returns {Promise<string|null>} The label, or null
    */
-  async _recordAccountLabel(descriptor, id, userId) {
-    if (typeof descriptor.accountLabel !== 'function') return;
+  async ensureAccountLabel({ installationId, userId }) {
+    const id = connectionIdFor(installationId, { type: 'user', id: userId });
+    const record = await this.getConnection(id);
+    if (!record || record.status !== 'active') return null;
+    if (record.externalAccount?.label) return record.externalAccount.label;
+    const failedAt = this.accountLabelFailures.get(id);
+    if (failedAt && this.now() - failedAt < ACCOUNT_LABEL_RETRY_MS) return null;
+    const descriptor = await this.describe(installationId);
+    if (typeof descriptor?.accountLabel !== 'function') return null;
     try {
       const label = await descriptor.accountLabel(userId);
-      if (typeof label !== 'string' || !label) return;
-      const record = await this.getConnection(id);
+      if (typeof label !== 'string' || !label) throw new Error('No account label');
+      const bounded = label.slice(0, 512);
       await this.updateConnection(id, {
-        externalAccount: { ...(record?.externalAccount || {}), label: label.slice(0, 512) }
+        externalAccount: { ...(record.externalAccount || {}), label: bounded }
       });
+      this.accountLabelFailures.delete(id);
+      return bounded;
     } catch (error) {
-      logger.info('Could not read the account of a new connection', {
+      this.accountLabelFailures.set(id, this.now());
+      logger.info('Could not read the account of a connection', {
         component: COMPONENT,
-        integration: descriptor.installationId,
+        integration: installationId,
         error: error.message
       });
+      return null;
     }
   }
 

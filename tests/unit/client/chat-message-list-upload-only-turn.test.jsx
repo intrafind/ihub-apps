@@ -30,11 +30,6 @@ jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
   useUIConfig: () => ({ uiConfig: {} })
 }));
 
-jest.mock('../../../client/src/shared/components/integrations/IntegrationAuthPrompts', () => ({
-  __esModule: true,
-  default: () => null
-}));
-
 jest.mock('../../../client/src/api', () => ({
   sendMessageFeedback: jest.fn(),
   answerInteraction: jest.fn()

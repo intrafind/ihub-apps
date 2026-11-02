@@ -237,6 +237,13 @@ async function entryFor(resolved, user, actions) {
     record = resolvedConnection?.ok
       ? resolvedConnection.connection
       : await connections.getConnection(connectionIdFor(instance.id, principal)).catch(() => null);
+    // "Connected as …": read once from the provider, then kept on the record.
+    if (resolvedConnection?.ok && record && !record.externalAccount?.label) {
+      const label = await connections
+        .ensureAccountLabel({ installationId: instance.id, userId: principal.id })
+        .catch(() => null);
+      if (label) record = { ...record, externalAccount: { ...record.externalAccount, label } };
+    }
   }
   const language = resolved.language;
   return {

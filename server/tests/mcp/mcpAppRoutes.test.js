@@ -17,7 +17,7 @@ const findTool = jest.fn();
 const hasServer = jest.fn(() => false);
 const connectionForUser = jest.fn();
 const withUserConnection = jest.fn();
-const connectUrlFor = jest.fn(id => `/api/mcp/oauth/authorize?serverId=${id}`);
+const connectUrlFor = jest.fn(id => `/api/integrations/${id}/connect`);
 
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
@@ -225,7 +225,7 @@ describe('per-user OAuth servers', () => {
       error: 'auth_required',
       code: 'INTEGRATION_AUTH_REQUIRED',
       integration: 'excalidraw',
-      connectUrl: '/api/mcp/oauth/authorize?serverId=excalidraw'
+      connectUrl: '/api/integrations/excalidraw/connect'
     });
   });
 

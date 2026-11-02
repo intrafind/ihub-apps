@@ -3,14 +3,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-// The shared OAuth route factory (routes/integrations/oauthIntegrationFactory.js),
-// exercised through the four real provider routers, and the security parity of
-// their sign-in through the shared connection service
+// The one connect flow (`POST /api/integrations/:id/connect|disconnect`,
+// routes/integrations/userIntegrations.js) and the vendor-registered callback
+// aliases of the four providers (routes/integrations/oauthIntegrationFactory.js),
+// exercised through the real routers, and the security parity of their
+// sign-in through the shared connection service
 // (concept `2026-05-11 Cloud Storage Provider Security Parity.md`):
 //
 //   - PKCE (S256) for every provider, the verifier kept server-side;
 //   - the state bound to the user and the installation, single use;
-//   - the return URL validated (http(s), same origin) and redirects to paths only;
+//   - the return URL validated (http(s), same origin; anything else refused)
+//     and redirects to paths only;
 //   - stable error codes, never upstream text;
 //   - tokens stored for the user who started the flow only;
 //   - no token, code or verifier in the logs.
@@ -26,6 +29,7 @@ import office365Router from '../routes/integrations/office365.js';
 import googledriveRouter from '../routes/integrations/googledrive.js';
 import nextcloudRouter from '../routes/integrations/nextcloud.js';
 import jiraRouter from '../routes/integrations/jira.js';
+import userIntegrationsRouter from '../routes/integrations/userIntegrations.js';
 import Office365Service from '../services/integrations/Office365Service.js';
 import GoogleDriveService from '../services/integrations/GoogleDriveService.js';
 import NextcloudService from '../services/integrations/NextcloudService.js';
@@ -34,7 +38,6 @@ import tokenStorageService from '../services/TokenStorageService.js';
 import credentialService from '../services/CredentialService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-import { createUnavailableError } from '../services/integrations/oauthRefreshError.js';
 import {
   IntegrationConnectionService,
   connectionIdFor,
@@ -101,8 +104,6 @@ function check(label, condition) {
   console.log(`❌ ${label}`);
 }
 
-const expiringInfo = { expiresAt: '2030-01-01T00:00:00.000Z', minutesUntilExpiry: 5 };
-
 // One row per provider: how it is wired and what its stubbed service reports.
 const providers = [
   {
@@ -111,20 +112,7 @@ const providers = [
     router: office365Router,
     service: Office365Service,
     multi: true,
-    callbackPath: '/:providerId/callback',
-    userInfo: {
-      displayName: 'Ada',
-      mail: 'ada@example.com',
-      userPrincipalName: 'ada@corp',
-      jobTitle: 'Eng',
-      secret: 'must-not-leak'
-    },
-    expectedUserInfo: {
-      displayName: 'Ada',
-      mail: 'ada@example.com',
-      userPrincipalName: 'ada@corp',
-      jobTitle: 'Eng'
-    }
+    callbackPath: '/:providerId/callback'
   },
   {
     key: 'googledrive',
@@ -132,45 +120,7 @@ const providers = [
     router: googledriveRouter,
     service: GoogleDriveService,
     multi: true,
-    callbackPath: '/:providerId/callback',
-    userInfo: { displayName: 'Ada', mail: 'ada@example.com', picture: 'p.png', secret: 'x' },
-    expectedUserInfo: { displayName: 'Ada', mail: 'ada@example.com', picture: 'p.png' }
-  },
-  {
-    key: 'nextcloud',
-    providerId: 'prov-nc',
-    router: nextcloudRouter,
-    service: NextcloudService,
-    multi: true,
-    callbackPath: '/:providerId/callback',
-    userInfo: { displayName: 'Ada', email: 'ada@example.com', id: 'ada', serverUrl: 'https://nc' },
-    expectedUserInfo: {
-      displayName: 'Ada',
-      email: 'ada@example.com',
-      userPrincipalName: 'ada',
-      serverUrl: 'https://nc'
-    }
-  },
-  {
-    key: 'jira',
-    providerId: 'jira',
-    router: jiraRouter,
-    service: JiraService,
-    multi: false,
-    callbackPath: '/callback',
-    userInfo: {
-      displayName: 'Ada',
-      emailAddress: 'ada@example.com',
-      accountType: 'atlassian',
-      active: true,
-      secret: 'x'
-    },
-    expectedUserInfo: {
-      displayName: 'Ada',
-      emailAddress: 'ada@example.com',
-      accountType: 'atlassian',
-      active: true
-    }
+    callbackPath: '/:providerId/callback'
   }
 ];
 
@@ -193,7 +143,10 @@ async function run(handler, req) {
     status: code => ((out.status = code), res),
     json: body => ((out.body = body), res)
   };
-  await handler({ query: {}, params: {}, body: {}, ...req }, res);
+  await handler(
+    { query: {}, params: {}, body: {}, is: type => type === 'application/json', ...req },
+    res
+  );
   return out;
 }
 
@@ -218,44 +171,53 @@ const member = id => ({ id, groups: ['users'], permissions: { integrations: ['*'
 
 const s256 = verifier => crypto.createHash('sha256').update(verifier).digest('base64url');
 
+const connectHandler = lastHandler(userIntegrationsRouter, '/:id/connect', 'post');
+const disconnectHandler = lastHandler(userIntegrationsRouter, '/:id/disconnect', 'post');
+
 for (const p of providers) {
   console.log(`\n🧪 ${p.key}`);
-  const { router, service, key } = p;
+  const { router, service, providerId } = p;
+  /** Where the callback sends the browser: the one result shape of every integration. */
+  const connectedAt = page =>
+    `${page}${page.includes('?') ? '&' : '?'}integration_connected=${providerId}`;
+  const failedAt = (page, code) => `${page}?integration_error=${code}&integration=${providerId}`;
 
-  // ---- route registration
+  // ---- route registration: only the vendor-registered callback is left per provider
   check(
-    'registers /auth, the callback, /status and /disconnect',
-    !!routeFor(router, '/auth') &&
-      !!routeFor(router, p.callbackPath) &&
-      !!routeFor(router, '/status') &&
-      !!routeFor(router, '/disconnect', 'post')
+    'registers the callback alias and no /auth, /status or /disconnect',
+    !!routeFor(router, p.callbackPath) &&
+      !routeFor(router, '/auth') &&
+      !routeFor(router, '/status') &&
+      !routeFor(router, '/disconnect', 'post')
   );
   check(
     p.multi ? 'multi-provider has no bare /callback' : 'single-provider has no :providerId route',
     p.multi ? !routeFor(router, '/callback') : !routeFor(router, '/:providerId/callback')
   );
-  // authRequired + rate limiter + handler on /auth for every provider (Jira included).
-  check('/auth is rate limited', routeFor(router, '/auth').stack.length === 3);
+  check(
+    'POST /api/integrations/:id/connect is rate limited',
+    routeFor(userIntegrationsRouter, '/:id/connect', 'post').stack.length === 4
+  );
 
-  // ---- /auth
-  const providerId = p.providerId;
-  const queryId = p.multi ? providerId : undefined;
-  const authHandler = lastHandler(router, '/auth');
-  const anon = await run(authHandler, {
-    query: { providerId: queryId },
-    user: { id: 'anonymous' }
+  // ---- POST /api/integrations/:id/connect
+  const anon = await run(connectHandler, { params: { id: providerId }, user: { id: 'anonymous' } });
+  check('connect refuses the anonymous principal', anon.status === 401 && !anon.body?.url);
+  const noUser = await run(connectHandler, { params: { id: providerId }, user: { id: '' } });
+  check('connect refuses a user without an id (no shared token bucket)', noUser.status === 401);
+  const form = await run(connectHandler, {
+    params: { id: providerId },
+    user: member('u1'),
+    is: () => false
   });
-  check('/auth refuses the anonymous principal', anon.status === 401 && !anon.location);
-  const noUser = await run(authHandler, { query: { providerId: queryId }, user: { id: '' } });
-  check('/auth refuses a user without an id (no shared token bucket)', noUser.status === 401);
-
-  if (p.multi) {
-    const noProvider = await run(authHandler, { user: { id: 'u1' } });
-    check('/auth without providerId is a 400', noProvider.status === 400);
-  }
+  check('connect without a JSON body is refused (no cross-site form posts)', form.status === 415);
+  const notGranted = await run(connectHandler, {
+    params: { id: providerId },
+    user: { id: 'u9', groups: [], permissions: { integrations: [] } }
+  });
+  check('an installation the groups do not grant answers 404', notGranted.status === 404);
 
   // What the browser's requests carry; the callback arrives at the redirect
-  // URI, so it has the same Host as /auth.
+  // URI, so it has the same Host as the connect request.
   const browser = {
     headers: { host: 'ihub.example' },
     hostname: 'ihub.example',
@@ -264,17 +226,18 @@ for (const p of providers) {
   };
   let tokenEndpoint = answerTokenEndpoint(service, [{ user_id: 'nc-user' }]);
   const start = async (returnUrl = '/apps/chat', userId = 'u1') => {
-    const started = await run(authHandler, {
+    const started = await run(connectHandler, {
       ...browser,
-      query: { providerId: queryId, returnUrl },
+      params: { id: providerId },
+      body: { returnUrl },
       user: member(userId)
     });
-    const url = new URL(started.location);
+    const url = new URL(started.body.url);
     return { url, state: url.searchParams.get('state') };
   };
   const first = await start();
   check(
-    "/auth redirects to the provider's authorization endpoint",
+    "connect answers the provider's authorization URL",
     first.url.searchParams.get('client_id') === `${providerId}-client`
   );
   check(
@@ -300,7 +263,7 @@ for (const p of providers) {
   const ok = await callback({ code: 'the-code', state: first.state });
   check(
     'callback succeeds and returns to the original page',
-    ok.location === `/apps/chat?${key}_connected=true`
+    ok.location === connectedAt('/apps/chat')
   );
   const exchange = tokenEndpoint.calls[0]?.params;
   check(
@@ -326,10 +289,10 @@ for (const p of providers) {
   const replay = await callback({ code: 'the-code', state: first.state });
   check(
     'a replayed state is refused (single use)',
-    replay.location === `/settings/integrations?${key}_error=invalid_state`
+    replay.location === failedAt('/settings/integrations', 'invalid_state')
   );
 
-  // Return URLs a browser would read as another site fall back to the default page.
+  // Return URLs a browser would read as another site are refused before any flow starts.
   for (const evil of [
     '//evil.example',
     '/\\evil.example',
@@ -337,24 +300,28 @@ for (const p of providers) {
     'https://evil.example/x',
     'javascript://ihub.example/%0Aalert(1)'
   ]) {
-    const flow = await start(evil);
-    const evilCallback = await callback({ code: 'c', state: flow.state });
+    const refused = await run(connectHandler, {
+      ...browser,
+      params: { id: providerId },
+      body: { returnUrl: evil },
+      user: member('u1')
+    });
     check(
-      `return URL ${JSON.stringify(evil)} falls back to the default page`,
-      evilCallback.location === `/settings/integrations?${key}_connected=true`
+      `return URL ${JSON.stringify(evil)} is refused`,
+      refused.status === 400 && refused.body?.code === 'INVALID_RETURN_URL' && !refused.body.url
     );
   }
   const sameOrigin = await start('https://ihub.example/apps/x?y=1');
   const sameOriginCallback = await callback({ code: 'c', state: sameOrigin.state });
   check(
     'a same-origin absolute return URL is kept, as a path',
-    sameOriginCallback.location === `/apps/x?y=1&${key}_connected=true`
+    sameOriginCallback.location === connectedAt('/apps/x?y=1')
   );
 
   const declined = await callback({ error: 'access_denied', state: (await start()).state });
   check(
     'declined consent reports access_denied',
-    declined.location === `/apps/chat?${key}_error=access_denied`
+    declined.location === failedAt('/apps/chat', 'access_denied')
   );
   const failedIdp = await callback({
     error: 'server_error <script>',
@@ -362,17 +329,17 @@ for (const p of providers) {
   });
   check(
     'raw IdP error text never reaches the redirect',
-    failedIdp.location === `/apps/chat?${key}_error=oauth_failed`
+    failedIdp.location === failedAt('/apps/chat', 'oauth_failed')
   );
   const missing = await callback({ state: (await start()).state });
   check(
     'missing code reports missing_code',
-    missing.location === `/apps/chat?${key}_error=missing_code`
+    missing.location === failedAt('/apps/chat', 'missing_code')
   );
   const garbage = await callback({ code: 'c', state: 'not-a-state' });
   check(
     'an unknown state lands on the default page with invalid_state',
-    garbage.location === `/settings/integrations?${key}_error=invalid_state`
+    garbage.location === failedAt('/settings/integrations', 'invalid_state')
   );
 
   // Per-user isolation: a state started by u1 cannot complete in u2's session.
@@ -386,7 +353,7 @@ for (const p of providers) {
   );
   check(
     'a state from another user is refused, without an exchange',
-    otherUser.location === `/settings/integrations?${key}_error=invalid_state` &&
+    otherUser.location === failedAt('/settings/integrations', 'user_mismatch') &&
       tokenEndpoint.calls.length === callsBefore
   );
   let u2Connected = true;
@@ -404,7 +371,7 @@ for (const p of providers) {
     );
     check(
       "a state for another installation is refused at this installation's callback",
-      otherProvider.location === `/apps/chat?${key}_error=invalid_state`
+      otherProvider.location === failedAt('/apps/chat', 'invalid_state')
     );
   }
 
@@ -416,8 +383,8 @@ for (const p of providers) {
   ]);
   const failed = await callback({ code: 'c', state: (await start()).state });
   check(
-    'a failed token exchange reports a stable callback_failed code',
-    failed.location === `/apps/chat?${key}_error=callback_failed`
+    'a failed token exchange reports a stable code',
+    failed.location === failedAt('/apps/chat', 'exchange_failed')
   );
 
   check(
@@ -432,113 +399,25 @@ for (const p of providers) {
   );
   delete service.oauthStrategy;
 
-  // ---- /status
-  const statusHandler = lastHandler(router, '/status');
-  const status = req => run(statusHandler, { user: { id: 'u1' }, query: { providerId }, ...req });
-
-  const anonStatus = await status({ user: { id: 'anonymous' } });
-  check('/status refuses the anonymous principal', anonStatus.status === 401);
-
-  service.isUserAuthenticated = async () => false;
-  const disconnected = await status();
-  check(
-    '/status reports a disconnected account',
-    disconnected.body?.connected === false && /not connected/.test(disconnected.body.message)
-  );
-
-  service.isUserAuthenticated = async () => true;
-  service.getUserInfo = async () => p.userInfo;
-  service.getTokenExpirationInfo = async () => ({
-    ...expiringInfo,
-    isExpiring: false,
-    isExpired: false
-  });
-  const connected = await status();
-  check(
-    '/status returns only the whitelisted user fields',
-    JSON.stringify(connected.body?.userInfo) === JSON.stringify(p.expectedUserInfo)
-  );
-  check(
-    '/status reports token expiry and a success message',
-    connected.body?.tokenInfo?.expiresAt === expiringInfo.expiresAt &&
-      /connected successfully/.test(connected.body.message)
-  );
-
-  service.getTokenExpirationInfo = async () => ({
-    ...expiringInfo,
-    isExpiring: true,
-    isExpired: false
-  });
-  const expiring = await status();
-  check('/status flags expiring tokens', /expiring soon/.test(expiring.body?.message));
-
-  service.getUserInfo = async () => {
-    throw new Error('profile endpoint is down');
-  };
-  const profileDown = await status();
-  if (key === 'nextcloud') {
-    check(
-      'a failing profile lookup still reports connected (nextcloud)',
-      profileDown.status === 200 &&
-        profileDown.body?.connected === true &&
-        profileDown.body.userInfo === null
-    );
-  } else {
-    check('a failing profile lookup is a 500', profileDown.status === 500);
-  }
-
-  service.isUserAuthenticated = async () => {
-    throw new Error(`${key} authentication required`);
-  };
-  const expired = await status();
-  check(
-    'an "authentication required" failure reports an expired connection',
-    expired.body?.connected === false && /authentication expired/.test(expired.body.message)
-  );
-
-  service.isUserAuthenticated = () => Promise.reject(createUnavailableError('Provider'));
-  const unavailable = await status();
-  check(
-    'a temporary refresh failure keeps the account connected and does not say to reconnect',
-    unavailable.status === 200 &&
-      unavailable.body?.connected === true &&
-      unavailable.body.temporarilyUnavailable === true &&
-      /temporarily unavailable/.test(unavailable.body.message) &&
-      !/reconnect|expired/i.test(unavailable.body.message)
-  );
-
-  // ---- /disconnect
-  const disconnectHandler = lastHandler(router, '/disconnect', 'post');
-  let deletedArgs;
-  service.deleteUserTokens = async (userId, id, request) => {
-    deletedArgs = [userId, id, request];
-    return true;
-  };
-  const disconnect = req => run(disconnectHandler, { user: { id: 'u1' }, ...req });
-
+  // ---- POST /api/integrations/:id/disconnect
+  const disconnect = req => run(disconnectHandler, { params: { id: providerId }, ...req });
   const anonDisconnect = await disconnect({ user: { id: 'anonymous' } });
-  check('/disconnect refuses the anonymous principal', anonDisconnect.status === 401);
-
-  const fromBody = await disconnect({ body: { providerId: 'from-body' } });
-  check('/disconnect succeeds', fromBody.body?.success === true);
-  // Jira's service takes (userId, req); the storage services (userId, providerId, req).
-  const requestArg = p.multi ? deletedArgs[2] : deletedArgs[1];
-  check(
-    '/disconnect hands the request on for the audit entry',
-    Boolean(requestArg?.user?.id === 'u1')
-  );
-  check(
-    p.multi ? 'providerId is read from the JSON body' : 'single-provider ignores any providerId',
-    p.multi ? deletedArgs[1] === 'from-body' : !deletedArgs.includes('from-body')
-  );
-  if (p.multi) {
-    await disconnect({ query: { providerId: 'from-query' }, body: { providerId: 'from-body' } });
-    check('providerId in the query wins over the body', deletedArgs[1] === 'from-query');
+  check('disconnect refuses the anonymous principal', anonDisconnect.status === 401);
+  const unknown = await disconnect({ params: { id: 'not-installed' }, user: member('u1') });
+  check('disconnect of an unknown installation answers 404', unknown.status === 404);
+  const done = await disconnect({ user: member('u1') });
+  check("disconnect removes the caller's tokens", done.body?.success === true && done.body.removed);
+  let stillConnected = true;
+  try {
+    await connections.getUserTokens({ installationId: providerId, userId: 'u1' });
+  } catch (error) {
+    stillConnected = error.reason !== 'not_connected';
   }
-
-  service.deleteUserTokens = async () => false;
-  const nothing = await disconnect();
-  check('/disconnect reports when there was nothing to remove', nothing.body?.success === false);
+  check('after disconnect the user is not connected', stillConnected === false);
+  const revokedRecord = await connections.getConnection(
+    connectionIdFor(providerId, { type: 'user', id: 'u1' })
+  );
+  check('the connection record says revoked', revokedRecord?.status === 'revoked');
 }
 
 rmSync(tmpDir, { recursive: true, force: true });

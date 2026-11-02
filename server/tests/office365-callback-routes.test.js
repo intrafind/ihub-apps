@@ -17,6 +17,7 @@ import {
 } from '../services/integrations/auth/IntegrationConnectionService.js';
 import { OAuthFlowStore } from '../services/integrations/auth/oauthFlowStore.js';
 import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
+import { IntegrationAuthRequiredError } from '../services/integrations/auth/integrationAuthRequired.js';
 
 // In-memory key material; tokens land in a temp directory.
 tokenStorageService.encryptionKey = 'c'.repeat(64);
@@ -49,12 +50,12 @@ check(
 check('legacy callback route is removed', !getRoutes.includes('/callback'));
 
 // Drive the handlers directly. Each call gets a fresh request with no session,
-// like a callback landing on a different cluster worker than /auth did.
+// like a callback landing on a different cluster worker than the connect
+// request (`POST /api/integrations/:id/connect`) did.
 function handlerFor(path) {
   const route = office365Router.stack.find(layer => layer.route?.path === path).route;
   return route.stack[route.stack.length - 1].handle;
 }
-const authHandler = handlerFor('/auth');
 const callbackHandler = handlerFor('/:providerId/callback');
 
 // The `office365` installation, its secret and a local token endpoint.
@@ -93,21 +94,20 @@ const workerB = new IntegrationConnectionService({ documents: null, flowStore: s
 
 const member = id => ({ id, groups: ['users'], permissions: { integrations: ['*'] } });
 
+/** The sign-in as the one connect route starts it, on worker A. */
 async function startSignIn(userId = 'u1') {
   setIntegrationConnectionServiceForTests(workerA);
-  let location;
-  await authHandler(
-    {
-      query: { providerId: 'office365', returnUrl: '/apps/chat' },
-      user: member(userId),
+  const { authorizationUrl: url } = await workerA.beginConnect({
+    installationId: 'office365',
+    user: member(userId),
+    returnUrl: '/apps/chat',
+    req: {
       headers: { host: 'ihub.example' },
       hostname: 'ihub.example',
       get: () => 'ihub.example',
       protocol: 'https'
-    },
-    { redirect: url => (location = url), status: () => ({ json: () => {} }) }
-  );
-  const url = new URL(location);
+    }
+  });
   return { url, state: url.searchParams.get('state') };
 }
 
@@ -141,7 +141,7 @@ check('state is an opaque handle, not a ticket', !started.state.includes('.'));
 const ok = await callbackRedirect({ code: 'c', state: started.state });
 check(
   'callback on another worker succeeds (state and verifier live in the shared flow store)',
-  ok === '/apps/chat?office365_connected=true'
+  ok === '/apps/chat?integration_connected=office365'
 );
 check(
   'the token exchange carries the verifier of the original sign-in',
@@ -159,7 +159,7 @@ const declined = await callbackRedirect({
 });
 check(
   'declined consent returns to the original page with access_denied',
-  declined === '/apps/chat?office365_error=access_denied'
+  declined === '/apps/chat?integration_error=access_denied&integration=office365'
 );
 
 const otherUser = await callbackRedirect(
@@ -168,7 +168,7 @@ const otherUser = await callbackRedirect(
 );
 check(
   'state from another user is refused',
-  otherUser === '/settings/integrations?office365_error=invalid_state'
+  otherUser === '/settings/integrations?integration_error=user_mismatch&integration=office365'
 );
 
 const noUser = await callbackRedirect(
@@ -177,7 +177,7 @@ const noUser = await callbackRedirect(
 );
 check(
   'callback without a signed-in user is refused',
-  noUser === '/settings/integrations?office365_error=invalid_state'
+  noUser === '/settings/integrations?integration_error=user_mismatch&integration=office365'
 );
 
 const otherProvider = await callbackRedirect(
@@ -186,15 +186,15 @@ const otherProvider = await callbackRedirect(
 );
 check(
   'state for another provider is refused',
-  otherProvider === '/apps/chat?office365_error=invalid_state'
+  otherProvider === '/apps/chat?integration_error=invalid_state&integration=office365'
 );
 
 const expiring = await startSignIn();
 for (const record of sharedFlows.memory.values()) record.exp = Date.now() - 1000;
 const expired = await callbackRedirect({ code: 'c', state: expiring.state });
 check(
-  'expired state reports session_expired',
-  expired === '/apps/chat?office365_error=session_expired'
+  'expired state reports state_expired',
+  expired === '/apps/chat?integration_error=state_expired&integration=office365'
 );
 
 const badSecret = fakeTokenEndpoint([{ status: 401, body: { error: 'invalid_client' } }]);
@@ -210,7 +210,7 @@ Office365Service.oauthStrategy = function oauthStrategyForTest(providerId) {
 const rejected = await callbackRedirect({ code: 'c', state: (await startSignIn()).state });
 check(
   'expired client secret surfaces invalid_client',
-  rejected === '/apps/chat?office365_error=invalid_client'
+  rejected === '/apps/chat?integration_error=invalid_client&integration=office365'
 );
 Office365Service.oauthStrategy = originalStrategy;
 rmSync(tmpDir, { recursive: true, force: true });
@@ -236,6 +236,34 @@ const businessDriveId = 'b!Xk3pQ-7zLmN0aBcD_eF9gH1iJ2kL3mN4oP5qR6sT7uV8wX9yZ0';
 check('drive ID with ! is accepted', (await itemsStatus(businessDriveId)) === 200);
 check('drive ID with ! reaches the service', listedDrive === businessDriveId);
 check('drive ID with a slash is still rejected', (await itemsStatus('b!abc/../me')) === 400);
+
+// A user without a usable connection gets the one "connect first" answer (409,
+// not 401: the iHub session is fine), which the file browser turns into the
+// Connect card.
+Office365Service.listItems = async () => {
+  throw new IntegrationAuthRequiredError({
+    integration: 'office365',
+    reason: 'expired',
+    message: 'Office 365 authentication expired. Please reconnect your account.'
+  });
+};
+{
+  let status = 200;
+  let body = null;
+  const res = {
+    status: code => ((status = code), res),
+    json: payload => ((body = payload), res)
+  };
+  await itemsHandler({ query: { providerId: 'office365' }, user: { id: 'u1' } }, res);
+  check(
+    'a missing connection answers 409 INTEGRATION_AUTH_REQUIRED with reason and connect route',
+    status === 409 &&
+      body?.error === 'INTEGRATION_AUTH_REQUIRED' &&
+      body.integration === 'office365' &&
+      body.reason === 'expired' &&
+      body.connectUrl === '/api/integrations/office365/connect'
+  );
+}
 
 // Only the sources the admin enabled are offered (the provider is the
 // `office365` installation; its source switches are install values).

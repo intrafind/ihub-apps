@@ -9,10 +9,12 @@ import os from 'os';
 import path from 'path';
 
 /**
- * Per-user OAuth for outbound MCP servers — the flow routes, end to end with
- * the MCP SDK's OAuth functions mocked: start (discovery, DCR / CIMD, PKCE,
- * signed state), callback (state checks, user binding, code exchange, token
- * storage), connections listing, disconnect (revocation) and the CIMD document
+ * Per-user OAuth for outbound MCP servers — the one connect flow of every
+ * integration (`POST /api/integrations/:id/connect|disconnect`,
+ * `GET /api/integrations`) and the MCP callback alias, end to end with the MCP
+ * SDK's OAuth functions mocked: start (discovery, DCR / CIMD, PKCE,
+ * server-side state), callback (state checks, user binding, code exchange,
+ * token storage), the listing, disconnect (revocation) and the CIMD document
  * — plus the review fixes: per-server callbacks and the RFC 9207 issuer check
  * against an OAuth mix-up between two authorization servers, a forged Host
  * that must not replace the shared registration, and OAuth requests that
@@ -25,6 +27,8 @@ function installationsOf(ids, extra = {}) {
     installed: ids.map(id => ({
       id,
       definition: 'com.intrafind/mcp-server',
+      // Up to date with the loaded definition (else the listing withholds it).
+      definitionVersion: '1.0.0',
       values: { url: `https://${id}-mcp.example.com/mcp` },
       auth: { mode: 'oauth-user' },
       ...extra
@@ -102,6 +106,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getAppsForUser: jest.fn(async () => ({ data: state.apps })),
     getIntegrations: () => ({ data: state.integrations }),
     getGroups: () => ({ data: { groups: state.groups } }),
+    getFeatures: () => ({ integrations: true }),
     get: key => (key === 'config/integrations.json' ? { data: state.integrations } : null)
   }
 }));
@@ -129,6 +134,8 @@ const { readUserTokens, writeUserTokens, tokenBindingFor } =
 const { buildMcpOAuthFetch } = await import('../../services/mcp/McpUserOAuthProvider.js');
 const { validateClientMetadata } = await import('../../utils/clientIdMetadata.js');
 const { default: registerMcpOAuthRoutes } = await import('../../routes/mcpOAuth.js');
+const { default: userIntegrationRoutes } =
+  await import('../../routes/integrations/userIntegrations.js');
 const { returnPathWith } =
   await import('../../services/integrations/auth/IntegrationConnectionService.js');
 const { getOAuthFlowStore } = await import('../../services/integrations/auth/oauthFlowStore.js');
@@ -141,9 +148,15 @@ const SERVER = {
   auth: { type: 'oauthUser', scopes: ['openid', 'profile'] }
 };
 
-const app = express();
-app.use(express.json());
-registerMcpOAuthRoutes(app);
+/** The routes under test: the MCP callback and CIMD, and the one connect flow. */
+function mountRoutes(target) {
+  target.use(express.json());
+  registerMcpOAuthRoutes(target);
+  target.use('/api/integrations', userIntegrationRoutes);
+  return target;
+}
+
+const app = mountRoutes(express());
 
 const saved = {};
 let tmpDir;
@@ -261,19 +274,36 @@ function matchesChallenge(verifier, challenge) {
   return cryptoModule.createHash('sha256').update(verifier).digest('base64url') === challenge;
 }
 
-async function startFlow(user = 'alice', returnUrl = '/chat/abc') {
-  const res = await request(app)
-    .get('/api/mcp/oauth/authorize')
-    .query({ serverId: 'okta', returnUrl })
-    .set('x-test-user', user);
-  return res;
+/**
+ * Start a sign-in the way the chat's Connect card does:
+ * `POST /api/integrations/:id/connect` → `{ url }`. Answers the status, the
+ * body and the authorization URL (`location`).
+ */
+async function connect({
+  target = app,
+  serverId = 'okta',
+  user = 'alice',
+  returnUrl = '/chat/abc',
+  admin = false,
+  headers = {}
+} = {}) {
+  let req = request(target).post(`/api/integrations/${serverId}/connect`);
+  if (user) req = req.set('x-test-user', user);
+  if (admin) req = req.set('x-test-admin', '1');
+  for (const [name, value] of Object.entries(headers)) req = req.set(name, value);
+  const res = await req.send({ returnUrl });
+  return { status: res.status, body: res.body, location: res.body?.url };
 }
 
-describe('GET /api/mcp/oauth/authorize', () => {
-  it('redirects to the authorization server with PKCE, resource and a server-side state', async () => {
+function startFlow(user = 'alice', returnUrl = '/chat/abc') {
+  return connect({ user, returnUrl });
+}
+
+describe('POST /api/integrations/:id/connect (MCP)', () => {
+  it('answers the authorization URL with PKCE, resource and a server-side state', async () => {
     const res = await startFlow();
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.location);
+    expect(res.status).toBe(200);
+    const location = new URL(res.location);
     expect(location.origin + location.pathname).toBe('https://okta-mcp.example.com/authorize');
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
     expect(location.searchParams.get('code_challenge')).toBeTruthy();
@@ -285,7 +315,7 @@ describe('GET /api/mcp/oauth/authorize', () => {
       /^http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/oauth\/callback\/okta$/
     );
 
-    const { payload, stateParam } = decodeState(res.headers.location);
+    const { payload, stateParam } = decodeState(res.location);
     // The state is an opaque handle; the flow stays on the server.
     expect(stateParam).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(payload).toMatchObject({
@@ -331,8 +361,8 @@ describe('GET /api/mcp/oauth/authorize', () => {
       authorizationServerMetadata: { ...AS_METADATA, client_id_metadata_document_supported: true }
     });
     const res = await startFlow();
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.location);
+    expect(res.status).toBe(200);
+    const location = new URL(res.location);
     expect(location.searchParams.get('client_id')).toBe(
       'https://ihub.example.com/api/mcp/oauth/client-metadata/okta'
     );
@@ -342,27 +372,37 @@ describe('GET /api/mcp/oauth/authorize', () => {
     expect(sdk.registerClient).not.toHaveBeenCalled();
   });
 
-  it('replaces an off-site returnUrl with the settings page', async () => {
+  it('refuses an off-site returnUrl before any flow starts', async () => {
     const res = await startFlow('alice', 'https://evil.example.com/steal');
-    expect(res.status).toBe(302);
-    expect(decodeState(res.headers.location).payload.returnUrl).toBe('/settings/integrations');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_RETURN_URL');
+    expect(res.location).toBeUndefined();
+    expect(sdk.discoverOAuthServerInfo).not.toHaveBeenCalled();
   });
 
   it('refuses anonymous callers', async () => {
-    const res = await request(app).get('/api/mcp/oauth/authorize').query({ serverId: 'okta' });
+    const res = await connect({ user: null });
     expect(res.status).toBe(401);
   });
 
-  it('answers an unknown or invisible server with server_not_found', async () => {
-    const unknown = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'nope', returnUrl: '/chat/abc' })
-      .set('x-test-user', 'alice');
-    expect(unknown.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=nope');
+  it('refuses a request without a JSON body (no cross-site form posts)', async () => {
+    const res = await request(app)
+      .post('/api/integrations/okta/connect')
+      .set('x-test-user', 'alice')
+      .type('form')
+      .send('returnUrl=/chat/abc');
+    expect(res.status).toBe(415);
+  });
+
+  it('answers an unknown or invisible server with 404', async () => {
+    const unknown = await connect({ serverId: 'nope' });
+    expect(unknown.status).toBe(404);
+    expect(unknown.body.code).toBe('INTEGRATION_NOT_FOUND');
 
     state.apps = [];
     const hidden = await startFlow();
-    expect(hidden.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=okta');
+    expect(hidden.status).toBe(404);
+    expect(hidden.body.code).toBe('INTEGRATION_NOT_FOUND');
     expect(sdk.discoverOAuthServerInfo).not.toHaveBeenCalled();
   });
 
@@ -370,48 +410,51 @@ describe('GET /api/mcp/oauth/authorize', () => {
     // Since V193 an app binds the installation; it no longer lists the server in `tools`.
     state.apps = [{ id: 'assistant', integrations: { okta: { actions: ['search'] } } }];
     const res = await startFlow();
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toContain('https://okta-mcp.example.com/authorize?');
-    const listed = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
-    expect(listed.body.servers.map(s => s.serverId)).toEqual(['okta']);
+    expect(res.status).toBe(200);
+    expect(res.location).toContain('https://okta-mcp.example.com/authorize?');
+    const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
+    expect(listed.body.integrations.map(entry => entry.id)).toContain('okta');
   });
 
   it('refuses a user whose groups do not grant the installation, whatever the apps grant', async () => {
+    // A stable public URL: supertest listens on a new port per request, and only
+    // the admin's sign-in may move the registration to another base.
+    state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
     state.apps = [{ id: 'assistant', tools: ['okta'], integrations: { okta: {} } }];
     state.groups = {
       users: { id: 'users', permissions: { integrations: ['type:people-directory'] } },
       admins: { id: 'admins', permissions: { integrations: [], adminAccess: true } }
     };
     const hidden = await startFlow();
-    expect(hidden.headers.location).toBe('/chat/abc?mcp_error=server_not_found&mcp_server=okta');
-    const listed = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
-    expect(listed.body.servers).toEqual([]);
+    expect(hidden.status).toBe(404);
+    // The listing never shows an integration the user's groups do not allow.
+    const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
+    expect(listed.body.integrations.map(entry => entry.id)).not.toContain('okta');
     // Admins configure and test the server: they always may connect.
-    const admin = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('x-test-user', 'root')
-      .set('x-test-admin', '1');
-    expect(admin.status).toBe(302);
-    expect(admin.headers.location).toContain('https://okta-mcp.example.com/authorize?');
+    const admin = await connect({ user: 'root', admin: true });
+    expect(admin.status).toBe(200);
+    expect(admin.location).toContain('https://okta-mcp.example.com/authorize?');
     // Once the group grants it (by installation id), its members connect.
     state.groups = {
       ...state.groups,
       users: { id: 'users', permissions: { integrations: ['okta'] } }
     };
     const member = await startFlow();
-    expect(member.status).toBe(302);
+    expect(member.status).toBe(200);
   });
 
   it('reports discovery and registration failures with stable codes', async () => {
     sdk.discoverOAuthServerInfo.mockRejectedValueOnce(new Error('boom <script>'));
     const discovery = await startFlow();
-    expect(discovery.headers.location).toBe('/chat/abc?mcp_error=discovery_failed&mcp_server=okta');
+    expect(discovery.status).toBe(502);
+    expect(discovery.body).toEqual({
+      error: 'The sign-in could not be started',
+      code: 'discovery_failed'
+    });
     sdk.registerClient.mockRejectedValueOnce(new Error('registration refused'));
     const registration = await startFlow();
-    expect(registration.headers.location).toBe(
-      '/chat/abc?mcp_error=registration_failed&mcp_server=okta'
-    );
+    expect(registration.status).toBe(502);
+    expect(registration.body.code).toBe('registration_failed');
   });
 });
 
@@ -424,10 +467,10 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   }
 
   it('exchanges the code with the verifier, stores the tokens and returns', async () => {
-    const { stateParam, challenge } = decodeState((await startFlow()).headers.location);
+    const { stateParam, challenge } = decodeState((await startFlow()).location);
     const res = await callback({ code: 'auth-code-1', state: stateParam });
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('/chat/abc?mcp_connected=okta');
+    expect(res.headers.location).toBe('/chat/abc?integration_connected=okta');
     const [[tokenUrl, params]] = tokenRequests();
     expect(tokenUrl).toBe('https://okta-mcp.example.com/token');
     expect(params.get('grant_type')).toBe('authorization_code');
@@ -451,11 +494,11 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   });
 
   it('refuses a flow started by another user', async () => {
-    const { stateParam } = decodeState((await startFlow('alice')).headers.location);
+    const { stateParam } = decodeState((await startFlow('alice')).location);
     const res = await callback({ code: 'c', state: stateParam }, 'mallory');
     // The flow's return URL is only used for its owner.
     expect(res.headers.location).toBe(
-      '/settings/integrations?mcp_error=user_mismatch&mcp_server=okta'
+      '/settings/integrations?integration_error=user_mismatch&integration=okta'
     );
     expect(tokenRequests()).toHaveLength(0);
     expect(await readUserTokens('mallory', 'okta')).toBeNull();
@@ -466,92 +509,106 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
     const invalid = await callback({ code: 'c', state: 'not-a-state' });
     expect(invalid.headers.location).toBe(
-      '/settings/integrations?mcp_error=invalid_state&mcp_server=okta'
+      '/settings/integrations?integration_error=invalid_state&integration=okta'
     );
 
     // Single use: a second callback with the same state finds nothing.
-    const { stateParam } = decodeState((await startFlow()).headers.location);
+    const { stateParam } = decodeState((await startFlow()).location);
     expect((await callback({ code: 'c', state: stateParam })).headers.location).toBe(
-      '/chat/abc?mcp_connected=okta'
+      '/chat/abc?integration_connected=okta'
     );
     const replayed = await callback({ code: 'c', state: stateParam });
     expect(replayed.headers.location).toBe(
-      '/settings/integrations?mcp_error=invalid_state&mcp_server=okta'
+      '/settings/integrations?integration_error=invalid_state&integration=okta'
     );
     expect(tokenRequests()).toHaveLength(1);
 
-    const started = decodeState((await startFlow()).headers.location);
+    const started = decodeState((await startFlow()).location);
     started.payload.exp = Date.now() - 1000;
     const late = await callback({ code: 'c', state: started.stateParam });
-    expect(late.headers.location).toBe('/chat/abc?mcp_error=state_expired&mcp_server=okta');
+    expect(late.headers.location).toBe(
+      '/chat/abc?integration_error=state_expired&integration=okta'
+    );
     expect(tokenRequests()).toHaveLength(1);
   });
 
-  it('turns an AS error into oauth_failed without echoing its text', async () => {
-    const { stateParam } = decodeState((await startFlow()).headers.location);
+  it('turns an AS error into a stable code without echoing its text', async () => {
+    const { stateParam } = decodeState((await startFlow()).location);
     const res = await callback({
       error: 'access_denied',
       error_description: 'The user said <b>no</b>',
       state: stateParam
     });
-    expect(res.headers.location).toBe('/chat/abc?mcp_error=oauth_failed&mcp_server=okta');
-    expect(res.headers.location).not.toContain('access_denied');
+    expect(res.headers.location).toBe('/chat/abc?integration_error=access_denied&integration=okta');
+    expect(res.headers.location).not.toContain('said');
   });
 
   it('reports a missing code and a failed exchange', async () => {
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'http://ihub.test' } };
-    const { stateParam } = decodeState((await startFlow()).headers.location);
+    const { stateParam } = decodeState((await startFlow()).location);
     const missing = await callback({ state: stateParam });
-    expect(missing.headers.location).toBe('/chat/abc?mcp_error=missing_code&mcp_server=okta');
+    expect(missing.headers.location).toBe(
+      '/chat/abc?integration_error=missing_code&integration=okta'
+    );
 
     tokenAnswer.mockImplementationOnce(() => ({ status: 400, body: { error: 'invalid_grant' } }));
-    const again = decodeState((await startFlow()).headers.location);
+    const again = decodeState((await startFlow()).location);
     const failed = await callback({ code: 'c', state: again.stateParam });
-    expect(failed.headers.location).toBe('/chat/abc?mcp_error=exchange_failed&mcp_server=okta');
+    expect(failed.headers.location).toBe(
+      '/chat/abc?integration_error=exchange_failed&integration=okta'
+    );
     expect(await readUserTokens('alice', 'okta')).toBeNull();
   });
 });
 
-describe('connections and disconnect', () => {
-  it('lists the per-user servers with their connection state', async () => {
+describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)', () => {
+  it('lists the per-user server with its connection status', async () => {
     await writeUserTokens(
       'alice',
       'okta',
       { access_token: 'a', token_type: 'bearer', expires_in: 3600, scope: 'openid' },
       tokenBindingFor(SERVER)
     );
-    const alice = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
+    const okta = res => res.body.integrations.find(entry => entry.id === 'okta');
+    const alice = await request(app).get('/api/integrations').set('x-test-user', 'alice');
     expect(alice.status).toBe(200);
-    expect(alice.body.servers).toEqual([
+    expect([okta(alice)]).toEqual([
       expect.objectContaining({
-        serverId: 'okta',
-        name: 'Okta MCP',
-        connected: true,
-        scope: 'openid',
-        connectUrl: '/api/mcp/oauth/authorize?serverId=okta'
+        id: 'okta',
+        protocol: 'mcp',
+        connection: expect.objectContaining({
+          mode: 'personal',
+          status: 'connected',
+          scopes: expect.arrayContaining(['openid']),
+          connectable: true
+        })
       })
     ]);
-    const bob = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'bob');
-    expect(bob.body.servers[0]).toMatchObject({ serverId: 'okta', connected: false });
-
-    state.apps = [];
-    const hidden = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'bob');
-    expect(hidden.body.servers).toEqual([]);
+    const bob = await request(app).get('/api/integrations').set('x-test-user', 'bob');
+    expect(okta(bob).connection).toMatchObject({
+      mode: 'personal',
+      status: 'not_connected',
+      reason: 'not_connected'
+    });
+    const one = await request(app).get('/api/integrations/okta').set('x-test-user', 'bob');
+    expect(one.body.integration).toMatchObject({ id: 'okta' });
+    const anonymous = await request(app).get('/api/integrations');
+    expect(anonymous.status).toBe(401);
   });
 
   it('revokes at the authorization server and deletes the tokens', async () => {
-    const { stateParam } = decodeState((await startFlow()).headers.location);
+    const { stateParam } = decodeState((await startFlow()).location);
     const connected = await request(app)
       .get('/api/mcp/oauth/callback/okta')
       .query({ code: 'c', state: stateParam })
       .set('x-test-user', 'alice');
-    expect(connected.headers.location).toBe('/chat/abc?mcp_connected=okta');
+    expect(connected.headers.location).toBe('/chat/abc?integration_connected=okta');
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
 
     const res = await request(app)
-      .post('/api/mcp/oauth/disconnect')
+      .post('/api/integrations/okta/disconnect')
       .set('x-test-user', 'alice')
-      .send({ serverId: 'okta' });
+      .send({});
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, removed: true, revoked: true });
     // Revocation requests refuse redirects too.
@@ -571,14 +628,14 @@ describe('connections and disconnect', () => {
 
   it('refuses an invalid or unknown server id', async () => {
     const bad = await request(app)
-      .post('/api/mcp/oauth/disconnect')
+      .post('/api/integrations/..%2Fetc/disconnect')
       .set('x-test-user', 'alice')
-      .send({ serverId: '../etc' });
-    expect(bad.status).toBe(400);
+      .send({});
+    expect(bad.status).toBe(404);
     const unknown = await request(app)
-      .post('/api/mcp/oauth/disconnect')
+      .post('/api/integrations/nope/disconnect')
       .set('x-test-user', 'alice')
-      .send({ serverId: 'nope' });
+      .send({});
     expect(unknown.status).toBe(404);
   });
 });
@@ -660,12 +717,9 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
   });
 
   async function start(serverId) {
-    const res = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId, returnUrl: '/chat/abc' })
-      .set('x-test-user', 'alice');
-    expect(res.status).toBe(302);
-    return decodeState(res.headers.location);
+    const res = await connect({ serverId });
+    expect(res.status).toBe(200);
+    return decodeState(res.location);
   }
 
   it("gives every server its own redirect URI and binds the flow to that server's AS", async () => {
@@ -692,7 +746,9 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .get('/api/mcp/oauth/callback/evil')
       .query({ code: 'honest-code', state: stateParam, iss: 'https://login.corp.example.com' })
       .set('x-test-user', 'alice');
-    expect(res.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=evil');
+    expect(res.headers.location).toBe(
+      '/chat/abc?integration_error=issuer_mismatch&integration=evil'
+    );
     // The code and the verifier never reach the evil token endpoint.
     expect(tokenRequests()).toHaveLength(0);
     expect(await readUserTokens('alice', 'evil')).toBeNull();
@@ -704,7 +760,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .get('/api/mcp/oauth/callback/corp')
       .query({ code: 'honest-code', state: stateParam })
       .set('x-test-user', 'alice');
-    expect(res.headers.location).toBe('/chat/abc?mcp_error=invalid_state&mcp_server=evil');
+    expect(res.headers.location).toBe('/chat/abc?integration_error=invalid_state&integration=evil');
     expect(tokenRequests()).toHaveLength(0);
   });
 
@@ -714,7 +770,9 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .get('/api/mcp/oauth/callback/corp')
       .query({ code: 'c1', state: first.stateParam })
       .set('x-test-user', 'alice');
-    expect(missing.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=corp');
+    expect(missing.headers.location).toBe(
+      '/chat/abc?integration_error=issuer_mismatch&integration=corp'
+    );
     expect(tokenRequests()).toHaveLength(0);
 
     const second = await start('corp');
@@ -722,7 +780,7 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .get('/api/mcp/oauth/callback/corp')
       .query({ code: 'c1', state: second.stateParam, iss: 'https://login.corp.example.com' })
       .set('x-test-user', 'alice');
-    expect(ok.headers.location).toBe('/chat/abc?mcp_connected=corp');
+    expect(ok.headers.location).toBe('/chat/abc?integration_connected=corp');
     const [[tokenUrl, params]] = tokenRequests();
     expect(tokenUrl).toBe('https://login.corp.example.com/token');
     expect(params.get('client_id')).toBe('client-at-corp');
@@ -740,41 +798,34 @@ describe('OAuth mix-up defence (two authorization servers)', () => {
       .get('/api/mcp/oauth/callback/evil')
       .query({ code: 'c', state: stateParam, iss: 'https://as.evil.example.net' })
       .set('x-test-user', 'alice');
-    expect(res.headers.location).toBe('/chat/abc?mcp_error=exchange_failed&mcp_server=evil');
+    expect(res.headers.location).toBe(
+      '/chat/abc?integration_error=exchange_failed&integration=evil'
+    );
     expect(tokenRequests()).toHaveLength(0);
   });
 });
 
 describe('public base and the shared registration', () => {
   it('a forged Host does not replace the registration every user depends on', async () => {
-    const first = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('Host', 'ihub.test')
-      .set('x-test-user', 'alice');
-    expect(first.status).toBe(302);
+    const first = await connect({ headers: { Host: 'ihub.test' } });
+    expect(first.status).toBe(200);
     const before = await mcpClientManager.clientStore.get('okta');
     expect(before).toMatchObject({ clientId: 'dcr-client', publicBase: 'http://ihub.test' });
 
     // X-Forwarded-Host is ignored while `trust proxy` is off.
-    const forwarded = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('Host', 'ihub.test')
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('x-test-user', 'mallory');
-    expect(new URL(forwarded.headers.location).searchParams.get('redirect_uri')).toBe(
+    const forwarded = await connect({
+      user: 'mallory',
+      headers: { Host: 'ihub.test', 'X-Forwarded-Host': 'evil.example' }
+    });
+    expect(new URL(forwarded.location).searchParams.get('redirect_uri')).toBe(
       'http://ihub.test/api/mcp/oauth/callback/okta'
     );
 
     // A forged Host is refused instead of re-registering.
     sdk.registerClient.mockResolvedValue({ client_id: 'attacker-client' });
-    const forged = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('Host', 'evil.example')
-      .set('x-test-user', 'mallory');
-    expect(forged.headers.location).toBe('/chat/abc?mcp_error=public_url_mismatch&mcp_server=okta');
+    const forged = await connect({ user: 'mallory', headers: { Host: 'evil.example' } });
+    expect(forged.status).toBe(409);
+    expect(forged.body.code).toBe('public_url_mismatch');
     expect(sdk.registerClient).toHaveBeenCalledTimes(1);
     expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
       clientId: 'dcr-client',
@@ -785,42 +836,30 @@ describe('public base and the shared registration', () => {
   it('honours X-Forwarded-Host only behind a trusted proxy, and still never replaces the registration', async () => {
     const proxied = express();
     proxied.set('trust proxy', true);
-    registerMcpOAuthRoutes(proxied);
-    await request(proxied)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('X-Forwarded-Host', 'ihub.example.com')
-      .set('X-Forwarded-Proto', 'https')
-      .set('x-test-user', 'alice');
+    mountRoutes(proxied);
+    await connect({
+      target: proxied,
+      headers: { 'X-Forwarded-Host': 'ihub.example.com', 'X-Forwarded-Proto': 'https' }
+    });
     expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
       publicBase: 'https://ihub.example.com'
     });
-    const forged = await request(proxied)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('X-Forwarded-Host', 'evil.example')
-      .set('X-Forwarded-Proto', 'https')
-      .set('x-test-user', 'mallory');
-    expect(forged.headers.location).toContain('mcp_error=public_url_mismatch');
+    const forged = await connect({
+      target: proxied,
+      user: 'mallory',
+      headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-Proto': 'https' }
+    });
+    expect(forged.body.code).toBe('public_url_mismatch');
     expect((await mcpClientManager.clientStore.get('okta')).publicBase).toBe(
       'https://ihub.example.com'
     );
   });
 
   it("lets an admin's own sign-in move the registration to a new base", async () => {
-    await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('Host', 'old.ihub.test')
-      .set('x-test-user', 'alice');
+    await connect({ headers: { Host: 'old.ihub.test' } });
     sdk.registerClient.mockResolvedValue({ client_id: 'dcr-client-2' });
-    const moved = await request(app)
-      .get('/api/mcp/oauth/authorize')
-      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
-      .set('Host', 'new.ihub.test')
-      .set('x-test-user', 'admin')
-      .set('x-test-admin', '1');
-    expect(moved.status).toBe(302);
+    const moved = await connect({ user: 'admin', admin: true, headers: { Host: 'new.ihub.test' } });
+    expect(moved.status).toBe(200);
     expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
       clientId: 'dcr-client-2',
       publicBase: 'http://new.ihub.test'

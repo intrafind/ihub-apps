@@ -268,11 +268,7 @@ describe('message.mcpApps', () => {
       toolId: 'drawio__create_diagram',
       name: 'drawio__create_diagram',
       resultPreview: { error: 'INTEGRATION_AUTH_REQUIRED' },
-      authRequired: {
-        serverId: 'drawio',
-        serverName: 'draw.io',
-        connectUrl: '/api/mcp/oauth/authorize?serverId=drawio'
-      }
+      authRequired: { integration: 'drawio', name: 'draw.io', reason: 'not_connected' }
     });
     const run = runFrom([started, toolStarted, needsSignIn]);
     expect(buildMcpAppViews(run)).toBeNull();

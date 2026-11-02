@@ -173,11 +173,9 @@ describe('tool calls on a per-user server', () => {
   it('returns auth_required (not an error) for callers without a user or a token', async () => {
     const expected = {
       error: 'INTEGRATION_AUTH_REQUIRED',
-      authRequired: {
-        serverId: 'okta',
-        serverName: 'Okta MCP',
-        connectUrl: '/api/mcp/oauth/authorize?serverId=okta'
-      }
+      integration: 'okta',
+      reason: 'not_connected',
+      connectUrl: '/api/integrations/okta/connect'
     };
     // Headless: no user (gateway, A2A, a workflow without a user).
     expect(await mcpClientManager.callTool('okta__get-current-user', {})).toMatchObject(expected);
@@ -188,7 +186,9 @@ describe('tool calls on a per-user server', () => {
       user: { id: 'bob' }
     });
     expect(result).toMatchObject(expected);
-    expect(result.message).toContain('/api/mcp/oauth/authorize?serverId=okta');
+    // The model is told to point at the Connect card, not given a URL to print.
+    expect(result.message).toContain('Connect Okta MCP');
+    expect(result.authRequired).toBeUndefined();
   });
 
   it("calls on the caller's own connection and never falls back to another user's", async () => {
@@ -276,13 +276,13 @@ describe('admin tests of a per-user server', () => {
     const admin = { id: 'admin', groups: ['admins'] };
     expect(await mcpClientManager.testConnection('okta', admin)).toEqual({
       status: 'auth_required',
-      connectUrl: '/api/mcp/oauth/authorize?serverId=okta',
+      connectUrl: '/api/integrations/okta/connect',
       tools: [],
       catalog: []
     });
     expect(await mcpClientManager.testConfig(OKTA, admin)).toMatchObject({
       status: 'auth_required',
-      connectUrl: '/api/mcp/oauth/authorize?serverId=okta'
+      connectUrl: '/api/integrations/okta/connect'
     });
     expect(await mcpClientManager.testConfig(OKTA, null)).toMatchObject({
       status: 'auth_required'
@@ -293,13 +293,12 @@ describe('admin tests of a per-user server', () => {
 describe('chat projection of auth_required', () => {
   const marker = {
     error: 'INTEGRATION_AUTH_REQUIRED',
-    message: 'Connect Okta MCP to use this tool: /api/mcp/oauth/authorize?serverId=okta',
-    authRequired: {
-      serverId: 'okta',
-      serverName: 'Okta MCP',
-      connectUrl: '/api/mcp/oauth/authorize?serverId=okta'
-    }
+    integration: 'okta',
+    reason: 'not_connected',
+    message: 'Connect Okta MCP to use this tool.',
+    connectUrl: '/api/integrations/okta/connect'
   };
+  const card = { integration: 'okta', name: 'okta', reason: 'not_connected' };
 
   function run(seam, rawResult, callId) {
     const frames = [];
@@ -325,28 +324,45 @@ describe('chat projection of auth_required', () => {
       chatId: 'chat-1',
       buildLogData: () => ({}),
       logInteraction: async () => {},
-      mcpAuthPrompts: prompts
+      authPrompts: prompts
     });
     const [frame] = await run(seam, marker, 'c1');
     expect(frame.type).toBe(SSE_V2_EVENTS.TOOL_COMPLETED);
-    expect(frame.data.authRequired).toEqual(marker.authRequired);
-    // The SSE v2 contract accepts the new field.
+    expect(frame.data.authRequired).toEqual(card);
+    // The SSE v2 contract accepts the field.
     expect(parseSseV2EventData(SSE_V2_EVENTS.TOOL_COMPLETED, frame.data).authRequired).toEqual(
-      marker.authRequired
+      card
     );
     await run(seam, marker, 'c2');
-    expect(prompts).toEqual([marker.authRequired]);
+    expect(prompts).toEqual([card]);
 
     const [plain] = await run(seam, 'an ordinary result', 'c3');
     expect(plain.data.authRequired).toBeUndefined();
   });
 
-  it('only accepts well-formed markers with a same-origin connect path', () => {
-    expect(authRequiredOf(marker)).toEqual(marker.authRequired);
-    expect(authRequiredOf({ authRequired: { serverId: 'x', connectUrl: 'https://evil' } })).toBe(
-      null
-    );
-    expect(authRequiredOf('text')).toBeNull();
-    expect(authRequiredOf(null)).toBeNull();
+  it("only accepts a result about the tool's own integration", () => {
+    const toolDef = {
+      _mcp: { serverId: 'okta' },
+      _integration: { instanceId: 'okta', instanceLabel: 'Okta MCP', actionTitle: 'Who am I' }
+    };
+    expect(authRequiredOf(marker, toolDef)).toEqual({
+      integration: 'okta',
+      name: 'Okta MCP',
+      reason: 'not_connected',
+      action: 'Who am I'
+    });
+    // Another integration's id: an unrelated tool cannot spoof a card.
+    expect(authRequiredOf({ ...marker, integration: 'jira' }, toolDef)).toBeNull();
+    // A tool that belongs to no integration never draws a card.
+    expect(authRequiredOf(marker, {})).toBeNull();
+    // An adapter or transport failure is not "connect first".
+    expect(authRequiredOf({ error: true, message: 'HTTP 500' }, toolDef)).toBeNull();
+    expect(authRequiredOf('text', toolDef)).toBeNull();
+    expect(authRequiredOf(null, toolDef)).toBeNull();
+    // Step-up scopes ride along, an unknown reason does not.
+    expect(
+      authRequiredOf({ ...marker, reason: 'insufficient_scope', scopes: ['a', 'b'] }, toolDef)
+    ).toMatchObject({ reason: 'insufficient_scope', scopes: ['a', 'b'] });
+    expect(authRequiredOf({ ...marker, reason: 'bogus' }, toolDef).reason).toBe('not_connected');
   });
 });

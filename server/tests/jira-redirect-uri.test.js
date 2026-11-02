@@ -24,6 +24,7 @@ import jiraRouter from '../routes/integrations/jira.js';
 import { runWithContext } from '../utils/requestContext.js';
 import credentialService from '../services/CredentialService.js';
 import { fakeTokenEndpoint } from './helpers/integrationConnect.js';
+import { getIntegrationConnectionService } from '../services/integrations/auth/IntegrationConnectionService.js';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtempSync } from 'node:fs';
@@ -157,17 +158,24 @@ describe('Jira OAuth routes', () => {
     JiraService.oauthStrategy = originalStrategy;
   });
 
+  /** The sign-in as `POST /api/integrations/jira/connect` starts it (the one connect flow). */
   async function startFlow() {
-    const authHandler = lastHandler(jiraRouter, '/auth');
-    let started;
-    await new Promise(resolve =>
+    let authorize;
+    await new Promise((resolve, reject) =>
       runWithContext({ basePathPrefix: '/ihub' }, async () => {
-        started = await run(authHandler, fakeRequest({ headers, user: { id: 'u1' } }));
-        resolve();
+        try {
+          const user = { id: 'u1' };
+          ({ authorizationUrl: authorize } = await getIntegrationConnectionService().beginConnect({
+            installationId: 'jira',
+            user,
+            req: fakeRequest({ headers, user })
+          }));
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
       })
     );
-    assert.equal(started.status, 302, started.error?.message);
-    const authorize = new URL(started.location);
     return { authorize, state: authorize.searchParams.get('state') };
   }
 
@@ -183,7 +191,7 @@ describe('Jira OAuth routes', () => {
         resolve();
       })
     );
-    assert.equal(done.location, '/ihub/settings/integrations?jira_connected=true');
+    assert.equal(done.location, '/ihub/settings/integrations?integration_connected=jira');
     return tokenEndpoint.calls[0].params;
   }
 

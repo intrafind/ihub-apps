@@ -151,15 +151,10 @@ jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
   __esModule: true,
   default: () => mockFeatureFlags
 }));
-const mockNoIntegrations = [];
-const mockIntegrationAuth = {
-  monitorChatMessages: mockNoop,
-  connectIntegration: mockNoop,
-  getRequiredIntegrations: () => mockNoIntegrations
-};
-jest.mock('../../../client/src/features/chat/hooks/useIntegrationAuth', () => ({
+// The retry after connecting an integration has its own tests (connect-card.test.jsx).
+jest.mock('../../../client/src/features/integrations/connect/useConnectRetry', () => ({
   __esModule: true,
-  useIntegrationAuth: () => mockIntegrationAuth
+  useConnectRetry: () => {}
 }));
 const mockVoice = { handleVoiceInput: mockNoop, handleVoiceCommand: mockNoop };
 // Voice mode (issue #2868) has its own tests; the chat page only renders its

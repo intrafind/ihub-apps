@@ -39,10 +39,9 @@ describe('scope step-up on a per-user MCP server', () => {
       integration: 'okta',
       reason: 'insufficient_scope'
     });
-    expect(result.connectUrl).toBe(
-      '/api/mcp/oauth/authorize?serverId=okta&scope=openid%20tickets%3Aread%20tickets%3Awrite'
-    );
-    expect(result.authRequired.connectUrl).toBe(result.connectUrl);
+    // The one reconnect route, with the scopes the re-authorization asks for.
+    expect(result.connectUrl).toBe('/api/integrations/okta/reconnect');
+    expect(result.scopes).toEqual(['openid', 'tickets:read', 'tickets:write']);
   });
 
   it('re-authorizes once: a refusal for scopes already granted is final', () => {

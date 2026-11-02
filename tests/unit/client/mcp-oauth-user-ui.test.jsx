@@ -7,7 +7,8 @@
  *     "Invalid server config";
  *   - the connected-users badge has plural forms (en, de);
  *   - Settings → Integrations names the server by its display name after a
- *     sign-in, not by its id.
+ *     sign-in (the one `integration_connected` / `integration_error` result),
+ *     not by its id.
  */
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -49,8 +50,19 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => mockI18n
 }));
 
+const mockFetchUserIntegrations = jest.fn();
+jest.mock('../../../client/src/api/userIntegrationsApi', () => ({
+  fetchUserIntegrations: (...args) => mockFetchUserIntegrations(...args),
+  disconnectUserIntegration: jest.fn(),
+  fetchUserIntegration: jest.fn(async () => null),
+  requestConnectUrl: jest.fn()
+}));
+
 const IntegrationsPage =
   require('../../../client/src/features/settings/pages/IntegrationsPage').default;
+const {
+  resetConnectResultForTests
+} = require('../../../client/src/features/integrations/connect/connectResult');
 
 describe('connected-users badge', () => {
   test.each([
@@ -66,49 +78,55 @@ describe('connected-users badge', () => {
 
 describe('Settings → Integrations after an MCP sign-in', () => {
   beforeEach(() => {
-    global.fetch = jest.fn(async url => {
-      if (String(url).endsWith('mcp/oauth/connections')) {
-        return {
-          ok: true,
-          json: async () => ({
-            servers: [
-              {
-                serverId: 'okta-whoami',
-                name: { en: 'Okta Who Am I' },
-                connected: true,
-                connectUrl: '/api/mcp/oauth/authorize?serverId=okta-whoami'
-              }
-            ]
-          })
-        };
+    resetConnectResultForTests();
+    mockFetchUserIntegrations.mockResolvedValue([
+      {
+        id: 'okta-whoami',
+        name: 'Okta Who Am I',
+        protocol: 'mcp',
+        actions: [],
+        connection: { mode: 'personal', status: 'connected', account: null }
       }
-      return { ok: false, status: 404, json: async () => ({}) };
-    });
+    ]);
+    // The other cards of the page answer "not enabled".
+    global.fetch = jest.fn(async () => ({ ok: false, status: 404, json: async () => ({}) }));
+  });
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
   });
 
   test('names the server by its display name', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/settings/integrations?integration_connected=okta-whoami'
+    );
     render(
-      <MemoryRouter initialEntries={['/settings/integrations?mcp_connected=okta-whoami']}>
+      <MemoryRouter initialEntries={['/settings/integrations']}>
         <IntegrationsPage />
       </MemoryRouter>
     );
     expect(await screen.findByText('Okta Who Am I connected successfully.')).toBeInTheDocument();
+    // The result parameters are gone from the address bar.
+    expect(window.location.search).toBe('');
   });
 
   test('names the server in an error too', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/settings/integrations?integration_error=public_url_mismatch&integration=okta-whoami'
+    );
     render(
-      <MemoryRouter
-        initialEntries={[
-          '/settings/integrations?mcp_error=public_url_mismatch&mcp_server=okta-whoami'
-        ]}
-      >
+      <MemoryRouter initialEntries={['/settings/integrations']}>
         <IntegrationsPage />
       </MemoryRouter>
     );
     expect(
       await screen.findByText(
-        // The test `t` falls back to the code itself.
-        'Connecting Okta Who Am I failed: public_url_mismatch'
+        // The test `t` falls back to the default text.
+        'Connecting Okta Who Am I failed: The sign-in did not succeed.'
       )
     ).toBeInTheDocument();
   });
