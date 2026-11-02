@@ -343,10 +343,13 @@ vendors' OAuth apps keep working.
 - **Disconnect revokes upstream** where the provider supports it (Google Drive, MCP servers that
   advertise a revocation endpoint). Connect and disconnect are in the audit log as
   `connection.create` and `connection.revoke`.
-- **Scheduled tasks use the owner's connection:** a run whose owner has no usable connection to an
-  integration it may call fails before it starts with `INTEGRATION_AUTH_REQUIRED`, naming the
+- **Scheduled tasks use the owner's connection:** a tool in a scheduled run uses the owner's own
+  connection; when there is none, the run fails with `INTEGRATION_AUTH_REQUIRED`, naming the
   integration and the reason (`not_connected`, `expired`, `insufficient_scope`), with a
   **Reconnect** link.
+- **No endless retries:** a refresh token the provider refuses ends the connection (the user is
+  asked to reconnect), and after repeated temporary failures iHub backs off instead of asking the
+  provider again on every call.
 - **More scopes when a server asks:** an MCP server that refuses a call for a missing scope gets a
   Connect card that asks the user to re-authorize once with the additional scopes.
 

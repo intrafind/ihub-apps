@@ -50,7 +50,6 @@ import { CLOUD_STORAGE_PROVIDERS, listCloudStorageInstallations } from '../cloud
 import { JIRA_INSTANCE_ID, JIRA_TOKEN_SERVICE } from '../jiraConfig.js';
 import { describeInstallation } from './connectionProviders.js';
 import {
-  connectionIdFor,
   getIntegrationConnectionService,
   recordFromStored
 } from './IntegrationConnectionService.js';
@@ -273,12 +272,11 @@ export async function reindexIntegrationConnections({
         });
         continue;
       }
-      const id = connectionIdFor(outcome.record.integration, outcome.record.principal);
-      if (await service.getConnection(id)) {
-        existing += 1;
-        continue;
-      }
-      if (await service.putConnection(outcome.record)) indexed += 1;
+      // Create-only: a record a live connect or refresh wrote meanwhile (on
+      // any worker) wins, atomically in the document store.
+      const { created, record } = await service.createConnection(outcome.record);
+      if (created) indexed += 1;
+      else if (record) existing += 1;
     }
     for (const entry of skipped) {
       logger.warn('Token file not indexed as a connection', {

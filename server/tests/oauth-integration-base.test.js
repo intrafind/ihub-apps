@@ -38,6 +38,13 @@ const tokenStorage = {
     store.expired = false;
     return Promise.resolve();
   }),
+  // Which file the tokens live in: the connection service only uses a file
+  // scoped to the installation (or an admissible legacy one).
+  getTokenMetadata: jest.fn(() =>
+    store.tokens
+      ? Promise.resolve({ providerId: store.tokens.providerId ?? null, createdAt: null })
+      : Promise.reject(new Error('No tokens found'))
+  ),
   deleteUserTokens: jest.fn(() => {
     const had = store.tokens !== null;
     store.tokens = null;
@@ -147,11 +154,13 @@ function connectionServiceFor(getService) {
       }),
     mayConnect: async () => true
   };
-  return new IntegrationConnectionService({
+  const connections = new IntegrationConnectionService({
     documents: null,
     flowStore: new OAuthFlowStore({ documents: null }),
     describe: async id => (id === PROVIDER ? descriptor : null)
   });
+  connections.refreshGraceMs = 0;
+  return connections;
 }
 
 /** A provider that, like Office 365, always sends Content-Type. */

@@ -30,6 +30,7 @@
  * @module services/integrations/auth/oauthFlowStore
  */
 import crypto from 'node:crypto';
+import cluster from 'node:cluster';
 import { getStorage, readFacet } from '../../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../../storage/namespaces.js';
 import tokenStorageService from '../../TokenStorageService.js';
@@ -112,10 +113,57 @@ export class OAuthFlowStore {
     if (documents) {
       await documents.put(OAUTH_FLOWS_NAMESPACE, key, record, { ownerId: 'system' });
     } else {
+      this._warnMemoryOnly();
       this.memory.set(key, record);
     }
     this._sweepSoon();
     return state;
+  }
+
+  /**
+   * Without a storage provider the flows live in this worker's memory, which
+   * another cluster worker (or pod) cannot read: a callback landing there
+   * fails with `invalid_state`. Said once, loudly, when that can happen.
+   */
+  _warnMemoryOnly() {
+    if (this._warned || !cluster.isWorker) return;
+    this._warned = true;
+    logger.warn(
+      'No storage provider: integration sign-ins are kept in this worker only, so a callback that lands on another worker fails with invalid_state. Configure the storage provider (shared contents/) for cluster mode.',
+      { component: COMPONENT }
+    );
+  }
+
+  /**
+   * The routing fields of the flow a `state` names (user, installation,
+   * stack, return URL), without consuming it, or null. Lets the callback
+   * refuse a request from another user or at another installation's alias
+   * without burning the owner's sign-in.
+   *
+   * @param {string} state
+   * @returns {Promise<{userId: string, installationId: string, stack: string, returnUrl: string}|null>}
+   */
+  async peek(state) {
+    if (typeof state !== 'string' || !state || state.length > MAX_STATE_LENGTH) return null;
+    const key = keyFor(state);
+    const documents = this._docs();
+    let record = null;
+    if (documents) {
+      try {
+        record = (await documents.get(OAUTH_FLOWS_NAMESPACE, key))?.data || null;
+      } catch {
+        record = null;
+      }
+    } else {
+      record = this.memory.get(key) || null;
+    }
+    if (!record) return null;
+    return {
+      userId: record.userId,
+      installationId: record.installationId,
+      stack: record.stack,
+      returnUrl: record.returnUrl
+    };
   }
 
   /**

@@ -37,6 +37,7 @@ import {
   cloudStorageTypeOfDefinition,
   getCloudStorageInstallation,
   isCloudStorageProviderConfigured,
+  listCloudStorageInstallations,
   mayUseCloudStorageProvider,
   providerFromInstance,
   resolveCloudStorageRedirectUri
@@ -77,22 +78,56 @@ export const SETTINGS_INTEGRATIONS_PATH = '/settings/integrations';
  * Token store access for the stacks whose files hold the camelCase payload
  * (`{ accessToken, refreshToken, expiresIn, scope, providerId? }`): Jira and
  * the cloud storage providers.
+ *
+ * A storage provider's tokens live in `<user>__<installation>.json`. A legacy
+ * file without the installation in its name (`<user>.json`, from before
+ * tokens were scoped per installation) is only used while it cannot belong to
+ * another installation: when `allowLegacy()` says so (exactly one installation
+ * of the service) and the file names no other installation. Otherwise a
+ * second installation would adopt the first one's tokens, send them to its own
+ * endpoint and client, and delete them when they are refused.
+ *
+ * @param {Object} params
+ * @param {string} params.service - Token store service
+ * @param {string|null} params.providerId - Installation id of scoped files (null: Jira's one slot)
+ * @param {() => boolean} [params.allowLegacy] - Whether an unscoped legacy file may be used
  */
-export function tokenStoreSecret({ service, providerId }) {
+export function tokenStoreSecret({ service, providerId, allowLegacy = () => false }) {
+  /**
+   * Which file holds the user's tokens: the scoped one, an admissible legacy
+   * one, or none. `providerId` is what to hand the token store.
+   */
+  async function fileOf(userId) {
+    const storageId = tokenStorageIdFor(userId);
+    if (!providerId) return { storageId, providerId: null };
+    let meta;
+    try {
+      meta = await tokenStorage.getTokenMetadata(storageId, service, providerId);
+    } catch {
+      return null;
+    }
+    if (meta?.providerId === providerId) return { storageId, providerId, meta };
+    // The token store fell back to the unscoped file.
+    if (!meta?.providerId && allowLegacy()) return { storageId, providerId: null, meta };
+    return null;
+  }
+
   return {
     ref(userId) {
       return tokenSecretRef({ service, storageId: tokenStorageIdFor(userId), providerId });
     },
-    /** The file the user's tokens are read from (a legacy unscoped one counts). */
+    /** The file the user's tokens are read from (an admissible legacy one counts). */
     async locate(userId) {
-      const storageId = tokenStorageIdFor(userId);
+      const file = await fileOf(userId);
+      if (!file) return null;
       try {
-        const meta = await tokenStorage.getTokenMetadata(storageId, service, providerId);
+        const meta =
+          file.meta || (await tokenStorage.getTokenMetadata(file.storageId, service, null));
         return {
           secretRef: tokenSecretRef({
             service,
-            storageId,
-            providerId: meta.providerId || null
+            storageId: file.storageId,
+            providerId: file.providerId
           }),
           createdAt: meta.createdAt || null,
           expiresAt: meta.expiresAt || null
@@ -102,8 +137,13 @@ export function tokenStoreSecret({ service, providerId }) {
       }
     },
     async read(userId) {
+      const file = await fileOf(userId);
+      if (!file) return null;
       try {
-        return await tokenStorage.getUserTokens(tokenStorageIdFor(userId), service, providerId);
+        const stored = await tokenStorage.getUserTokens(file.storageId, service, file.providerId);
+        // A legacy payload that names another installation is not ours.
+        if (providerId && stored?.providerId && stored.providerId !== providerId) return null;
+        return stored;
       } catch (error) {
         if (/not authenticated/i.test(error?.message || '')) return null;
         throw error;
@@ -113,11 +153,16 @@ export function tokenStoreSecret({ service, providerId }) {
       await tokenStorage.storeUserTokens(tokenStorageIdFor(userId), service, payload, providerId);
       return payload;
     },
+    /** Delete the file the tokens are read from — never another installation's. */
     async remove(userId) {
-      return tokenStorage.deleteUserTokens(tokenStorageIdFor(userId), service, providerId);
+      const file = await fileOf(userId);
+      if (!file) return false;
+      return tokenStorage.deleteUserTokens(file.storageId, service, file.providerId);
     },
     async expired(userId) {
-      return tokenStorage.areTokensExpired(tokenStorageIdFor(userId), service, providerId);
+      const file = await fileOf(userId);
+      if (!file) return true;
+      return tokenStorage.areTokensExpired(file.storageId, service, file.providerId);
     },
     /** @returns {SecretView|null} */
     view(stored) {
@@ -231,7 +276,13 @@ function cloudDescriptor(instance) {
     connectUrl: buildServerPath(
       `/api/integrations/${spec.service}/auth?providerId=${encodeURIComponent(provider.id)}`
     ),
-    secret: tokenStoreSecret({ service: spec.service, providerId: provider.id }),
+    // A legacy unscoped file is this installation's only while it is the only
+    // installation of its service.
+    secret: tokenStoreSecret({
+      service: spec.service,
+      providerId: provider.id,
+      allowLegacy: () => listCloudStorageInstallations(provider.type).length === 1
+    }),
     async strategy() {
       const { default: service } = await loadService();
       return service.oauthStrategy(provider.id);

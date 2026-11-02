@@ -255,13 +255,15 @@ The tokens themselves stay where they always were, encrypted per user and servic
 
 **Resolve.** When a tool runs, the adapter asks the connection service for the caller's connection: the caller's **own** one, or the shared service account configured on the installation — never another user's token. A personal OAuth grant can never become a shared connection. A connection whose installation was repointed (another Nextcloud server, another Microsoft tenant, another OAuth client, another MCP endpoint or auth block) is invalidated: its tokens are deleted, its status becomes `needs-reconnect`, and the user connects again — a token issued for one endpoint is never sent to another.
 
-**Refresh.** An expired access token is refreshed once per connection and worker (concurrent calls share the refresh), at the issuer that issued it. The tokens are deleted only when the authorization server refuses the refresh token (`invalid_grant`); a network error, a 5xx, a 429 or a client problem an admin can fix (`invalid_client`) keeps them and the call reports the integration as temporarily unavailable.
+**Refresh.** An expired access token is refreshed once per connection and worker (concurrent calls share the refresh), at the issuer that issued it. The tokens are deleted when the authorization server refuses the refresh token: `invalid_grant`, or `unauthorized_client` / `invalid_client` whose description names the refresh token (Atlassian answers a dead refresh token with `403 unauthorized_client` "refresh_token is invalid"). Before deleting, the tokens are read once more: when another worker has just refreshed them with a rotating refresh token, its tokens are used. A network error, a 5xx, a 429 or a client problem an admin can fix (an expired client secret) keeps the tokens and the call reports the integration as temporarily unavailable. After three such failures in a row the token endpoint is left alone for a cooldown (5 minutes, doubling, at most an hour); after ten the connection is `failed` and the user connects again. A successful refresh resets the count.
+
+A record is not trusted on its own: `resolve` also checks that its token file is still there, and an `expired`, `revoked`, `failed` or `needs-reconnect` connection is never used, even while a token file is left on disk. A legacy cloud storage token file without the installation in its name is only used while there is exactly one installation of that service; with several, no installation adopts (or deletes) it.
 
 **Disconnect** revokes the tokens at the authorization server when it has a revocation endpoint (RFC 7009: Google, MCP servers that advertise one), deletes them and marks the record `revoked`. Connect and disconnect write the audit entries `connection.create` and `connection.revoke` (resource `connection`).
 
 ### Signing in: one callback
 
-Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. The browser is always sent back to a same-origin path with stable result codes (`<provider>_connected`, `<provider>_error=<code>`, `mcp_connected`, `mcp_error`), never the authorization server's text.
+Every sign-in is an authorization-code flow with PKCE (S256). The connect request stores the flow server-side (storage namespace `integration-oauth-flows`; several instances must share the storage, as they share `contents/`): the user and installation it is bound to, the PKCE verifier (encrypted), the redirect URI, the issuer and client it went to and the validated return URL (http or https, same origin). The browser only carries an opaque `state`; the callback consumes it once and refuses it for another user or another installation. Flows expire after 15 minutes. A callback from another signed-in user, or at another installation's callback, is refused without using up the owner's flow. The browser is always sent back to a same-origin path with stable result codes (`<provider>_connected`, `<provider>_error=<code>`, `mcp_connected`, `mcp_error`), never the authorization server's text.
 
 The callback is `GET /api/integrations/oauth/callback`. The callback URLs registered in the vendors' OAuth apps keep working as aliases of it, with the same handler:
 
@@ -275,14 +277,14 @@ The redirect URI sent to the authorization server does not change with this rele
 
 ### Headless runs
 
-Scheduled tasks (and workflows) run as their owner. Before a scheduled run spends a model call, it resolves the owner's own connection of every installation whose tools it may call and that signs users in. When one is missing, the run fails with `INTEGRATION_AUTH_REQUIRED` and the reason names the installation and why:
+Scheduled tasks (and workflows) run as their owner: a tool that needs a connection resolves the **owner's** own connection when it is called, never anybody else's. A run is not refused up front because its app offers a tool whose integration the owner has not connected — most runs never call most of the app's tools. A tool call that finds no usable connection returns a structured result instead of throwing:
 
 ```json
-{ "code": "INTEGRATION_AUTH_REQUIRED", "message": "Reconnect JIRA: the connection has expired",
-  "integration": "jira", "reason": "expired", "connectUrl": "/settings/integrations" }
+{ "error": "INTEGRATION_AUTH_REQUIRED", "integration": "jira", "reason": "not_connected",
+  "message": "Please connect your JIRA account to search tickets", "connectUrl": "/api/integrations/jira/auth" }
 ```
 
-`reason` is `not_connected`, `expired` or `insufficient_scope`. A tool call that finds no usable connection returns the same structured result instead of throwing (`{ "error": "INTEGRATION_AUTH_REQUIRED", "integration", "reason", "message", "connectUrl" }`); the chat shows its Connect card, and a scheduled run that meets one fails with the same code.
+`reason` is `not_connected`, `expired` or `insufficient_scope`. In a chat the Connect card shows; a scheduled run that meets one ends as failed with the reason code `INTEGRATION_AUTH_REQUIRED`, naming the `integration` and the `reason`, with a **Reconnect** link.
 
 ### Scope step-up
 
