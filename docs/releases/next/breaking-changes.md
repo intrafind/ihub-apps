@@ -299,14 +299,14 @@ apps keep working unchanged.
 | --- | --- |
 | `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/connect` `{ "returnUrl" }` → `{ "url" }` |
 | `GET /api/integrations/jira/status` | `GET /api/integrations/jira` (`connection.status`) |
-| `POST /api/integrations/jira/disconnect` | `POST /api/integrations/jira/disconnect` is now the generic route (same path, no body) |
+| `POST /api/integrations/jira/disconnect` | `POST /api/integrations/jira/disconnect` is now the generic route (same path, JSON body `{}`; `415` without one) |
 | `POST /api/integrations/jira/refresh` | none: tokens refresh on use; `GET /api/integrations/jira` shows the state |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/connect` |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/status?providerId=<id>` | `GET /api/integrations/<id>` |
-| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` (`providerId` in query or body) | `POST /api/integrations/<id>/disconnect` |
+| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` (`providerId` in query or body) | `POST /api/integrations/<id>/disconnect` with JSON body `{}` |
 | `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/connect`, or `…/reconnect` `{ "scopes" }` |
 | `GET /api/mcp/oauth/connections` | `GET /api/integrations` (per-user servers have `connection.mode: "personal"`) |
-| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/disconnect` |
+| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/disconnect` with JSON body `{}` |
 
 - **Return parameters:** after a sign-in the browser comes back with
   `integration_connected=<installation id>`, or `integration_error=<code>&integration=<installation
@@ -314,6 +314,9 @@ apps keep working unchanged.
   and the like. The codes are the same for every integration; `session_expired` is now
   `state_expired`, `server_not_found` is `integration_not_found`, a refused token exchange is
   `exchange_failed`, a declined consent is `access_denied`.
+- **JSON body required:** `connect`, `reconnect` and `disconnect` take a JSON body
+  (`Content-Type: application/json`, `{}` when there is nothing to send); any other request is
+  refused with `415 JSON_REQUIRED`, so a cross-site form cannot start or end a connection.
 - **Return URL:** a `returnUrl` that is not a path or an http(s) URL on this host is refused with
   `400 INVALID_RETURN_URL` instead of being replaced by the settings page.
 - **`INTEGRATION_AUTH_REQUIRED` results:** `connectUrl` is the connect route

@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { SwitchIndicator } from '../../../shared/components/Switch';
 import { saveIntegrationPreferences } from '../../../api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
@@ -22,6 +23,12 @@ import { isRowOn, scopeMapOf } from '../../integrations/picker/pickerState';
  * (rows from the server, one per integration), web search and image
  * generation, and the way to the integration settings. On a phone it also
  * holds the quick actions the desktop shows inline (magic prompt, voice).
+ *
+ * On/off rows (message context, web search, integrations) are
+ * `menuitemcheckbox` items of the `role="menu"`: the row owns the state
+ * (`aria-checked`), the focus and Space/Enter. The switch drawn in a row is a
+ * visual only ({@link SwitchIndicator}): a real `Switch` (or checkbox) inside
+ * a menu item would be a nested interactive control.
  */
 function ChatInputActionsMenu({
   app,
@@ -371,10 +378,21 @@ function ChatInputActionsMenu({
                 <div className="space-y-1">
                   {hostContextToggles.map(toggle => {
                     const enabled = hostContextFlags?.[toggle.key] ?? toggle.defaultEnabled ?? true;
+                    const flip = () => onHostContextFlagChange?.(toggle.key, !enabled);
                     return (
                       <div
                         key={toggle.key}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        role="menuitemcheckbox"
+                        aria-checked={enabled}
+                        tabIndex={-1}
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg cursor-pointer"
+                        onClick={flip}
+                        onKeyDown={e => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            flip();
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -386,15 +404,7 @@ function ChatInputActionsMenu({
                             </div>
                           )}
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={enabled}
-                            onChange={e => onHostContextFlagChange?.(toggle.key, e.target.checked)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                        </label>
+                        <SwitchIndicator checked={enabled} />
                       </div>
                     );
                   })}

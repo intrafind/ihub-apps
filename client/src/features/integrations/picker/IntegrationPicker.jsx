@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import StatusDot from '../../../shared/components/StatusDot';
+import { SwitchIndicator } from '../../../shared/components/Switch';
 import IntegrationLogo from './IntegrationLogo';
 import {
   currentScopeOf,
@@ -37,24 +38,6 @@ function onActivateKey(action) {
       action();
     }
   };
-}
-
-/** The visual track of a switch; the row owns role, state and interaction. */
-function SwitchTrack({ on }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors motion-reduce:transition-none ${
-        on ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition motion-reduce:transition-none ${
-          on ? 'translate-x-4' : 'translate-x-0'
-        }`}
-      />
-    </span>
-  );
 }
 
 /**
@@ -379,7 +362,7 @@ export default function IntegrationPicker({
                 </span>
               </span>
             </span>
-            <SwitchTrack on={websearch.enabled} />
+            <SwitchIndicator checked={websearch.enabled} size="sm" />
           </div>
         )}
 
@@ -479,7 +462,7 @@ export default function IntegrationPicker({
                     )}
                   </span>
                 </span>
-                <SwitchTrack on={on} />
+                <SwitchIndicator checked={on} size="sm" />
               </div>
               {scope && on && onScopeChange && (
                 <ScopePicker

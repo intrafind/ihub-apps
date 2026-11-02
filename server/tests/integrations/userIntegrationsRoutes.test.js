@@ -138,6 +138,19 @@ const USERS = {
     groups: ['users'],
     isOAuthClient: true,
     permissions: { integrations: new Set(['*']) }
+  },
+  // An admin's personal API key: the admin's groups, but a bearer token.
+  adminKey: {
+    id: 'admin',
+    groups: ['admins'],
+    authMode: 'oauth_personal_key',
+    permissions: { integrations: new Set(), adminAccess: true }
+  },
+  memberKey: {
+    id: 'member',
+    groups: ['users'],
+    authMode: 'oauth_personal_key',
+    permissions: { integrations: new Set(['jira', 'nc-main', 'brave']) }
   }
 };
 
@@ -257,6 +270,17 @@ describe('GET /api/integrations', () => {
     assert.deepEqual(other.body, { fallthrough: true });
   });
 
+  it('gives an anonymous caller one answer for installed and unknown ids', async () => {
+    const installed = await request(app).get('/api/integrations/jira');
+    const unknown = await request(app).get('/api/integrations/no-such-installation');
+    assert.equal(installed.status, unknown.status);
+    assert.deepEqual(installed.body, unknown.body);
+    assert.notEqual(installed.status, 401, 'no 401 that only an installed id gets');
+    // The other routers under the prefix still answer anonymous callers.
+    const other = await request(app).get('/api/integrations/connections');
+    assert.deepEqual(other.body, { fallthrough: true });
+  });
+
   it('says connected (and when) after a connect', async () => {
     const { outcome } = await connectJira();
     assert.equal(outcome.ok, true);
@@ -322,6 +346,14 @@ describe('POST /api/integrations/:id/connect', () => {
   it('refuses anonymous, delegated and non-JSON requests (CSRF)', async () => {
     assert.equal((await request(app).post('/api/integrations/jira/connect').send({})).status, 401);
     assert.equal((await post('/api/integrations/jira/connect', 'client')).status, 403);
+    // A personal API key is a bearer token too, even with the user's own groups.
+    const keyConnect = await post('/api/integrations/jira/connect', 'memberKey');
+    assert.equal(keyConnect.status, 403);
+    assert.equal(keyConnect.body.code, 'INTERACTIVE_SESSION_REQUIRED');
+    assert.equal((await post('/api/integrations/jira/reconnect', 'memberKey')).status, 403);
+    assert.equal((await post('/api/integrations/jira/disconnect', 'memberKey')).status, 403);
+    // An admin's personal key gets neither the connect nor the admin bypass.
+    assert.equal((await post('/api/integrations/jira/connect', 'adminKey')).status, 403);
     const form = await request(app)
       .post('/api/integrations/jira/connect')
       .set('x-test-user', 'member')

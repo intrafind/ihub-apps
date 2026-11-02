@@ -3,36 +3,16 @@
 
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import Badge from '../../../../shared/components/Badge';
+import StatusDot from '../../../../shared/components/StatusDot';
 import { MIGRATION_STATUS, migrationStatusTone } from './migrationState';
 
-const TONES = {
-  green: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
-  yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
-  amber: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
-  red: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
-  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-  orange: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
-  gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-};
-
 /**
- * A small status pill of the integrations admin.
- *
- * @param {Object} props
- * @param {'green'|'yellow'|'amber'|'red'|'blue'|'orange'|'gray'} [props.tone='gray']
- * @param {string} [props.title] - tooltip
- * @param {React.ReactNode} props.children
+ * The Badge tone of a migration state's tone (`migrationStatusTone`, which
+ * also picks the frame colour of the migration panel): failed red, pending
+ * and needs review amber.
  */
-export function Pill({ tone = 'gray', title, children }) {
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TONES[tone] || TONES.gray}`}
-      title={title}
-    >
-      {children}
-    </span>
-  );
-}
+const MIGRATION_BADGE_TONES = { red: 'danger', amber: 'warning' };
 
 /** Where the marketplace shows the item of a definition, for the update badge. */
 export function marketplaceLinkFor(definitionId) {
@@ -73,9 +53,9 @@ export function MigrationStatusPill({ status }) {
   const tone = migrationStatusTone(status);
   if (!tone) return null;
   return (
-    <Pill tone={tone}>
+    <Badge tone={MIGRATION_BADGE_TONES[tone]}>
       <span data-testid="migration-status">{migrationStatusLabel(status, t)}</span>
-    </Pill>
+    </Badge>
   );
 }
 
@@ -99,11 +79,18 @@ export function MigrationStatusReason({ item, className = '' }) {
   );
 }
 
-/** The tone of the live status pill: unreachable red, connected green, else gray. */
-function statusTone(status) {
-  if (status.unhealthy) return 'red';
-  if (status.connected || status.perUser) return 'green';
-  return 'gray';
+/**
+ * The live status as a {@link StatusDot} status and a {@link Badge} tone:
+ * unreachable `error` (red), connected or signed in per user `ok` (green),
+ * else `off` (gray).
+ *
+ * @param {Object} status - the installation's live status
+ * @returns {{dot: 'ok'|'error'|'off', tone: 'success'|'danger'|'neutral'}}
+ */
+function liveStatusStyle(status) {
+  if (status.unhealthy) return { dot: 'error', tone: 'danger' };
+  if (status.connected || status.perUser) return { dot: 'ok', tone: 'success' };
+  return { dot: 'off', tone: 'neutral' };
 }
 
 /**
@@ -125,15 +112,15 @@ function statusLabel(status, t) {
   return t('admin.integrationCatalog.status.notConnected', 'Not connected');
 }
 
-/** The tone of the LDAP transport pill: plain text red, unknown gray, protected blue. */
+/** The Badge tone of the LDAP transport: plain text red, unknown gray, protected blue. */
 function transportTone(transport) {
-  if (transport === 'plaintext') return 'red';
-  if (transport === 'unknown') return 'gray';
-  return 'blue';
+  if (transport === 'plaintext') return 'danger';
+  if (transport === 'unknown') return 'neutral';
+  return 'info';
 }
 
 /**
- * Every pill of an installation, as on its tile and in its page header:
+ * Every badge of an installation, as on its tile and in its page header:
  * enabled / disabled, always installed, definition missing, version (with
  * the version on disk as tooltip when it differs), the migration state
  * (pending, failed, needs review), incompatible, update
@@ -149,26 +136,27 @@ function transportTone(transport) {
 export function InstallationStatusPills({ item, linkClassName = '' }) {
   const { t } = useTranslation();
   const enabled = item.enabled !== false;
+  const live = item.liveStatus ? liveStatusStyle(item.liveStatus) : null;
   return (
     <>
-      <Pill tone={enabled ? 'green' : 'yellow'}>
+      <Badge tone={enabled ? 'success' : 'warning'}>
         {enabled
           ? t('admin.integrationCatalog.status.enabled', 'Enabled')
           : t('admin.integrationCatalog.status.disabled', 'Disabled')}
-      </Pill>
+      </Badge>
       {item.locked && (
-        <Pill tone="blue">
+        <Badge tone="info">
           {t('admin.integrationCatalog.status.alwaysInstalled', 'Always installed')}
-        </Pill>
+        </Badge>
       )}
       {item.definitionMissing && (
-        <Pill tone="red">
+        <Badge tone="danger">
           {t('admin.integrationCatalog.status.definitionMissing', 'Definition missing')}
-        </Pill>
+        </Badge>
       )}
       {item.definitionVersion && (
-        <Pill
-          tone="gray"
+        <Badge
+          tone="neutral"
           title={
             item.currentVersion && item.currentVersion !== item.definitionVersion
               ? t(
@@ -182,13 +170,13 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
           <span className="font-mono" data-testid="installed-version">
             v{item.definitionVersion}
           </span>
-        </Pill>
+        </Badge>
       )}
       <MigrationStatusPill status={item.status} />
       {item.incompatible && (
-        <Pill tone="red" title={item.incompatibleReason || undefined}>
+        <Badge tone="danger" title={item.incompatibleReason || undefined}>
           {t('admin.integrationCatalog.status.incompatible', 'Incompatible')}
-        </Pill>
+        </Badge>
       )}
       {item.updateAvailable && item.latestVersion && (
         <Link
@@ -196,8 +184,8 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
           className={`inline-flex rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${linkClassName}`}
           data-testid="update-badge"
         >
-          <Pill
-            tone="orange"
+          <Badge
+            tone="warning"
             title={t(
               'admin.integrationCatalog.status.updateAvailableTitle',
               'Open the marketplace to update'
@@ -210,34 +198,41 @@ export function InstallationStatusPills({ item, linkClassName = '' }) {
                 version: item.latestVersion
               }
             )}
-          </Pill>
+          </Badge>
         </Link>
       )}
       {item.auth?.mode && item.auth.mode !== 'none' && (
-        <Pill tone="blue">
+        <Badge tone="info">
           {t(`admin.integrationCatalog.authModes.short.${item.auth.mode}`, item.auth.mode)}
-        </Pill>
+        </Badge>
       )}
-      {item.liveStatus && enabled && (
-        <Pill tone={statusTone(item.liveStatus)}>
-          <span data-testid="live-status">
-            {statusLabel(item.liveStatus, t)}
-            {typeof item.liveStatus.toolCount === 'number' &&
-              ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.liveStatus.toolCount })}`}
-          </span>
-        </Pill>
+      {live && enabled && (
+        <Badge tone={live.tone}>
+          <StatusDot
+            status={live.dot}
+            size="sm"
+            showLabel
+            labelClassName=""
+            data-testid="live-status"
+            label={`${statusLabel(item.liveStatus, t)}${
+              typeof item.liveStatus.toolCount === 'number'
+                ? ` · ${t('admin.integrationCatalog.status.toolCount', '{{count}} tools', { count: item.liveStatus.toolCount })}`
+                : ''
+            }`}
+          />
+        </Badge>
       )}
       {item.liveStatus?.transport && enabled && (
         // People directories: how the LDAP connection is protected.
-        <Pill tone={transportTone(item.liveStatus.transport)}>
+        <Badge tone={transportTone(item.liveStatus.transport)}>
           {t(
             `admin.integrationCatalog.transport.${item.liveStatus.transport}`,
             item.liveStatus.transport
           )}
-        </Pill>
+        </Badge>
       )}
       {item.liveStatus?.external && (
-        <Pill tone="yellow">{t('admin.integrationCatalog.status.external', 'External')}</Pill>
+        <Badge tone="warning">{t('admin.integrationCatalog.status.external', 'External')}</Badge>
       )}
     </>
   );

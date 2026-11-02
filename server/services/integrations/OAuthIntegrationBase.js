@@ -4,7 +4,11 @@
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { getIntegrationConnectionService } from './auth/IntegrationConnectionService.js';
-import { isIntegrationAuthRequired } from './auth/integrationAuthRequired.js';
+import {
+  INTEGRATION_AUTH_REASONS,
+  IntegrationAuthRequiredError,
+  isIntegrationAuthRequired
+} from './auth/integrationAuthRequired.js';
 import { tokenStorageIdFor } from './auth/tokenSecrets.js';
 import { getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
@@ -291,17 +295,22 @@ class OAuthIntegrationBase {
 
   /**
    * Turn a failed (non-OK, non-retried) API response into the error to throw.
-   * 401 and 429 get dedicated messages; a 404 and everything else carry the
-   * provider's message.
+   * A 401 (after the one refresh) is "connect first" with reason `expired`
+   * (`IntegrationAuthRequiredError`), so the storage routes answer it with the
+   * Connect card; 429 gets a dedicated message; a 404 and everything else
+   * carry the provider's message.
    * @param {Response} response - The failed response
    * @param {string} endpoint - Requested endpoint, for logging
+   * @param {string} [providerId] - The installation id
    * @returns {Promise<Error>} The error to throw
    */
-  async _apiErrorFromResponse(response, endpoint) {
+  async _apiErrorFromResponse(response, endpoint, providerId) {
     if (response.status === 401) {
-      return new Error(
-        `${this.displayName} authentication required. Please reconnect your account.`
-      );
+      return new IntegrationAuthRequiredError({
+        integration: providerId,
+        reason: INTEGRATION_AUTH_REASONS.EXPIRED,
+        message: `${this.displayName} authentication required. Please reconnect your account.`
+      });
     }
     if (response.status === 429) {
       return this._rateLimitError(response, endpoint);
@@ -321,7 +330,11 @@ class OAuthIntegrationBase {
    * @returns {Error} The error to throw
    */
   _toApiRequestError(error) {
-    if (error.message.includes(this.displayName) || error.message.includes('authentication')) {
+    if (
+      isIntegrationAuthRequired(error) ||
+      error.message.includes(this.displayName) ||
+      error.message.includes('authentication')
+    ) {
       return error;
     }
     logger.error(`${this.displayName} API request failed`, {
@@ -387,7 +400,7 @@ class OAuthIntegrationBase {
         );
       }
 
-      throw await this._apiErrorFromResponse(response, endpoint);
+      throw await this._apiErrorFromResponse(response, endpoint, providerId);
     } catch (error) {
       throw this._toApiRequestError(error);
     }

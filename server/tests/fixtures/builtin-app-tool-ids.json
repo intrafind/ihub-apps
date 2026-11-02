@@ -1,0 +1,427 @@
+{
+  "description": "Regression fixture for #2973: the tool ids getToolsForApp returns for apps bound to the built-in integrations. Captured before the legacy branches of the tool loader are removed (#2913); a refactor that changes one of these lists changes what apps offer their models. Installations get their definition's current version in the test; everything else is as here.",
+  "user": {
+    "id": "fixture-user",
+    "groups": ["research"],
+    "authMode": "local",
+    "permissions": {
+      "scheduledTasks": true
+    }
+  },
+  "groups": {
+    "research": {
+      "id": "research",
+      "permissions": {
+        "integrations": ["*"]
+      }
+    }
+  },
+  "installed": [
+    {
+      "id": "ifinder",
+      "definition": "com.intrafind/ifinder",
+      "enabled": true,
+      "values": {
+        "baseUrl": "https://ifinder.example"
+      },
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "iassistant",
+      "definition": "com.intrafind/iassistant",
+      "enabled": true,
+      "values": {
+        "connection": "ifinder"
+      },
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "jira",
+      "definition": "com.intrafind/jira",
+      "enabled": true,
+      "values": {
+        "clientId": "jira-client",
+        "clientSecretRef": "cred-jira-secret"
+      },
+      "auth": {
+        "mode": "oauth-user"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "brave",
+      "definition": "com.intrafind/brave-search",
+      "enabled": true,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "qwant",
+      "definition": "com.intrafind/qwant-search",
+      "enabled": true,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "iFinder app: base id in tools and the installation bound",
+      "app": {
+        "id": "a1",
+        "tools": ["iFinder"],
+        "integrations": {
+          "ifinder": {}
+        }
+      },
+      "expectedToolIds": [
+        "iFinder_search",
+        "iFinder_getContent",
+        "iFinder_getMetadata",
+        "iFinder_discover",
+        "iFinder_getFields",
+        "iFinder_getFacetValues",
+        "iFinder_listProfiles"
+      ]
+    },
+    {
+      "name": "iFinder bound, every action",
+      "app": {
+        "id": "a2",
+        "integrations": {
+          "ifinder": {}
+        }
+      },
+      "expectedToolIds": [
+        "iFinder_search",
+        "iFinder_getContent",
+        "iFinder_getMetadata",
+        "iFinder_discover",
+        "iFinder_getFields",
+        "iFinder_getFacetValues",
+        "iFinder_listProfiles"
+      ]
+    },
+    {
+      "name": "iFinder bound to two actions",
+      "app": {
+        "id": "a3",
+        "integrations": {
+          "ifinder": {
+            "actions": ["search", "getContent"]
+          }
+        }
+      },
+      "expectedToolIds": ["iFinder_search", "iFinder_getContent"]
+    },
+    {
+      "name": "iFinder tool ids in tools, no binding (kept tool ids)",
+      "app": {
+        "id": "a4",
+        "tools": ["iFinder_search", "iFinder_getMetadata"]
+      },
+      "expectedToolIds": ["iFinder_search", "iFinder_getMetadata"]
+    },
+    {
+      "name": "the iFinder installation id in tools selects nothing",
+      "app": {
+        "id": "a5",
+        "tools": ["ifinder"]
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "iAssistant bound for its model: no tool (ask is bound explicitly only)",
+      "app": {
+        "id": "a6",
+        "preferredModel": "iassistant-conversation",
+        "iassistant": {
+          "enabled": true
+        },
+        "integrations": {
+          "iassistant": {}
+        }
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "iAssistant binding that ticks ask",
+      "app": {
+        "id": "a7",
+        "integrations": {
+          "iassistant": {
+            "actions": ["ask"]
+          }
+        }
+      },
+      "expectedToolIds": ["iassistant__ask"]
+    },
+    {
+      "name": "iassistant__ask in tools without a binding selects nothing",
+      "app": {
+        "id": "a7b",
+        "tools": ["iassistant__ask"]
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "Jira base id in tools (kept tool ids)",
+      "app": {
+        "id": "a8",
+        "tools": ["jira"]
+      },
+      "expectedToolIds": [
+        "jira_searchTickets",
+        "jira_getTicket",
+        "jira_addComment",
+        "jira_getTransitions",
+        "jira_transitionTicket",
+        "jira_getAttachment"
+      ]
+    },
+    {
+      "name": "Jira bound, every action",
+      "app": {
+        "id": "a9",
+        "integrations": {
+          "jira": {}
+        }
+      },
+      "expectedToolIds": [
+        "jira_searchTickets",
+        "jira_getTicket",
+        "jira_addComment",
+        "jira_getTransitions",
+        "jira_transitionTicket",
+        "jira_getAttachment"
+      ]
+    },
+    {
+      "name": "Jira bound to two actions",
+      "app": {
+        "id": "a10",
+        "integrations": {
+          "jira": {
+            "actions": ["searchTickets", "getTicket"]
+          }
+        }
+      },
+      "expectedToolIds": ["jira_searchTickets", "jira_getTicket"]
+    },
+    {
+      "name": "web search on Brave with a function-tool model: engine and page reader",
+      "app": {
+        "id": "a11",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "brave"
+        }
+      },
+      "context": {
+        "modelProvider": "mistral"
+      },
+      "expectedToolIds": ["braveSearch", "read_url"]
+    },
+    {
+      "name": "web search auto: the first engine (Brave) and the page reader",
+      "app": {
+        "id": "a12",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "auto"
+        }
+      },
+      "context": {
+        "modelProvider": "mistral"
+      },
+      "expectedToolIds": ["braveSearch", "read_url"]
+    },
+    {
+      "name": "web search on Qwant",
+      "app": {
+        "id": "a13",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "qwant"
+        }
+      },
+      "context": {
+        "modelProvider": "mistral"
+      },
+      "expectedToolIds": ["qwantSearch", "read_url"]
+    },
+    {
+      "name": "native search on Google: no tools",
+      "app": {
+        "id": "a14",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "brave"
+        }
+      },
+      "context": {
+        "modelProvider": "google"
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "native search on Anthropic: the page reader only",
+      "app": {
+        "id": "a15",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "brave"
+        }
+      },
+      "context": {
+        "modelProvider": "anthropic"
+      },
+      "expectedToolIds": ["read_url"]
+    },
+    {
+      "name": "web search switched off in the chat",
+      "app": {
+        "id": "a16",
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "brave"
+        }
+      },
+      "context": {
+        "modelProvider": "mistral",
+        "websearchEnabled": false
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "an engine's tool id in tools",
+      "app": {
+        "id": "a17",
+        "tools": ["braveSearch"]
+      },
+      "expectedToolIds": ["braveSearch"]
+    },
+    {
+      "name": "iHub tools by id (scheduled tasks on)",
+      "app": {
+        "id": "a18",
+        "tools": ["ask_user", "schedule_task", "list_scheduled_tasks"]
+      },
+      "expectedToolIds": ["ask_user", "schedule_task", "list_scheduled_tasks"]
+    },
+    {
+      "name": "the ihub installation id selects nothing",
+      "app": {
+        "id": "a19",
+        "tools": ["ihub"]
+      },
+      "expectedToolIds": []
+    },
+    {
+      "name": "platform tools by id and base id",
+      "app": {
+        "id": "a20",
+        "tools": ["read_url", "write_memory", "evidence"]
+      },
+      "expectedToolIds": [
+        "evidence_collect",
+        "evidence_validateQuotesFastPath",
+        "evidence_composeReport",
+        "read_url",
+        "write_memory"
+      ]
+    },
+    {
+      "name": "research app: iHub, iFinder, iAssistant ask, Jira and web search",
+      "app": {
+        "id": "a21",
+        "tools": ["ask_user", "iFinder_search"],
+        "integrations": {
+          "ifinder": {
+            "actions": ["getContent"]
+          },
+          "iassistant": {
+            "actions": ["ask"]
+          },
+          "jira": {}
+        },
+        "websearch": {
+          "enabled": true,
+          "enabledByDefault": true,
+          "provider": "auto"
+        }
+      },
+      "context": {
+        "modelProvider": "openai"
+      },
+      "expectedToolIds": [
+        "iFinder_search",
+        "ask_user",
+        "iFinder_getContent",
+        "iassistant__ask",
+        "jira_searchTickets",
+        "jira_getTicket",
+        "jira_addComment",
+        "jira_getTransitions",
+        "jira_transitionTicket",
+        "jira_getAttachment",
+        "braveSearch",
+        "read_url"
+      ]
+    },
+    {
+      "name": "research app narrowed by the chat's tool selection",
+      "app": {
+        "id": "a22",
+        "tools": ["ask_user", "iFinder_search"],
+        "integrations": {
+          "ifinder": {},
+          "iassistant": {
+            "actions": ["ask"]
+          }
+        }
+      },
+      "context": {
+        "enabledTools": ["iFinder_search", "iassistant"]
+      },
+      "expectedToolIds": ["iFinder_search", "ask_user", "iassistant__ask"]
+    }
+  ]
+}
