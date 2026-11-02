@@ -20,8 +20,8 @@ const isGoogleDoc = item => item?.isGoogleDoc === true;
 
 /**
  * Google Drive File Browser — thin wrapper around the shared
- * `CloudFileBrowserShell`. Provides the Google Drive-specific hook,
- * i18n keys, and predicates for the platform's virtual files
+ * `CloudFileBrowserShell`. Provides the Google Drive-specific hook
+ * and predicates for the platform's virtual files
  * (`isGoogleDoc`).
  */
 const GoogleDriveFileBrowser = props => (
@@ -30,14 +30,6 @@ const GoogleDriveFileBrowser = props => (
     useBrowserHook={useGoogleDriveBrowser}
     isVirtualFile={isGoogleDoc}
     extraFileIconRule={extraIcon}
-    i18nKeys={{
-      notConnected: ['cloudStorage.googleDrive.notConnected', 'Google Drive Not Connected'],
-      connectPrompt: [
-        'cloudStorage.googleDrive.connectPrompt',
-        'Connect your Google account to browse files from Google Drive, Shared Drives, and files shared with you'
-      ],
-      connect: ['cloudStorage.googleDrive.connect', 'Connect to Google Drive']
-    }}
   />
 );
 

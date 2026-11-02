@@ -31,7 +31,9 @@ export function useConnectRetry({ chatId, messages, ready, busy, send }) {
   const [connected] = useState(() => consumeConnectResult().connected);
   const doneRef = useRef(false);
   const sendRef = useRef(send);
-  sendRef.current = send;
+  useEffect(() => {
+    sendRef.current = send;
+  });
 
   useEffect(() => {
     if (doneRef.current || !connected || !ready || busy || !chatId) return;

@@ -43,7 +43,7 @@ import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
-import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
+import { useConnectRetry } from '../../integrations/connect/useConnectRetry';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import useMediaQuery from '../../../shared/hooks/useMediaQuery';
@@ -651,14 +651,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       cancelled = true;
     };
   }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
-
-  // Integration authentication detection
-  const {
-    monitorChatMessages,
-    connectIntegration,
-    // checkConnectionStatus is available but not currently used
-    getRequiredIntegrations
-  } = useIntegrationAuth();
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
@@ -1517,23 +1509,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   ]);
 
   // Determine which integrations this app uses
-  const appIntegrations = useMemo(() => {
-    const integrations = [];
-    // Jira signs every user in: the app binds the `jira` installation.
-    if (app?.integrations?.jira) {
-      integrations.push('jira');
-    }
-    return integrations;
-  }, [app?.integrations]);
-
-  // Monitor messages for integration authentication errors
-  useEffect(() => {
-    monitorChatMessages(messages, appIntegrations);
-  }, [messages, appIntegrations, monitorChatMessages]);
-
-  // Get required integrations for display
-  const requiredIntegrations = getRequiredIntegrations();
-
   // Set up voice commands
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
     messages,
@@ -2677,6 +2652,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     });
     return voiceTurnSentRef.current;
   };
+
+  // After connecting an integration from a Connect card, the browser comes
+  // back here; the answer that needed the connection is retried once (#2917).
+  useConnectRetry({
+    chatId,
+    messages,
+    ready: !hydrating,
+    busy: processing,
+    send: text => {
+      void handleSubmit({ preventDefault() {} }, null, { voiceText: text, typedInVoiceMode: true });
+    }
+  });
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>
     submitClarificationResponse(answer, clarificationParams({ voiceMode: true }));
@@ -3152,8 +3139,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onMessageComplete={handleMessageComplete}
                   onOpenInCanvas={handleOpenInCanvas}
                   canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
                   onClarificationSubmit={onClarificationSubmitInChat}
                   onClarificationSkip={onClarificationSkipInChat}
                   onOpenSourceInApp={handleOpenSourceInApp}
@@ -3203,8 +3188,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         onSaveAsPrompt={handleSaveAsPrompt}
                         onSaveAsSkill={handleSaveAsSkill}
                         canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
                         onClarificationSubmit={onClarificationSubmitInChat}
@@ -3259,8 +3242,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         onSaveAsPrompt={handleSaveAsPrompt}
                         onSaveAsSkill={handleSaveAsSkill}
                         canvasEnabled={app?.features?.canvas === true}
-                        requiredIntegrations={requiredIntegrations}
-                        onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
                         onClarificationSubmit={onClarificationSubmitInChat}
@@ -3314,8 +3295,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     onSaveAsPrompt={handleSaveAsPrompt}
                     onSaveAsSkill={handleSaveAsSkill}
                     canvasEnabled={app?.features?.canvas === true}
-                    requiredIntegrations={requiredIntegrations}
-                    onConnectIntegration={connectIntegration}
                     app={app}
                     models={models}
                     onClarificationSubmit={onClarificationSubmitInChat}
@@ -3351,8 +3330,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onSaveAsPrompt={handleSaveAsPrompt}
                   onSaveAsSkill={handleSaveAsSkill}
                   canvasEnabled={app?.features?.canvas === true}
-                  requiredIntegrations={requiredIntegrations}
-                  onConnectIntegration={connectIntegration}
                   app={app}
                   models={models}
                   onClarificationSubmit={onClarificationSubmitInChat}

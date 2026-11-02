@@ -4999,19 +4999,8 @@
     "name": "Name",
     "size": "Size",
     "modified": "Modified",
-    "notConnected": "Office 365 Not Connected",
-    "connect": "Connect to Office 365",
-    "connectPrompt": "Connect your Microsoft account to browse files from OneDrive, SharePoint, and Teams",
-    "googleDrive": {
-      "notConnected": "Google Drive Not Connected",
-      "connect": "Connect to Google Drive",
-      "connectPrompt": "Connect your Google account to browse files from Google Drive, Shared Drives, and files shared with you"
-    },
-    "nextcloud": {
-      "notConnected": "Nextcloud Not Connected",
-      "connectPrompt": "Connect your Nextcloud account to browse and attach files from your Nextcloud instance.",
-      "connect": "Connect to Nextcloud"
-    }
+    "googleDrive": {},
+    "nextcloud": {}
   },
   "components": {
     "uploader": {
@@ -5543,8 +5532,6 @@
           "update": "Update existing tickets",
           "info": "Get project and user information"
         },
-        "connected": "JIRA account connected successfully! You can now use JIRA features in your apps.",
-        "connectionFailed": "Connection failed: {{message}}",
         "disconnected": "JIRA account disconnected successfully",
         "disconnectFailed": "Failed to disconnect JIRA: {{message}}",
         "testSuccess": "JIRA connection test successful! Found {{count}} accessible tickets.",
@@ -5561,19 +5548,8 @@
           "upload": "Upload cloud files to chats",
           "oauth": "Secure OAuth 2.0 with PKCE"
         },
-        "connected": "{{name}} account connected successfully! You can now select files from {{name}}.",
-        "connectionFailed": "{{name}} connection failed: {{message}}",
         "disconnected": "{{name}} account disconnected successfully",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
-          "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
-          "invalid_state": "{{name}} sign-in could not be verified. Please try connecting again.",
-          "session_expired": "{{name}} sign-in took too long and expired. Please try connecting again.",
-          "oauth_failed": "{{name}} sign-in failed at the provider. Please try again or contact your administrator if the problem persists.",
-          "missing_code": "{{name}} sign-in did not complete. Please try connecting again.",
-          "callback_failed": "{{name}} could not be connected. Please try again or contact your administrator if the problem persists."
-        }
+        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}"
       },
       "office": {
         "available": "Available",
@@ -5675,23 +5651,8 @@
         "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
         "serverDescription": "MCP server",
         "connect": "Connect {{name}}",
-        "connected": "{{name}} connected successfully.",
-        "connectionFailed": "Connecting {{name}} failed: {{message}}",
         "disconnected": "{{name}} disconnected",
-        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
-        "errors": {
-          "oauth_failed": "the sign-in was cancelled or refused",
-          "missing_code": "the sign-in returned no authorization code",
-          "invalid_state": "the sign-in link is invalid",
-          "state_expired": "the sign-in took too long, please start again",
-          "user_mismatch": "the sign-in was started by a different user",
-          "server_not_found": "the server is not available to you",
-          "exchange_failed": "the server did not accept the sign-in",
-          "discovery_failed": "the server's sign-in could not be found",
-          "registration_failed": "iHub could not register with the server",
-          "issuer_mismatch": "the sign-in answer came from another authorization server than expected",
-          "public_url_mismatch": "iHub was reached under another address than the one registered with the server; ask your administrator to set the MCP gateway public URL"
-        }
+        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}"
       },
       "iFinder": {
         "title": "iFinder",
@@ -5700,6 +5661,53 @@
         "authorize": "Sign in via {{provider}}",
         "revoked": "iFinder authorization revoked",
         "revokeFailed": "Could not revoke the iFinder authorization: {{message}}"
+      }
+    },
+    "connect": {
+      "title": "Connect {{name}}",
+      "titleReconnect": "Reconnect {{name}}",
+      "titleScope": "{{name}} needs another permission",
+      "why": "To answer your request, iHub needs to act as you in {{name}}.",
+      "whyAction": "To run “{{action}}” for your request, iHub needs to act as you in {{name}}.",
+      "whyFiles": "To show your files, iHub needs to act as you in {{name}}.",
+      "whyExpired": "Your connection to {{name}} has expired or was revoked. Sign in again to continue; your settings stay as they are.",
+      "whyScope": "This request needs a permission you have not granted to iHub yet. Reconnecting keeps your connection and adds it.",
+      "signInAt": "You will sign in at {{host}}.",
+      "newPermission": "New permission:",
+      "permissions": "Permissions",
+      "effects": {
+        "read": "Read",
+        "write": "Write",
+        "destructive": "Delete",
+        "unknown": "Other"
+      },
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "notNow": "Not now",
+      "notNowNote": "{{name}} is not connected.",
+      "show": "Show details",
+      "connected": "{{name}} is connected.",
+      "connectedAs": "{{name}} is connected as {{account}}.",
+      "connectedMessage": "{{name}} connected successfully.",
+      "failed": "Connecting {{name}} did not succeed. Try again.",
+      "failedMessage": "Connecting {{name}} failed: {{message}}",
+      "startFailed": "The sign-in to {{name}} could not be started.",
+      "retryMessage": "I connected {{name}}. Please try again.",
+      "errors": {
+        "access_denied": "{{name}} was not connected because access was not granted. If your organization requires administrator approval for the app, ask your administrator to grant it, then try again.",
+        "oauth_failed": "The sign-in to {{name}} did not succeed.",
+        "missing_code": "The sign-in to {{name}} did not return an authorization. Try again.",
+        "invalid_state": "The sign-in to {{name}} could not be matched to your session. Try again.",
+        "state_expired": "The sign-in to {{name}} took too long. Try again.",
+        "user_mismatch": "The sign-in to {{name}} was started by another iHub user. Try again.",
+        "integration_not_found": "{{name}} is not available to you.",
+        "exchange_failed": "{{name}} did not accept the sign-in. Try again or ask your administrator.",
+        "discovery_failed": "The sign-in server of {{name}} could not be reached.",
+        "registration_failed": "iHub could not register with the sign-in server of {{name}}.",
+        "issuer_mismatch": "The sign-in answer did not come from the expected server for {{name}}.",
+        "public_url_mismatch": "The public URL of iHub changed; ask your administrator to check {{name}}.",
+        "invalid_client": "{{name}} could not be connected because the integration is misconfigured (for example an expired client secret). Please contact your administrator.",
+        "callback_failed": "The sign-in to {{name}} could not be completed. Try again."
       }
     }
   },
@@ -6663,13 +6671,6 @@
       "attachmentNotIncluded": "Attachment not included: {{name}}",
       "attachmentUnnamed": "file"
     }
-  },
-  "mcpConnect": {
-    "title": "Connect {{name}}",
-    "explanation": "{{name}} needs you to sign in with your own account before its tools can be used.",
-    "connect": "Connect",
-    "connected": "{{name}} is connected. Send your request again to use it.",
-    "failed": "Connecting {{name}} did not succeed. Try again."
   },
   "sources": {
     "title": "Sources",

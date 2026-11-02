@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -13,45 +12,17 @@ import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
 import ConnectedAppsCard from '../components/ConnectedAppsCard';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
-import { buildMcpConnectUrl } from '../../chat/mcpApps/mcpConnectUrl';
-
-/** Stable error codes of the MCP sign-in callback (server/routes/mcpOAuth.js). */
-const MCP_ERROR_CODES = new Set([
-  'oauth_failed',
-  'missing_code',
-  'invalid_state',
-  'state_expired',
-  'user_mismatch',
-  'server_not_found',
-  'exchange_failed',
-  'discovery_failed',
-  'registration_failed',
-  'issuer_mismatch',
-  'public_url_mismatch'
-]);
-
-/**
- * Integration sign-in callback error codes (Jira and cloud storage) with a
- * dedicated, readable message under `integrations.page.cloud.errors`.
- */
-const INTEGRATION_ERROR_CODES = new Set([
-  'access_denied',
-  'invalid_client',
-  'invalid_state',
-  'session_expired',
-  'oauth_failed',
-  'missing_code',
-  'callback_failed'
-]);
+import { disconnectUserIntegration, fetchUserIntegrations } from '../../../api/userIntegrationsApi';
+import { consumeConnectResult } from '../../integrations/connect/connectResult';
+import { startIntegrationConnect } from '../../integrations/connect/integrationInfo';
 
 export default function IntegrationsPage() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const { user, loginWithOidc } = useAuth();
   const { platformConfig } = usePlatformConfig();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [integrations, setIntegrations] = useState({});
+  // The user's integrations (`GET /api/integrations`). Null until loaded.
+  const [userIntegrations, setUserIntegrations] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   // Personal API keys are offered only when an admin enabled them, so the
@@ -65,8 +36,6 @@ export default function IntegrationsPage() {
   const [connectionOverview, setConnectionOverview] = useState(null);
   const [connectionBusy, setConnectionBusy] = useState(false);
   const [connectionPendingRevoke, setConnectionPendingRevoke] = useState(null);
-  // MCP servers with per-user sign-in the user may connect. Null until loaded.
-  const [mcpServers, setMcpServers] = useState(null);
   // Stored sign-in iFinder calls are authorized with (OIDC token exchange mode).
   const [iFinderAuthorization, setIFinderAuthorization] = useState(null);
 
@@ -77,95 +46,71 @@ export default function IntegrationsPage() {
     [cloudStorage.enabled, cloudStorage.providers]
   );
 
-  // Handle OAuth callback query parameters
+  // The result of a sign-in that came back to this page
+  // (`integration_connected=<id>` / `integration_error=<code>&integration=<id>`),
+  // read once; the text names the integration once the list has loaded.
+  const [connectResult] = useState(() => consumeConnectResult());
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const jiraConnected = params.get('jira_connected');
-    const jiraError = params.get('jira_error');
-
-    // Handle JIRA callbacks
-    if (jiraConnected === 'true') {
+    if (connectResult.connected) {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
-      setMessage({
-        type: 'success',
-        text: t('integrations.page.jira.connected')
-      });
-      navigate('/settings/integrations', { replace: true });
-    } else if (jiraError) {
+      setMessage({ type: 'success', result: { kind: 'connected', id: connectResult.connected } });
+    } else if (connectResult.error) {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
-        text: INTEGRATION_ERROR_CODES.has(jiraError)
-          ? t(`integrations.page.cloud.errors.${jiraError}`, { name: 'JIRA' })
-          : t('integrations.page.jira.connectionFailed', {
-              message: decodeURIComponent(jiraError)
-            })
+        result: {
+          kind: 'error',
+          id: connectResult.errorIntegration || '',
+          code: connectResult.error
+        }
       });
-      navigate('/settings/integrations', { replace: true });
     }
+  }, [connectResult]);
 
-    // Handle MCP server sign-in callbacks
-    const mcpConnected = params.get('mcp_connected');
-    const mcpError = params.get('mcp_error');
-    // The URL carries the server id; the text is built at render time with
-    // the server's display name once the server list has loaded.
-    if (mcpConnected) {
-      // eslint-disable-next-line @eslint-react/set-state-in-effect
-      setMessage({ type: 'success', mcp: { kind: 'connected', serverId: mcpConnected } });
-      navigate('/settings/integrations', { replace: true });
-    } else if (mcpError) {
-      const code = MCP_ERROR_CODES.has(mcpError) ? mcpError : 'oauth_failed';
-      // eslint-disable-next-line @eslint-react/set-state-in-effect
-      setMessage({
-        type: 'error',
-        mcp: { kind: 'error', serverId: params.get('mcp_server') || '', code }
-      });
-      navigate('/settings/integrations', { replace: true });
-    }
+  /** Display name of an integration, falling back to its id. */
+  const integrationName = id => userIntegrations?.find(entry => entry.id === id)?.name || id || '';
 
-    // Handle cloud storage provider callbacks dynamically
-    cloudProviders.forEach(provider => {
-      const connected = params.get(`${provider.type}_connected`);
-      const error = params.get(`${provider.type}_error`);
-
-      if (connected === 'true') {
-        setMessage({
-          type: 'success',
-          text: t('integrations.page.cloud.connected', { name: provider.displayName })
-        });
-        navigate('/settings/integrations', { replace: true });
-      } else if (error) {
-        setMessage({
-          type: 'error',
-          text: INTEGRATION_ERROR_CODES.has(error)
-            ? t(`integrations.page.cloud.errors.${error}`, { name: provider.displayName })
-            : t('integrations.page.cloud.connectionFailed', {
-                name: provider.displayName,
-                message: decodeURIComponent(error)
-              })
-        });
-        navigate('/settings/integrations', { replace: true });
-      }
-    });
-  }, [location.search, navigate, cloudProviders, t]);
-
-  /** Display name of a per-user MCP server, falling back to its id. */
-  const mcpServerName = serverId => {
-    const server = (mcpServers || []).find(entry => entry.serverId === serverId);
-    return (server && getLocalizedContent(server.name, lang)) || serverId || 'MCP';
-  };
-
-  /** The text of the current message; MCP sign-in results name the server. */
-  const messageText = !message?.mcp
+  /** The text of the current message; sign-in results name the integration. */
+  const messageText = !message?.result
     ? message?.text
-    : message.mcp.kind === 'connected'
-      ? t('integrations.page.mcp.connected', '{{name}} connected successfully.', {
-          name: mcpServerName(message.mcp.serverId)
+    : message.result.kind === 'connected'
+      ? t('integrations.connect.connectedMessage', '{{name}} connected successfully.', {
+          name: integrationName(message.result.id)
         })
-      : t('integrations.page.mcp.connectionFailed', 'Connecting {{name}} failed: {{message}}', {
-          name: mcpServerName(message.mcp.serverId),
-          message: t(`integrations.page.mcp.errors.${message.mcp.code}`, message.mcp.code)
+      : t('integrations.connect.failedMessage', 'Connecting {{name}} failed: {{message}}', {
+          name: integrationName(message.result.id),
+          message: t(
+            `integrations.connect.errors.${message.result.code}`,
+            t('integrations.connect.errors.oauth_failed', 'The sign-in did not succeed.')
+          )
         });
+
+  /** Connection state per installation id, in the shape the cards read. */
+  const integrations = useMemo(() => {
+    const byId = {};
+    for (const entry of userIntegrations || []) {
+      const connection = entry.connection || {};
+      byId[entry.id] = {
+        connected: connection.status === 'connected',
+        userInfo: connection.account ? { displayName: connection.account } : null
+      };
+    }
+    return byId;
+  }, [userIntegrations]);
+
+  // MCP servers with per-user sign-in the user may connect.
+  const mcpServers = useMemo(
+    () =>
+      (userIntegrations || [])
+        .filter(entry => entry.protocol === 'mcp' && entry.connection?.mode === 'personal')
+        .map(entry => ({
+          serverId: entry.id,
+          name: entry.name,
+          description: entry.description,
+          connected: entry.connection.status === 'connected'
+        })),
+    [userIntegrations]
+  );
 
   // Derive Jira enabled state from platform config
   const jiraEnabled = platformConfig?.jira?.enabled;
@@ -196,17 +141,12 @@ export default function IntegrationsPage() {
 
       setLoading(true);
       try {
-        // Check JIRA status only if configured on the server
-        if (jiraEnabled) {
-          const jiraResponse = await fetch(buildApiUrl('integrations/jira/status'), {
-            credentials: 'include'
-          });
-          const jiraData = await jiraResponse.json();
-
-          setIntegrations(prev => ({
-            ...prev,
-            jira: jiraData
-          }));
+        // Every integration the user may use, with its connection status.
+        try {
+          setUserIntegrations(await fetchUserIntegrations());
+        } catch (err) {
+          console.error('Error loading integrations:', err);
+          setUserIntegrations([]);
         }
 
         // Personal API keys. A 404 means the admin has not enabled them, which
@@ -247,39 +187,6 @@ export default function IntegrationsPage() {
         } catch (err) {
           console.error('Error loading iFinder authorization:', err);
         }
-
-        // MCP servers with per-user sign-in visible to this user.
-        try {
-          const mcpResponse = await fetch(buildApiUrl('mcp/oauth/connections'), {
-            credentials: 'include'
-          });
-          if (mcpResponse.ok) {
-            const data = await mcpResponse.json();
-            setMcpServers(Array.isArray(data.servers) ? data.servers : []);
-          }
-        } catch (err) {
-          console.error('Error loading MCP connections:', err);
-        }
-
-        // Check cloud storage provider status dynamically
-        for (const provider of cloudProviders) {
-          try {
-            // Tokens are stored per provider; without providerId the server
-            // only finds the legacy single-slot file and reports "not connected".
-            const response = await fetch(
-              `${buildApiUrl(`integrations/${provider.type}/status`)}?providerId=${encodeURIComponent(provider.id)}`,
-              { credentials: 'include' }
-            );
-            const data = await response.json();
-
-            setIntegrations(prev => ({
-              ...prev,
-              [provider.id]: data
-            }));
-          } catch (err) {
-            console.error(`Error loading ${provider.type} status:`, err);
-          }
-        }
       } catch (error) {
         console.error('Error loading integrations:', error);
       } finally {
@@ -288,48 +195,26 @@ export default function IntegrationsPage() {
     };
 
     void loadIntegrations();
-  }, [user?.id, cloudProviders, jiraEnabled]);
+  }, [user?.id]);
 
-  // Connect flow — JIRA pre-checks the auth response before redirecting so
-  // config errors surface inline instead of after a failed round trip.
-  const handleConnect = async ({ type, id }) => {
-    const returnUrl = window.location.origin + window.location.pathname;
-    const authUrl =
-      type === 'jira'
-        ? `${buildApiUrl('integrations/jira/auth')}?returnUrl=${encodeURIComponent(returnUrl)}`
-        : `${buildApiUrl(`integrations/${type}/auth`)}?providerId=${encodeURIComponent(id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
-
-    if (type !== 'jira') {
-      window.location.href = authUrl;
-      return;
-    }
-
+  // Connect: the one connect flow of every integration. The browser leaves for
+  // the vendor's consent and comes back to this page.
+  const handleConnect = async ({ id, displayName }) => {
     try {
-      const response = await fetch(authUrl, {
-        credentials: 'include',
-        redirect: 'manual' // Don't automatically follow redirects
+      await startIntegrationConnect(id, {
+        returnUrl: window.location.origin + window.location.pathname
       });
-
-      if (
-        response.type === 'opaqueredirect' ||
-        response.status === 302 ||
-        response.status === 301
-      ) {
-        // The server is redirecting to JIRA OAuth, follow the redirect manually
-        window.location.href = authUrl;
-      } else if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        setMessage({
-          type: 'error',
-          text: t('integrations.page.jira.connectionFailed', {
-            message: errorData.message || 'Unknown error'
-          })
-        });
-      }
     } catch (error) {
       setMessage({
         type: 'error',
-        text: t('integrations.page.jira.connectionFailed', { message: error.message })
+        text: t(
+          'integrations.connect.startFailed',
+          'The sign-in to {{name}} could not be started.',
+          {
+            name: displayName || id
+          }
+        ),
+        detail: error.message
       });
     }
   };
@@ -358,97 +243,43 @@ export default function IntegrationsPage() {
   };
 
   const handleDisconnect = async ({ type, id, displayName }) => {
+    const name = displayName || integrationName(id);
     try {
-      const response = await fetch(buildApiUrl(`integrations/${type}/disconnect`), {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        // Jira has a single connection; cloud providers store tokens per provider.
-        body: JSON.stringify(type === 'jira' ? {} : { providerId: id })
+      await disconnectUserIntegration(id);
+      setUserIntegrations(prev =>
+        (prev || []).map(entry =>
+          entry.id === id
+            ? {
+                ...entry,
+                connection: { ...entry.connection, status: 'not_connected', account: null }
+              }
+            : entry
+        )
+      );
+      setMessage({
+        type: 'success',
+        text:
+          type === 'jira'
+            ? t('integrations.page.jira.disconnected')
+            : t('integrations.page.cloud.disconnected', { name })
       });
-
-      if (response.ok) {
-        setIntegrations(prev => ({
-          ...prev,
-          [id]: { connected: false }
-        }));
-        setMessage({
-          type: 'success',
-          text:
-            type === 'jira'
-              ? t('integrations.page.jira.disconnected')
-              : t('integrations.page.cloud.disconnected', { name: displayName })
-        });
-      }
     } catch (error) {
       setMessage({
         type: 'error',
         text:
           type === 'jira'
             ? t('integrations.page.jira.disconnectFailed', { message: error.message })
-            : t('integrations.page.cloud.disconnectFailed', {
-                name: displayName,
-                message: error.message
-              })
+            : t('integrations.page.cloud.disconnectFailed', { name, message: error.message })
       });
     }
   };
 
-  // MCP servers: Connect leaves for the server's sign-in and comes back here.
-  const handleMcpConnect = server => {
-    window.location.href = buildMcpConnectUrl(
-      server.serverId,
-      window.location.origin + window.location.pathname
-    );
-  };
+  // MCP servers: the same connect flow as every other integration.
+  const handleMcpConnect = server =>
+    handleConnect({ id: server.serverId, displayName: server.name });
 
-  const handleMcpDisconnect = async server => {
-    const name = getLocalizedContent(server.name, lang) || server.serverId;
-    try {
-      const response = await fetch(buildApiUrl('mcp/oauth/disconnect'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: server.serverId })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setMessage({
-          type: 'error',
-          text: t(
-            'integrations.page.mcp.disconnectFailed',
-            'Failed to disconnect {{name}}: {{message}}',
-            {
-              name,
-              message: data.error || response.statusText
-            }
-          )
-        });
-        return;
-      }
-      setMcpServers(prev =>
-        (prev || []).map(s => (s.serverId === server.serverId ? { ...s, connected: false } : s))
-      );
-      setMessage({
-        type: 'success',
-        text: t('integrations.page.mcp.disconnected', '{{name}} disconnected', { name })
-      });
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: t(
-          'integrations.page.mcp.disconnectFailed',
-          'Failed to disconnect {{name}}: {{message}}',
-          {
-            name,
-            message: error.message
-          }
-        )
-      });
-    }
-  };
+  const handleMcpDisconnect = server =>
+    handleDisconnect({ type: 'mcp', id: server.serverId, displayName: server.name });
 
   const handleTest = async () => {
     try {

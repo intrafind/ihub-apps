@@ -5291,19 +5291,8 @@
     "name": "Name",
     "size": "Größe",
     "modified": "Geändert",
-    "notConnected": "Office 365 nicht verbunden",
-    "connect": "Mit Office 365 verbinden",
-    "connectPrompt": "Verbinden Sie Ihr Microsoft-Konto, um Dateien aus OneDrive, SharePoint und Teams zu durchsuchen",
-    "googleDrive": {
-      "notConnected": "Google Drive nicht verbunden",
-      "connect": "Mit Google Drive verbinden",
-      "connectPrompt": "Verbinden Sie Ihr Google-Konto, um Dateien aus Google Drive, geteilten Ablagen und für Sie freigegebenen Dateien zu durchsuchen"
-    },
-    "nextcloud": {
-      "notConnected": "Nextcloud nicht verbunden",
-      "connectPrompt": "Verbinden Sie Ihr Nextcloud-Konto, um Dateien aus Ihrer Nextcloud-Instanz zu durchsuchen und anzuhängen.",
-      "connect": "Mit Nextcloud verbinden"
-    }
+    "googleDrive": {},
+    "nextcloud": {}
   },
   "components": {
     "uploader": {
@@ -5508,8 +5497,6 @@
           "update": "Bestehende Tickets aktualisieren",
           "info": "Projekt- und Benutzerinformationen abrufen"
         },
-        "connected": "JIRA-Konto erfolgreich verbunden! Sie können jetzt JIRA-Funktionen in Ihren Apps nutzen.",
-        "connectionFailed": "Verbindung fehlgeschlagen: {{message}}",
         "disconnected": "JIRA-Konto erfolgreich getrennt",
         "disconnectFailed": "Trennen von JIRA fehlgeschlagen: {{message}}",
         "testSuccess": "JIRA-Verbindungstest erfolgreich! {{count}} zugängliche Tickets gefunden.",
@@ -5526,19 +5513,8 @@
           "upload": "Cloud-Dateien zu Chats hinzufügen",
           "oauth": "Sicheres OAuth 2.0 mit PKCE"
         },
-        "connected": "{{name}}-Konto erfolgreich verbunden! Sie können jetzt Dateien aus {{name}} auswählen.",
-        "connectionFailed": "{{name}}-Verbindung fehlgeschlagen: {{message}}",
         "disconnected": "{{name}}-Konto erfolgreich getrennt",
-        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}",
-        "errors": {
-          "access_denied": "{{name}} wurde nicht verbunden, da der Zugriff nicht erteilt wurde. Falls Ihre Organisation eine Administratorgenehmigung für die App verlangt, bitten Sie Ihren Administrator, sie zu erteilen, und versuchen Sie es erneut.",
-          "invalid_client": "{{name}} konnte nicht verbunden werden, da die Integration fehlerhaft konfiguriert ist (z. B. ein abgelaufenes Client-Secret). Bitte wenden Sie sich an Ihren Administrator.",
-          "invalid_state": "Die Anmeldung bei {{name}} konnte nicht überprüft werden. Bitte versuchen Sie es erneut.",
-          "session_expired": "Die Anmeldung bei {{name}} hat zu lange gedauert und ist abgelaufen. Bitte versuchen Sie es erneut.",
-          "oauth_failed": "Die Anmeldung bei {{name}} ist beim Anbieter fehlgeschlagen. Bitte versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator, falls das Problem weiterhin besteht.",
-          "missing_code": "Die Anmeldung bei {{name}} wurde nicht abgeschlossen. Bitte versuchen Sie es erneut.",
-          "callback_failed": "{{name}} konnte nicht verbunden werden. Bitte versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator, falls das Problem weiterhin besteht."
-        }
+        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}"
       },
       "office": {
         "available": "Verfügbar",
@@ -5640,23 +5616,8 @@
         "description": "Die Tools dieser Server handeln mit Ihrem eigenen Konto. Verbinden Sie einen Server, um seine Tools in Chats zu nutzen.",
         "serverDescription": "MCP-Server",
         "connect": "{{name}} verbinden",
-        "connected": "{{name}} wurde erfolgreich verbunden.",
-        "connectionFailed": "Verbinden von {{name}} fehlgeschlagen: {{message}}",
         "disconnected": "{{name}} getrennt",
-        "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}",
-        "errors": {
-          "oauth_failed": "die Anmeldung wurde abgebrochen oder abgelehnt",
-          "missing_code": "die Anmeldung lieferte keinen Autorisierungscode",
-          "invalid_state": "der Anmeldelink ist ungültig",
-          "state_expired": "die Anmeldung hat zu lange gedauert, bitte neu starten",
-          "user_mismatch": "die Anmeldung wurde von einer anderen Person gestartet",
-          "server_not_found": "der Server steht Ihnen nicht zur Verfügung",
-          "exchange_failed": "der Server hat die Anmeldung nicht akzeptiert",
-          "discovery_failed": "die Anmeldung des Servers wurde nicht gefunden",
-          "registration_failed": "iHub konnte sich nicht beim Server registrieren",
-          "issuer_mismatch": "die Antwort der Anmeldung kam von einem anderen Autorisierungsserver als erwartet",
-          "public_url_mismatch": "iHub wurde unter einer anderen Adresse aufgerufen als der beim Server registrierten; bitten Sie Ihre Administration, die öffentliche URL des MCP-Gateways zu setzen"
-        }
+        "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}"
       },
       "iFinder": {
         "title": "iFinder",
@@ -5665,6 +5626,53 @@
         "authorize": "Über {{provider}} anmelden",
         "revoked": "iFinder-Autorisierung widerrufen",
         "revokeFailed": "Die iFinder-Autorisierung konnte nicht widerrufen werden: {{message}}"
+      }
+    },
+    "connect": {
+      "title": "{{name}} verbinden",
+      "titleReconnect": "{{name}} erneut verbinden",
+      "titleScope": "{{name}} braucht eine weitere Berechtigung",
+      "why": "Um Ihre Anfrage zu beantworten, muss iHub in {{name}} in Ihrem Namen handeln.",
+      "whyAction": "Um „{{action}}“ für Ihre Anfrage auszuführen, muss iHub in {{name}} in Ihrem Namen handeln.",
+      "whyFiles": "Um Ihre Dateien anzuzeigen, muss iHub in {{name}} in Ihrem Namen handeln.",
+      "whyExpired": "Ihre Verbindung zu {{name}} ist abgelaufen oder wurde widerrufen. Melden Sie sich erneut an, um fortzufahren; Ihre Einstellungen bleiben erhalten.",
+      "whyScope": "Diese Anfrage braucht eine Berechtigung, die Sie iHub noch nicht erteilt haben. Beim erneuten Verbinden bleibt Ihre Verbindung bestehen und die Berechtigung kommt hinzu.",
+      "signInAt": "Sie melden sich bei {{host}} an.",
+      "newPermission": "Neue Berechtigung:",
+      "permissions": "Berechtigungen",
+      "effects": {
+        "read": "Lesen",
+        "write": "Schreiben",
+        "destructive": "Löschen",
+        "unknown": "Sonstiges"
+      },
+      "connect": "Verbinden",
+      "reconnect": "Erneut verbinden",
+      "notNow": "Nicht jetzt",
+      "notNowNote": "{{name}} ist nicht verbunden.",
+      "show": "Details anzeigen",
+      "connected": "{{name}} ist verbunden.",
+      "connectedAs": "{{name}} ist verbunden als {{account}}.",
+      "connectedMessage": "{{name}} wurde erfolgreich verbunden.",
+      "failed": "Die Verbindung mit {{name}} ist nicht gelungen. Versuchen Sie es erneut.",
+      "failedMessage": "Die Verbindung mit {{name}} ist fehlgeschlagen: {{message}}",
+      "startFailed": "Die Anmeldung bei {{name}} konnte nicht gestartet werden.",
+      "retryMessage": "Ich habe {{name}} verbunden. Bitte versuche es erneut.",
+      "errors": {
+        "access_denied": "{{name}} wurde nicht verbunden, da der Zugriff nicht erteilt wurde. Falls Ihre Organisation eine Administratorgenehmigung für die App verlangt, bitten Sie Ihren Administrator, sie zu erteilen, und versuchen Sie es erneut.",
+        "oauth_failed": "Die Anmeldung bei {{name}} war nicht erfolgreich.",
+        "missing_code": "Die Anmeldung bei {{name}} hat keine Autorisierung geliefert. Versuchen Sie es erneut.",
+        "invalid_state": "Die Anmeldung bei {{name}} konnte Ihrer Sitzung nicht zugeordnet werden. Versuchen Sie es erneut.",
+        "state_expired": "Die Anmeldung bei {{name}} hat zu lange gedauert. Versuchen Sie es erneut.",
+        "user_mismatch": "Die Anmeldung bei {{name}} wurde von einem anderen iHub-Benutzer begonnen. Versuchen Sie es erneut.",
+        "integration_not_found": "{{name}} steht Ihnen nicht zur Verfügung.",
+        "exchange_failed": "{{name}} hat die Anmeldung nicht akzeptiert. Versuchen Sie es erneut oder wenden Sie sich an Ihre Administration.",
+        "discovery_failed": "Der Anmeldeserver von {{name}} ist nicht erreichbar.",
+        "registration_failed": "iHub konnte sich nicht beim Anmeldeserver von {{name}} registrieren.",
+        "issuer_mismatch": "Die Antwort der Anmeldung kam nicht vom erwarteten Server für {{name}}.",
+        "public_url_mismatch": "Die öffentliche URL von iHub hat sich geändert; bitten Sie Ihre Administration, {{name}} zu prüfen.",
+        "invalid_client": "{{name}} konnte nicht verbunden werden, da die Integration fehlerhaft konfiguriert ist (z. B. ein abgelaufenes Client-Secret). Bitte wenden Sie sich an Ihren Administrator.",
+        "callback_failed": "Die Anmeldung bei {{name}} konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
       }
     }
   },
@@ -6628,13 +6636,6 @@
       "attachmentNotIncluded": "Anhang nicht enthalten: {{name}}",
       "attachmentUnnamed": "Datei"
     }
-  },
-  "mcpConnect": {
-    "title": "{{name}} verbinden",
-    "explanation": "{{name}} erfordert eine Anmeldung mit Ihrem eigenen Konto, bevor die Tools genutzt werden können.",
-    "connect": "Verbinden",
-    "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
-    "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
   },
   "sources": {
     "title": "Quellen",
