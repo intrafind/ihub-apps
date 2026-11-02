@@ -367,3 +367,36 @@ test('#9 secret-looking arguments are redacted for anyone but the requester', ()
   const question = { kind: 'question', prompt: { displayData: { args: { token: 't' } } } };
   assert.equal(redactInteractionForViewer(question), question);
 });
+
+// ── SonarCloud S2871 / S3403 ─────────────────────────────────────────────────
+
+test('argument comparison is independent of key order and locale (code-unit sort)', async () => {
+  const { sameArgs } = await import('../../services/loop/seams/approvalSeam.js');
+  const { compareCodeUnits } = await import('../../../shared/toolApproval.js');
+  assert.deepEqual(['b', 'B', 'a', 'ä', 'A'].sort(compareCodeUnits), ['A', 'B', 'a', 'b', 'ä']);
+  assert.equal(sameArgs({ b: 1, a: { d: 2, c: 3 } }, { a: { c: 3, d: 2 }, b: 1 }), true);
+  assert.equal(sameArgs({ a: 1 }, { a: '1' }), false);
+});
+
+test('setApproval: an explicit null clears, a value is validated and stored', async () => {
+  const config = { installed: [{ id: 'jira', definition: 'x', approval: { default: 'always' } }] };
+  const service = new InstalledIntegrationService({
+    registry: { list: () => [], get: () => null, ensureLoaded: async () => {} }
+  });
+  service._readConfigForWrite = () => config;
+  service.writeConfig = async () => {};
+  service._afterChange = async () => {};
+  const set = await service.setApproval('jira', { default: 'writes', actions: {} });
+  assert.deepEqual(set.approval, { default: 'writes' });
+  await assert.rejects(service.setApproval('jira', { default: 'sometimes' }), /Invalid approval/);
+  assert.deepEqual(
+    config.installed[0].approval,
+    { default: 'writes' },
+    'a refused value changes nothing'
+  );
+  const cleared = await service.setApproval('jira', null);
+  assert.equal(cleared.approval, undefined);
+  await service.setApproval('jira', { default: 'always' });
+  const omitted = await service.setApproval('jira');
+  assert.equal(omitted.approval, undefined, 'the default parameter is null, never undefined');
+});

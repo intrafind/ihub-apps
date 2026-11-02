@@ -65,6 +65,19 @@ export const SIDE_EFFECT_SOURCES = Object.freeze([
 ]);
 
 /**
+ * Code-unit order of two strings, for orders that only need to be the same
+ * everywhere (keys of a canonical form), never for lists people read. Unlike
+ * `localeCompare` it does not depend on the runtime's locale.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+export function compareCodeUnits(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
  * Whether a value is a known approval mode.
  *
  * @param {unknown} value

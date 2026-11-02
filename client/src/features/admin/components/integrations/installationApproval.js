@@ -8,7 +8,7 @@
  *
  * @module features/admin/components/integrations/installationApproval
  */
-import { isApprovalMode } from '../../../../../../shared/toolApproval.js';
+import { compareCodeUnits, isApprovalMode } from '../../../../../../shared/toolApproval.js';
 
 /**
  * A clean copy: only known modes, actions sorted by name.
@@ -20,7 +20,9 @@ export function normalizeApproval(approval) {
   const out = { actions: {} };
   if (isApprovalMode(approval?.default)) out.default = approval.default;
   const actions = approval?.actions && typeof approval.actions === 'object' ? approval.actions : {};
-  for (const name of Object.keys(actions).sort()) {
+  // Code-unit order: only needs to be stable, so a draft compares equal to
+  // what is stored whatever order the keys came in.
+  for (const name of Object.keys(actions).sort(compareCodeUnits)) {
     if (isApprovalMode(actions[name])) out.actions[name] = actions[name];
   }
   return out;

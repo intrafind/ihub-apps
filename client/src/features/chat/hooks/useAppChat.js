@@ -18,6 +18,7 @@ import {
   getRuns
 } from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
+import { toolApprovalAnswer } from '../toolApprovalAnswer';
 import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
@@ -1025,12 +1026,13 @@ function useAppChat({
    * @param {Object} [params] - Parameters for the continuation request (model, style, …)
    */
   const submitToolApproval = useCallback(
-    ({ interactionId, decision, grant = null }, params = {}) => {
-      if (!interactionId || (decision !== 'approve' && decision !== 'reject')) return;
+    (answer, params = {}) => {
+      const decided = toolApprovalAnswer(answer);
+      if (!decided) return;
+      const { outcome, approvalResponse } = decided;
+      const { interactionId } = approvalResponse;
       const owner = messagesRef.current.find(m => m.toolApproval?.interactionId === interactionId);
       if (!owner || owner.toolApproval.decision) return;
-      const outcome =
-        decision === 'reject' ? 'rejected' : grant === 'chat' ? 'approvedForChat' : 'approved';
       const toolName = owner.toolApproval.toolName || owner.toolApproval.toolId;
       // The card shows the decision instead of its buttons from here on —
       // unless the turn fails before it starts (`reopenToolApproval`).
@@ -1049,11 +1051,6 @@ function useAppChat({
                 tool: toolName
               })
             : t('chat.toolApproval.approvedMessage', 'Approved: {{tool}}', { tool: toolName });
-      const approvalResponse = {
-        interactionId,
-        decision,
-        ...(decision === 'approve' && grant === 'chat' ? { grant: 'chat' } : {})
-      };
       try {
         isCancellingRef.current = false;
         detachEventSource();

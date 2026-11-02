@@ -37,7 +37,11 @@
  *
  * @module services/loop/seams/approvalSeam
  */
-import { APPROVAL_ERROR_CODES, needsApproval } from '../../../../shared/toolApproval.js';
+import {
+  APPROVAL_ERROR_CODES,
+  compareCodeUnits,
+  needsApproval
+} from '../../../../shared/toolApproval.js';
 import { resolveToolApproval } from '../../../utils/toolApproval.js';
 import { toolDisplayOf } from '../../../utils/toolDisplay.js';
 
@@ -76,7 +80,7 @@ export function sameArgs(a, b) {
     if (value && typeof value === 'object') {
       return Object.fromEntries(
         Object.keys(value)
-          .sort()
+          .sort(compareCodeUnits)
           .map(key => [key, canonical(value[key])])
       );
     }

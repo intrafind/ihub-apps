@@ -573,10 +573,10 @@ export class InstalledIntegrationService {
    * @param {{default?: string, actions?: Object<string,string>}|null} approval
    * @returns {Promise<Object>} the stored installation
    */
-  setApproval(id, approval) {
+  setApproval(id, approval = null) {
     return this._serialize(async () => {
       let cleaned = null;
-      if (approval !== null && approval !== undefined) {
+      if (approval !== null) {
         const parsed = installedApprovalSchema.safeParse(approval);
         if (!parsed.success) {
           throw new IntegrationError('Invalid approval settings', {
