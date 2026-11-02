@@ -150,3 +150,39 @@ describe('ChatInputActionsMenu web search toggle', () => {
     expect(input).toHaveAttribute('tabindex', '-1');
   });
 });
+
+describe('ChatInputActionsMenu web search toggle and the model', () => {
+  // No engine is available to the user (the server's websearchAvailability).
+  const noEngine = {
+    id: 'demo',
+    websearch: { enabled: true },
+    websearchAvailability: { native: ['google', 'openai-responses', 'anthropic'], script: false }
+  };
+
+  it('is offered on a model with native search, with no engine installed', () => {
+    openMenu({ app: noEngine, model: { id: 'a', provider: 'anthropic', supportsTools: 'auto' } });
+    expect(screen.getByRole('menuitemcheckbox', { name: /Web Search/ })).toBeInTheDocument();
+  });
+
+  it('is not offered on a model without native search while no engine is available', () => {
+    render(
+      <ChatInputActionsMenu
+        app={noEngine}
+        model={{ id: 'm', provider: 'mistral', supportsTools: 'auto' }}
+        enabledTools={null}
+        uploadConfig={{}}
+        websearchEnabled={false}
+        onWebsearchEnabledChange={jest.fn()}
+      />
+    );
+    // Web search was its only item: the menu is not offered at all.
+    expect(screen.queryByRole('button', { name: 'Actions menu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: /Web Search/ })).not.toBeInTheDocument();
+  });
+
+  it('is offered on that model once an engine is available', () => {
+    const withEngine = { ...noEngine, websearchAvailability: { native: [], script: true } };
+    openMenu({ app: withEngine, model: { id: 'm', provider: 'mistral', supportsTools: 'auto' } });
+    expect(screen.getByRole('menuitemcheckbox', { name: /Web Search/ })).toBeInTheDocument();
+  });
+});

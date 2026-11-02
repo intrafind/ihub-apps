@@ -27,6 +27,41 @@ import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
 
 /**
+ * The tool files of iHub's own features, retired from `contents/tools/` by
+ * migrations V195 (`read_url`), V199 and V202. They are read in place
+ * (`services/tools/shippedToolDefinitions.js`): by the iHub integration
+ * (`ask_user`, the scheduled-task tools), by the platform tools of workflows,
+ * agents and the web search feature (the page reader `read_url`), and by the
+ * project knowledge tools. A copy seeded into
+ * `contents/tools/` would take the place of the shipped definition again on
+ * every start after the migration removed it. Paths relative to
+ * server/defaults.
+ */
+export const RETIRED_IHUB_TOOL_FILES = Object.freeze(
+  [
+    'ask_user',
+    'create_task',
+    'delete_scheduled_task',
+    'evidence',
+    'get_task_run',
+    'knowledge',
+    'list_scheduled_tasks',
+    'list_task_runs',
+    'list_tasks',
+    'mark_task_done',
+    'read_inbox',
+    'read_memory',
+    'read_url',
+    'run_scheduled_task_now',
+    'schedule_task',
+    'update_scheduled_task',
+    'write_artifact',
+    'write_inbox',
+    'write_memory'
+  ].map(id => `tools/${id}.json`)
+);
+
+/**
  * Shipped defaults that are never seeded into contents: plaintext files that
  * only exist to be imported into an admin project (the FAQ, the meeting
  * knowledge base, the consolidated documentation). The startup import
@@ -41,11 +76,13 @@ import { getContentsPath } from './contentsPath.js';
 // reads in place; a copy under contents/ would shadow every later update.
 // `tools/iFinder.json` (V192) and `config/mcpServers.json` (V193) are retired:
 // the iFinder built-in and the installed MCP integrations own them now. Both
-// files are kept only for the older migrations that read them.
+// files are kept only for the older migrations that read them. iHub's own
+// tool files ({@link RETIRED_IHUB_TOOL_FILES}) are read in place by the server.
 export const IMPORT_ONLY_DEFAULT_FILES = [
   'sources/',
   'integration-definitions/',
   'tools/iFinder.json',
+  ...RETIRED_IHUB_TOOL_FILES,
   'config/mcpServers.json'
 ];
 

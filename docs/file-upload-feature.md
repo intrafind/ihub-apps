@@ -6,7 +6,7 @@ iHub Apps supports a unified upload system that enables users to attach files, i
 
 ## Upload Types
 
-Five upload sub-types are available, each independently enabled:
+Four upload sub-types are available, each independently enabled; files from storage providers come through the app's binding (see [Files from Storage Providers](#files-from-storage-providers)):
 
 | Type | Description | Default size limit |
 |------|-------------|--------------------|
@@ -14,7 +14,6 @@ Five upload sub-types are available, each independently enabled:
 | `imageUpload` | JPEG, PNG, GIF, WebP, TIFF images | 10 MB |
 | `audioUpload` | MP3, WAV, FLAC, OGG, M4A/MP4 audio | 20 MB |
 | `videoUpload` | MP4, MOV, WebM video; its audio track is extracted in the browser | 50 MB (up to 50 GB) |
-| `cloudStorageUpload` | Google Drive, OneDrive, Nextcloud | — |
 
 Each type has its own size limit, and a file is held to the limit of its own type (see [Size Limits](#size-limits)).
 
@@ -29,8 +28,10 @@ All upload types share a single `upload` object in the app configuration:
     "allowMultiple": false,
     "fileUpload": { "enabled": true },
     "imageUpload": { "enabled": true },
-    "audioUpload": { "enabled": true },
-    "cloudStorageUpload": { "enabled": true }
+    "audioUpload": { "enabled": true }
+  },
+  "integrations": {
+    "type:storage": { "required": false }
   }
 }
 ```
@@ -100,17 +101,15 @@ The video itself never leaves the browser when `extractAudio` is on. An **MP4 or
 
 > **Note:** Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
 
-### `cloudStorageUpload` Options
+### Files from Storage Providers
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Show the cloud storage file picker |
+The cloud file picker offers the storage providers the app **binds** in `integrations` — `"type:storage"` for all of them, a provider's definition id (`com.intrafind/office365`, `com.intrafind/google-drive`, `com.intrafind/nextcloud`) for all its installations, or one installation id — among those the user's groups grant. Each provider is an installed integration with its own OAuth app (**Admin → Integrations**; several installations per provider are possible):
 
-Supported providers (configured at the platform level):
+- [Microsoft Office 365](office365-integration.md) (OneDrive, SharePoint, Teams)
+- [Google Drive](google-drive-integration.md)
+- [Nextcloud](nextcloud-integration.md)
 
-- Google Drive
-- Microsoft OneDrive / Office 365
-- Nextcloud
+Picked files are processed like uploads (`upload.enabled` must not be `false`; the `fileUpload` extraction options apply). The former switch `upload.cloudStorageUpload` was replaced by the binding in migration V206 and is refused by the app schema. See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
 
 ## Supported File Types
 
@@ -401,10 +400,10 @@ All file processing happens **client-side** before content is sent to the server
     "fileUpload": {
       "enabled": true,
       "maxFileSizeMB": 20
-    },
-    "cloudStorageUpload": {
-      "enabled": true
     }
+  },
+  "integrations": {
+    "type:storage": { "required": false }
   }
 }
 ```

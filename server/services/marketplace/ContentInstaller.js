@@ -911,6 +911,7 @@ class ContentInstaller {
     assertValidContent(type, name, content, config);
     if (type === 'integration') {
       assertCompatible(type, name, content.files['integration.json']);
+      return this._updateIntegration(name, key, existing, item, content, updatedBy);
     }
 
     await this._writeContent(type, name, content, config);
@@ -929,6 +930,54 @@ class ContentInstaller {
 
     logger.info('Content item updated', { component: COMPONENT, type, name });
     return existing;
+  }
+
+  /**
+   * Update an installed integration definition together with its
+   * installations (versioning concept §3, trigger 1): the new folder is
+   * staged, every installation of the definition is migrated against it
+   * under its lock, and the folder, the migrated installations, their apps
+   * and this manifest entry are committed together by the definition
+   * migration runner — no worker ever sees the new definition with old
+   * values. An installation whose migration fails is marked
+   * `migrationFailed` in the same commit; a failing commit leaves the
+   * previous folder and every value as it was, and the update throws.
+   *
+   * @param {string} name - catalog item name (the definition folder name)
+   * @param {string} key - manifest key (`integration:<name>`)
+   * @param {object} existing - the manifest entry
+   * @param {object} item - the catalog item
+   * @param {{ files: Record<string, string|object> }} content - the fetched package
+   * @param {string} updatedBy
+   * @returns {Promise<object>} the updated manifest entry with `integrationMigrations`,
+   *   one result per installation (`migrated`, `stamped`, `failed` or `skipped`)
+   */
+  async _updateIntegration(name, key, existing, item, content, updatedBy) {
+    const manifestPatch = {
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+      version: item.version || existing.version,
+      updateAvailable: null
+    };
+    const { default: definitionMigrationRunner } =
+      await import('../integrations/definitions/DefinitionMigrationRunner.js');
+    const outcome = await definitionMigrationRunner.applyDefinitionUpdate({
+      definitionId: dirNameToDefinitionId(name),
+      files: content.files,
+      manifestKey: key,
+      manifestPatch,
+      by: updatedBy
+    });
+    Object.assign(existing, manifestPatch);
+    const cc = await getConfigCache();
+    await cc.refreshInstallationsCache?.();
+    logger.info('Content item updated', {
+      component: COMPONENT,
+      type: 'integration',
+      name,
+      migrations: outcome.installations.map(result => `${result.id}:${result.result}`)
+    });
+    return { ...existing, integrationMigrations: outcome.installations };
   }
 
   /**

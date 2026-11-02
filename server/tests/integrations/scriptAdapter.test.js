@@ -88,6 +88,7 @@ export default {
 const scopedInstance = {
   id: 'scoped',
   definition: scopedDefinition.id,
+  definitionVersion: '1.0.0',
   enabled: true,
   values: {},
   auth: { mode: 'none' }

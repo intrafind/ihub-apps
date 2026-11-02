@@ -4,12 +4,13 @@
 /**
  * People directory search (#3026): who sees and may run a directory's tools.
  *
- * A directory is an installation of `com.intrafind/ldap-directory`. Its
- * groups (the installation's `allowedGroups`) are ANDed with the ordinary tool
- * grants and checked in every place tools are narrowed to a user — the
- * `/api/tools` listing, an app's tools, a direct tool run, the MCP gateway —
- * and again when the tool runs. An app binds one directory by its id, or
- * every directory by binding the definition.
+ * A directory is an installation of `com.intrafind/ldap-directory`. Who may
+ * use it is granted on the groups (`permissions.integrations`, #3093: the
+ * installation id, the definition id, `type:people-directory` or `*`), ANDed
+ * with the ordinary tool grants and checked in every place tools are narrowed
+ * to a user — the `/api/tools` listing, an app's tools, a direct tool run,
+ * the MCP gateway — and again when the tool runs. An app binds one directory
+ * by its id, or every directory by binding the definition.
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,8 +36,7 @@ const DIRECTORIES = [
     preset: 'activeDirectory',
     bind: { mode: 'service', dn: 'cn=svc,dc=corp,dc=example', passwordRef: 'svc' },
     name: { en: 'Company directory', de: 'Firmenverzeichnis' },
-    description: { en: 'Employees of our company.', de: 'Mitarbeitende.' },
-    groups: ['users']
+    description: { en: 'Employees of our company.', de: 'Mitarbeitende.' }
   },
   {
     id: 'x500bund',
@@ -48,29 +48,32 @@ const DIRECTORIES = [
     maxResults: 25,
     dataFlow: 'external',
     name: { en: 'Federal directory (IVBB)' },
-    description: { en: 'Staff of German federal authorities.' },
-    groups: ['authenticated']
+    description: { en: 'Staff of German federal authorities.' }
   },
-  { id: 'off', enabled: false, url: 'ldaps://off.example:636', baseDn: 'o=Off', groups: ['*'] },
+  { id: 'off', enabled: false, url: 'ldaps://off.example:636', baseDn: 'o=Off' },
   {
     id: 'hr',
     url: 'ldaps://hr.example:636',
     baseDn: 'o=HR',
-    bind: { mode: 'anonymous' },
-    groups: ['hr']
+    bind: { mode: 'anonymous' }
   }
 ];
 
 const state = { tools: [] };
 configCache.getPlatform = () => ({ defaultLanguage: 'en' });
+// Who may use which directory: users the company directory (and one added
+// later), every signed-in user the federal one, hr its own; admins inherit
+// users. Anonymous callers get `open` only.
 configCache.getGroups = () => ({
   data: {
     groups: {
       admins: { inherits: ['users'], permissions: { adminAccess: true } },
-      users: { inherits: ['authenticated'] },
-      authenticated: {},
-      hr: {},
-      guests: {}
+      users: { inherits: ['authenticated'], permissions: { integrations: ['corp', 'later'] } },
+      authenticated: { permissions: { integrations: ['x500bund', 'off'] } },
+      hr: { permissions: { integrations: ['hr'] } },
+      'directory-team': { permissions: { integrations: [DEFINITION_ID] } },
+      guests: { permissions: { integrations: [] } },
+      anonymous: { permissions: { integrations: ['open'] } }
     }
   }
 });
@@ -146,13 +149,13 @@ describe('people directory access', () => {
 
   it('leaves out a directory whose configuration cannot work', async () => {
     installDirectories(configCache, [
-      { id: 'noprov', authProvider: 'missing', groups: ['*'] },
-      { id: 'plain', url: 'ldap://plain.example:389', baseDn: 'o=x', groups: ['*'] }
+      { id: 'noprov', authProvider: 'missing' },
+      { id: 'plain', url: 'ldap://plain.example:389', baseDn: 'o=x' }
     ]);
     assert.deepEqual(directoryToolIds(await loadTools('en')), []);
   });
 
-  describe('groups', () => {
+  describe('group grants', () => {
     it('resolve inherited groups', () => {
       assert.deepEqual([...expandUserGroups(['admins'])].sort(), [
         'admins',
@@ -168,11 +171,34 @@ describe('people directory access', () => {
       assert.equal(mayUseDirectory(member, 'unknown'), false);
     });
 
-    it('no groups on the installation opens a directory to every caller', () => {
+    it('let the anonymous principal use what the anonymous group grants', () => {
       installDirectories(configCache, [
-        { id: 'open', url: 'ldaps://a.example', baseDn: 'o=a', groups: ['*'] }
+        { id: 'open', url: 'ldaps://a.example', baseDn: 'o=a' },
+        { id: 'closed', url: 'ldaps://b.example', baseDn: 'o=b' }
       ]);
       assert.equal(mayUseDirectory(null, 'open'), true);
+      assert.equal(mayUseDirectory(null, 'closed'), false);
+    });
+
+    it('a definition grant opens every directory, the ones installed later included', () => {
+      const team = { id: 'team', groups: ['directory-team'] };
+      for (const id of ['corp', 'x500bund', 'hr']) assert.equal(mayUseDirectory(team, id), true);
+      installDirectories(configCache, [
+        ...DIRECTORIES,
+        { id: 'newer', url: 'ldaps://n.example', baseDn: 'o=n', bind: { mode: 'anonymous' } }
+      ]);
+      assert.equal(mayUseDirectory(team, 'newer'), true);
+      assert.equal(mayUseDirectory(member, 'newer'), false);
+    });
+
+    it('read the resolved grant of an enhanced user', () => {
+      const enhanced = {
+        id: 'e',
+        groups: ['guests'],
+        permissions: { ...everything, integrations: new Set(['hr']) }
+      };
+      assert.equal(mayUseDirectory(enhanced, 'hr'), true);
+      assert.equal(mayUseDirectory(enhanced, 'corp'), false);
     });
 
     it('narrow the /api/tools listing, even with a "*" tool grant', async () => {
@@ -306,6 +332,18 @@ describe('people directory access', () => {
       ]);
     });
 
+    it('binding the type (the shipped People search app) selects the same directory tools', async () => {
+      const app = { id: 'people-directory', integrations: { 'type:people-directory': {} } };
+      const tools = await getToolsForApp(app, 'en', { user: member });
+      assert.deepEqual(directoryToolIds(tools), [
+        'corp__get_person',
+        'corp__search_people',
+        'x500bund__get_person',
+        'x500bund__list_units',
+        'x500bund__search_people'
+      ]);
+    });
+
     it('a definition binding narrowed to actions, and an installation binding on top', async () => {
       const app = {
         id: 'a',
@@ -342,8 +380,7 @@ describe('people directory access', () => {
           id: 'later',
           url: 'ldaps://later.example',
           baseDn: 'o=later',
-          bind: { mode: 'anonymous' },
-          groups: ['users']
+          bind: { mode: 'anonymous' }
         }
       ]);
       const ids = (await getToolsForApp(app, 'en', { user: member })).map(tool => tool.id);

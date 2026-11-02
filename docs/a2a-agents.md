@@ -12,8 +12,8 @@ This is the client side of A2A. For the opposite direction — other agents call
 ## Configuration
 
 A remote agent is an **installed integration**: an installation of the shipped definition
-**"A2A agent"** (`com.intrafind/a2a-agent`) under **Admin → Integrations → Installed**
-(`/admin/integrations/installed`; **Catalog** tab → **A2A agent** → **Install**, see
+**"A2A agent"** (`com.intrafind/a2a-agent`) under **Admin → Integrations**
+(`/admin/integrations`; **Catalog** tab → **A2A agent** → **Install**, see
 [Admin page](#admin-page)). Installations live in `contents/config/integrations.json`, next to
 MCP servers and the other [installed integrations](integrations.md):
 
@@ -33,8 +33,7 @@ MCP servers and the other [installed integrations](integrations.md):
     "pollIntervalMs": 1500 // tasks/get polling while a task runs
   },
   "auth": { "mode": "service-account", "credentialRef": "langdock-agent-key" },
-  "actions": { "enabled": ["*"], "disabled": [] },
-  "allowedGroups": []
+  "actions": { "enabled": ["*"], "disabled": [] }
 }
 ```
 
@@ -49,7 +48,6 @@ needed.
 | `values.cardUrl` | — | Required. Full URL of the Agent Card. HTTPS; plain HTTP only for `localhost` / `127.0.0.1`. |
 | `auth` | `{ "mode": "none" }` | The sign-in mode and the credential reference; see [Authentication](#authentication). |
 | `actions` | `{ "enabled": ["*"], "disabled": [] }` | Which skills become tools; see [Actions: the card's skills](#actions-the-cards-skills). |
-| `allowedGroups` | `[]` (everyone) | Who gets the agent's tools, as for every installation. |
 | `values.timeoutMs` | `60000` | Advanced. Budget for one tool call, Agent Card fetch, streaming and polling included (1000 – 600000). |
 | `values.streaming` | `"auto"` | Advanced. `auto` streams when the card declares `capabilities.streaming`; `never` always uses `message/send`. |
 | `values.pollIntervalMs` | `1500` | Advanced. How often `tasks/get` is polled for a task that is still running. |
@@ -144,8 +142,9 @@ id — **Admin → Apps → Edit → Installed integrations** writes it, exactly
 ```
 
 `"langdock": {}` offers every skill the installation has enabled; `"langdock": { "actions":
-["<skill id>"] }` only the named skills (skill ids as the card names them). The installation's
-`allowedGroups` and the binding's actions apply in the chat and in `GET /api/tools?appId=`; an
+["<skill id>"] }` only the named skills (skill ids as the card names them). The group grant
+(`groups.json` → `permissions.integrations`, see [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration))
+and the binding's actions apply in the chat and in `GET /api/tools?appId=`; an
 app whose installation is missing or disabled does not offer the agent. In the chat's tool menu
 each agent is one toggle.
 
@@ -249,8 +248,8 @@ Without a storage provider the memory is per server process (5,000 conversations
 
 ## Admin page
 
-Agents have no page of their own any more: **Admin → Integrations → Installed**
-(`/admin/integrations/installed`) lists each agent among the installed integrations with its
+Agents have no page of their own any more: **Admin → Integrations**
+(`/admin/integrations`) lists each agent among the installed integrations with its
 status — card loaded and number of skills, not contacted yet, unreachable, disabled — and offers
 **Test**, **Edit**, **Enable**/**Disable** and **Uninstall**, as for every installation. The
 **Catalog** tab → **A2A agent** → **Install** opens the wizard: the Agent Card URL, the

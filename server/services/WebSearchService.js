@@ -232,9 +232,8 @@ class BraveSearchProvider extends SearchProvider {
   }
 
   /**
-   * Get API key with fallback logic:
-   * 1. Check provider-level API key (from providers.json)
-   * 2. Fallback to environment variable
+   * The API key: the credential the `brave` installation references, else
+   * the `BRAVE_SEARCH_API_KEY` environment variable.
    */
   getApiKey() {
     return getBraveApiKey();
@@ -257,11 +256,13 @@ class BraveSearchProvider extends SearchProvider {
    * @param {boolean} [options.skipCache] - Bypass the result cache and always
    *   issue a request (used by the admin connectivity test, where a cached hit
    *   would report success for credentials that have since stopped working).
+   * @param {string} [options.apiKey] - Key to use instead of the installation's
+   *   (the admin test of unsaved values; always with `skipCache`)
    * @returns {Promise<{results: Array<Object>}>}
    */
   async search(query, options = {}) {
     const { chatId, language, freshness, skipCache = false } = options;
-    const apiKey = this.getApiKey();
+    const apiKey = options.apiKey || this.getApiKey();
 
     if (!apiKey) {
       throw new Error(

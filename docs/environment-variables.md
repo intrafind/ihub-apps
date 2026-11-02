@@ -88,7 +88,7 @@ IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES=true
 
 The iFinder and iAssistant settings are not in `platform.json`: they are the
 `ifinder` and `iassistant` installations in `contents/config/integrations.json`
-(Admin → Integrations → Installed), which the `IHUB_*` mapping does not cover.
+(Admin → Integrations), which the `IHUB_*` mapping does not cover.
 Use `IFINDER_API_URL` and `IFINDER_PRIVATE_KEY` for them; they win over the
 installation's base URL and private key (see
 [iFinder Integration](iFinder-Integration.md#configuration)).

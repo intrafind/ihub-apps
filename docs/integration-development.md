@@ -19,6 +19,7 @@ needs no code in any of them.
 | A remote A2A agent | An A2A agent entry | none | [Remote A2A Agents](a2a-agents.md) |
 | An SDK, several calls per answer, or a per-user sign-in | A script tool: `contents/tools/<id>.json` and `server/tools/<script>.js` | JavaScript | [Tool Calling](tool-calling.md), this guide |
 | A service that answers like a model (iAssistant) | A model adapter | JavaScript | [LLM Client](llm-client.md) |
+| A web search engine for apps with web search on | An integration definition of `"type": "web-search"` with one action `search` | none (`openapi`) or one connector file (`script`) | [Web search engines](#web-search-engines) below, [Integrations](integrations.md) |
 
 Whatever you build, the user's view of what it found is the same. The rest of this guide is about
 that view.
@@ -83,7 +84,9 @@ reach a viewer who lacks those permissions.
 - When a public and a private sighting of the same item merge, the result is public but shows only
   what the public sighting reported. Your private excerpt never reaches a share because a web
   search also returned the same URL.
-- A name never makes results public. Only the platform's own web search scripts report public hits.
+- A name never makes results public. Only the platform's own web search engines (Brave, Staan,
+  Qwant) report public hits; a third-party web search engine's hits are private unless its
+  definition declares them public.
 
 ## 5. Let the model cite it
 
@@ -283,6 +286,61 @@ the tool definition instead. The paths point into that tool's result:
   - Each action works.
   - A cited result is numbered like its badge.
   - A share of the chat leaves the private results out.
+
+## Web search engines
+
+Web search is a feature of the app (`app.websearch`); an **engine** is an installed integration of
+type `web-search` that the feature calls when the model has no native search. iHub ships Brave
+Search, Staan and Qwant as engines; yours sits next to them under **Admin → Integrations → Web
+search**, in the app editor's engine list and in **All web search engines** (`type:web-search`)
+on the group page. Apps on `websearch.provider: "auto"` take the first engine the user may use:
+the shipped ones in the order Brave, Staan, Qwant, then the others by installation id; an app may
+also name your installation id.
+
+The contract:
+
+| Part | Rule |
+|---|---|
+| Definition | `"type": "web-search"`, a `script` or `openapi` protocol; any install fields you need (an API key as a `credential` field) |
+| Action | exactly one action the feature calls, named **`search`** (`sideEffect: "read"`, `dataFlow: "external"`). The definition schema refuses a `web-search` definition without it. The tool id is `<installation id>__search` |
+| Parameters | **`query`** (string, required). Optional, used when declared: **`maxResults`** (integer), **`extractContent`** (boolean), **`contentMaxLength`** (integer) — the app's `websearch` settings become their defaults, clamped to the schema's `minimum` / `maximum`. Anything else (`language`, `freshness`, `includeDomains`) is passed through as the model sends it |
+| Result | the shape of the shipped engines: `{ results: [{ title, url, description, hostname, publishedDate?, favicon? }] }`, optionally `extractedContent: [{ url, contentExtracted, content }]` (see [Web Tools → Result Shape](web-tools.md#result-shape-and-filters)) |
+| Sources | the web source producer lists the hits under the answer. They are **private** unless the definition's `sources` declaration for `search` says `"public": true` (only when the engine searches nothing but the open web) |
+| Access | the engine runs only while its installation is enabled and the user's groups grant it; native search never needs it |
+| Test | the connector's `test` (or the definition's `health` action) should run one search |
+
+A `script` definition (`org.example__web-search/integration.json`, with `connector.js` next to
+it):
+
+```jsonc
+{
+  "id": "org.example/web-search",
+  "version": "1.0.0",
+  "name": { "en": "Example Search" },
+  "type": "web-search",
+  "protocol": { "type": "script", "module": "connector.js" },
+  "auth": { "modes": ["none"] },
+  "install": [
+    { "key": "apiKeyRef", "type": "credential", "credentialTypes": ["secret"], "title": { "en": "API key" } }
+  ],
+  "actions": [
+    {
+      "name": "search",
+      "title": { "en": "Search the web" },
+      "description": { "en": "Search the web with Example Search." },
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  ]
+}
+```
+
+The connector's `search.run(args, ctx)` gets the model's arguments (with the app's defaults
+applied) and `ctx.values` (the install values); it returns the result shape above. A connector is
+one bundled file and runs in the server process, so a registry may deliver it only when the admin
+trusts the registry for code (see [Integrations → Code-based integrations](integrations.md#code-based-integrations-script)).
+An outbound request from a connector must honour the platform's TLS and proxy settings as any
+other. A full example connector is in [Web Tools → Writing your own engine](web-tools.md#writing-your-own-engine).
 
 ## Checklist
 

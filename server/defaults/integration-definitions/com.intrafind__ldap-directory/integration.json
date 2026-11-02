@@ -1,19 +1,37 @@
 {
   "id": "com.intrafind/ldap-directory",
   "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-01",
+      "summary": {
+        "en": "First version: every people directory is an installation (migration V198); the LDAP browser moved into its own integration (migration V205).",
+        "de": "Erste Version: jedes Personenverzeichnis ist eine Installation (Migration V198); der LDAP-Browser ist eine eigene Integration (Migration V205)."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md",
+        "breaking": "releases/1.0.0/breaking-changes.md"
+      }
+    }
+  ],
   "name": {
-    "en": "LDAP people directory",
-    "de": "LDAP-Personenverzeichnis"
+    "en": "People directory (LDAP)",
+    "de": "Personenverzeichnis (LDAP)"
   },
   "description": {
-    "en": "Let the model look people up in an LDAP or Active Directory people directory: the company directory (reusing an LDAP sign-in provider) or an external one such as x500.bund.de. Each installation is one directory with its own tools, named and described after it, so the model can tell which fits a question. Optionally an admin-only LDAP browser for raw entries.",
-    "de": "Das Modell Personen in einem LDAP- oder Active-Directory-Personenverzeichnis nachschlagen lassen: das Firmenverzeichnis (über einen LDAP-Anmeldeanbieter) oder ein externes wie x500.bund.de. Jede Installation ist ein Verzeichnis mit eigenen, nach ihm benannten Tools, damit das Modell erkennt, welches zu einer Frage passt. Optional ein LDAP-Browser für rohe Einträge, nur für Administratoren."
+    "en": "Let the model look people up in an LDAP or Active Directory people directory: the company directory (reusing an LDAP sign-in provider) or an external one such as x500.bund.de. Each installation is one directory with its own tools, named and described after it, so the model can tell which fits a question. The admin LDAP browser for raw entries is a separate integration that reuses a directory’s connection.",
+    "de": "Das Modell Personen in einem LDAP- oder Active-Directory-Personenverzeichnis nachschlagen lassen: das Firmenverzeichnis (über einen LDAP-Anmeldeanbieter) oder ein externes wie x500.bund.de. Jede Installation ist ein Verzeichnis mit eigenen, nach ihm benannten Tools, damit das Modell erkennt, welches zu einer Frage passt. Der LDAP-Browser für rohe Einträge ist eine eigene Integration, die die Verbindung eines Verzeichnisses nutzt."
   },
   "publisher": {
     "name": "IntraFind Software AG",
     "verification": "intrafind"
   },
   "categories": ["directory", "ldap", "people"],
+  "type": "people-directory",
   "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/people-directory-search.md",
   "builtIn": true,
   "protocol": {
@@ -212,140 +230,6 @@
           }
         }
       ]
-    },
-    {
-      "key": "browse",
-      "type": "boolean",
-      "title": {
-        "en": "LDAP browser for admins",
-        "de": "LDAP-Browser für Administratoren"
-      },
-      "description": {
-        "en": "Also offer the raw-entry browse actions (browse_search, browse_read, browse_children) to the groups below. Raw entries are never for every caller; every call is audited.",
-        "de": "Zusätzlich die Browse-Aktionen für rohe Einträge (browse_search, browse_read, browse_children) für die Gruppen unten anbieten. Rohe Einträge sind nie für jeden; jeder Aufruf wird protokolliert."
-      }
-    },
-    {
-      "key": "browseGroups",
-      "type": "list",
-      "title": {
-        "en": "LDAP browser: groups",
-        "de": "LDAP-Browser: Gruppen"
-      },
-      "default": ["admins"],
-      "when": {
-        "field": "browse",
-        "equals": true
-      },
-      "description": {
-        "en": "Who may browse, separate from the installation’s groups. Signed-in users only; \"*\" is refused. Personal API keys, OAuth clients and agents never browse.",
-        "de": "Wer browsen darf, getrennt von den Gruppen der Installation. Nur angemeldete Benutzer; \"*\" wird abgelehnt. Persönliche API-Schlüssel, OAuth-Clients und Agenten browsen nie."
-      }
-    },
-    {
-      "key": "browseBase",
-      "type": "string",
-      "title": {
-        "en": "LDAP browser: base DN",
-        "de": "LDAP-Browser: Basis-DN"
-      },
-      "when": {
-        "field": "browse",
-        "equals": true
-      },
-      "description": {
-        "en": "The DN the browser is confined to. Empty: the directory’s base DN.",
-        "de": "Der DN, auf den der Browser beschränkt ist. Leer: der Basis-DN des Verzeichnisses."
-      }
-    },
-    {
-      "key": "browseMaxResults",
-      "type": "number",
-      "title": {
-        "en": "LDAP browser: results per search",
-        "de": "LDAP-Browser: Treffer pro Suche"
-      },
-      "min": 1,
-      "max": 200,
-      "default": 50,
-      "when": {
-        "field": "browse",
-        "equals": true
-      }
-    },
-    {
-      "key": "browseBindMode",
-      "type": "enum",
-      "title": {
-        "en": "LDAP browser: access",
-        "de": "LDAP-Browser: Zugriff"
-      },
-      "when": {
-        "field": "browse",
-        "equals": true
-      },
-      "description": {
-        "en": "A separate (ideally read-only) account for browsing. Empty: the directory’s own bind, whose whole reach the browser then has.",
-        "de": "Ein eigenes (idealerweise lesendes) Konto zum Browsen. Leer: der Bind des Verzeichnisses, dessen gesamte Reichweite der Browser dann hat."
-      },
-      "choices": [
-        {
-          "value": "anonymous",
-          "label": {
-            "en": "Anonymous bind",
-            "de": "Anonymer Bind"
-          }
-        },
-        {
-          "value": "service",
-          "label": {
-            "en": "Service account",
-            "de": "Dienstkonto"
-          },
-          "requires": ["browseBindDn", "browseBindPasswordRef"]
-        }
-      ]
-    },
-    {
-      "key": "browseBindDn",
-      "type": "string",
-      "title": {
-        "en": "LDAP browser: bind DN",
-        "de": "LDAP-Browser: Bind-DN"
-      },
-      "when": {
-        "field": "browseBindMode",
-        "equals": "service"
-      }
-    },
-    {
-      "key": "browseBindPasswordRef",
-      "type": "credential",
-      "credentialTypes": ["secret"],
-      "title": {
-        "en": "LDAP browser: bind password",
-        "de": "LDAP-Browser: Bind-Passwort"
-      },
-      "when": {
-        "field": "browseBindMode",
-        "equals": "service"
-      }
-    },
-    {
-      "key": "browseDenyAttributes",
-      "type": "list",
-      "title": {
-        "en": "LDAP browser: withheld attributes",
-        "de": "LDAP-Browser: zurückgehaltene Attribute"
-      },
-      "when": {
-        "field": "browse",
-        "equals": true
-      },
-      "description": {
-        "en": "Attribute names withheld on top of the built-in list of secrets.",
-        "de": "Attributnamen, die zusätzlich zur eingebauten Liste der Geheimnisse zurückgehalten werden."
-      }
     },
     {
       "key": "searchBase",
@@ -795,60 +679,6 @@
       "requires": {
         "install.units": true
       }
-    },
-    {
-      "name": "browse_search",
-      "title": {
-        "en": "LDAP browser: search",
-        "de": "LDAP-Browser: Suche"
-      },
-      "description": {
-        "en": "Admin LDAP browser: search raw directory entries with an LDAP filter",
-        "de": "Admin-LDAP-Browser: rohe Verzeichniseinträge mit einem LDAP-Filter suchen"
-      },
-      "sideEffect": "read",
-      "dataFlow": "internal",
-      "connection": "service",
-      "requires": {
-        "install.browse": true
-      },
-      "bindExplicitly": true
-    },
-    {
-      "name": "browse_read",
-      "title": {
-        "en": "LDAP browser: read entry",
-        "de": "LDAP-Browser: Eintrag lesen"
-      },
-      "description": {
-        "en": "Admin LDAP browser: read one entry by its full DN, with its raw attributes",
-        "de": "Admin-LDAP-Browser: einen Eintrag anhand seines DN mit rohen Attributen lesen"
-      },
-      "sideEffect": "read",
-      "dataFlow": "internal",
-      "connection": "service",
-      "requires": {
-        "install.browse": true
-      },
-      "bindExplicitly": true
-    },
-    {
-      "name": "browse_children",
-      "title": {
-        "en": "LDAP browser: list children",
-        "de": "LDAP-Browser: Kinder auflisten"
-      },
-      "description": {
-        "en": "Admin LDAP browser: list the direct children of a DN",
-        "de": "Admin-LDAP-Browser: die direkten Kinder eines DN auflisten"
-      },
-      "sideEffect": "read",
-      "dataFlow": "internal",
-      "connection": "service",
-      "requires": {
-        "install.browse": true
-      },
-      "bindExplicitly": true
     }
   ]
 }

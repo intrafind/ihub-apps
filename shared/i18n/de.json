@@ -121,7 +121,8 @@
     "selectLanguage": "Sprache auswählen",
     "export": "Exportieren",
     "enabled": "Aktiviert",
-    "disabled": "Deaktiviert"
+    "disabled": "Deaktiviert",
+    "saving": "Speichern…"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -2578,7 +2579,6 @@
       "logging": "Logging",
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
-      "installedIntegrations": "Installierte Integrationen",
       "telemetry": "Telemetrie",
       "systemResources": "Systemressourcen",
       "voiceInput": "Spracheingabe",
@@ -2905,7 +2905,27 @@
       "incompatibleShort": "Nicht kompatibel mit dieser iHub-Version",
       "compatibilityLine": "Kompatibilität: iHub {{requires}}",
       "confirmUpdate": "Die installierten Dateien werden durch die Katalogversion ersetzt; lokale Änderungen gehen verloren.",
-      "noReleasesBetween": "Der Katalog führt keine Release-Notes zwischen diesen Versionen."
+      "noReleasesBetween": "Der Katalog führt keine Release-Notes zwischen diesen Versionen.",
+      "migration": {
+        "locked": "Gerade läuft eine Migration einer Installation dieser Integration. Es wurde nichts geändert; versuchen Sie es gleich noch einmal.",
+        "preview": {
+          "title": "Installationen",
+          "changes": "Dieses Update ändert {{changes}} von {{label}}; vorher wird eine Sicherung erstellt.",
+          "noChanges": "Die Migrationen dieses Updates ändern nichts, was {{label}} speichert; vorher wird eine Sicherung erstellt.",
+          "fails": "Die Migration von {{label}} wird fehlschlagen. Das Update wird trotzdem eingespielt, aber {{label}} bleibt auf v{{from}} und bietet keine Aktionen an, bis Sie auf der Seite der Installation handeln: die Migration erneut ausführen, die Sicherung wiederherstellen oder deinstallieren.",
+          "notPlanned": "Die Migration von {{label}} (v{{from}}) wird geplant, wenn das Update heruntergeladen wird: Der Katalog listet nicht jedes Release seit dieser Version.",
+          "review": "{{label}} muss geprüft werden (vermerkt keine gültige Version), daher migriert das Update die Installation nicht.",
+          "current": "{{label}} ist bereits auf v{{from}}.",
+          "wholeNotPlanned": "Die Migrationen lassen sich nicht aus dem Katalog planen; sie werden geplant, wenn das Update heruntergeladen wird. Eine Installation, deren Migration fehlschlägt, bleibt auf ihrer Version, bis Sie handeln."
+        },
+        "report": {
+          "title": "Migrationen der Installationen",
+          "migrated": "{{label}} wurde von v{{from}} auf v{{to}} migriert.",
+          "stamped": "{{label}} vermerkt jetzt v{{to}}; an den gespeicherten Daten musste sich nichts ändern.",
+          "failed": "Die Migration von {{label}} ist fehlgeschlagen: Die Installation bleibt auf v{{from}} und bietet keine Aktionen an, bis Sie auf ihrer Seite handeln. Grund: {{reason}}",
+          "skipped": "{{label}} wurde nicht migriert: {{reason}}"
+        }
+      }
     },
     "apps": {
       "edit": {
@@ -2930,8 +2950,8 @@
         "created": "App erstellt",
         "idRequired": "Die App-ID ist erforderlich",
         "integrations": {
-          "title": "Installierte Integrationen",
-          "desc": "Binde Integrationen ein, die unter Integrationen → Installiert eingerichtet sind. Beschränke sie auf einzelne Aktionen und lege den Startbereich für Nutzer fest.",
+          "title": "Integrationen",
+          "desc": "Installierte Integrationen binden. Auf einzelne Aktionen einschränken und den Bereich festlegen, mit dem Benutzer starten.",
           "none": "Es ist noch keine Integration installiert.",
           "openCatalog": "Katalog öffnen",
           "actions": "Aktionen",
@@ -2953,17 +2973,36 @@
           },
           "allInstallations": "Alle Installationen von {{name}}",
           "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
-          "explicitAction": "Nur wenn hier angehakt; nie Teil von „alle Aktionen“."
+          "explicitAction": "Nur wenn hier angehakt; nie Teil von „alle Aktionen“.",
+          "allPeopleDirectories": "Alle Personenverzeichnisse",
+          "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
+          "panelNotInstalled": "{{name}} ist nicht installiert. Unter Integrationen installieren, um diese Einstellungen zu nutzen.",
+          "iassistantBinding": "In dieser App verwenden",
+          "peopleDirectoriesTitle": "Personenverzeichnisse",
+          "peopleDirectoriesDesc": "Das Modell Personen in den Verzeichnissen nachschlagen lassen: in allen oder in einzelnen.",
+          "groups": {
+            "mcp": "MCP-Server",
+            "a2a": "Agenten",
+            "builtIn": "Integriert",
+            "catalog": "Aus dem Katalog"
+          },
+          "allStorageProviders": "Alle Speicheranbieter",
+          "storageRequiredHelp": "Die App ausblenden, solange dieser Speicheranbieter deaktiviert ist oder fehlt. Aus: Die App bleibt verfügbar, und die Dateiauswahl bietet die vorhandenen Anbieter an.",
+          "storageProvidersTitle": "Speicheranbieter",
+          "storageProvidersDesc": "Benutzer Dateien für den Chat aus den Speicheranbietern auswählen lassen: aus allen oder aus einzelnen. Benutzer sehen die, die ihre Gruppen freigeben; ausgewählte Dateien folgen den Upload-Einstellungen."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
         "websearchEnabled": "Websuche aktivieren",
-        "websearchProvider": "Anbieter",
+        "websearchProvider": "Suchmaschine",
         "websearchProviderAuto": "Automatisch",
-        "websearchProviderBrave": "Brave",
-        "websearchProviderStaan": "Staan",
-        "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
-        "websearchProviderDesc": "Suchmaschine, wenn das Modell keine eigene Websuche hat. „Automatisch“ nimmt die Standard-Suchmaschine der Integration „Websuche“ (Admin → Integrationen → Installiert); steht sie ebenfalls auf „Automatisch“, wird Brave verwendet, wenn ein API-Schlüssel hinterlegt ist, sonst Staan, sonst Qwant. Brave und Staan brauchen einen API-Schlüssel an dieser Integration; Qwant braucht keinen, ist aber auf vielen Cloud-Hosts gesperrt.",
+        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, Qwant, dann jede weitere.",
+        "websearchEngineDisabledOption": "{{name}} — deaktiviert",
+        "websearchEngineMissingOption": "{{name}} — nicht installiert",
+        "websearchEngineMissing": "Die Suchmaschine „{{engine}}“ ist nicht installiert. Die App sucht selbst, wo das Modell es kann, und bei anderen Modellen gar nicht. Installieren Sie sie unter Integrationen oder wählen Sie „Automatisch“.",
+        "websearchEngineDisabled": "Die Suchmaschine „{{engine}}“ ist deaktiviert. Bis sie aktiviert ist, sucht die App selbst, wo das Modell es kann, und bei anderen Modellen gar nicht.",
+        "websearchNoEngine": "Keine Suchmaschine installiert: Die App sucht nur mit Modellen, die eine eigene Websuche haben.",
+        "websearchInstallEngine": "Suchmaschine installieren",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
@@ -2980,7 +3019,7 @@
         "websearchResearchGuidanceCustomDesc": "Optional. Ersetzt die eingebaute Anweisung, die dem Systemprompt hinzugefügt wird, wenn die Websuche aktiv ist. Leer lassen, um die eingebaute Anweisung zu verwenden.",
         "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
         "websearchRequired": "Erforderlich",
-        "websearchRequiredDesc": "Blendet die App aus, solange die Websuche-Integration deaktiviert ist oder fehlt. Aus: Die App bleibt ohne Websuche verfügbar.",
+        "websearchRequiredDesc": "Blendet die App aus, solange ihre Suchmaschine nicht verfügbar ist („Automatisch“: keine Suchmaschine installiert und aktiviert; eine benannte Suchmaschine: diese fehlt oder ist deaktiviert). Aus: Die App bleibt verfügbar und sucht selbst, wo das Modell es kann.",
         "toolChoice": "Werkzeugnutzung",
         "toolChoiceDesc": "Ob das Modell selbst entscheidet, die Werkzeuge dieser App zu nutzen",
         "toolChoiceAuto": "Modell entscheidet (Standard)",
@@ -3100,7 +3139,14 @@
         "documentTemplatePinned": "Jedes Dokument dieser App verwendet diese Vorlage; das Modell kann keine andere wählen.",
         "documentTemplateFree": "Die Standardvorlage gilt; das Modell kann eine andere Vorlage verwenden, wenn der Benutzer darum bittet.",
         "documentTemplatesLink": "Dokumentvorlagen verwalten",
-        "documentTemplateMissing": "Die Vorlage „{{id}}“ existiert nicht; die Standardvorlage gilt."
+        "documentTemplateMissing": "Die Vorlage „{{id}}“ existiert nicht; die Standardvorlage gilt.",
+        "addLanguage": "Sprache hinzufügen",
+        "selectLanguage": "Auswählen...",
+        "languageCode": "Sprachcode (z. B. en, de, es)",
+        "add": "Hinzufügen",
+        "removeLanguage": "Sprache {{lang}} entfernen",
+        "noLanguages": "Keine Sprachen konfiguriert. Fügen Sie eine Sprache hinzu, um zu beginnen.",
+        "cloudStorageMoved": "Dateien aus Speicheranbietern (Office 365, Google Drive, Nextcloud): binden Sie die Anbieter unter Integrationen → Speicheranbieter."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -3111,6 +3157,7 @@
       "openDisabledHint": "Aktivieren Sie die App, um sie zu öffnen",
       "openMissingFeaturesHint": "Schalten Sie {{features}} ein, um sie zu öffnen",
       "missingInstalledIntegration": "Installierte Integration \"{{id}}\"",
+      "missingWebSearchEngine": "Eine Websuchmaschine",
       "test": {
         "title": "App testen",
         "subtitle": "Läuft mit der gespeicherten Version, so wie Benutzer sie sehen",
@@ -3125,6 +3172,20 @@
       "status": {
         "disabled": "Deaktiviert",
         "hiddenUntilFeature": "Für Nutzer ausgeblendet, bis {{features}} eingeschaltet ist"
+      },
+      "integrationNames": {
+        "jira": "Jira-Integration",
+        "ifinder": "iFinder-Integration",
+        "iassistant": "iAssistant-Integration",
+        "peopleDirectories": "Personenverzeichnisse (jede Installation)",
+        "ldapDirectory": "Personenverzeichnis (LDAP) (jede Installation)",
+        "ldapBrowser": "LDAP-Browser (jede Installation)"
+      },
+      "migrationWarnings": {
+        "actionRemoved": "Das Update von {{installation}} auf v{{version}} hat die Aktion „{{action}}“ entfernt, an die diese App gebunden war; die App bietet sie nicht mehr an.",
+        "typeBindingAction": "Das Update von {{installation}} auf v{{version}} hat die Aktion „{{action}}“ umbenannt oder entfernt, die diese App noch in ihrer Einbindung {{key}} nennt: Bearbeiten Sie die Einbindung.",
+        "typeBindingScope": "Das Update von {{installation}} auf v{{version}} hat den Bereich „{{scope}}“ umbenannt, den diese App noch in ihrer Einbindung {{key}} setzt: Bearbeiten Sie die Einbindung.",
+        "openLog": "Migrationsprotokoll von {{installation}}"
       }
     },
     "features": {
@@ -3153,14 +3214,16 @@
       }
     },
     "integrationCatalog": {
-      "title": "Installierte Integrationen",
-      "subtitle": "Installiere eine Integration aus dem Katalog, richte sie auf dein System aus und binde sie an Apps. Jede Installation bringt ihre Aktionen zum Modell.",
+      "field": {
+        "choose": "Auswählen…",
+        "custom": "Eigener Wert…",
+        "customValue": "Eigener Wert für {{field}}"
+      },
       "install": "Installieren",
       "reload": "Katalog neu laden",
       "reloaded": "Katalog neu geladen.",
       "saved": "Integration \"{{id}}\" gespeichert.",
       "removed": "Integration \"{{id}}\" entfernt.",
-      "searchPlaceholder": "Katalog durchsuchen",
       "catalogEmpty": "Keine Definition passt. Integrationen lassen sich auch aus dem Marktplatz installieren.",
       "installedCount": "{{count}} installiert",
       "notInstalled": "Nicht installiert",
@@ -3218,13 +3281,13 @@
       },
       "confirmRemove": {
         "title": "Integration entfernen?",
-        "message": "Apps, die \"{{id}}\" einbinden, verlieren ihre Aktionen und sind für Nutzer ausgeblendet, bis die Einbindung entfernt ist. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
+        "message": "Apps, die \"{{id}}\" verwenden, verlieren ihre Aktionen. Eine App, die sie voraussetzt, ist für Nutzer ausgeblendet, bis ihre Konfiguration geändert ist. Ein gespeichertes Dienstkonto-Token wird mit gelöscht."
       },
       "confirmDisable": {
         "title": "Integration deaktivieren?",
-        "message": "Apps, die \"{{id}}\" einbinden, sind für Nutzer ausgeblendet, solange sie deaktiviert ist."
+        "message": "Apps, die \"{{id}}\" verwenden, arbeiten ohne sie, solange sie deaktiviert ist. Eine App, die sie voraussetzt, ist für Nutzer ausgeblendet."
       },
-      "boundApps": "Eingebunden von: {{apps}}",
+      "boundApps": "Verwendet von: {{apps}}",
       "sideEffect": {
         "read": "lesend",
         "write": "schreibend",
@@ -3261,8 +3324,6 @@
         "laterRelease": "(spätere Version)",
         "secretStored": "Gespeichert. Leer lassen, um es zu behalten.",
         "who": "4 · Wer darf sie nutzen",
-        "groups": "Gruppen",
-        "groupsHelp": "Leer lassen für alle, die eine App nutzen dürfen, die diese Integration einbindet.",
         "enabled": "Aktiv",
         "actions": "5 · Aktionen, die das Modell aufrufen darf",
         "requires": "Benötigt {{requirement}}",
@@ -3277,7 +3338,8 @@
         "runsCode": "Diese Integration führt ihr eigenes Connector-Modul im iHub-Serverprozess aus. Installieren Sie sie nur von einem Herausgeber, dem Sie vertrauen.",
         "description": "Beschreibung",
         "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
-        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab."
+        "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab.",
+        "onePerLine": "Ein Eintrag pro Zeile"
       },
       "connections": {
         "title": "Verbundene Benutzer",
@@ -3303,14 +3365,6 @@
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
       "cards": {
-        "installed": {
-          "title": "Installierte Integrationen",
-          "description": "Installiere Integrationen aus dem Katalog oder dem Marktplatz (z. B. ein CKAN-Open-Data-Portal), richte sie auf deine Systeme aus und binde ihre Aktionen an Apps."
-        },
-        "nextcloud": {
-          "title": "Nextcloud",
-          "description": "Benutzer Dateien aus einer Nextcloud-Instanz im Chat durchsuchen und anhängen lassen. Installiert als Integration „nextcloud“."
-        },
         "nextcloudEmbed": {
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
@@ -3319,14 +3373,682 @@
           "title": "Microsoft 365 Copilot",
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
         },
-        "peopleDirectories": {
-          "description": "Das Modell Personen, ihre Funktion und Kontaktdaten in LDAP-Verzeichnissen nachschlagen lassen – im eigenen und in externen wie x500.bund.de. Jedes Verzeichnis ist eine Installation der Integration „LDAP-Personenverzeichnis“.",
-          "title": "Personenverzeichnisse"
+        "outlook": {
+          "title": "Outlook-Add-in",
+          "description": "iHub-Apps im Aufgabenbereich von Outlook. Benutzer melden sich mit ihrem iHub-Konto an und führen Prompts auf der gerade ausgewählten E-Mail aus."
+        },
+        "browserExtension": {
+          "title": "Browser-Erweiterung",
+          "description": "Seitenleisten-Erweiterung für Chrome / Edge / Firefox. Führt jede iHub-App auf der Seite aus, die der Benutzer gerade liest."
+        },
+        "mcpGateway": {
+          "title": "MCP-Gateway",
+          "description": "Externe MCP-Clients nutzen die Apps von iHub als Tools, angemeldet über den eigenen OAuth-Server von iHub."
         }
       },
-      "categories": {
-        "data": "Daten & APIs",
-        "directories": "Verzeichnisse"
+      "tabs": {
+        "inbound": "Eingehend"
+      },
+      "searchPlaceholder": "Integrationen durchsuchen…",
+      "noMatch": "Nichts passt zu „{{query}}“.",
+      "featureFlagOff": "Das Feature-Flag „integrations“ ist aus. Schalten Sie es unter Admin → Features ein, damit Clients die Integrations-Endpunkte sehen.",
+      "title": "Integrationen",
+      "subtitle": "Die Systeme, mit denen iHub arbeitet: Installieren Sie eine Integration aus dem Katalog, richten Sie sie auf Ihr System aus und binden Sie sie an Apps. „Eingehend“ listet, was sich mit iHub verbindet.",
+      "closeTestResults": "Testergebnisse schließen",
+      "page": {
+        "loadError": "Die Installation konnte nicht geladen werden",
+        "tabs": {
+          "overview": "Überblick",
+          "settings": "Einstellungen",
+          "releases": "Versionen"
+        },
+        "remove": "Entfernen",
+        "definitionMissing": "Die Definition „{{definition}}“ dieser Installation ist nicht geladen: Sie bietet keine Aktionen und lässt sich nicht bearbeiten. Installieren Sie die Definition erneut aus dem Marketplace oder entfernen Sie die Installation.",
+        "tabsLabel": "Installation",
+        "facts": "Konfiguration",
+        "noFacts": "Nichts über die Standardwerte hinaus konfiguriert.",
+        "editSettings": "Einstellungen bearbeiten",
+        "actions": "Aktionen",
+        "noLiveActions": "Das System listet seine Aktionen, sobald iHub sich verbindet. Testen Sie die Verbindung, um sie zu sehen.",
+        "noActions": "Diese Integration bietet dem Modell keine Aktionen; Apps nutzen sie über ihre eigenen Einstellungen.",
+        "actionOff": "Aus",
+        "actionUnavailable": "Nicht verfügbar",
+        "about": "Über",
+        "groups": "Gruppen",
+        "docs": "Dokumentation",
+        "opensInNewTab": "(öffnet in einem neuen Tab)",
+        "apps": "Apps, die sie nutzen",
+        "noApps": "Noch bindet keine App diese Installation. Binden Sie sie im Abschnitt „Integrationen“ einer App.",
+        "via": {
+          "installation": "über diese Installation",
+          "definition": "jede {{name}}-Installation",
+          "type": "jede Installation ihres Typs",
+          "webSearch": "ihre Websuchmaschine",
+          "webSearchAuto": "Websuche auf „Automatisch“ (die erste Suchmaschine, die ein Benutzer nutzen darf)"
+        },
+        "notEditable": "Diese Installation lässt sich nicht bearbeiten, solange ihre Definition fehlt oder inkompatibel ist."
+      },
+      "catalog": {
+        "installAria": "{{name}} installieren"
+      },
+      "inbound": {
+        "status": {
+          "on": "An",
+          "available": "Verfügbar"
+        },
+        "description": "Was sich mit iHub verbindet: andere Anwendungen, die iHub einbetten oder seine Apps aufrufen. Jede wird auf ihrer eigenen Seite konfiguriert."
+      },
+      "tile": {
+        "noGroup": "Noch keine Gruppe gibt sie frei"
+      },
+      "facts": {
+        "credential": "Zugangsdaten",
+        "sources": "Quellen",
+        "baseUrl": "Basis-URL",
+        "authentication": "Authentifizierung",
+        "oidcProvider": "OIDC-Provider",
+        "signingKey": "Signaturschlüssel",
+        "privateKey": "Privater Schlüssel",
+        "defaultSearchProfile": "Standard-Suchprofil",
+        "runsOn": "Läuft auf",
+        "defaultProfile": "Standardprofil",
+        "groundedOnly": "Antworten nur aus Dokumenten",
+        "signInProvider": "Anmelde-Provider",
+        "directoryUrl": "Verzeichnis-URL",
+        "baseDn": "Basis-DN",
+        "bindPassword": "Bind-Passwort",
+        "browse": "LDAP-Browser",
+        "tenantId": "Tenant-ID",
+        "clientId": "Client-ID",
+        "clientSecret": "Client-Secret",
+        "apiKey": "API-Schlüssel",
+        "keyFallback": "Ohne Schlüssel",
+        "serverUrl": "Server-URL",
+        "siteUrl": "Site-URL",
+        "portalUrl": "Portal-URL",
+        "defaultFilter": "Filter",
+        "maxRows": "Treffer pro Suche",
+        "command": "Befehl",
+        "transport": "Transport",
+        "agentCard": "Agent Card",
+        "endpoint": "Endpunkt",
+        "secretSet": "gesetzt",
+        "secretNotSet": "nicht gesetzt",
+        "noKeyNeeded": "kein Schlüssel nötig",
+        "yes": "ja",
+        "no": "nein",
+        "choices": {
+          "ihubSigned": "JWT von iHub signiert",
+          "oidcTokenExchange": "OIDC-Token-Austausch",
+          "streamableHttp": "Streamable HTTP",
+          "sse": "SSE",
+          "websocket": "WebSocket",
+          "stdio": "Lokaler Prozess (stdio)",
+          "oidcKeyPair": "OIDC-Schlüsselpaar von iHub",
+          "openldap": "OpenLDAP",
+          "activeDirectory": "Active Directory",
+          "ivbb": "IVBB-Verzeichnis (x500.bund.de)",
+          "directoryAccount": "Konto des Verzeichnisses",
+          "anonymous": "anonym",
+          "directoryBase": "Basis-DN des Verzeichnisses"
+        },
+        "directoryType": "Verzeichnistyp",
+        "directory": "Verzeichnis",
+        "browseBase": "Browse-Basis",
+        "account": "Konto",
+        "noSources": "keine"
+      },
+      "groups": {
+        "peopleDirectories": {
+          "title": "Personenverzeichnisse",
+          "description": "LDAP- und Entra-ID-Verzeichnisse, in denen das Modell Personen nachschlägt."
+        },
+        "webSearch": {
+          "title": "Websuche",
+          "description": "Suchmaschinen für Apps mit eingeschalteter Websuche; ohne Suchmaschine suchen Modelle selbst, wo sie es können."
+        },
+        "storage": {
+          "title": "Speicheranbieter",
+          "description": "Cloud-Speicher, aus denen Benutzer im Chat und in Projekten Dateien durchsuchen und anhängen."
+        },
+        "mcp": {
+          "title": "MCP-Server",
+          "description": "Server des Model Context Protocol; ihre Tools sind die Aktionen."
+        },
+        "agents": {
+          "title": "Agenten",
+          "description": "Entfernte Agenten (A2A), an die das Modell Aufgaben übergibt; ihre Skills sind die Aktionen."
+        },
+        "builtIn": {
+          "title": "Eingebaut",
+          "description": "Integrationen, die mit iHub ausgeliefert werden, etwa iFinder, iAssistant und Jira."
+        },
+        "catalog": {
+          "title": "Aus dem Katalog",
+          "description": "Integrationen aus dem Katalog oder einer Marketplace-Registry."
+        }
+      },
+      "editors": {
+        "iassistant": {
+          "connectionRequired": "Wählen Sie die iFinder-Installation, auf der iAssistant läuft.",
+          "connectionSection": "Verbindung",
+          "connectionSectionHelp": "iAssistant nutzt die Basis-URL und die Anmeldung einer iFinder-Installation; konfigurieren Sie diese dort.",
+          "settingsSection": "iAssistant-Einstellungen",
+          "defaultProfileId": "Standard-Profil-ID",
+          "defaultProfileIdHelp": "Das iAssistant-Profil, wenn eine App keines nennt (Klartext oder Base64-kodiert).",
+          "defaultSearchProfile": "Standard-Suchprofil",
+          "defaultSearchProfileHelp": "Das Suchprofil, das iAssistant-Konversationen durchsuchen, wenn weder die App noch das Modell eines nennt.",
+          "testResults": "Verbindungstest iAssistant",
+          "testHelp": "Der Test erreicht iAssistant über die gewählte iFinder-Installation mit Ihrem eigenen Admin-Konto, mit den Werten oben (ungespeichert)."
+        },
+        "webSearch": {
+          "engineSection": "Suchmaschine",
+          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, Qwant, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem API-Schlüssel von {{engine}}. Anlegen unter Admin → Integrationen → Zugangsdaten.",
+          "envFallback": "Ohne Zugangsdaten nutzt der Server die Umgebungsvariable {{env}}, wenn sie gesetzt ist. Ausgewählte Zugangsdaten haben immer Vorrang.",
+          "noKeyNeeded": "{{engine}} braucht keinen API-Schlüssel.",
+          "egressHint": "Qwant sperrt viele IP-Adressen von Rechenzentren. „Verbindung testen“ zeigt, ob Qwant diesem Server antwortet.",
+          "testResults": "Test der Suchmaschine",
+          "testHelp": "Der Test prüft den API-Schlüssel der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
+        },
+        "ifinder": {
+          "privateKey": "Privater Schlüssel",
+          "privateKeyHelp": "Die gespeicherten Zugangsdaten mit dem privaten RSA- oder EC-Schlüssel (PEM), der das iFinder-JWT signiert. Alternativ die Umgebungsvariable IFINDER_PRIVATE_KEY auf dem Server setzen.",
+          "algorithm": "JWT-Algorithmus",
+          "issuer": "JWT-Aussteller",
+          "audience": "JWT-Zielgruppe",
+          "tokenExpiration": "Token-Lebensdauer (Sekunden)",
+          "effectiveIssuer": "Wirksame OAuth-Aussteller-URL",
+          "issuerNotAvailable": "Nicht verfügbar",
+          "autoDetected": "Automatisch erkannt",
+          "effectiveIssuerConfiguredHelp": "Konfiguriert unter Admin → OAuth-Server.",
+          "effectiveIssuerAutoHelp": "Aus der URL Ihres Servers erkannt. Einen eigenen Aussteller setzen Sie bei Bedarf unter Admin → OAuth-Server.",
+          "oidcKeyPairReady": "OIDC-Schlüsselpaar bereit",
+          "oidcKeyPairReadyHelp": "Konfigurieren Sie iFinder mit:",
+          "oidcKeyPairMissingIssuer": "OAuth-Aussteller-URL erforderlich",
+          "oidcKeyPairMissingIssuerHelp": "Setzen Sie vor dem Speichern die OAuth-Aussteller-URL unter Admin → Authentifizierung → OAuth-Server.",
+          "info": {
+            "title": "iFinder-JWT-Authentifizierung",
+            "description": "Jeder Aufruf läuft als angemeldeter Benutzer: iHub signiert ein JWT für den Benutzer oder tauscht dessen Anmelde-Token bei einem gemeinsamen OIDC-Provider. iAssistant läuft auf dieser Verbindung."
+          },
+          "connectionSection": "iFinder-Verbindung",
+          "baseUrl": "iFinder-Basis-URL",
+          "baseUrlHelp": "Ihr iFinder-/iAssistant-Server; die API-Pfade werden angehängt.",
+          "authMode": {
+            "label": "Token-Aussteller",
+            "ihubSigned": "iHub signiert das Token",
+            "oidcTokenExchange": "Gemeinsamer OIDC-Provider (Token-Austausch)",
+            "oidcTokenExchangeHelp": "iHub und iFinder teilen sich einen OIDC-Provider. iHub bewahrt das Anmelde-Token jedes Benutzers auf und tauscht es beim Provider gegen ein Token für iFinder. Benutzer müssen sich über diesen Provider bei iHub anmelden; Hintergrundläufe nutzen das gespeicherte Refresh-Token.",
+            "ihubSignedHelp": "iHub signiert das iFinder-Token selbst, mit einem privaten Schlüssel oder dem OIDC-Schlüsselpaar von iHub. iFinder vertraut iHub als Aussteller."
+          },
+          "useOidcKeyPair": "Mit dem OIDC-Schlüsselpaar von iHub signieren",
+          "useOidcKeyPairHelp": "Tokens werden mit dem RSA-Schlüssel des OIDC-Servers von iHub signiert. iFinder prüft sie über JWKS-Discovery (/.well-known/jwks.json); kein Schlüssel muss verteilt werden.",
+          "defaultScope": "Token-Scope",
+          "jwtSubjectField": "An iFinder gesendete Benutzeridentität",
+          "jwtSubject": {
+            "email": "E-Mail-Adresse",
+            "username": "Benutzername",
+            "id": "Benutzer-ID",
+            "name": "Anzeigename",
+            "domainUsername": "Domäne\\Benutzername (NTLM-Stil)",
+            "custom": "Eigene Vorlage"
+          },
+          "jwtSubjectFieldHelp": "Der „sub“-Claim des iFinder-JWT: welches Benutzerattribut den Benutzer so identifiziert, wie iFinder ihn kennt.",
+          "jwtSubjectTemplate": "Eigene Subject-Vorlage",
+          "jwtSubjectTemplateHelp": "Platzhalter: ${user.email}, ${user.username}, ${user.domain}, ${user.id}, ${user.name}.",
+          "searchSection": "Suchprofile",
+          "searchSectionHelp": "Welches iFinder-Suchprofil ein Chat durchsucht und welche Benutzer wählen dürfen.",
+          "defaultSearchProfile": "Standard-Suchprofil",
+          "defaultSearchProfileHelp": "Das Suchprofil, das ein Chat durchsucht, bis der Benutzer ein anderes wählt.",
+          "allowedSearchProfiles": "Suchprofile, die Benutzer wählen dürfen",
+          "allowedSearchProfilesPlaceholder": "Alle Profile des Benutzers",
+          "allowedSearchProfilesHelp": "Eine Suchprofil-ID pro Zeile. Leer bietet jedes Profil an, das der Benutzer in iFinder hat.",
+          "allowUserSearchProfileChange": "Benutzer dürfen das Suchprofil wechseln",
+          "allowUserSearchProfileChangeHelp": "Aus: Jeder Chat durchsucht das Standard-Suchprofil, und weder der Benutzer noch das Modell können ein anderes wählen.",
+          "advancedSection": "Erweitert",
+          "advancedToggle": "Zeitlimit, Download-Verzeichnis und API-Pfade",
+          "testResults": "Verbindungstest iFinder",
+          "diagnostics": {
+            "exchangeDescription": "Der Test tauscht Ihr eigenes gespeichertes Anmelde-Token beim OIDC-Provider und ruft die Endpunkte der Integration auf, mit den Werten oben (ungespeichert). Er läuft immer als Sie: Der Austausch braucht Ihre Anmeldung.",
+            "description": "Der Test signiert ein JWT für Ihr eigenes Admin-Konto und ruft die Endpunkte der Integration auf, mit den Werten oben (ungespeichert)."
+          },
+          "tokenExchange": {
+            "provider": "OIDC-Provider",
+            "selectProvider": "Provider wählen…",
+            "providerDisabled": "deaktiviert",
+            "noProviders": "Kein OIDC-Provider konfiguriert. Legen Sie zuerst den Provider, den iFinder nutzt, unter Admin → Authentifizierung an.",
+            "providerHelp": "Der Provider, den sich iHub und iFinder teilen. Seine Anmelde-Tokens werden (verschlüsselt) aufbewahrt und mit der dort unter Admin → Authentifizierung konfigurierten Client-ID und dem Secret gegen iFinder-Tokens getauscht. Ergänzen Sie „offline_access“ in seinen Scopes, damit Hintergrundläufe weiter funktionieren.",
+            "grantType": "Grant-Typ",
+            "grantEntraObo": "On-Behalf-Of (Microsoft Entra ID)",
+            "grantTokenExchange": "Token-Austausch (RFC 8693: Zitadel, Keycloak)",
+            "audience": "Zielgruppe",
+            "audienceObo": "Von On-Behalf-Of nicht genutzt: Entra entnimmt die Zielgruppe dem Scope (api://<ifinder-app-id>/.default).",
+            "audienceHelp": "Die Client- oder Projekt-ID von iFinder beim Provider. Das ausgestellte Token trägt sie als „aud“.",
+            "scopeMap": "Scope-Zuordnung",
+            "scopeMapHelp": "Übersetzt die Scopes, die iHub anfragt, in die Scopes des Providers (Zitadel-Rollen-Scopes, Entra api://…/.default). Ein leerer Wert sendet den iHub-Scope unverändert.",
+            "providerScopeFor": "Provider-Scope für {{scope}}",
+            "unchanged": "(unverändert)",
+            "extraScopes": "Zusätzliche Scopes",
+            "extraScopesHelp": "Durch Leerzeichen getrennte Scopes, die bei jedem Austausch mitgesendet werden.",
+            "ifinderSetupTitle": "Konfigurieren Sie iFinder mit:",
+            "providerIssuer": "Aussteller-URL des Providers",
+            "ifinderSetupHelp": "Das Token, das iHub sendet, muss auch die fa_*-Claims tragen, die iFinder liest – als angefragte Scopes oder über einen Claim-Mapper beim Provider. Der Verbindungstest zeigt, welche vorhanden sind.",
+            "providerRequired": "Wählen Sie den OIDC-Provider, den sich iHub mit iFinder teilt."
+          },
+          "baseUrlRequired": "Geben Sie die iFinder-Basis-URL ein.",
+          "oidcKeyPairNeedsIssuer": "Signieren mit dem OIDC-Schlüsselpaar braucht eine OAuth-Aussteller-URL. Sie wird aus der URL Ihres Servers erkannt, oder Sie setzen sie unter Admin → Authentifizierung → OAuth-Server."
+        },
+        "nameSection": "Name",
+        "nameSectionHelp": "Wie Benutzer diese Integration im Chat sehen. Die ID bleibt fest.",
+        "accessSection": "Wer sie nutzen darf",
+        "actionsSection": "Aktionen, die das Modell aufrufen darf",
+        "actionsSectionHelp": "Eine App, die diese Integration bindet, bietet die angehakten Aktionen an; sie kann sie weiter einschränken.",
+        "peopleDirectory": {
+          "source": {
+            "baseDn": "Basis-DN",
+            "bindAccount": "Bind-Konto",
+            "bindAccountNone": "Keines",
+            "bindAccountSet": "Konfiguriert",
+            "description": "Wo das Verzeichnis liegt und wie iHub es erreicht.",
+            "direct": "Direkt verbinden",
+            "directHelp": "Für Verzeichnisse ohne Anmeldeanbieter, etwa das externe x500.bund.de.",
+            "missingProvider": "Der Anmeldeanbieter „{{name}}“ ist nicht konfiguriert. Speichern Sie ihn zuerst in den Authentifizierungseinstellungen, oder wählen Sie einen anderen.",
+            "noProviders": "Es ist kein LDAP-Anmeldeanbieter konfiguriert.",
+            "openAuth": "Authentifizierungseinstellungen öffnen",
+            "overrides": "Einstellungen des Anbieters überschreiben",
+            "overridesHelp": "Lassen Sie ein Feld leer, um den Wert des Anmeldeanbieters zu verwenden.",
+            "preset": "Verzeichnistyp",
+            "presetHelp": "Legt fest, welche Einträge Personen sind und woher jedes Feld gelesen wird. Siehe „Suche und Zuordnung“ unten.",
+            "presetInherit": "Wie der Anbieter ({{preset}})",
+            "provider": "Anmeldeanbieter",
+            "providerNotConfigured": "{{name}} (nicht konfiguriert)",
+            "providerPlaceholder": "Anbieter auswählen …",
+            "reuse": "Anmeldeanbieter wiederverwenden",
+            "reuseHelp": "URL, Basis-DN, Verzeichnistyp und Bind-Konto kommen von einem LDAP-Anmeldeanbieter der Authentifizierungseinstellungen.",
+            "starttls": "StartTLS",
+            "starttlsHelp": "Stuft eine ldap://-Verbindung auf TLS hoch, bevor gesucht wird. Für ldaps:// nicht nötig.",
+            "starttlsInheritOff": "Wie der Anbieter (aus)",
+            "starttlsInheritOn": "Wie der Anbieter (an)",
+            "starttlsLabel": "StartTLS verwenden (ldap://-Verbindungen verschlüsseln)",
+            "starttlsOff": "Aus",
+            "starttlsOn": "An",
+            "title": "Quelle",
+            "url": "URL",
+            "urlHelp": "ldaps://host:636 für TLS. ldap://host:389 braucht StartTLS – oder unter „Netzwerk“ zugelassenen Klartext, was nicht empfohlen ist."
+          },
+          "access": {
+            "anonymous": "Anonym",
+            "anonymousHelp": "Nur für Verzeichnisse, die eine anonyme Suche erlauben, etwa x500.bund.de. Active Directory erlaubt sie in der Regel nicht.",
+            "bindDn": "Bind-DN",
+            "description": "Wie sich iHub am Verzeichnis anmeldet. Suchen laufen nie mit dem Passwort eines Benutzers, denn iHub speichert es nicht.",
+            "noBindAccount": "Dieser Anmeldeanbieter hat kein Bind-Konto. Wählen Sie anonymen Zugriff, wenn das Verzeichnis ihn erlaubt, oder ein Dienstkonto.",
+            "password": "Passwort",
+            "passwordHelp": "Wählen Sie die gespeicherten Zugangsdaten, die das Passwort enthalten.",
+            "providerAccount": "Das Bind-Konto des Anmeldeanbieters",
+            "providerAccountHelp": "Das Dienstkonto, mit dem der Anbieter schon Benutzer nachschlägt.",
+            "service": "Dienstkonto",
+            "serviceHelp": "Ein eigenes, nur lesendes Konto für die Personensuche.",
+            "servicePlaintext": "Ein Dienstkonto meldet sich nie im Klartext an. Verwenden Sie ldaps:// oder StartTLS, sonst kann dieses Verzeichnis keine Verbindung aufbauen.",
+            "title": "Zugriff"
+          },
+          "network": {
+            "allowPlaintext": "Klartextverbindungen zulassen (ldap:// ohne StartTLS)",
+            "allowedHosts": "Erlaubte Hosts mit privater Adresse",
+            "allowedHostsHelp": "Ein Host pro Zeile. iHub lehnt einen Verzeichnis-Host ab, der zu einer privaten, Loopback- oder Link-Local-Adresse auflöst, sofern er nicht hier oder in der plattformweiten SSRF-Freigabeliste steht. Der Host eines wiederverwendeten Anmeldeanbieters ist immer erlaubt.",
+            "description": "Wie die Verbindung geschützt ist und welche Server iHub erreichen darf.",
+            "plaintextRefused": "Dieses Verzeichnis verwendet ldap:// ohne StartTLS. iHub lehnt die Verbindung ab, bis Klartext hier zugelassen ist – besser wechseln Sie zu ldaps:// oder StartTLS.",
+            "plaintextWarning": "Ohne TLS gehen die Suchbegriffe und die Einträge, die das Verzeichnis liefert – Namen, Telefonnummern, E-Mail-Adressen –, im Klartext über das Netzwerk. Verwenden Sie ldaps://host:636 oder ldap://host:389 mit StartTLS, wann immer der Server es unterstützt. Das Passwort eines Dienstkontos wird nie im Klartext gesendet.",
+            "title": "Netzwerk",
+            "tlsCa": "Vertrauenswürdige Zertifikate",
+            "tlsCaHelp": "Nur für eine Zertifizierungsstelle, der der iHub-Server nicht schon vertraut. Ein Name pro Zeile: die Datei contents/config/certs/<name>.pem auf dem Server. Wenn gesetzt, prüfen nur diese Zertifikate das Serverzertifikat. Leer lassen, um den öffentlichen Wurzelzertifikaten und dem Zertifikatsspeicher des Betriebssystems des Servers zu vertrauen. Die Prüfung bleibt aktiv, außer der Host steht auf der SSL-Whitelist der Plattform.",
+            "transport": "Transport",
+            "tlsSettings": "TLS-Versionen und Cipher-Suites",
+            "tlsDefault": "Standard von Node",
+            "tlsMinVersion": "Minimale TLS-Version",
+            "tlsMaxVersion": "Maximale TLS-Version",
+            "tlsCiphers": "Cipher-Suites",
+            "tlsCiphersHelp": "Eine OpenSSL-Cipher-Liste. Leer: die Standardwerte von Node. Das sind die einzigen TLS-Einstellungen, die ein Verzeichnis ändern darf; die Werte eines wiederverwendeten Anmeldeanbieters gelten, sofern sie hier nicht gesetzt sind."
+          },
+          "visibility": {
+            "title": "Sichtbarkeit",
+            "description": "Wer dieses Verzeichnis durchsuchen darf und wohin die Suchbegriffe gehen.",
+            "groups": "Gruppen",
+            "dataFlow": "Datenfluss",
+            "internal": "Intern",
+            "internalHelp": "Ihre Organisation betreibt das Verzeichnis.",
+            "external": "Extern",
+            "externalHelp": "Ein Dritter betreibt das Verzeichnis, daher verlassen die gesuchten Namen Ihre Organisation. Sagen Sie das auch in der Beschreibung.",
+            "groupsHelp": "Eine Gruppe gibt dieses Verzeichnis über seine ID, über „Personenverzeichnis (LDAP)“, über „Alle Personenverzeichnisse“ oder über „*“ frei. Apps und Tool-Berechtigungen können das nicht erweitern."
+          },
+          "model": {
+            "description": "Anhand dieser Texte wählt das Modell ein Verzeichnis aus. Nennen Sie, wessen Personal es enthält, welche Felder es hat und ob es ein externer Dienst ist.",
+            "descriptionLabel": "Beschreibung",
+            "name": "Name",
+            "noDescription": "Ohne Beschreibung kennt das Modell nur Name und ID und wählt womöglich das falsche Verzeichnis.",
+            "previewTitle": "Was das Modell sieht",
+            "title": "Name und Beschreibung für das Modell",
+            "toolIds": "Tools, die Apps binden können:"
+          },
+          "limits": {
+            "concurrency": "Parallele Anfragen",
+            "description": "Obergrenzen für jede Suche. Ein Tool-Aufruf kann weniger Treffer anfordern, nie mehr. Alle Tools dieses Verzeichnisses, sein Test und die LDAP-Browser, die es nutzen, teilen sich eine Anfragewarteschlange.",
+            "maxResults": "Höchstzahl der Ergebnisse je Suche",
+            "range": "Standard {{fallback}}, {{min}} bis {{max}}.",
+            "requestDelayMs": "Pause zwischen Anfragen (ms)",
+            "timeoutMs": "Timeout (ms)",
+            "title": "Grenzen",
+            "units": "Organisationseinheiten anbieten (list_units)",
+            "unitsHelp": "Listet die Einheiten direkt unter der Suchbasis auf (bei x500.bund.de: die Behörden), damit das Modell eine Suche auf eine davon eingrenzen kann."
+          },
+          "mapping": {
+            "description": "Die Standardwerte kommen vom Verzeichnistyp „{{preset}}“. Lassen Sie ein Feld leer, um den daneben angezeigten Wert der Vorlage zu behalten.",
+            "field": "Feld",
+            "fieldsHelp": "Kommagetrennte Kandidaten; der erste mit einem Wert gewinnt. Ein Kandidat ist ein Attribut (mail), ein Bestandteil des DN des Eintrags (dn:l) oder durch Leerzeichen verbundene Attribute (givenName sn). Aus dem Verzeichnis werden nur zugeordnete Attribute gelesen.",
+            "fieldsTitle": "Personenfelder",
+            "overrideColumn": "Überschreiben",
+            "personFilter": "Personenfilter",
+            "presetColumn": "Vorlage",
+            "presetValue": "Vorlage: {{value}}",
+            "searchAttributes": "Attribute für die Freitextsuche",
+            "searchAttributesHelp": "Durch Kommas getrennt, höchstens 12. Jedes Wort einer Suche wird mit diesen Attributen verglichen.",
+            "searchBase": "Suchbasis",
+            "searchBaseHelp": "Wo nach Personen gesucht wird. Standard ist der Basis-DN.",
+            "title": "Suche und Zuordnung",
+            "unmapped": "nicht zugeordnet"
+          },
+          "fields": {
+            "academicTitle": "Akademischer Titel",
+            "department": "Abteilung",
+            "email": "E-Mail",
+            "fax": "Fax",
+            "firstName": "Vorname",
+            "jobTitle": "Funktion",
+            "lastName": "Nachname",
+            "location": "Ort",
+            "managerId": "Vorgesetzte(r)",
+            "mobile": "Mobil",
+            "name": "Name",
+            "organization": "Organisation",
+            "phone": "Telefon",
+            "salutation": "Anrede"
+          },
+          "presets": {
+            "activeDirectory": "Active Directory",
+            "ivbb": "IVBB-Verzeichnis (x500.bund.de)",
+            "openldap": "OpenLDAP / generisches LDAP"
+          },
+          "transport": {
+            "ldaps": "Verschlüsselt (LDAPS)",
+            "plaintext": "Klartext",
+            "plaintextHint": "Suchbegriffe und Ergebnisse gehen unverschlüsselt über das Netzwerk.",
+            "starttls": "Verschlüsselt (StartTLS)",
+            "unknown": "Noch nicht bekannt"
+          },
+          "errors": {
+            "authProviderRequired": "Wählen Sie einen Anmeldeanbieter.",
+            "urlRequired": "Geben Sie die URL des Verzeichnisses ein.",
+            "baseDnRequired": "Geben Sie den Basis-DN ein.",
+            "urlPattern": "Verwenden Sie ldaps://host:636 oder ldap://host:389, ohne Pfad.",
+            "bindDnRequired": "Geben Sie den Bind-DN ein.",
+            "passwordRefRequired": "Wählen Sie die Zugangsdaten, die das Passwort enthalten.",
+            "tlsCaPattern": "„{{name}}“ ist kein Zertifikatsname: Kleinbuchstaben, Ziffern und „-“ verwenden, ohne „.pem“.",
+            "personFilterPattern": "Ein LDAP-Filter in Klammern, z. B. (objectClass=person).",
+            "attributeName": "„{{name}}“ ist kein LDAP-Attributname.",
+            "limitRange": "Geben Sie eine ganze Zahl von {{min}} bis {{max}} ein."
+          },
+          "statusTitle": "So wie gespeichert, hat dieses Verzeichnis Probleme:",
+          "errorsTitle": "Bitte prüfen Sie diese Felder",
+          "testResults": "Verbindungstest des Verzeichnisses",
+          "testHelp": "Prüft Konfiguration, Adresse, Verbindung, StartTLS und Bind mit den Werten oben (ungespeichert). Mit einem Namen sucht er außerdem und zeigt die zugeordneten Personen neben den Attributen, aus denen sie stammen. Es wird nichts gespeichert.",
+          "testQuery": "Beispielsuche (ein Nachname)",
+          "testQueryHelp": "Optional: ein Name, nach dem gesucht wird, um die Zuordnung zu prüfen."
+        },
+        "ldapBrowser": {
+          "directorySection": "Personenverzeichnis",
+          "directorySectionHelp": "Der Browser nutzt die Verbindung einer Installation von Personenverzeichnis (LDAP): ihre URL, TLS-Einstellungen, vertrauenswürdigen Zertifikate, erlaubten Hosts, Basis-DN und, sofern Sie dem Browser kein eigenes Konto geben, ihr Bind-Konto.",
+          "directory": "Verzeichnis",
+          "directoryPlaceholder": "Verzeichnis auswählen…",
+          "directoryMissing": "{{id}} (nicht installiert)",
+          "directoryMissingHint": "Das Verzeichnis „{{id}}“ ist nicht installiert: der Browser bietet keine Tools an. Wählen Sie ein anderes.",
+          "noDirectories": "Es ist kein Personenverzeichnis (LDAP) installiert. Installieren Sie zuerst eines unter Integrationen.",
+          "directoryDisabled": "Dieses Verzeichnis ist ausgeschaltet. Der Browser bietet seine Tools nur an, solange das Verzeichnis eingeschaltet ist.",
+          "openDirectory": "Verzeichnis öffnen",
+          "signInProvider": "Anmeldeanbieter",
+          "url": "URL",
+          "baseDnOfDirectory": "Basis-DN",
+          "bindOfDirectory": "Bind-Konto",
+          "bindOfDirectoryService": "Dienstkonto {{dn}}",
+          "bindOfDirectoryAnonymous": "Anonym",
+          "bindOfDirectoryProvider": "Das Bind-Konto des Anmeldeanbieters",
+          "transport": "Transport",
+          "settingsSection": "Browse-Einstellungen",
+          "settingsSectionHelp": "Administratoren können in normaler Sprache nach dem Verzeichnis fragen und sehen die rohen Einträge: Attribute, Zweige, Gruppenmitglieder. Getrennt von der Personensuche, die nur zugeordnete Felder liefert.",
+          "base": "Browse-Basis",
+          "baseHelp": "Jeder DN, den der Browser liest, muss hier liegen. Leer lassen für den Basis-DN des Verzeichnisses, also das ganze Verzeichnis; einen Zweig angeben, um einzugrenzen, was Administratoren sehen.",
+          "maxResults": "Höchstzahl Einträge pro Suche",
+          "maxResultsHelp": "1 bis {{max}}; leer für {{default}}.",
+          "bind": "Konto zum Browsen",
+          "bindDirectory": "Das Konto des Verzeichnisses",
+          "bindDirectoryHelp": "Das Konto, mit dem das Verzeichnis sucht. Der Browser kann alles lesen, was dieses Konto lesen kann.",
+          "bindAnonymous": "Anonym",
+          "bindAnonymousHelp": "Nur, was das Verzeichnis anonymen Clients zeigt.",
+          "bindService": "Ein eigenes Konto",
+          "bindServiceHelp": "Ein Nur-Lese-Konto mit genau der Reichweite, die Administratoren haben sollen.",
+          "bindDirectoryWarning": "Mit dem Konto des Verzeichnisses hat der Browser die volle Reichweite des Personensuche-Kontos. Verwenden Sie ein eigenes Konto, wenn dieses Konto mehr lesen kann, als Administratoren sehen sollen.",
+          "bindDn": "Bind-DN",
+          "password": "Passwort",
+          "passwordHelp": "Wählen Sie die gespeicherten Zugangsdaten, die das Passwort enthalten.",
+          "servicePlaintext": "Ein Dienstkonto bindet nie im Klartext. Verwenden Sie ldaps:// oder StartTLS am Verzeichnis, sonst kann sich der Browser nicht verbinden.",
+          "denyAttributes": "Weitere zurückgehaltene Attribute",
+          "denyAttributesHelp": "Ein Attributname pro Zeile. Passwörter, LAPS- und BitLocker-Geheimnisse, Zertifikate und Fotos werden immer zurückgehalten; ergänzen Sie Attribute, in denen Ihr Verzeichnis weitere Geheimnisse speichert. Zurückgehaltene Attribute können auch nicht in einem Filter vorkommen.",
+          "toolIds": "Tools:",
+          "auditNote": "Jeder Browser-Aufruf wird mit dem verwendeten Filter im Audit-Log festgehalten, nie mit den gelieferten Werten. Über das MCP-Gateway wird der Browser nie angeboten. Die App „LDAP-Browser“ ist bei Auslieferung ausgeschaltet: schalten Sie sie unter Apps ein und geben Sie sie nur Administratorgruppen.",
+          "accessNote": "Nur angemeldete Benutzer browsen. Persönliche API-Schlüssel, OAuth-Clients und Agenten nie, unabhängig von ihren Gruppen. Rohe Einträge sind nicht für jeden: geben Sie diesen Browser nur Administratorgruppen frei, nicht mit „*“.",
+          "errorsTitle": "Bitte prüfen Sie diese Felder",
+          "errors": {
+            "directoryRequired": "Wählen Sie das Personenverzeichnis, dessen Verbindung der Browser nutzt.",
+            "limitRange": "Geben Sie eine ganze Zahl von {{min}} bis {{max}} ein.",
+            "bindDnRequired": "Geben Sie den Bind-DN ein.",
+            "passwordRefRequired": "Wählen Sie die Zugangsdaten, die das Passwort enthalten.",
+            "attributeName": "„{{name}}“ ist kein LDAP-Attributname."
+          },
+          "testResults": "Verbindungstest des LDAP-Browsers",
+          "testHelp": "Prüft das genutzte Verzeichnis, die Adresse, die Verbindung, StartTLS und den Bind mit dem Konto des Browsers und listet die Einträge direkt unter der Browse-Basis, mit den Werten oben (ungespeichert)."
+        },
+        "entra": {
+          "registrationSection": "App-Registrierung",
+          "registrationSectionHelp": "iHub schlägt Personen über Microsoft Graph mit den Client-Zugangsdaten einer App-Registrierung nach, nicht als angemeldeter Benutzer. Geben Sie der Registrierung die Anwendungsberechtigungen User.Read.All und GroupMember.Read.All mit Administratorzustimmung.",
+          "tenantId": "Mandanten-ID",
+          "tenantIdHelp": "Die Verzeichnis-ID (Mandanten-ID) Ihres Entra-ID-Mandanten.",
+          "clientId": "Anwendungs-ID (Client-ID)",
+          "clientIdHelp": "Die App-Registrierung mit den Graph-Anwendungsberechtigungen.",
+          "clientSecret": "Client-Secret",
+          "clientSecretHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret der App-Registrierung (Administration → Zugangsdaten). Das Secret wird nie in der Installation gespeichert.",
+          "envUsed": "Leer: {{variable}} wird verwendet (auf dem Server gesetzt).",
+          "envMissing": "Leer, und {{variable}} ist auf dem Server nicht gesetzt.",
+          "envFallback": "Leer: die Umgebungsvariable {{variable}} wird verwendet.",
+          "notGuid": "Das sieht nicht nach einer ID aus Entra ID aus (einer GUID).",
+          "incomplete": "Ohne {{fields}} kann sich das Verzeichnis nicht anmelden: füllen Sie die Felder aus oder setzen Sie die Umgebungsvariablen auf dem Server.",
+          "testResults": "Verbindungstest Entra ID",
+          "testHelp": "Holt ein Token mit den Werten oben (ungespeichert), ersatzweise mit den AZURE_*-Variablen, und liest einen Benutzer über Microsoft Graph."
+        },
+        "storage": {
+          "registerSection": "iHub beim Anbieter registrieren",
+          "registerSectionHelp": "Der Anbieter schickt Benutzer nach der Anmeldung an diese URL zurück. Sie enthält die Installations-ID „{{id}}“, die sich nie ändert.",
+          "redirectToRegister": "Zu registrierende Redirect-URI",
+          "register": {
+            "office365": "Azure-Portal → Microsoft Entra ID → App-Registrierungen → Ihre App → Authentifizierung → Plattform „Web“ → Umleitungs-URIs.",
+            "googledrive": "Google Cloud Console → APIs & Dienste → Anmeldedaten → Ihr OAuth-2.0-Client (Webanwendung) → Autorisierte Weiterleitungs-URIs.",
+            "nextcloud": "Nextcloud → Verwaltungseinstellungen → Sicherheit → OAuth-2.0-Clients → einen Client mit dieser Redirect-URI hinzufügen."
+          },
+          "redirectDerivedHelp": "So abgeleitet, wie der Server sie aus jeder Anfrage ableitet: diese Adresse, der Basispfad und der Callback-Pfad. Das Feld unten setzen, wenn der Anbieter eine andere Adresse sehen muss (eine ungewöhnliche Proxy-Einrichtung).",
+          "redirectConfiguredHelp": "Die unten eingetragene Redirect-URI gilt für jede Anmeldung.",
+          "redirectUri": "Redirect-URI (optional)",
+          "redirectUriHelp": "Leer lassen, damit sie aus jeder Anfrage abgeleitet wird (empfohlen).",
+          "oauthSection": "OAuth-App",
+          "oauthSectionHelp": {
+            "office365": "Die Azure-App-Registrierung, mit der sich Benutzer anmelden (Microsoft Graph, delegierte Berechtigungen).",
+            "googledrive": "Der OAuth-2.0-Client (Webanwendung) Ihres Google-Cloud-Projekts mit aktivierter Drive-API.",
+            "nextcloud": "Der Nextcloud-Server und der darin registrierte OAuth-2.0-Client."
+          },
+          "serverUrl": "Nextcloud-Server-URL",
+          "serverUrlHelp": "Die Basis-URL der Instanz (ohne abschließenden Schrägstrich); Basis für OAuth, OCS und WebDAV.",
+          "tenantId": "Verzeichnis-ID (Mandanten-ID)",
+          "tenantIdHelp": "Eine Kennung, kein Geheimnis: wird in der Installation als Klartext gespeichert.",
+          "clientId": "Client-ID",
+          "clientSecret": "Client-Secret",
+          "clientSecretHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem Client-Secret (Admin → Integrationen → Zugangsdaten).",
+          "sourcesSection": "Quellen, die Benutzer durchsuchen dürfen",
+          "sourcesSectionHelp": {
+            "office365": "Die Anmeldung fragt nur die Microsoft-Graph-Berechtigungen an, die die angehakten Quellen brauchen; schalten Sie ab, wofür Ihr Mandant keine Zustimmung gibt.",
+            "googledrive": "Die Dateiauswahl bietet nur die angehakten Quellen an."
+          },
+          "sources": {
+            "personalDrive": "Persönliches OneDrive",
+            "personalDriveHelp": "Fragt nur Files.Read an; dem stimmen Benutzer selbst zu.",
+            "followedSites": "Gefolgte SharePoint-Sites",
+            "followedSitesHelp": "Fragt Sites.Read.All und Files.Read.All an (Administratorzustimmung).",
+            "teams": "Microsoft Teams",
+            "teamsHelp": "Fragt Team.ReadBasic.All, Channel.ReadBasic.All und Files.Read.All an (Administratorzustimmung).",
+            "myDrive": "Meine Ablage",
+            "sharedDrives": "Geteilte Ablagen",
+            "sharedWithMe": "Für mich freigegeben"
+          },
+          "noSource": "Keine Quelle angehakt: Benutzer können sich verbinden, aber nichts durchsuchen.",
+          "siteUrl": "SharePoint-Site-URL",
+          "siteUrlHelp": "Zugriff auf eine SharePoint-Site beschränken.",
+          "driveId": "Laufwerks-ID",
+          "driveIdHelp": "Zugriff auf ein Laufwerk beschränken.",
+          "connectionsSection": "Verbindung und Benutzer",
+          "connectionsSectionHelp": "Jeder Benutzer verbindet sein eigenes Konto, unter Einstellungen → Integrationen oder aus der Dateiauswahl. Verbindungen werden je Installation gespeichert.",
+          "statusEnabled": "Aktiviert: Benutzer, deren Gruppen sie freigeben, können sich verbinden.",
+          "statusDisabled": "Deaktiviert: Benutzer können sich weder verbinden noch Dateien daraus auswählen.",
+          "connectedUsers": "{{count}} Benutzer verbunden",
+          "testResults": "Test des Speicheranbieters",
+          "testHelp": "Prüft die Werte oben (ungespeichert): Client und Secret, die Anbieter-Einstellungen, die Redirect-URI, ob der Anbieter antwortet, und wie viele Benutzer verbunden sind. Die Anmeldung braucht einen Browser: unter Einstellungen → Integrationen verbinden.",
+          "errors": {
+            "required": {
+              "tenantId": "Geben Sie die Verzeichnis-ID (Mandanten-ID) der App-Registrierung ein.",
+              "clientId": "Geben Sie die Client-ID der OAuth-App ein.",
+              "clientSecretRef": "Wählen Sie den Zugangsdaten-Eintrag mit dem Client-Secret.",
+              "serverUrl": "Geben Sie die URL des Nextcloud-Servers ein."
+            },
+            "url": "Geben Sie eine http(s)-URL ein.",
+            "redirectPath": "Die Redirect-URI muss auf {{path}} enden."
+          }
+        }
+      },
+      "access": {
+        "grantedTo": "Freigegeben für: {{groups}}",
+        "noGroup": "Noch keine Gruppe gibt sie frei: niemand kann sie nutzen.",
+        "help": "Gruppen legen fest, welche Integrationen ihre Mitglieder nutzen dürfen (vererbt wie Apps).",
+        "editOnGroups": "Unter Admin → Gruppen bearbeiten"
+      },
+      "migration": {
+        "status": {
+          "migrationPending": "Migration ausstehend",
+          "migrationFailed": "Migration fehlgeschlagen",
+          "needsReview": "Prüfung nötig"
+        },
+        "changes": {
+          "values_one": "{{count}} Installationswert",
+          "values_other": "{{count}} Installationswerte",
+          "actions_one": "{{count}} Aktion",
+          "actions_other": "{{count}} Aktionen",
+          "apps_one": "{{count}} App-Einbindung",
+          "apps_other": "{{count}} App-Einbindungen"
+        },
+        "warnings": {
+          "actionRemoved": "Die Aktion „{{action}}“ wird aus der App „{{app}}“ entfernt (Einbindung {{key}}); die App bietet sie nicht mehr an.",
+          "typeBindingAction": "Die App „{{app}}“ nennt die Aktion „{{action}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
+          "typeBindingScope": "Die App „{{app}}“ setzt den Bereich „{{scope}}“ in ihrer Typ-Einbindung {{key}}. Diese Einbindung teilen sich mehrere Definitionen, sie wird nicht umgeschrieben: Bearbeiten Sie die App.",
+          "openApp": "App öffnen"
+        },
+        "log": {
+          "title": "Migrationsprotokoll",
+          "empty": "Für diese Installation ist noch keine Migration gelaufen.",
+          "fromTo": "{{from}} → {{to}}",
+          "noVersion": "keine Version",
+          "by": "von {{by}}",
+          "changes": "Geändert: {{changes}}.",
+          "migrations": "Migrationen: {{list}}",
+          "reason": "Grund: {{reason}}",
+          "steps_one": "{{count}} Schritt",
+          "steps_other": "{{count}} Schritte",
+          "backup": "Sicherung: {{backup}}",
+          "results": {
+            "migrated": "Migriert",
+            "stamped": "Version vermerkt",
+            "failed": "Fehlgeschlagen",
+            "rolledBack": "Zurückgerollt",
+            "restored": "Sicherung wiederhergestellt",
+            "adopted": "Version übernommen",
+            "skipped": "Übersprungen"
+          },
+          "triggers": {
+            "manual": "von Hand gestartet",
+            "marketplace": "Marktplatz-Update",
+            "startup": "Serverstart",
+            "recovery": "Wiederherstellung beim Start",
+            "restore": "Wiederherstellung",
+            "downgrade": "Downgrade",
+            "adopt": "Übernahme"
+          }
+        },
+        "actions": {
+          "migrate": "Jetzt migrieren",
+          "rerun": "Migration erneut ausführen",
+          "restore": "Sicherung wiederherstellen",
+          "adopt": "Aktuelle Version übernehmen",
+          "uninstall": "Deinstallieren",
+          "forInstallation": "{{action}}: {{label}}"
+        },
+        "confirm": {
+          "restore": {
+            "title": "Sicherung von {{label}} wiederherstellen?",
+            "message": "Die Werte der Installation, ihre Aktionsauswahl und die Einbindungen ihrer Apps werden auf die Sicherung {{backup}} zurückgesetzt (v{{version}}, erstellt {{date}}). Was sich seitdem geändert hat, wird ersetzt; iHub sichert vorher den aktuellen Stand.",
+            "definition": "Die Sicherung enthält auch die Definition in v{{version}}; ist eine andere Version der Definition geladen, wird sie ebenfalls zurückgespielt."
+          },
+          "adopt": {
+            "title": "v{{version}} für {{label}} übernehmen?",
+            "message": "Sie bestätigen, dass die gespeicherten Werte bereits zu {{definition}} v{{version}} passen. iHub prüft sie wie das Ergebnis einer Migration und vermerkt die Version erst dann; kein Wert wird geändert. Passen Werte nicht, werden sie aufgelistet und nichts wird vermerkt.",
+            "confirm": "Version übernehmen"
+          }
+        },
+        "outcome": {
+          "migrated": "{{label}} wurde von v{{from}} auf v{{to}} migriert.",
+          "stamped": "{{label}} vermerkt jetzt v{{to}}; es musste keine Migration laufen.",
+          "current": "{{label}} ist bereits auf v{{to}}; es musste nichts laufen.",
+          "restored": "Die Sicherung {{backup}} von {{label}} wurde wiederhergestellt; die Installation ist wieder auf v{{to}}.",
+          "adopted": "{{label}} vermerkt jetzt v{{to}}.",
+          "restoreFailed": "Die Sicherung von {{label}} konnte nicht wiederhergestellt werden.",
+          "adoptFailed": "Die aktuelle Version konnte für {{label}} nicht übernommen werden.",
+          "migrateFailed": "Die Migration von {{label}} ist fehlgeschlagen.",
+          "retry": "Es wurde nichts geschrieben. Versuchen Sie es gleich noch einmal.",
+          "open": "{{label}} öffnen",
+          "dismiss": "Schließen"
+        },
+        "panel": {
+          "title": "Definitionsmigration",
+          "pending": "{{definition}} v{{to}} ist geladen; diese Installation vermerkt v{{from}}. Bis sie migriert ist, bietet sie keine Aktionen an, und ihre Einstellungen lassen sich nicht speichern.",
+          "pendingStamp": "{{definition}} v{{to}} ist geladen; diese Installation vermerkt v{{from}}. Zwischen den Versionen liegt keine Migration, sie arbeitet also weiter: „Jetzt migrieren“ (oder das nächste Speichern) vermerkt v{{to}}.",
+          "failed": "Die Migration auf v{{to}} ist fehlgeschlagen und hat nichts geändert: Die Werte sind weiterhin die von v{{from}}. Die Installation bietet keine Aktionen an, bis Sie die Migration erneut ausführen, die Sicherung wiederherstellen oder sie deinstallieren.",
+          "downgrade": "Die geladene Definition v{{to}} ist älter als v{{from}} dieser Installation (ein Downgrade). Migrationen laufen nur vorwärts; die Installation bietet daher keine Aktionen an, bis Sie die Sicherung von v{{to}} wiederherstellen, v{{to}} übernehmen oder sie deinstallieren.",
+          "review": "iHub kann nicht erkennen, für welche Definitionsversion die Werte dieser Installation geschrieben wurden. Sie bietet keine Aktionen an, bis Sie eine Sicherung wiederherstellen, die geladene Version v{{to}} übernehmen oder sie deinstallieren.",
+          "changes": "Die Migrationen {{migrations}} ändern {{changes}}; vorher wird eine Sicherung erstellt.",
+          "noChanges": "Die Migrationen {{migrations}} ändern nichts, was diese Installation speichert; vorher wird eine Sicherung erstellt.",
+          "notPlanned": "Die Migrationen {{migrations}} laufen; was sie ändern, ließ sich nicht im Voraus planen. Vorher wird eine Sicherung erstellt.",
+          "warningsTitle": "Nach der Migration prüfen",
+          "collisionsTitle": "Kollisionen: Die Migration wird fehlschlagen",
+          "collisionsHelp": "Ein Schritt würde etwas überschreiben, das bereits existiert. Entfernen Sie zuerst das Ziel (zum Beispiel in der App), sonst schlägt die Migration fehl und ändert nichts.",
+          "errorsTitle": "Das Ergebnis würde nicht zu v{{to}} passen: Die Migration wird fehlschlagen",
+          "backup": "„Sicherung wiederherstellen“ spielt {{backup}} zurück (v{{version}}, erstellt {{date}}).",
+          "noBackup": "Keine Sicherung dieser Installation passt zu ihrem Zustand; es gibt nichts wiederherzustellen."
+        },
+        "settingsReadOnly": "Die Einstellungen sind schreibgeschützt, bis der Migrationszustand geklärt ist: iHub speichert keine Werte, die für eine andere Definitionsversion geschrieben wurden. Nutzen Sie die Aktionen im Migrationsbereich oben.",
+        "settingsReadOnlyLegend": "Einstellungen (schreibgeschützt)",
+        "noActionsWhileBlocked": "Keine Aktionen, solange der Migrationszustand nicht geklärt ist: Die gespeicherten Werte gehören nicht zur geladenen Definitionsversion."
       }
     },
     "sidebar": {
@@ -3417,7 +4139,39 @@
       "projectSharing": "Projekte teilen",
       "projectSharingHint": "Mitglieder dürfen andere Benutzer, Gruppen oder alle zu Projekten hinzufügen, die sie besitzen oder bearbeiten.",
       "contentAdmin": "Inhalts-Admin (Apps, Prompts, Projekte)",
-      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten"
+      "contentAdminHint": "Mitglieder dürfen Apps, Prompts und Projekte ohne vollen Admin-Zugriff verwalten",
+      "integrations": {
+        "title": "Integrationen",
+        "help": "Welche installierten Integrationen Mitglieder nutzen dürfen. Eine App, die eine Integration einbindet, bietet sie nur Mitgliedern einer Gruppe an, die sie gewährt. Gruppen, die diese Gruppe erben, erhalten dasselbe.",
+        "inheritedHelp": "Angehakt und ausgegraut: von einer geerbten Gruppe gewährt. Dort ändern.",
+        "all": "Alle Integrationen",
+        "allHelp": "Jede installierte Integration, auch später installierte.",
+        "none": "Mitglieder dieser Gruppe dürfen keine Integration nutzen.",
+        "loading": "Integrationen werden geladen…",
+        "loadError": "Die installierten Integrationen konnten nicht geladen werden: {{error}}",
+        "sections": {
+          "peopleDirectories": "Personenverzeichnisse",
+          "webSearch": "Websuche",
+          "storage": "Speicheranbieter",
+          "mcp": "MCP-Server",
+          "a2a": "Agenten",
+          "builtIn": "Integriert",
+          "catalog": "Aus dem Katalog"
+        },
+        "allPeopleDirectories": "Alle Personenverzeichnisse",
+        "allWebSearch": "Alle Websuchmaschinen",
+        "allStorage": "Alle Speicheranbieter",
+        "allOfTypeHelp": "Jede Installation dieser Art, auch später installierte (derzeit {{count}}).",
+        "allInstallations": "Alle Installationen von {{name}}",
+        "allInstallationsHelp": "Jede Installation dieser Integration, auch später installierte (derzeit {{count}}).",
+        "noneInstalled": "Noch nichts installiert.",
+        "disabled": "deaktiviert",
+        "via": "über {{groups}}",
+        "with": "mit {{name}}",
+        "other": "Weitere Einträge",
+        "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
+        "remove": "{{key}} entfernen"
+      }
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -4442,7 +5196,8 @@
         "features": "Funktionen",
         "fixes": "Fehlerbehebungen"
       }
-    }
+    },
+    "translateField": "Übersetzen"
   },
   "cloudStorage": {
     "selectFiles": "Dateien aus Cloud-Speicher auswählen",

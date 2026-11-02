@@ -370,8 +370,9 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       }
 
       // Whether web search can work for this app, per model (the model
-      // picker marks the models it works with).
-      const websearchAvailability = await describeWebSearchAvailability(appData);
+      // picker marks the models it works with): native search, or the app's
+      // engine as far as this user's groups grant it.
+      const websearchAvailability = await describeWebSearchAvailability(appData, req.user);
       res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
     } catch (error) {
       return sendInternalError(res, error, 'fetch app details');

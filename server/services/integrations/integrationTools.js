@@ -3,8 +3,14 @@
 
 import logger from '../../utils/logger.js';
 import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
-import { expandUserGroups } from '../../utils/groupInheritance.js';
+import { isToolSelected } from '../../utils/toolSelection.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
+import { bindingKeyOfType, getDefinitionTypes } from './integrationTypes.js';
+import {
+  grantsIntegration,
+  integrationPermissionsOf,
+  mayUseIntegration
+} from './integrationAccess.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import {
@@ -71,7 +77,7 @@ function toolFromAction(resolved, action, language) {
       definition: definition.id,
       // A built-in that kept the tool id it had before (`iFinder_search`).
       fixedToolId: action.toolId !== `${instance.id}__${action.name}`,
-      // Bound only when a binding names the action (a directory's LDAP browser).
+      // Bound only when a binding names the action (`bindExplicitly` in the definition).
       ...(action.bindExplicitly ? { bindExplicitly: true } : {})
     },
     sideEffect: action.sideEffect,
@@ -80,26 +86,64 @@ function toolFromAction(resolved, action, language) {
     examples: action.examples,
     sources: action.sources,
     instructions: localized(definition.instructions, language) || undefined,
-    // A connector may add fields of its own (a people directory's marker).
+    // A connector may add fields of its own (a people directory's or an LDAP browser's marker).
     ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
   };
 }
 
 /**
+ * The key under `app.integrations` that binds an installation: its own id,
+ * else its definition id, else its definition's type key (`type:<type>`).
+ * Null when the app binds none of them.
+ * @param {object} app
+ * @param {{ id: string, definition?: string }|null|undefined} instance
+ * @returns {string|null}
+ */
+export function bindingKeyFor(app, instance) {
+  const bindings = app?.integrations;
+  if (!bindings || typeof bindings !== 'object' || !instance?.id) return null;
+  if (Object.hasOwn(bindings, instance.id)) return instance.id;
+  if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
+    return instance.definition;
+  }
+  const types = getDefinitionTypes();
+  const type =
+    instance.definition && Object.hasOwn(types, instance.definition)
+      ? types[instance.definition]
+      : null;
+  if (type && Object.hasOwn(bindings, bindingKeyOfType(type))) return bindingKeyOfType(type);
+  return null;
+}
+
+/**
  * The binding an app has for an installation: its own, else the one of its
- * definition. Null when the app binds neither.
+ * definition, else the one of its definition's type (`type:<type>`). Null
+ * when the app binds none of them.
  * @param {object} app
  * @param {{ id: string, definition?: string }} instance
  * @returns {object|null}
  */
 export function appBindingFor(app, instance) {
-  const bindings = app?.integrations;
-  if (!bindings || typeof bindings !== 'object' || !instance?.id) return null;
-  if (Object.hasOwn(bindings, instance.id)) return bindings[instance.id] || {};
-  if (instance.definition && Object.hasOwn(bindings, instance.definition)) {
-    return bindings[instance.definition] || {};
-  }
-  return null;
+  const key = bindingKeyFor(app, instance);
+  return key === null ? null : app.integrations[key] || {};
+}
+
+/**
+ * Whether a chat's `enabledTools` keeps a tool the app binds under
+ * `app.integrations`. The chat names a bound integration by the key the app
+ * binds it with, so a definition id (`com.intrafind/office365`) or a type key
+ * (`type:storage`) keeps the tools of every installation it binds, exactly as
+ * an installation id keeps its own.
+ * @param {object} app
+ * @param {object} tool - a tool `getIntegrationToolsForApp` returned
+ * @param {string[]} enabledTools
+ * @returns {boolean}
+ */
+export function isBoundToolEnabled(app, tool, enabledTools) {
+  if (isToolSelected(tool, enabledTools)) return true;
+  const instance = installedIntegrationService.get(tool?._integration?.instanceId);
+  const key = bindingKeyFor(app, instance);
+  return key !== null && enabledTools.includes(key);
 }
 
 /**
@@ -148,33 +192,32 @@ export async function discoverIntegrationTools(language = null) {
 }
 
 /**
- * Whether the installation's `allowedGroups` admit the user (every user when
- * the list is empty). Holds on top of every tool grant and app binding.
+ * Whether the user's groups grant the installation (`permissions.integrations`:
+ * `*`, its id, its definition id or its type key; see `integrationAccess.js`).
+ * Holds on top of every tool grant and app binding.
  * @param {object} instance
  * @param {object} user
  */
 export function userMayUse(instance, user) {
-  const allowed = instance.allowedGroups || [];
-  if (allowed.length === 0) return true;
-  // Inherited groups count: an installation open to `users` is open to
-  // `admins`, who inherit it (groups.json `inherits`).
-  const groups = expandUserGroups(Array.isArray(user?.groups) ? user.groups : []);
-  return allowed.some(g => groups.has(g));
+  return mayUseIntegration(instance, user);
 }
 
 /**
- * Drop the integration tools of installations whose groups exclude the user
- * (or whose installation is gone or disabled). An installation's groups hold
- * on top of every tool grant: `runIntegrationTool` refuses such a call, so
- * the listing must not offer it either.
+ * Drop the integration tools of installations the user's groups do not grant
+ * (or whose installation is gone or disabled). The grant holds on top of
+ * every tool grant: `runIntegrationTool` refuses such a call, so the listing
+ * must not offer it either. The user's grants are resolved once per call.
  * @param {Array} tools
  * @param {object} user
  */
 export function filterIntegrationToolsForUser(tools, user) {
+  let granted = null;
   return tools.filter(tool => {
     if (!isIntegrationTool(tool)) return true;
     const instance = installedIntegrationService.get(tool._integration.instanceId);
-    return Boolean(instance) && instance.enabled !== false && userMayUse(instance, user);
+    if (!instance || instance.enabled === false) return false;
+    granted ??= integrationPermissionsOf(user);
+    return grantsIntegration(granted, instance);
   });
 }
 
@@ -202,6 +245,7 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
   const bindings = app?.integrations;
   if (!bindings || typeof bindings !== 'object') return [];
   const out = [];
+  let granted = null;
   for (const tool of allTools) {
     if (!isIntegrationTool(tool)) continue;
     const { instanceId, action } = tool._integration;
@@ -209,7 +253,8 @@ export function getIntegrationToolsForApp(app, allTools, context = {}) {
     if (!instance || instance.enabled === false) continue;
     const binding = appBindingFor(app, instance);
     if (!binding) continue;
-    if (!userMayUse(instance, context.user)) continue;
+    granted ??= integrationPermissionsOf(context.user);
+    if (!grantsIntegration(granted, instance)) continue;
     // `actions` absent: every action except those bound explicitly only; a
     // list (even empty): exactly those. An empty list binds the installation
     // for its scopes and nothing else.
@@ -236,6 +281,13 @@ export async function runIntegrationTool(tool, params = {}, options = {}) {
   if (resolved.incompatible) {
     throw new Error(
       `Integration ${instanceId} cannot run: its definition ${resolved.statusReason || 'is incompatible with this server version'}`
+    );
+  }
+  if (resolved.blocked) {
+    // A failed or pending migration, or an installation that needs a
+    // review: its values are not served against the loaded definition.
+    throw new Error(
+      `Integration ${instanceId} cannot run: ${resolved.migration?.status || 'migration'} (${resolved.migration?.statusReason || 'see Admin → Integrations'})`
     );
   }
   if (resolved.instance.enabled === false) {
@@ -311,8 +363,8 @@ function scopeProviderFor(resolved) {
     id: instanceId,
     name: label,
     action: 'search',
-    // A user outside the installation's groups gets none of its tools, so
-    // the scope picker and the "limited to" note would be about nothing.
+    // A user whose groups do not grant the installation gets none of its
+    // tools, so the scope picker and the "limited to" note would be about nothing.
     appliesTo: ({ app, user }) =>
       Boolean(appBindingFor(app, instance)) && userMayUse(instance, user),
     describeForModel: scopeId => {

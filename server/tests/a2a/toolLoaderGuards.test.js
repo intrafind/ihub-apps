@@ -49,7 +49,12 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => ({ defaultLanguage: 'en' }),
     getWorkflows: () => ({ data: [] }),
     getFeatures: () => ({}),
-    getIntegrations: () => ({ data: { installed } })
+    getIntegrations: () => ({ data: { installed } }),
+    // The callers here are anonymous; their group may use every integration
+    // (`permissions.integrations`, #3093).
+    getGroups: () => ({
+      data: { groups: { anonymous: { id: 'anonymous', permissions: { integrations: ['*'] } } } }
+    })
   }
 }));
 jest.unstable_mockModule('../../services/mcp/McpClientManager.js', () => ({

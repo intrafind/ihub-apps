@@ -299,38 +299,12 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                   parseNumberOrUndefined={parseNumberOrUndefined}
                 />
 
-                <div>
-                  <div className="flex items-center mb-2">
-                    <input
-                      type="checkbox"
-                      checked={app.upload?.cloudStorageUpload?.enabled || false}
-                      onChange={e =>
-                        onChange(
-                          'upload',
-                          updateIn(
-                            app.upload || {},
-                            ['cloudStorageUpload', 'enabled'],
-                            e.target.checked
-                          )
-                        )
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
-                    />
-                    <label className="ml-2 block text-sm font-medium text-gray-900">
-                      {t('admin.apps.edit.enableCloudStorageUpload', 'Enable Cloud Storage Upload')}
-                    </label>
-                  </div>
-                  {app.upload?.cloudStorageUpload?.enabled && (
-                    <div className="ml-6">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {t(
-                          'admin.apps.edit.cloudStorageUploadDesc',
-                          'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
-                        )}
-                      </p>
-                    </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.apps.edit.cloudStorageMoved',
+                    'Files from storage providers (Office 365, Google Drive, Nextcloud): bind the providers under Integrations → Storage providers.'
                   )}
-                </div>
+                </p>
               </div>
             )}
           </div>

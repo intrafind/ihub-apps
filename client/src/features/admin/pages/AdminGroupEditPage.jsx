@@ -34,6 +34,8 @@ function AdminGroupEditPage() {
     tools: []
   });
   const [jsonSchema, setJsonSchema] = useState(null);
+  // Every group, so the editor can show what this one inherits.
+  const [allGroups, setAllGroups] = useState({});
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, group);
 
@@ -50,6 +52,7 @@ function AdminGroupEditPage() {
           apps: [],
           prompts: [],
           models: [],
+          integrations: [],
           adminAccess: false
         },
         mappings: [],
@@ -58,6 +61,7 @@ function AdminGroupEditPage() {
       setGroup(defaultGroup);
       setInitialData(defaultGroup);
       setLoading(false);
+      void loadAllGroups();
     } else {
       loadGroup();
     }
@@ -70,6 +74,15 @@ function AdminGroupEditPage() {
       setResources(data);
     } catch (error) {
       console.error('Failed to load resources:', error);
+    }
+  };
+
+  const loadAllGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      setAllGroups(response.data?.groups || {});
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -92,6 +105,7 @@ function AdminGroupEditPage() {
       if (!groupData) {
         throw new Error('Group not found');
       }
+      setAllGroups(data.groups || {});
 
       setGroup(groupData);
       setInitialData(groupData);
@@ -237,6 +251,7 @@ function AdminGroupEditPage() {
             formComponent={GroupFormEditor}
             formProps={{
               resources,
+              groups: allGroups,
               jsonSchema
             }}
             jsonSchema={jsonSchema}

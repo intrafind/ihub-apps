@@ -19,6 +19,7 @@ import {
 import { parseOpenApiText } from '../../tools/openApiText.js';
 import { checkScriptCodeFiles } from './scriptModule.js';
 import { checkCompatibility, describeIncompatibility } from './compatibility.js';
+import { publishDefinitionTypes } from '../integrationTypes.js';
 
 /**
  * Loads integration definitions (the catalog) from two trees:
@@ -68,6 +69,8 @@ export class IntegrationRegistry {
    */
   constructor(options = {}) {
     this.shippedDir = options.shippedDir || defaultShippedDir;
+    /** Whether loads publish the definitions' types (the shared instance only). */
+    this.publishesTypes = options.publishTypes === true;
     this.contentsDirOverride = options.contentsDir;
     /** @type {Map<string, object>} id → entry */
     this.entries = new Map();
@@ -102,6 +105,7 @@ export class IntegrationRegistry {
       }
       this.entries = entries;
       this.loaded = true;
+      if (this.publishesTypes) publishDefinitionTypes(entries.values());
       logger.info('Integration definitions loaded', {
         component: COMPONENT,
         count: entries.size,
@@ -168,15 +172,175 @@ export class IntegrationRegistry {
 
   /**
    * Write an installed definition folder from a map of relative paths to
-   * contents (text or JSON), replacing what was there. Used by the marketplace.
+   * contents (text or JSON), replacing what was there, then reload and tell
+   * the other workers. {@link IntegrationRegistry#stageInstalled} followed by
+   * {@link IntegrationRegistry#commitStaged}; the marketplace update uses the
+   * two halves on their own, so the definition moves in together with its
+   * installations' migrated values (versioning concept §3, trigger 1).
    *
    * @param {string} id - definition id (validated against the files' integration.json)
    * @param {Record<string, string|object>} files - relative path → content
    */
   async writeInstalled(id, files) {
+    const staged = await this.stageInstalled(id, files);
+    await this.commitStaged(staged);
+    await this.reload();
+    this._announce();
+    return this.get(id);
+  }
+
+  /**
+   * Validate a definition folder and write it to a staging folder next to the
+   * installed ones, without touching the working folder. The staging folder
+   * is dot-prefixed, so it is never loaded. Throws (and removes the staging
+   * folder) when the definition, a companion path, the connector module or
+   * the OpenAPI document is not acceptable.
+   *
+   * @param {string} id - definition id
+   * @param {Record<string, string|object>} files - relative path → content
+   * @returns {Promise<{ id: string, dir: string, staging: string, definition: object }>}
+   */
+  async stageInstalled(id, files) {
     const definitionFile = files[DEFINITION_FILE];
     if (!definitionFile) throw new Error(`${DEFINITION_FILE} is missing`);
     const raw = typeof definitionFile === 'string' ? JSON.parse(definitionFile) : definitionFile;
+    const definition = this._validateForInstall(id, raw, files);
+    const dir = await this._installedDir(id);
+    const staging = this._helperFolder('staging');
+    await fs.mkdir(staging, { recursive: true });
+    try {
+      for (const [relPath, content] of Object.entries(files)) {
+        const target = await resolveAndValidatePath(relPath, staging);
+        if (!target) throw new Error(`Path traversal detected in integration file: ${relPath}`);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+        await fs.writeFile(target, text, 'utf8');
+      }
+      const { type, document } = definition.protocol;
+      if (type === 'openapi' && !isHttpUrl(document)) {
+        await this._readDocument(staging, document);
+      }
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true });
+      throw error;
+    }
+    return { id, dir, staging, definition };
+  }
+
+  /**
+   * Stage a copy of a definition folder (a backup's copy, restored). The copy
+   * is validated like an install, so a damaged backup never replaces a
+   * working folder.
+   *
+   * @param {string} id - definition id
+   * @param {string} sourceDir - absolute folder to copy
+   * @returns {Promise<{ id: string, dir: string, staging: string, definition: object }>}
+   */
+  async stageCopy(id, sourceDir) {
+    const dir = await this._installedDir(id);
+    const staging = this._helperFolder('staging');
+    await fs.mkdir(this.contentsDir, { recursive: true });
+    try {
+      await fs.cp(sourceDir, staging, { recursive: true, errorOnExist: true });
+      const raw = JSON.parse(await fs.readFile(path.join(staging, DEFINITION_FILE), 'utf8'));
+      const definition = this._validateForInstall(id, raw, null);
+      if (definition.protocol.type === 'script') {
+        await fs.access(path.join(staging, definition.protocol.module));
+      }
+      const { type, document } = definition.protocol;
+      if (type === 'openapi' && !isHttpUrl(document)) {
+        await this._readDocument(staging, document);
+      }
+      return { id, dir, staging, definition };
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  /**
+   * Put a staged folder in place. The working folder is moved aside first;
+   * with `keepPrevious` it stays aside and its path is returned, so a commit
+   * that fails later can put it back ({@link IntegrationRegistry#restorePrevious}).
+   * Without it the previous folder is removed. Neither reloads nor
+   * announces: the caller does that once everything that belongs together
+   * is written.
+   *
+   * @param {{ dir: string, staging: string, id: string }} staged
+   * @param {{ keepPrevious?: boolean }} [options]
+   * @returns {Promise<{ previous: string|null }>} where the previous folder waits, when kept
+   */
+  async commitStaged(staged, { keepPrevious = false } = {}) {
+    const backup = this._helperFolder('backup');
+    const hadPrevious = await this._moveAside(staged.dir, backup);
+    try {
+      await this._swapIn(staged.staging, staged.dir);
+    } catch (error) {
+      await fs.rm(staged.staging, { recursive: true, force: true });
+      if (hadPrevious) await fs.rename(backup, staged.dir);
+      throw error;
+    }
+    if (!hadPrevious) return { previous: null };
+    if (keepPrevious) return { previous: backup };
+    await this._removePrevious(staged.id, backup);
+    return { previous: null };
+  }
+
+  /**
+   * Undo {@link IntegrationRegistry#commitStaged} with `keepPrevious`: the
+   * folder that was moved in is removed and the previous one put back (or,
+   * when there was none, the folder is just removed).
+   *
+   * @param {{ dir: string }} staged
+   * @param {string|null} previous - what `commitStaged` returned
+   */
+  async restorePrevious(staged, previous) {
+    await fs.rm(staged.dir, { recursive: true, force: true });
+    if (previous) await fs.rename(previous, staged.dir);
+  }
+
+  /** Remove a previous folder kept aside by `commitStaged` once its commit is final. */
+  async dropPrevious(id, previous) {
+    if (previous) await this._removePrevious(id, previous);
+  }
+
+  /** Remove a staged folder that will not be committed. */
+  async discardStaged(staged) {
+    if (staged?.staging) await fs.rm(staged.staging, { recursive: true, force: true });
+  }
+
+  async _removePrevious(id, backup) {
+    // The new folder is in place; a backup that cannot be removed (a file
+    // lock on Windows) must not fail the install or skip the reload.
+    try {
+      await fs.rm(backup, { recursive: true, force: true });
+    } catch (error) {
+      logger.warn('Previous integration definition folder could not be removed', {
+        component: 'IntegrationRegistry',
+        id,
+        backup,
+        error: error.message
+      });
+    }
+  }
+
+  /** A dot-prefixed helper folder next to the installed definitions (never loaded). */
+  _helperFolder(kind) {
+    const stamp = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return path.join(this.contentsDir, `.${kind}-${stamp}`);
+  }
+
+  /**
+   * The checks an installed definition passes before it is staged: known
+   * format revision, the schema, the id, a script's code files, an MCP
+   * transport a registry may publish.
+   *
+   * @param {string} id
+   * @param {object} raw - parsed integration.json
+   * @param {Record<string, string|object>|null} files - the package files (null for a folder copy)
+   * @returns {object} the validated definition
+   */
+  _validateForInstall(id, raw, files) {
     const revision = definitionSchemaRevision(raw);
     if (!revision.supported) {
       const error = new Error(
@@ -193,7 +357,7 @@ export class IntegrationRegistry {
     if (validation.data.id !== id) {
       throw new Error(`Definition id "${validation.data.id}" does not match "${id}"`);
     }
-    if (validation.data.protocol.type === 'script') {
+    if (validation.data.protocol.type === 'script' && files) {
       const moduleFile = validation.data.protocol.module;
       if (typeof files[moduleFile] !== 'string') {
         throw new Error(`Connector module "${moduleFile}" is missing from the integration files`);
@@ -211,57 +375,16 @@ export class IntegrationRegistry {
         );
       }
     }
-    const dir = await this._installedDir(id);
-    // Written to a staging folder first: a bad companion path, a failed write
-    // or an unreadable OpenAPI document must not have touched the working
-    // folder. The working folder is moved aside, not deleted, until the
-    // staging folder is in place, so a failed swap restores it. Both helper
-    // folders are dot-prefixed, so a leftover is never loaded.
-    const stamp = `${process.pid}-${Date.now()}`;
-    const staging = path.join(this.contentsDir, `.staging-${stamp}`);
-    const backup = path.join(this.contentsDir, `.backup-${stamp}`);
-    await fs.mkdir(staging, { recursive: true });
-    try {
-      for (const [relPath, content] of Object.entries(files)) {
-        const target = await resolveAndValidatePath(relPath, staging);
-        if (!target) throw new Error(`Path traversal detected in integration file: ${relPath}`);
-        await fs.mkdir(path.dirname(target), { recursive: true });
-        const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-        await fs.writeFile(target, text, 'utf8');
-      }
-      const { type, document } = validation.data.protocol;
-      if (type === 'openapi' && !isHttpUrl(document)) {
-        await this._readDocument(staging, document);
-      }
-    } catch (error) {
-      await fs.rm(staging, { recursive: true, force: true });
-      throw error;
-    }
-    const hadPrevious = await this._moveAside(dir, backup);
-    try {
-      await this._swapIn(staging, dir);
-    } catch (error) {
-      await fs.rm(staging, { recursive: true, force: true });
-      if (hadPrevious) await fs.rename(backup, dir);
-      throw error;
-    }
-    if (hadPrevious) {
-      // The new folder is in place; a backup that cannot be removed (a file
-      // lock on Windows) must not fail the install or skip the reload.
-      try {
-        await fs.rm(backup, { recursive: true, force: true });
-      } catch (error) {
-        logger.warn('Previous integration definition folder could not be removed', {
-          component: 'IntegrationRegistry',
-          id,
-          backup,
-          error: error.message
-        });
-      }
-    }
-    await this.reload();
-    this._announce();
-    return this.get(id);
+    return validation.data;
+  }
+
+  /**
+   * The folder an installed definition lives in (absolute), whether or not
+   * it exists; the folder the runner copies into a backup.
+   * @param {string} id
+   */
+  async installedDir(id) {
+    return this._installedDir(id);
   }
 
   /**
@@ -502,5 +625,5 @@ export class IntegrationRegistry {
 
 export { dirNameToDefinitionId };
 
-const integrationRegistry = new IntegrationRegistry();
+const integrationRegistry = new IntegrationRegistry({ publishTypes: true });
 export default integrationRegistry;

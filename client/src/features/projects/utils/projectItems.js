@@ -40,8 +40,10 @@ export const CLOUD_ITEM_KINDS = Object.freeze(['office365', 'google-drive', 'nex
 export const PROJECT_ITEM_KIND = 'project-item';
 
 /**
- * The `platform.cloudStorage.providers[].type` each cloud kind reads from
- * (the kind's `picker.provider` says the same; this is the fallback).
+ * The storage provider type (`cloudStorage.providers[].type` of
+ * `/api/auth/status`) each cloud kind reads from; every installation of that
+ * provider is offered (the kind's `picker.provider` says the same; this is the
+ * fallback).
  */
 export const CLOUD_PROVIDER_TYPE_BY_KIND = Object.freeze({
   office365: 'office365',

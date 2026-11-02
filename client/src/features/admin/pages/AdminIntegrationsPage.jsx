@@ -1,253 +1,614 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import AdminIntegrationHubPage from '../components/AdminIntegrationHubPage';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import Icon from '../../../shared/components/Icon';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-import { makeAdminApiCall } from '../../../api/adminApi';
-import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
+import AdminTabs from '../components/AdminTabs';
+import AdminLoadError from '../components/AdminLoadError';
+import IntegrationTestResults from '../components/IntegrationTestResults';
+import IntegrationInstallDialog from '../components/integrations/IntegrationInstallDialog';
+import IntegrationConnectionsDialog from '../components/integrations/IntegrationConnectionsDialog';
+import IntegrationGroupSection from '../components/integrations/IntegrationGroupSection';
+import InstallationTile from '../components/integrations/InstallationTile';
+import CatalogTile from '../components/integrations/CatalogTile';
+import InboundIntegrations from '../components/integrations/InboundIntegrations';
+import {
+  MigrationConfirmDialog,
+  MigrationOutcome
+} from '../components/integrations/MigrationParts';
+import useMigrationActions from '../components/integrations/useMigrationActions';
+import { groupIntegrations } from '../components/integrations/integrationGroups';
+import { appsBindingInstallation } from '../components/integrations/integrationBindings';
+import { groupsGranting } from '../utils/groupIntegrationAccess';
+import {
+  CALLOUT_CLASS,
+  INPUT_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS
+} from '../components/formStyles';
+import {
+  deleteInstalledIntegration,
+  fetchInstalledIntegrations,
+  fetchIntegrationCatalog,
+  reloadIntegrationCatalog,
+  setInstalledIntegrationEnabled,
+  testInstalledIntegration
+} from '../../../api/integrationsAdminApi';
+import {
+  fetchAdminApps,
+  fetchAdminGroups,
+  fetchAdminPlatformConfig,
+  getAdminApiErrorMessage
+} from '../../../api/adminApi';
 
-/** The built-in definition of the LDAP people directories (one installation per directory). */
-const LDAP_DIRECTORY_DEFINITION = 'com.intrafind/ldap-directory';
-/** The cloud storage installations (one singleton per provider), by card id. */
-const CLOUD_STORAGE_INSTALLATIONS = {
-  office365: 'office365',
-  'google-drive': 'googledrive',
-  nextcloud: 'nextcloud'
-};
+const TABS = new Set(['installed', 'catalog', 'inbound']);
+
+/** Marketplace item names are definition folder names: `/` became `__`. */
+export function definitionIdFromParam(value) {
+  return value ? value.replace('__', '/') : null;
+}
 
 /**
- * Integrations landing page — single entry point for every external system
- * iHub talks to. Renders the AdminIntegrationHubPage shell with status pills,
- * category grouping, and search. Each card links to the dedicated subpage where
- * the admin actually configures the integration.
+ * Prefilled install values from a deep link: `v.<key>=<value>` parameters
+ * (`?install=com.intrafind__ldap-directory&v.authProvider=corp-ad`) and the
+ * `label` parameter. Another page (the LDAP sign-in providers) opens the
+ * install dialog this way with its own context filled in.
  *
- * Status detection:
- *   - Cloud storage providers → the `office365`, `googledrive` and `nextcloud`
- *     installations (`GET /admin/integrations/installed`)
- *   - Outlook / Nextcloud Embed → corresponding feature flag in platform.features
- *   - People directories → at least one enabled installation of the LDAP people
- *     directory definition (`GET /admin/integrations/installed`)
+ * @param {URLSearchParams} params
+ * @returns {{ values: Object<string,string>, label: string }}
+ */
+export function prefillFromParams(params) {
+  const values = {};
+  for (const [key, value] of params.entries()) {
+    if (key.startsWith('v.') && key.length > 2) values[key.slice(2)] = value;
+  }
+  const label = params.get('label') || '';
+  return { values, label };
+}
+
+/**
+ * Whether an installation or catalog definition matches the search text
+ * (label, name, id, definition, description, categories).
  *
- * If platform config can't be loaded the cards still render but show "Available".
+ * @param {Object} entry
+ * @param {string} query - lower-cased, trimmed
+ * @returns {boolean}
+ */
+export function matchesIntegrationQuery(entry, query) {
+  if (!query) return true;
+  const texts = [
+    entry.label,
+    entry.name,
+    entry.id,
+    entry.definition,
+    entry.definitionName,
+    entry.description,
+    ...(entry.categories || [])
+  ];
+  return texts.some(text => typeof text === 'string' && text.toLowerCase().includes(query));
+}
+
+/**
+ * Admin → Integrations (`/admin/integrations`): the one page of the
+ * integrations iHub calls out to and of the channels that connect to iHub.
+ *
+ * Tabs (`?tab=`):
+ *
+ * - **Installed** (default): every installation as a tile, grouped (people
+ *   directories, web search, storage providers, MCP servers, agents,
+ *   built-in, from the catalog). A tile opens the installation's page
+ *   (`/admin/integrations/:instanceId`); its quick actions test, enable /
+ *   disable (asking first when apps bind it), remove and list the connected
+ *   users. An installation with a migration state also offers the actions
+ *   of that state (Migrate now, Re-run migration, Restore backup, Adopt
+ *   current version); their outcome shows above the groups with a link to
+ *   the installation's page.
+ * - **Catalog**: the definitions to install from, in the same groups.
+ *   Install opens the install dialog; so does the deep link
+ *   `?install=<folder name>` with `v.<key>=` and `label` prefills (the
+ *   marketplace, the LDAP sign-in providers).
+ * - **Inbound**: Outlook add-in, browser extension, Microsoft 365 Copilot,
+ *   Nextcloud embed and the MCP gateway, each with its status.
  */
 function AdminIntegrationsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
   const integrationsEnabled = featureFlags.isEnabled('integrations', true);
-  const [platform, setPlatform] = useState(null);
-  const [peopleDirectoriesOn, setPeopleDirectoriesOn] = useState(false);
+  const tabParam = searchParams.get('tab');
+  const tab = TABS.has(tabParam) ? tabParam : 'installed';
+  const installParam = searchParams.get('install');
+
   const [installed, setInstalled] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [apps, setApps] = useState([]);
+  // The groups (id → group), for who grants each installation; null when unknown.
+  const [groups, setGroups] = useState(null);
+  const [platform, setPlatform] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  // A message handed over by the page we came from (e.g. "removed" from an installation's page).
+  const [message, setMessage] = useState(() => location.state?.flash || null);
+  const [search, setSearch] = useState('');
+  const [dialog, setDialog] = useState(null); // { definitionId, prefill? }
+  const [connectionsFor, setConnectionsFor] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { kind: 'remove' | 'disable', item }
+  const [busy, setBusy] = useState(null);
+  const [testResult, setTestResult] = useState(null);
+  // The outcome of the last migration action (log entry or error), until dismissed.
+  const [migrationOutcome, setMigrationOutcome] = useState(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [installedRes, catalogRes] = await Promise.all([
+        fetchInstalledIntegrations(),
+        fetchIntegrationCatalog()
+      ]);
+      setInstalled(installedRes?.items || []);
+      setCatalog(catalogRes?.items || []);
+      // Which apps bind each installation (for the remove and disable
+      // warnings) and which groups grant it (for the tiles); the page works
+      // without either list.
+      const [appList, groupsResult] = await Promise.all([
+        fetchAdminApps().catch(() => null),
+        fetchAdminGroups().catch(() => null)
+      ]);
+      setApps(Array.isArray(appList) ? appList : []);
+      setGroups(
+        groupsResult?.groups && typeof groupsResult.groups === 'object' ? groupsResult.groups : null
+      );
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!integrationsEnabled) return;
+    void load();
+  }, [load]);
+
+  // The inbound channels' switches live in platform.json; without it every
+  // card shows "Available".
+  useEffect(() => {
     let cancelled = false;
-    makeAdminApiCall('/admin/configs/platform')
-      .then(res => {
-        if (!cancelled) setPlatform(res.data ?? null);
+    fetchAdminPlatformConfig()
+      .then(result => {
+        if (!cancelled) setPlatform(result);
       })
       .catch(() => {
         if (!cancelled) setPlatform(null);
       });
-    fetchInstalledIntegrations()
-      .then(res => {
-        if (!cancelled) {
-          const items = res?.items || [];
-          setInstalled(items);
-          setPeopleDirectoriesOn(
-            items.some(
-              item => item?.definition === LDAP_DIRECTORY_DEFINITION && item.enabled !== false
-            )
-          );
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setInstalled([]);
-          setPeopleDirectoriesOn(false);
-        }
-      });
     return () => {
       cancelled = true;
     };
-  }, [integrationsEnabled]);
+  }, []);
 
-  const statusFor = (kind, id) => {
-    // Read from the installed integrations, not from platform.json.
-    if (kind === 'peopleDirectories') return peopleDirectoriesOn ? 'connected' : 'available';
-    if (kind === 'cloud') {
-      const item = installed.find(entry => entry?.id === CLOUD_STORAGE_INSTALLATIONS[id]);
-      if (!item) return 'available';
-      if (item.enabled === false) return 'disabled';
-      return item.status?.connected ? 'connected' : 'available';
+  // The handed-over message is shown once: drop it from the history entry so a
+  // reload does not show it again.
+  useEffect(() => {
+    if (location.state?.flash) {
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     }
-    if (!platform) return 'available';
-    switch (kind) {
-      case 'outlook':
-        return platform.features?.outlookAddIn || platform.officeIntegration?.enabled
-          ? 'connected'
-          : 'available';
-      case 'browserExtension':
-        return platform.features?.browserExtension ? 'connected' : 'available';
-      case 'nextcloudEmbed':
-        return platform.nextcloudEmbed?.enabled ? 'connected' : 'available';
-      case 'copilotAgent':
-        return platform.copilotAgent?.enabled ? 'connected' : 'available';
-      default:
-        return 'available';
+  }, [location.state, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  // Deep link: /admin/integrations?install=<folder name>[&label=…][&v.<key>=…]
+  useEffect(() => {
+    const definitionId = definitionIdFromParam(installParam);
+    if (!definitionId || loading) return;
+    setDialog({ definitionId, prefill: prefillFromParams(searchParams) });
+    const next = new URLSearchParams(searchParams);
+    next.delete('install');
+    next.delete('label');
+    // Iterate the original: deleting from `next` while iterating it would skip keys.
+    for (const key of searchParams.keys()) if (key.startsWith('v.')) next.delete(key);
+    setSearchParams(next, { replace: true });
+  }, [installParam, loading, searchParams, setSearchParams]);
+
+  const setTab = next => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'installed') params.delete('tab');
+    else params.set('tab', next);
+    setSearchParams(params, { replace: true });
+  };
+
+  const takenIds = useMemo(() => installed.map(item => item.id), [installed]);
+  const query = search.trim().toLowerCase();
+  const installedGroups = useMemo(
+    () => groupIntegrations(installed.filter(item => matchesIntegrationQuery(item, query))),
+    [installed, query]
+  );
+  const catalogGroups = useMemo(
+    () => groupIntegrations(catalog.filter(item => matchesIntegrationQuery(item, query))),
+    [catalog, query]
+  );
+
+  /** The names of the apps that bind an installation. */
+  const boundAppNames = useCallback(
+    item => appsBindingInstallation(apps, item, i18n.language).map(app => app.name),
+    [apps, i18n.language]
+  );
+
+  const flash = (type, text) => setMessage({ type, text });
+
+  const migration = useMigrationActions({
+    onDone: async outcome => {
+      setMigrationOutcome(outcome);
+      await load();
+    }
+  });
+
+  const onInstalled = instance => {
+    setDialog(null);
+    flash(
+      'success',
+      t('admin.integrationCatalog.saved', 'Integration "{{id}}" saved.', { id: instance.id })
+    );
+    setTab('installed');
+    void load();
+  };
+
+  const toggle = async item => {
+    setBusy(item.id);
+    try {
+      await setInstalledIntegrationEnabled(item.id, item.enabled === false);
+      await load();
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
     }
   };
 
-  const productivity = t('admin.integrations.categories.productivity', 'Productivity');
-  const storage = t('admin.integrations.categories.storage', 'Cloud Storage');
-  const directories = t('admin.integrations.categories.directories', 'Directories');
-
-  const integrations = [
-    {
-      id: 'installed-integrations',
-      title: t('admin.integrations.cards.installed.title', 'Installed integrations'),
-      description: t(
-        'admin.integrations.cards.installed.description',
-        'Install integrations from the catalog or the marketplace (e.g. a CKAN open data portal), point them at your systems and bind their actions to apps.'
-      ),
-      icon: 'link',
-      color: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400',
-      href: '/admin/integrations/installed',
-      status: 'available',
-      category: t('admin.integrations.categories.data', 'Data & APIs')
-    },
-    {
-      id: 'outlook',
-      title: t('admin.integrations.cards.outlook.title', 'Outlook Add-in'),
-      description: t(
-        'admin.integrations.cards.outlook.description',
-        'Embed iHub apps inside the Outlook task pane. Users sign in with their iHub account and run prompts against the currently selected email.'
-      ),
-      icon: 'mail',
-      color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400',
-      href: '/admin/office-integration',
-      status: statusFor('outlook'),
-      category: productivity
-    },
-    {
-      id: 'browser-extension',
-      title: t('admin.integrations.cards.browserExtension.title', 'Browser Extension'),
-      description: t(
-        'admin.integrations.cards.browserExtension.description',
-        'Side-panel extension for Chrome / Edge / Firefox. Run any iHub app against the page the user is reading.'
-      ),
-      icon: 'wrench',
-      color: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400',
-      href: '/admin/browser-extension',
-      status: statusFor('browserExtension'),
-      category: productivity
-    },
-    {
-      id: 'copilot-agent',
-      title: t('admin.integrations.cards.copilotAgent.title', 'Microsoft 365 Copilot'),
-      description: t(
-        'admin.integrations.cards.copilotAgent.description',
-        "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
-      ),
-      icon: 'sparkles',
-      color: 'bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400',
-      href: '/admin/copilot-agent',
-      status: statusFor('copilotAgent'),
-      category: productivity
-    },
-    {
-      id: 'office365',
-      title: t('admin.integrations.cards.office365.title', 'Office 365 (OneDrive / SharePoint)'),
-      description: t(
-        'admin.integrations.cards.office365.description',
-        'Let users browse and attach files from OneDrive / SharePoint via Microsoft Graph during a chat. Installed as the integration "office365".'
-      ),
-      icon: 'cloud',
-      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
-      href: '/admin/integrations/installed',
-      status: statusFor('cloud', 'office365'),
-      category: storage
-    },
-    {
-      id: 'google-drive',
-      title: t('admin.integrations.cards.googleDrive.title', 'Google Drive'),
-      description: t(
-        'admin.integrations.cards.googleDrive.description',
-        'Let users browse and attach files from Google Drive during a chat. Installed as the integration "googledrive".'
-      ),
-      icon: 'cloud',
-      color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400',
-      href: '/admin/integrations/installed',
-      status: statusFor('cloud', 'google-drive'),
-      category: storage
-    },
-    {
-      id: 'nextcloud',
-      title: t('admin.integrations.cards.nextcloud.title', 'Nextcloud'),
-      description: t(
-        'admin.integrations.cards.nextcloud.description',
-        'Let users browse and attach files from any Nextcloud instance during a chat. Installed as the integration "nextcloud".'
-      ),
-      icon: 'cloud',
-      color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400',
-      href: '/admin/integrations/installed',
-      status: statusFor('cloud', 'nextcloud'),
-      category: storage
-    },
-    {
-      id: 'nextcloudEmbed',
-      title: t('admin.integrations.cards.nextcloudEmbed.title', 'Nextcloud Embed'),
-      description: t(
-        'admin.integrations.cards.nextcloudEmbed.description',
-        'Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached.'
-      ),
-      icon: 'cloud',
-      color: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400',
-      href: '/admin/nextcloud-embed',
-      status: statusFor('nextcloudEmbed'),
-      category: storage
-    },
-    {
-      id: 'people-directories',
-      title: t('admin.integrations.cards.peopleDirectories.title', 'People directories'),
-      description: t(
-        'admin.integrations.cards.peopleDirectories.description',
-        'Let the model look up people, their function and contact details in LDAP directories — your own and external ones such as x500.bund.de. Each directory is an installation of the LDAP people directory integration.'
-      ),
-      icon: 'user-group',
-      color: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300',
-      href: '/admin/integrations/installed',
-      status: statusFor('peopleDirectories'),
-      category: directories
+  // Disabling takes the installation from every app that uses it, and hides an app
+  // that requires it: ask first when there is one.
+  const requestToggle = item => {
+    if (item.enabled !== false && boundAppNames(item).length > 0) {
+      setConfirm({ kind: 'disable', item });
+    } else {
+      void toggle(item);
     }
+  };
+
+  const runTest = async item => {
+    setBusy(item.id);
+    setTestResult(null);
+    try {
+      const result = await testInstalledIntegration(item.id);
+      setTestResult({ id: item.id, label: item.label, result });
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async item => {
+    setBusy(item.id);
+    try {
+      await deleteInstalledIntegration(item.id);
+      flash(
+        'success',
+        t('admin.integrationCatalog.removed', 'Integration "{{id}}" removed.', { id: item.id })
+      );
+      if (testResult?.id === item.id) setTestResult(null);
+      await load();
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reload = async () => {
+    try {
+      await reloadIntegrationCatalog();
+      await load();
+      flash('success', t('admin.integrationCatalog.reloaded', 'Catalog reloaded.'));
+    } catch (err) {
+      flash('error', getAdminApiErrorMessage(err));
+    }
+  };
+
+  const tabs = [
+    {
+      id: 'installed',
+      label: t('admin.integrationCatalog.tabs.installed', 'Installed'),
+      count: installed.length
+    },
+    {
+      id: 'catalog',
+      label: t('admin.integrationCatalog.tabs.catalog', 'Catalog'),
+      count: catalog.length
+    },
+    { id: 'inbound', label: t('admin.integrations.tabs.inbound', 'Inbound') }
   ];
 
-  const featureFlagBanner = !integrationsEnabled && (
-    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 mb-6 text-sm text-amber-800 dark:text-amber-200">
-      {t(
-        'admin.integrations.featureFlagOff',
-        'The "integrations" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.'
-      )}
+  const searchBox = (
+    <div className="mb-6">
+      <label htmlFor="integrations-search" className="sr-only">
+        {t('admin.integrations.searchPlaceholder', 'Search integrations…')}
+      </label>
+      <div className="relative w-full sm:max-w-md">
+        <Icon
+          name="search"
+          size="sm"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+        />
+        <input
+          id="integrations-search"
+          type="search"
+          className={`${INPUT_CLASS} pl-9`}
+          placeholder={t('admin.integrations.searchPlaceholder', 'Search integrations…')}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
     </div>
   );
 
+  const noMatch = (
+    <output className="block text-sm text-gray-600 dark:text-gray-400">
+      {t('admin.integrations.noMatch', 'Nothing matches "{{query}}".', { query: search.trim() })}
+    </output>
+  );
+
   return (
-    <>
-      {featureFlagBanner && (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">{featureFlagBanner}</div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {!integrationsEnabled && (
+        <div className={`mb-6 ${CALLOUT_CLASS.warning}`}>
+          {t(
+            'admin.integrations.featureFlagOff',
+            'The "integrations" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.'
+          )}
+        </div>
       )}
-      <AdminIntegrationHubPage
-        title={t('admin.integrations.title', 'Integrations')}
-        description={t(
-          'admin.integrations.subtitle',
-          'Connect iHub to the systems your users already work with — mail, docs, ticketing — and ship the iHub UI inside their browser.'
-        )}
-        integrations={integrationsEnabled ? integrations : []}
-        categoryOrder={[productivity, storage, directories]}
-        searchPlaceholder={t('admin.integrations.searchPlaceholder', 'Search integrations…')}
+
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {t('admin.integrations.title', 'Integrations')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1 max-w-3xl">
+            {t(
+              'admin.integrations.subtitle',
+              'The systems iHub works with: install an integration from the catalog, point it at your system and bind it to apps. Inbound lists what connects to iHub.'
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={reload}>
+            <Icon name="refresh" size="sm" />
+            {t('admin.integrationCatalog.reload', 'Reload catalog')}
+          </button>
+          <button type="button" className={PRIMARY_BUTTON_CLASS} onClick={() => setTab('catalog')}>
+            <Icon name="plus" size="sm" />
+            {t('admin.integrationCatalog.install', 'Install')}
+          </button>
+        </div>
+      </div>
+
+      {message && (
+        <output
+          className={`mb-4 block ${message.type === 'error' ? CALLOUT_CLASS.danger : CALLOUT_CLASS.success}`}
+        >
+          {message.text}
+        </output>
+      )}
+      {error && <AdminLoadError message={error} framed={false} className="mb-4" />}
+
+      <AdminTabs
+        tabs={tabs}
+        activeId={tab}
+        onChange={setTab}
+        ariaLabel={t('admin.integrations.title', 'Integrations')}
       />
-    </>
+
+      {loading && (
+        <div className="flex justify-center py-16">
+          <LoadingSpinner size="lg" />
+        </div>
+      )}
+      {!loading && tab === 'installed' && (
+        <div role="tabpanel" id="tabpanel-installed" aria-labelledby="tab-installed">
+          {testResult && (
+            <div className="mb-6" data-testid="tile-test-results">
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  className={SECONDARY_BUTTON_CLASS}
+                  onClick={() => setTestResult(null)}
+                >
+                  <Icon name="x" size="sm" />
+                  {t('admin.integrations.closeTestResults', 'Close test results')}
+                </button>
+              </div>
+              <IntegrationTestResults
+                title={t('admin.integrationCatalog.testResultsFor', 'Test results: {{label}}', {
+                  label: testResult.label
+                })}
+                result={testResult.result}
+              />
+            </div>
+          )}
+          {migrationOutcome && (
+            <div className="mb-6">
+              <MigrationOutcome
+                outcome={migrationOutcome}
+                onDismiss={() => setMigrationOutcome(null)}
+                linkToInstallation
+              />
+            </div>
+          )}
+          {installed.length === 0 ? (
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
+              <Icon name="link" size="lg" className="mx-auto text-gray-400" />
+              <h2 className="mt-3 text-lg font-medium text-gray-900 dark:text-gray-100">
+                {t('admin.integrationCatalog.empty.title', 'Nothing installed yet')}
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.integrationCatalog.empty.description',
+                  'Pick an integration from the catalog, enter its settings and test it before you save.'
+                )}
+              </p>
+              <button
+                type="button"
+                className={`${PRIMARY_BUTTON_CLASS} mt-4`}
+                onClick={() => setTab('catalog')}
+              >
+                {t('admin.integrationCatalog.empty.cta', 'Open the catalog')}
+              </button>
+            </div>
+          ) : (
+            <>
+              {searchBox}
+              {installedGroups.length === 0 ? (
+                noMatch
+              ) : (
+                <div className="space-y-8">
+                  {installedGroups.map(group => (
+                    <IntegrationGroupSection key={group.id} group={group} scope="installed">
+                      {group.items.map(item => (
+                        <InstallationTile
+                          key={item.id}
+                          item={item}
+                          installations={installed}
+                          grantedTo={groups ? groupsGranting(item, groups) : null}
+                          busy={busy === item.id || migration.running === item.id}
+                          onTest={runTest}
+                          onToggle={requestToggle}
+                          onRemove={target => setConfirm({ kind: 'remove', item: target })}
+                          onConnections={setConnectionsFor}
+                          onMigrationAction={migration.request}
+                        />
+                      ))}
+                    </IntegrationGroupSection>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {!loading && tab === 'catalog' && (
+        <div role="tabpanel" id="tabpanel-catalog" aria-labelledby="tab-catalog">
+          {searchBox}
+          {catalogGroups.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.integrationCatalog.catalogEmpty',
+                'No definitions match. Integrations can also be installed from the Marketplace.'
+              )}
+            </p>
+          ) : (
+            <div className="space-y-8">
+              {catalogGroups.map(group => (
+                <IntegrationGroupSection key={group.id} group={group} scope="catalog">
+                  {group.items.map(item => (
+                    <CatalogTile
+                      key={item.id}
+                      item={item}
+                      onInstall={definitionId => setDialog({ definitionId })}
+                    />
+                  ))}
+                </IntegrationGroupSection>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {!loading && tab === 'inbound' && (
+        <div role="tabpanel" id="tabpanel-inbound" aria-labelledby="tab-inbound">
+          <InboundIntegrations platform={platform} />
+        </div>
+      )}
+
+      {connectionsFor && (
+        <IntegrationConnectionsDialog
+          instance={connectionsFor}
+          onClose={() => setConnectionsFor(null)}
+        />
+      )}
+
+      {dialog && (
+        <IntegrationInstallDialog
+          definitionId={dialog.definitionId}
+          takenIds={takenIds}
+          prefill={dialog.prefill}
+          onClose={() => setDialog(null)}
+          onSaved={onInstalled}
+        />
+      )}
+
+      <MigrationConfirmDialog
+        pending={migration.pending}
+        onConfirm={migration.confirm}
+        onCancel={migration.cancel}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(confirm)}
+        title={
+          confirm?.kind === 'disable'
+            ? t('admin.integrationCatalog.confirmDisable.title', 'Disable integration?')
+            : t('admin.integrationCatalog.confirmRemove.title', 'Remove integration?')
+        }
+        message={
+          <>
+            <p>
+              {confirm?.kind === 'disable'
+                ? t(
+                    'admin.integrationCatalog.confirmDisable.message',
+                    'Apps that use "{{id}}" go without it while it is disabled. An app that requires it is hidden from users.',
+                    { id: confirm?.item.id }
+                  )
+                : t(
+                    'admin.integrationCatalog.confirmRemove.message',
+                    'Apps that use "{{id}}" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it.',
+                    { id: confirm?.item.id }
+                  )}
+            </p>
+            {confirm && boundAppNames(confirm.item).length > 0 && (
+              <p className="mt-2" data-testid="bound-apps">
+                {t('admin.integrationCatalog.boundApps', 'Used by: {{apps}}', {
+                  apps: boundAppNames(confirm.item).join(', ')
+                })}
+              </p>
+            )}
+          </>
+        }
+        confirmLabel={
+          confirm?.kind === 'disable'
+            ? t('admin.integrationCatalog.status.disable', 'Disable')
+            : t('common.delete', 'Delete')
+        }
+        denyLabel={t('common.cancel', 'Cancel')}
+        danger
+        onConfirm={() => {
+          const current = confirm;
+          setConfirm(null);
+          if (!current) return;
+          if (current.kind === 'disable') void toggle(current.item);
+          else void remove(current.item);
+        }}
+        onDeny={() => setConfirm(null)}
+      />
+    </div>
   );
 }
 

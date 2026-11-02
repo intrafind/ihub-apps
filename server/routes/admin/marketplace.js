@@ -28,6 +28,9 @@ import contentInstaller, {
 } from '../../services/marketplace/ContentInstaller.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import configStore from '../../services/config/ConfigStore.js';
+import { dirNameToDefinitionId } from '../../validators/integrationDefinitionSchema.js';
+import { previewDefinitionUpdate } from '../../services/integrations/definitions/migrationPreview.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
 
@@ -42,6 +45,46 @@ const COMPONENT = 'AdminMarketplaceRoutes';
  */
 function sendError(res, status, message, code) {
   return res.status(status).json({ error: message, ...(code ? { code } : {}) });
+}
+
+/** Codes of the definition migration runner that mean "try again" (409). */
+const MIGRATION_CONFLICT_CODES = new Set([
+  'MIGRATION_LOCKED',
+  'MIGRATION_LOCK_LOST',
+  'MIGRATION_CONFLICT'
+]);
+
+/**
+ * What updating an integration item would do to the installations of its
+ * definition, planned from the catalog item's releases and migrations
+ * (`migrationPreview.js`); null when the definition has no installation.
+ * Nothing is written.
+ *
+ * @param {string} name - catalog item name (the definition folder name)
+ * @param {object} item - the catalog item (version, releases, migrations)
+ * @returns {Promise<object|null>}
+ */
+async function integrationUpdatePreview(name, item) {
+  const definitionId = dirNameToDefinitionId(name);
+  const [{ default: installedIntegrationService }, { default: integrationRegistry }] =
+    await Promise.all([
+      import('../../services/integrations/InstalledIntegrationService.js'),
+      import('../../services/integrations/definitions/IntegrationRegistry.js')
+    ]);
+  await integrationRegistry.ensureLoaded();
+  const instances = installedIntegrationService.instancesOf(definitionId);
+  if (instances.length === 0) return null;
+  const apps = (await configStore.listDocuments('apps')).map(doc => ({
+    path: doc.path,
+    data: doc.data
+  }));
+  return previewDefinitionUpdate({
+    definitionId,
+    item,
+    instances,
+    apps,
+    entry: integrationRegistry.get(definitionId)
+  });
 }
 
 /**
@@ -313,6 +356,12 @@ export default function registerAdminMarketplaceRoutes(app) {
   /**
    * GET /api/admin/marketplace/registries/:registryId/items/:type/:name
    * Get full details for a specific catalog item including content preview.
+   * An integration item whose definition is installed also carries
+   * `migrationPreview`: per installation, what updating to the item's
+   * version would change (`summary`), the warnings and the collisions,
+   * planned from the catalog's releases and migrations; `planFromCatalog`
+   * is false when an installation is older than the releases the catalog
+   * lists (the plan then runs at update time). Nothing is written.
    */
   app.get(
     buildServerPath('/api/admin/marketplace/registries/:registryId/items/:type/:name'),
@@ -324,6 +373,18 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (!validateIdForPath(registryId, 'registryId', res)) return;
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const item = await registryService.getItemDetail(registryId, type, name);
+        if (type === 'integration') {
+          try {
+            item.migrationPreview = await integrationUpdatePreview(name, item);
+          } catch (error) {
+            logger.warn('Could not plan the migrations of an integration update', {
+              component: COMPONENT,
+              name,
+              error: error.message
+            });
+            item.migrationPreview = null;
+          }
+        }
         res.json(item);
       } catch (error) {
         logger.error('Error getting item detail', { component: COMPONENT, error: error.message });
@@ -419,6 +480,10 @@ export default function registerAdminMarketplaceRoutes(app) {
   /**
    * POST /api/admin/marketplace/registries/:registryId/items/:type/:name/_update
    * Update an already-installed item to the latest version in the registry.
+   * For an integration the installations of the definition are migrated in
+   * the same commit as the new folder; the answer carries
+   * `integrationMigrations`, one result per installation. 409 with
+   * `MIGRATION_LOCKED` while a migration of one of them runs.
    */
   app.post(
     buildServerPath('/api/admin/marketplace/registries/:registryId/items/:type/:name/_update'),
@@ -441,6 +506,9 @@ export default function registerAdminMarketplaceRoutes(app) {
       } catch (error) {
         logger.error('Error updating item', { component: COMPONENT, error: error.message });
         if (error.code === 'INCOMPATIBLE_IHUB_VERSION') {
+          return sendError(res, 409, error.message, error.code);
+        }
+        if (MIGRATION_CONFLICT_CODES.has(error.code)) {
           return sendError(res, 409, error.message, error.code);
         }
         if (error.code === 'UNSUPPORTED_DEFINITION_SCHEMA') {
