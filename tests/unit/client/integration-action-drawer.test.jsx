@@ -354,6 +354,29 @@ describe('IntegrationActionDrawer', () => {
     expect(document.body.textContent).not.toMatch(/MISSING:/);
   });
 
+  it('has no critical or serious axe violations when open (with a test result)', async () => {
+    const axe = require('axe-core');
+    mockApi.fetchIntegrationAction.mockResolvedValue(detailOf());
+    mockApi.testIntegrationAction.mockResolvedValue(RESULT);
+    renderDrawer({ onTryInChat: () => {} });
+    const drawer = await screen.findByRole('dialog', { name: 'Jira (EU) › Add a comment' });
+    fireEvent.change(screen.getByLabelText(/issueKey/), { target: { value: 'DEMO-42' } });
+    fireEvent.change(screen.getByLabelText(/^comment/), { target: { value: 'x' } });
+    fireEvent.click(screen.getByLabelText(/I understand that this test can change data/));
+    fireEvent.click(screen.getByRole('button', { name: 'Run test' }));
+    await screen.findByTestId('action-test-result');
+    // jsdom computes no layout, so contrast is left to the Playwright scan
+    // (tests/e2e/accessibility.spec.js); every other WCAG rule runs here.
+    const results = await axe.run(drawer, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      rules: { 'color-contrast': { enabled: false } }
+    });
+    const blocking = results.violations
+      .filter(v => v.impact === 'critical' || v.impact === 'serious')
+      .map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`);
+    expect(blocking).toEqual([]);
+  });
+
   it('saves edited guidance for the current language and keeps the other languages', async () => {
     mockApi.fetchIntegrationAction.mockResolvedValue(detailOf());
     const updated = detailOf();

@@ -96,6 +96,6 @@ user docs for the full description; this file is about the code.
   another client, show their call and arguments only. An MCP call over a long-lived SSE stream
   records the POSTs of the call, not the stream.
 - **The a11y check** of the drawer is in `tests/e2e/accessibility.spec.js` (opens
-  `/admin/integrations/jira?action=searchTickets`); it needs a running server and Playwright.
+  `/admin/integrations/ihub?action=list_scheduled_tasks`); it needs a running server and Playwright.
 - **The installation's `instructions`** are edited per language like labels: a string override
   applies to every language; editing one language turns it into `{ en, <lang> }`.
