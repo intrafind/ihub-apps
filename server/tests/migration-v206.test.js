@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import semver from 'semver';
 import {
   up,
   precondition,
@@ -113,6 +114,79 @@ describe('V206 integration definition version baseline', () => {
     ]) {
       assert.equal(isStrictVersion(bad), false, String(bad));
     }
+  });
+
+  it('decides the tricky versions exactly as the semver grammar it snapshots', () => {
+    const cases = {
+      // accepted
+      '0.0.0': true,
+      '1.2.3-0': true,
+      '1.2.3-0a': true,
+      '1.2.3-01a': true,
+      '1.2.3-a-': true,
+      '1.2.3--': true,
+      '1.2.3-a.0.b': true,
+      '1.2.3-A-Z.9': true,
+      '1.2.3-alpha-beta': true,
+      '1.2.3-1.2.3': true,
+      // beyond Number.MAX_SAFE_INTEGER: the grammar admits it (the semver package does not)
+      '99999999999999999999.0.0': true,
+      [`1.2.3-${'a'.repeat(58)}`]: true,
+      // refused
+      [`1.2.3-${'a'.repeat(59)}`]: false,
+      '1.2.3-': false,
+      '1.2.3-.a': false,
+      '1.2.3-a.': false,
+      '1.2.3-a..b': false,
+      '1.2.3-00': false,
+      '1.2.3-a.01': false,
+      '1.2.3-a+b': false,
+      '1.2.3+b': false,
+      '1.2.3.4': false,
+      '1.2.-3': false,
+      '1.2.3a': false,
+      '1..3': false,
+      '.1.2.3': false,
+      '1.2.3\n': false,
+      ' 1.2.3': false,
+      '=1.2.3': false,
+      '1.02.3': false,
+      '1.2.03': false,
+      '-1.2.3': false
+    };
+    for (const [value, expected] of Object.entries(cases)) {
+      assert.equal(isStrictVersion(value), expected, JSON.stringify(value));
+    }
+  });
+
+  it('matches the strict semver grammar over every short string and prerelease combination', () => {
+    // Below Number.MAX_SAFE_INTEGER, a string semver parses back to itself is
+    // exactly the grammar V206 snapshots: no `v`, no `=`, no spaces, no build.
+    const oracle = value => semver.valid(value) === value;
+    const checked = [];
+    const alphabet = ['0', '1', '.', '-', 'a', '+'];
+    const brute = (prefix, depth) => {
+      checked.push(prefix);
+      if (depth > 0) for (const char of alphabet) brute(prefix + char, depth - 1);
+    };
+    brute('', 5);
+    const numbers = ['0', '1', '01', '10', 'a', ''];
+    const identifiers = ['0', '01', '1', '10', 'a', '0a', 'a-', '-', '', '1a1', 'A-Z', '+', '00'];
+    for (const major of numbers) {
+      for (const minor of numbers) {
+        for (const patch of numbers) {
+          const core = `${major}.${minor}.${patch}`;
+          checked.push(core);
+          for (const first of identifiers) {
+            checked.push(`${core}-${first}`);
+            for (const second of identifiers) checked.push(`${core}-${first}.${second}`);
+          }
+        }
+      }
+    }
+    const mismatches = checked.filter(value => isStrictVersion(value) !== oracle(value));
+    assert.deepEqual(mismatches, []);
+    assert.ok(checked.filter(oracle).length > 1000, 'the enumeration reaches accepted versions');
   });
 
   it('reads both trees, skipping dot-folders and invalid definitions', async () => {

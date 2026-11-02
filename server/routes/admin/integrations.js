@@ -298,6 +298,55 @@ function adminName(req) {
   return req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
 }
 
+/**
+ * The installation as the migration actions answer with it: the admin
+ * view, its migration state and its backups.
+ */
+async function migratedView(id, req) {
+  const language = languageOf(req);
+  const resolved = await installedIntegrationService.resolve(id, language);
+  if (!resolved) return null;
+  const migrations = await migrationViews([resolved.instance]);
+  return instanceView(
+    resolved.instance,
+    resolved,
+    language,
+    await definitionUpdates(),
+    migrations.get(resolved.instance.id) || null
+  );
+}
+
+/** Answer a failed migration action: 422 with the reason and the state it left. */
+async function sendMigrationError(res, req, id, error, context) {
+  if (error instanceof IntegrationError && error.code === 'MIGRATION_FAILED') {
+    let instance = null;
+    try {
+      instance = await migratedView(id, req);
+    } catch {
+      instance = null;
+    }
+    return res.status(422).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      reason: error.details?.reason || error.message,
+      logEntry: error.details?.logEntry || null,
+      details: error.details,
+      instance
+    });
+  }
+  if (error instanceof IntegrationError) {
+    return res.status(error.status).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      reason: error.message,
+      details: error.details
+    });
+  }
+  return sendInternalError(res, error, context);
+}
+
 export default function registerAdminIntegrationsRoutes(app) {
   // --- Catalog ------------------------------------------------------------
 
@@ -608,55 +657,6 @@ export default function registerAdminIntegrationsRoutes(app) {
   }
 
   // --- Definition migrations (versioning concept §3) -----------------------
-
-  /**
-   * The installation as the migration actions answer with it: the admin
-   * view, its migration state and its backups.
-   */
-  async function migratedView(id, req) {
-    const language = languageOf(req);
-    const resolved = await installedIntegrationService.resolve(id, language);
-    if (!resolved) return null;
-    const migrations = await migrationViews([resolved.instance]);
-    return instanceView(
-      resolved.instance,
-      resolved,
-      language,
-      await definitionUpdates(),
-      migrations.get(resolved.instance.id) || null
-    );
-  }
-
-  /** Answer a failed migration action: 422 with the reason and the state it left. */
-  async function sendMigrationError(res, req, id, error, context) {
-    if (error instanceof IntegrationError && error.code === 'MIGRATION_FAILED') {
-      let instance = null;
-      try {
-        instance = await migratedView(id, req);
-      } catch {
-        instance = null;
-      }
-      return res.status(422).json({
-        success: false,
-        error: error.message,
-        code: error.code,
-        reason: error.details?.reason || error.message,
-        logEntry: error.details?.logEntry || null,
-        details: error.details,
-        instance
-      });
-    }
-    if (error instanceof IntegrationError) {
-      return res.status(error.status).json({
-        success: false,
-        error: error.message,
-        code: error.code,
-        reason: error.message,
-        details: error.details
-      });
-    }
-    return sendInternalError(res, error, context);
-  }
 
   /**
    * @swagger

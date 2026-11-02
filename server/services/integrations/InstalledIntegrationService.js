@@ -273,13 +273,10 @@ export class InstalledIntegrationService {
     await this.registry.ensureLoaded();
     // The migration state and log are the runner's (`DefinitionMigrationRunner`):
     // a payload never sets them; a save keeps the log it had.
-    const {
-      secrets,
-      status: _status,
-      statusReason: _statusReason,
-      migrationLog: _migrationLog,
-      ...rest
-    } = payload || {};
+    const { secrets, ...rest } = payload || {};
+    delete rest.status;
+    delete rest.statusReason;
+    delete rest.migrationLog;
     const parsed = validateInstalledIntegration({
       ...rest,
       installedAt: existing?.installedAt,

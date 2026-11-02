@@ -138,7 +138,8 @@ export function normalizeStoredInstallation(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const stored = raw.definitionVersion;
   if (stored === undefined || stored === null || isStrictSemver(stored)) return raw;
-  const { definitionVersion: _dropped, ...rest } = raw;
+  const rest = { ...raw };
+  delete rest.definitionVersion;
   const shown = typeof stored === 'string' ? stored.slice(0, 64) : JSON.stringify(stored);
   return {
     ...rest,
