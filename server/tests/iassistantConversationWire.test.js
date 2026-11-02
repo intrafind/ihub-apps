@@ -544,3 +544,73 @@ test('a changed scope starts a new conversation with the picked iAssistant', asy
     iFinderAssistants.getAssistant = originalGet;
   }
 });
+
+// ── where the documents were found (#3056) ─────────────────────────────────
+
+test('an answer over all profiles names each document’s profile and records whom it asked', async () => {
+  conversationStateManager.setState('chat-wire-scope-names', {
+    conversationId: 'conv-names',
+    lastParentId: 'msg-1',
+    profileId: 'iassistant-workspace',
+    searchProfile: null,
+    searchScope: 'all',
+    scopeId: 'all',
+    ownerId: user.id
+  });
+  const originalProfilesFetch = iFinderSearchProfiles.fetch;
+  const originalList = iFinderAssistants.listAssistants;
+  iFinderSearchProfiles.reset();
+  let profileReads = 0;
+  iFinderSearchProfiles.fetch = async () => {
+    profileReads += 1;
+    return configurationResponse(['hr', 'contracts']);
+  };
+  iFinderAssistants.listAssistants = async () => [];
+  try {
+    const request = await adapter.createCompletionRequest(
+      model,
+      [{ role: 'user', content: 'Welche Regeln gelten?' }],
+      null,
+      chatOptions('chat-wire-scope-names', { language: 'de' })
+    );
+    // Nothing is read for an answer before it brings documents.
+    assert.equal(profileReads, 0);
+
+    const resultItems = ['hr', 'contracts'].map(profile => ({
+      document_id: `doc-${profile}`,
+      title: `Document in ${profile}`,
+      links: [{ type: 'ACCESS', documentId: `doc-${profile}`, searchProfile: profile }]
+    }));
+    const response = new Response(
+      sse('result_items', { result_items: resultItems }) +
+        sse('answer', { delta: 'Siehe Dokumente.' }) +
+        sse('done', {}),
+      { status: 200, headers: { 'content-type': 'text/event-stream' } }
+    );
+    const frames = [];
+    for await (const chunk of adapter.parseResponseStream(response, { request })) {
+      if (chunk.sources) frames.push(chunk.sources);
+    }
+    assert.equal(frames.length, 1);
+    assert.deepEqual(
+      frames[0].items.map(item => [item.ref.scope, item.scopeName]),
+      [
+        ['hr', 'HR'],
+        ['contracts', 'CONTRACTS']
+      ]
+    );
+    assert.deepEqual(frames[0].scopes, [
+      {
+        integrationId: 'iassistant',
+        id: 'all',
+        name: { en: 'All my search profiles', de: 'Alle meine Suchprofile' },
+        action: 'ask'
+      }
+    ]);
+    assert.equal(profileReads, 1);
+  } finally {
+    iFinderSearchProfiles.fetch = originalProfilesFetch;
+    iFinderSearchProfiles.reset();
+    iFinderAssistants.listAssistants = originalList;
+  }
+});

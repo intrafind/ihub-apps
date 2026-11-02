@@ -520,6 +520,8 @@ The server checks the pick on every turn and never trusts the client value: a pr
 
 Runs outside a chat keep a profile too. A [scheduled task](scheduled-tasks.md#where-a-task-searches) stores the profile (and iAssistant) of the chat it was scheduled from, or the one picked on its form, and every run searches it, even after the chat moved elsewhere. A [workflow step](workflows.md#integration-scopes-in-a-node) sets one with `integrationScopes`. Both are checked as the user running them: a profile they no longer have fails the run with an error naming it.
 
+The **Sources** panel under an answer says where each document was found: every card names the search profile by its display name (the id when the name is unknown), and the panel header says where the answer searched (**Searched in Contracts**) or which iAssistant it asked (**Asked HR assistant**). An iAssistant over all of the user's search profiles names, per document, the profile iFinder reports on it; when the documents come from several profiles, the panel can show one profile at a time. The labels are stored with the answer, so a reopened chat shows the same ones. See [Answer Sources → Integration scopes](answer-sources.md#integration-scopes).
+
 ### Example User Interactions
 
 1. **"Show my latest tickets"**

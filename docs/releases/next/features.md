@@ -438,3 +438,16 @@ run uses them, even after the chat moved to another profile.
   `integrationScopes`, fixed or from a workflow input; the model cannot pick another one.
 - Tasks saved before keep running as they did: without a stored profile, they search the
   default.
+
+## Sources Panel: Where Each Document Was Found
+
+The sources panel under an answer now says where each document came from. Every iFinder card
+names the search profile it was found in by its display name ("Contracts"), and the panel header
+says where the answer searched (**Searched in Contracts**) or which iAssistant it asked
+(**Asked HR assistant**).
+
+- **iAssistant over all search profiles:** each document names the profile iFinder reports on it.
+- **Several profiles in one answer:** the panel can show one profile at a time.
+- **Reopened chats:** the labels are stored with the answer, so they show the same after reopening.
+- The names come from the same per-user list as the search profile picker; a profile whose name
+  is unknown shows its id. Shared chats leave the labels out, like the documents themselves.
