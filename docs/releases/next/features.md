@@ -348,7 +348,7 @@ directories.
   directory (`"type:people-directory": {}`) instead of only the LDAP ones. With the Entra ID
   directory enabled, users find people there too, and the app is offered as soon as any people
   directory is enabled. Its instructions know the Entra tools.
-- **Migrated for you:** migration V204 rewrites an existing People search app that still has the
+- **Migrated for you:** migration V205 rewrites an existing People search app that still has the
   binding it got in V198. A customised binding is left alone.
 
 See [People Directory Search](../../people-directory-search.md).
@@ -369,7 +369,7 @@ new built-in integration **LDAP browser**, separate from people search. Install 
 - **Bound like any integration:** an app binds one browser or every browser
   (`com.intrafind/ldap-browser`); a binding without actions binds all three browse tools. The
   shipped **LDAP browser** app binds every browser and still ships disabled.
-- **Migrated for you:** migration V204 creates a browser installation for every directory that
+- **Migrated for you:** migration V205 creates a browser installation for every directory that
   had the browser switched on and grants it to the groups that could browse.
 
 See [People Directory Search → LDAP browser](../../people-directory-search.md#ldap-browser-for-admins).
