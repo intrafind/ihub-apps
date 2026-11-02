@@ -17,6 +17,7 @@ import {
   registerSourceProducer
 } from '../../services/sources/index.js';
 import { isWebSearchTool, webSourceProducer } from '../../services/sources/producers/web.js';
+import { publishDefinitionTypes } from '../../services/integrations/integrationTypes.js';
 import { declarationOf } from '../../services/sources/producers/declared.js';
 import {
   _resetSourceProviders,
@@ -185,24 +186,24 @@ test('web: only the platform’s own web search scripts make their hits public',
   assert.equal(privacyOf('tavily_search', { id: 'tavily_search' }), true);
 });
 
-test('web: the search actions of the websearch installation make their hits public', () => {
-  // The connector's tools carry no `script`; the installation and action say what ran.
-  const connectorTool = (id, action) => ({
+test('web: the search action of a shipped engine makes its hits public', () => {
+  // The connector's tools carry no `script`; the definition and action say what ran.
+  const engineTool = (id, instanceId, definition, action = 'search') => ({
     id,
     type: 'integration',
-    _integration: { instanceId: 'websearch', action, definition: 'com.intrafind/web-search' }
+    _integration: { instanceId, action, definition }
   });
   const result = {
     results: [{ title: 'Example', url: 'https://example.com/a', description: 'x' }]
   };
-  for (const [id, action] of [
+  for (const [id, instanceId] of [
     ['braveSearch', 'brave'],
     ['staanSearch', 'staan'],
     ['qwantSearch', 'qwant']
   ]) {
     const { items } = webSourceProducer.fromToolResult({
       toolId: id,
-      toolDef: connectorTool(id, action),
+      toolDef: engineTool(id, instanceId, `com.intrafind/${instanceId}-search`),
       args: { query: 'example' },
       result
     });
@@ -210,15 +211,15 @@ test('web: the search actions of the websearch installation make their hits publ
     assert.equal(items[0].private, false, id);
     assert.equal(items[0].url, 'https://example.com/a');
   }
-  // The page reader is an action of the same installation, but a page it read is private.
+  // The page reader is a platform tool; a page it read is private.
   const read = webSourceProducer.fromToolResult({
     toolId: 'read_url',
-    toolDef: connectorTool('read_url', 'readUrl'),
+    toolDef: { id: 'read_url', script: 'webContentExtractor.js' },
     args: { url: 'https://example.com/a' },
     result: { url: 'https://example.com/a', content: 'body', wordCount: 1 }
   });
   assert.equal(read.items[0].private, true);
-  // Another installation's search, or a tool only named like one, stays private.
+  // Another installation's action, or a tool only named like one, stays private.
   const other = webSourceProducer.fromToolResult({
     toolId: 'portal__brave',
     toolDef: { id: 'portal__brave', _integration: { instanceId: 'portal', action: 'brave' } },
@@ -227,10 +228,33 @@ test('web: the search actions of the websearch installation make their hits publ
   assert.equal(other.items[0].private, true);
   const bareId = webSourceProducer.fromToolResult({
     toolId: 'braveSearch',
-    toolDef: { id: 'braveSearch', _integration: { instanceId: 'websearch', action: 'readUrl' } },
+    toolDef: engineTool('braveSearch', 'brave', 'com.intrafind/brave-search', 'other'),
     result
   });
   assert.equal(bareId.items[0].private, true);
+});
+
+test('web: a third-party engine’s search reports web sources, kept private', () => {
+  publishDefinitionTypes([{ definition: { id: 'org.acme/search', type: 'web-search' } }]);
+  try {
+    const toolDef = {
+      id: 'acme__search',
+      type: 'integration',
+      _integration: { instanceId: 'acme', action: 'search', definition: 'org.acme/search' }
+    };
+    const result = { results: [{ title: 'Hit', url: 'https://acme.example/hit' }] };
+    assert.equal(webSourceProducer.matches({ toolId: 'acme__search', toolDef }), true);
+    const frame = extractToolSources({ toolId: 'acme__search', toolDef, result });
+    assert.deepEqual(
+      frame.items.map(item => [item.url, item.private]),
+      [['https://acme.example/hit', true]]
+    );
+    // Without the type, the id alone does not make it a web search.
+    publishDefinitionTypes([]);
+    assert.equal(webSourceProducer.matches({ toolId: 'acme__search', toolDef }), false);
+  } finally {
+    publishDefinitionTypes([]);
+  }
 });
 
 // ── a tool's own report ────────────────────────────────────────────────────

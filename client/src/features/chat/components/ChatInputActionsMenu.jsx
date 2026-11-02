@@ -15,6 +15,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 import { appToolRefs } from '../../../shared/utils/boundIntegrationRefs';
+import { modelSupportsWebSearch } from '../webSearch';
 import {
   currentScopeOf,
   scopeActionLabel,
@@ -195,7 +196,12 @@ function ChatInputActionsMenu({
   const menuToolRefs = [...grouped.flatMap(g => g.matchedTools), ...individual];
   const toolCount = menuToolRefs.length;
   const enabledCount = hasTools ? menuToolRefs.filter(ref => enabledTools.includes(ref)).length : 0;
-  const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  // Not offered on a model web search does not work with: no native search
+  // there and no engine available (the server's `websearchAvailability`).
+  const hasWebsearch =
+    app?.websearch?.enabled === true &&
+    onWebsearchEnabledChange !== null &&
+    modelSupportsWebSearch(app, model) !== false;
   const scopeIntegrations = (Array.isArray(integrationScopes) ? integrationScopes : []).filter(
     integration => integration.scopePicker !== 'hidden' && integration.scopes?.length > 0
   );

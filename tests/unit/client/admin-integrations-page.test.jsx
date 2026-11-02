@@ -105,15 +105,27 @@ const INSTALLED = [
     auth: { mode: 'none' }
   },
   {
-    id: 'websearch',
-    label: 'Web search',
-    definition: 'com.intrafind/web-search',
-    definitionName: 'Web search',
+    id: 'brave',
+    label: 'Brave Search',
+    definition: 'com.intrafind/brave-search',
+    definitionName: 'Brave Search',
     protocol: 'native',
     type: 'web-search',
     builtIn: true,
     enabled: true,
-    values: { defaultProvider: 'brave', braveCredentialRef: 'brave-key' },
+    values: { apiKeyRef: 'brave-key' },
+    auth: { mode: 'none' }
+  },
+  {
+    id: 'staan',
+    label: 'Staan',
+    definition: 'com.intrafind/staan-search',
+    definitionName: 'Staan',
+    protocol: 'native',
+    type: 'web-search',
+    builtIn: true,
+    enabled: true,
+    values: {},
     auth: { mode: 'none' }
   },
   {
@@ -165,6 +177,17 @@ const CATALOG = [
     authModes: ['oauth-user'],
     actionCount: 0
   },
+  ...['Brave Search', 'Staan', 'Qwant'].map(name => ({
+    id: `com.intrafind/${name.split(' ')[0].toLowerCase()}-search`,
+    name,
+    version: '1.0.0',
+    protocol: 'native',
+    type: 'web-search',
+    builtIn: true,
+    supported: true,
+    authModes: ['none'],
+    actionCount: 1
+  })),
   {
     id: 'org.ckan/open-data-portal',
     name: 'CKAN open data portal',
@@ -241,11 +264,14 @@ describe('Installed tab', () => {
     expect(within(tile).getByRole('button', { name: 'Edit govdata' })).toBeEnabled();
     expect(within(tile).getByRole('button', { name: 'Remove govdata' })).toBeEnabled();
 
-    const web = screen
-      .getAllByTestId('installation-tile')
-      .find(el => el.getAttribute('data-installation') === 'websearch');
-    expect(within(web).getByText('Brave Search')).toBeInTheDocument();
-    expect(within(web).getByText('not set')).toBeInTheDocument();
+    // One tile per web search engine: whether its key is set, never the credential id.
+    const tileOf = id =>
+      screen
+        .getAllByTestId('installation-tile')
+        .find(el => el.getAttribute('data-installation') === id);
+    expect(within(tileOf('brave')).getByText('set')).toBeInTheDocument();
+    expect(within(tileOf('staan')).getByText('not set')).toBeInTheDocument();
+    expect(within(tileOf('staan')).getByText('STAAN_API_KEY')).toBeInTheDocument();
 
     const drawio = screen
       .getAllByTestId('installation-tile')
@@ -266,9 +292,17 @@ describe('Catalog and Inbound tabs', () => {
   test('the catalog uses the same groups', async () => {
     renderPage('/admin/integrations?tab=catalog');
     await screen.findByText('Jira');
-    expect(
-      screen.getAllByTestId('integration-group').map(g => g.getAttribute('data-group'))
-    ).toEqual(['storage', 'built-in', 'catalog']);
+    const groups = screen.getAllByTestId('integration-group');
+    expect(groups.map(g => g.getAttribute('data-group'))).toEqual([
+      'web-search',
+      'storage',
+      'built-in',
+      'catalog'
+    ]);
+    // The three engines are grouped under Web search.
+    expect(within(groups[0]).getByText('Brave Search')).toBeInTheDocument();
+    expect(within(groups[0]).getByText('Staan')).toBeInTheDocument();
+    expect(within(groups[0]).getByText('Qwant')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Install Jira' }));
     expect(screen.getByTestId('install-dialog')).toHaveTextContent('com.intrafind/jira');

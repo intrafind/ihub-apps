@@ -36,12 +36,12 @@ import { requireCloudStorageGrant } from '../routes/integrations/cloudStorageAcc
 
 const LDAP = 'com.intrafind/ldap-directory';
 const ENTRA = 'com.intrafind/entra-directory';
-const WEB = 'com.intrafind/web-search';
+const WEB = 'com.intrafind/brave-search';
 
 const x500 = { id: 'x500bund', definition: LDAP };
 const corp = { id: 'corp', definition: LDAP };
 const entra = { id: 'entra', definition: ENTRA };
-const websearch = { id: 'websearch', definition: WEB };
+const brave = { id: 'brave', definition: WEB };
 const jira = { id: 'jira', definition: 'com.intrafind/jira' };
 
 /** groups.json as an admin writes it: admins → users → authenticated → anonymous. */
@@ -186,12 +186,12 @@ describe('userMayUse', () => {
     // type key (directories: every people directory; authenticated: web search)
     assert.equal(userMayUse(entra, enhanced(['directories'])), true);
     assert.equal(userMayUse(x500, enhanced(['directories'])), true);
-    assert.equal(userMayUse(websearch, enhanced(['directories'])), false);
-    assert.equal(userMayUse(websearch, enhanced(['authenticated'])), true);
+    assert.equal(userMayUse(brave, enhanced(['directories'])), false);
+    assert.equal(userMayUse(brave, enhanced(['authenticated'])), true);
   });
 
   it('grants nothing to a group without the field, or an installation without an id', () => {
-    assert.equal(userMayUse(websearch, enhanced(['legacy'])), false);
+    assert.equal(userMayUse(brave, enhanced(['legacy'])), false);
     assert.equal(userMayUse({ definition: WEB }, enhanced(['everything'])), false);
     assert.equal(mayUseIntegration(null, enhanced(['everything'])), false);
   });
@@ -207,8 +207,8 @@ describe('userMayUse', () => {
     // Raw groups in the cache: inheritance is resolved through `inherits` here.
     configCache.setCacheEntry('config/groups.json', structuredClone(RAW_GROUPS));
     assert.equal(userMayUse(jira, { id: 'u', groups: ['admins'] }), true);
-    assert.equal(userMayUse(websearch, { id: 'u', groups: ['admins'] }), true);
-    assert.equal(userMayUse(websearch, { id: 'u', groups: ['anonymous'] }), false);
+    assert.equal(userMayUse(brave, { id: 'u', groups: ['admins'] }), true);
+    assert.equal(userMayUse(brave, { id: 'u', groups: ['anonymous'] }), false);
     // A Set restored from JSON reads `{}`: resolved from the groups again.
     assert.equal(
       userMayUse(x500, { id: 'u', groups: ['users'], permissions: { integrations: {} } }),
@@ -224,12 +224,12 @@ describe('userMayUse', () => {
   it('never allows everything to an unresolved principal, whatever it claims', () => {
     const claims = { id: 'c', groups: ['oauth_clients'], isOAuthClient: true };
     assert.equal(integrationPermissionsOf(claims).size, 0);
-    assert.equal(userMayUse(websearch, claims), false);
+    assert.equal(userMayUse(brave, claims), false);
   });
 
   it('treats no user as the anonymous principal', () => {
     assert.equal(userMayUse({ id: 'ihub', definition: 'com.intrafind/ihub' }, undefined), true);
-    assert.equal(userMayUse(websearch, null), false);
+    assert.equal(userMayUse(brave, null), false);
   });
 
   it('grants nothing when the groups cannot be read', () => {
@@ -238,7 +238,7 @@ describe('userMayUse', () => {
       throw new Error('groups.json is unreadable');
     };
     try {
-      assert.equal(userMayUse(websearch, { id: 'u', groups: ['everything'] }), false);
+      assert.equal(userMayUse(brave, { id: 'u', groups: ['everything'] }), false);
     } finally {
       configCache.getGroups = getGroups;
     }

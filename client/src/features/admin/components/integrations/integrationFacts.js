@@ -5,7 +5,7 @@
  * The key facts of an installation: the two to four values an admin needs to
  * recognise it at a glance on its tile (Admin → Integrations → Installed) and
  * on the Overview tab of its page — the iFinder base URL and sign-in, the
- * directory URL and base DN, which web search keys are set, …
+ * directory URL and base DN, whether a web search engine's key is set, …
  *
  * The facts are chosen per definition (`FACTS_BY_DEFINITION`), then per
  * protocol, then by a generic rule (the first URL-like value). The module is
@@ -161,19 +161,31 @@ const IFINDER_AUTH = {
   oidcTokenExchange: [`${FACT_PREFIX}.choices.oidcTokenExchange`, 'OIDC token exchange']
 };
 
-const WEB_SEARCH_ENGINES = {
-  auto: [`${FACT_PREFIX}.choices.auto`, 'Auto'],
-  brave: [`${FACT_PREFIX}.choices.brave`, 'Brave Search'],
-  staan: [`${FACT_PREFIX}.choices.staan`, 'Staan'],
-  qwant: [`${FACT_PREFIX}.choices.qwant`, 'Qwant']
-};
-
 const MCP_TRANSPORTS = {
   streamableHttp: [`${FACT_PREFIX}.choices.streamableHttp`, 'Streamable HTTP'],
   sse: [`${FACT_PREFIX}.choices.sse`, 'SSE'],
   websocket: [`${FACT_PREFIX}.choices.websocket`, 'WebSocket'],
   stdio: [`${FACT_PREFIX}.choices.stdio`, 'Local process (stdio)']
 };
+
+/**
+ * The facts of a keyed web search engine (Brave, Staan): whether its API key
+ * credential is set and, while none is, the environment variable the server
+ * falls back to. Never the credential id.
+ *
+ * @param {Object} item - the installation
+ * @param {string} keyEnv - e.g. `BRAVE_SEARCH_API_KEY`
+ * @returns {Array<InstallationFact|null>}
+ */
+function keyedEngineFacts(item, keyEnv) {
+  const keyFact = secretFact('apiKey', label('apiKey', 'API key'), item.values?.apiKeyRef);
+  return [
+    keyFact,
+    keyFact.secret === 'unset'
+      ? { id: 'keyFallback', ...label('keyFallback', 'Without a key'), text: keyEnv, mono: true }
+      : null
+  ];
+}
 
 /** The label of another installation, for `instance` fields (iAssistant's iFinder). */
 function installationName(id, context) {
@@ -321,15 +333,15 @@ const FACTS_BY_DEFINITION = {
     }),
     secretFact('clientSecret', label('clientSecret', 'Client secret'), item.values?.clientSecretRef)
   ],
-  'com.intrafind/web-search': item => [
-    choiceFact(
-      'defaultProvider',
-      label('defaultEngine', 'Default engine'),
-      item.values?.defaultProvider || 'auto',
-      WEB_SEARCH_ENGINES
-    ),
-    secretFact('braveKey', label('braveKey', 'Brave API key'), item.values?.braveCredentialRef),
-    secretFact('staanKey', label('staanKey', 'Staan API key'), item.values?.staanCredentialRef)
+  'com.intrafind/brave-search': item => keyedEngineFacts(item, 'BRAVE_SEARCH_API_KEY'),
+  'com.intrafind/staan-search': item => keyedEngineFacts(item, 'STAAN_API_KEY'),
+  'com.intrafind/qwant-search': () => [
+    {
+      id: 'apiKey',
+      ...label('apiKey', 'API key'),
+      valueKey: `${FACT_PREFIX}.noKeyNeeded`,
+      valueDefault: 'no key needed'
+    }
   ],
   'com.intrafind/office365': (item, context) => [
     fieldFact(item, 'tenantId', 'tenantId', label('tenantId', 'Tenant ID'), {
@@ -457,9 +469,10 @@ export function hasDefinitionFacts(definitionId) {
  * @param {number} [options.limit=DEFAULT_FACT_LIMIT]
  * @returns {InstallationFact[]}
  * @example
- *   installationFacts({ definition: 'com.intrafind/web-search',
- *                       values: { defaultProvider: 'brave', braveCredentialRef: 'brave-key' } });
- *   // → Default engine: Brave Search · Brave API key: set · Staan API key: not set
+ *   installationFacts({ definition: 'com.intrafind/brave-search', values: { apiKeyRef: 'brave-key' } });
+ *   // → API key: set
+ *   installationFacts({ definition: 'com.intrafind/staan-search', values: {} });
+ *   // → API key: not set · Without a key: STAAN_API_KEY
  */
 export function installationFacts(
   item,

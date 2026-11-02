@@ -48,14 +48,100 @@ function AppNameCell({ app, currentLanguage }) {
   );
 }
 
+/** The key of "any web search engine" in the integration status (`type:<type>`). */
+const WEB_SEARCH_TYPE_KEY = 'type:web-search';
+
 /** Names of the integrations an app can require, as shown to admins. */
 const INTEGRATION_NAMES = {
-  websearch: 'Web search integration',
   jira: 'Jira integration',
   ifinder: 'iFinder integration',
   iassistant: 'iAssistant integration',
   'com.intrafind/ldap-directory': 'LDAP people directory (any installation)'
 };
+
+/**
+ * The features an app requires (`requiredFeatures`) that are off, by name. An
+ * id no feature has counts as off and is shown as it is.
+ *
+ * @param {Object} app - App config.
+ * @param {Object[]} [features] - The platform's resolved `features`.
+ * @param {string} language - Current language.
+ * @returns {string[]} Names of the required features that are off.
+ */
+function missingFeatureNames(app, features, language) {
+  if (!Array.isArray(app.requiredFeatures) || !Array.isArray(features)) return [];
+  return app.requiredFeatures.flatMap(id => {
+    const feature = features.find(entry => entry.id === id);
+    if (!feature) return [id];
+    if (feature.enabled !== false) return [];
+    return [getLocalizedContent(feature.name, language) || feature.id];
+  });
+}
+
+/**
+ * The integrations an app's bindings (`app.integrations`) require. Optional
+ * bindings (`required: false`) never hide the app (missingAppIntegrations); a
+ * key may be a definition id: the status map lists definitions too.
+ * iAssistant runs on the iFinder connection; the server hides the app while
+ * that installation is off (missingAppIntegrations), so it is required too.
+ *
+ * @param {Object} app - App config.
+ * @returns {string[]} Installation or definition ids.
+ */
+function requiredBindingIds(app) {
+  const bindings = app.integrations && typeof app.integrations === 'object' ? app.integrations : {};
+  const bound = Object.keys(bindings).filter(id => bindings[id]?.required !== false);
+  const connection = bound.includes('iassistant') ? ['ifinder'] : [];
+  return [...bound, ...connection];
+}
+
+/**
+ * The web search engine an app requires. Web search hides the app only when
+ * the app says it is required, and then while its engine is off: any engine
+ * for Auto (`type:web-search`), the named one otherwise (server:
+ * `integrationRegistry.requiredWebSearchKey`).
+ *
+ * @param {Object} app - App config.
+ * @returns {string[]} The engine's id or `type:web-search`; empty when not required.
+ */
+function requiredWebSearchIds(app) {
+  if (!app.websearch?.enabled || app.websearch.required !== true) return [];
+  const engine = app.websearch.provider;
+  return [engine && engine !== 'auto' ? engine : WEB_SEARCH_TYPE_KEY];
+}
+
+/**
+ * The name an admin sees for a required integration that is off.
+ *
+ * @param {string} id - Installation or definition id, or `type:web-search`.
+ * @param {Function} t - Translator.
+ * @returns {string}
+ */
+function integrationDisplayName(id, t) {
+  if (id === WEB_SEARCH_TYPE_KEY)
+    return t('admin.apps.missingWebSearchEngine', 'A web search engine');
+  return (
+    INTEGRATION_NAMES[id] ||
+    t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id })
+  );
+}
+
+/**
+ * The integrations an app requires (its bindings and its web search engine)
+ * that are off, by name, each name once.
+ *
+ * @param {Object} app - App config.
+ * @param {Object} integrationStatus - Integration ids with whether they are on.
+ * @param {Function} t - Translator.
+ * @returns {string[]} Names of the required integrations that are off.
+ */
+function missingIntegrationNames(app, integrationStatus, t) {
+  const required = new Set([...requiredBindingIds(app), ...requiredWebSearchIds(app)]);
+  const names = [...required]
+    .filter(id => integrationStatus[id] !== true)
+    .map(id => integrationDisplayName(id, t));
+  return [...new Set(names)];
+}
 
 /**
  * The features (`requiredFeatures`) and integrations (every installation or
@@ -73,35 +159,9 @@ const INTEGRATION_NAMES = {
  * @returns {string[]} Names of the required features and integrations that are off.
  */
 function missingRequirements(app, platformConfig, integrationStatus, language, t) {
-  const features = platformConfig?.features;
-  const missingFeatures =
-    Array.isArray(app.requiredFeatures) && Array.isArray(features)
-      ? app.requiredFeatures.flatMap(id => {
-          const feature = features.find(entry => entry.id === id);
-          if (!feature) return [id];
-          if (feature.enabled !== false) return [];
-          return [getLocalizedContent(feature.name, language) || feature.id];
-        })
-      : [];
+  const missingFeatures = missingFeatureNames(app, platformConfig?.features, language);
   if (!integrationStatus) return missingFeatures;
-  // Optional bindings (`required: false`) never hide the app (missingAppIntegrations).
-  // A key may be a definition id: the status map lists definitions too.
-  const bindings = app.integrations && typeof app.integrations === 'object' ? app.integrations : {};
-  const bound = Object.keys(bindings).filter(id => bindings[id]?.required !== false);
-  const missingIntegrations = [];
-  // iAssistant runs on the iFinder connection; the server hides the app while
-  // that installation is off (missingAppIntegrations), so say so here too.
-  const connection = bound.includes('iassistant') ? ['ifinder'] : [];
-  // Web search hides the app only when the app says it is required.
-  const websearch = app.websearch?.enabled && app.websearch.required === true ? ['websearch'] : [];
-  for (const id of new Set([...bound, ...connection, ...websearch])) {
-    if (integrationStatus[id] === true) continue;
-    const name =
-      INTEGRATION_NAMES[id] ||
-      t('admin.apps.missingInstalledIntegration', 'Installed integration "{{id}}"', { id });
-    if (!missingIntegrations.includes(name)) missingIntegrations.push(name);
-  }
-  return [...missingFeatures, ...missingIntegrations];
+  return [...missingFeatures, ...missingIntegrationNames(app, integrationStatus, t)];
 }
 
 function AdminAppsPage() {

@@ -53,7 +53,13 @@ describe('V199 iHub tools → installed integration', () => {
     // Since V202 the files are read by three owners: the iHub connector
     // (ask_user, scheduled tasks), the platform tools of workflows and agents,
     // and the project knowledge tools. Together they are the files V199 retired.
-    const ids = [...IHUB_TOOL_FILE_IDS, ...PLATFORM_TOOL_FILE_IDS, KNOWLEDGE_TOOL_FILE_ID].sort();
+    // The page reader (`read_url`) joined the platform tools with V204; V195
+    // had retired its file, not V199.
+    const ids = [
+      ...IHUB_TOOL_FILE_IDS,
+      ...PLATFORM_TOOL_FILE_IDS.filter(id => id !== 'read_url'),
+      KNOWLEDGE_TOOL_FILE_ID
+    ].sort();
     assert.deepEqual(Object.keys(SHIPPED_HASHES).sort(), ids);
     for (const id of ids) {
       assert.equal(contentHash(shipped(id), sha256), SHIPPED_HASHES[id], id);

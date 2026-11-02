@@ -2679,12 +2679,15 @@
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
         "websearchEnabled": "Enable Web Search",
-        "websearchProvider": "Provider",
+        "websearchProvider": "Search engine",
         "websearchProviderAuto": "Auto",
-        "websearchProviderBrave": "Brave",
-        "websearchProviderStaan": "Staan",
-        "websearchProviderQwant": "Qwant (no API key)",
-        "websearchProviderDesc": "Search engine used when the model has no native search. Auto takes the default engine of the Web search integration (Admin → Integrations → Installed), which otherwise uses Brave when it has an API key, then Staan, and Qwant otherwise. Brave and Staan need an API key on that integration; Qwant needs none but is blocked on many cloud hosts.",
+        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, then any other engine.",
+        "websearchEngineDisabledOption": "{{name}} — disabled",
+        "websearchEngineMissingOption": "{{name}} — not installed",
+        "websearchEngineMissing": "The engine \"{{engine}}\" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.",
+        "websearchEngineDisabled": "The engine \"{{engine}}\" is disabled. Until it is enabled, the app searches natively where the model can and not at all on other models.",
+        "websearchNoEngine": "No search engine is installed: the app searches only on models with native search.",
+        "websearchInstallEngine": "Install an engine",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -2701,7 +2704,7 @@
         "websearchResearchGuidanceCustomDesc": "Optional. Replaces the built-in guidance that is added to the system prompt when web search is on. Leave empty to use the built-in guidance.",
         "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users",
         "websearchRequired": "Required",
-        "websearchRequiredDesc": "Hide the app while the web search integration is disabled or missing. Off: the app stays available without web search.",
+        "websearchRequiredDesc": "Hide the app while its search engine is not available (Auto: no engine is installed and enabled; a named engine: that one is missing or disabled). Off: the app stays available and searches natively where the model can.",
         "toolChoice": "Tool use",
         "toolChoiceDesc": "Whether the model decides for itself to use this app's tools",
         "toolChoiceAuto": "Model decides (default)",
@@ -2832,6 +2835,7 @@
       "openDisabledHint": "Enable the app to open it",
       "openMissingFeaturesHint": "Turn on {{features}} to open it",
       "missingInstalledIntegration": "Installed integration \"{{id}}\"",
+      "missingWebSearchEngine": "A web search engine",
       "test": {
         "title": "Test app",
         "subtitle": "Runs the saved version, as users see it",
@@ -2941,13 +2945,13 @@
       },
       "confirmRemove": {
         "title": "Remove integration?",
-        "message": "Apps that bind \"{{id}}\" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it."
+        "message": "Apps that use \"{{id}}\" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it."
       },
       "confirmDisable": {
         "title": "Disable integration?",
-        "message": "Apps that bind \"{{id}}\" are hidden from users while it is disabled."
+        "message": "Apps that use \"{{id}}\" go without it while it is disabled. An app that requires it is hidden from users."
       },
-      "boundApps": "Bound by: {{apps}}",
+      "boundApps": "Used by: {{apps}}",
       "sideEffect": {
         "read": "read",
         "write": "write",
@@ -3082,7 +3086,9 @@
         "via": {
           "installation": "by this installation",
           "definition": "every {{name}} installation",
-          "type": "every installation of its type"
+          "type": "every installation of its type",
+          "webSearch": "its web search engine",
+          "webSearchAuto": "web search on Auto (the first engine a user may use)"
         },
         "notEditable": "This installation cannot be edited while its definition is missing or incompatible."
       },
@@ -3119,9 +3125,8 @@
         "tenantId": "Tenant ID",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "defaultEngine": "Default engine",
-        "braveKey": "Brave API key",
-        "staanKey": "Staan API key",
+        "apiKey": "API key",
+        "keyFallback": "Without a key",
         "serverUrl": "Server URL",
         "siteUrl": "Site URL",
         "portalUrl": "Portal URL",
@@ -3134,10 +3139,6 @@
         "choices": {
           "ihubSigned": "JWT signed by iHub",
           "oidcTokenExchange": "OIDC token exchange",
-          "auto": "Auto",
-          "brave": "Brave Search",
-          "staan": "Staan",
-          "qwant": "Qwant",
           "streamableHttp": "Streamable HTTP",
           "sse": "SSE",
           "websocket": "WebSocket",
@@ -3146,6 +3147,7 @@
         },
         "secretSet": "set",
         "secretNotSet": "not set",
+        "noKeyNeeded": "no key needed",
         "yes": "yes",
         "no": "no"
       },
@@ -3156,7 +3158,7 @@
         },
         "webSearch": {
           "title": "Web search",
-          "description": "The search engines and the page reader of apps with web search on."
+          "description": "Search engines apps with web search on use; without one, models search natively where they can."
         },
         "storage": {
           "title": "Storage providers",
@@ -3191,6 +3193,17 @@
           "defaultSearchProfileHelp": "The search profile iAssistant conversations search when neither the app nor the model names one.",
           "testResults": "iAssistant connection test",
           "testHelp": "The test reaches iAssistant through the selected iFinder installation as your own admin account, with the values above (unsaved)."
+        },
+        "webSearch": {
+          "engineSection": "Search engine",
+          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, then any other engine). Models with native search do not need an engine.",
+          "apiKey": "API key",
+          "apiKeyHelp": "A credential of type secret holding the {{engine}} API key. Add one under Admin → Integrations → Credentials.",
+          "envFallback": "Without a credential, the server uses the environment variable {{env}} when it is set. A picked credential always wins.",
+          "noKeyNeeded": "{{engine}} needs no API key.",
+          "egressHint": "Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.",
+          "testResults": "Search engine test",
+          "testHelp": "The test checks the API key of the values above (unsaved) and runs one live search from this server."
         },
         "ifinder": {
           "privateKey": "Private key",

@@ -65,7 +65,7 @@ describe('the ihub installation', () => {
     assert.equal(ihub.definition, 'com.intrafind/ihub');
     assert.equal(ihub.enabled, true);
     assert.equal(installedIntegrationService.isAlwaysInstalled('ihub'), true);
-    assert.equal(installedIntegrationService.isAlwaysInstalled('websearch'), false);
+    assert.equal(installedIntegrationService.isAlwaysInstalled('brave'), false);
   });
 
   it('stays enabled when the file says otherwise, and keeps the admin’s action policy', () => {
@@ -99,7 +99,7 @@ describe('the ihub installation', () => {
   it('is reserved for its definition like every singleton id', async () => {
     const service = new InstalledIntegrationService();
     await assert.rejects(
-      service._prepare({ id: 'ihub', definition: 'com.intrafind/web-search', values: {} }),
+      service._prepare({ id: 'ihub', definition: 'com.intrafind/brave-search', values: {} }),
       /reserved for com\.intrafind\/ihub/
     );
   });

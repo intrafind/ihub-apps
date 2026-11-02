@@ -6,7 +6,9 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-The search engines and the page reader are the built-in installed integration **Web search** (`com.intrafind/web-search`), installed once as `websearch` under **Admin → Integrations** (see [Integrations](integrations.md)). The installation holds the engines' API keys and the default engine; a fresh install ships it enabled, and migration V195 creates it on an existing one. Apps only switch web search on in their own settings.
+Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`). An engine installation holds what that engine needs (Brave and Staan: the API key); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
+
+**No engine is needed for native search.** A fresh install ships no engine: an app with web search on searches with the model's own search on Google, OpenAI Responses and Anthropic models, and gets no web search on other models until an engine is installed. The page reader `read_url` belongs to the web search feature, not to an engine.
 
 ### Search Providers
 
@@ -15,15 +17,16 @@ The search engines and the page reader are the built-in installed integration **
 | **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
 | **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
-| **Brave Search** | Server-side | Privacy-focused search, any model (needs an API key) |
-| **Staan Search** | Server-side | European search index, any model, works from cloud hosting (needs an API key) |
-| **Qwant Search** | Server-side | Privacy-focused search, any model, **no API key required** |
+| **Brave Search** | Engine (installation `brave`) | Privacy-focused search, any model (needs an API key) |
+| **Staan Search** | Engine (installation `staan`) | European search index, any model, works from cloud hosting (needs an API key) |
+| **Qwant Search** | Engine (installation `qwant`) | Privacy-focused search, any model, **no API key required** |
+| Your own | Engine (any `web-search` installation) | A `script` or `openapi` definition of type `web-search` |
 
 ### Additional Web Tools
 
 | Tool | Purpose |
 |------|---------|
-| **read_url** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search) |
+| **read_url** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search, with any engine and next to native search on Anthropic and OpenAI Responses) |
 
 ## Unified Web Search Configuration
 
@@ -55,7 +58,8 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"`, `"staan"` or `"qwant"`. `"auto"` takes the `websearch` installation's **Default search engine**; when that is `auto` too, it picks Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise |
+| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, `"qwant"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, Qwant, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
+| `required` | Boolean | `false` | Hide the app while its engine is not available: on `"auto"` while no engine is installed and enabled, on a named engine while that one is missing or disabled. Off, the app stays available and searches natively where the model can |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
@@ -80,98 +84,97 @@ The system automatically selects the best search tool at runtime based on the mo
 │    → Google Search (grounding)                   │
 │                                                  │
 │  useNativeSearch + OpenAI Responses model?       │
-│    → OpenAI Web Search                           │
+│    → OpenAI Web Search (+ page reader)           │
 │                                                  │
 │  useNativeSearch + Anthropic model?              │
-│    → Anthropic Web Search                        │
+│    → Anthropic Web Search (+ page reader)        │
 │                                                  │
-│  Otherwise → provider:                           │
-│    "brave" → Brave Search                        │
-│    "staan" → Staan Search                        │
-│    "qwant" → Qwant Search                        │
-│    "auto"  → the websearch installation's        │
-│              default engine; when that is        │
-│              "auto" too:                         │
-│              Brave if a Brave API key is set,    │
-│              else Staan if a Staan key is set,   │
-│              else Qwant (needs no key)           │
+│  Otherwise → the engine of `provider`:           │
+│    "auto"  → the first engine that is enabled    │
+│              and granted to the user: Brave,     │
+│              Staan, Qwant, then any other        │
+│              engine by id                        │
+│    an id   → that engine, if it is installed,    │
+│              enabled and granted                 │
+│    none    → no web search on this model         │
+│    (the engine's search tool + page reader)      │
 └─────────────────────────────────────────────────┘
 ```
 
-The script-backed search tools and the page reader are the actions of the
-`websearch` installation. The resolution above only happens while that
-installation exists and is enabled; an installation that is off offers no
-search tool and no page reader, and **Admin → Apps** names it as missing for
-every app with `websearch.enabled: true`. The **group grant**
-applies as well (`groups.json` → `permissions.integrations`: `*`, `websearch`,
-`com.intrafind/web-search` or `type:web-search`; see
-[Integrations → Who may use an integration](integrations.md#who-may-use-an-integration)):
-a user whose groups do not grant the installation gets no search tool and no
-page reader, whatever the app says — and no native search either (see
-[Native Search and the Installation](#native-search-and-the-installation)).
+Native search is the app's own feature: it needs **no engine installation and
+no integration grant**. An app with web search on therefore searches on
+Google, OpenAI Responses and Anthropic models even while no engine is
+installed, and the model picker marks the other models as without web search.
 
-The tools keep the ids they had as tool files, so an app or a **workflow node**
-can still list `braveSearch`, `staanSearch`, `qwantSearch` or `read_url` in its
-`tools` (the shipped `claude-style-agent` and `research-assistant` workflows
-do, and a node's generic `webSearch` falls back to `braveSearch` on a model
-without native search). Such a reference is served from the installation, by
-exact id, after the same enabled and group checks; the installation's own id
-(`websearch`) selects nothing in `tools`. Web search for an *app*, though, is
-configured in `websearch` as above — the migration turns a bare search tool
-reference into those settings (see
-[Migration from Legacy Tool Configuration](#migration-from-legacy-tool-configuration)).
+An engine is an installed integration like any other: it is used only while it
+is enabled and one of the user's groups grants it (`groups.json` →
+`permissions.integrations`: `*`, the engine's id such as `brave`, its
+definition id, or `type:web-search` for every engine; see
+[Integrations → Who may use an integration](integrations.md#who-may-use-an-integration)).
+`"auto"` passes over an engine the user may not use, and over one whose
+**Search the web** action an admin switched off; a named engine is used or not
+at all, so an app set to one engine never silently answers from another.
 
-Whenever one of these script-backed search tools is offered — including when a
-provider turns native search down and the loop falls back to it — the page
-reader [`read_url`](#web-content-extractor-read_url) is
-offered next to it. The search tool's automatic extraction only copies a short
-excerpt of the top results (`contentMaxLength` each); the page reader lets the
-model open one specific result, or a URL the user pasted, and read it in full.
+The engine tools keep the ids they always had, so an app or a **workflow node**
+can still list `braveSearch`, `staanSearch`, `qwantSearch` (or a third-party
+engine's `<id>__search`) or `read_url` in its `tools` (the shipped
+`claude-style-agent` and `research-assistant` workflows do). An engine tool is
+served by exact id while its engine is installed, enabled and granted; the
+engine's installation id (`brave`) selects nothing in `tools`. A node's generic
+`webSearch` marker resolves to native search where the model runs it, and
+otherwise to the search tool of the first engine the user may use (`auto`);
+with no engine it adds nothing. Web search for an *app*, though, is configured
+in `websearch` as above.
+
+Whenever an engine's search tool is offered — including when a provider turns
+native search down and the loop falls back to it — the page reader
+[`read_url`](#web-content-extractor-read_url) is offered next to it. The search
+tool's automatic extraction only copies a short excerpt of the top results
+(`contentMaxLength` each); the page reader lets the model open one specific
+result, or a URL the user pasted, and read it in full.
 
 The page reader is also offered next to **Anthropic** and **OpenAI Responses**
 native search, whose requests accept function tools alongside the provider's
-search: the provider searches, the reader opens a result or a pasted URL. It is
-not offered next to **Google** native search. Gemini drops every function
-declaration next to `google_search`; combining the two is a preview feature for
-Gemini 3 models only and requires the server-side tool calls to be circulated
-back through the conversation, which the adapter does not do yet. An admin can
-switch the reader off by switching the installation's **Web page reader**
-action off under **Admin → Integrations → Web search**.
-
-`"auto"` exists so an install without a Brave subscription still gets working
-web search. It asks the installation for its **Default search engine** first,
-so one setting changes the engine for every app on `"auto"` at once. When that
-is `auto` as well, it walks the keyed engines in registration order, so an
-install that already had a Brave key keeps using it and does not change engine
-on upgrade. A named provider — in the app or as the installation default — is
-always honoured as configured, even when it is unconfigured, so the resulting
-error names the engine the admin actually chose rather than silently answering
-from a different one.
+search — with or without an engine: the provider searches, the reader opens a
+result or a pasted URL. It is not offered next to **Google** native search.
+Gemini drops every function declaration next to `google_search`; combining the
+two is a preview feature for Gemini 3 models only and requires the server-side
+tool calls to be circulated back through the conversation, which the adapter
+does not do yet. The reader is a platform tool of the web search feature
+(`server/defaults/tools/read_url.json`), not an engine's action: an admin
+switches it off with a tool file `contents/tools/read_url.json` that says
+`"enabled": false` (**Admin → Tools**).
 
 ### Admin UI Configuration
 
 Web search settings can be configured through the admin panel:
 
 1. Navigate to **Admin → Apps → Edit App**
-2. Scroll to the **Web Search Configuration** section
+2. Open the **Web Search** panel in the **Integrations** section (every chat app has it)
 3. Toggle **Enable Web Search** to activate
-4. Configure provider, result limits, and content extraction settings
+4. Pick the **Search engine** (**Auto** or one of the installed engines), result limits, and content extraction settings
 5. Save changes — no server restart required
 
-The app only switches web search on. The engines themselves — their API keys,
-the default engine and who may use them — are set on the `websearch`
-installation under **Admin → Integrations → Web search** (see
-[API Key Setup](#api-key-setup)). An app with web search on requires that
-installation: when it is missing or disabled, **Admin → Apps** names it as
-missing for the app, and the app offers no search.
+The engine list shows **Auto** and every installed engine, a disabled one
+marked as such. An engine the app names that is not installed (or is
+disabled) stays selected and is called out with a warning: the app then
+searches only natively. While no engine is installed at all, the panel says
+so and links to the catalog.
+
+The engines themselves — their API keys and who may use them — are set on
+their installations under **Admin → Integrations → Web search** (see
+[API Key Setup](#api-key-setup)). Web search does not hide an app while no
+engine is available, unless **Required** is on (`websearch.required: true`):
+then **Admin → Apps** names the missing engine (`type:web-search` for Auto)
+and users do not get the app.
 
 ### User Toggle
 
-When web search is enabled for an app, users see a toggle in the chat input's **+** menu to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+When web search is enabled for an app, users see a toggle in the chat input's **+** menu to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state. The toggle (and the chip below) is offered only on models web search works with: a model whose provider runs native search, or any tool-calling model while an engine is available to the user.
 
 While web search is on, a highlighted **Web search** chip next to the **+** button says so; one click on it turns web search off.
 
-In the model picker of a web search app, a globe marks the models web search works with, and is greyed out on the others — for example a model whose provider has no native search, while native search is off for it and no script-backed provider is usable (a named Brave or Staan provider without an API key, or the `websearch` installation switched off). The server reports what is usable per app on `GET /api/apps/:appId` as `websearchAvailability` (`{ native: [providers], script: boolean }`).
+In the model picker of a web search app, a globe marks the models web search works with, and is greyed out on the others — for example a model whose provider has no native search, while no engine is usable for the user (none installed, the named engine missing or disabled, an engine the user's groups do not grant, or Brave or Staan without an API key). The server reports what is usable per app and user on `GET /api/apps/:appId` as `websearchAvailability` (`{ native: [providers], script: boolean }`).
 
 ### Multi-Step Research
 
@@ -184,7 +187,8 @@ adds a short research instruction to the end of the system prompt:
 - run several searches with different wording (and in another language where that helps);
 - search again with more precise terms when results are thin or disagree;
 - open the most relevant pages and read them in full when the search excerpts are not enough
-  (with script-backed search through the page reader, `read_url`);
+  (with an engine, and next to Anthropic and OpenAI native search, through the page reader,
+  `read_url`);
 - check key claims against more than one source;
 - combine the findings into one answer with the source URLs;
 - stop once the question is answered, without searching for things the model already knows.
@@ -209,7 +213,7 @@ replaces the built-in text (up to 4,000 characters).
 
 How much the model can act on it depends on the search path:
 
-- **Script-backed search (Brave, Staan, Qwant)**: each search is a tool call, so several searches
+- **Engines (Brave, Staan, Qwant, your own)**: each search is a tool call, so several searches
   show up as several tool calls in the turn.
 - **OpenAI and Anthropic native search**: the provider runs the searches; the model can search
   several times per model call (Anthropic up to `maxSearches`).
@@ -255,7 +259,7 @@ ordinary link. How the links get into the answer depends on the search path:
 
 | Path | Citations come from |
 |------|---------------------|
-| Brave, Staan, Qwant | The model, which the source guidance (below) asks to cite with `[n](url)` links |
+| Brave, Staan, Qwant, your own engine | The model, which the source guidance (below) asks to cite with `[n](url)` links |
 | Anthropic | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under *Also considered*, the `cited_text` on the card |
 | Google | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under *Also considered* |
 | OpenAI Responses | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
@@ -270,7 +274,7 @@ When web search is on for a turn, the server adds a short source instruction to
 the system prompt, next to the research guidance. It is not an admin setting —
 the display depends on it — and it covers:
 
-- **Citation format** (script-backed search): cite each claim with a
+- **Citation format** (search through an engine): cite each claim with a
   Markdown link to the source URL, numbered, only URLs the turn returned, no
   separate source list at the end. With native search the provider cites its
   own results, so only pages read with the page reader are to be cited this way
@@ -303,7 +307,7 @@ Apps that previously used websearch tool IDs in their `tools` array are automati
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
 
-Migration V195 then moves the engines into the `websearch` installation:
+Migration V195 then moved the engines into one installation, `websearch` (in 5.6.5-RC1):
 
 - Moves the Brave and Staan API keys from `providers.json` into the credentials
   `integration-websearch-brave` / `integration-websearch-staan` (they were
@@ -320,9 +324,29 @@ Migration V195 then moves the engines into the `websearch` installation:
   enabledByDefault: true, provider }` with the engine it named — the
   installation's default engine when several were listed, else the first — so
   it keeps searching with that engine; the change is logged per app. A
-  `read_url` reference stays: the tool loader serves it from the installation
+  `read_url` reference stays
 
-No manual action is required — the migrations run automatically.
+Migration V204 makes every engine its own installation and removes
+`websearch` ("keep what worked"):
+
+- `brave` is installed where a Brave key was configured (the credential
+  `websearch` referenced, which moves to the engine's **API key** field, or
+  `BRAVE_SEARCH_API_KEY`); `staan` likewise (`STAAN_API_KEY`)
+- `qwant` is installed where Qwant was reachable: the default engine was
+  `auto` without any key, or `qwant`, or an app named `qwant`
+- each engine takes over the enabled state of `websearch`; an engine or page
+  reader action `websearch` had switched off stays off (the page reader
+  through `contents/tools/read_url.json` with `enabled: false`)
+- when the default engine of `websearch` was an explicit one, apps on
+  `auto` are set to that engine, so their engine does not change
+- group grants of `websearch` (or `com.intrafind/web-search`) become
+  `type:web-search`; app bindings and `tools` entries naming `websearch` are
+  removed
+- a fresh install gets no engine
+
+No manual action is required — the migrations run automatically. Check the
+server log for the `V204` lines: they name each engine installed or not, and
+why.
 
 ## Answer Source Attribution
 
@@ -358,42 +382,38 @@ badge.
 ### API Key Setup
 
 Brave Search and Staan Search each require an API key. **Qwant requires none**
-and works as soon as an app selects it. The keys belong to the `websearch`
-installation — there is no web search category under **Admin → Providers** any
-more, and the keys are not in `providers.json`.
+and works as soon as its engine is installed (from a host Qwant accepts, see
+below). The keys belong to the engine installations — there is no web search
+category under **Admin → Providers**, and the keys are not in `providers.json`.
 
 #### Installation and Credentials (Recommended)
 
-1. Store each key as a credential of type **secret** under **Admin →
-   Integrations → Credentials** (one for Brave, one for Staan)
-2. Open **Admin → Integrations → Web search** (the installation
-   `websearch`, definition `com.intrafind/web-search`) and fill in its fields:
-   - **Brave Search API key** (`braveCredentialRef`): the Brave credential
-   - **Staan API key** (`staanCredentialRef`): the Staan credential
-   - **Default search engine** (`defaultProvider`): `auto`, `brave`, `staan`
-     or `qwant` — what an app's `websearch.provider: "auto"` resolves to (see
-     [How Provider Resolution Works](#how-provider-resolution-works))
-   - **Qwant**: nothing to configure
-3. Save — no server restart required. **Test** on the installation runs one
-   live search (see [Connectivity Test](#connectivity-test-admin-ui))
+1. Store the key as a credential of type **secret** under **Admin →
+   Integrations → Credentials**
+2. Install the engine from **Admin → Integrations → Catalog → Web search**
+   (**Brave Search** installs as `brave`, **Staan** as `staan`), or open its
+   tile on the **Installed** tab, and pick the credential in **API key**
+   (`apiKeyRef`)
+3. **Test connection** checks the key of the values as entered and runs one
+   live search (see [Connectivity Test](#connectivity-test-admin-ui)); save —
+   no server restart required
 
-The installation's **groups** restrict who gets web search at all — the
-script-backed search tools, the page reader, a `braveSearch` / `read_url`
-reference in an app's or a workflow node's `tools`, native search on Google,
-OpenAI and Anthropic, and the fallback tool offered when a provider turns
-native search down — and the installation can be switched off as a whole,
-which takes all of these away from every app.
+The engine's **groups** decide who may use it (**Admin → Groups → a group →
+Integrations**: the engine, or **All web search engines**,
+`type:web-search`). An engine can be switched off as a whole, which takes its
+search tool away from every app; native search is not affected.
 
-Credentials are encrypted at rest using AES-256-GCM. On an upgrade, migration
-V195 moves the keys that were stored under **Admin → Providers** into the
-credentials `integration-websearch-brave` and `integration-websearch-staan` and
-references them from the installation, so nothing has to be re-entered.
+Credentials are encrypted at rest using AES-256-GCM. On an upgrade, migrations
+V195 and V204 carry the keys that were stored under **Admin → Providers** into
+the credentials `integration-websearch-brave` and `integration-websearch-staan`
+and reference them from the engine installations, so nothing has to be
+re-entered.
 
 #### Environment Variables (Fallback)
 
 Set `BRAVE_SEARCH_API_KEY` or `STAAN_API_KEY` as a real environment variable (or in the `.env` file of a source checkout). The shipped `config.env` of the binary distribution no longer lists them.
 
-The environment variable applies when the installation references no credential for that engine; a referenced credential wins.
+The environment variable applies when the engine installation references no credential (or the referenced one is empty); a referenced credential wins. The variable alone does not make an engine available: the engine must be installed.
 
 ### Search Language
 
@@ -433,15 +453,16 @@ A model can still override the language for one search by passing the tool's
 
 Whether a search provider *can be reached from this server* is a separate
 question from whether it is configured correctly, and for Qwant it is the one
-that usually decides the outcome. The **Test** button of the `websearch`
-installation — on its tile under **Admin → Integrations**, and in
-the installation wizard — answers it directly. It reports two steps:
+that usually decides the outcome. The **Test** button of an engine
+installation — on its tile under **Admin → Integrations**, on its page and in
+its editor (with the values as entered, unsaved) — answers it directly. It
+reports two steps:
 
-- **API keys**: which engines have a key (Brave, Staan; Qwant needs none),
-  whether from a credential or from the environment variable.
-- **Search with …**: one live search with the installation's default engine
-  (the first keyed engine, else Qwant, when the default is `auto`). A default
-  engine without a key fails this step straight away.
+- **API key**: where the key comes from (the credential, or the environment
+  variable), a referenced credential that is empty, or that there is none
+  (Qwant needs none).
+- **Search with …**: one live search with that engine and that key. An engine
+  without a key fails before it searches.
 
 The search **bypasses the result cache**, so it reports the engine's behaviour
 right now rather than replaying an earlier success. The verdict names what to
@@ -456,7 +477,7 @@ do next, with remediation hints:
 
 A **Blocked** result is deliberately not a configuration problem. It means the
 request reached Qwant and Qwant declined to answer *this IP address*; no setting
-on the installation will change that, and retrying will not either. The hints
+on the engine will change that, and retrying will not either. The hints
 point at the egress IP and the outbound proxy's exit address, because that is
 the variable in play.
 
@@ -484,31 +505,33 @@ Native search providers (Google Search, OpenAI Web Search, and Anthropic Web Sea
 
 Native search is tuned per model in the model configuration (`nativeWebSearch`, see [Models → Native Web Search](models.md#native-web-search)):
 
-- `enabled: false` turns native search off for one model — for example an Anthropic-compatible gateway that does not implement the server tool — so apps fall back to Brave Search on that model.
+- `enabled: false` turns native search off for one model — for example an Anthropic-compatible gateway that does not implement the server tool — so apps use their engine on that model.
 - Anthropic only: `toolVersion` selects the web search tool version (`web_search_20250305`, the basic version, by default; `web_search_20260209` and `web_search_20260318` add dynamic filtering on Claude 4.6 and later) and `dynamicFiltering` opts into filtering search results through code execution. Without it, newer versions are called directly (`allowed_callers: ["direct"]`), which is also what Google Cloud and Azure-hosted Foundry require.
 
 Three safeguards apply to every native search call:
 
 - **Search cap.** The app's `websearch.maxSearches` (default 5) or a workflow node's `maxWebSearches` is sent to Anthropic as `max_uses`. Once the cap is reached the model answers with what it has; the refused search reports `max_uses_exceeded` and is not billed.
-- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the `braveSearch` tool instead. The rejection is remembered for 15 minutes per model so later calls skip the failing request. The fallback tool is subject to the `websearch` installation like every other search tool: off, or closed to the user's groups, and the retry runs without web search.
+- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the app's engine instead (its `websearch.provider`; `auto` for a workflow node), with the page reader. The rejection is remembered for 15 minutes per model so later calls skip the failing request. The fallback engine follows the same rules as any engine: missing, disabled or closed to the user's groups, and the retry runs without web search.
 
-#### Native Search and the Installation
+#### Native Search Needs No Engine
 
-Native search is run by the model's provider, but it is still the app's web search, which belongs to the `websearch` installation: `resolveAppNativeWebSearch` resolves it only while the installation is enabled and one of the user's groups grants it (`permissions.integrations`). A user whose groups do not grant it gets no native search on a Gemini, OpenAI or Anthropic model, just as they get no script-backed search tool on any other — the group grant decides who gets web search at all, not which kind. Workflow nodes that list the generic `webSearch` marker resolve native search per node and are not gated by the installation; their fallback to `braveSearch`, and any `braveSearch` / `read_url` they list directly, is.
+Native search is run by the model's provider and is the app's own feature: `resolveAppNativeWebSearch` resolves it from the app's `websearch` settings and the model alone. It needs no engine installation and no integration grant (`permissions.integrations` decides who may use an *engine*, not who gets web search). An app with web search on therefore searches natively on Gemini, OpenAI Responses and Anthropic models on an install without any engine. Workflow nodes that list the generic `webSearch` marker resolve native search per node the same way; their fallback to the first engine the user may use, and any `braveSearch` they list directly, follows the engine's enabled state and grant.
 - **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
 
 The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
 
 ## Tools Reference
 
-The three search tools and the page reader are the **actions** of the
-`websearch` installation, not tool files: `braveSearch`, `staanSearch`,
-`qwantSearch` and `read_url` keep their ids, but there is no
-`contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`,
-`read_url.json`) any more, and they are not listed under **Admin → Tools**.
-They are switched on and off, and restricted to groups, on the installation
-under **Admin → Integrations → Web search**. Their throttling is
-unchanged (Brave: one request at a time, 1100 ms apart).
+The three search tools are the **Search the web** action (`search`) of their
+engine installations, not tool files: `braveSearch` (`brave`), `staanSearch`
+(`staan`) and `qwantSearch` (`qwant`) keep their ids, but there is no
+`contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`)
+any more, and they are not listed under **Admin → Tools**. They are switched
+on and off, and restricted to groups, on their engine under **Admin →
+Integrations → Web search**. Their throttling is unchanged (Brave: one request
+at a time, 1100 ms apart). The page reader `read_url` is a platform tool of the
+web search feature, read from `server/defaults/tools/read_url.json` (see
+[Web Content Extractor](#web-content-extractor-read_url)).
 
 ### Brave Search (`braveSearch`)
 
@@ -589,8 +612,10 @@ request carrying both, so `includeDomains` wins when both are given.
 
 ### Result Shape and Filters
 
-All three script-backed tools share one result shape (`tools/lib/searchWithExtraction.js`),
-so an app can switch provider without the model seeing a different contract:
+All three shipped engines share one result shape (`tools/lib/searchWithExtraction.js`),
+so an app can switch engine without the model seeing a different contract (a
+third-party engine returns the same shape, see
+[Writing your own engine](#writing-your-own-engine)):
 `{ title, url, description, hostname }` plus, where the provider returns them,
 `publishedDate` (ISO 8601), `age`, `snippets` and `favicon`. The chat's source
 cards are drawn from these fields.
@@ -608,6 +633,76 @@ as `filters` in the result.
 > supported one for the same language (`de-CH` → `de-de`), and an unsupported
 > language to `en-us`. Note that iHub defaults to `en-us` rather than to the
 > API's own default of `fr-fr`.
+
+### Writing your own engine
+
+An engine is any integration definition with `"type": "web-search"` (the
+**engine contract**). A third party ships one as a `script` definition (its own
+connector module) or an `openapi` definition from a marketplace registry; once
+installed, it appears under **Admin → Integrations → Web search**, in the app
+editor's engine list, in **All web search engines** (`type:web-search`) on the
+group page, and after the shipped engines in `auto`'s order (by installation
+id). The contract:
+
+- The definition declares **one action named `search`** (the definition
+  schema refuses a `web-search` definition without it, except for MCP and A2A
+  definitions, whose actions are listed at run time). Its tool is
+  `<installation id>__search`; only shipped definitions keep fixed tool ids.
+- `search` takes **`query`** (string, required). It may take **`maxResults`**
+  (integer), **`extractContent`** (boolean) and **`contentMaxLength`**
+  (integer): when the parameter schema declares them, the app's
+  `websearch.maxResults`, `extractContent` and `contentMaxLength` become their
+  defaults, clamped to the schema's `minimum` / `maximum`. Further optional
+  parameters (`language`, `freshness`, `includeDomains`) are passed through as
+  the model sends them.
+- It returns the result shape of the shipped engines: `{ results: [{ title,
+  url, description, hostname, publishedDate?, favicon? }] }`, optionally with
+  `extractedContent: [{ url, contentExtracted, content }]`. The chat's sources
+  panel reads the hits from it. A third-party engine's hits are kept
+  **private** (not shared with a chat share), because iHub cannot know that it
+  searched the open web; declare them public with a sources declaration
+  (`"sources": { …, "public": true }`) if they are.
+- The web search feature calls the action like any other integration action:
+  the installation must be enabled and the user's groups must grant it; its
+  `test` should run one search.
+
+A minimal `script` engine:
+
+```js
+// connector.js of org.example__web-search (type "web-search")
+export default {
+  actions: {
+    search: {
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'What to search for' },
+          maxResults: { type: 'integer', minimum: 1, maximum: 20, default: 10 }
+        },
+        required: ['query']
+      },
+      async run({ query, maxResults = 10 }, ctx) {
+        const hits = await searchMyIndex(query, maxResults, ctx.values);
+        return {
+          results: hits.map(h => ({
+            title: h.title,
+            url: h.url,
+            description: h.snippet,
+            hostname: new URL(h.url).hostname
+          }))
+        };
+      }
+    }
+  },
+  async test({ values }) {
+    await searchMyIndex('test', 1, values);
+    return [{ id: 'search', label: 'Search', status: 'ok', message: 'Answered' }];
+  }
+};
+```
+
+See [Building an Integration](integration-development.md#web-search-engines) for the
+definition file and how to publish it.
 
 ### Native Search Providers (Google, OpenAI, Anthropic)
 
@@ -631,7 +726,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: The **Web page reader** action of the `websearch` installation (there is no `contents/tools/read_url.json`), offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Switch the action off on the installation to stop offering it; an installation that is off, or closed to the user's groups, offers it to nobody. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
+**Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V204 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
@@ -745,22 +840,20 @@ The web content extractor includes protection against Server-Side Request Forger
 
 ### Common Issues
 
-1. **"BRAVE_SEARCH_API_KEY is not set"**
+1. **"Brave Search API key is not configured"**
    - Store the key as a **secret** credential under Admin → Integrations → Credentials and
-     reference it in the **Brave Search API key** field of the `websearch` installation
-     (Admin → Integrations → Web search) (recommended)
+     pick it in the **API key** field of the `brave` engine (Admin → Integrations → Web search →
+     Brave Search) (recommended)
    - Or set the `BRAVE_SEARCH_API_KEY` environment variable and restart the server
-   - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key, or set
-     the installation's **Default search engine** to Qwant. `"auto"` already does this on an
-     install with no Brave key
+   - Or install Qwant, which needs no key, and switch the app to it (`websearch.provider:
+     "qwant"`), or uninstall or disable Brave so that `"auto"` takes the next engine
 
 2. **Qwant search fails with `QWANT_CAPTCHA`**
    - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
      so this is about where the server sends its traffic from, not how it is
      configured, and no retry or setting will clear it
-   - Confirm it for the host with **Test** on the `websearch` installation
-     (Admin → Integrations) while Qwant is its default engine,
-     or `node tests/manual/manual-test-qwant-search.js`
+   - Confirm it for the host with **Test** on the `qwant` engine
+     (Admin → Integrations), or `node tests/manual/manual-test-qwant-search.js`
    - Route outbound search traffic through an egress IP Qwant accepts, or
      configure Brave or Staan Search for that install
 
@@ -775,22 +868,24 @@ The web content extractor includes protection against Server-Side Request Forger
 
 5. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
-   - Migration V195 moves the Brave and Staan keys from **Admin → Providers** into the
-     credentials `integration-websearch-brave` / `integration-websearch-staan` and creates the
-     `websearch` installation; check that it exists and is enabled under **Admin → Integrations**
-     (**Admin → Apps** names it as missing otherwise) and that one of the user's groups grants it
-     (**Admin → Groups → Integrations**)
-   - Check server logs for migration output
+   - Migrations V195 and V204 move the Brave and Staan keys from **Admin → Providers** into the
+     credentials `integration-websearch-brave` / `integration-websearch-staan` and install one
+     engine per key (and Qwant where it was reachable); check under **Admin → Integrations → Web
+     search** that the app's engine exists and is enabled, and that one of the user's groups
+     grants it (**Admin → Groups → Integrations**). Without an engine the app searches only on
+     models with native search
+   - Check server logs for migration output (`V204` names each engine it installed or not, and
+     why)
    - Verify the app has `websearch.enabled: true` in its configuration
 
 6. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
    - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
-   - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to Brave Search
+   - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to the app's engine
 
-7. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+7. **Answers on a Claude model come from an engine although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
    - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
-   - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses Brave Search without the failed attempt
+   - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses the app's engine without the failed attempt
    - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
 
 8. **Brave Search requests hang or time out**

@@ -69,7 +69,8 @@ function activeTab(tabParam, hasReleases) {
 
 /**
  * How a bound app reaches the installation, for the "Apps that use it" list:
- * by its id, by its definition id or by its type.
+ * by its id, by its definition id, by its type, or (web search engines) as
+ * its named engine or through web search on Auto.
  *
  * @param {{ via: string }} app - an entry of `appsBindingInstallation`
  * @param {Object} instance - the installation
@@ -77,15 +78,23 @@ function activeTab(tabParam, hasReleases) {
  * @returns {string}
  */
 function bindingViaLabel(app, instance, t) {
-  if (app.via === 'installation') {
-    return t('admin.integrations.page.via.installation', 'by this installation');
+  switch (app.via) {
+    case 'installation':
+      return t('admin.integrations.page.via.installation', 'by this installation');
+    case 'definition':
+      return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
+        name: instance.definitionName || instance.definition
+      });
+    case 'webSearch':
+      return t('admin.integrations.page.via.webSearch', 'its web search engine');
+    case 'webSearchAuto':
+      return t(
+        'admin.integrations.page.via.webSearchAuto',
+        'web search on Auto (the first engine a user may use)'
+      );
+    default:
+      return t('admin.integrations.page.via.type', 'every installation of its type');
   }
-  if (app.via === 'definition') {
-    return t('admin.integrations.page.via.definition', 'every {{name}} installation', {
-      name: instance.definitionName || instance.definition
-    });
-  }
-  return t('admin.integrations.page.via.type', 'every installation of its type');
 }
 
 /**
@@ -225,7 +234,8 @@ function InstallationPageContent({ instanceId }) {
     }
   };
 
-  // Disabling hides every app that binds the installation: ask first when there is one.
+  // Disabling takes the installation from every app that uses it, and hides an app
+  // that requires it: ask first when there is one.
   const requestToggle = () => {
     if (instance.enabled !== false && boundApps.length > 0) setConfirm('disable');
     else void toggle();
@@ -676,18 +686,18 @@ function InstallationPageContent({ instanceId }) {
               {confirm === 'disable'
                 ? t(
                     'admin.integrationCatalog.confirmDisable.message',
-                    'Apps that bind "{{id}}" are hidden from users while it is disabled.',
+                    'Apps that use "{{id}}" go without it while it is disabled. An app that requires it is hidden from users.',
                     { id: instance.id }
                   )
                 : t(
                     'admin.integrationCatalog.confirmRemove.message',
-                    'Apps that bind "{{id}}" lose its actions and are hidden from users until the binding is removed. A stored service-account token is deleted with it.',
+                    'Apps that use "{{id}}" lose its actions. An app that requires it is hidden from users until its configuration changes. A stored service-account token is deleted with it.',
                     { id: instance.id }
                   )}
             </p>
             {boundApps.length > 0 && (
               <p className="mt-2" data-testid="bound-apps">
-                {t('admin.integrationCatalog.boundApps', 'Bound by: {{apps}}', {
+                {t('admin.integrationCatalog.boundApps', 'Used by: {{apps}}', {
                   apps: boundApps.map(app => app.name).join(', ')
                 })}
               </p>

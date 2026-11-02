@@ -9,7 +9,12 @@
  *   `read_inbox`, `write_inbox`, `create_task`, `list_tasks`,
  *   `mark_task_done` (`server/tools/agentTools.js`);
  * - the evidence tools: `evidence_collect`, `evidence_validateQuotesFastPath`,
- *   `evidence_composeReport` (`server/tools/evidence.js`).
+ *   `evidence_composeReport` (`server/tools/evidence.js`);
+ * - the page reader of the web search feature, `read_url`
+ *   (`server/tools/webContentExtractor.js`). It is no web search engine's
+ *   action: `getToolsForApp` offers it next to whatever engine an app's web
+ *   search uses, and next to native search where the provider takes function
+ *   tools; an app or a workflow node that names it in `tools` gets it as well.
  *
  * They are plain tools — no `_integration` marker, not listed on the
  * Integrations page — loaded by `loadTools()` next to the configured tools,
@@ -37,6 +42,7 @@ export const PLATFORM_TOOL_FILE_IDS = Object.freeze([
   'mark_task_done',
   'read_inbox',
   'read_memory',
+  'read_url',
   'write_artifact',
   'write_inbox',
   'write_memory'

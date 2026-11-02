@@ -20,7 +20,12 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { actionTracker } from '../../../actionTracker.js';
-import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
+import {
+  getToolsForApp,
+  runTool,
+  resolveNativeWebSearchProvider,
+  resolveWebSearchEngineToolId
+} from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import llmClient from '../../loop/LLMClient.js';
 import { AgentLoop } from '../../loop/AgentLoop.js';
@@ -374,7 +379,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // models with native (provider-handled) search (Google, OpenAI
       // Responses, Anthropic) it resolves to that native capability, passed
       // straight to the adapter as `nativeWebSearch`. For everything else it
-      // falls back to the real, script-backed `braveSearch` tool.
+      // falls back to the search tool of the first web search engine the
+      // user may use (`auto`: Brave, Staan, Qwant, then any other engine),
+      // and to no search at all while no engine is available.
       //
       // Gemini API limitation: google_search CANNOT be combined with
       // function calling. If we sent both, the API would silently drop all
@@ -422,8 +429,20 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           configuredToolIds = [];
         } else if (!nativeWebSearch) {
           // No native search capability for this provider — fall back to
-          // the real, script-backed braveSearch tool.
-          configuredToolIds.push('braveSearch');
+          // the search tool of the first engine available to the user.
+          const engineToolId = await resolveWebSearchEngineToolId('auto', {
+            user: context?.user,
+            language
+          });
+          if (engineToolId) {
+            if (!configuredToolIds.includes(engineToolId)) configuredToolIds.push(engineToolId);
+          } else {
+            this.logger.info('No web search engine for the node — webSearch has no effect', {
+              component: 'PromptNodeExecutor',
+              modelId: model?.id,
+              nodeId: node.id
+            });
+          }
         }
       }
       let tools = [];

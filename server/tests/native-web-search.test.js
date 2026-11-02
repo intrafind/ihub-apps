@@ -22,19 +22,16 @@ import {
   DEFAULT_NATIVE_WEB_SEARCH_MAX_USES
 } from '../toolLoader.js';
 
-// Native search is the app's web search, which belongs to the `websearch`
-// installation: it is resolved only while that installation is on and open
-// to the user.
-let installed = [{ id: 'websearch', definition: 'com.intrafind/web-search', enabled: true }];
+// Native search is the app's own web search, run by the model's provider: it
+// needs no engine installation and no integration grant. The tests prove it
+// with no installation at all and with groups that grant nothing.
+let installed = [];
 configCache.getIntegrations = () => ({ data: { installed } });
-// Who may use it (#3093): every group, unless a test narrows it.
-const OPEN_GROUPS = {
-  anonymous: { id: 'anonymous', permissions: { integrations: ['*'] } },
-  research: { id: 'research', permissions: { integrations: ['*'] } },
-  staff: { id: 'staff', permissions: { integrations: ['*'] } }
+const NO_GRANTS = {
+  anonymous: { id: 'anonymous', permissions: { integrations: [] } },
+  staff: { id: 'staff', permissions: { integrations: [] } }
 };
-let groups = OPEN_GROUPS;
-configCache.getGroups = () => ({ data: { groups } });
+configCache.getGroups = () => ({ data: { groups: NO_GRANTS } });
 import AnthropicAdapter, { buildAnthropicWebSearchTool } from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
@@ -52,7 +49,7 @@ import { sseResponse, fakeResponse, makeClient, MODELS } from './loop/helpers/ll
 const directive = provider => ({
   provider,
   maxUses: DEFAULT_NATIVE_WEB_SEARCH_MAX_USES,
-  fallback: 'braveSearch'
+  fallback: 'auto'
 });
 
 describe('resolveNativeWebSearchProvider', () => {
@@ -131,7 +128,7 @@ describe('resolveAppNativeWebSearch', () => {
     );
   });
 
-  it('returns null for a provider without native search (caller falls back to braveSearch)', () => {
+  it('returns null for a provider without native search (caller uses the app’s engine)', () => {
     assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'mistral', undefined), null);
   });
 
@@ -146,43 +143,30 @@ describe('resolveAppNativeWebSearch', () => {
     );
   });
 
-  it('returns null while the websearch installation is off or missing', () => {
+  it('needs no engine installation and no integration grant', () => {
     const was = installed;
     try {
-      installed = [{ id: 'websearch', enabled: false }];
-      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'anthropic', undefined), null);
-      installed = [];
-      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'google', undefined), null);
+      for (const engines of [
+        [],
+        [{ id: 'brave', definition: 'com.intrafind/brave-search', enabled: false }]
+      ]) {
+        installed = engines;
+        assert.deepStrictEqual(
+          resolveAppNativeWebSearch(baseApp, 'anthropic', undefined),
+          directive('anthropic')
+        );
+        assert.deepStrictEqual(
+          resolveAppNativeWebSearch(baseApp, 'google', undefined, undefined),
+          directive('google')
+        );
+      }
+      // The user's groups grant no integration at all.
+      assert.deepStrictEqual(
+        resolveAppNativeWebSearch(baseApp, 'openai-responses', undefined, undefined),
+        directive('openai-responses')
+      );
     } finally {
       installed = was;
-    }
-  });
-
-  it('applies the group grant: a user whose groups do not grant the installation gets no native search', () => {
-    try {
-      groups = {
-        anonymous: { id: 'anonymous', permissions: { integrations: [] } },
-        research: { id: 'research', permissions: { integrations: ['websearch'] } },
-        staff: { id: 'staff', permissions: { integrations: [] } }
-      };
-      const model = undefined;
-      assert.strictEqual(
-        resolveAppNativeWebSearch(baseApp, 'anthropic', undefined, model, {
-          id: 'u',
-          groups: ['staff']
-        }),
-        null
-      );
-      assert.strictEqual(resolveAppNativeWebSearch(baseApp, 'google', undefined, model), null);
-      assert.deepStrictEqual(
-        resolveAppNativeWebSearch(baseApp, 'anthropic', undefined, model, {
-          id: 'u',
-          groups: ['research']
-        }),
-        directive('anthropic')
-      );
-    } finally {
-      groups = OPEN_GROUPS;
     }
   });
 });
@@ -650,7 +634,7 @@ describe('anthropic.js — web search tool version, search cap and caller select
     url: 'https://api.anthropic.com/v1/messages',
     provider: 'anthropic'
   };
-  const capped = { provider: 'anthropic', maxUses: 4, fallback: 'braveSearch' };
+  const capped = { provider: 'anthropic', maxUses: 4, fallback: 'auto' };
 
   it('defaults to the basic tool version and sends the search cap as max_uses', async () => {
     const req = await AnthropicAdapter.createCompletionRequest(baseModel, messages, 'key', {
@@ -998,14 +982,14 @@ describe('native web search fallback', () => {
     const loop = new AgentLoop({
       llmClient: client,
       resolveNativeWebSearchFallbackTools: async directive =>
-        directive.fallback === 'braveSearch' ? [braveTool] : []
+        directive.fallback === 'auto' ? [braveTool] : []
     });
 
     const result = await loop.run({
       model: MODELS.anthropic,
       messages: [{ role: 'user', content: 'search something' }],
       tools: [],
-      options: { nativeWebSearch: { provider: 'anthropic', maxUses: 5, fallback: 'braveSearch' } },
+      options: { nativeWebSearch: { provider: 'anthropic', maxUses: 5, fallback: 'auto' } },
       executeTool: async () => ({ ok: true })
     });
 
@@ -1015,7 +999,7 @@ describe('native web search fallback', () => {
     assert.deepStrictEqual(calls[0].request.body.nativeWebSearch, {
       provider: 'anthropic',
       maxUses: 5,
-      fallback: 'braveSearch'
+      fallback: 'auto'
     });
     assert.strictEqual(calls[1].request.body.nativeWebSearch ?? null, null);
     assert.deepStrictEqual(

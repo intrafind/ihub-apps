@@ -1,22 +1,6 @@
 {
   "installed": [
     {
-      "id": "websearch",
-      "definition": "com.intrafind/web-search",
-      "enabled": true,
-      "values": {
-        "defaultProvider": "auto"
-      },
-      "auth": {
-        "mode": "none"
-      },
-      "actions": {
-        "enabled": ["*"],
-        "disabled": [],
-        "overrides": {}
-      }
-    },
-    {
       "id": "drawio",
       "definition": "mcp/drawio",
       "enabled": false,
