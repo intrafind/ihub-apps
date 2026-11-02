@@ -76,12 +76,15 @@ export class OAuthTokenError extends Error {
    * @param {Object} [details]
    * @param {string} [details.errorCode] - The OAuth `error` the server answered with
    * @param {number} [details.status] - HTTP status
+   * @param {string} [details.errorDescription] - The server's `error_description`, for
+   *   classification only (never put into a URL or a user-facing message)
    */
-  constructor(message, { errorCode, status } = {}) {
+  constructor(message, { errorCode, status, errorDescription } = {}) {
     super(message);
     this.name = 'OAuthTokenError';
     if (errorCode) this.errorCode = errorCode;
     if (status) this.status = status;
+    if (errorDescription) this.errorDescription = errorDescription;
   }
 }
 
@@ -343,9 +346,11 @@ async function tokenErrorFrom(response) {
     body = null;
   }
   const errorCode = typeof body?.error === 'string' ? body.error : undefined;
+  const errorDescription =
+    typeof body?.error_description === 'string' ? body.error_description.slice(0, 512) : undefined;
   return new OAuthTokenError(
     `Token endpoint answered HTTP ${response.status}${errorCode ? ` (${errorCode})` : ''}`,
-    { errorCode, status: response.status }
+    { errorCode, status: response.status, errorDescription }
   );
 }
 
@@ -455,6 +460,25 @@ export function normalizeTokenResponse(raw, previousRefreshToken) {
  *   `authorize` | `exchange` | `refresh` | `revoke`; the MCP strategy also reads
  *   `publicBase` / `trustedBase` / `redirectUri` from it
  */
+
+/**
+ * Whether tokens bound to `binding` belong to the server and client of
+ * `context` (credentials are keyed by issuer). A binding that names neither
+ * (tokens from before bindings existed) matches.
+ *
+ * @param {{authorizationServerUrl?: string, clientId?: string}} binding
+ * @param {OAuthServerContext} context
+ * @returns {boolean}
+ */
+export function bindingMatches(binding = {}, context = {}) {
+  if (
+    binding.authorizationServerUrl &&
+    binding.authorizationServerUrl !== String(context.authorizationServerUrl)
+  ) {
+    return false;
+  }
+  return !(binding.clientId && binding.clientId !== context.clientInformation?.client_id);
+}
 
 export class OAuthUserClient {
   /**
@@ -576,11 +600,7 @@ export class OAuthUserClient {
    */
   async refresh({ refreshToken, binding = {}, ctx = {}, refreshFn }) {
     const context = await this.strategy.resolve({ ...ctx, purpose: 'refresh' });
-    if (
-      (binding.authorizationServerUrl &&
-        binding.authorizationServerUrl !== String(context.authorizationServerUrl)) ||
-      (binding.clientId && binding.clientId !== context.clientInformation?.client_id)
-    ) {
+    if (!bindingMatches(binding, context)) {
       throw new OAuthTokenError('Tokens were issued to another client', {
         errorCode: 'other_client'
       });
@@ -614,12 +634,18 @@ export class OAuthUserClient {
    * Revoke tokens at the issuer's revocation endpoint (RFC 7009), best effort:
    * failures are logged, never thrown.
    *
+   * Like {@link refresh}, tokens whose binding names another authorization
+   * server or client are never sent: the server the strategy resolves now is
+   * not the one that issued them (a repointed MCP server). The caller still
+   * deletes them locally.
+   *
    * @param {Object} params
    * @param {{accessToken?: string, refreshToken?: string}} params.tokens
+   * @param {{authorizationServerUrl?: string, clientId?: string}} [params.binding] - What the tokens were issued for
    * @param {Object} [params.ctx]
    * @returns {Promise<boolean>} True when the server accepted every revocation
    */
-  async revoke({ tokens, ctx = {} }) {
+  async revoke({ tokens, binding = {}, ctx = {} }) {
     let context;
     try {
       context = await this.strategy.resolve({ ...ctx, purpose: 'revoke' });
@@ -633,6 +659,13 @@ export class OAuthUserClient {
     }
     const endpoint = context.metadata?.revocation_endpoint;
     if (!endpoint) return false;
+    if (!bindingMatches(binding, context)) {
+      logger.warn('OAuth revocation skipped: the tokens were issued by another server or client', {
+        component: COMPONENT,
+        strategy: this.strategy.id
+      });
+      return false;
+    }
     const candidates = [
       tokens?.refreshToken ? ['refresh_token', tokens.refreshToken] : null,
       tokens?.accessToken ? ['access_token', tokens.accessToken] : null

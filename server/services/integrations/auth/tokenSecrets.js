@@ -19,6 +19,8 @@
  * @module services/integrations/auth/tokenSecrets
  */
 import crypto from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import tokenStorage from '../../TokenStorageService.js';
 
 /** The token store's file-name allowlist (kept in sync with TokenStorageService). */
 export const SAFE_STORAGE_ID = /^[A-Za-z0-9._@+-]+$/;
@@ -83,6 +85,27 @@ export function parseSecretRef(ref) {
     storageId: at > 0 ? stem.slice(0, at) : stem,
     providerId: at > 0 ? stem.slice(at + 2) : null
   };
+}
+
+/**
+ * Delete exactly the token file a `secretRef` names — never the legacy
+ * unscoped fallback the token store would read for a missing scoped file,
+ * which may belong to another installation.
+ *
+ * @param {string} secretRef
+ * @returns {Promise<boolean>} Whether a file was removed
+ */
+export async function deleteSecretFile(secretRef) {
+  const parsed = parseSecretRef(secretRef);
+  if (parsed?.type !== 'tokenstore') return false;
+  const file = tokenStorage._tokenFilePath(parsed.storageId, parsed.service, parsed.providerId);
+  try {
+    await fs.unlink(file);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
 }
 
 /**

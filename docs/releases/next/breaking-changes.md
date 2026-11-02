@@ -273,13 +273,16 @@ with one code, `INTEGRATION_AUTH_REQUIRED`, instead of one per integration.
   `MCP_AUTH_REQUIRED`) and carries `integration`.
 - **Scheduled runs:** a run that fails for a missing connection ends with the reason code
   `INTEGRATION_AUTH_REQUIRED` (was `INTEGRATION_RECONNECT_REQUIRED`), with `integration` and
-  `reason`; it now fails before the model call when the owner is not connected to an integration
-  whose tools the run may call.
+  `reason`.
 - **Sign-in state:** the `state` of an integration sign-in is an opaque handle of a single-use
   record kept server-side (storage namespace `integration-oauth-flows`), no longer a signed ticket.
   A sign-in started before the upgrade and finished after it fails with `invalid_state`; the user
-  starts it again. Installations that run several instances already share `contents/`, where
-  these records live.
+  starts it again.
+- **Several instances need shared storage for sign-ins:** connecting Jira, a storage provider or a
+  per-user MCP server now needs every instance (pod, host) to use the same storage provider —
+  the shared `contents/` volume a multi-server deployment already requires. Before, matching
+  `JWT_SECRET` and `TOKEN_ENCRYPTION_KEY` were enough. Without storage, sign-ins are kept in one
+  worker's memory and the log warns in cluster mode.
 
 **Before upgrading:** scripts, workflows or clients that match on `JIRA_AUTH_REQUIRED`,
 `MCP_AUTH_REQUIRED`, `INTEGRATION_RECONNECT_REQUIRED` or the `authUrl` field have to match on

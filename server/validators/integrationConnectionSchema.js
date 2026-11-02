@@ -84,6 +84,10 @@ export const integrationConnectionSchema = z
     lastUsedAt: isoDate.nullable().prefault(null),
     /** Stable error code of the last failure (never upstream text). */
     error: z.string().max(128).nullable().prefault(null),
+    /** Transient refresh failures in a row (reset by a successful refresh). */
+    refreshFailures: z.number().int().min(0).prefault(0),
+    /** Until when the token endpoint is left alone after repeated failures. */
+    retryAfter: isoDate.nullable().prefault(null),
     /** Where the secret lives; null for `sso`. Never the secret itself. */
     secretRef: z.string().regex(SECRET_REF_PATTERN).max(600).nullable(),
     /**

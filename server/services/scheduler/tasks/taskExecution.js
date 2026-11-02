@@ -28,7 +28,6 @@
  *
  * @module services/scheduler/tasks/taskExecution
  */
-import { getIntegrationConnectionService } from '../../integrations/auth/IntegrationConnectionService.js';
 import {
   INTEGRATION_AUTH_REASONS,
   INTEGRATION_AUTH_REQUIRED
@@ -176,55 +175,6 @@ async function authorizeRun(task, user, language) {
   }
   return { app, integrationScopes: scopes.scopes };
 }
-
-/**
- * Check the integrations the run's tools need, before spending a model call.
- * A run is headless: it resolves the **owner's** own connection of every
- * installation whose tools it may call and that signs users in (Jira, cloud
- * storage, per-user MCP), and fails with `INTEGRATION_AUTH_REQUIRED`
- * (`integration`, `reason`: `not_connected` | `expired` | `insufficient_scope`)
- * when one is missing. Never anybody else's connection.
- *
- * @param {Object[]} tools - The tools the run offers
- * @param {Object} user - The task owner
- * @throws {RunFailure}
- */
-export async function checkIntegrations(tools, user) {
-  const connections = getIntegrationConnectionService();
-  const seen = new Set();
-  for (const tool of tools) {
-    const installationId = tool?._integration?.instanceId;
-    if (!installationId || seen.has(installationId)) continue;
-    seen.add(installationId);
-    const descriptor = await connections.describe(installationId);
-    if (descriptor?.kind !== 'oauth-user') continue;
-    const resolved = await connections.resolve(
-      { type: 'user', id: String(user.id) },
-      installationId
-    );
-    if (resolved.ok) continue;
-    const reason = resolved.error?.reason || INTEGRATION_AUTH_REASONS.NOT_CONNECTED;
-    throw new RunFailure(
-      'failed',
-      INTEGRATION_AUTH_REQUIRED,
-      `Reconnect ${descriptor.displayName}: ${REASON_TEXT[reason] || REASON_TEXT.not_connected}`,
-      {
-        extra: {
-          integration: installationId,
-          reason,
-          connectUrl: SETTINGS_INTEGRATIONS_PATH
-        }
-      }
-    );
-  }
-}
-
-/** How a run's failure names a missing connection. */
-const REASON_TEXT = Object.freeze({
-  not_connected: 'the connection is missing',
-  expired: 'the connection has expired',
-  insufficient_scope: 'the connection lacks a permission the task needs'
-});
 
 /**
  * Execute one queued run to its end (or to an approval pause).
@@ -519,7 +469,11 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
       memory = prepareMemory.marker;
       memoryBefore = prepareMemory.before;
     }
-    await checkIntegrations(prepared.tools, user);
+    // No up-front connection check: a run offers every tool of its app, and
+    // most runs never call most of them. A tool that needs the owner's
+    // connection resolves it when it is called (never anybody else's) and,
+    // without one, returns INTEGRATION_AUTH_REQUIRED, which ends the run
+    // with that code (see `integrationIssues` below).
 
     const allowedTools = new Set((task.allowedTools || []).map(entry => entry.toolId));
     if (continuation?.approvedToolId) allowedTools.add(continuation.approvedToolId);

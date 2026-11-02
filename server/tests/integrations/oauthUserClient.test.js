@@ -188,6 +188,24 @@ describe('refresh', () => {
     assert.equal(endpoint.calls.length, 0);
   });
 
+  it('keeps the error_description for classification, never in the message', async () => {
+    const client = new OAuthUserClient({
+      strategy: strategyWith(
+        fakeTokenEndpoint([
+          {
+            status: 403,
+            body: { error: 'unauthorized_client', error_description: 'refresh_token is invalid' }
+          }
+        ])
+      )
+    });
+    const error = await client.refresh({ refreshToken: 'r' }).catch(e => e);
+    assert.equal(error.errorCode, 'unauthorized_client');
+    assert.equal(error.errorDescription, 'refresh_token is invalid');
+    assert.equal(error.status, 403);
+    assert.doesNotMatch(error.message, /refresh_token is invalid/);
+  });
+
   it('tells a definitive refusal from a transient failure', async () => {
     const answers = [
       [{ status: 400, body: { error: 'invalid_grant' } }, 'invalid_grant'],
@@ -228,6 +246,28 @@ describe('revocation (RFC 7009)', () => {
         [`${ISSUER}/revoke`, 'refresh_token', 'r'],
         [`${ISSUER}/revoke`, 'access_token', 'a']
       ]
+    );
+  });
+
+  it('never revokes tokens bound to another authorization server or client', async () => {
+    const endpoint = fakeTokenEndpoint([{}]);
+    const client = new OAuthUserClient({ strategy: strategyWith(endpoint) });
+    for (const binding of [
+      { clientId: 'old-client' },
+      { authorizationServerUrl: 'https://old-as.example.com/' }
+    ]) {
+      assert.equal(
+        await client.revoke({ tokens: { accessToken: 'a', refreshToken: 'r' }, binding }),
+        false
+      );
+    }
+    assert.equal(endpoint.calls.length, 0);
+    assert.equal(
+      await client.revoke({
+        tokens: { accessToken: 'a' },
+        binding: { clientId: 'client-1', authorizationServerUrl: ISSUER }
+      }),
+      true
     );
   });
 

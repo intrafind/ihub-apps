@@ -2,83 +2,78 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Headless runs and integration connections: a scheduled run resolves the
- * task **owner's** own connection of every installation whose tools it may
- * call and that signs users in, and fails with the structured
- * `INTEGRATION_AUTH_REQUIRED` (`integration`, `reason`) when there is none —
- * never with anybody else's connection.
+ * Headless runs and integration connections: a scheduled run uses the task
+ * **owner's** own connections — never anybody else's. A run is not refused up
+ * front because the app offers a tool whose integration the owner has not
+ * connected (most runs never call most of the app's tools); a tool that does
+ * need the connection returns the structured `INTEGRATION_AUTH_REQUIRED`
+ * result when it is called, and the run ends with that code, naming the
+ * integration and the reason.
  *
  * Run: node --test server/tests/scheduled-tasks-integration-auth.test.js
  */
-import { describe, it, after } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkIntegrations } from '../services/scheduler/tasks/taskExecution.js';
-import { integrationIssueOf } from '../services/scheduler/tasks/runSeams.js';
 import {
-  IntegrationConnectionService,
-  setIntegrationConnectionServiceForTests,
-  getIntegrationConnectionService
-} from '../services/integrations/auth/IntegrationConnectionService.js';
-import { IntegrationAuthRequiredError } from '../services/integrations/auth/integrationAuthRequired.js';
+  cleanup,
+  principal,
+  scriptedChatService,
+  setupHarness,
+  taskInput,
+  teardownHarness,
+  toolCall
+} from './helpers/scheduledTaskHarness.js';
+import { openaiText } from './loop/helpers/llmFixtures.js';
+import * as tasks from '../services/scheduler/tasks/taskService.js';
+import * as taskExecution from '../services/scheduler/tasks/taskExecution.js';
+import { integrationIssueOf } from '../services/scheduler/tasks/runSeams.js';
+import { integrationAuthRequiredResult } from '../services/integrations/auth/integrationAuthRequired.js';
 
-const original = getIntegrationConnectionService();
-after(() => setIntegrationConnectionServiceForTests(original));
+before(() => setupHarness());
+after(() => teardownHarness());
 
-/** A connection service whose installations and connections are given. */
-function fakeConnections({ descriptors, connected }) {
-  const service = new IntegrationConnectionService({
-    documents: null,
-    describe: async id => descriptors[id] || null
-  });
-  const resolved = [];
-  service.resolve = async (principal, installationId) => {
-    resolved.push([principal, installationId]);
-    if (connected[installationId]?.includes(principal.id)) return { ok: true };
-    return {
-      ok: false,
-      error: new IntegrationAuthRequiredError({
-        integration: installationId,
-        reason: connected[installationId] ? 'expired' : 'not_connected'
-      })
-    };
-  };
-  service.resolved = resolved;
-  setIntegrationConnectionServiceForTests(service);
-  return service;
+const ada = () => principal({ id: 'user-ada', name: 'Ada' });
+
+async function run(script, runTool) {
+  const task = await tasks.createTask(ada(), taskInput());
+  const queued = await tasks.requestRun(ada(), task.id);
+  const chat = scriptedChatService(script, { runTool });
+  return taskExecution.executeTaskRun({ taskId: task.id, runId: queued.id }, chat.deps);
 }
 
-const tool = instanceId => ({ id: `${instanceId}__x`, _integration: { instanceId } });
-
-describe('the integration check before a scheduled run', () => {
-  it("resolves the owner's own connection and fails with INTEGRATION_AUTH_REQUIRED", async () => {
-    const service = fakeConnections({
-      descriptors: {
-        jira: { kind: 'oauth-user', displayName: 'JIRA' },
-        web: { kind: 'service-account', displayName: 'Web' }
-      },
-      connected: { jira: ['someone-else'] }
+describe('scheduled runs and integration connections', () => {
+  it('has no up-front check that fails runs for tools they never call', async () => {
+    assert.equal(taskExecution.checkIntegrations, undefined);
+    const done = await run([openaiText(['All quiet today.'])], async () => {
+      throw new Error('no tool should run');
     });
-    const failure = await checkIntegrations([tool('web'), tool('jira'), tool('jira')], {
-      id: 'owner-1'
-    }).catch(error => error);
-    assert.equal(failure.status, 'failed');
-    assert.equal(failure.code, 'INTEGRATION_AUTH_REQUIRED');
-    assert.match(failure.message, /^Reconnect JIRA: the connection has expired$/);
-    assert.deepEqual(failure.extra, {
-      integration: 'jira',
-      reason: 'expired',
-      connectUrl: '/settings/integrations'
-    });
-    // Only the per-user installation, once, as the owner — nobody else.
-    assert.deepEqual(service.resolved, [[{ type: 'user', id: 'owner-1' }, 'jira']]);
+    assert.equal(done.status, 'succeeded');
+    await cleanup(ada());
   });
 
-  it('lets the run go on when the owner is connected', async () => {
-    fakeConnections({
-      descriptors: { jira: { kind: 'oauth-user', displayName: 'JIRA' } },
-      connected: { jira: ['owner-1'] }
-    });
-    await checkIntegrations([tool('jira'), { id: 'plain' }], { id: 'owner-1' });
+  it("runs a tool as the owner and ends with INTEGRATION_AUTH_REQUIRED when the owner's connection is missing", async () => {
+    const calls = [];
+    const failed = await run(
+      [toolCall('lookup', { key: 'x' }), openaiText(['Sorry, I could not look it up.'])],
+      async (toolId, params) => {
+        calls.push({ toolId, user: params?.user?.id });
+        return integrationAuthRequiredResult({
+          integration: 'jira',
+          reason: 'not_connected',
+          message: 'Please connect your JIRA account to search tickets',
+          connectUrl: '/api/integrations/jira/connect'
+        });
+      }
+    );
+    assert.deepEqual(calls, [{ toolId: 'lookup', user: 'user-ada' }], 'the owner, nobody else');
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.reason.code, 'INTEGRATION_AUTH_REQUIRED');
+    assert.equal(failed.reason.integration, 'jira');
+    assert.equal(failed.reason.reason, 'not_connected');
+    // The run page links the owner to Settings → Integrations (a page), not to
+    // the connect API route the tool result names.
+    assert.equal(failed.reason.connectUrl, '/settings/integrations');
+    await cleanup(ada());
   });
 });
 

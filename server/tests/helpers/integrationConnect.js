@@ -23,7 +23,7 @@ export function fakeTokenEndpoint(answers = [{}]) {
     const call = { url: String(url), params, headers: init.headers || {} };
     calls.push(call);
     const pick = answers[Math.min(calls.length - 1, answers.length - 1)];
-    const answer = typeof pick === 'function' ? pick(call) : pick;
+    const answer = typeof pick === 'function' ? await pick(call) : pick;
     const status = answer.status || 200;
     const body =
       status >= 400

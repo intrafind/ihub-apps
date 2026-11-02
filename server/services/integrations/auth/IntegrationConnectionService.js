@@ -64,6 +64,7 @@ import {
   unionScopes
 } from './OAuthUserClient.js';
 import { getOAuthFlowStore } from './oauthFlowStore.js';
+import { deleteSecretFile } from './tokenSecrets.js';
 import { describeInstallation } from './connectionProviders.js';
 import {
   INTEGRATION_AUTH_REASONS,
@@ -86,6 +87,42 @@ const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Statuses that mean "reconnect before use". */
 const UNUSABLE_STATUSES = new Set(['expired', 'revoked', 'failed', 'needs-reconnect']);
+
+/**
+ * Transient refresh failures in a row after which the token endpoint is left
+ * alone for a cooldown (doubling per further failure, at most
+ * REFRESH_COOLDOWN_MAX_MS) instead of being asked again on every call.
+ */
+const REFRESH_FAILURE_BACKOFF_AFTER = 3;
+/** Transient refresh failures in a row after which the connection is `failed` (reconnect). */
+const REFRESH_FAILURE_GIVE_UP_AFTER = 10;
+const REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+const REFRESH_COOLDOWN_MAX_MS = 60 * 60 * 1000;
+
+/**
+ * Whether a refused refresh ends the connection. `invalid_grant` always does,
+ * and so does a refresh token bound to another client. `invalid_client` and
+ * `unauthorized_client` are usually client problems an admin fixes (an
+ * expired client secret) and keep the tokens — unless the server says the
+ * refresh token is what it refuses: Atlassian answers a dead refresh token
+ * with `403 unauthorized_client` "refresh_token is invalid", and treating
+ * that as temporary would retry the dead token forever.
+ *
+ * @param {Error} error - What the refresh threw
+ * @returns {string|null} The rejection that ends the connection, or null
+ */
+export function terminalRefreshRejection(error) {
+  if (error?.errorCode === 'other_client') return 'other_client';
+  const rejection = definitiveOAuthRejection(error);
+  if (rejection === 'invalid_grant') return rejection;
+  if (
+    (rejection === 'unauthorized_client' || rejection === 'invalid_client') &&
+    /refresh[\s_-]?token/i.test(error?.errorDescription || '')
+  ) {
+    return rejection;
+  }
+  return null;
+}
 
 /**
  * The id of the connection of a principal to an installation — a pure
@@ -186,6 +223,12 @@ export class IntegrationConnectionService {
     this.accountLabelFailures = new Map();
     /** Test seam: the SDK-style refresh function handed to the OAuth client. */
     this.refreshFn = null;
+    /**
+     * How long to wait before re-reading the stored tokens once more when the
+     * authorization server refused a refresh token: a rotating refresh token
+     * may just have been used by another worker, whose new tokens win.
+     */
+    this.refreshGraceMs = 250;
   }
 
   _docs() {
@@ -261,6 +304,57 @@ export class IntegrationConnectionService {
     const ownerId = stored.principal.type === 'user' ? stored.principal.id : 'system';
     await documents.put(CONNECTIONS_NAMESPACE, stored.id, stored, { ownerId });
     return stored;
+  }
+
+  /**
+   * Write a connection record only when none exists (create-only, atomic in
+   * the document store): the re-index uses it so a record a live connect or
+   * refresh wrote meanwhile is never overwritten.
+   *
+   * @param {Object} record
+   * @returns {Promise<{created: boolean, record: (Object|null)}>}
+   */
+  async createConnection(record) {
+    const documents = this._docs();
+    if (!documents) {
+      if (this.memory.has(record.id)) return { created: false, record: this.memory.get(record.id) };
+      return { created: true, record: await this.putConnection(record) };
+    }
+    const now = this._iso();
+    const parsed = validateIntegrationConnection({
+      issuer: null,
+      scopesGranted: [],
+      externalAccount: null,
+      expiresAt: null,
+      lastRefreshedAt: null,
+      lastUsedAt: null,
+      error: null,
+      fingerprint: null,
+      ...record,
+      createdAt: record.createdAt || now,
+      updatedAt: now
+    });
+    if (!parsed.success) {
+      logger.error('Refusing to store an invalid connection record', {
+        component: COMPONENT,
+        integration: record?.integration,
+        issues: parsed.error.issues.map(issue => issue.path.join('.')).join(', ')
+      });
+      return { created: false, record: null };
+    }
+    const ownerId = parsed.data.principal.type === 'user' ? parsed.data.principal.id : 'system';
+    try {
+      await documents.put(CONNECTIONS_NAMESPACE, parsed.data.id, parsed.data, {
+        ownerId,
+        etag: null
+      });
+      return { created: true, record: parsed.data };
+    } catch (error) {
+      if (error?.code === 'ETAG_MISMATCH') {
+        return { created: false, record: await this.getConnection(parsed.data.id) };
+      }
+      throw error;
+    }
   }
 
   /** Merge fields into a record; no-op when there is none. */
@@ -447,6 +541,15 @@ export class IntegrationConnectionService {
         `${descriptor.displayName} authentication expired. Please reconnect your account.`
       );
     }
+    // The record alone is not a connection: the secret must still be there
+    // (a token file removed by hand, or by another worker a moment ago).
+    if (!(await descriptor.secret.locate(principal.id))) {
+      await this.updateConnection(record.id, { status: 'revoked', error: 'secret_missing' });
+      return fail(
+        INTEGRATION_AUTH_REASONS.NOT_CONNECTED,
+        `Connect ${descriptor.displayName} to continue`
+      );
+    }
     const granted = new Set(record.scopesGranted || []);
     const missing = parseScope(requiredScopes).filter(scope => !granted.has(scope));
     if (granted.size > 0 && missing.length > 0) {
@@ -520,6 +623,9 @@ export class IntegrationConnectionService {
     let count = 0;
     for (const record of await this.listConnections({ integration: installationId })) {
       if (record.principal?.type !== 'user' || UNUSABLE_STATUSES.has(record.status)) continue;
+      // Exactly the file the record names: never a legacy fallback that may
+      // belong to another installation.
+      await deleteSecretFile(record.secretRef).catch(() => false);
       await this.updateConnection(record.id, { status, error: 'endpoint_changed' });
       count += 1;
     }
@@ -646,9 +752,39 @@ export class IntegrationConnectionService {
    */
   async completeConnect({ req, alias = {} }) {
     const query = req.query || {};
-    const consumed = await this._flows().consume(
-      typeof query.state === 'string' ? query.state : ''
-    );
+    const state = typeof query.state === 'string' ? query.state : '';
+    // Checked before the flow is consumed, so a callback in another session
+    // or at another installation's alias cannot burn the owner's sign-in.
+    const pending = await this._flows().peek(state);
+    if (pending) {
+      const wrongUser = isAnonymous(req.user) || String(req.user.id) !== pending.userId;
+      const wrongAlias =
+        (alias.installationId && alias.installationId !== pending.installationId) ||
+        (alias.stack && alias.stack !== pending.stack);
+      if (wrongUser || wrongAlias) {
+        logger.warn('Integration OAuth callback for a different user or installation refused', {
+          component: COMPONENT,
+          integration: pending.installationId,
+          reason: wrongUser ? 'user' : 'installation'
+        });
+        const target = {
+          stack: pending.stack,
+          installationId: pending.installationId,
+          resultKey: (await this.describe(pending.installationId).catch(() => null))?.resultKey
+        };
+        const code = wrongUser
+          ? OAUTH_FLOW_ERROR_CODES.USER_MISMATCH
+          : OAUTH_FLOW_ERROR_CODES.INVALID_STATE;
+        // The flow's return URL is only used for its owner.
+        const returnUrl = wrongUser ? buildServerPath(DEFAULT_RETURN_PATH) : pending.returnUrl;
+        return {
+          ok: false,
+          code,
+          redirectTo: returnPathWith(returnUrl, resultParams(target, { ok: false, code }))
+        };
+      }
+    }
+    const consumed = await this._flows().consume(state);
     const fallbackStack = alias.stack || null;
     const failWith = (code, flow, descriptor) => {
       const target = descriptor || {
@@ -947,6 +1083,9 @@ export class IntegrationConnectionService {
     if (record && (await this._invalidateIfRepointed(descriptor, record))) {
       throw expiredError(descriptor);
     }
+    // An expired, revoked, failed or repointed connection is not used, even
+    // while a token file is still on disk.
+    if (record && UNUSABLE_STATUSES.has(record.status)) throw expiredError(descriptor);
     const expired = await descriptor.secret.expired(userId, stored);
     if (!expired && !forceRefresh) {
       await this._touch(record);
@@ -1020,6 +1159,16 @@ export class IntegrationConnectionService {
       await this._terminal(descriptor, userId, id, 'refresh_missing');
       throw expiredError(descriptor);
     }
+    // Backing off after repeated transient failures: the token endpoint is
+    // not asked again until the cooldown is over.
+    const before = await this.getConnection(id);
+    const retryAfter = Date.parse(before?.retryAfter || '');
+    if (Number.isFinite(retryAfter) && retryAfter > this.now()) {
+      throw createUnavailableError(
+        descriptor.displayName,
+        new Error('Token refresh is cooling down after repeated failures')
+      );
+    }
     let refreshed;
     try {
       const client = new OAuthUserClient({ strategy: await descriptor.strategy() });
@@ -1029,16 +1178,16 @@ export class IntegrationConnectionService {
         ...(this.refreshFn ? { refreshFn: this.refreshFn } : {})
       });
     } catch (error) {
-      const rejection =
-        error?.errorCode === 'other_client' ? 'other_client' : definitiveOAuthRejection(error);
-      // Only a refused refresh token (or one issued to another client) ends
-      // the connection; `invalid_client` / `unauthorized_client` are client
-      // problems an admin can fix, so the tokens are kept.
-      if (rejection === 'invalid_grant' || rejection === 'other_client') {
+      const rejection = terminalRefreshRejection(error);
+      if (rejection) {
+        // A rotating refresh token may just have been used by another
+        // worker: its new tokens win, nothing is deleted.
+        const latest = await this._tokensChangedSince(descriptor, userId, view);
+        if (latest) return latest;
         await this._terminal(descriptor, userId, id, rejection);
         throw expiredError(descriptor);
       }
-      await this.updateConnection(id, { error: 'refresh_unavailable' }).catch(() => null);
+      await this._recordTransientFailure(id, before);
       logger.warn('Integration token refresh failed; keeping the tokens', {
         component: COMPONENT,
         integration: descriptor.installationId,
@@ -1078,6 +1227,8 @@ export class IntegrationConnectionService {
         })),
       status: 'active',
       error: null,
+      refreshFailures: 0,
+      retryAfter: null,
       lastRefreshedAt: this._iso(),
       lastUsedAt: this._iso(),
       expiresAt: Number.isFinite(refreshed.expiresIn)
@@ -1092,6 +1243,57 @@ export class IntegrationConnectionService {
       userId
     });
     return written;
+  }
+
+  /**
+   * The stored payload when its tokens changed since `view` was read (another
+   * worker refreshed with a rotating refresh token), re-read once more after
+   * {@link refreshGraceMs}; else null.
+   */
+  async _tokensChangedSince(descriptor, userId, view) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let latest = null;
+      try {
+        latest = await descriptor.secret.read(userId);
+      } catch {
+        latest = null;
+      }
+      const latestView = descriptor.secret.view(latest);
+      if (
+        latestView &&
+        (latestView.refreshToken !== view.refreshToken ||
+          latestView.accessToken !== view.accessToken)
+      ) {
+        return latest;
+      }
+      if (attempt === 0 && this.refreshGraceMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, this.refreshGraceMs));
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Count a transient refresh failure: after REFRESH_FAILURE_BACKOFF_AFTER in
+   * a row the token endpoint is left alone for a growing cooldown; after
+   * REFRESH_FAILURE_GIVE_UP_AFTER the connection is `failed` and the user is
+   * asked to reconnect. A successful refresh resets both.
+   */
+  async _recordTransientFailure(id, record) {
+    const failures = (record?.refreshFailures || 0) + 1;
+    const patch = { error: 'refresh_unavailable', refreshFailures: failures };
+    if (failures >= REFRESH_FAILURE_GIVE_UP_AFTER) {
+      patch.status = 'failed';
+      patch.error = 'refresh_failing';
+      patch.retryAfter = null;
+    } else if (failures >= REFRESH_FAILURE_BACKOFF_AFTER) {
+      const cooldown = Math.min(
+        REFRESH_COOLDOWN_MS * 2 ** (failures - REFRESH_FAILURE_BACKOFF_AFTER),
+        REFRESH_COOLDOWN_MAX_MS
+      );
+      patch.retryAfter = this._iso(this.now() + cooldown);
+    }
+    await this.updateConnection(id, patch).catch(() => null);
   }
 
   /** A refresh token that is gone for good: delete the tokens, mark the record. */
@@ -1179,7 +1381,9 @@ export class IntegrationConnectionService {
     if (view) {
       try {
         const client = new OAuthUserClient({ strategy: await descriptor.strategy() });
-        revoked = await client.revoke({ tokens: view });
+        // Never sent to a server or client the tokens were not issued by
+        // (a repointed MCP server); they are still deleted locally.
+        revoked = await client.revoke({ tokens: view, binding: view.binding || {} });
       } catch (error) {
         logger.warn('Upstream revocation skipped', {
           component: COMPONENT,

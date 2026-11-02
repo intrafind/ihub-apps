@@ -375,7 +375,7 @@ for (const p of providers) {
     );
   }
 
-  tokenEndpoint = answerTokenEndpoint(service, [
+  answerTokenEndpoint(service, [
     {
       status: 400,
       body: { error: 'invalid_grant', error_description: '<script>alert(1)</script>' }

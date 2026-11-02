@@ -201,10 +201,12 @@ The JIRA connector provides comprehensive error handling:
 - **INTEGRATION_AUTH_REQUIRED** (`integration: "jira"`, `reason: not_connected | expired`): the
   user needs to connect (or reconnect) their JIRA account; the result carries the `connectUrl`
   (`/api/integrations/jira/connect`) and is returned before any call to Atlassian.
-  It replaces the former `JIRA_AUTH_REQUIRED`. A scheduled task whose owner has no Jira
-  connection fails before it starts with the same code.
+  It replaces the former `JIRA_AUTH_REQUIRED`. A scheduled run whose owner has no Jira
+  connection fails with the same code when it calls a Jira tool.
 - **Authentication Expired**: Automatic token refresh or re-authentication prompt; the tokens are
-  deleted only when Atlassian refuses the refresh token, a temporary failure keeps them
+  deleted when Atlassian refuses the refresh token (including its `403 unauthorized_client`
+  "refresh_token is invalid"), a temporary failure keeps them; after repeated failures iHub backs
+  off and finally asks the user to reconnect
 - **Permission Denied**: Clear messages about access limitations
 - **API Errors**: Meaningful error messages from JIRA API
 - **Network Issues**: Graceful handling of connectivity problems

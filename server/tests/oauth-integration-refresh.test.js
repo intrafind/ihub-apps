@@ -68,6 +68,13 @@ const tokenStorage = {
     store.expired = false;
     return Promise.resolve();
   }),
+  // Which file the tokens live in: the connection service only uses a file
+  // scoped to the installation (or an admissible legacy one).
+  getTokenMetadata: jest.fn(() =>
+    store.tokens
+      ? Promise.resolve({ providerId: store.tokens.providerId ?? null, createdAt: null })
+      : Promise.reject(new Error('No tokens found'))
+  ),
   deleteUserTokens: jest.fn(() => {
     const had = store.tokens !== null;
     store.tokens = null;
@@ -81,6 +88,8 @@ const { default: GoogleDriveService } =
 const { default: Office365Service } = await import('../services/integrations/Office365Service.js');
 const { default: NextcloudService } = await import('../services/integrations/NextcloudService.js');
 const { isUnavailableError } = await import('../services/integrations/oauthRefreshError.js');
+const { IntegrationConnectionService, setIntegrationConnectionServiceForTests } =
+  await import('../services/integrations/auth/IntegrationConnectionService.js');
 
 const USER = 'user-1';
 
@@ -174,6 +183,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   httpFetch.mockReset();
   store.expired = false;
+  // A fresh connection index per test: a connection one test ended stays
+  // ended (it is only revived by connecting again).
+  const connections = new IntegrationConnectionService({ documents: null, audit: () => {} });
+  connections.refreshGraceMs = 0;
+  setIntegrationConnectionServiceForTests(connections);
 });
 
 describe.each(providers)('$name', ({ name, service, providerId, hasRetryWrapper, callApi }) => {
