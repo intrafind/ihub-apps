@@ -233,32 +233,41 @@ function isWebSearchRequirementMet(key, context = {}) {
  * @returns {string[]}
  */
 export function missingAppIntegrations(app, context = {}) {
-  const missing = [];
-  const bindings = app?.integrations;
-  if (bindings && typeof bindings === 'object') {
-    for (const key of Object.keys(bindings)) {
-      if (!isRequiredBinding(bindings[key])) continue;
-      if (!isBindingSatisfied(key, context) && !missing.includes(key)) missing.push(key);
-    }
-    // iAssistant runs on the iFinder installation its `connection` names
-    // (`ifinder` by default): the app is off while that connection is off too.
-    if (
-      Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID) &&
-      isRequiredBinding(bindings[IASSISTANT_INSTANCE_ID])
-    ) {
-      const connection = iAssistantConnectionId(context);
-      if (!isInstalledIntegrationEnabled(connection, context) && !missing.includes(connection)) {
-        missing.push(connection);
-      }
-    }
-  }
+  // A Set keeps the first-seen order and lists each key once.
+  const missing = new Set(missingBoundIntegrations(app?.integrations, context));
   // Web search is switched on in the app's own settings; native search needs
   // no engine, so by default the app stays available without one.
   // `required: true` hides the app while its engine is not available: any
   // engine for `auto`, the named one otherwise.
   const webSearchKey = requiredWebSearchKey(app);
   if (webSearchKey && !isWebSearchRequirementMet(webSearchKey, context)) {
-    if (!missing.includes(webSearchKey)) missing.push(webSearchKey);
+    missing.add(webSearchKey);
+  }
+  return [...missing];
+}
+
+/**
+ * The keys of `app.integrations` whose required binding is not satisfied,
+ * plus the iFinder connection of a required iAssistant binding when that
+ * connection is off. In binding order; a key may repeat (the caller dedupes).
+ *
+ * @param {Object|undefined} bindings - `app.integrations`
+ * @param {Object} context - `{ platform, installedIntegrations }`
+ * @returns {string[]}
+ */
+function missingBoundIntegrations(bindings, context) {
+  if (!bindings || typeof bindings !== 'object') return [];
+  const missing = Object.keys(bindings).filter(
+    key => isRequiredBinding(bindings[key]) && !isBindingSatisfied(key, context)
+  );
+  // iAssistant runs on the iFinder installation its `connection` names
+  // (`ifinder` by default): the app is off while that connection is off too.
+  if (
+    Object.hasOwn(bindings, IASSISTANT_INSTANCE_ID) &&
+    isRequiredBinding(bindings[IASSISTANT_INSTANCE_ID])
+  ) {
+    const connection = iAssistantConnectionId(context);
+    if (!isInstalledIntegrationEnabled(connection, context)) missing.push(connection);
   }
   return missing;
 }
